@@ -960,6 +960,54 @@
   flex-direction: column;
 }
 
+.modelTopTabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 0;
+  margin: 0 0 18px;
+  border: 1px solid var(--h-line);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+  padding: 3px;
+}
+
+.modelTopTab {
+  min-width: 132px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 14px;
+  font-family: var(--h-font-cn);
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.modelTopTab:hover {
+  color: var(--h-text);
+  background: var(--h-bg-soft);
+}
+.modelTopTab[data-active="true"] {
+  color: var(--h-text);
+  background: var(--h-bg-chip);
+}
+.modelTopTab span {
+  max-width: 220px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .modelsSectionHeader {
   display: flex;
   align-items: flex-start;
@@ -1306,6 +1354,267 @@
   margin-top: 18px;
 }
 
+.auxModels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.auxIntroCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 18px;
+  align-items: start;
+  border: 1px solid var(--h-line);
+  border-radius: 14px;
+  background: var(--h-bg-pane);
+  padding: 18px;
+}
+
+.auxIntroTitle {
+  margin-bottom: 8px;
+  color: var(--h-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.auxIntroCard p {
+  margin: 0 0 8px;
+  color: var(--h-text-2);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.auxIntroCard p:last-child {
+  margin-bottom: 0;
+}
+
+.auxImageModeBox {
+  border: 1px solid var(--h-line-soft);
+  border-radius: 10px;
+  background: var(--h-bg-app);
+  padding: 12px;
+}
+
+.auxToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.auxToolbar .desc {
+  margin: 0;
+}
+
+.auxLayout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.auxTaskList {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auxTaskGroup {
+  overflow: hidden;
+  border: 1px solid var(--h-line);
+  border-radius: 10px;
+  background: var(--h-bg-pane);
+}
+
+.auxTaskGroupTitle {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--h-line-soft);
+  color: var(--h-text-3);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.auxTaskItem {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: transparent;
+  color: var(--h-text);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  text-align: left;
+  font-family: var(--h-font-cn);
+}
+.auxTaskItem:last-child {
+  border-bottom: 0;
+}
+.auxTaskItem:hover {
+  background: var(--h-bg-soft);
+}
+.auxTaskItem[data-active="true"] {
+  background: var(--h-bg-chip);
+}
+
+.auxTaskMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auxTaskName {
+  min-width: 0;
+  color: var(--h-text);
+  font-size: 12.5px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auxTaskDesc {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+.auxTaskState {
+  max-width: 150px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: var(--h-r-pill);
+  background: var(--h-bg-app);
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+  padding: 4px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auxTaskState[data-auto="true"] {
+  font-family: var(--h-font-cn);
+  color: var(--h-text-3);
+}
+
+.auxEditorPanel {
+  min-width: 0;
+  border: 1px solid var(--h-line);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+  padding: 20px;
+}
+
+.auxEditorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.auxEditorTitle {
+  color: var(--h-text);
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.auxEditorSubtitle {
+  margin-top: 5px;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.auxNotice,
+.auxWarning {
+  margin-top: 14px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.auxNotice {
+  border: 1px solid var(--h-line-soft);
+  background: var(--h-bg-app);
+  color: var(--h-text-2);
+}
+
+.auxWarning {
+  border: 1px solid color-mix(in srgb, var(--h-warn, #c8782a) 42%, var(--h-line));
+  background: color-mix(in srgb, var(--h-warn, #c8782a) 9%, var(--h-bg-pane));
+  color: var(--h-text);
+}
+
+.auxAdvancedToggle {
+  margin-top: 16px;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+}
+.auxAdvancedToggle:hover {
+  color: var(--h-text);
+}
+.auxAdvancedToggle span {
+  width: 12px;
+  color: var(--h-text-3);
+}
+
+.auxAdvancedGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--h-line-soft);
+  padding-top: 14px;
+}
+
+.auxExtraBodyField {
+  grid-column: 1 / -1;
+}
+
+.auxJsonArea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 132px;
+  resize: vertical;
+  border: 1px solid var(--h-line);
+  border-radius: 8px;
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  outline: none;
+  padding: 10px 12px;
+}
+.auxJsonArea:focus {
+  border-color: var(--h-accent);
+}
+
+.auxSavedHint {
+  margin-top: 10px;
+  color: var(--h-ok);
+  font-size: 12px;
+  font-family: var(--h-font-cn);
+}
+
 @media (max-width: 1180px) {
   .content {
     padding: 22px 24px 36px;
@@ -1316,6 +1625,11 @@
   }
 
   .providerPresetLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auxIntroCard,
+  .auxLayout {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1378,8 +1692,27 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .modelTopTabs {
+    align-self: stretch;
+  }
+
+  .modelTopTab {
+    flex: 1;
+    min-width: 0;
+  }
+
   .providerFormGrid .fieldRow:last-child {
     grid-column: auto;
+  }
+
+  .auxToolbar,
+  .auxEditorHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auxAdvancedGrid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useDeleteEnv, useEnvVars, useRevealEnv, useSetEnv } from "@/hooks/use-env";
 import { useGateway } from "@/hooks/use-gateway";
 import { useProviderModels } from "@/hooks/use-provider-models";
-import type { ProviderProbeResult } from "@hermes/protocol";
+import type { ModelInfo, ProviderProbeResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
   buildCurrentModelConfigUpdate,
@@ -48,8 +49,358 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
 const PROVIDER_ACTION_LOADING_MIN_MS = 450;
 const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 
+type ModelSettingsTab = "main" | "auxiliary";
+
+type AuxiliaryTaskId =
+  | "vision"
+  | "compression"
+  | "web_extract"
+  | "title_generation"
+  | "approval"
+  | "mcp"
+  | "skills_hub"
+  | "triage_specifier"
+  | "kanban_decomposer"
+  | "profile_describer"
+  | "curator";
+
+interface AuxiliaryTaskDefinition {
+  id: AuxiliaryTaskId;
+  name: string;
+  shortName: string;
+  description: string;
+  defaultTimeout: number;
+  group: "common" | "advanced";
+}
+
+interface AuxiliaryTaskForm {
+  provider: string;
+  model: string;
+  timeout: string;
+  baseUrl: string;
+  apiKey: string;
+  downloadTimeout: string;
+  extraBody: string;
+}
+
+const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
+  {
+    id: "vision",
+    name: "视觉分析",
+    shortName: "Vision",
+    description: "图片附件、浏览器截图和 vision_analyze 会走这个槽位；主模型不支持图片时尤其重要。",
+    defaultTimeout: 120,
+    group: "common",
+  },
+  {
+    id: "compression",
+    name: "上下文压缩",
+    shortName: "Compression",
+    description: "长会话压缩和上下文总结会走这个槽位，建议使用便宜且长上下文的模型。",
+    defaultTimeout: 120,
+    group: "common",
+  },
+  {
+    id: "web_extract",
+    name: "网页抽取",
+    shortName: "Web Extract",
+    description: "网页、PDF 等内容抽取后的总结和合成会走这个槽位，默认超时更长。",
+    defaultTimeout: 360,
+    group: "common",
+  },
+  {
+    id: "title_generation",
+    name: "标题生成",
+    shortName: "Title",
+    description: "新会话标题自动生成会走这个槽位，适合很快、很便宜的小模型。",
+    defaultTimeout: 30,
+    group: "common",
+  },
+  {
+    id: "approval",
+    name: "智能审批",
+    shortName: "Approval",
+    description: "smart approval 判断低风险命令时会走这个槽位，要求稳定但不需要大模型。",
+    defaultTimeout: 30,
+    group: "common",
+  },
+  {
+    id: "mcp",
+    name: "MCP 路由",
+    shortName: "MCP",
+    description: "MCP 工具选择和路由判断会走这个槽位，适合响应快的模型。",
+    defaultTimeout: 30,
+    group: "common",
+  },
+  {
+    id: "skills_hub",
+    name: "Skills Hub",
+    shortName: "Skills",
+    description: "Skill Hub 相关辅助调用使用这个槽位。",
+    defaultTimeout: 30,
+    group: "advanced",
+  },
+  {
+    id: "triage_specifier",
+    name: "Kanban 需求扩写",
+    shortName: "Triage",
+    description: "把 Kanban triage 中的一句话扩写为可执行规格。",
+    defaultTimeout: 120,
+    group: "advanced",
+  },
+  {
+    id: "kanban_decomposer",
+    name: "Kanban 任务分解",
+    shortName: "Decomposer",
+    description: "把 Kanban 任务拆成任务图并路由到对应 profile。",
+    defaultTimeout: 180,
+    group: "advanced",
+  },
+  {
+    id: "profile_describer",
+    name: "Profile 描述生成",
+    shortName: "Profile",
+    description: "自动生成 profile 的能力描述，属于短文本辅助调用。",
+    defaultTimeout: 60,
+    group: "advanced",
+  },
+  {
+    id: "curator",
+    name: "Skill 审查",
+    shortName: "Curator",
+    description: "Skill 使用审查 fork 会走这个槽位，可能持续数分钟。",
+    defaultTimeout: 600,
+    group: "advanced",
+  },
+];
+
+const AUXILIARY_TASK_BY_ID = Object.fromEntries(
+  AUXILIARY_TASKS.map((task) => [task.id, task]),
+) as Record<AuxiliaryTaskId, AuxiliaryTaskDefinition>;
+
+const AUXILIARY_PROVIDER_PRESETS: { id: string; name: string; hint: string; models: string[] }[] = [
+  {
+    id: "auto",
+    name: "Auto 自动选择",
+    hint: "优先复用主模型，必要时 fallback 到可用 provider。",
+    models: [],
+  },
+  {
+    id: "anthropic",
+    name: "Anthropic",
+    hint: "适合 vision、compression、approval 等辅助任务。",
+    models: [
+      "claude-haiku-4-5-20251001",
+      "claude-sonnet-4-5-20250929",
+      "claude-3-5-haiku-latest",
+    ],
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    hint: "可路由 Gemini、Claude 等视觉或便宜快速模型。",
+    models: [
+      "google/gemini-3-flash-preview",
+      "google/gemini-2.5-flash",
+      "anthropic/claude-haiku-4.5",
+      "openrouter/auto",
+    ],
+  },
+  {
+    id: "nous",
+    name: "Nous Portal",
+    hint: "使用 Nous 登录状态或账号额度。",
+    models: [
+      "google/gemini-3-flash-preview",
+      "google/gemini-2.5-flash",
+      "anthropic/claude-haiku-4.5",
+    ],
+  },
+];
+
+const TEXT_ONLY_VISION_PROVIDERS = new Set([
+  "deepseek",
+  "minimax",
+  "minimax-cn",
+  "minimax-oauth",
+  "kimi-for-coding",
+  "kimi-coding",
+  "kimi-coding-cn",
+]);
+
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function asRecord(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+}
+
+function getAuxiliarySlot(config: Record<string, any> | undefined, task: AuxiliaryTaskId): Record<string, any> {
+  const auxiliary = asRecord(config?.auxiliary);
+  return asRecord(auxiliary[task]);
+}
+
+function auxiliaryFormFromConfig(
+  config: Record<string, any> | undefined,
+  task: AuxiliaryTaskId,
+): AuxiliaryTaskForm {
+  const slot = getAuxiliarySlot(config, task);
+  const def = AUXILIARY_TASK_BY_ID[task];
+  const extraBody = asRecord(slot.extra_body);
+  return {
+    provider: String(slot.provider || "auto"),
+    model: String(slot.model || ""),
+    timeout: String(slot.timeout ?? def.defaultTimeout),
+    baseUrl: String(slot.base_url || ""),
+    apiKey: "",
+    downloadTimeout: String(slot.download_timeout ?? 30),
+    extraBody: Object.keys(extraBody).length > 0
+      ? JSON.stringify(extraBody, null, 2)
+      : "",
+  };
+}
+
+function getImageInputMode(config: Record<string, any> | undefined): "auto" | "native" | "text" {
+  const mode = String(asRecord(config?.agent).image_input_mode || "auto");
+  return mode === "native" || mode === "text" ? mode : "auto";
+}
+
+function parsePositiveNumber(value: string, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseExtraBody(value: string): Record<string, unknown> {
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("extra_body 必须是 JSON object");
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function buildAuxiliaryTaskUpdate(
+  config: Record<string, any>,
+  task: AuxiliaryTaskId,
+  form: AuxiliaryTaskForm,
+): Record<string, any> {
+  const def = AUXILIARY_TASK_BY_ID[task];
+  const auxiliary = asRecord(config.auxiliary);
+  const current = getAuxiliarySlot(config, task);
+  const provider = form.provider.trim() || "auto";
+  const nextSlot: Record<string, any> = {
+    ...current,
+    provider,
+    model: provider === "auto" ? "" : form.model.trim(),
+    timeout: parsePositiveNumber(form.timeout, def.defaultTimeout),
+    base_url: form.baseUrl.trim(),
+    extra_body: parseExtraBody(form.extraBody),
+  };
+
+  if (task === "vision") {
+    nextSlot.download_timeout = parsePositiveNumber(form.downloadTimeout, 30);
+  } else {
+    delete nextSlot.download_timeout;
+  }
+
+  if (provider === "auto") {
+    nextSlot.base_url = "";
+    nextSlot.model = "";
+    delete nextSlot.api_key;
+  } else if (form.apiKey.trim()) {
+    nextSlot.api_key = form.apiKey.trim();
+  }
+
+  return {
+    ...config,
+    auxiliary: {
+      ...auxiliary,
+      [task]: nextSlot,
+    },
+  };
+}
+
+function buildAuxiliaryTaskReset(config: Record<string, any>, task: AuxiliaryTaskId): Record<string, any> {
+  const auxiliary = asRecord(config.auxiliary);
+  const current = getAuxiliarySlot(config, task);
+  return {
+    ...config,
+    auxiliary: {
+      ...auxiliary,
+      [task]: {
+        ...current,
+        provider: "auto",
+        model: "",
+        base_url: "",
+        extra_body: {},
+        timeout: AUXILIARY_TASK_BY_ID[task].defaultTimeout,
+        ...(task === "vision" ? { download_timeout: 30 } : {}),
+      },
+    },
+  };
+}
+
+function buildAllAuxiliaryReset(config: Record<string, any>): Record<string, any> {
+  return AUXILIARY_TASKS.reduce(
+    (next, task) => buildAuxiliaryTaskReset(next, task.id),
+    config,
+  );
+}
+
+function buildImageInputModeUpdate(
+  config: Record<string, any>,
+  mode: "auto" | "native" | "text",
+): Record<string, any> {
+  const agent = asRecord(config.agent);
+  return {
+    ...config,
+    agent: {
+      ...agent,
+      image_input_mode: mode,
+    },
+  };
+}
+
+function describeAuxiliarySlot(config: Record<string, any> | undefined, task: AuxiliaryTaskId): string {
+  const slot = getAuxiliarySlot(config, task);
+  const provider = String(slot.provider || "auto");
+  const model = String(slot.model || "");
+  if (provider === "auto") return "Auto";
+  return model ? `${provider} · ${model}` : provider;
+}
+
+function getProviderDisplayName(providerId: string, providers: ProviderPreset[]): string {
+  if (providerId === "auto") return "Auto 自动选择";
+  const preset = AUXILIARY_PROVIDER_PRESETS.find((p) => p.id === providerId);
+  if (preset) return preset.name;
+  const provider = providers.find((p) => p.id === providerId);
+  return provider ? provider.name : providerId;
+}
+
+function getAuxiliaryModelOptions(providerId: string, providers: ProviderPreset[], currentModel: string): string[] {
+  const options = new Set<string>();
+  const auxPreset = AUXILIARY_PROVIDER_PRESETS.find((provider) => provider.id === providerId);
+  for (const model of auxPreset?.models ?? []) options.add(model);
+  const provider = providers.find((item) => item.id === providerId);
+  for (const model of provider?.models ?? []) options.add(model.id);
+  if (provider?.defaultModel) options.add(provider.defaultModel);
+  if (currentModel) options.add(currentModel);
+  return Array.from(options);
+}
+
+function isLikelyVisionCapable(providerId: string, model: string, providers: ProviderPreset[]): boolean {
+  if (!providerId || providerId === "auto") return true;
+  if (TEXT_ONLY_VISION_PROVIDERS.has(providerId)) return false;
+  if (providerId === "anthropic" || providerId === "openrouter" || providerId === "nous") return true;
+  const provider = providers.find((item) => item.id === providerId);
+  const modelEntry = provider?.models.find((item) => item.id === model);
+  if (modelEntry?.supportsVision) return true;
+  const normalized = `${providerId} ${model}`.toLowerCase();
+  return /\b(vl|vision|gemini|claude|gpt-4o|pixtral|llava|qwen-vl)\b/.test(normalized);
 }
 
 function getProviderGroup(key: string): string {
@@ -73,6 +424,7 @@ export function ModelsSection() {
   const revealEnv = useRevealEnv();
   const { probeProvider, setRuntimeModel } = useGateway();
   const { catalog, message: catalogMessage, refresh: refreshCatalog } = useProviderCatalog();
+  const [activeModelTab, setActiveModelTab] = useState<ModelSettingsTab>("main");
   const [probeState, setProbeState] = useState<{
     providerId: string;
     status: "pending" | "ok" | "error";
@@ -114,6 +466,13 @@ export function ModelsSection() {
     apiKey: "",
     model: "",
   });
+  const [selectedAuxTask, setSelectedAuxTask] = useState<AuxiliaryTaskId>("vision");
+  const [auxForm, setAuxForm] = useState<AuxiliaryTaskForm>(() =>
+    auxiliaryFormFromConfig(config, "vision"));
+  const [auxAdvancedOpen, setAuxAdvancedOpen] = useState(false);
+  const [auxSavingTask, setAuxSavingTask] = useState<AuxiliaryTaskId | "__all__" | "image_mode" | null>(null);
+  const [auxSavedTask, setAuxSavedTask] = useState<AuxiliaryTaskId | "__all__" | "image_mode" | null>(null);
+  const [auxError, setAuxError] = useState("");
   const customDialogTitleId = useId();
   const selectProvider = useCallback((providerId: string) => {
     if (!providerId || selectedProviderIdRef.current === providerId) return;
@@ -182,6 +541,28 @@ export function ModelsSection() {
     () => [...catalog.providers, ...customProviders],
     [catalog.providers, customProviders],
   );
+  const auxiliaryProviderOptions = useMemo(() => {
+    const options = new Map<string, { id: string; name: string; hint: string }>();
+    for (const provider of AUXILIARY_PROVIDER_PRESETS) {
+      options.set(provider.id, { id: provider.id, name: provider.name, hint: provider.hint });
+    }
+    for (const provider of allProviders) {
+      options.set(provider.id, {
+        id: provider.id,
+        name: provider.name,
+        hint: provider.vendor,
+      });
+    }
+    const currentProvider = auxForm.provider.trim();
+    if (currentProvider && !options.has(currentProvider)) {
+      options.set(currentProvider, {
+        id: currentProvider,
+        name: currentProvider,
+        hint: "当前配置中的 provider",
+      });
+    }
+    return Array.from(options.values());
+  }, [allProviders, auxForm.provider]);
   const selectedProvider = useMemo<ProviderPreset | undefined>(
     () => allProviders.find((provider) => provider.id === selectedProviderId) ?? allProviders[0],
     [allProviders, selectedProviderId],
@@ -214,6 +595,13 @@ export function ModelsSection() {
     (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
       ? String((config.model as Record<string, unknown>).provider ?? "")
       : "");
+  const configuredAuxiliaryCount = useMemo(
+    () => AUXILIARY_TASKS.filter((task) => {
+      const slot = getAuxiliarySlot(config, task.id);
+      return String(slot.provider || "auto") !== "auto" || Boolean(String(slot.model || ""));
+    }).length,
+    [config],
+  );
   const configuredCount = useMemo(
     () => allProviders.filter((provider) => providerHasSavedCredentials(config, provider.id)).length,
     [allProviders, config],
@@ -283,6 +671,12 @@ export function ModelsSection() {
     selectedProviderEntry.base_url,
     selectedProviderEntry.model,
   ]);
+
+  useEffect(() => {
+    setAuxForm(auxiliaryFormFromConfig(config, selectedAuxTask));
+    setAuxAdvancedOpen(false);
+    setAuxError("");
+  }, [config, selectedAuxTask]);
 
   // Switching to a different provider hides any stale "已保存" indicator.
   useEffect(() => {
@@ -507,6 +901,67 @@ export function ModelsSection() {
     );
   };
 
+  const handleSaveAuxiliaryTask = async () => {
+    if (!config) return;
+    setAuxSavingTask(selectedAuxTask);
+    setAuxSavedTask(null);
+    setAuxError("");
+    try {
+      await saveConfig.mutateAsync(buildAuxiliaryTaskUpdate(config, selectedAuxTask, auxForm));
+      setAuxForm((prev) => ({ ...prev, apiKey: "" }));
+      setAuxSavedTask(selectedAuxTask);
+    } catch (error) {
+      setAuxError(error instanceof Error ? error.message : String(error || "保存失败"));
+    } finally {
+      setAuxSavingTask(null);
+    }
+  };
+
+  const handleResetAuxiliaryTask = async (task: AuxiliaryTaskId) => {
+    if (!config) return;
+    setAuxSavingTask(task);
+    setAuxSavedTask(null);
+    setAuxError("");
+    try {
+      await saveConfig.mutateAsync(buildAuxiliaryTaskReset(config, task));
+      setAuxSavedTask(task);
+    } catch (error) {
+      setAuxError(error instanceof Error ? error.message : String(error || "恢复失败"));
+    } finally {
+      setAuxSavingTask(null);
+    }
+  };
+
+  const handleResetAllAuxiliary = async () => {
+    if (!config) return;
+    setAuxSavingTask("__all__");
+    setAuxSavedTask(null);
+    setAuxError("");
+    try {
+      await saveConfig.mutateAsync(buildAllAuxiliaryReset(config));
+      setAuxSavedTask("__all__");
+    } catch (error) {
+      setAuxError(error instanceof Error ? error.message : String(error || "恢复失败"));
+    } finally {
+      setAuxSavingTask(null);
+    }
+  };
+
+  const handleImageInputModeChange = async (mode: "auto" | "native" | "text") => {
+    if (!config) return;
+    setAuxSavingTask("image_mode");
+    setAuxSavedTask(null);
+    setAuxError("");
+    try {
+      await saveConfig.mutateAsync(buildImageInputModeUpdate(config, mode));
+      setAuxSavedTask("image_mode");
+    } catch (error) {
+      setAuxError(error instanceof Error ? error.message : String(error || "保存失败"));
+    } finally {
+      setAuxSavingTask(null);
+    }
+  };
+
   const envRowProps = (key: string, info: EnvVarInfo) => ({
     envKey: key,
     info,
@@ -539,246 +994,296 @@ export function ModelsSection() {
           <span>推荐从 DeepSeek 开始 · <a href="https://platform.deepseek.com/" target="_blank" rel="noreferrer" className={s.link}>DeepSeek 开放平台 ↗</a></span>
         </div>
       )}
-      <div className={s.modelsSectionHeader}>
-        <div>
-          <p className={s.desc}>
-            管理国内模型服务商预设和 API Key。
-            {modelInfo && <> 当前模型: <b>{modelInfo.model}</b> ({modelInfo.provider})</>}
-            {" · "}{configuredCount}/{catalog.providers.length} 个预设已配置
-          </p>
-        </div>
-        <div className={s.catalogMeta}>
-          <span>Provider Catalog {catalog.version}</span>
-          {catalogMessage && <span className={s.catalogMessage}>{catalogMessage}</span>}
-        </div>
-      </div>
-
-      <div className={s.providerPresetLayout}>
-        <div className={s.providerPresetListPane}>
-          <div className={s.providerListToolbar}>
-            <input
-              className={s.providerSearchInput}
-              value={providerSearch}
-              onChange={(event) => setProviderSearch(event.target.value)}
-              placeholder="搜索模型平台..."
-            />
-            <button
-              className={s.btn}
-              onClick={() => setShowCustomForm(true)}
-              title="添加自定义 OpenAI 兼容 provider"
-            >
-              + 自定义
-            </button>
-            <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
-          </div>
-          <div className={s.providerPresetList}>
-            {filteredProviders.map((provider) => {
-              const configured = providerHasSavedCredentials(config, provider.id);
-              const current = currentProviderId === provider.id;
-              return (
-                <button
-                  key={provider.id}
-                  id={`provider-${provider.id}`}
-                  className={s.providerPresetItem}
-                  data-active={selectedProvider?.id === provider.id}
-                  onClick={() => selectProvider(provider.id)}
-                >
-                  <span className={s.providerPresetName}>{provider.name}</span>
-                  <span className={s.providerPresetVendor}>{provider.vendor}</span>
-                  <span className={s.providerPresetBadges}>
-                    {current && <span className={s.statusBadge} data-on="true">当前</span>}
-                    <span className={s.statusBadge} data-on={configured}>
-                      {configured ? "已设置" : "未设置"}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-            {filteredProviders.length === 0 && (
-              <div className={s.providerPresetEmpty}>没有匹配的模型平台</div>
-            )}
-          </div>
-        </div>
-
-        {selectedProvider && (
-          <div className={s.providerPresetPanel} data-loading={providerPanelLoading}>
-            {providerPanelLoading ? (
-              <ProviderPanelLoading providerName={selectedProvider.name} />
-            ) : (
-              <>
-                <div className={s.providerPresetHeader}>
-                  <div>
-                    <div className={s.providerDetailName}>{selectedProvider.name}</div>
-                    <div className={s.providerDetailVendor}>
-                      {selectedProvider.id} · {selectedProvider.vendor}
-                      {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
-                    </div>
-                  </div>
-                  <span className={s.statusBadge} data-on={selectedHasCredentials}>
-                    {selectedHasCredentials ? "已保存密钥" : "未设置"}
-                  </span>
-                </div>
-
-                <div className={s.providerFormGrid}>
-                  <label className={s.fieldRow}>
-                    <div className={s.fieldLabel}>{selectedProvider.apiKeyLabel}</div>
-                    <input
-                      className={s.fieldInput}
-                      data-mono="true"
-                      type="password"
-                      value={providerForm.apiKey}
-                      placeholder={selectedHasCredentials ? "已保存" : "粘贴 API Key"}
-                      onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
-                    />
-                  </label>
-                  <label className={s.fieldRow}>
-                    <div className={s.fieldLabel}>Base URL</div>
-                    <input
-                      className={s.fieldInput}
-                      data-mono="true"
-                      value={providerForm.baseUrl}
-                      onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
-                    />
-                  </label>
-                  <label className={s.fieldRow}>
-                    <div className={s.fieldLabel}>模型</div>
-                    <div className={s.modelPickerRow}>
-                      <ModelCombobox
-                        value={providerForm.model}
-                        onChange={(next) => setProviderForm((prev) => ({ ...prev, model: next }))}
-                        options={mergedModelOptions}
-                      />
-                      {supportsModelListing ? (
-                        <button
-                          type="button"
-                          className={s.btn}
-                          disabled={modelsQuery.isFetching}
-                          onClick={() => modelsQuery.refetch()}
-                          title={`从 ${providerForm.baseUrl}/models 拉取`}
-                        >
-                          {refreshLabel}
-                        </button>
-                      ) : null}
-                    </div>
-                  </label>
-                  {!supportsModelListing && (
-                    <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
-                  )}
-                  {refreshErrorText && (
-                    <div className={s.modelPickerError}>{refreshErrorText}</div>
-                  )}
-                </div>
-
-                <div className={s.modelTags}>
-                  {mergedModelOptions.slice(0, 8).map((id) => (
-                    <span key={id} className={s.modelTag}>{id}</span>
-                  ))}
-                </div>
-
-                <div className={s.providerActions}>
-                  <button
-                    className={s.btnPrimary}
-                    disabled={
-                      providerSavePending ||
-                      providerSetCurrentPending ||
-                      !isFormDirty ||
-                      (!selectedHasCredentials && !providerForm.apiKey.trim())
-                    }
-                    onClick={() => void handleProviderSave()}
-                  >
-                    {providerSavePending
-                      ? (
-                        <>
-                          <span className={s.buttonSpinner} aria-hidden="true" />
-                          保存中…
-                        </>
-                      )
-                      : showSavedFlash
-                        ? "✓ 已保存"
-                        : "保存配置"}
-                  </button>
-                  <button
-                    className={isFormDirty || selectedProviderIsCurrent ? s.btn : s.btnPrimary}
-                    disabled={
-                      selectedProviderIsCurrent ||
-                      providerSavePending ||
-                      providerSetCurrentPending ||
-                      !selectedProviderModel ||
-                      !selectedHasCredentials
-                    }
-                    onClick={() => void handleSetCurrentModel()}
-                    title={
-                      selectedProviderIsCurrent
-                        ? "当前已在使用这个模型"
-                        : selectedHasCredentials
-                          ? "切换当前运行模型；如刚修改了 Base URL / API Key，请先保存配置"
-                          : "请先保存 API Key / provider 配置"
-                    }
-                  >
-                    {providerSetCurrentPending
-                      ? (
-                        <>
-                          <span className={s.buttonSpinner} aria-hidden="true" />
-                          切换中…
-                        </>
-                      )
-                      : selectedProviderIsCurrent
-                        ? "已是当前模型"
-                        : "设为当前模型"}
-                  </button>
-                  <button
-                    className={s.btn}
-                    disabled={
-                      probeForSelected?.status === "pending" ||
-                      (!selectedHasCredentials && !providerForm.apiKey.trim())
-                    }
-                    onClick={() => void handleProbe()}
-                    title="向 /models 端点发一次 GET，验证 API Key + 网络通"
-                  >
-                    {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
-                  </button>
-                </div>
-                {probeForSelected && probeForSelected.status !== "pending" && (
-                  <ProbeResultRow probe={probeForSelected} />
-                )}
-                {providerSaveError && (
-                  <div className={s.modelPickerError} style={{ marginTop: 8 }}>
-                    操作失败：{providerSaveError}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      <OAuthProvidersSection />
-
-      <div className={s.advancedEnvBlock}>
-        <button className={s.providerCardHeader} onClick={() => setShowEnvAdvanced((prev) => !prev)}>
-          <span className={s.providerCardName}>
-            <span className={s.providerCardArrow}>{showEnvAdvanced ? "▾" : "▸"}</span>
-            高级环境变量
-          </span>
-          <span className={s.providerCardCount}>{providerEnvEntries.length} 项</span>
+      <div className={s.modelTopTabs} role="tablist" aria-label="模型配置类型">
+        <button
+          type="button"
+          className={s.modelTopTab}
+          data-active={activeModelTab === "main"}
+          role="tab"
+          aria-selected={activeModelTab === "main"}
+          onClick={() => setActiveModelTab("main")}
+        >
+          主模型
+          {modelInfo?.model && <span>{modelInfo.model}</span>}
         </button>
-        {showEnvAdvanced && (
-          <div className={s.providerCardBody}>
-            {providerEnvEntries.map(([key, info]) => (
-              <EnvRow key={key} {...envRowProps(key, info)} />
-            ))}
-          </div>
-        )}
+        <button
+          type="button"
+          className={s.modelTopTab}
+          data-active={activeModelTab === "auxiliary"}
+          role="tab"
+          aria-selected={activeModelTab === "auxiliary"}
+          onClick={() => setActiveModelTab("auxiliary")}
+        >
+          辅助模型
+          <span>{configuredAuxiliaryCount} 项已指定</span>
+        </button>
       </div>
 
-      {nonProviderGroups.map((group) => (
-        <div key={group.category} style={{ marginTop: 24 }}>
-          <div className={s.modelsLabel}>{group.label} ({group.entries.length})</div>
-          {group.entries.map(([key, info]) => (
-            <EnvRow key={key} {...envRowProps(key, info)} />
+      {activeModelTab === "main" ? (
+        <>
+          <div className={s.modelsSectionHeader}>
+            <div>
+              <p className={s.desc}>
+                管理国内模型服务商预设和 API Key。
+                {modelInfo && <> 当前模型: <b>{modelInfo.model}</b> ({modelInfo.provider})</>}
+                {" · "}{configuredCount}/{catalog.providers.length} 个预设已配置
+              </p>
+            </div>
+            <div className={s.catalogMeta}>
+              <span>Provider Catalog {catalog.version}</span>
+              {catalogMessage && <span className={s.catalogMessage}>{catalogMessage}</span>}
+            </div>
+          </div>
+
+          <div className={s.providerPresetLayout}>
+            <div className={s.providerPresetListPane}>
+              <div className={s.providerListToolbar}>
+                <input
+                  className={s.providerSearchInput}
+                  value={providerSearch}
+                  onChange={(event) => setProviderSearch(event.target.value)}
+                  placeholder="搜索模型平台..."
+                />
+                <button
+                  className={s.btn}
+                  onClick={() => setShowCustomForm(true)}
+                  title="添加自定义 OpenAI 兼容 provider"
+                >
+                  + 自定义
+                </button>
+                <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
+              </div>
+              <div className={s.providerPresetList}>
+                {filteredProviders.map((provider) => {
+                  const configured = providerHasSavedCredentials(config, provider.id);
+                  const current = currentProviderId === provider.id;
+                  return (
+                    <button
+                      key={provider.id}
+                      id={`provider-${provider.id}`}
+                      className={s.providerPresetItem}
+                      data-active={selectedProvider?.id === provider.id}
+                      onClick={() => selectProvider(provider.id)}
+                    >
+                      <span className={s.providerPresetName}>{provider.name}</span>
+                      <span className={s.providerPresetVendor}>{provider.vendor}</span>
+                      <span className={s.providerPresetBadges}>
+                        {current && <span className={s.statusBadge} data-on="true">当前</span>}
+                        <span className={s.statusBadge} data-on={configured}>
+                          {configured ? "已设置" : "未设置"}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+                {filteredProviders.length === 0 && (
+                  <div className={s.providerPresetEmpty}>没有匹配的模型平台</div>
+                )}
+              </div>
+            </div>
+
+            {selectedProvider && (
+              <div className={s.providerPresetPanel} data-loading={providerPanelLoading}>
+                {providerPanelLoading ? (
+                  <ProviderPanelLoading providerName={selectedProvider.name} />
+                ) : (
+                  <>
+                    <div className={s.providerPresetHeader}>
+                      <div>
+                        <div className={s.providerDetailName}>{selectedProvider.name}</div>
+                        <div className={s.providerDetailVendor}>
+                          {selectedProvider.id} · {selectedProvider.vendor}
+                          {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
+                        </div>
+                      </div>
+                      <span className={s.statusBadge} data-on={selectedHasCredentials}>
+                        {selectedHasCredentials ? "已保存密钥" : "未设置"}
+                      </span>
+                    </div>
+
+                    <div className={s.providerFormGrid}>
+                      <label className={s.fieldRow}>
+                        <div className={s.fieldLabel}>{selectedProvider.apiKeyLabel}</div>
+                        <input
+                          className={s.fieldInput}
+                          data-mono="true"
+                          type="password"
+                          value={providerForm.apiKey}
+                          placeholder={selectedHasCredentials ? "已保存" : "粘贴 API Key"}
+                          onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
+                        />
+                      </label>
+                      <label className={s.fieldRow}>
+                        <div className={s.fieldLabel}>Base URL</div>
+                        <input
+                          className={s.fieldInput}
+                          data-mono="true"
+                          value={providerForm.baseUrl}
+                          onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                        />
+                      </label>
+                      <label className={s.fieldRow}>
+                        <div className={s.fieldLabel}>模型</div>
+                        <div className={s.modelPickerRow}>
+                          <ModelCombobox
+                            value={providerForm.model}
+                            onChange={(next) => setProviderForm((prev) => ({ ...prev, model: next }))}
+                            options={mergedModelOptions}
+                          />
+                          {supportsModelListing ? (
+                            <button
+                              type="button"
+                              className={s.btn}
+                              disabled={modelsQuery.isFetching}
+                              onClick={() => modelsQuery.refetch()}
+                              title={`从 ${providerForm.baseUrl}/models 拉取`}
+                            >
+                              {refreshLabel}
+                            </button>
+                          ) : null}
+                        </div>
+                      </label>
+                      {!supportsModelListing && (
+                        <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
+                      )}
+                      {refreshErrorText && (
+                        <div className={s.modelPickerError}>{refreshErrorText}</div>
+                      )}
+                    </div>
+
+                    <div className={s.modelTags}>
+                      {mergedModelOptions.slice(0, 8).map((id) => (
+                        <span key={id} className={s.modelTag}>{id}</span>
+                      ))}
+                    </div>
+
+                    <div className={s.providerActions}>
+                      <button
+                        className={s.btnPrimary}
+                        disabled={
+                          providerSavePending ||
+                          providerSetCurrentPending ||
+                          !isFormDirty ||
+                          (!selectedHasCredentials && !providerForm.apiKey.trim())
+                        }
+                        onClick={() => void handleProviderSave()}
+                      >
+                        {providerSavePending
+                          ? (
+                            <>
+                              <span className={s.buttonSpinner} aria-hidden="true" />
+                              保存中…
+                            </>
+                          )
+                          : showSavedFlash
+                            ? "✓ 已保存"
+                            : "保存配置"}
+                      </button>
+                      <button
+                        className={isFormDirty || selectedProviderIsCurrent ? s.btn : s.btnPrimary}
+                        disabled={
+                          selectedProviderIsCurrent ||
+                          providerSavePending ||
+                          providerSetCurrentPending ||
+                          !selectedProviderModel ||
+                          !selectedHasCredentials
+                        }
+                        onClick={() => void handleSetCurrentModel()}
+                        title={
+                          selectedProviderIsCurrent
+                            ? "当前已在使用这个模型"
+                            : selectedHasCredentials
+                              ? "切换当前运行模型；如刚修改了 Base URL / API Key，请先保存配置"
+                              : "请先保存 API Key / provider 配置"
+                        }
+                      >
+                        {providerSetCurrentPending
+                          ? (
+                            <>
+                              <span className={s.buttonSpinner} aria-hidden="true" />
+                              切换中…
+                            </>
+                          )
+                          : selectedProviderIsCurrent
+                            ? "已是当前模型"
+                            : "设为当前模型"}
+                      </button>
+                      <button
+                        className={s.btn}
+                        disabled={
+                          probeForSelected?.status === "pending" ||
+                          (!selectedHasCredentials && !providerForm.apiKey.trim())
+                        }
+                        onClick={() => void handleProbe()}
+                        title="向 /models 端点发一次 GET，验证 API Key + 网络通"
+                      >
+                        {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
+                      </button>
+                    </div>
+                    {probeForSelected && probeForSelected.status !== "pending" && (
+                      <ProbeResultRow probe={probeForSelected} />
+                    )}
+                    {providerSaveError && (
+                      <div className={s.modelPickerError} style={{ marginTop: 8 }}>
+                        操作失败：{providerSaveError}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <OAuthProvidersSection />
+
+          <div className={s.advancedEnvBlock}>
+            <button className={s.providerCardHeader} onClick={() => setShowEnvAdvanced((prev) => !prev)}>
+              <span className={s.providerCardName}>
+                <span className={s.providerCardArrow}>{showEnvAdvanced ? "▾" : "▸"}</span>
+                高级环境变量
+              </span>
+              <span className={s.providerCardCount}>{providerEnvEntries.length} 项</span>
+            </button>
+            {showEnvAdvanced && (
+              <div className={s.providerCardBody}>
+                {providerEnvEntries.map(([key, info]) => (
+                  <EnvRow key={key} {...envRowProps(key, info)} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {nonProviderGroups.map((group) => (
+            <div key={group.category} style={{ marginTop: 24 }}>
+              <div className={s.modelsLabel}>{group.label} ({group.entries.length})</div>
+              {group.entries.map(([key, info]) => (
+                <EnvRow key={key} {...envRowProps(key, info)} />
+              ))}
+            </div>
           ))}
-        </div>
-      ))}
+        </>
+      ) : (
+        <AuxiliaryModelsPanel
+          config={config}
+          modelInfo={modelInfo}
+          providers={allProviders}
+          providerOptions={auxiliaryProviderOptions}
+          selectedTask={selectedAuxTask}
+          form={auxForm}
+          advancedOpen={auxAdvancedOpen}
+          savingTask={auxSavingTask}
+          savedTask={auxSavedTask}
+          error={auxError}
+          onSelectTask={setSelectedAuxTask}
+          onFormChange={setAuxForm}
+          onAdvancedOpenChange={setAuxAdvancedOpen}
+          onSaveTask={() => void handleSaveAuxiliaryTask()}
+          onResetTask={(task) => void handleResetAuxiliaryTask(task)}
+          onResetAll={() => void handleResetAllAuxiliary()}
+          imageInputMode={getImageInputMode(config)}
+          onImageInputModeChange={(mode) => void handleImageInputModeChange(mode)}
+        />
+      )}
 
       {showCustomForm && createPortal(
         <div className={s.customProviderBackdrop} onClick={closeCustomForm}>
@@ -867,6 +1372,321 @@ export function ModelsSection() {
         document.body,
       )}
     </div>
+  );
+}
+
+function AuxiliaryModelsPanel({
+  config,
+  modelInfo,
+  providers,
+  providerOptions,
+  selectedTask,
+  form,
+  advancedOpen,
+  savingTask,
+  savedTask,
+  error,
+  onSelectTask,
+  onFormChange,
+  onAdvancedOpenChange,
+  onSaveTask,
+  onResetTask,
+  onResetAll,
+  imageInputMode,
+  onImageInputModeChange,
+}: {
+  config: Record<string, any>;
+  modelInfo?: ModelInfo;
+  providers: ProviderPreset[];
+  providerOptions: { id: string; name: string; hint: string }[];
+  selectedTask: AuxiliaryTaskId;
+  form: AuxiliaryTaskForm;
+  advancedOpen: boolean;
+  savingTask: AuxiliaryTaskId | "__all__" | "image_mode" | null;
+  savedTask: AuxiliaryTaskId | "__all__" | "image_mode" | null;
+  error: string;
+  onSelectTask: (task: AuxiliaryTaskId) => void;
+  onFormChange: Dispatch<SetStateAction<AuxiliaryTaskForm>>;
+  onAdvancedOpenChange: (open: boolean) => void;
+  onSaveTask: () => void;
+  onResetTask: (task: AuxiliaryTaskId) => void;
+  onResetAll: () => void;
+  imageInputMode: "auto" | "native" | "text";
+  onImageInputModeChange: (mode: "auto" | "native" | "text") => void;
+}) {
+  const selectedDefinition = AUXILIARY_TASK_BY_ID[selectedTask];
+  const modelOptions = getAuxiliaryModelOptions(form.provider, providers, form.model);
+  const providerName = getProviderDisplayName(form.provider, providers);
+  const selectedSlot = getAuxiliarySlot(config, selectedTask);
+  const hasInlineApiKey = Boolean(selectedSlot.api_key);
+  const isAutoProvider = form.provider === "auto";
+  const isSavingCurrent = savingTask === selectedTask;
+  const currentSaved = savedTask === selectedTask;
+  const showVisionWarning = selectedTask === "vision" &&
+    !isAutoProvider &&
+    !isLikelyVisionCapable(form.provider, form.model, providers);
+  const showVisionAutoHint = selectedTask === "vision" && isAutoProvider;
+
+  const updateForm = (patch: Partial<AuxiliaryTaskForm>) => {
+    onFormChange((prev) => ({ ...prev, ...patch }));
+  };
+
+  return (
+    <div className={s.auxModels}>
+      <div className={s.auxIntroCard}>
+        <div>
+          <div className={s.auxIntroTitle}>辅助模型按任务生效</div>
+          <p>
+            这里配置的是 <b>auxiliary.&lt;task&gt;</b> 槽位。Auto 会优先复用主模型，再按后端策略 fallback；显式指定后，该任务会固定走选中的 provider/model。
+          </p>
+          {modelInfo?.model && (
+            <p>
+              当前主模型是 <b>{modelInfo.model}</b>（{modelInfo.provider || "未知 provider"}），辅助模型配置主要影响图片分析、上下文压缩、网页抽取、标题生成、审批和 MCP 路由。
+            </p>
+          )}
+        </div>
+        <div className={s.auxImageModeBox}>
+          <label className={s.fieldRow}>
+            <div className={s.fieldLabel}>图片输入模式</div>
+            <select
+              className={s.select}
+              value={imageInputMode}
+              disabled={savingTask === "image_mode"}
+              onChange={(event) =>
+                onImageInputModeChange(event.target.value as "auto" | "native" | "text")}
+            >
+              <option value="auto">auto · 主模型支持图片时原生，否则走 vision</option>
+              <option value="text">text · 始终先用 vision 分析成文字</option>
+              <option value="native">native · 始终尝试原生传图</option>
+            </select>
+          </label>
+          {savedTask === "image_mode" && <div className={s.auxSavedHint}>✓ 图片输入模式已保存</div>}
+        </div>
+      </div>
+
+      <div className={s.auxToolbar}>
+        <div className={s.desc}>
+          常用任务默认展示，高级任务用于 Kanban、Profile 和 Skill 审查。session_search 已不再使用辅助 LLM，所以这里不展示。
+        </div>
+        <button
+          type="button"
+          className={s.btn}
+          disabled={savingTask === "__all__"}
+          onClick={onResetAll}
+        >
+          {savingTask === "__all__" ? "恢复中…" : "全部恢复 Auto"}
+        </button>
+      </div>
+
+      <div className={s.auxLayout}>
+        <div className={s.auxTaskList} aria-label="辅助模型任务列表">
+          <AuxiliaryTaskGroup
+            title="常用辅助任务"
+            tasks={AUXILIARY_TASKS.filter((task) => task.group === "common")}
+            config={config}
+            selectedTask={selectedTask}
+            onSelectTask={onSelectTask}
+          />
+          <AuxiliaryTaskGroup
+            title="高级辅助任务"
+            tasks={AUXILIARY_TASKS.filter((task) => task.group === "advanced")}
+            config={config}
+            selectedTask={selectedTask}
+            onSelectTask={onSelectTask}
+          />
+        </div>
+
+        <div className={s.auxEditorPanel}>
+          <div className={s.auxEditorHeader}>
+            <div>
+              <div className={s.auxEditorTitle}>{selectedDefinition.name}</div>
+              <div className={s.auxEditorSubtitle}>{selectedDefinition.description}</div>
+            </div>
+            <span className={s.statusBadge} data-on={!isAutoProvider}>
+              {isAutoProvider ? "Auto" : providerName}
+            </span>
+          </div>
+
+          <div className={s.providerFormGrid}>
+            <label className={s.fieldRow}>
+              <div className={s.fieldLabel}>Provider</div>
+              <select
+                className={s.select}
+                value={form.provider}
+                onChange={(event) => updateForm({
+                  provider: event.target.value,
+                  model: event.target.value === "auto" ? "" : form.model,
+                })}
+              >
+                {providerOptions.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name} · {provider.id}
+                  </option>
+                ))}
+              </select>
+              <div className={s.modelPickerHint}>
+                {providerOptions.find((provider) => provider.id === form.provider)?.hint ||
+                  "可以直接使用当前配置里的 provider。"}
+              </div>
+            </label>
+
+            <label className={s.fieldRow}>
+              <div className={s.fieldLabel}>模型</div>
+              <ModelCombobox
+                value={form.model}
+                onChange={(next) => updateForm({ model: next })}
+                options={modelOptions}
+                placeholder={isAutoProvider ? "Auto 模式下不需要填写模型" : "搜索或输入辅助模型 ID"}
+                disabled={isAutoProvider}
+              />
+            </label>
+
+            <label className={s.fieldRow}>
+              <div className={s.fieldLabel}>调用超时（秒）</div>
+              <input
+                className={s.fieldInput}
+                data-mono="true"
+                value={form.timeout}
+                inputMode="numeric"
+                onChange={(event) => updateForm({ timeout: event.target.value })}
+              />
+            </label>
+          </div>
+
+          {showVisionAutoHint && (
+            <div className={s.auxNotice}>
+              Auto 会尝试寻找可用视觉后端；如果没有 Anthropic、OpenRouter、Nous 或自定义视觉 endpoint 的可用凭据，主模型是 MiniMax/DeepSeek 这类文本模型时仍然无法真正读图。
+            </div>
+          )}
+          {showVisionWarning && (
+            <div className={s.auxWarning}>
+              当前 provider/model 看起来不像视觉模型。`auxiliary.vision` 必须指向真实支持图片输入的后端，否则附件图片仍会读取失败。
+            </div>
+          )}
+
+          <button
+            type="button"
+            className={s.auxAdvancedToggle}
+            onClick={() => onAdvancedOpenChange(!advancedOpen)}
+          >
+            <span>{advancedOpen ? "▾" : "▸"}</span>
+            高级设置
+          </button>
+          {advancedOpen && (
+            <div className={s.auxAdvancedGrid}>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>Base URL</div>
+                <input
+                  className={s.fieldInput}
+                  data-mono="true"
+                  value={form.baseUrl}
+                  placeholder="可选，自定义 OpenAI-compatible endpoint"
+                  disabled={isAutoProvider}
+                  onChange={(event) => updateForm({ baseUrl: event.target.value })}
+                />
+              </label>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>Inline API Key</div>
+                <input
+                  className={s.fieldInput}
+                  data-mono="true"
+                  type="password"
+                  value={form.apiKey}
+                  placeholder={hasInlineApiKey ? "已保存，留空则保留" : "可选，优先建议使用全局环境变量"}
+                  disabled={isAutoProvider}
+                  onChange={(event) => updateForm({ apiKey: event.target.value })}
+                />
+              </label>
+              {selectedTask === "vision" && (
+                <label className={s.fieldRow}>
+                  <div className={s.fieldLabel}>图片下载超时（秒）</div>
+                  <input
+                    className={s.fieldInput}
+                    data-mono="true"
+                    value={form.downloadTimeout}
+                    inputMode="numeric"
+                    onChange={(event) => updateForm({ downloadTimeout: event.target.value })}
+                  />
+                </label>
+              )}
+              <label className={`${s.fieldRow} ${s.auxExtraBodyField}`}>
+                <div className={s.fieldLabel}>extra_body JSON</div>
+                <textarea
+                  className={s.auxJsonArea}
+                  value={form.extraBody}
+                  placeholder={'例如：{\\n  "provider": { "sort": "throughput" }\\n}'}
+                  onChange={(event) => updateForm({ extraBody: event.target.value })}
+                />
+              </label>
+            </div>
+          )}
+
+          {error && <div className={s.modelPickerError}>操作失败：{error}</div>}
+          {currentSaved && <div className={s.auxSavedHint}>✓ {selectedDefinition.name} 已保存</div>}
+          {savedTask === "__all__" && <div className={s.auxSavedHint}>✓ 所有辅助任务已恢复 Auto</div>}
+
+          <div className={s.providerActions}>
+            <button
+              type="button"
+              className={s.btnPrimary}
+              disabled={isSavingCurrent}
+              onClick={onSaveTask}
+            >
+              {isSavingCurrent ? "保存中…" : "保存此辅助任务"}
+            </button>
+            <button
+              type="button"
+              className={s.btn}
+              disabled={savingTask === selectedTask}
+              onClick={() => onResetTask(selectedTask)}
+            >
+              恢复此任务 Auto
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AuxiliaryTaskGroup({
+  title,
+  tasks,
+  config,
+  selectedTask,
+  onSelectTask,
+}: {
+  title: string;
+  tasks: AuxiliaryTaskDefinition[];
+  config: Record<string, any>;
+  selectedTask: AuxiliaryTaskId;
+  onSelectTask: (task: AuxiliaryTaskId) => void;
+}) {
+  return (
+    <section className={s.auxTaskGroup}>
+      <div className={s.auxTaskGroupTitle}>{title}</div>
+      {tasks.map((task) => {
+        const summary = describeAuxiliarySlot(config, task.id);
+        const isAuto = summary === "Auto";
+        return (
+          <button
+            type="button"
+            key={task.id}
+            className={s.auxTaskItem}
+            data-active={selectedTask === task.id}
+            onClick={() => onSelectTask(task.id)}
+          >
+            <span className={s.auxTaskMain}>
+              <span className={s.auxTaskName}>{task.name}</span>
+              <span className={s.auxTaskDesc}>{task.shortName}</span>
+            </span>
+            <span className={s.auxTaskState} data-auto={isAuto}>
+              {summary}
+            </span>
+          </button>
+        );
+      })}
+    </section>
   );
 }
 
