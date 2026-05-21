@@ -51,10 +51,10 @@ export function formatCostCny(usd: number | undefined | null): string {
 }
 
 export function getGreeting(hour: number): string {
-  if (hour < 6) return "夜深了，想让 Hermes 处理什么？";
-  if (hour < 12) return "早上好，今天从哪件事开始？";
-  if (hour < 18) return "下午好，交给 Hermes 一个任务。";
-  return "晚上好，继续推进你的工作。";
+  if (hour < 6) return "夜深了，休息一下？";
+  if (hour < 12) return "早上好，开始今天的工作";
+  if (hour < 18) return "下午好，我们该做什么？";
+  return "晚上好，给今天收收尾？";
 }
 
 import {

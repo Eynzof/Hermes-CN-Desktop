@@ -25,19 +25,27 @@ Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，
 
 ### 界面截图
 
-下面的截图展示了工作台、明暗主题、内置 Skills、模型服务商配置、记忆管理和聊天工作流。
+下面的截图展示了工作台、明暗主题、配置、内置 Skills、模型服务商配置、记忆管理、运行时诊断、日志、对话历史、聊天回复和项目 Review 工作流。
 
 | 工作台（浅色主题） | 工作台（深色主题） |
 | --- | --- |
 | <img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent 中文社区桌面版浅色主题工作台" width="100%"> | <img src="./docs/assets/demo/screenshots/workbench-dark.png" alt="Hermes Agent 中文社区桌面版深色主题工作台" width="100%"> |
 
-| 内置 Skills | 模型服务商配置 |
+| 配置总览 | 内置 Skills |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/skills-library.png" alt="内置 Skills 管理页面" width="100%"> | <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="模型服务商配置页面" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/config.png" alt="配置总览页面" width="100%"> | <img src="./docs/assets/demo/screenshots/skills-library.png" alt="内置 Skills 管理页面" width="100%"> |
 
-| 记忆管理 | 聊天回复 |
+| 模型服务商配置 | 记忆管理 |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="记忆管理页面" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-response.png" alt="聊天回复工作流" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="模型服务商配置页面" width="100%"> | <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="记忆管理页面" width="100%"> |
+
+| 运行时诊断 | 日志查看 |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/runtime.png" alt="运行时诊断页面" width="100%"> | <img src="./docs/assets/demo/screenshots/log.png" alt="日志查看页面" width="100%"> |
+
+| 对话历史 | 聊天回复 |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/chat-history.png" alt="对话历史页面" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-response.png" alt="聊天回复工作流" width="100%"> |
 
 | 项目 Review 工作流 |
 | --- |

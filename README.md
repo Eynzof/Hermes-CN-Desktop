@@ -25,19 +25,27 @@ Click the preview image below, or open the [MP4 demo](./docs/assets/demo/hermes-
 
 ### Screenshots
 
-These screenshots show the main workspace, light and dark themes, built-in Skills, model provider setup, memory management, and chat workflows.
+These screenshots show the main workspace, light and dark themes, configuration, built-in Skills, model provider setup, memory, runtime diagnostics, logs, chat history, chat responses, and project review workflows.
 
 | Workbench, light theme | Workbench, dark theme |
 | --- | --- |
 | <img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent CN Desktop workspace in light theme" width="100%"> | <img src="./docs/assets/demo/screenshots/workbench-dark.png" alt="Hermes Agent CN Desktop workspace in dark theme" width="100%"> |
 
-| Built-in Skills | Model provider setup |
+| Configuration | Built-in Skills |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/skills-library.png" alt="Built-in Skills management page" width="100%"> | <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="Model provider setup page" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/config.png" alt="Configuration overview page" width="100%"> | <img src="./docs/assets/demo/screenshots/skills-library.png" alt="Built-in Skills management page" width="100%"> |
 
-| Memory management | Chat response |
+| Model provider setup | Memory management |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="Memory management page" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-response.png" alt="Chat response workflow" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="Model provider setup page" width="100%"> | <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="Memory management page" width="100%"> |
+
+| Runtime diagnostics | Logs |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/runtime.png" alt="Runtime diagnostics page" width="100%"> | <img src="./docs/assets/demo/screenshots/log.png" alt="Log viewer page" width="100%"> |
+
+| Chat history | Chat response |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/chat-history.png" alt="Chat history page" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-response.png" alt="Chat response workflow" width="100%"> |
 
 | Project review workflow |
 | --- |

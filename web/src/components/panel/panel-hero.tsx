@@ -8,11 +8,11 @@ interface PanelHeroProps {
   needsAttention: number;
 }
 
-function greetingParts(hour: number): { lead: string; tail: string; emph: string } {
-  if (hour < 6) return { lead: "夜深了，", tail: " 一会儿。", emph: "稍作休息" };
-  if (hour < 12) return { lead: "早上好，", tail: " 第一件事。", emph: "开始" };
-  if (hour < 18) return { lead: "下午好，", tail: " 吧。", emph: "动手" };
-  return { lead: "晚上好，", tail: " 收个尾。", emph: "继续" };
+function greetingParts(hour: number): { lead: string; body: string } {
+  if (hour < 6) return { lead: "夜深了，", body: "休息一下？" };
+  if (hour < 12) return { lead: "早上好，", body: "开始今天的工作" };
+  if (hour < 18) return { lead: "下午好，", body: "我们该做什么？" };
+  return { lead: "晚上好，", body: "给今天收收尾？" };
 }
 
 export function PanelHero({ activeCount, completedToday, needsAttention }: PanelHeroProps) {
@@ -23,7 +23,7 @@ export function PanelHero({ activeCount, completedToday, needsAttention }: Panel
     return () => window.clearInterval(timer);
   }, []);
 
-  const { lead, tail, emph } = greetingParts(now.getHours());
+  const { lead, body } = greetingParts(now.getHours());
 
   return (
     <div className={s.hero}>
@@ -35,8 +35,7 @@ export function PanelHero({ activeCount, completedToday, needsAttention }: Panel
         <h1 className={s.title}>
           {lead}
           <br />
-          <em>{emph}</em>
-          {tail}
+          <em>{body}</em>
         </h1>
         <div className={s.greet}>
           <span className={s.day}>{formatHeroTimestamp(now)}</span>
