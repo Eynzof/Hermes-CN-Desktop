@@ -34,6 +34,7 @@ export interface ComposerContextUsage {
   percent?: number;
   model?: string;
   compressions?: number;
+  estimated?: boolean;
 }
 
 export interface ComposerSubmitPayload {

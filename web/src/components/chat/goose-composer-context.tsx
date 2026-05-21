@@ -76,11 +76,15 @@ export function ContextIndicator({
   const rawPercent = contextUsagePercent(usage);
   const percent = Math.max(0, Math.min(100, rawPercent ?? 0));
   const risk = contextUsageRisk(usage);
+  const usedLabel = formatTokenCount(usage.used);
+  const estimatedPrefix = usage.estimated && typeof usage.used === "number" ? "约 " : "";
   const label = usage.max
-    ? `${formatTokenCount(usage.used ?? 0)} / ${formatTokenCount(usage.max)}`
-    : formatTokenCount(usage.used);
+    ? `${estimatedPrefix}${usedLabel} / ${formatTokenCount(usage.max)}`
+    : `${estimatedPrefix}${usedLabel}`;
   const displayPercent = rawPercent ?? percent;
-  const percentLabel = `${displayPercent > 0 && displayPercent < 10 ? displayPercent.toFixed(1) : Math.round(displayPercent)}%`;
+  const percentLabel = rawPercent === undefined
+    ? "-"
+    : `${displayPercent > 0 && displayPercent < 10 ? displayPercent.toFixed(1) : Math.round(displayPercent)}%`;
   const contextTitle = usage.model
     ? `${usage.model} · 上下文窗口 ${label}`
     : `上下文窗口 ${label}`;
@@ -127,6 +131,9 @@ export function ContextIndicator({
             <span>{label}</span>
             <span>{percentLabel}</span>
           </span>
+          {usage.estimated ? (
+            <span className={s.contextPopoverMeta}>按当前消息内容估算</span>
+          ) : null}
           {typeof usage.compressions === "number" && usage.compressions > 0 ? (
             <span className={s.contextPopoverMeta}>已压缩 {usage.compressions} 次</span>
           ) : null}
