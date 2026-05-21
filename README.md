@@ -7,7 +7,7 @@
 [![release-desktop](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-Hermes Agent CN Desktop is a lightweight desktop client for the Hermes Agent Chinese community edition. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and it wraps the [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) Dashboard with a native desktop shell.
+Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese community, with native support for Windows and macOS. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and includes the Chinese community-modified Hermes Agent core from [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn).
 
 > Current release: `v0.1.0-alpha.2`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
 
@@ -51,12 +51,11 @@ This repository is the desktop shell. The agent runtime and Dashboard source liv
 
 ## Highlights
 
-- **Lightweight desktop shell**: Tauri uses the system WebView instead of bundling Chromium.
-- **Managed runtime workflow**: the desktop app can install, update, verify, and roll back the local Hermes runtime.
+- **One-click installation with a very low setup barrier**: adapted for Windows users, so you can install the app and start using it after configuring an API key.
+- **Lightweight and cross-platform**: Tauri uses the system WebView instead of bundling Chromium, keeping the installer small while supporting Windows and macOS.
+- **Built-in independent Hermes Agent core**: the desktop app can install, update, verify, health-check, and roll back the local Hermes Agent core.
 - **Agent-first UI**: chat, streaming responses, attachments, MCP tools, skills, memory, profiles, scheduled tasks, and runtime health panels.
 - **Production transport bridge**: Rust commands proxy REST requests, uploads, and SSE streams to avoid WebView CORS limitations and centralize auth handling.
-- **Local-first defaults**: the managed Dashboard uses port `9120` by default, leaving `9119` free for a user-managed global Hermes Agent.
-- **Cross-platform release target**: macOS DMG and Windows NSIS installers are built by GitHub Actions.
 
 ## Download
 
