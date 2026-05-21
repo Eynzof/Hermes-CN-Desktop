@@ -7,7 +7,11 @@ import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
 
-const PRACTICE_GUIDES_URL = "https://hermesagent.org.cn/practice-guides";
+const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.1.0";
+const DESKTOP_VERSION_PARAM = DESKTOP_VERSION.startsWith("v") || DESKTOP_VERSION.startsWith("V")
+  ? DESKTOP_VERSION
+  : `v${DESKTOP_VERSION}`;
+const BRAND_URL = `https://hermesagent.org.cn?source=cn_desktop&version=${encodeURIComponent(DESKTOP_VERSION_PARAM)}`;
 
 export function AppTopBar() {
   const navigate = useNavigate();
@@ -16,21 +20,21 @@ export function AppTopBar() {
   const nextTheme = themeConfig.theme === "dark" ? "light" : "dark";
   const ThemeIcon = themeConfig.theme === "dark" ? Sun : Moon;
   const themeToggleLabel = themeConfig.theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
-  const openPracticeGuides = (event: MouseEvent<HTMLAnchorElement>) => {
+  const openBrandSite = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    window.open(PRACTICE_GUIDES_URL, "_blank", "noopener,noreferrer");
+    window.open(BRAND_URL, "_blank", "noopener,noreferrer");
   };
 
   return (
     <header className={s.topbar} data-window-drag data-tauri-drag-region="deep">
       <a
         className={s.brand}
-        aria-label="打开 Hermes Agent 实践指南"
-        href={PRACTICE_GUIDES_URL}
+        aria-label="打开 Hermes Agent 中文社区官网"
+        href={BRAND_URL}
         target="_blank"
         rel="noopener noreferrer"
-        title="打开 Hermes Agent 实践指南"
-        onClick={openPracticeGuides}
+        title="打开 Hermes Agent 中文社区官网"
+        onClick={openBrandSite}
         data-no-drag
       >
         <HermesLogoMark
