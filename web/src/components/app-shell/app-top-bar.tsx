@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "@hermes/shared-ui";
@@ -6,6 +7,8 @@ import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
 
+const PRACTICE_GUIDES_URL = "https://hermesagent.org.cn/practice-guides";
+
 export function AppTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -13,20 +16,39 @@ export function AppTopBar() {
   const nextTheme = themeConfig.theme === "dark" ? "light" : "dark";
   const ThemeIcon = themeConfig.theme === "dark" ? Sun : Moon;
   const themeToggleLabel = themeConfig.theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
+  const openPracticeGuides = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    window.open(PRACTICE_GUIDES_URL, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <header className={s.topbar} data-window-drag data-tauri-drag-region="deep">
-      <div className={s.brand} aria-label="Hermes Agent 中文社区桌面版">
+      <a
+        className={s.brand}
+        aria-label="打开 Hermes Agent 实践指南"
+        href={PRACTICE_GUIDES_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="打开 Hermes Agent 实践指南"
+        onClick={openPracticeGuides}
+        data-no-drag
+      >
         <HermesLogoMark
           className={s.brandMark}
-          size={22}
+          size={30}
           tone={themeConfig.theme === "light" ? "dark" : "light"}
         />
-        <span className={s.wordmark}>
-          Hermes <em>Agent</em>
+        <span className={s.brandText}>
+          <span className={s.wordmark}>
+            Hermes <em>Agent</em>
+          </span>
+          <span className={s.brandMeta}>
+            <span className={s.edition}>中文社区桌面版</span>
+            <span className={s.metaDot} aria-hidden="true">·</span>
+            <span className={s.site}>hermesagent.org.cn</span>
+          </span>
         </span>
-        <span className={s.ver}>中文社区桌面版</span>
-      </div>
+      </a>
 
       <nav className={s.nav} aria-label="主导航">
         {TOP_TABS.map((tab) => (
