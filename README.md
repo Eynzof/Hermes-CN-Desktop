@@ -13,9 +13,31 @@ Hermes Agent CN Desktop is a lightweight desktop client for the Hermes Agent Chi
 
 ## Demo
 
-<video src="./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4" controls muted width="100%" aria-label="Hermes Agent CN Desktop demo"></video>
+### Demo video
 
-If the embedded player is not available in your Markdown viewer, open the [MP4 demo](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4).
+Click the preview image below, or open the [MP4 demo](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4) directly. README renderers do not consistently support local video embeds, so the preview links to the video file instead.
+
+[<img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent CN Desktop demo video preview" width="100%">](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)
+
+### Screenshots
+
+These screenshots show the main workspace, light and dark themes, built-in Skills, model provider setup, memory management, and chat workflows.
+
+| Workbench, light theme | Workbench, dark theme |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent CN Desktop workspace in light theme" width="100%"> | <img src="./docs/assets/demo/screenshots/workbench-dark.png" alt="Hermes Agent CN Desktop workspace in dark theme" width="100%"> |
+
+| Built-in Skills | Model provider setup |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/skills-library.png" alt="Built-in Skills management page" width="100%"> | <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="Model provider setup page" width="100%"> |
+
+| Memory management | Chat response |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="Memory management page" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-response.png" alt="Chat response workflow" width="100%"> |
+
+| Project review workflow |
+| --- |
+| <img src="./docs/assets/demo/screenshots/project-review.png" alt="Project review chat workflow" width="100%"> |
 
 ## Why this project exists
 

@@ -11,11 +11,33 @@ Hermes Agent CN Desktop 是 Hermes Agent 中文社区版的轻量桌面客户端
 
 > 当前版本是 `v0.1.0-alpha.2`。项目仍处于 alpha 阶段，API、打包流程、运行时分发策略和界面细节都可能在稳定版发布前继续调整。
 
-## 演示视频
+## 演示
 
-<video src="./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4" controls muted width="100%" aria-label="Hermes Agent CN Desktop 演示视频"></video>
+### 演示视频
 
-如果当前 Markdown 渲染器不显示内嵌播放器，可以直接打开 [MP4 演示视频](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)。
+点击下方预览图，或直接打开 [MP4 演示视频](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)。README 渲染器对本地视频内嵌播放支持不稳定，因此这里用可点击预览图链接到视频文件。
+
+[<img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent 中文社区桌面版演示视频预览" width="100%">](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)
+
+### 界面截图
+
+下面的截图展示了工作台、明暗主题、内置 Skills、模型服务商配置、记忆管理和聊天工作流。
+
+| 工作台（浅色主题） | 工作台（深色主题） |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent 中文社区桌面版浅色主题工作台" width="100%"> | <img src="./docs/assets/demo/screenshots/workbench-dark.png" alt="Hermes Agent 中文社区桌面版深色主题工作台" width="100%"> |
+
+| 内置 Skills | 模型服务商配置 |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/skills-library.png" alt="内置 Skills 管理页面" width="100%"> | <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="模型服务商配置页面" width="100%"> |
+
+| 记忆管理 | 聊天回复 |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="记忆管理页面" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-response.png" alt="聊天回复工作流" width="100%"> |
+
+| 项目 Review 工作流 |
+| --- |
+| <img src="./docs/assets/demo/screenshots/project-review.png" alt="项目 Review 聊天工作流" width="100%"> |
 
 ## 项目定位
 

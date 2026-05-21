@@ -4,7 +4,7 @@
 // probe_dashboard correctly classifies HTTP responses (2xx, 401, errors,
 // timeouts).
 
-use std::time::Duration;
+use std::{net::TcpListener, time::Duration};
 
 use hermes_agent_cn::process::dashboard::probe_dashboard;
 use wiremock::matchers::{method, path};
@@ -63,12 +63,14 @@ async fn returns_false_when_response_exceeds_timeout() {
 
 #[tokio::test]
 async fn returns_false_when_server_unreachable() {
-    // Start a server, drop it, then probe — the port should refuse connections.
-    let uri = {
-        let server = MockServer::start().await;
-        server.uri()
-    };
-    // Brief delay so the OS releases the port.
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // Bind an ephemeral local port without serving HTTP. This avoids the
+    // race where a dropped mock server's port can be immediately reused by
+    // another parallel test on CI.
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind inert local listener");
+    let uri = format!(
+        "http://{}",
+        listener.local_addr().expect("listener address")
+    );
+
     assert!(!probe_dashboard(&uri).await);
 }
