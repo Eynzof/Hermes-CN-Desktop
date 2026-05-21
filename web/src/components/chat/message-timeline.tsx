@@ -98,8 +98,6 @@ interface ProgressBlockProps {
 
 function ProgressBlock({ turnStartedAt, sessionUsage, progressModel, progressText }: ProgressBlockProps) {
   const [elapsed, setElapsed] = useState(0);
-  const peakTokensRef = useRef(0);
-
   useEffect(() => {
     if (!turnStartedAt) return;
     setElapsed(Date.now() - turnStartedAt);
@@ -113,13 +111,12 @@ function ProgressBlock({ turnStartedAt, sessionUsage, progressModel, progressTex
   const elapsedSeconds = Math.floor(elapsed / 1000);
   const showLongHint = elapsedSeconds >= LONG_THINKING_THRESHOLD_S;
 
-  const rawTotal =
-    sessionUsage?.total ??
-    ((sessionUsage?.input ?? 0) + (sessionUsage?.output ?? 0) || undefined);
-  if (rawTotal && rawTotal > peakTokensRef.current) {
-    peakTokensRef.current = rawTotal;
-  }
-  const tokenValue = peakTokensRef.current > 0 ? peakTokensRef.current : undefined;
+  const tokenValue =
+    typeof sessionUsage?.context_used === "number" &&
+    Number.isFinite(sessionUsage.context_used) &&
+    sessionUsage.context_used > 0
+      ? sessionUsage.context_used
+      : undefined;
   const model = progressModel || sessionUsage?.model;
 
   return (

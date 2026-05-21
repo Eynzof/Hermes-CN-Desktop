@@ -19,6 +19,10 @@ import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
+import {
+  buildComposerContextUsage,
+  estimateRenderedContextTokens,
+} from "@/lib/context-usage";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
@@ -302,37 +306,22 @@ export function DetailRoute() {
   const timelineStatus =
     runtime.statusMessage ||
     (runtimeIsBusy && chatMessages.length === 0 ? "任务运行中，等待输出…" : undefined);
-  // session.usage 在刚 resume 的 gw session 上会返回 context_used=0（因为 gw
-  // 只跟踪当前 live session 的累计用量，resume 后是新 gw session_id），但
-  // REST /api/sessions/{id} 的 input_tokens+output_tokens 是该持久化 session
-  // 的全部历史。0 是"还没数据"哨兵——用 ?? 会把 0 当 truthy 卡住，必须显式
-  // 把 0 视为 undefined 才能 fall through 到 REST。compressions 同理。
-  const liveUsed = sessionUsage?.context_used && sessionUsage.context_used > 0
-    ? sessionUsage.context_used
-    : undefined;
-  const liveCompressions = sessionUsage?.compressions && sessionUsage.compressions > 0
-    ? sessionUsage.compressions
-    : undefined;
-  const contextUsage = sessionUsage || modelInfo || sessionData
-    ? {
-        used:
-          liveUsed ??
-          (sessionData?.input_tokens || sessionData?.output_tokens
-            ? (sessionData.input_tokens ?? 0) + (sessionData.output_tokens ?? 0)
-            : undefined),
-        max:
-          selectedContextMax ??
-          sessionUsage?.context_max ??
-          // effective = max(config_context_length, auto_context_length)，是上游
-          // 算好的权威值；auto 在探测失败时会回落到 256k，必须排在 effective 之后
-          // 否则会把"探测失败兜底"误当成模型真实上限。
-          modelInfo?.effective_context_length ??
-          modelInfo?.auto_context_length,
-        percent: liveUsed ? sessionUsage?.context_percent : undefined,
-        model: selectedModel?.model ?? sessionUsage?.model ?? sessionData?.model ?? modelInfo?.model,
-        compressions: liveCompressions,
-      }
-    : null;
+  // `session.usage.context_used` 是运行时回报的当前上下文窗口用量，最准确。
+  // 刚 resume 的 gw session 可能暂时返回 0，此时只能用当前已渲染消息做近似估算。
+  // 不要再回退到 REST `input_tokens + output_tokens`：那是会话累计账单用量，
+  // 多轮对话会重复计算历史 prompt，30K 级别上下文很容易被显示成 1M+。
+  const estimatedContextUsed = useMemo(
+    () => estimateRenderedContextTokens(chatMessages),
+    [chatMessages],
+  );
+  const contextUsage = buildComposerContextUsage({
+    live: sessionUsage,
+    modelInfo,
+    session: sessionData,
+    selectedModel,
+    selectedContextMax,
+    estimatedUsed: estimatedContextUsed,
+  });
 
   return (
     <div className={s.page}>
