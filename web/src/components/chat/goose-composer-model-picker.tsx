@@ -647,7 +647,8 @@ function ModelPickerBody({
                     >
                       <ChevronRight
                         aria-hidden="true"
-                        style={{ transform: moreExpanded ? "rotate(90deg)" : undefined }}
+                        className={s.mpGroupChevron}
+                        data-expanded={moreExpanded ? "true" : undefined}
                       />
                       <span>{GROUP_LABELS.more.name} · {visible.more.length} 项</span>
                       <span className={s.mpGroupSub}>{GROUP_LABELS.more.subtitle}</span>

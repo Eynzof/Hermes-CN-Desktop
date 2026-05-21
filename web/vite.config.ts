@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "os";
 import { dirname, join, resolve } from "path";
@@ -86,6 +87,16 @@ function gitShortCommit(): string {
     }).trim();
   } catch {
     return "unknown";
+  }
+}
+
+function desktopAppVersion(): string {
+  if (process.env.HERMES_DESKTOP_APP_VERSION) return process.env.HERMES_DESKTOP_APP_VERSION;
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, "..", "package.json"), "utf8")) as { version?: unknown };
+    return typeof pkg.version === "string" && pkg.version.trim() ? pkg.version.trim() : "0.1.0";
+  } catch {
+    return "0.1.0";
   }
 }
 
@@ -251,6 +262,7 @@ export default defineConfig({
   plugins: [react(), hermesTokenPlugin(), hermesSessionLogPlugin(), hermesSessionArchivePlugin()],
   define: {
     "import.meta.env.VITE_HERMES_BUILD_COMMIT": JSON.stringify(gitShortCommit()),
+    "import.meta.env.VITE_HERMES_DESKTOP_VERSION": JSON.stringify(desktopAppVersion()),
   },
   resolve: {
     alias: {

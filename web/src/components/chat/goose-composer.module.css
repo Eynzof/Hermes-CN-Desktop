@@ -684,12 +684,17 @@
   color: var(--h-text);
 }
 
-.mpGroupCollapsible svg {
+.mpGroupChevron {
   width: 12px;
   height: 12px;
   stroke-width: 1.6;
   flex: 0 0 auto;
+  transform: translateY(3px);
   transition: transform 0.12s ease;
+}
+
+.mpGroupChevron[data-expanded="true"] {
+  transform: translateY(3px) rotate(90deg);
 }
 
 .mpCard {
