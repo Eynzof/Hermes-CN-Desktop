@@ -13,6 +13,10 @@ Hermes Agent CN Desktop 是 Hermes Agent 中文社区版的轻量桌面客户端
 
 ## 演示
 
+### 原型图预览
+
+可以在 [hermes-cn-ui-prototypes-sans.vercel.app](https://hermes-cn-ui-prototypes-sans.vercel.app/) 浏览高保真 UI 原型图。
+
 ### 演示视频
 
 点击下方预览图，或直接打开 [MP4 演示视频](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)。README 渲染器对本地视频内嵌播放支持不稳定，因此这里用可点击预览图链接到视频文件。

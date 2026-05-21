@@ -13,6 +13,10 @@ Hermes Agent CN Desktop is a lightweight desktop client for the Hermes Agent Chi
 
 ## Demo
 
+### Prototype preview
+
+Browse the high-fidelity UI prototype gallery at [hermes-cn-ui-prototypes-sans.vercel.app](https://hermes-cn-ui-prototypes-sans.vercel.app/).
+
 ### Demo video
 
 Click the preview image below, or open the [MP4 demo](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4) directly. README renderers do not consistently support local video embeds, so the preview links to the video file instead.
