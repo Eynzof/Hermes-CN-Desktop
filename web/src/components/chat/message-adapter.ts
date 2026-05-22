@@ -603,7 +603,7 @@ function looseComparableText(value: string | undefined): string {
 }
 
 function canonicalText(message: HermesUIMessage): string {
-  return comparableText(textFromParts(message.parts) ?? noticeTextFromParts(message.parts));
+  return comparableText(normalizeContent(textFromParts(message.parts) ?? noticeTextFromParts(message.parts)));
 }
 
 function canonicalReasoning(message: HermesUIMessage): string {

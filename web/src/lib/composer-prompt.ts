@@ -8,6 +8,11 @@ import type { AttachmentUploadResult, ImageAttachResult, InputDetectDropResult }
 const WORKSPACE_BLOCK_START = "[Hermes UI Workspace]";
 const WORKSPACE_BLOCK_END = "[/Hermes UI Workspace]";
 const WORKSPACE_BLOCK_RE = /\n?\[Hermes UI Workspace\]\nworkspace=[^\n]*\ninstruction=[\s\S]*?\n\[\/Hermes UI Workspace\]\n?/g;
+const IMAGE_BLOCK_START = "[Hermes UI Image]";
+const IMAGE_BLOCK_END = "[/Hermes UI Image]";
+const IMAGE_BLOCK_RE = /\n?\[Hermes UI Image\]\nname=([^\n]*)\ndescription:\n[\s\S]*?\n\[\/Hermes UI Image\]\n?/g;
+const IMAGE_FALLBACK_PREAMBLE_RE = /\n?\[The user attached an image(?: but analysis failed)?\.\]\n\[You can examine it with vision_analyze using image_url: [^\]\n]+\]\n?/g;
+const LEGACY_IMAGE_BLOCK_RE = /^\s*\[User attached image: ([^\]\n]+)\]\n[\s\S]*$/;
 
 const IMAGE_EXTENSIONS = new Set([
   ".apng",
@@ -36,8 +41,43 @@ export function fileNameFromPath(path: string): string {
   return normalized.split("/").pop() || path;
 }
 
+function attachmentSuffix(labels: string[]): string {
+  return `附件：${labels.join("、")}`;
+}
+
+function sanitizeContextValue(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function stripLegacyImageContext(value: string, labels: string[]): string {
+  const match = value.match(LEGACY_IMAGE_BLOCK_RE);
+  if (!match) return value;
+
+  const label = match[1]?.trim();
+  if (label) labels.push(label);
+
+  const body = value.replace(/^\s*\[User attached image: [^\]\n]+\]\n/, "");
+  const lastSeparator = body.lastIndexOf("\n\n");
+  return lastSeparator >= 0 ? body.slice(lastSeparator + 2) : "";
+}
+
 export function stripHermesUiWorkspaceContext(text: string | null | undefined): string {
-  return (text ?? "").replace(WORKSPACE_BLOCK_RE, "").trimEnd();
+  let value = (text ?? "")
+    .replace(IMAGE_FALLBACK_PREAMBLE_RE, "")
+    .replace(WORKSPACE_BLOCK_RE, "");
+  const imageLabels: string[] = [];
+
+  value = value.replace(IMAGE_BLOCK_RE, (_block, label: string) => {
+    const name = label.trim();
+    if (name) imageLabels.push(name);
+    return "\n";
+  });
+  value = stripLegacyImageContext(value, imageLabels).trim();
+
+  if (imageLabels.length === 0) return value.trimEnd();
+
+  const suffix = attachmentSuffix(imageLabels);
+  return value ? `${value}\n\n${suffix}` : suffix;
 }
 
 function buildWorkspaceContext(workspacePath?: string): string {
@@ -126,6 +166,16 @@ export async function prepareComposerPrompt(
         const attached = await helpers.attachImage(sessionId, path);
         if (attached.attached === false) {
           throw new Error(attached.text || "图片附件未能添加");
+        }
+        if (attached.text?.trim()) {
+          const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
+          parts.push([
+            IMAGE_BLOCK_START,
+            `name=${sanitizeContextValue(label)}`,
+            "description:",
+            attached.text.trim(),
+            IMAGE_BLOCK_END,
+          ].join("\n"));
         }
         helpers.onAttachmentUpdate?.(attachment.id, { status: "done", progress: 100 });
         continue;

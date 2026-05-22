@@ -700,6 +700,59 @@ describe("startPromptAtom", () => {
     expect(runtime.streamStatus).toBe("streaming");
   });
 
+
+  it("does not recover from stored reasoning/tools when the stored final text is still missing", () => {
+    const store = createStore();
+
+    store.set(startPromptAtom, { sessionId: "s1", text: "总结", now: 1_000 });
+    store.set(chatRuntimeBySessionAtom, (state) => {
+      let rt = state.s1;
+      rt = reduceGatewayEvent(rt, {
+        type: "reasoning.delta",
+        session_id: "s1",
+        payload: { text: "先检查。" },
+      }, 1_500);
+      rt = reduceGatewayEvent(rt, {
+        type: "tool.start",
+        session_id: "s1",
+        payload: { tool_id: "t1", name: "read", context: "a.txt" },
+      }, 1_600);
+      rt = reduceGatewayEvent(rt, {
+        type: "tool.complete",
+        session_id: "s1",
+        payload: { tool_id: "t1", summary: "ok" },
+      }, 1_700);
+      rt = reduceGatewayEvent(rt, {
+        type: "message.delta",
+        session_id: "s1",
+        payload: { text: "最终回答不要消失。" },
+      }, 1_800);
+      return { ...state, s1: rt };
+    });
+
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, {
+      sessionId: "s1",
+      now: 2_000,
+      storedMessages: [
+        runtimeMessage({
+          id: "stored-no-final-text-yet",
+          sessionId: "s1",
+          role: "assistant",
+          status: "complete",
+          createdAt: 1_900,
+          parts: [
+            { type: "reasoning", text: "先检查。" },
+            { type: "tool", toolCallId: "t1", name: "read", state: "done", output: "ok", startedAt: 1_600, completedAt: 1_700 },
+          ],
+        }),
+      ],
+    });
+
+    const runtime = store.get(chatRuntimeBySessionAtom).s1;
+    expect(runtime.streamStatus).toBe("streaming");
+    expect(textFromParts(assistantMessage(runtime).parts)).toBe("最终回答不要消失。");
+  });
+
   it("recovers a stale streaming assistant when stored messages already completed the turn", () => {
     const store = createStore();
 

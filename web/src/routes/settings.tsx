@@ -27,6 +27,7 @@ import {
 } from "@/hooks/use-runtime-update";
 import { showReasoningAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
+import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import s from "./settings.module.css";
@@ -142,7 +143,7 @@ export function ConfigSection({ showHeading = true }: SettingsSectionProps) {
             fieldKey={key}
             field={field}
             value={getNestedValue(config, key)}
-            onSave={(val) => saveConfig.mutate(buildConfigUpdate(key, val))}
+            onSave={(val) => saveConfig.mutate(mergeConfigUpdate(config, buildNestedConfigUpdate(key, val)))}
             showCategory={isSearching}
           />
         ))}
@@ -862,19 +863,6 @@ function FieldRow({ label, value, onChange, placeholder }: {
 function getNestedValue(obj: any, path: string): any {
   if (!obj) return undefined;
   return path.split(".").reduce((o, k) => o?.[k], obj);
-}
-
-function buildConfigUpdate(key: string, value: any): Record<string, any> {
-  const parts = key.split(".");
-  if (parts.length === 1) return { [key]: value };
-  const root: any = {};
-  let cur = root;
-  for (let i = 0; i < parts.length - 1; i++) {
-    cur[parts[i]] = {};
-    cur = cur[parts[i]];
-  }
-  cur[parts[parts.length - 1]] = value;
-  return root;
 }
 
 function groupBy<T>(arr: T[], fn: (item: T) => string): Record<string, T[]> {
