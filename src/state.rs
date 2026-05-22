@@ -11,6 +11,42 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// Windows Job Object handle used to bind the dashboard process tree to the
+/// desktop lifecycle. On non-Windows this is a zero-sized placeholder so the
+/// DashboardHandle shape stays uniform across platforms.
+pub struct DashboardJobHandle {
+    #[cfg(windows)]
+    raw: windows_sys::Win32::Foundation::HANDLE,
+}
+
+impl DashboardJobHandle {
+    /// Take ownership of a valid Windows Job Object handle.
+    ///
+    /// # Safety
+    ///
+    /// `raw` must be a live Job Object handle owned by the caller, and it must
+    /// not be closed elsewhere after this wrapper is constructed.
+    #[cfg(windows)]
+    pub unsafe fn from_raw(raw: windows_sys::Win32::Foundation::HANDLE) -> Self {
+        Self { raw }
+    }
+}
+
+#[cfg(windows)]
+unsafe impl Send for DashboardJobHandle {}
+
+impl Drop for DashboardJobHandle {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        unsafe {
+            if !self.raw.is_null() {
+                let _ = windows_sys::Win32::Foundation::CloseHandle(self.raw);
+                self.raw = std::ptr::null_mut();
+            }
+        }
+    }
+}
+
 /// Handle to a running hermes dashboard subprocess.
 pub struct DashboardHandle {
     /// Base URL of the dashboard API (e.g. "http://127.0.0.1:9120").
@@ -25,18 +61,43 @@ pub struct DashboardHandle {
     pub gateway_runtime_dir: Option<String>,
     /// Runtime-scoped lock directory injected into the dashboard environment.
     pub gateway_lock_dir: Option<String>,
+    /// Path to the desktop ownership marker, when the dashboard is managed or attached.
+    pub ownership_marker_path: Option<String>,
+    /// Diagnostic ownership state: owned, attached, orphan-cleaned, etc.
+    pub ownership_state: Option<String>,
+    /// Windows Job Object keeping the owned runtime process tree tied to this handle.
+    pub job_handle: Option<DashboardJobHandle>,
     /// The child process, if we own it.
     pub child: Option<Child>,
 }
 
 impl DashboardHandle {
-    /// Gracefully stop the dashboard process if we own it.
+    /// Stop the dashboard process tree if we own it.
     pub fn stop(&mut self) {
-        if let Some(ref mut child) = self.child {
-            let _ = child.kill();
-            let _ = child.wait();
+        self.stop_with_token(None);
+    }
+
+    /// Stop the dashboard process tree if we own it, first trying the
+    /// dashboard's protected shutdown endpoint when a session token is known.
+    pub fn stop_with_token(&mut self, session_token: Option<&str>) {
+        if !self.owns_process {
+            self.child = None;
+            return;
         }
+        let fallback_pid = self.child.as_ref().map(|child| child.id());
+        crate::process::dashboard::terminate_owned_dashboard_tree(
+            &self.api_base_url,
+            self.child.as_mut(),
+            fallback_pid,
+            session_token,
+        );
         self.child = None;
+        self.job_handle = None;
+        self.owns_process = false;
+        crate::process::dashboard::remove_ownership_marker_path(
+            self.ownership_marker_path.as_deref(),
+        );
+        self.ownership_state = Some("stopped".to_string());
     }
 }
 

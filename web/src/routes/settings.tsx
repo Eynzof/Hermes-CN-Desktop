@@ -528,6 +528,8 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             <RuntimeField label="档案" value={process?.currentProfile ?? rendererRuntime?.currentProfile ?? "—"} />
             <RuntimeField label="Session Token" value={process?.sessionTokenPresent ? "已注入" : "未注入 / dev proxy"} />
             <RuntimeField label="SSE 代理" value={process?.gatewaySseProxyActive ? "连接中" : "未连接或浏览器直连"} />
+            <RuntimeField label="Ownership" value={process?.ownershipState ?? "—"} mono />
+            <RuntimeField label="Ownership Marker" value={process?.ownershipMarkerPath ?? "—"} mono wide />
             <RuntimeField label="HERMES_HOME" value={process?.hermesHome || hermesHomePath || "—"} mono wide />
           </div>
           {process?.commandLine && (

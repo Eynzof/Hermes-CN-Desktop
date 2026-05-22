@@ -168,6 +168,10 @@ pub struct RuntimeProcessInfo {
     pub gateway_runtime_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gateway_lock_dir: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ownership_marker_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ownership_state: Option<String>,
     pub session_token_present: bool,
     pub gateway_sse_proxy_active: bool,
 }

@@ -38,6 +38,8 @@ pub fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, 
                 command_line,
                 gateway_runtime_dir: handle.gateway_runtime_dir.clone(),
                 gateway_lock_dir: handle.gateway_lock_dir.clone(),
+                ownership_marker_path: handle.ownership_marker_path.clone(),
+                ownership_state: handle.ownership_state.clone(),
                 session_token_present: inner.session_token.is_some(),
                 gateway_sse_proxy_active: inner
                     .gateway_sse_stop
@@ -142,9 +144,13 @@ pub async fn runtime_rollback(
 async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> {
     let (host, port, hermes_home) = {
         let mut inner = state.inner.lock()?;
-        // Stop existing
+        // Stop existing dashboard and any long-lived SSE proxy before swapping runtime.
+        if let Some(stop) = inner.gateway_sse_stop.take() {
+            stop.store(true, Ordering::Relaxed);
+        }
+        let session_token = inner.session_token.clone();
         if let Some(ref mut handle) = inner.dashboard_handle {
-            handle.stop();
+            handle.stop_with_token(session_token.as_deref());
         }
         inner.dashboard_handle = None;
 

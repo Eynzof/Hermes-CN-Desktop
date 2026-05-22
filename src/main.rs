@@ -8,6 +8,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
@@ -65,6 +66,42 @@ async fn install_bundled_runtime_for_bootstrap(
     true
 }
 
+fn shutdown_owned_runtime(app: &tauri::AppHandle, reason: &str) {
+    use tauri::Manager;
+
+    let state = app.state::<AppState>();
+    let (sse_stop, mut dashboard_handle, session_token) = match state.inner.lock() {
+        Ok(mut inner) => (
+            inner.gateway_sse_stop.take(),
+            inner.dashboard_handle.take(),
+            inner.session_token.clone(),
+        ),
+        Err(err) => {
+            log::warn!(
+                "Failed to lock app state during {} shutdown: {}",
+                reason,
+                err
+            );
+            return;
+        }
+    };
+
+    if let Some(stop) = sse_stop {
+        stop.store(true, Ordering::Relaxed);
+    }
+
+    if let Some(ref mut handle) = dashboard_handle {
+        log::info!(
+            "Stopping desktop-owned dashboard during {} (api={}, owns_process={}, marker={:?})",
+            reason,
+            handle.api_base_url,
+            handle.owns_process,
+            handle.ownership_marker_path
+        );
+        handle.stop_with_token(session_token.as_deref());
+    }
+}
+
 fn create_and_return(path: PathBuf) -> PathBuf {
     let _ = fs::create_dir_all(&path);
     path
@@ -95,7 +132,7 @@ fn main() {
 
     let app_state = AppState::new();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -173,6 +210,9 @@ fn main() {
                             command_args: vec![],
                             gateway_runtime_dir: None,
                             gateway_lock_dir: None,
+                            ownership_marker_path: None,
+                            ownership_state: Some("external-dev".to_string()),
+                            job_handle: None,
                             child: None,
                         }
                     } else {
@@ -322,6 +362,9 @@ fn main() {
                         command_args: vec![],
                         gateway_runtime_dir: None,
                         gateway_lock_dir: None,
+                        ownership_marker_path: None,
+                        ownership_state: Some("external-dev".to_string()),
+                        job_handle: None,
                         child: None,
                     }
                 } else {
@@ -593,6 +636,12 @@ fn main() {
                 log::info!("Main window destroyed");
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Hermes Agent 中文社区桌面版");
+        .build(tauri::generate_context!())
+        .expect("error while building Hermes Agent 中文社区桌面版");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            shutdown_owned_runtime(app_handle, "app exit");
+        }
+    });
 }

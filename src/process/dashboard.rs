@@ -3,23 +3,31 @@
 // Replaces hermes-cn-ui-v1/apps/desktop/src/main/hermes-process.ts.
 // Responsible for probing, spawning, and managing the hermes dashboard subprocess.
 
+use std::fs;
+use std::io::Write;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::LazyLock;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{
     io::{BufRead, BufReader, Read},
     thread,
 };
 
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
-use crate::state::DashboardHandle;
+use crate::state::{DashboardHandle, DashboardJobHandle};
 
 const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(25);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(900);
 const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_millis(1200);
+const SHUTDOWN_HTTP_TIMEOUT: Duration = Duration::from_millis(800);
+const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(1800);
+const FORCE_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(1200);
+const OWNERSHIP_MARKER_SCHEMA_VERSION: u32 = 1;
 pub const DEFAULT_DESKTOP_DASHBOARD_PORT: u16 = 9120;
 const DASHBOARD_PORT_FALLBACK_LIMIT: u16 = 20;
 static SESSION_TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -38,6 +46,38 @@ static SESSION_TOKEN_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .expect("valid dashboard session token HTTP client")
 });
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardOwnershipMarker {
+    pub schema_version: u32,
+    pub run_id: String,
+    pub desktop_pid: u32,
+    pub dashboard_pid: u32,
+    pub api_base_url: String,
+    pub hermes_home: String,
+    pub runtime_root: String,
+    pub gateway_runtime_dir: String,
+    pub started_at_ms: u128,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MarkerOwnerState {
+    Missing,
+    LiveDesktopOwner,
+    StaleDesktopOwner,
+    NotThisDashboard,
+}
+
+pub fn ownership_marker_path() -> PathBuf {
+    crate::process::runtime::runtime_root().join("desktop-owner.json")
+}
+
+pub fn ownership_marker_path_display() -> String {
+    ownership_marker_path().to_string_lossy().to_string()
+}
+
 /// Build the base URL for a dashboard at the given host and port.
 pub fn dashboard_base_url(host: &str, port: u16) -> String {
     format!("http://{}:{}", host, port)
@@ -52,6 +92,311 @@ fn fallback_ports(start: u16) -> Vec<u16> {
         ports.push(port);
     }
     ports
+}
+
+fn now_millis() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
+fn read_ownership_marker() -> Option<DashboardOwnershipMarker> {
+    let path = ownership_marker_path();
+    let content = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+fn write_ownership_marker(marker: &DashboardOwnershipMarker) -> Result<(), String> {
+    let path = ownership_marker_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(marker).map_err(|e| e.to_string())?;
+    fs::write(path, format!("{}\n", json)).map_err(|e| e.to_string())
+}
+
+pub fn remove_ownership_marker_path(path: Option<&str>) {
+    let marker_path = path
+        .map(PathBuf::from)
+        .unwrap_or_else(ownership_marker_path);
+    if let Err(err) = fs::remove_file(&marker_path) {
+        if err.kind() != std::io::ErrorKind::NotFound {
+            log::warn!(
+                "Failed to remove dashboard ownership marker {}: {}",
+                marker_path.display(),
+                err
+            );
+        }
+    }
+}
+
+fn same_path(left: &str, right: &str) -> bool {
+    let left = fs::canonicalize(left).unwrap_or_else(|_| PathBuf::from(left));
+    let right = fs::canonicalize(right).unwrap_or_else(|_| PathBuf::from(right));
+    left == right
+}
+
+fn marker_owner_state(
+    marker: Option<&DashboardOwnershipMarker>,
+    api_base_url: &str,
+    hermes_home: &str,
+) -> MarkerOwnerState {
+    let Some(marker) = marker else {
+        return MarkerOwnerState::Missing;
+    };
+    if marker.schema_version != OWNERSHIP_MARKER_SCHEMA_VERSION
+        || marker.api_base_url != api_base_url
+        || !same_path(&marker.hermes_home, hermes_home)
+    {
+        return MarkerOwnerState::NotThisDashboard;
+    }
+    if pid_is_running(marker.desktop_pid) {
+        MarkerOwnerState::LiveDesktopOwner
+    } else {
+        MarkerOwnerState::StaleDesktopOwner
+    }
+}
+
+#[cfg(unix)]
+fn pid_is_running(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+    rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(windows)]
+fn pid_is_running(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    let filter = format!("PID eq {}", pid);
+    let Ok(output) = Command::new("tasklist")
+        .args(["/FI", &filter, "/FO", "CSV", "/NH"])
+        .output()
+    else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout).contains(&pid.to_string())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn pid_is_running(_pid: u32) -> bool {
+    false
+}
+
+fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> bool {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Ok(None) => thread::sleep(Duration::from_millis(80)),
+            Err(_) => return true,
+        }
+    }
+    false
+}
+
+fn request_dashboard_shutdown(api_base_url: &str, session_token: Option<&str>) -> bool {
+    let shutdown_url = format!("{}/api/shutdown", api_base_url.trim_end_matches('/'));
+    let parsed = match url::Url::parse(&shutdown_url) {
+        Ok(url) => url,
+        Err(err) => {
+            log::debug!("Invalid dashboard shutdown URL {}: {}", shutdown_url, err);
+            return false;
+        }
+    };
+    if parsed.scheme() != "http" {
+        log::debug!(
+            "Skipping dashboard graceful shutdown for unsupported scheme {}",
+            parsed.scheme()
+        );
+        return false;
+    }
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    let path = match parsed.query() {
+        Some(query) => format!("{}?{}", parsed.path(), query),
+        None => parsed.path().to_string(),
+    };
+
+    let mut stream = match TcpStream::connect_timeout(
+        &(host, port)
+            .to_socket_addrs()
+            .ok()
+            .and_then(|mut addrs| addrs.next())
+            .unwrap_or_else(|| std::net::SocketAddr::from(([127, 0, 0, 1], 0))),
+        SHUTDOWN_HTTP_TIMEOUT,
+    ) {
+        Ok(stream) => stream,
+        Err(err) => {
+            log::debug!("Dashboard graceful shutdown endpoint unavailable: {}", err);
+            return false;
+        }
+    };
+    let _ = stream.set_read_timeout(Some(SHUTDOWN_HTTP_TIMEOUT));
+    let _ = stream.set_write_timeout(Some(SHUTDOWN_HTTP_TIMEOUT));
+
+    let mut request = format!(
+        "POST {} HTTP/1.1\r\nHost: {}:{}\r\nAccept: application/json\r\nContent-Length: 0\r\nConnection: close\r\n",
+        path, host, port
+    );
+    if let Some(token) = session_token.filter(|token| !token.is_empty()) {
+        request.push_str(&format!(
+            "Authorization: Bearer {}\r\nX-Hermes-Session-Token: {}\r\n",
+            token, token
+        ));
+    }
+    request.push_str("\r\n");
+
+    if let Err(err) = stream.write_all(request.as_bytes()) {
+        log::debug!("Dashboard graceful shutdown request failed: {}", err);
+        return false;
+    }
+    let mut response = String::new();
+    if let Err(err) = stream.read_to_string(&mut response) {
+        log::debug!("Dashboard graceful shutdown response failed: {}", err);
+        return false;
+    }
+    let status = response
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|code| code.parse::<u16>().ok())
+        .unwrap_or(0);
+    if (200..300).contains(&status) {
+        true
+    } else {
+        if status != 404 {
+            log::debug!(
+                "Dashboard graceful shutdown endpoint returned HTTP {}",
+                status
+            );
+        }
+        false
+    }
+}
+
+#[cfg(unix)]
+fn signal_process_group(pid: u32, signal: libc::c_int) {
+    if pid == 0 {
+        return;
+    }
+    let pgid = -(pid as libc::pid_t);
+    let rc = unsafe { libc::kill(pgid, signal) };
+    if rc != 0 {
+        log::debug!(
+            "Failed to signal dashboard process group {} with {}: {}",
+            pid,
+            signal,
+            std::io::Error::last_os_error()
+        );
+    }
+}
+
+#[cfg(not(unix))]
+fn signal_process_group(_pid: u32, _signal: i32) {}
+
+#[cfg(windows)]
+fn create_dashboard_job(child: &Child) -> Result<DashboardJobHandle, String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+    if job.is_null() {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+
+    let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    let set_ok = unsafe {
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const _,
+            std::mem::size_of_val(&info) as u32,
+        )
+    };
+    if set_ok == 0 {
+        let err = std::io::Error::last_os_error().to_string();
+        unsafe { CloseHandle(job) };
+        return Err(err);
+    }
+
+    let process = child.as_raw_handle() as HANDLE;
+    let assign_ok = unsafe { AssignProcessToJobObject(job, process) };
+    if assign_ok == 0 {
+        let err = std::io::Error::last_os_error().to_string();
+        unsafe { CloseHandle(job) };
+        return Err(err);
+    }
+
+    Ok(unsafe { DashboardJobHandle::from_raw(job) })
+}
+
+#[cfg(windows)]
+fn force_kill_process_tree(pid: u32) {
+    if pid == 0 {
+        return;
+    }
+    let pid_arg = pid.to_string();
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid_arg, "/T", "/F"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+pub fn terminate_owned_dashboard_tree(
+    api_base_url: &str,
+    child: Option<&mut Child>,
+    fallback_pid: Option<u32>,
+    session_token: Option<&str>,
+) {
+    let _ = request_dashboard_shutdown(api_base_url, session_token);
+
+    if let Some(child) = child {
+        if wait_for_child_exit(child, GRACEFUL_SHUTDOWN_TIMEOUT) {
+            return;
+        }
+        let pid = child.id();
+        #[cfg(unix)]
+        signal_process_group(pid, libc::SIGTERM);
+        if wait_for_child_exit(child, FORCE_SHUTDOWN_TIMEOUT) {
+            return;
+        }
+        #[cfg(unix)]
+        signal_process_group(pid, libc::SIGKILL);
+        #[cfg(windows)]
+        force_kill_process_tree(pid);
+        let _ = child.kill();
+        let _ = child.wait();
+        return;
+    }
+
+    if let Some(pid) = fallback_pid {
+        #[cfg(unix)]
+        {
+            signal_process_group(pid, libc::SIGTERM);
+            thread::sleep(GRACEFUL_SHUTDOWN_TIMEOUT);
+            if pid_is_running(pid) {
+                signal_process_group(pid, libc::SIGKILL);
+            }
+        }
+        #[cfg(windows)]
+        {
+            force_kill_process_tree(pid);
+        }
+    }
 }
 
 /// Check if a dashboard is reachable at the given base URL.
@@ -188,6 +533,8 @@ struct SpawnedDashboard {
     command_args: Vec<String>,
     gateway_runtime_dir: String,
     gateway_lock_dir: String,
+    ownership_marker_path: String,
+    job_handle: Option<DashboardJobHandle>,
 }
 
 fn env_flag(name: &str) -> bool {
@@ -290,16 +637,64 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // Put the dashboard in its own process group so shutdown can target
+        // gateway/MCP/worker descendants without touching unrelated user
+        // processes.
+        cmd.process_group(0);
+    }
+
     // Windows: hide the console window for the child process
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        cmd.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
     }
 
     let mut child = cmd
         .spawn()
         .map_err(|e| AppError::DashboardStartup(e.to_string()))?;
+    let job_handle = {
+        #[cfg(windows)]
+        {
+            match create_dashboard_job(&child) {
+                Ok(job) => Some(job),
+                Err(err) => {
+                    log::warn!("Failed to attach dashboard to Windows Job Object: {}", err);
+                    None
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            None
+        }
+    };
+    let api_base_url = dashboard_base_url(&options.host, options.port);
+    let marker_path = ownership_marker_path_display();
+    let runtime_version =
+        crate::process::runtime::read_current_record().map(|record| record.runtime_version);
+    let marker = DashboardOwnershipMarker {
+        schema_version: OWNERSHIP_MARKER_SCHEMA_VERSION,
+        run_id: format!("{}-{}", std::process::id(), now_millis()),
+        desktop_pid: std::process::id(),
+        dashboard_pid: child.id(),
+        api_base_url,
+        hermes_home: options.hermes_home.clone(),
+        runtime_root: crate::process::runtime::runtime_root()
+            .to_string_lossy()
+            .to_string(),
+        gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
+        started_at_ms: now_millis(),
+        runtime_version,
+    };
+    if let Err(err) = write_ownership_marker(&marker) {
+        log::warn!("Failed to write dashboard ownership marker: {}", err);
+    }
     drain_dashboard_output(&mut child);
     Ok(SpawnedDashboard {
         child,
@@ -307,6 +702,8 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         command_args: prefix_args,
         gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
         gateway_lock_dir: gateway_lock_dir.to_string_lossy().to_string(),
+        ownership_marker_path: marker_path,
+        job_handle,
     })
 }
 
@@ -377,20 +774,52 @@ pub async fn ensure_hermes_dashboard(
     // is serving the same isolated runtime HERMES_HOME and supports the
     // desktop-required routes. This keeps hot reload / second launch usable
     // without falling back to a user-installed ~/.hermes or PATH runtime.
-    let primary_occupied = probe_dashboard(&api_base_url).await;
+    let mut primary_occupied = probe_dashboard(&api_base_url).await;
+    let ownership_marker = read_ownership_marker();
+    let primary_marker_state = marker_owner_state(
+        ownership_marker.as_ref(),
+        &api_base_url,
+        &options.hermes_home,
+    );
+    if primary_occupied && primary_marker_state == MarkerOwnerState::StaleDesktopOwner {
+        if let Some(marker) = ownership_marker.as_ref() {
+            log::warn!(
+                "Found stale desktop-owned dashboard marker for {}; cleaning orphan pid {}",
+                api_base_url,
+                marker.dashboard_pid
+            );
+            terminate_owned_dashboard_tree(
+                &marker.api_base_url,
+                None,
+                Some(marker.dashboard_pid),
+                None,
+            );
+            remove_ownership_marker_path(None);
+            tokio::time::sleep(Duration::from_millis(350)).await;
+            primary_occupied = probe_dashboard(&api_base_url).await;
+            if primary_occupied {
+                return Err(AppError::DashboardStartup(format!(
+                    "{} is still occupied after cleaning a stale desktop-owned runtime. Stop the remaining process and retry.",
+                    api_base_url
+                )));
+            }
+        }
+    }
     let can_reuse_existing = true;
     if primary_occupied
         && can_reuse_existing
         && dashboard_is_compatible(&api_base_url, &options.hermes_home).await
     {
+        let ownership_state = match primary_marker_state {
+            MarkerOwnerState::LiveDesktopOwner => "attached-live-desktop-owner",
+            MarkerOwnerState::Missing => "attached-compatible-unmarked",
+            MarkerOwnerState::NotThisDashboard => "attached-compatible-unmatched-marker",
+            MarkerOwnerState::StaleDesktopOwner => "attached-stale-cleanup-failed",
+        };
         log::info!(
-            "Reusing compatible dashboard at {}{}",
+            "Reusing compatible dashboard at {} ({})",
             api_base_url,
-            if options.allow_external_agent {
-                " (external agent explicitly allowed)"
-            } else {
-                " (fixed-port managed dev)"
-            }
+            ownership_state
         );
         return Ok(DashboardHandle {
             api_base_url,
@@ -399,6 +828,9 @@ pub async fn ensure_hermes_dashboard(
             command_args: vec![],
             gateway_runtime_dir: None,
             gateway_lock_dir: None,
+            ownership_marker_path: Some(ownership_marker_path_display()),
+            ownership_state: Some(ownership_state.to_string()),
+            job_handle: None,
             child: None,
         });
     }
@@ -437,6 +869,9 @@ pub async fn ensure_hermes_dashboard(
                         command_args: vec![],
                         gateway_runtime_dir: None,
                         gateway_lock_dir: None,
+                        ownership_marker_path: Some(ownership_marker_path_display()),
+                        ownership_state: Some("attached-compatible-fallback".to_string()),
+                        job_handle: None,
                         child: None,
                     });
                 }
@@ -463,8 +898,9 @@ pub async fn ensure_hermes_dashboard(
     let ready = wait_for_dashboard(&child_url, &mut child_opt).await;
     if !ready {
         if let Some(ref mut c) = child_opt {
-            let _ = c.kill();
+            terminate_owned_dashboard_tree(&child_url, Some(c), None, None);
         }
+        remove_ownership_marker_path(Some(&spawned.ownership_marker_path));
         return Err(AppError::DashboardStartup(format!(
             "Not ready at {} within {}s",
             child_url,
@@ -480,6 +916,9 @@ pub async fn ensure_hermes_dashboard(
         command_args: spawned.command_args,
         gateway_runtime_dir: Some(spawned.gateway_runtime_dir),
         gateway_lock_dir: Some(spawned.gateway_lock_dir),
+        ownership_marker_path: Some(spawned.ownership_marker_path),
+        ownership_state: Some("owned".to_string()),
+        job_handle: spawned.job_handle,
         child: child_opt,
     })
 }
@@ -564,5 +1003,66 @@ mod tests {
         // Only http/https are rewritten — anything else passes through.
         let out = build_gateway_url("file:///local", None);
         assert_eq!(out, "file:///local/api/ws");
+    }
+
+    fn test_marker(
+        desktop_pid: u32,
+        api_base_url: &str,
+        hermes_home: &str,
+    ) -> DashboardOwnershipMarker {
+        DashboardOwnershipMarker {
+            schema_version: OWNERSHIP_MARKER_SCHEMA_VERSION,
+            run_id: "test-run".to_string(),
+            desktop_pid,
+            dashboard_pid: 0,
+            api_base_url: api_base_url.to_string(),
+            hermes_home: hermes_home.to_string(),
+            runtime_root: "/tmp/hermes-runtime-test".to_string(),
+            gateway_runtime_dir: "/tmp/hermes-runtime-test/gateway".to_string(),
+            started_at_ms: 1,
+            runtime_version: Some("test".to_string()),
+        }
+    }
+
+    #[test]
+    fn marker_owner_state_detects_live_and_stale_desktop_owner() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let home = temp.path().join("home");
+        std::fs::create_dir_all(&home).expect("home");
+        let home = home.to_string_lossy().to_string();
+        let api_base_url = "http://127.0.0.1:9120";
+
+        let live = test_marker(std::process::id(), api_base_url, &home);
+        assert_eq!(
+            marker_owner_state(Some(&live), api_base_url, &home),
+            MarkerOwnerState::LiveDesktopOwner
+        );
+
+        let stale = test_marker(0, api_base_url, &home);
+        assert_eq!(
+            marker_owner_state(Some(&stale), api_base_url, &home),
+            MarkerOwnerState::StaleDesktopOwner
+        );
+    }
+
+    #[test]
+    fn marker_owner_state_rejects_unmatched_dashboard_scope() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let home = temp.path().join("home");
+        let other_home = temp.path().join("other-home");
+        std::fs::create_dir_all(&home).expect("home");
+        std::fs::create_dir_all(&other_home).expect("other");
+        let home = home.to_string_lossy().to_string();
+        let other_home = other_home.to_string_lossy().to_string();
+        let marker = test_marker(std::process::id(), "http://127.0.0.1:9120", &home);
+
+        assert_eq!(
+            marker_owner_state(Some(&marker), "http://127.0.0.1:9121", &home),
+            MarkerOwnerState::NotThisDashboard
+        );
+        assert_eq!(
+            marker_owner_state(Some(&marker), "http://127.0.0.1:9120", &other_home),
+            MarkerOwnerState::NotThisDashboard
+        );
     }
 }
