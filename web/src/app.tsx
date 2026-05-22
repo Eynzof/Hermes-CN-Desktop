@@ -23,7 +23,6 @@ import { LogsRoute } from "@/routes/logs";
 import { DebugRoute } from "@/routes/debug";
 import { AnalyticsRoute } from "@/routes/analytics";
 import { AdvancedRoute } from "@/routes/advanced";
-import { DevPrimitivesRoute } from "@/routes/dev-primitives";
 
 function NewTaskRedirect() {
   const { search } = useLocation();
@@ -62,9 +61,6 @@ export function App() {
           <Route path="/debug" element={<DebugRoute />} />
           <Route path="/advanced/*" element={<ErrorBoundary><AdvancedRoute /></ErrorBoundary>} />
           <Route path="/settings" element={<Navigate to="/advanced" replace />} />
-          {import.meta.env.DEV && (
-            <Route path="/dev/primitives" element={<DevPrimitivesRoute />} />
-          )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppShell>

@@ -34,7 +34,7 @@ export function ProfilesRoute() {
   const sub = isError
     ? "未接入"
     : profilesQuery.data
-      ? `${profiles.length} 个 profile · 当前 ${active}`
+      ? `${profiles.length} 个档案 · 当前 ${active}`
       : isLoading
         ? "加载中…"
         : "—";
@@ -58,7 +58,7 @@ export function ProfilesRoute() {
       return;
     }
     if (profiles.some((p) => p.name === name)) {
-      setCreateError("已存在同名 profile");
+      setCreateError("已存在同名档案");
       return;
     }
     createProfile.mutate(
@@ -80,38 +80,38 @@ export function ProfilesRoute() {
     // 用 window.confirm 是保守选择——这页其它危险操作（重启 dashboard 提示）
     // 也是文字提示，没必要为单个删除操作引入 modal 组件依赖。
     const ok = window.confirm(
-      `删除 profile "${name}"？\n\n这会删掉它的整个目录（config / .env / sessions / skills / memory / state.db 全部）。无法恢复。`,
+      `删除档案 "${name}"？\n\n这会删掉它的整个目录（config / .env / sessions / skills / memory / state.db 全部）。无法恢复。`,
     );
     if (!ok) return;
     deleteProfile.mutate(name);
   };
 
   return (
-    <SectionShell title="Profile" sub={sub}>
+    <SectionShell title="档案" sub={sub}>
       <p className={s.desc}>
-        Profile 是 Hermes Agent 的独立环境（独立的 config / .env / SOUL.md / sessions / skills / memory）。每个 profile 有自己的 sticky 标记，新 hermes 进程启动时会读它决定加载哪个 profile。
+        档案（profile）是 Hermes Agent 的独立环境（独立的 config / .env / SOUL.md / sessions / skills / memory）。每个档案有自己的 sticky 标记，新 hermes 进程启动时会读它决定加载哪个档案。
       </p>
 
       {runtime.platform === "electron" ? (
         <div className={s.warning}>
           <strong>切换会自动重启 dashboard 子进程。</strong>
           <span>
-            桌面端 own 着 dashboard 进程，切换 profile 会自动 stop + 用新 HERMES_HOME 重新 spawn（约 2-3 秒）。期间会话和 gateway 短暂断开，重启完成后自动连回新 profile 的数据。
+            桌面端 own 着 dashboard 进程，切换档案会自动 stop + 用新 HERMES_HOME 重新 spawn（约 2-3 秒）。期间会话和 gateway 短暂断开，重启完成后自动连回新档案的数据。
           </span>
         </div>
       ) : (
         <div className={s.warning}>
           <strong>切换不会立即生效。</strong>
           <span>
-            切换 profile 只更新 <code>~/.hermes/active_profile</code>。当前运行的 dashboard 进程已绑定旧 profile，要让切换生效必须<strong>重启 dashboard</strong>（终端 <code>Ctrl+C</code>，再跑 <code>hermes dashboard --no-open</code>）。
+            切换档案只更新 <code>~/.hermes/active_profile</code>。当前运行的 dashboard 进程已绑定旧档案，要让切换生效必须<strong>重启 dashboard</strong>（终端 <code>Ctrl+C</code>，再跑 <code>hermes dashboard --no-open</code>）。
           </span>
         </div>
       )}
 
       {restartHint && (
         <div className={s.restartHint}>
-          <strong>已设 profile <code>{restartHint}</code> 为默认。</strong>
-          <span>下次 hermes 启动会用它。在终端重启 dashboard 后刷新此页面即可看到新 profile 的数据。</span>
+          <strong>已设档案 <code>{restartHint}</code> 为默认。</strong>
+          <span>下次 hermes 启动会用它。在终端重启 dashboard 后刷新此页面即可看到新档案的数据。</span>
           <button type="button" onClick={() => setRestartHint(null)} className={s.restartDismiss}>
             知道了
           </button>
@@ -129,14 +129,14 @@ export function ProfilesRoute() {
             }}
             disabled={createProfile.isPending}
           >
-            {creating ? "取消" : "+ 新建 profile"}
+            {creating ? "取消" : "+ 新建档案"}
           </button>
         </div>
       )}
 
       {creating && (
         <div className={s.createCard}>
-          <div className={s.createCardTitle}>新建 profile</div>
+          <div className={s.createCardTitle}>新建档案</div>
           <div className={s.createForm}>
             <div className={s.fieldRow}>
               <label className={s.fieldLabel} htmlFor="profile-name-input">
@@ -206,7 +206,7 @@ export function ProfilesRoute() {
 
       {isError ? (
         <div className={s.errorState}>
-          <strong>无法读取 profile 列表。</strong>
+          <strong>无法读取档案列表。</strong>
           <p>
             {errorObj instanceof Error ? errorObj.message : "未知错误"}。常见原因：dashboard 没启动，或 hermes 还没装 hermes-agent-cn fork（`/api/profiles/active` 是 fork P-008 加的）。
           </p>
@@ -215,7 +215,7 @@ export function ProfilesRoute() {
         <div className={s.emptyState}>加载中…</div>
       ) : profiles.length === 0 ? (
         <div className={s.emptyState}>
-          一个 profile 都没有，连 default 都没有？这通常是 hermes 刚装还没初始化。运行 <code>hermes setup</code> 引导一次。
+          一个档案都没有，连 default 都没有？这通常是 hermes 刚装还没初始化。运行 <code>hermes setup</code> 引导一次。
         </div>
       ) : (
         <div className={s.list}>
@@ -267,7 +267,7 @@ export function ProfilesRoute() {
                       className={s.deleteBtn}
                       onClick={() => handleDelete(p.name)}
                       disabled={isDeleting || isActive}
-                      title={isActive ? "切到别的 profile 后才能删" : "删除此 profile（含目录所有数据）"}
+                      title={isActive ? "切到别的档案后才能删" : "删除此档案（含目录所有数据）"}
                     >
                       {isDeleting ? "删除中…" : "删除"}
                     </button>
@@ -280,7 +280,7 @@ export function ProfilesRoute() {
       )}
 
       <p className={s.footnote}>
-        重命名 profile 暂未在 UI 内提供 —— 用 CLI：<code>hermes profile rename &lt;old&gt; &lt;new&gt;</code>。
+        重命名档案暂未在 UI 内提供 —— 用 CLI：<code>hermes profile rename &lt;old&gt; &lt;new&gt;</code>。
       </p>
     </SectionShell>
   );

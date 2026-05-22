@@ -30,7 +30,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
     id: "skills",
     num: "02",
     label: "配置",
-    href: "/skills",
+    href: "/models",
     matches: (path) =>
       path.startsWith("/skills") ||
       path.startsWith("/mcp") ||
@@ -49,7 +49,6 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/analytics") ||
       path.startsWith("/logs") ||
       path.startsWith("/debug") ||
-      path.startsWith("/dev/primitives") ||
       path.startsWith("/advanced") ||
       path.startsWith("/settings"),
   },

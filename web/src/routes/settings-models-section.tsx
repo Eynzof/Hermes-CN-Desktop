@@ -152,15 +152,15 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
     id: "kanban_decomposer",
     name: "Kanban 任务分解",
     shortName: "Decomposer",
-    description: "把 Kanban 任务拆成任务图并路由到对应 profile。",
+    description: "把 Kanban 任务拆成任务图并路由到对应档案。",
     defaultTimeout: 180,
     group: "advanced",
   },
   {
     id: "profile_describer",
-    name: "Profile 描述生成",
-    shortName: "Profile",
-    description: "自动生成 profile 的能力描述，属于短文本辅助调用。",
+    name: "档案描述生成",
+    shortName: "档案",
+    description: "自动生成档案的能力描述，属于短文本辅助调用。",
     defaultTimeout: 60,
     group: "advanced",
   },
@@ -1466,7 +1466,7 @@ function AuxiliaryModelsPanel({
 
       <div className={s.auxToolbar}>
         <div className={s.desc}>
-          常用任务默认展示，高级任务用于 Kanban、Profile 和 Skill 审查。session_search 已不再使用辅助 LLM，所以这里不展示。
+          常用任务默认展示，高级任务用于 Kanban、档案和 Skill 审查。session_search 已不再使用辅助 LLM，所以这里不展示。
         </div>
         <button
           type="button"

@@ -18,15 +18,15 @@ interface CapabilityItem {
 }
 
 const CONFIG_ITEMS: readonly CapabilityItem[] = [
+  { label: "模型", path: "/models", icon: Cpu },
   {
-    label: "Profile",
+    label: "档案",
     path: "/profiles",
     icon: Boxes,
-    title: "Profile：独立 config / .env / sessions / skills 的环境",
+    title: "档案：独立 config / .env / sessions / skills 的环境",
   },
   { label: "技能", path: "/skills", icon: Sparkles },
   { label: "MCP", path: "/mcp", icon: Puzzle },
-  { label: "模型", path: "/models", icon: Cpu },
   { label: "记忆", path: "/memory", icon: Brain },
 ];
 

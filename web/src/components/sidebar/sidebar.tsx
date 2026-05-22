@@ -191,11 +191,17 @@ export function Sidebar() {
 
         <NavGroup label="能力">
           <NavItem
+            icon={Cpu}
+            label="模型"
+            active={matchPath("/models")}
+            onClick={() => navigate("/models")}
+          />
+          <NavItem
             icon={Boxes}
-            label="Profile"
+            label="档案"
             active={matchPath("/profiles")}
             onClick={() => navigate("/profiles")}
-            title="Profile：独立 config / .env / sessions / skills 的环境"
+            title="档案：独立 config / .env / sessions / skills 的环境"
           />
           <NavItem
             icon={Sparkles}
@@ -208,12 +214,6 @@ export function Sidebar() {
             label="MCP"
             active={matchPath("/mcp")}
             onClick={() => navigate("/mcp")}
-          />
-          <NavItem
-            icon={Cpu}
-            label="模型"
-            active={matchPath("/models")}
-            onClick={() => navigate("/models")}
           />
         </NavGroup>
 

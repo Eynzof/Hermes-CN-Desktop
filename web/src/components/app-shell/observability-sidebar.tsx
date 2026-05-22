@@ -3,7 +3,6 @@ import {
   BarChart3,
   Bug,
   FileText,
-  FlaskConical,
   HeartPulse,
   type LucideIcon,
 } from "lucide-react";
@@ -20,15 +19,6 @@ const ITEMS: readonly ObservabilityItem[] = [
   { label: "数据分析", path: "/analytics", icon: BarChart3 },
   { label: "日志", path: "/logs", icon: FileText },
   { label: "Debug", path: "/debug", icon: Bug },
-  ...(import.meta.env.DEV
-    ? [
-        {
-          label: "Dev Primitives",
-          path: "/dev/primitives",
-          icon: FlaskConical,
-        } as ObservabilityItem,
-      ]
-    : []),
 ];
 
 export function ObservabilitySidebar() {
