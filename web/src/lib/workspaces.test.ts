@@ -8,16 +8,12 @@ import {
   removeWorkspaceProject,
   workspaceNameFromPath,
 } from "./workspaces";
+import { __resetUiStoreForTests } from "./ui-store";
 
 describe("workspace persistence helpers", () => {
   beforeEach(() => {
-    const store = new Map<string, string>();
+    __resetUiStoreForTests();
     vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => store.set(key, value),
-        removeItem: (key: string) => store.delete(key),
-      },
       dispatchEvent: vi.fn(),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),

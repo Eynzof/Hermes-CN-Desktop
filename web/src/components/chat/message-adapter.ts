@@ -11,6 +11,7 @@ import {
   normalizeReasoningText,
 } from "@/lib/reasoning-filter";
 import { stripHermesUiWorkspaceContext } from "@/lib/composer-prompt";
+import { stableTextHash, type UiTurnStats } from "@/lib/ui-store";
 import type { AssistantTurnBlock } from "@/stores/chat";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 
@@ -385,6 +386,84 @@ function noticeTextFromParts(parts: HermesMessagePart[]): string | undefined {
 
 function messageHasErrorNotice(message: HermesUIMessage): boolean {
   return message.parts.some((part) => part.type === "notice" && part.level === "error");
+}
+
+function statsHashFromMessage(message: HermesUIMessage): string | undefined {
+  const toolText = message.parts
+    .filter((part): part is HermesToolPart => part.type === "tool")
+    .map((tool) => `${tool.name}\n${displayUnknown(tool.output) ?? ""}`)
+    .join("\n");
+  return stableTextHash([
+    textFromParts(message.parts),
+    reasoningFromParts(message.parts),
+    toolText,
+  ].filter(Boolean).join("\n"));
+}
+
+function metadataFromTurnStats(stat: UiTurnStats): HermesMessageMetadata | undefined {
+  if (stat.metadata) return stat.metadata;
+  const metadata: HermesMessageMetadata = {};
+  const usage: NonNullable<HermesMessageMetadata["usage"]> = {};
+  const timing: NonNullable<HermesMessageMetadata["timing"]> = {};
+
+  if (typeof stat.tokensInput === "number") usage.tokensInput = stat.tokensInput;
+  if (typeof stat.tokensOutput === "number") usage.tokensOutput = stat.tokensOutput;
+  if (typeof stat.tokensTotal === "number") usage.tokensTotal = stat.tokensTotal;
+  if (typeof stat.cacheRead === "number") usage.cacheRead = stat.cacheRead;
+  if (typeof stat.cacheWrite === "number") usage.cacheWrite = stat.cacheWrite;
+  if (typeof stat.apiCalls === "number") usage.apiCalls = stat.apiCalls;
+  if (typeof stat.contextUsed === "number") usage.contextUsed = stat.contextUsed;
+  if (typeof stat.contextMax === "number") usage.contextMax = stat.contextMax;
+
+  if (typeof stat.startedAt === "number") timing.startedAt = stat.startedAt;
+  if (typeof stat.firstTokenAt === "number") timing.firstTokenAt = stat.firstTokenAt;
+  if (typeof stat.completedAt === "number") timing.completedAt = stat.completedAt;
+  if (typeof stat.ttftMs === "number") timing.ttftMs = stat.ttftMs;
+  if (typeof stat.durationMs === "number") timing.durationMs = stat.durationMs;
+
+  if (Object.keys(usage).length > 0) metadata.usage = usage;
+  if (Object.keys(timing).length > 0) metadata.timing = timing;
+  if (stat.model) metadata.model = stat.model;
+  if (stat.finishReason) metadata.finishReason = stat.finishReason;
+  if (typeof stat.costUsd === "number") metadata.costUsd = stat.costUsd;
+  if (stat.costStatus) metadata.costStatus = stat.costStatus;
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+export function attachTurnStatsMetadata(
+  messages: HermesUIMessage[],
+  stats: UiTurnStats[],
+): HermesUIMessage[] {
+  if (stats.length === 0) return messages;
+
+  const used = new Set<number>();
+  let assistantIndex = 0;
+  return messages.map((message) => {
+    if (message.role !== "assistant") return message;
+    assistantIndex += 1;
+    const hash = statsHashFromMessage(message);
+    let statIndex = stats.findIndex((stat, index) =>
+      !used.has(index) && Boolean(hash) && stat.contentHash === hash,
+    );
+    if (statIndex === -1) {
+      statIndex = stats.findIndex((stat, index) =>
+        !used.has(index) && stat.turnIndex === assistantIndex,
+      );
+    }
+    if (statIndex === -1) return message;
+    const metadata = metadataFromTurnStats(stats[statIndex]!);
+    if (!metadata) return message;
+    used.add(statIndex);
+    return {
+      ...message,
+      metadata: {
+        ...message.metadata,
+        ...metadata,
+        persistedId: message.metadata?.persistedId ?? metadata.persistedId,
+      },
+    };
+  });
 }
 
 export function deriveAssistantStats(msg: HermesUIMessage): AssistantMessageStats | undefined {

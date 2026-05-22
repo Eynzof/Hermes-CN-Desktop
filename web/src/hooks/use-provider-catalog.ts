@@ -10,7 +10,7 @@ import {
 // back the built-in constant + optionally merges a remote refresh on
 // demand. When issue #54 lands (cloud-hosted catalog), this hook is the
 // only place that needs to learn how to read the remote source, kick off
-// the SWR fetch, and cache to localStorage — every other component that
+// the SWR fetch, and cache to the UI store — every other component that
 // uses providers/models can stay as-is.
 //
 // Why a hook (vs. importing the constant directly): when remote catalog

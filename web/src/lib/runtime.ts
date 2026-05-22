@@ -1,5 +1,6 @@
 import type {
   FileUploadInput,
+  HermesMessageMetadata,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -66,6 +67,52 @@ export interface SkillMarkdownResult {
   sizeBytes: number;
 }
 
+export interface UiStoreSnapshot {
+  kv: Record<string, unknown>;
+}
+
+export interface UiTurnStats {
+  id: string;
+  sessionId: string;
+  gatewaySessionId?: string;
+  clientMessageId?: string;
+  backendMessageId?: number;
+  turnIndex?: number;
+  contentHash?: string;
+  metadata?: HermesMessageMetadata;
+  model?: string;
+  provider?: string;
+  startedAt?: number;
+  firstTokenAt?: number;
+  completedAt?: number;
+  ttftMs?: number;
+  durationMs?: number;
+  tokensInput?: number;
+  tokensOutput?: number;
+  tokensTotal?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  reasoningTokens?: number;
+  contextUsed?: number;
+  contextMax?: number;
+  apiCalls?: number;
+  costUsd?: number;
+  costStatus?: string;
+  finishReason?: string;
+  status?: string;
+  createdAt?: number;
+}
+
+export interface UiEventInput {
+  id: string;
+  ts: number;
+  eventName: string;
+  sessionId?: string;
+  source?: string;
+  props?: Record<string, unknown>;
+  appVersion?: string;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -100,6 +147,12 @@ declare global {
       updateMemoryEntry?(index: number, content: string): Promise<MemoryMutationResult>;
       removeMemoryEntry?(index: number): Promise<boolean>;
       writeUserProfile?(content: string): Promise<MemoryMutationResult>;
+      uiStoreSnapshot?(): Promise<UiStoreSnapshot>;
+      uiStoreSetKv?(input: { key: string; value: unknown }): Promise<boolean>;
+      uiStoreRemoveKv?(input: { key: string }): Promise<boolean>;
+      uiStoreRecordTurnStats?(input: UiTurnStats): Promise<boolean>;
+      uiStoreGetTurnStats?(input: { sessionId: string }): Promise<UiTurnStats[]>;
+      uiStoreRecordEvent?(input: UiEventInput): Promise<boolean>;
       onSystemResume?(handler: () => void): () => void;
     };
   }

@@ -1,48 +1,35 @@
 import type { HermesMessageMetadata } from "@hermes/protocol";
+import { getUiTurnStats, recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
 
-const STORAGE_KEY = "hermes:message-stats";
-const MAX_SESSIONS = 500;
-
-interface SessionStats {
-  metadata: HermesMessageMetadata;
-  savedAt: number;
-}
-
-type StatsStore = Record<string, SessionStats>;
-
-function readStore(): StatsStore {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeStore(store: StatsStore): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-  } catch {}
-}
-
-function pruneStore(store: StatsStore): StatsStore {
-  const entries = Object.entries(store);
-  if (entries.length <= MAX_SESSIONS) return store;
-  entries.sort(([, a], [, b]) => b.savedAt - a.savedAt);
-  return Object.fromEntries(entries.slice(0, MAX_SESSIONS));
-}
-
-export function persistMessageStats(
+export async function persistMessageStats(
   sessionId: string,
   metadata: HermesMessageMetadata,
-): void {
-  const store = readStore();
-  store[sessionId] = { metadata, savedAt: Date.now() };
-  writeStore(pruneStore(store));
+  text?: string,
+): Promise<void> {
+  await recordUiTurnStats({
+    id: `legacy-${sessionId}-${Date.now()}`,
+    sessionId,
+    metadata,
+    contentHash: stableTextHash(text),
+    model: metadata.model,
+    ttftMs: metadata.timing?.ttftMs,
+    durationMs: metadata.timing?.durationMs,
+    tokensInput: metadata.usage?.tokensInput,
+    tokensOutput: metadata.usage?.tokensOutput,
+    tokensTotal: metadata.usage?.tokensTotal,
+    cacheRead: metadata.usage?.cacheRead,
+    cacheWrite: metadata.usage?.cacheWrite,
+    apiCalls: metadata.usage?.apiCalls,
+    costUsd: metadata.costUsd ?? undefined,
+    costStatus: metadata.costStatus,
+    finishReason: metadata.finishReason,
+    createdAt: Date.now(),
+  });
 }
 
-export function findCachedMetadata(
+export async function findCachedMetadata(
   sessionId: string,
-): HermesMessageMetadata | undefined {
-  return readStore()[sessionId]?.metadata;
+): Promise<HermesMessageMetadata | undefined> {
+  const rows = await getUiTurnStats(sessionId);
+  return [...rows].reverse().find((row) => row.metadata)?.metadata;
 }

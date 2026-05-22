@@ -1,18 +1,10 @@
 import type { ComposerModelSelection } from "@/components/chat/composer-types";
 
 // Carries the picker selection across the panel composer → detail navigation.
-// Without this, detail's selectedModel/sessionUsage/sessionData are all
-// empty on first mount and the displayed model falls back to modelInfo
-// (the global default), which is almost never what the user just picked.
-//
-// sessionStorage (not localStorage) — overrides should die with the tab so
-// stale entries don't accumulate. Detail consumes-and-clears on mount.
+// This is intentionally renderer-memory only: overrides should die with the
+// current window so stale entries don't accumulate in persistent UI state.
 
-const STORAGE_PREFIX = "hermes:session-model:";
-
-function storageKey(sessionId: string): string {
-  return `${STORAGE_PREFIX}${sessionId}`;
-}
+const overrides = new Map<string, ComposerModelSelection>();
 
 function isValid(value: unknown): value is ComposerModelSelection {
   if (!value || typeof value !== "object") return false;
@@ -29,29 +21,20 @@ export function rememberSessionModelOverride(
   selection: ComposerModelSelection,
 ): void {
   if (!sessionId || !isValid(selection)) return;
-  try {
-    window.sessionStorage.setItem(storageKey(sessionId), JSON.stringify(selection));
-  } catch {
-    // sessionStorage unavailable — silently drop, detail page will fall
-    // back to its existing precedence chain.
-  }
+  overrides.set(sessionId, { ...selection });
 }
 
 export function readSessionModelOverride(sessionId: string): ComposerModelSelection | null {
   if (!sessionId) return null;
-  try {
-    const raw = window.sessionStorage.getItem(storageKey(sessionId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    return isValid(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+  const value = overrides.get(sessionId);
+  return value ? { ...value } : null;
 }
 
 export function forgetSessionModelOverride(sessionId: string): void {
   if (!sessionId) return;
-  try {
-    window.sessionStorage.removeItem(storageKey(sessionId));
-  } catch {}
+  overrides.delete(sessionId);
+}
+
+export function __resetSessionModelOverridesForTests(): void {
+  overrides.clear();
 }

@@ -4,17 +4,11 @@ import {
   rememberLastUsedModel,
   readLastUsedModel,
 } from "./last-used-model";
+import { __resetUiStoreForTests, readUiValue, writeUiValue } from "./ui-store";
 
 describe("last-used-model", () => {
   beforeEach(() => {
-    const store = new Map<string, string>();
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => store.set(key, value),
-        removeItem: (key: string) => store.delete(key),
-      },
-    });
+    __resetUiStoreForTests();
   });
 
   it("returns null when nothing stored", () => {
@@ -43,21 +37,21 @@ describe("last-used-model", () => {
 
   it("expires entries older than 30 days", () => {
     rememberLastUsedModel({ model: "claude-sonnet-4-6" });
-    const raw = JSON.parse(window.localStorage.getItem("hermes:last-used-model")!);
+    const raw = readUiValue<{ selection: { model: string }; ts: number }>(
+      "hermes:last-used-model",
+      { selection: { model: "" }, ts: 0 },
+    );
     raw.ts = Date.now() - 31 * 24 * 60 * 60 * 1000;
-    window.localStorage.setItem("hermes:last-used-model", JSON.stringify(raw));
+    writeUiValue("hermes:last-used-model", raw);
     expect(readLastUsedModel()).toBeNull();
   });
 
   it("survives malformed payloads", () => {
-    window.localStorage.setItem("hermes:last-used-model", "not json{{{");
+    writeUiValue("hermes:last-used-model", "not an object");
     expect(readLastUsedModel()).toBeNull();
-    window.localStorage.setItem("hermes:last-used-model", JSON.stringify({ ts: Date.now() }));
+    writeUiValue("hermes:last-used-model", { ts: Date.now() });
     expect(readLastUsedModel()).toBeNull();
-    window.localStorage.setItem(
-      "hermes:last-used-model",
-      JSON.stringify({ ts: Date.now(), selection: { model: 42 } }),
-    );
+    writeUiValue("hermes:last-used-model", { ts: Date.now(), selection: { model: 42 } });
     expect(readLastUsedModel()).toBeNull();
   });
 

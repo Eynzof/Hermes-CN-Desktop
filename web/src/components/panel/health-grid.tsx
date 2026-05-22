@@ -5,6 +5,7 @@ import { useEnvVars } from "@/hooks/use-env";
 import { useSkills } from "@/hooks/use-skills";
 import { useMcpServers } from "@/hooks/use-mcp-servers";
 import { useLastUsedModel } from "@/lib/last-used-model";
+import { readUiValue, writeUiValue } from "@/lib/ui-store";
 import { Dot } from "@/components/ui/pill";
 import s from "./health-grid.module.css";
 
@@ -31,17 +32,11 @@ function formatContextLength(n: number | undefined | null): string {
 }
 
 function readOpen(): boolean {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return readUiValue(STORAGE_KEY, false);
 }
 
 function writeOpen(open: boolean) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, open ? "1" : "0");
-  } catch {}
+  writeUiValue(STORAGE_KEY, open);
 }
 
 function originFromHealthUrl(url: string | null | undefined): string {

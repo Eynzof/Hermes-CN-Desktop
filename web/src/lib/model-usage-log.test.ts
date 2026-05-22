@@ -1,25 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
-  clearModelUsageLog,
   modelUsageKey,
   rankRecentModels,
   readModelUsageLog,
   recordModelUsage,
   type ModelUsageEntry,
 } from "./model-usage-log";
-
-function stubLocalStorage() {
-  const store = new Map<string, string>();
-  vi.stubGlobal("window", {
-    localStorage: {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => store.set(key, value),
-      removeItem: (key: string) => store.delete(key),
-    },
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  });
-}
+import { __resetUiStoreForTests } from "./ui-store";
 
 const NOW = new Date("2026-05-16T10:00:00Z").getTime();
 const HOUR = 60 * 60 * 1000;
@@ -37,8 +24,7 @@ describe("modelUsageKey", () => {
 
 describe("recordModelUsage", () => {
   beforeEach(() => {
-    stubLocalStorage();
-    clearModelUsageLog();
+    __resetUiStoreForTests();
   });
 
   it("creates an entry on first pick", () => {

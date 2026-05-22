@@ -24,6 +24,7 @@ use hermes_agent_cn::commands::api_proxy::{
     api_request_impl, external_request_impl, upload_file_impl, ApiRequestInput, UploadFileInput,
 };
 use hermes_agent_cn::error::AppError;
+use hermes_agent_cn::ui_store;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
@@ -303,11 +304,9 @@ async fn archive_intercept_writes_local_state_and_does_not_hit_dashboard() {
     .await
     .expect("ok");
     assert_eq!(r.status, 200);
-    // archive state file should now exist
-    let state_path = home.path().join("session-ui-state.json");
-    assert!(state_path.exists());
-    let contents = std::fs::read_to_string(&state_path).unwrap();
-    assert!(contents.contains("sess-1"));
+    let archived = ui_store::read_archived_session_ids(home.path().to_str().unwrap());
+    assert!(home.path().join("desktop-ui.sqlite").exists());
+    assert!(archived.contains("sess-1"));
 }
 
 // --- Archive filter post-processing ----------------------------------------
@@ -330,12 +329,8 @@ async fn archived_sessions_are_filtered_from_list_response() {
         .await;
 
     let home = tempdir();
-    // Pre-populate archive state.
-    std::fs::write(
-        home.path().join("session-ui-state.json"),
-        r#"{"archivedSessions":["archived-2"]}"#,
-    )
-    .unwrap();
+    // Pre-populate archive state in the UI SQLite store.
+    ui_store::set_session_archived(home.path().to_str().unwrap(), "archived-2", true).unwrap();
 
     let r = api_request_impl(
         input_get("/api/sessions"),

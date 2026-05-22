@@ -1,15 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renameSession } from "./session-rename";
 import { readSessionTitleOverrides } from "./session-ui-state";
+import { __resetUiStoreForTests } from "./ui-store";
 
 beforeEach(() => {
-  const store = new Map<string, string>();
+  __resetUiStoreForTests();
   vi.stubGlobal("window", {
-    localStorage: {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => store.set(key, value),
-      removeItem: (key: string) => store.delete(key),
-    },
     dispatchEvent: vi.fn(),
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
