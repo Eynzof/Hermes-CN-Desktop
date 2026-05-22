@@ -1,10 +1,10 @@
 import { atom } from "jotai";
-import { atomWithStorage } from "jotai/utils";
+import { readUiValue, writeUiValue } from "@/lib/ui-store";
 
 export const activeSessionIdAtom = atom<string | null>(null);
 export const sidebarSearchAtom = atom("");
 
-// Active profile name. Persisted in localStorage so refresh / multi-tab keeps
+// Active profile name. Persisted in the UI SQLite store so refresh keeps
 // the user's choice. "default" is the upstream's reserved name for the root
 // HERMES_HOME (~/.hermes), so we use it both as the literal default profile
 // label and as the bootstrap value before the backend has been queried.
@@ -14,14 +14,22 @@ export const sidebarSearchAtom = atom("");
 // Desktop 模式 (Electron) 下主进程 own dashboard 子进程，切换走 IPC →
 // stop + spawn，真正即时生效（direction B）。X-Hermes-Profile header 是给
 // 未来 fork 改造支持 per-request 路由用的占位（direction C）。
-export const activeProfileAtom = atomWithStorage<string>(
-  "hermes.active-profile",
-  "default",
+const activeProfileBaseAtom = atom<string>(readUiValue("hermes.active-profile", "default"));
+export const activeProfileAtom = atom(
+  (get) => get(activeProfileBaseAtom),
+  (_get, set, next: string) => {
+    set(activeProfileBaseAtom, next);
+    writeUiValue("hermes.active-profile", next);
+  },
 );
 
-export const showReasoningAtom = atomWithStorage<boolean>(
-  "hermes.show-reasoning",
-  false,
+const showReasoningBaseAtom = atom<boolean>(readUiValue("hermes.show-reasoning", false));
+export const showReasoningAtom = atom(
+  (get) => get(showReasoningBaseAtom),
+  (_get, set, next: boolean) => {
+    set(showReasoningBaseAtom, next);
+    writeUiValue("hermes.show-reasoning", next);
+  },
 );
 
 // Set to true while the desktop main process is restarting the dashboard

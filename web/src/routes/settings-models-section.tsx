@@ -840,7 +840,7 @@ export function ModelsSection() {
       await saveConfig.mutateAsync(
         buildCurrentModelConfigUpdate(config, selectedProvider, providerForm),
       );
-      // PanelComposer seeds its model picker from localStorage.
+      // PanelComposer seeds its model picker from the UI store.
       // This mirrors picking a model from the workbench composer, so the next
       // new session carries this explicit choice even before /api/model/info
       // finishes refetching.

@@ -1,5 +1,6 @@
 import { parseGatewayEvent, type GatewayEvent } from "@hermes/protocol";
 import { runtime } from "./runtime";
+import { readUiValue } from "./ui-store";
 
 export type ConnectionState = "idle" | "connecting" | "open" | "closed" | "error";
 
@@ -552,7 +553,7 @@ export type GatewayTransport = "ws" | "sse";
 
 // Pick the transport once per page load. Precedence (highest first):
 //   1. URL query: ?transport=sse|ws  — for ad-hoc QA without rebuilding
-//   2. localStorage HERMES_TRANSPORT  — sticky per-browser
+//   2. UI store HERMES_TRANSPORT  — sticky per-profile
 //   3. window.__HERMES_RUNTIME__.transport — Electron preload injection
 //      (apps/desktop/src/preload/preload.ts), so the desktop bundle can
 //      default to SSE without forcing every web user to opt in
@@ -563,7 +564,7 @@ function pickTransport(): GatewayTransport {
     if (typeof window !== "undefined") {
       const fromQuery = new URLSearchParams(window.location.search).get("transport");
       if (fromQuery === "ws" || fromQuery === "sse") return fromQuery;
-      const fromStorage = window.localStorage?.getItem("HERMES_TRANSPORT");
+      const fromStorage = readUiValue<string | undefined>("HERMES_TRANSPORT", undefined);
       if (fromStorage === "ws" || fromStorage === "sse") return fromStorage;
       const fromRuntime = window.__HERMES_RUNTIME__?.transport;
       if (fromRuntime === "ws" || fromRuntime === "sse") return fromRuntime;
@@ -572,7 +573,7 @@ function pickTransport(): GatewayTransport {
       if (window.__TAURI_INTERNALS__) return "sse";
     }
   } catch {
-    // localStorage / URL access can throw in restricted contexts
+    // UI store / URL access can throw in restricted contexts
   }
   const fromEnv = (import.meta as any)?.env?.VITE_HERMES_TRANSPORT as string | undefined;
   if (fromEnv === "ws" || fromEnv === "sse") return fromEnv;

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 import type { ComposerModelSelection } from "@/components/chat/composer-types";
 
 const STORAGE_KEY = "hermes:last-used-model";
@@ -27,9 +28,7 @@ function isValidSelection(value: unknown): value is ComposerModelSelection {
 
 export function readLastUsedModel(): ComposerModelSelection | null {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredEntry | null;
+    const parsed = readUiValue<StoredEntry | null>(STORAGE_KEY, null);
     if (!parsed || typeof parsed !== "object") return null;
     if (typeof parsed.ts !== "number") return null;
     if (Date.now() - parsed.ts > MAX_AGE_MS) return null;
@@ -44,33 +43,29 @@ export function rememberLastUsedModel(selection: ComposerModelSelection) {
   if (!isValidSelection(selection)) return;
   try {
     const entry: StoredEntry = { selection, ts: Date.now() };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entry));
+    writeUiValue(STORAGE_KEY, entry);
     notifyLastUsedModelChanged();
   } catch {}
 }
 
 export function forgetLastUsedModel() {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    removeUiValue(STORAGE_KEY);
     notifyLastUsedModelChanged();
   } catch {}
 }
 
-// React hook — re-renders when last-used model changes (in this tab via
-// rememberLastUsedModel/forgetLastUsedModel, or in another tab via storage event).
+// React hook — re-renders when last-used model changes in this renderer.
 export function useLastUsedModel(): ComposerModelSelection | null {
   const [value, setValue] = useState<ComposerModelSelection | null>(() => readLastUsedModel());
 
   useEffect(() => {
     const refresh = () => setValue(readLastUsedModel());
     subscribers.add(refresh);
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY) refresh();
-    };
-    window.addEventListener("storage", onStorage);
+    const unsubscribe = subscribeUiStore(refresh);
     return () => {
       subscribers.delete(refresh);
-      window.removeEventListener("storage", onStorage);
+      unsubscribe();
     };
   }, []);
 

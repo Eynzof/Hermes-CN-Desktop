@@ -1,23 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
+  __resetSessionModelOverridesForTests,
   forgetSessionModelOverride,
   readSessionModelOverride,
   rememberSessionModelOverride,
 } from "./session-model-override";
 
-function stubSessionStorage() {
-  const store = new Map<string, string>();
-  vi.stubGlobal("window", {
-    sessionStorage: {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => store.set(key, value),
-      removeItem: (key: string) => store.delete(key),
-    },
-  });
-}
-
 describe("session-model-override", () => {
-  beforeEach(() => stubSessionStorage());
+  beforeEach(() => __resetSessionModelOverridesForTests());
 
   it("returns null when nothing stored", () => {
     expect(readSessionModelOverride("abc")).toBeNull();
@@ -45,13 +35,6 @@ describe("session-model-override", () => {
 
   it("ignores selections without a model", () => {
     rememberSessionModelOverride("s1", { model: "" });
-    expect(readSessionModelOverride("s1")).toBeNull();
-  });
-
-  it("survives malformed payloads", () => {
-    window.sessionStorage.setItem("hermes:session-model:s1", "not json");
-    expect(readSessionModelOverride("s1")).toBeNull();
-    window.sessionStorage.setItem("hermes:session-model:s1", JSON.stringify({ model: 42 }));
     expect(readSessionModelOverride("s1")).toBeNull();
   });
 

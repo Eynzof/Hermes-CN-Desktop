@@ -1,31 +1,19 @@
 // Session archive state management.
 //
 // Replaces the archive logic in hermes-cn-ui-v1/apps/desktop/src/main/main.ts
-// lines 289-411. Manages a local JSON file that tracks which sessions are
+// lines 289-411. Manages local UI state that tracks which sessions are
 // "archived" (hidden from the session list but not deleted from the backend).
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
-const SESSION_ARCHIVE_STATE_FILE: &str = "session-ui-state.json";
+use crate::ui_store;
+
 static ARCHIVE_ROUTE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"^/api/sessions/([^/]+)/archive$").expect("valid archive route regex")
 });
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ArchiveState {
-    #[serde(default)]
-    archived_sessions: Vec<String>,
-}
-
-fn archive_state_path(hermes_home: &str) -> PathBuf {
-    Path::new(hermes_home).join(SESSION_ARCHIVE_STATE_FILE)
-}
-
+#[cfg(test)]
 fn normalize_ids(ids: &[String]) -> Vec<String> {
     let mut seen = HashSet::new();
     ids.iter()
@@ -35,27 +23,18 @@ fn normalize_ids(ids: &[String]) -> Vec<String> {
 }
 
 pub fn read_archive_state(hermes_home: &str) -> HashSet<String> {
-    let path = archive_state_path(hermes_home);
-    let content = match fs::read_to_string(&path) {
-        Ok(c) => c,
-        Err(_) => return HashSet::new(),
-    };
-    let state: ArchiveState = serde_json::from_str(&content).unwrap_or_default();
-    normalize_ids(&state.archived_sessions)
-        .into_iter()
-        .collect()
+    ui_store::read_archived_session_ids(hermes_home)
 }
 
 pub fn write_archive_state(hermes_home: &str, ids: &HashSet<String>) -> Result<(), String> {
-    let path = archive_state_path(hermes_home);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let current = ui_store::read_archived_session_ids(hermes_home);
+    for id in current.difference(ids) {
+        ui_store::set_session_archived(hermes_home, id, false).map_err(|e| e.to_string())?;
     }
-    let state = ArchiveState {
-        archived_sessions: normalize_ids(&ids.iter().cloned().collect::<Vec<_>>()),
-    };
-    let json = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
-    fs::write(&path, format!("{}\n", json)).map_err(|e| e.to_string())
+    for id in ids {
+        ui_store::set_session_archived(hermes_home, id, true).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// Check if a path matches /api/sessions/{id}/archive and extract the session ID.
@@ -220,15 +199,6 @@ mod tests {
         );
     }
 
-    // -------- archive_state_path --------
-
-    #[test]
-    fn archive_state_path_uses_hermes_home() {
-        let p = archive_state_path("/tmp/hh");
-        assert!(p.ends_with(SESSION_ARCHIVE_STATE_FILE));
-        assert!(p.to_str().unwrap().contains("hh"));
-    }
-
     // -------- extract_archive_session_id --------
 
     #[test]
@@ -275,7 +245,7 @@ mod tests {
     // -------- read / write archive state --------
 
     #[test]
-    fn read_archive_state_empty_when_no_file() {
+    fn read_archive_state_empty_when_no_ui_store_rows() {
         let dir = TempDir::new().unwrap();
         let state = read_archive_state(home_str(&dir));
         assert!(state.is_empty());
@@ -294,13 +264,8 @@ mod tests {
     }
 
     #[test]
-    fn read_archive_state_recovers_from_malformed_json() {
+    fn read_archive_state_recovers_from_missing_ui_store() {
         let dir = TempDir::new().unwrap();
-        std::fs::write(
-            dir.path().join(SESSION_ARCHIVE_STATE_FILE),
-            "{not valid json",
-        )
-        .unwrap();
         let state = read_archive_state(home_str(&dir));
         assert!(state.is_empty());
     }

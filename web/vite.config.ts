@@ -2,9 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import { homedir } from "os";
-import { dirname, join, resolve } from "path";
+import { join, resolve } from "path";
 import type { Plugin } from "vite";
 import { sessionLogToMessages } from "../packages/protocol/src/session-log.ts";
 
@@ -72,10 +72,10 @@ function hermesSessionLogPlugin(): Plugin {
   };
 }
 
-const SESSION_ARCHIVE_STATE_FILE = "session-ui-state.json";
 // Override with HERMES_DASHBOARD_ORIGIN to point dev server at a different
 // dashboard without disturbing a user's separately installed dashboard on 9119.
 const API_PROXY_TARGET = process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.1:9120";
+const devArchivedSessions = new Set<string>();
 
 function gitShortCommit(): string {
   if (process.env.HERMES_BUILD_COMMIT) return process.env.HERMES_BUILD_COMMIT;
@@ -104,33 +104,16 @@ function hermesHomePath(): string {
   return process.env.HERMES_DESKTOP_HERMES_HOME || process.env.HERMES_HOME || join(homedir(), ".hermes");
 }
 
-function archiveStatePath(): string {
-  return join(hermesHomePath(), SESSION_ARCHIVE_STATE_FILE);
-}
-
-function normalizeSessionIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.filter((item): item is string =>
-    typeof item === "string" && item.trim().length > 0,
-  ).map((item) => item.trim()))];
-}
-
 async function readArchiveState(): Promise<{ archivedSessions: string[] }> {
-  try {
-    const raw = await readFile(archiveStatePath(), "utf8");
-    const parsed = JSON.parse(raw) as { archivedSessions?: unknown };
-    return { archivedSessions: normalizeSessionIds(parsed.archivedSessions) };
-  } catch {
-    return { archivedSessions: [] };
-  }
+  return { archivedSessions: Array.from(devArchivedSessions) };
 }
 
 async function writeArchiveState(state: { archivedSessions: string[] }): Promise<void> {
-  const filePath = archiveStatePath();
-  await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify({
-    archivedSessions: normalizeSessionIds(state.archivedSessions),
-  }, null, 2)}\n`, "utf8");
+  devArchivedSessions.clear();
+  for (const id of state.archivedSessions) {
+    const cleanId = typeof id === "string" ? id.trim() : "";
+    if (cleanId) devArchivedSessions.add(cleanId);
+  }
 }
 
 function archiveRouteSessionId(pathname: string): string | null {

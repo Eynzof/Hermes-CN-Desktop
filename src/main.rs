@@ -268,7 +268,7 @@ fn main() {
                         log::error!(
                             "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
                              SSE transport will fail; set HERMES_TRANSPORT=ws in the \
-                             webview localStorage as a workaround, or upgrade the agent \
+                             UI store as a workaround, or upgrade the agent \
                              to a hermes-agent-cn build with the P-009 patch applied. \
                              See https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
                             handle.api_base_url
@@ -518,7 +518,7 @@ fn main() {
                     log::error!(
                         "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
                      SSE transport will fail; set HERMES_TRANSPORT=ws in the \
-                     webview localStorage as a workaround, or upgrade the agent \
+                     UI store as a workaround, or upgrade the agent \
                      to a hermes-agent-cn build with the P-009 patch applied. \
                      See https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
                         handle.api_base_url
@@ -581,6 +581,12 @@ fn main() {
             commands::memory::remove_memory_entry,
             commands::memory::write_user_profile,
             commands::sse_proxy::connect_gateway_sse,
+            commands::ui_store::ui_store_snapshot,
+            commands::ui_store::ui_store_set_kv,
+            commands::ui_store::ui_store_remove_kv,
+            commands::ui_store::ui_store_record_turn_stats,
+            commands::ui_store::ui_store_get_turn_stats,
+            commands::ui_store::ui_store_record_event,
         ])
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::Destroyed = event {

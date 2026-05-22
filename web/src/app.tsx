@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { usePlatform } from "@hermes/shared-ui";
+import { hydrateThemeAtom, usePlatform } from "@hermes/shared-ui";
+import { useEffect } from "react";
+import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
+import { readUiValue } from "@/lib/ui-store";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { AppShell } from "@/components/app-shell/app-shell";
@@ -28,9 +31,13 @@ function NewTaskRedirect() {
 
 export function App() {
   const platform = usePlatform();
-  // 首次启动时让 atom 跟上后端 sticky default（多 tab 之间 atomWithStorage
-  // 自动同步，所以这里只需要做一次种子）
+  const hydrateTheme = useSetAtom(hydrateThemeAtom);
+  // 首次启动时让 atom 跟上后端 sticky default；UI SQLite 已在 React 挂载前加载，
+  // 所以这里只需要做一次种子。
   useBootstrapActiveProfile();
+  useEffect(() => {
+    hydrateTheme(readUiValue("hermes-theme", { theme: "dark", density: "comfortable" }));
+  }, [hydrateTheme]);
 
   return (
     <div lang="zh-CN" data-hermes-platform={platform}>

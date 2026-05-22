@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteJSON, fetchJSON, postJSON, putJSON } from "@/lib/transport";
 import { runtime } from "@/lib/runtime";
+import { reloadUiStore } from "@/lib/ui-store";
 import { activeProfileAtom, profileSwitchingAtom } from "@/stores/ui";
 import {
   ActiveProfileResponse,
@@ -46,7 +47,7 @@ export function useActiveProfileName(): string {
 
 // Bootstrap: 首次拉到后端 sticky default 后，把 atom 同步过去。
 // atom 默认 "default"，只有在 atom 还是 "default" 而后端是别的时才覆盖；
-// 用户主动切过的 profile（已写入 localStorage）不会被清。
+// 用户主动切过的 profile（已写入 UI SQLite）不会被清。
 //
 // 桌面端启动时主进程已经把 currentProfile 通过 --hermes-current-profile
 // arg 推到 __HERMES_RUNTIME__ 里——直接读它就够了，不需要走后端 query
@@ -131,7 +132,8 @@ export function useSetActiveProfile() {
       await putJSON("/api/profiles/active", { name }, MutationOkResponse);
       return { mode: "web-sticky", profileName: name };
     },
-    onSuccess: (_result, name) => {
+    onSuccess: async (_result, name) => {
+      await reloadUiStore();
       // 1) 同步 atom：所有 queryKey 含 profileId 的 hook 会自动以新 key 抓数据
       setActive(name);
       // 2) sticky 字段本身刷新

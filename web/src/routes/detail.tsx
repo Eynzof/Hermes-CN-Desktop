@@ -19,6 +19,7 @@ import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
+import { getUiTurnStats, type UiTurnStats } from "@/lib/ui-store";
 import {
   buildComposerContextUsage,
   estimateRenderedContextTokens,
@@ -41,6 +42,7 @@ import type {
 import { MessageTimeline } from "@/components/chat/message-timeline";
 import {
   hermesUIMessagesToChatMessages,
+  attachTurnStatsMetadata,
   mergeHermesUIMessages,
   messagesResponseToHermesUIMessages,
 } from "@/components/chat/message-adapter";
@@ -56,6 +58,7 @@ export function DetailRoute() {
   const navigate = useNavigate();
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
   const taskId = activeSessionId ?? urlTaskId;
+  const [turnStats, setTurnStats] = useState<UiTurnStats[]>([]);
 
   const {
     resumeSession,
@@ -114,16 +117,16 @@ export function DetailRoute() {
   // session's choice (or the global last-used model) instead of reflecting
   // this session's own model.
   //
-  // Prefer a session-model override from sessionStorage when present: that's
+  // Prefer a renderer-memory session-model override when present: that's
   // the path panel-composer uses to hand off the just-picked
   // model so detail doesn't briefly show the global default before the
   // backend round-trips back with the real session model.
   //
-  // Don't delete the storage entry here — StrictMode runs effects twice
+  // Don't delete the renderer-memory override here — StrictMode runs effects twice
   // (mount → unmount → mount) in dev, and an eager delete on the first run
   // means the second run reads nothing and clobbers selectedModel back to
-  // null. sessionStorage dies with the tab anyway; per-session-id keys
-  // never collide, so leaving stale entries is safe.
+  // null. The override map dies with the window; per-session-id keys never
+  // collide, so leaving stale entries is safe.
   useEffect(() => {
     const override = taskId ? readSessionModelOverride(taskId) : null;
     setSelectedModel(override);
@@ -180,9 +183,21 @@ export function DetailRoute() {
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setTurnStats([]);
+    if (!taskId) return;
+    void getUiTurnStats(taskId).then((stats) => {
+      if (!cancelled) setTurnStats(stats);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId]);
+
   const storedMessages = useMemo(
-    () => messagesResponseToHermesUIMessages(messagesData),
-    [messagesData],
+    () => attachTurnStatsMetadata(messagesResponseToHermesUIMessages(messagesData), turnStats),
+    [messagesData, turnStats],
   );
 
   useEffect(() => {
