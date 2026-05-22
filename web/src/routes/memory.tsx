@@ -24,7 +24,7 @@ const PROVIDER_URLS: Record<string, string> = {
 };
 
 const PROVIDER_DESCRIPTIONS: Record<string, string> = {
-  builtin: "内置文件记忆，直接写入当前 Profile 的 memories/MEMORY.md 与 USER.md。",
+  builtin: "内置文件记忆，直接写入当前档案的 memories/MEMORY.md 与 USER.md。",
   honcho: "基于 AI 的跨会话用户画像建模，支持语义搜索与长期偏好记录。",
   hindsight: "长期记忆，具有知识图谱和多策略检索能力。",
   mem0: "服务端 LLM 事实提取，支持语义搜索和自动去重。",
@@ -171,7 +171,7 @@ export function MemoryRoute() {
       ) : (
         <div className={s.memoryPage}>
           <p className={s.desc}>
-            这里管理当前 Profile 的长期记忆。记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。
+            这里管理当前档案的长期记忆。记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。
           </p>
 
           <div className={s.statsGrid}>
@@ -204,7 +204,7 @@ export function MemoryRoute() {
               <div className={s.panelHead}>
                 <div>
                   <strong>{data.memory.entries.length} 条记忆</strong>
-                  <span>写入当前 Profile 的 memories/MEMORY.md</span>
+                  <span>写入当前档案的 memories/MEMORY.md</span>
                 </div>
                 <button type="button" className={s.primaryButton} onClick={() => setShowAdd((v) => !v)}>
                   <Plus size={14} /> 添加记忆

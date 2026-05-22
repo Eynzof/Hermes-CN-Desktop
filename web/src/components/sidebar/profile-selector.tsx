@@ -54,11 +54,11 @@ export function ProfileSelector() {
             data-state={open ? "open" : undefined}
             title={
               isError
-                ? "无法读取 profile（dashboard 离线或没装 hermes-agent-cn fork）"
-                : `当前 profile · 点击切换`
+                ? "无法读取档案（dashboard 离线或没装 hermes-agent-cn fork）"
+                : "当前档案 · 点击切换"
             }
           >
-            <span className={s.triggerLabel}>Profile</span>
+            <span className={s.triggerLabel}>档案</span>
             <span className={s.triggerName}>
               {isError ? "未接入" : active}
             </span>
@@ -67,11 +67,11 @@ export function ProfileSelector() {
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content className={s.menu} side="bottom" align="start">
-            <div className={s.menuTitle}>切换 profile</div>
+            <div className={s.menuTitle}>切换档案</div>
             {isLoading ? (
               <div className={s.menuEmpty}>加载中…</div>
             ) : profiles.length === 0 ? (
-              <div className={s.menuEmpty}>没有可用的 profile</div>
+              <div className={s.menuEmpty}>没有可用的档案</div>
             ) : (
               profiles.map((p) => {
                 const isActive = p.name === active;
@@ -99,7 +99,7 @@ export function ProfileSelector() {
                 className={s.menuFootLink}
                 onClick={handleManage}
               >
-                管理 profile…
+                管理档案…
               </button>
             </div>
           </Popover.Content>
@@ -109,7 +109,7 @@ export function ProfileSelector() {
         <div className={s.restartHint}>
           <div className={s.restartHintBody}>
             已切到 <strong>{restartHint}</strong>。
-            重启 dashboard 后才会真正加载新 profile 的 config / sessions。
+            重启 dashboard 后才会真正加载新档案的 config / sessions。
           </div>
           <button
             type="button"

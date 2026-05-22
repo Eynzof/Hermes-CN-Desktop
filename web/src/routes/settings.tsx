@@ -525,7 +525,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             <RuntimeField label="PID" value={process?.pid ? String(process.pid) : "—"} mono />
             <RuntimeField label="API Origin" value={process?.apiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "Vite proxy / relative"} mono wide />
             <RuntimeField label="Gateway URL" value={process?.gatewayUrl ?? rendererRuntime?.gatewayUrl ?? "relative / SSE proxy"} mono wide />
-            <RuntimeField label="Profile" value={process?.currentProfile ?? rendererRuntime?.currentProfile ?? "—"} />
+            <RuntimeField label="档案" value={process?.currentProfile ?? rendererRuntime?.currentProfile ?? "—"} />
             <RuntimeField label="Session Token" value={process?.sessionTokenPresent ? "已注入" : "未注入 / dev proxy"} />
             <RuntimeField label="SSE 代理" value={process?.gatewaySseProxyActive ? "连接中" : "未连接或浏览器直连"} />
             <RuntimeField label="HERMES_HOME" value={process?.hermesHome || hermesHomePath || "—"} mono wide />

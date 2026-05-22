@@ -4,7 +4,6 @@ import {
   Bug,
   FileCog,
   FileText,
-  FlaskConical,
   HeartPulse,
   Info,
   SlidersHorizontal,
@@ -23,15 +22,6 @@ const OBSERVABILITY_ITEMS: readonly AdvancedItem[] = [
   { label: "数据分析", path: "/analytics", icon: BarChart3 },
   { label: "日志", path: "/logs", icon: FileText },
   { label: "Debug", path: "/debug", icon: Bug },
-  ...(import.meta.env.DEV
-    ? [
-        {
-          label: "Dev Primitives",
-          path: "/dev/primitives",
-          icon: FlaskConical,
-        } as AdvancedItem,
-      ]
-    : []),
 ];
 
 const ADVANCED_ITEMS: readonly AdvancedItem[] = [
