@@ -156,6 +156,85 @@ describe("message adapter", () => {
     });
   });
 
+  it("hides image transport context when rendering stored user prompts", () => {
+    const message = hermesUIMessageToChatMessage(uiMessage({
+      id: "stored-user-image",
+      role: "user",
+      parts: [{
+        type: "text",
+        text: [
+          "[Hermes UI Image]",
+          "name=ga.png",
+          "description:",
+          "This image shows a Google Analytics dashboard.",
+          "[/Hermes UI Image]",
+          "",
+          "阅读这张图片的内容",
+        ].join("\n"),
+      }],
+    }));
+
+    expect(message?.text).toBe("阅读这张图片的内容\n\n附件：ga.png");
+  });
+
+  it("deduplicates stored image transport prompts against live display prompts", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-user-image",
+        role: "user",
+        parts: [{
+          type: "text",
+          text: [
+            "[The user attached an image but analysis failed.]",
+            "[You can examine it with vision_analyze using image_url: /Users/enzo/Downloads/ga.png]",
+            "",
+            "[Hermes UI Workspace]",
+            "workspace=/Users/enzo/Documents/GithubProjects/hermes/hermes-agent-cn-desktop",
+            "instruction=Treat this as the active workspace/root for file paths and shell commands.",
+            "[/Hermes UI Workspace]",
+            "",
+            "[Hermes UI Image]",
+            "name=ga.png",
+            "description:",
+            "[User attached image: ga.png]",
+            "[/Hermes UI Image]",
+            "",
+            "看一下这张图里面是什么内容",
+          ].join("\n"),
+        }],
+      }),
+      uiMessage({
+        id: "stored-assistant-image",
+        role: "assistant",
+        parts: [{ type: "text", text: "我已经阅读了这张图片。" }],
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-user-image",
+        role: "user",
+        parts: [{ type: "text", text: "看一下这张图里面是什么内容\n\n附件：ga.png" }],
+      }),
+      uiMessage({
+        id: "live-assistant-image",
+        role: "assistant",
+        parts: [{ type: "text", text: "我已经阅读了这张图片。" }],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    expect(merged.map((message) => message.id)).toEqual([
+      "live-user-image",
+      "live-assistant-image",
+    ]);
+    expect(chat.map((message) => message.text)).toEqual([
+      "看一下这张图里面是什么内容\n\n附件：ga.png",
+      "我已经阅读了这张图片。",
+    ]);
+  });
+
   it("keeps canonical progress as a streaming progress block", () => {
     const message = hermesUIMessageToChatMessage(uiMessage({
       id: "live-assistant-1",

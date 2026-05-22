@@ -833,6 +833,9 @@ function isRecoverableStoredAssistant(
   if (liveText && storedText) {
     return liveText === storedText || (liveText.length >= 4 && storedText.includes(liveText));
   }
+  if (liveText && !storedText) {
+    return false;
+  }
 
   const liveReasoning = looseComparableText(reasoningFromParts(withoutProgressParts(liveAssistant.parts)));
   const storedReasoning = looseComparableText(reasoningFromParts(storedAssistant.parts));

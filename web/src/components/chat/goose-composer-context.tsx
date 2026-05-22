@@ -60,7 +60,7 @@ export function contextRiskText(risk: ContextRisk, active: boolean): string {
       ? "上下文已超出模型窗口，当前响应可能卡住，或使用上下文更大的模型。"
       : "上下文已超出模型窗口，等待 Hermes 自动压缩或返回错误，或使用上下文更大的模型。";
   }
-  if (risk === "warning") return "上下文接近 Hermes 自动压缩阈值。";
+  if (risk === "warning") return "上下文接近 Hermes 自动压缩阈值，触发后会显示已压缩次数。";
   return "";
 }
 
@@ -132,7 +132,7 @@ export function ContextIndicator({
             <span>{percentLabel}</span>
           </span>
           {usage.estimated ? (
-            <span className={s.contextPopoverMeta}>按当前消息内容估算</span>
+            <span className={s.contextPopoverMeta}>按当前已渲染消息估算，不使用累计账单 tokens</span>
           ) : null}
           {typeof usage.compressions === "number" && usage.compressions > 0 ? (
             <span className={s.contextPopoverMeta}>已压缩 {usage.compressions} 次</span>

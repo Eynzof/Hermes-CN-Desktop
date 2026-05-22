@@ -101,6 +101,8 @@ export interface RuntimeProcessInfo {
   commandLine?: string;
   gatewayRuntimeDir?: string;
   gatewayLockDir?: string;
+  ownershipMarkerPath?: string;
+  ownershipState?: string;
   sessionTokenPresent: boolean;
   gatewaySseProxyActive: boolean;
 }

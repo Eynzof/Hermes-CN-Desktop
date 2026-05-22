@@ -12,8 +12,8 @@ const WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.workspaceProjects";
 const SESSION_WORKSPACE_STORAGE_KEY = "hermes-cn-ui.sessionWorkspaces";
 const WORKSPACE_CHANGED_EVENT = "hermes-cn-ui.workspaces.changed";
 
-export function normalizeWorkspacePath(path: string | null | undefined): string {
-  return (path ?? "").trim().replace(/\/+$/, "");
+export function normalizeWorkspacePath(path: unknown): string {
+  return typeof path === "string" ? path.trim().replace(/\/+$/, "") : "";
 }
 
 export function workspaceNameFromPath(path: string): string {
@@ -36,6 +36,10 @@ function writeJSON(key: string, value: unknown): void {
   emitWorkspaceChange();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export function readWorkspacePath(): string {
   return normalizeWorkspacePath(readUiValue(WORKSPACE_STORAGE_KEY, ""));
 }
@@ -51,17 +55,22 @@ export function writeWorkspacePath(path: string): void {
 }
 
 export function readWorkspaceProjects(): WorkspaceProject[] {
-  const raw = readJSON<WorkspaceProject[]>(WORKSPACE_PROJECTS_STORAGE_KEY, []);
+  const rawValue = readJSON<unknown>(WORKSPACE_PROJECTS_STORAGE_KEY, []);
+  const raw = Array.isArray(rawValue) ? rawValue : [];
   const seen = new Set<string>();
   return raw.flatMap((item) => {
-    const path = normalizeWorkspacePath(item?.path);
+    if (!isRecord(item)) return [];
+    const path = normalizeWorkspacePath(item.path);
     if (!path || seen.has(path)) return [];
     seen.add(path);
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+    const createdAt = typeof item.createdAt === "number" && Number.isFinite(item.createdAt) ? item.createdAt : Date.now();
+    const updatedAt = typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now();
     return [{
       path,
-      name: item.name?.trim() || workspaceNameFromPath(path),
-      createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
-      updatedAt: Number.isFinite(item.updatedAt) ? item.updatedAt : Date.now(),
+      name: name || workspaceNameFromPath(path),
+      createdAt,
+      updatedAt,
     }];
   });
 }
@@ -73,15 +82,16 @@ export function rememberWorkspaceProject(path: string, name?: string): Workspace
   const now = Date.now();
   const projects = readWorkspaceProjects();
   const existing = projects.find((item) => item.path === normalized);
+  const displayName = typeof name === "string" ? name.trim() : "";
   const nextProject: WorkspaceProject = existing
     ? {
         ...existing,
-        name: name?.trim() || existing.name || workspaceNameFromPath(normalized),
+        name: displayName || existing.name || workspaceNameFromPath(normalized),
         updatedAt: now,
       }
     : {
         path: normalized,
-        name: name?.trim() || workspaceNameFromPath(normalized),
+        name: displayName || workspaceNameFromPath(normalized),
         createdAt: now,
         updatedAt: now,
       };
@@ -113,7 +123,8 @@ export function removeWorkspaceProject(path: string): void {
 }
 
 export function readSessionWorkspaceMap(): Record<string, string> {
-  const raw = readJSON<Record<string, string>>(SESSION_WORKSPACE_STORAGE_KEY, {});
+  const raw = readJSON<unknown>(SESSION_WORKSPACE_STORAGE_KEY, {});
+  if (!isRecord(raw)) return {};
   return Object.fromEntries(
     Object.entries(raw).flatMap(([sessionId, path]) => {
       const normalized = normalizeWorkspacePath(path);

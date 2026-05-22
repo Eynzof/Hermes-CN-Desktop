@@ -9,6 +9,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -215,8 +216,12 @@ async fn do_switch_profile(
                 }
             }
         };
+        if let Some(stop) = inner.gateway_sse_stop.take() {
+            stop.store(true, Ordering::Relaxed);
+        }
+        let session_token = inner.session_token.clone();
         if let Some(ref mut handle) = inner.dashboard_handle {
-            handle.stop();
+            handle.stop_with_token(session_token.as_deref());
         }
         inner.dashboard_handle = None;
     }

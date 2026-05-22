@@ -1610,6 +1610,7 @@ dependencies = [
  "ed25519-dalek",
  "env_logger",
  "futures-util",
+ "libc",
  "log",
  "objc2",
  "objc2-foundation",
@@ -1633,6 +1634,7 @@ dependencies = [
  "tokio",
  "url",
  "urlencoding",
+ "windows-sys 0.61.2",
  "wiremock",
  "zip",
 ]
