@@ -1,3 +1,5 @@
+import { readUiValue, writeUiValue } from "@/lib/ui-store";
+
 const STORAGE_KEY = "hermes:gateway-session-map";
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 200;
@@ -9,65 +11,36 @@ interface SessionEntry {
 
 type SessionMap = Record<string, SessionEntry>;
 
-let cachedStorage: Storage | null = null;
-let cachedRaw: string | null | undefined;
-let cachedMap: SessionMap = {};
-
-function prepareCache(storage: Storage): void {
-  if (cachedStorage === storage) return;
-  cachedStorage = storage;
-  cachedRaw = undefined;
-  cachedMap = {};
-}
-
 function readMap(): SessionMap {
-  const storage = window.localStorage;
-  prepareCache(storage);
-  try {
-    const raw = storage.getItem(STORAGE_KEY);
-    if (raw === cachedRaw) return cachedMap;
-    if (!raw) {
-      cachedRaw = raw;
-      cachedMap = {};
-      return cachedMap;
-    }
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      cachedRaw = raw;
-      cachedMap = {};
-      return cachedMap;
-    }
-
-    if (typeof Object.values(parsed)[0] === "string") {
-      const migrated: SessionMap = {};
-      for (const [key, value] of Object.entries(parsed)) {
-        if (typeof value === "string") {
-          migrated[key] = { persistentId: value, ts: Date.now() };
-        }
-      }
-      writeMap(migrated);
-      return migrated;
-    }
-
-    cachedRaw = raw;
-    cachedMap = parsed as SessionMap;
-    return cachedMap;
-  } catch {
-    cachedRaw = undefined;
-    cachedMap = {};
-    return cachedMap;
+  const parsed = readUiValue<unknown>(STORAGE_KEY, {});
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {};
   }
+
+  if (typeof Object.values(parsed)[0] === "string") {
+    const migrated: SessionMap = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === "string") {
+        migrated[key] = { persistentId: value, ts: Date.now() };
+      }
+    }
+    writeMap(migrated);
+    return migrated;
+  }
+
+  const clean: SessionMap = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!key || !value || typeof value !== "object" || Array.isArray(value)) continue;
+    const entry = value as Record<string, unknown>;
+    if (typeof entry.persistentId !== "string" || !entry.persistentId) continue;
+    if (typeof entry.ts !== "number" || !Number.isFinite(entry.ts)) continue;
+    clean[key] = { persistentId: entry.persistentId, ts: entry.ts };
+  }
+  return clean;
 }
 
 function writeMap(map: SessionMap) {
-  const storage = window.localStorage;
-  prepareCache(storage);
-  try {
-    const raw = JSON.stringify(map);
-    storage.setItem(STORAGE_KEY, raw);
-    cachedRaw = raw;
-    cachedMap = map;
-  } catch {}
+  writeUiValue(STORAGE_KEY, map);
 }
 
 function pruneExpired(map: SessionMap): SessionMap {

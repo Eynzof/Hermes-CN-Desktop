@@ -1,3 +1,4 @@
+import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 export interface WorkspaceProject {
   path: string;
   name: string;
@@ -10,14 +11,6 @@ export const WORKSPACE_STORAGE_KEY = "hermes-cn-ui.workspacePath";
 const WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.workspaceProjects";
 const SESSION_WORKSPACE_STORAGE_KEY = "hermes-cn-ui.sessionWorkspaces";
 const WORKSPACE_CHANGED_EVENT = "hermes-cn-ui.workspaces.changed";
-
-function safeLocalStorage(): Storage | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
 
 export function normalizeWorkspacePath(path: string | null | undefined): string {
   return (path ?? "").trim().replace(/\/+$/, "");
@@ -35,41 +28,26 @@ function emitWorkspaceChange(): void {
 }
 
 function readJSON<T>(key: string, fallback: T): T {
-  const store = safeLocalStorage();
-  if (!store) return fallback;
-  try {
-    const raw = store.getItem(key);
-    return raw ? JSON.parse(raw) as T : fallback;
-  } catch {
-    return fallback;
-  }
+  return readUiValue<T>(key, fallback);
 }
 
 function writeJSON(key: string, value: unknown): void {
-  const store = safeLocalStorage();
-  if (!store) return;
-  try {
-    store.setItem(key, JSON.stringify(value));
-    emitWorkspaceChange();
-  } catch {}
+  writeUiValue(key, value);
+  emitWorkspaceChange();
 }
 
 export function readWorkspacePath(): string {
-  return normalizeWorkspacePath(safeLocalStorage()?.getItem(WORKSPACE_STORAGE_KEY) ?? "");
+  return normalizeWorkspacePath(readUiValue(WORKSPACE_STORAGE_KEY, ""));
 }
 
 export function writeWorkspacePath(path: string): void {
-  const store = safeLocalStorage();
-  if (!store) return;
   const normalized = normalizeWorkspacePath(path);
-  try {
-    if (normalized) {
-      store.setItem(WORKSPACE_STORAGE_KEY, normalized);
-    } else {
-      store.removeItem(WORKSPACE_STORAGE_KEY);
-    }
-    emitWorkspaceChange();
-  } catch {}
+  if (normalized) {
+    writeUiValue(WORKSPACE_STORAGE_KEY, normalized);
+  } else {
+    removeUiValue(WORKSPACE_STORAGE_KEY);
+  }
+  emitWorkspaceChange();
 }
 
 export function readWorkspaceProjects(): WorkspaceProject[] {
@@ -156,20 +134,10 @@ export function rememberSessionWorkspace(sessionId: string | null | undefined, p
 }
 
 export function subscribeWorkspaceChanges(listener: () => void): () => void {
-  const onStorage = (event: StorageEvent) => {
-    if (
-      event.key === WORKSPACE_STORAGE_KEY ||
-      event.key === WORKSPACE_PROJECTS_STORAGE_KEY ||
-      event.key === SESSION_WORKSPACE_STORAGE_KEY
-    ) {
-      listener();
-    }
-  };
-
   window.addEventListener(WORKSPACE_CHANGED_EVENT, listener);
-  window.addEventListener("storage", onStorage);
+  const unsubscribe = subscribeUiStore(listener);
   return () => {
     window.removeEventListener(WORKSPACE_CHANGED_EVENT, listener);
-    window.removeEventListener("storage", onStorage);
+    unsubscribe();
   };
 }

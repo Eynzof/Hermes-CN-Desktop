@@ -7,23 +7,12 @@ import { applyPlatformToDOM, applyThemeToDOM } from "@hermes/shared-ui";
 import { queryClient } from "./lib/query-client";
 import { applyHostOSToDOM, runtime } from "./lib/runtime";
 import { installDebugCapture } from "./lib/debug-install";
+import { initUiStore, readUiValue } from "./lib/ui-store";
 import { ErrorBoundary } from "./components/error-boundary";
-import { App } from "./app";
 import "./styles/global.css";
 
 applyPlatformToDOM(runtime.platform);
 applyHostOSToDOM();
-installDebugCapture();
-
-// Default to dark theme; honor any saved preference if present.
-let initialTheme: { theme: string; density: string } = { theme: "dark", density: "comfortable" };
-const saved = localStorage.getItem("hermes-theme");
-if (saved) {
-  try {
-    initialTheme = { ...initialTheme, ...JSON.parse(saved) };
-  } catch {}
-}
-applyThemeToDOM(initialTheme as Parameters<typeof applyThemeToDOM>[0]);
 
 async function fetchDevToken() {
   // Desktop runtime injects sessionToken directly and never rotates it within
@@ -49,8 +38,18 @@ async function bootstrap() {
     await installTauriBridge();
   }
 
-  await fetchDevToken();
+  await initUiStore();
 
+  const initialTheme = readUiValue<{ theme?: string; density?: string }>("hermes-theme", {});
+  applyThemeToDOM({
+    theme: initialTheme.theme === "light" ? "light" : "dark",
+    density: initialTheme.density === "compact" ? "compact" : "comfortable",
+  });
+
+  await fetchDevToken();
+  installDebugCapture();
+
+  const { App } = await import("./app");
   const Router = runtime.platform !== "web" ? HashRouter : BrowserRouter;
 
   createRoot(document.getElementById("root")!).render(

@@ -1,19 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Reload the factory module each test so the singleton cache resets.
-async function loadFactory() {
+async function loadFactory(seed: Record<string, unknown> = {}) {
   vi.resetModules();
+  const uiStore = await import("@/lib/ui-store");
+  uiStore.__resetUiStoreForTests(seed);
   return await import("./gateway-client");
 }
 
 interface FakeWindow {
   location: { search: string; href: string };
-  localStorage: {
-    _data: Record<string, string>;
-    getItem(k: string): string | null;
-    setItem(k: string, v: string): void;
-    removeItem(k: string): void;
-  };
   __HERMES_RUNTIME__?: { transport?: "ws" | "sse" };
 }
 
@@ -27,18 +23,6 @@ function setQuery(search: string): void {
 beforeEach(() => {
   fakeWindow = {
     location: { search: "", href: "http://test/" },
-    localStorage: {
-      _data: {},
-      getItem(k) {
-        return this._data[k] ?? null;
-      },
-      setItem(k, v) {
-        this._data[k] = v;
-      },
-      removeItem(k) {
-        delete this._data[k];
-      },
-    },
   };
   (globalThis as any).window = fakeWindow;
   // Stub EventSource so any module init that touches it doesn't crash.
@@ -74,18 +58,16 @@ describe("getGatewayClient transport selection", () => {
     expect(client.constructor.name).toBe("GatewaySseClient");
   });
 
-  it("picks SSE transport when localStorage HERMES_TRANSPORT=sse", async () => {
-    fakeWindow.localStorage.setItem("HERMES_TRANSPORT", "sse");
-    const mod = await loadFactory();
+  it("picks SSE transport when UI store HERMES_TRANSPORT=sse", async () => {
+    const mod = await loadFactory({ HERMES_TRANSPORT: "sse" });
     const client = mod.getGatewayClient();
     expect(mod.getActiveTransport()).toBe("sse");
     expect(client.constructor.name).toBe("GatewaySseClient");
   });
 
-  it("URL query takes precedence over localStorage", async () => {
-    fakeWindow.localStorage.setItem("HERMES_TRANSPORT", "sse");
+  it("URL query takes precedence over UI store", async () => {
     setQuery("transport=ws");
-    const mod = await loadFactory();
+    const mod = await loadFactory({ HERMES_TRANSPORT: "sse" });
     const client = mod.getGatewayClient();
     expect(mod.getActiveTransport()).toBe("ws");
     expect(client.constructor.name).toBe("GatewayClient");
@@ -104,10 +86,9 @@ describe("getGatewayClient transport selection", () => {
     expect(client.constructor.name).toBe("GatewaySseClient");
   });
 
-  it("URL query and localStorage trump __HERMES_RUNTIME__.transport", async () => {
+  it("URL query and UI store trump __HERMES_RUNTIME__.transport", async () => {
     fakeWindow.__HERMES_RUNTIME__ = { transport: "sse" };
-    fakeWindow.localStorage.setItem("HERMES_TRANSPORT", "ws");
-    const mod = await loadFactory();
+    const mod = await loadFactory({ HERMES_TRANSPORT: "ws" });
     const client = mod.getGatewayClient();
     expect(mod.getActiveTransport()).toBe("ws");
     expect(client.constructor.name).toBe("GatewayClient");

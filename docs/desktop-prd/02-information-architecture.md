@@ -56,10 +56,10 @@
 | 日志过滤 | query 参数 | `/logs?level=error&source=gateway&q=keyword` |
 | 历史搜索 | query 参数 | `/history?q=keyword` |
 
-### 进 localStorage（持久 + 跨 tab）
+### 进 UI SQLite（持久 + 跨窗口）
 
 - `hermes-theme`：主题（dark/light） + 密度（comfortable/compact）
-- Jotai `atomWithStorage` 同步的偏好（`activeProfileId`、`activeWorkspacePath` 等）
+- Jotai 偏好 atom 通过 UI store 同步（`activeProfileId`、`activeWorkspacePath` 等）
 
 ### 进 Jotai atom（仅当前 session）
 
@@ -201,7 +201,7 @@ Hermes Desktop ▾
 | Edit | 撤销 / 重做 / 剪切 / 复制 / 粘贴 / 全选 | OS 默认 |
 | Edit | 查找（⌘F） | 当前页有搜索框时聚焦它，否则置灰 |
 | View | 切「右侧面板收起 / 展开」（⌘B） | 状态切换（任务详情下生效） |
-| View | 切深 / 浅色 | 改 `hermes-theme` localStorage |
+| View | 切深 / 浅色 | 改 UI SQLite 中的 `hermes-theme` |
 | Window | 最小化（⌘M）/ 缩放 | OS 默认 |
 | Window | 当前打开的任务（动态） | navigate `/tasks/:id` |
 | Help | 仓库链接 / 反馈 / 关于 | 外部浏览器打开 |
@@ -307,7 +307,7 @@ OS 层（桌面 v2 新增）：
 
 1. Tab 状态进 query：`/tasks/123?panel=terminal`
 2. Tab 状态只进 atom，关页就丢
-3. Tab 状态进 localStorage（按用户偏好记忆"上次看哪个 Tab"）
+3. Tab 状态进 UI SQLite（按用户偏好记忆“上次看哪个 Tab”）
 
 **倾向**：方案 1（query 参数）+ 默认 `files`。可分享 + 不需要新路由 + 可后退。
 

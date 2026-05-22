@@ -11,6 +11,8 @@ import {
   normalizeCliThinkingProgress,
   normalizeReasoningText,
 } from "@/lib/reasoning-filter";
+import { resolvePersistentSessionId } from "@/lib/session-map";
+import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
 
 export interface ToolEntry {
   tool_id: string;
@@ -929,12 +931,90 @@ export const startPromptAtom = atom(
   },
 );
 
+function textForStatsHash(message: HermesUIMessage): string {
+  return message.parts
+    .flatMap((part) => {
+      if (part.type === "text" || part.type === "reasoning") return [part.text];
+      if (part.type === "tool") {
+        let output = "";
+        if (typeof part.output === "string") {
+          output = part.output;
+        } else if (part.output !== undefined) {
+          try {
+            output = JSON.stringify(part.output);
+          } catch {
+            output = String(part.output);
+          }
+        }
+        return [part.name, output];
+      }
+      return [];
+    })
+    .join("\n");
+}
+
+function latestCompletedAssistant(runtime: ChatSessionRuntime): HermesUIMessage | undefined {
+  return [...runtime.messages].reverse().find(
+    (message) => message.role === "assistant" && message.status !== "streaming" && message.metadata,
+  );
+}
+
+function assistantTurnIndex(runtime: ChatSessionRuntime, id: string): number | undefined {
+  let index = 0;
+  for (const message of runtime.messages) {
+    if (message.role !== "assistant") continue;
+    index += 1;
+    if (message.id === id) return index;
+  }
+  return undefined;
+}
+
+function persistCompletedTurnStats(runtime: ChatSessionRuntime, event: GatewayEvent): void {
+  if (event.type !== "message.complete" || !event.session_id) return;
+  const message = latestCompletedAssistant(runtime);
+  const metadata = message?.metadata;
+  if (!message || !metadata) return;
+
+  const persistentSessionId = resolvePersistentSessionId(event.session_id) ?? event.session_id;
+  const usage = metadata.usage;
+  const timing = metadata.timing;
+  const now = Date.now();
+  void recordUiTurnStats({
+    id: `${persistentSessionId}:${message.id}`,
+    sessionId: persistentSessionId,
+    gatewaySessionId: event.session_id === persistentSessionId ? undefined : event.session_id,
+    clientMessageId: message.id,
+    turnIndex: assistantTurnIndex(runtime, message.id),
+    contentHash: stableTextHash(textForStatsHash(message)),
+    metadata,
+    model: metadata.model,
+    startedAt: timing?.startedAt,
+    firstTokenAt: timing?.firstTokenAt,
+    completedAt: timing?.completedAt,
+    ttftMs: timing?.ttftMs,
+    durationMs: timing?.durationMs,
+    tokensInput: usage?.tokensInput,
+    tokensOutput: usage?.tokensOutput ?? usage?.tokensCompletion,
+    tokensTotal: usage?.tokensTotal,
+    cacheRead: usage?.cacheRead,
+    cacheWrite: usage?.cacheWrite,
+    apiCalls: usage?.apiCalls,
+    costUsd: metadata.costUsd ?? undefined,
+    costStatus: metadata.costStatus,
+    finishReason: metadata.finishReason,
+    status: message.status,
+    createdAt: now,
+  });
+}
+
 export const applyGatewayEventAtom = atom(null, (_get, set, event: GatewayEvent) => {
   if (!event.session_id) return;
   set(chatRuntimeBySessionAtom, (state) =>
-    updateSessionRuntime(state, event.session_id!, (runtime) =>
-      reduceGatewayEvent(runtime, event),
-    ),
+    updateSessionRuntime(state, event.session_id!, (runtime) => {
+      const next = reduceGatewayEvent(runtime, event);
+      persistCompletedTurnStats(next, event);
+      return next;
+    }),
   );
 });
 

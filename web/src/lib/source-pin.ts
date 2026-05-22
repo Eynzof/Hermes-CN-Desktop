@@ -1,15 +1,9 @@
+import { readUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
+
 const PINNED_SOURCES_KEY = "hermes-cn-ui.pinnedSources";
 const PINNED_CHANGED_EVENT = "hermes-cn-ui.pinnedSources.changed";
 
 const DEFAULT_PINNED: ReadonlySet<string> = new Set(["web", "cli"]);
-
-function safeLocalStorage(): Storage | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
 
 function emitChange(): void {
   try {
@@ -18,26 +12,14 @@ function emitChange(): void {
 }
 
 export function readPinnedSources(): Set<string> {
-  const store = safeLocalStorage();
-  if (!store) return new Set(DEFAULT_PINNED);
-  try {
-    const raw = store.getItem(PINNED_SOURCES_KEY);
-    if (raw === null) return new Set(DEFAULT_PINNED);
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((id): id is string => typeof id === "string" && id.length > 0));
-  } catch {
-    return new Set(DEFAULT_PINNED);
-  }
+  const parsed = readUiValue<unknown>(PINNED_SOURCES_KEY, Array.from(DEFAULT_PINNED));
+  if (!Array.isArray(parsed)) return new Set(DEFAULT_PINNED);
+  return new Set(parsed.filter((id): id is string => typeof id === "string" && id.length > 0));
 }
 
 export function writePinnedSources(ids: Set<string>): void {
-  const store = safeLocalStorage();
-  if (!store) return;
-  try {
-    store.setItem(PINNED_SOURCES_KEY, JSON.stringify(Array.from(ids)));
-    emitChange();
-  } catch {}
+  writeUiValue(PINNED_SOURCES_KEY, Array.from(ids));
+  emitChange();
 }
 
 export function togglePinnedSource(key: string): Set<string> {
@@ -49,13 +31,10 @@ export function togglePinnedSource(key: string): Set<string> {
 }
 
 export function subscribePinnedSourcesChange(listener: () => void): () => void {
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === PINNED_SOURCES_KEY) listener();
-  };
   window.addEventListener(PINNED_CHANGED_EVENT, listener);
-  window.addEventListener("storage", onStorage);
+  const unsubscribe = subscribeUiStore(listener);
   return () => {
     window.removeEventListener(PINNED_CHANGED_EVENT, listener);
-    window.removeEventListener("storage", onStorage);
+    unsubscribe();
   };
 }

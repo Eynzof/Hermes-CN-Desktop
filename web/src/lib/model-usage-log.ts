@@ -1,6 +1,8 @@
+import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
+
 // Records every model selection so the picker can surface "recently used"
-// without a server round-trip. localStorage-backed; per-tab subscriber list
-// lets open pickers refresh when a new selection comes in from another
+// without a server round-trip. UI SQLite-backed; the per-renderer subscriber
+// list lets open pickers refresh when a new selection comes in from another
 // surface (panel composer vs. detail composer).
 
 const STORAGE_KEY = "hermes:model-usage-log";
@@ -37,9 +39,7 @@ export function modelUsageKey(provider: string | undefined, model: string): stri
 
 export function readModelUsageLog(): ModelUsageEntry[] {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as StoredShape | null;
+    const parsed = readUiValue<StoredShape | null>(STORAGE_KEY, null);
     if (!parsed || parsed.v !== 1 || !Array.isArray(parsed.entries)) return [];
     return parsed.entries.filter(isValidEntry);
   } catch {
@@ -63,10 +63,10 @@ function writeModelUsageLog(entries: ModelUsageEntry[]): void {
   try {
     const trimmed = entries.slice(0, MAX_ENTRIES);
     const payload: StoredShape = { v: 1, entries: trimmed };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    writeUiValue(STORAGE_KEY, payload);
     notify();
   } catch {
-    // Quota exceeded or storage unavailable — silently drop the recording.
+    // UI store unavailable — silently drop the recording.
   }
 }
 
@@ -97,7 +97,7 @@ export function forgetModelUsage(key: string): void {
 
 export function clearModelUsageLog(): void {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    removeUiValue(STORAGE_KEY);
     notify();
   } catch {}
 }
@@ -154,12 +154,9 @@ export function rankRecentModels(
 // (record/forget) can stay in any context.
 export function subscribeModelUsage(listener: () => void): () => void {
   subscribers.add(listener);
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) listener();
-  };
-  window.addEventListener("storage", onStorage);
+  const unsubscribe = subscribeUiStore(listener);
   return () => {
     subscribers.delete(listener);
-    window.removeEventListener("storage", onStorage);
+    unsubscribe();
   };
 }

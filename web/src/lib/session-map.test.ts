@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetUiStoreForTests, readUiValue, writeUiValue } from "./ui-store";
 import {
   rememberSessionMapping,
   resolveGatewaySessionId,
@@ -7,13 +8,7 @@ import {
 
 describe("session-map", () => {
   beforeEach(() => {
-    const store = new Map<string, string>();
-    vi.stubGlobal("window", {
-      localStorage: {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => store.set(key, value),
-      },
-    });
+    __resetUiStoreForTests();
   });
 
   afterEach(() => {
@@ -35,21 +30,19 @@ describe("session-map", () => {
 
   it("expires entries older than 24 hours", () => {
     rememberSessionMapping("gw-old", "sess-old");
-    const store = window.localStorage;
-    const raw = JSON.parse(store.getItem("hermes:gateway-session-map")!);
+    const raw = readUiValue<Record<string, { persistentId: string; ts: number }>>(
+      "hermes:gateway-session-map",
+      {},
+    );
     raw["gw-old"].ts = Date.now() - 25 * 60 * 60 * 1000;
-    store.setItem("hermes:gateway-session-map", JSON.stringify(raw));
+    writeUiValue("hermes:gateway-session-map", raw);
 
     expect(resolvePersistentSessionId("gw-old")).toBe("gw-old");
     expect(resolveGatewaySessionId("sess-old")).toBeUndefined();
   });
 
   it("migrates legacy string-value format", () => {
-    const store = window.localStorage;
-    store.setItem(
-      "hermes:gateway-session-map",
-      JSON.stringify({ "gw-legacy": "sess-legacy" }),
-    );
+    writeUiValue("hermes:gateway-session-map", { "gw-legacy": "sess-legacy" });
     expect(resolvePersistentSessionId("gw-legacy")).toBe("sess-legacy");
     expect(resolveGatewaySessionId("sess-legacy")).toBe("gw-legacy");
   });
@@ -60,7 +53,7 @@ describe("session-map", () => {
     for (let i = 0; i < 210; i++) {
       map[`gw-${i}`] = { persistentId: `sess-${i}`, ts: now - (210 - i) * 1000 };
     }
-    window.localStorage.setItem("hermes:gateway-session-map", JSON.stringify(map));
+    writeUiValue("hermes:gateway-session-map", map);
 
     rememberSessionMapping("gw-new", "sess-new");
 
@@ -70,24 +63,12 @@ describe("session-map", () => {
     expect(resolvePersistentSessionId("gw-new")).toBe("sess-new");
   });
 
-  it("handles corrupted localStorage gracefully", () => {
-    window.localStorage.setItem("hermes:gateway-session-map", "not valid json{{{");
+  it("handles malformed UI store payloads gracefully", () => {
+    writeUiValue("hermes:gateway-session-map", {
+      "gw-1": { persistentId: 42, ts: "bad" },
+    });
     expect(resolvePersistentSessionId("gw-1")).toBe("gw-1");
     expect(resolveGatewaySessionId("sess-1")).toBeUndefined();
-  });
-
-  it("reuses parsed map while localStorage value is unchanged", () => {
-    window.localStorage.setItem(
-      "hermes:gateway-session-map",
-      '{"gw-1":{"persistentId":"sess-1","ts":9999999999999}}',
-    );
-    const parseSpy = vi.spyOn(JSON, "parse");
-
-    expect(resolvePersistentSessionId("gw-1")).toBe("sess-1");
-    expect(resolveGatewaySessionId("sess-1")).toBe("gw-1");
-    expect(resolvePersistentSessionId("gw-1")).toBe("sess-1");
-
-    expect(parseSpy).toHaveBeenCalledTimes(1);
   });
 
   it("no-ops when gateway and persistent ids are the same", () => {

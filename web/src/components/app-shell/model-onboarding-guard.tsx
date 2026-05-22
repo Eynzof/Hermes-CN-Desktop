@@ -4,8 +4,8 @@ import { KeyRound, Settings2, Sparkles } from "lucide-react";
 import { useModelInfo } from "@/hooks/use-config";
 import s from "./model-onboarding-guard.module.css";
 
-const DISMISS_KEY = "hermes:model-onboarding-dismissed";
 const DEFAULT_PROVIDER_HASH = "#provider-deepseek";
+let dismissedForWindow = false;
 
 function hasConfiguredModel(modelInfo: { model?: string; provider?: string } | undefined): boolean {
   return Boolean(modelInfo?.model?.trim() && modelInfo?.provider?.trim());
@@ -15,16 +15,13 @@ export function ModelOnboardingGuard() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: modelInfo, isLoading, isError } = useModelInfo();
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.sessionStorage.getItem(DISMISS_KEY) === "1";
-  });
+  const [dismissed, setDismissed] = useState(() => dismissedForWindow);
 
   const configured = hasConfiguredModel(modelInfo);
 
   useEffect(() => {
     if (!configured || typeof window === "undefined") return;
-    window.sessionStorage.removeItem(DISMISS_KEY);
+    dismissedForWindow = false;
     setDismissed(false);
   }, [configured]);
 
@@ -37,7 +34,7 @@ export function ModelOnboardingGuard() {
   };
 
   const dismiss = () => {
-    window.sessionStorage.setItem(DISMISS_KEY, "1");
+    dismissedForWindow = true;
     setDismissed(true);
   };
 

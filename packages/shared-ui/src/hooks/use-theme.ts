@@ -13,26 +13,27 @@ const DEFAULT_THEME: ThemeConfig = {
   density: "comfortable",
 };
 
-function loadTheme(): ThemeConfig {
-  try {
-    const saved = localStorage.getItem("hermes-theme");
-    if (saved) {
-      const parsed = JSON.parse(saved) as Partial<ThemeConfig>;
-      return {
-        theme: parsed.theme === "light" ? "light" : "dark",
-        density: parsed.density === "compact" ? "compact" : "comfortable",
-      };
-    }
-  } catch {}
-  return DEFAULT_THEME;
+function normalizeTheme(value: Partial<ThemeConfig> | undefined): ThemeConfig {
+  return {
+    theme: value?.theme === "light" ? "light" : "dark",
+    density: value?.density === "compact" ? "compact" : "comfortable",
+  };
 }
 
-export const themeAtom = atom<ThemeConfig>(loadTheme());
+export const themeAtom = atom<ThemeConfig>(DEFAULT_THEME);
+
+export const hydrateThemeAtom = atom(null, (_get, set, config: Partial<ThemeConfig>) => {
+  const next = normalizeTheme(config);
+  set(themeAtom, next);
+  applyThemeToDOM(next);
+});
 
 export const themeWriteAtom = atom(null, (_get, set, update: Partial<ThemeConfig>) => {
   set(themeAtom, (prev) => {
-    const next = { ...prev, ...update };
-    localStorage.setItem("hermes-theme", JSON.stringify(next));
+    const next = normalizeTheme({ ...prev, ...update });
+    try {
+      (globalThis as any).__HERMES_UI_STORE__?.set?.("hermes-theme", next);
+    } catch {}
     applyThemeToDOM(next);
     return next;
   });

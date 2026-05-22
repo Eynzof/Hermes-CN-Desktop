@@ -16,7 +16,7 @@ import type {
   SwitchProfileInput,
   SwitchProfileResult,
 } from "@hermes/protocol";
-import type { SkillMarkdownResult } from "./runtime";
+import type { SkillMarkdownResult, UiEventInput, UiStoreSnapshot, UiTurnStats } from "./runtime";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
 
@@ -153,6 +153,36 @@ const tauriBridge = {
   async writeUserProfile(content: string) {
     const inv = await ensureInvoke();
     return inv("write_user_profile", { content });
+  },
+
+  async uiStoreSnapshot(): Promise<UiStoreSnapshot> {
+    const inv = await ensureInvoke();
+    return inv("ui_store_snapshot");
+  },
+
+  async uiStoreSetKv(input: { key: string; value: unknown }): Promise<boolean> {
+    const inv = await ensureInvoke();
+    return inv("ui_store_set_kv", { input });
+  },
+
+  async uiStoreRemoveKv(input: { key: string }): Promise<boolean> {
+    const inv = await ensureInvoke();
+    return inv("ui_store_remove_kv", { input });
+  },
+
+  async uiStoreRecordTurnStats(input: UiTurnStats): Promise<boolean> {
+    const inv = await ensureInvoke();
+    return inv("ui_store_record_turn_stats", { input });
+  },
+
+  async uiStoreGetTurnStats(input: { sessionId: string }): Promise<UiTurnStats[]> {
+    const inv = await ensureInvoke();
+    return inv("ui_store_get_turn_stats", { input });
+  },
+
+  async uiStoreRecordEvent(input: UiEventInput): Promise<boolean> {
+    const inv = await ensureInvoke();
+    return inv("ui_store_record_event", { input });
   },
 
   onSystemResume(handler: () => void): () => void {

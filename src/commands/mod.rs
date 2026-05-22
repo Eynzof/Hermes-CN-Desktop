@@ -6,3 +6,4 @@ pub mod profiles;
 pub mod runtime_manager;
 pub mod skills;
 pub mod sse_proxy;
+pub mod ui_store;
