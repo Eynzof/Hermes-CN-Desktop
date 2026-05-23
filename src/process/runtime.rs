@@ -766,11 +766,22 @@ fn bundled_artifact_path(runtime_dir: &Path) -> PathBuf {
     ))
 }
 
+fn bundled_expanded_runtime_dir(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join(format!(
+        "{}-{}-{}",
+        RUNTIME_BASENAME,
+        current_platform(),
+        current_arch()
+    ))
+}
+
 pub fn bundled_runtime_available(resource_dir: Option<&Path>) -> bool {
     let Some(runtime_dir) = bundled_runtime_dir(resource_dir) else {
         return false;
     };
-    bundled_manifest_path(&runtime_dir).is_file() && bundled_artifact_path(&runtime_dir).is_file()
+    bundled_manifest_path(&runtime_dir).is_file()
+        && (bundled_artifact_path(&runtime_dir).is_file()
+            || bundled_expanded_runtime_dir(&runtime_dir).is_dir())
 }
 
 fn validate_manifest_for_current_platform(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
@@ -1070,6 +1081,33 @@ async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
     wait_for_smoke_child(child, SMOKE_TIMEOUT).await
 }
 
+fn install_record_from_manifest(
+    resolved: &RuntimeUpdateManifest,
+    target: &Path,
+    target_executable: &Path,
+    source: &str,
+    previous: Option<&RuntimeInstallRecord>,
+) -> RuntimeInstallRecord {
+    RuntimeInstallRecord {
+        schema_version: MANIFEST_SCHEMA_VERSION,
+        runtime_version: resolved.runtime_version.clone(),
+        kernel_version: resolved.kernel_version.clone(),
+        runtime_flavor: resolved.runtime_flavor.clone(),
+        runtime_revision: resolved.runtime_revision,
+        platform: current_platform().to_string(),
+        arch: current_arch().to_string(),
+        path: target.to_string_lossy().to_string(),
+        executable_path: target_executable.to_string_lossy().to_string(),
+        source: source.to_string(),
+        installed_at: chrono_now(),
+        source_repo: Some(resolved.source_repo.clone()),
+        source_commit: Some(resolved.source_commit.clone()),
+        local_dirty_hash: None,
+        artifact_sha256: Some(resolved.sha256.clone()),
+        previous_runtime_version: previous.map(|p| p.runtime_version.clone()),
+    }
+}
+
 async fn install_runtime_zip(
     resolved: RuntimeUpdateManifest,
     zip_path: &Path,
@@ -1193,24 +1231,132 @@ async fn install_runtime_zip(
     };
 
     let previous = read_current_record();
-    let installed = RuntimeInstallRecord {
-        schema_version: MANIFEST_SCHEMA_VERSION,
-        runtime_version: resolved.runtime_version.clone(),
-        kernel_version: resolved.kernel_version.clone(),
-        runtime_flavor: resolved.runtime_flavor.clone(),
-        runtime_revision: resolved.runtime_revision,
-        platform: current_platform().to_string(),
-        arch: current_arch().to_string(),
-        path: target.to_string_lossy().to_string(),
-        executable_path: target_executable.to_string_lossy().to_string(),
-        source: source.to_string(),
-        installed_at: chrono_now(),
-        source_repo: Some(resolved.source_repo.clone()),
-        source_commit: Some(resolved.source_commit.clone()),
-        local_dirty_hash: None,
-        artifact_sha256: Some(resolved.sha256.clone()),
-        previous_runtime_version: previous.as_ref().map(|p| p.runtime_version.clone()),
+    let installed = install_record_from_manifest(
+        &resolved,
+        &target,
+        &target_executable,
+        source,
+        previous.as_ref(),
+    );
+
+    let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
+    let _ = write_json_file(&current_record_path(), &installed);
+
+    RuntimeInstallUpdateResult {
+        ok: true,
+        installed: Some(installed),
+        previous,
+        error: None,
+    }
+}
+
+async fn install_runtime_tree(
+    resolved: RuntimeUpdateManifest,
+    runtime_tree_path: &Path,
+    source: &str,
+) -> RuntimeInstallUpdateResult {
+    if let Err(e) = validate_manifest_for_current_platform(&resolved) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
+
+    if !runtime_tree_path.is_dir() {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!(
+                "Runtime tree is not a directory: {}",
+                runtime_tree_path.display()
+            )),
+        };
+    }
+
+    let staging = match tempfile::tempdir() {
+        Ok(d) => d,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!("Failed to create temp dir: {}", e)),
+            };
+        }
     };
+
+    let runtime_tree_name = runtime_tree_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(RUNTIME_BASENAME);
+    let staged_runtime_tree = staging.path().join(runtime_tree_name);
+    if let Err(e) = copy_dir_all(runtime_tree_path, &staged_runtime_tree) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!("Failed to stage runtime tree: {}", e)),
+        };
+    }
+
+    let executable = match find_executable_in(staging.path(), 2) {
+        Some(e) => e,
+        None => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some("No runtime executable found in bundled runtime tree".to_string()),
+            };
+        }
+    };
+
+    if let Err(e) = smoke_check_runtime(&executable).await {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!("Smoke check failed: {}", e)),
+        };
+    }
+
+    let _ = fs::create_dir_all(versions_root());
+    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
+    let _ = fs::remove_dir_all(&target);
+    if let Err(e) = fs::rename(staging.path(), &target) {
+        if let Err(e2) = copy_dir_all(staging.path(), &target) {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!("Failed to install: rename={}, copy={}", e, e2)),
+            };
+        }
+    }
+
+    let target_executable = match find_executable_in(&target, 2) {
+        Some(e) => e,
+        None => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some("Executable disappeared after install".to_string()),
+            };
+        }
+    };
+
+    let previous = read_current_record();
+    let installed = install_record_from_manifest(
+        &resolved,
+        &target,
+        &target_executable,
+        source,
+        previous.as_ref(),
+    );
 
     let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
     let _ = write_json_file(&current_record_path(), &installed);
@@ -1225,9 +1371,11 @@ async fn install_runtime_zip(
 
 /// Install the runtime bundled inside the desktop installer, if present.
 ///
-/// This is used for Windows test builds that should work without a first-run
-/// network download. If no bundled files are present, it is a no-op and the
-/// normal update-download path remains responsible for first-run bootstrap.
+/// This is used for packaged builds that should work without a first-run
+/// network download. Windows stages the upstream zip directly. macOS stages an
+/// expanded runtime tree so the app bundle signing pass can sign nested Mach-O
+/// files before notarization; Apple notarization rejects unsigned binaries even
+/// when they are nested inside a zip resource.
 pub async fn install_bundled_runtime_if_needed(
     resource_dir: Option<&Path>,
 ) -> RuntimeInstallUpdateResult {
@@ -1249,14 +1397,18 @@ pub async fn install_bundled_runtime_if_needed(
         };
     }
     let artifact_path = bundled_artifact_path(&runtime_dir);
-    if !artifact_path.is_file() {
+    let expanded_runtime_dir = bundled_expanded_runtime_dir(&runtime_dir);
+    let has_zip_artifact = artifact_path.is_file();
+    let has_expanded_runtime = expanded_runtime_dir.is_dir();
+    if !has_zip_artifact && !has_expanded_runtime {
         return RuntimeInstallUpdateResult {
             ok: false,
             installed: None,
             previous: None,
             error: Some(format!(
-                "Bundled runtime manifest exists but artifact is missing: {}",
-                artifact_path.display()
+                "Bundled runtime manifest exists but runtime payload is missing: {} or {}",
+                artifact_path.display(),
+                expanded_runtime_dir.display()
             )),
         };
     }
@@ -1315,7 +1467,11 @@ pub async fn install_bundled_runtime_if_needed(
         };
     }
 
-    let mut result = install_runtime_zip(manifest, &artifact_path, "bundled").await;
+    let mut result = if has_expanded_runtime {
+        install_runtime_tree(manifest, &expanded_runtime_dir, "bundled").await
+    } else {
+        install_runtime_zip(manifest, &artifact_path, "bundled").await
+    };
     if result.ok {
         if let Some(installed) = &result.installed {
             if let Err(e) =
@@ -2164,6 +2320,103 @@ mod tests {
         assert!(synced.dashboard_web_dist.is_none());
         assert!(synced.bundled_skills.is_none());
         assert!(!runtime.join("_internal").exists());
+    }
+
+    #[test]
+    fn bundled_runtime_available_accepts_expanded_runtime_tree() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let runtime = resource.join("bundled-runtime");
+        std::fs::create_dir_all(bundled_expanded_runtime_dir(&runtime)).unwrap();
+        std::fs::write(bundled_manifest_path(&runtime), b"{}").unwrap();
+
+        assert!(bundled_runtime_available(Some(&resource)));
+    }
+
+    #[test]
+    fn bundled_runtime_available_requires_manifest_and_payload() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let runtime = resource.join("bundled-runtime");
+        std::fs::create_dir_all(&runtime).unwrap();
+
+        assert!(!bundled_runtime_available(Some(&resource)));
+
+        std::fs::write(bundled_manifest_path(&runtime), b"{}").unwrap();
+        assert!(!bundled_runtime_available(Some(&resource)));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    #[serial]
+    async fn install_bundled_runtime_from_expanded_tree() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempDir::new().unwrap();
+        let runtime_root = dir.path().join("runtime-root");
+        let resource = dir.path().join("resources");
+        let bundled = resource.join("bundled-runtime");
+        let expanded = bundled_expanded_runtime_dir(&bundled);
+        let web_dist = resource
+            .join(DASHBOARD_RESOURCE_DIR)
+            .join(DASHBOARD_WEB_DIST_DIR);
+        let skills = resource
+            .join(BUNDLED_SKILLS_RESOURCE_DIR)
+            .join("creative")
+            .join("demo");
+
+        std::fs::create_dir_all(&expanded).unwrap();
+        std::fs::create_dir_all(&web_dist).unwrap();
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::write(web_dist.join("index.html"), b"<html></html>").unwrap();
+        std::fs::write(skills.join("SKILL.md"), b"---\nname: demo\n---\n").unwrap();
+
+        let executable = expanded.join(primary_runtime_name());
+        std::fs::write(&executable, b"#!/bin/sh\nexit 0\n").unwrap();
+        let mut perms = std::fs::metadata(&executable).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&executable, perms).unwrap();
+
+        let (key, pem) = test_keypair();
+        let mut manifest = fixture_manifest();
+        manifest.runtime_version = "9.9.9-cn.1".to_string();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        manifest.sha256 =
+            "37f4d6d615188f1e84bd361a0292e2a26376d72225b2420e5e91a62e7b2ebd0c".to_string();
+        sign_manifest(&key, &mut manifest);
+        write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
+
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
+
+        let result = install_bundled_runtime_if_needed(Some(&resource)).await;
+
+        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        assert!(result.ok, "unexpected install error: {:?}", result.error);
+        let installed = result.installed.expect("runtime should be installed");
+        assert_eq!(installed.runtime_version, "9.9.9-cn.1");
+        assert_eq!(installed.source, "bundled");
+        assert_eq!(
+            installed.artifact_sha256.as_deref(),
+            Some(manifest.sha256.as_str())
+        );
+        assert!(Path::new(&installed.executable_path).is_file());
+        assert!(Path::new(&installed.path)
+            .join("_internal")
+            .join("hermes_cli")
+            .join(DASHBOARD_WEB_DIST_DIR)
+            .join("index.html")
+            .is_file());
+        assert!(Path::new(&installed.path)
+            .join("_internal")
+            .join(BUNDLED_SKILLS_DIR)
+            .join("creative")
+            .join("demo")
+            .join("SKILL.md")
+            .is_file());
     }
 
     // -------- find_executable_in --------

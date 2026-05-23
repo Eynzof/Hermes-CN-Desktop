@@ -31,8 +31,11 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
    终端用户的产品形态。
 
 解决方向：**桌面端自带 runtime**。Windows 与 macOS 的正式安装包都应
-预置目标平台的 `hermes-agent-cn` runtime zip + manifest，首次启动优先从
+预置目标平台的 `hermes-agent-cn` runtime payload + manifest，首次启动优先从
 包内资源安装；云端下载只作为包内 runtime 缺失、运行时升级或兜底修复路径。
+Windows 直接预置 runtime zip；macOS 预置展开后的 runtime 目录，让 Tauri
+的应用签名流程能够覆盖里面的 `.so`、framework 等 Mach-O 文件，否则 Apple
+notary 会把嵌在 zip 内部的未签名二进制也当作拒绝项。
 整套机制叫 **managed runtime**。
 
 ## 二、组件 + 文件分布
@@ -83,7 +86,8 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
 3. runtime::install_bundled_runtime_if_needed(resource_dir) 先检查安装包资源：
    static/bundled-runtime/stable-<platform>-<arch>.json
    static/bundled-runtime/hermes-agent-cn-runtime-<platform>-<arch>.zip
-   如果存在，走本地验签、SHA-256 校验、解压、smoke test，并把
+   或 static/bundled-runtime/hermes-agent-cn-runtime-<platform>-<arch>/
+   如果存在，走本地验签、SHA-256 校验或已展开目录安装、smoke test，并把
    Dashboard web_dist 与 bundled skills 同步进 runtime/_internal
    如果不存在，才进入云端 managed runtime 下载兜底
   ↓
@@ -282,7 +286,8 @@ desktop CI release-desktop.yml 触发：
     1. setup-node + pnpm + rust toolchain
     2. pnpm install
     3. 解析 runtime manifest 的 sourceCommit，checkout 对应 hermes-agent-cn
-    4. stage Dashboard web_dist、bundled skills、目标平台 runtime zip + manifest
+    4. stage Dashboard web_dist、bundled skills、目标平台 runtime payload + manifest
+       Windows 使用 zip；macOS 使用已展开目录，避免 notarization 扫到 zip 内未签名 Mach-O
     5. tauri-apps/tauri-action@v0 → 打 .msi / .dmg
        runtime URL + 公钥仍是 baked-in 兜底，不需要 env wire 进 CI
   ↓
@@ -339,7 +344,7 @@ keypair 同时签的过渡期（这个我们的代码现在不支持，要的话
 
 | 现象 | 多半的原因 | 怎么查 |
 |---|---|---|
-| 桌面端窗口卡在 "正在下载 runtime" 不动 | 包内 runtime 缺失且 manifest URL 404 / 网络不通 | 先检查安装包内 `Contents/Resources/bundled-runtime/` 是否有当前平台 manifest + zip，再看 GET stable-<platform>-<arch>.json |
+| 桌面端窗口卡在 "正在下载 runtime" 不动 | 包内 runtime 缺失且 manifest URL 404 / 网络不通 | 先检查安装包内 `Contents/Resources/bundled-runtime/` 是否有当前平台 manifest，以及 Windows 的 zip 或 macOS 的展开目录，再看 GET stable-<platform>-<arch>.json |
 | 显示 "runtime 安装失败：SHA-256 mismatch" | artifact 被劫持 / CDN 缓存了旧版 | 强制刷新 GitHub Release 缓存，或重发布 |
 | 显示 "runtime 安装失败：Signature verification failed" | 公私钥不匹配 / fork 重签了 manifest | 对照桌面端二进制里的公钥 vs `RUNTIME_SIGN_PRIVATE_KEY_PEM` |
 | dashboard 起来但 UI 报 "SSE closed during connect" | dashboard 缺 P-009 路由 | `curl http://localhost:9120/openapi.json | jq '.paths | keys' | grep v2`，应该看到 events + rpc |
