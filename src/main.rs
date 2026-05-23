@@ -621,6 +621,10 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::gateway::get_runtime_config,
             commands::gateway::refresh_gateway_url,
+            commands::im_onboarding::im_onboarding_state,
+            commands::im_onboarding::im_onboarding_begin,
+            commands::im_onboarding::im_onboarding_poll,
+            commands::im_onboarding::im_onboarding_apply,
             commands::file_dialogs::pick_files,
             commands::file_dialogs::pick_directory,
             commands::file_dialogs::create_workspace_project,

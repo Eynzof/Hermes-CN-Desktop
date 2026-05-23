@@ -7,8 +7,65 @@
   overflow: hidden;
 }
 
+.body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
 .scroll {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   padding: 20px 24px 48px;
+}
+
+.body[data-with-rail="true"] .scroll {
+  padding-right: 20px;
+}
+
+.rail {
+  position: relative;
+  z-index: 12;
+  flex: 0 0 56px;
+  width: 56px;
+  min-height: 0;
+  overflow: visible;
+  padding: 0;
+  border-left: 1px solid var(--h-line-soft);
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--h-accent) 8%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--h-bg-pane) 98%, transparent), var(--h-bg-pane));
+}
+
+@media (max-width: 1120px) {
+  .body[data-with-rail="true"] .scroll {
+    padding-right: 16px;
+  }
+}
+
+@media (max-width: 920px) {
+  .body[data-with-rail="true"] {
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .body[data-with-rail="true"] .scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 24px;
+    padding-bottom: 88px;
+  }
+
+  .rail {
+    flex: 0 0 56px;
+    width: 100%;
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid var(--h-line-soft);
+    background: color-mix(in srgb, var(--h-bg-pane) 96%, transparent);
+  }
 }

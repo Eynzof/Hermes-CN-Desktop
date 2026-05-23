@@ -1,8 +1,10 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   Boxes,
   Brain,
   Clock,
+  MessageCircle,
+  MessageSquareText,
   Cpu,
   Puzzle,
   Sparkles,
@@ -34,16 +36,21 @@ const AUTOMATION_ITEMS: readonly CapabilityItem[] = [
   { label: "定时任务", path: "/cron", icon: Clock },
 ];
 
-const SECTIONS: readonly {
+const IM_ITEMS: readonly CapabilityItem[] = [
+  { label: "飞书接入", path: "/im/feishu", icon: MessageCircle, title: "飞书 / Lark 开放平台机器人接入" },
+  { label: "微信接入", path: "/im/weixin", icon: MessageSquareText, title: "个人微信 iLink bot 接入" },
+];
+
+export const CAPABILITY_SECTIONS: readonly {
   label: string;
   items: readonly CapabilityItem[];
 }[] = [
   { label: "§021 · 配置", items: CONFIG_ITEMS },
   { label: "§022 · 自动化", items: AUTOMATION_ITEMS },
+  { label: "§023 · 消息平台接入", items: IM_ITEMS },
 ];
 
 export function CapabilitySidebar() {
-  const navigate = useNavigate();
   const location = useLocation();
 
   const isActive = (path: string) =>
@@ -52,7 +59,7 @@ export function CapabilitySidebar() {
   return (
     <aside className={s.sidebar} aria-label="配置侧栏">
       <div className={s.scrollY}>
-        {SECTIONS.map((section) => (
+        {CAPABILITY_SECTIONS.map((section) => (
           <section key={section.label} className={s.section}>
             <div className={s.label}>
               <span>{section.label}</span>
@@ -61,12 +68,11 @@ export function CapabilitySidebar() {
             {section.items.map((item) => {
               const Icon = item.icon;
               return (
-                <button
+                <Link
                   key={item.path}
-                  type="button"
+                  to={item.path}
                   className={s.item}
                   data-active={isActive(item.path) ? "true" : undefined}
-                  onClick={() => navigate(item.path)}
                   title={item.title ?? item.path}
                 >
                   <span className={s.itemIcon}>
@@ -74,7 +80,7 @@ export function CapabilitySidebar() {
                   </span>
                   <span className={s.itemLabel}>{item.label}</span>
                   <span className={s.itemPath}>{item.path}</span>
-                </button>
+                </Link>
               );
             })}
           </section>

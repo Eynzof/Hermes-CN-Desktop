@@ -77,11 +77,17 @@
   width: 100%;
   text-align: left;
   font-family: var(--h-font-cn);
+  text-decoration: none;
 }
 
 .item:hover {
   color: var(--h-text);
   background: var(--h-bg-soft);
+}
+
+.item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--h-accent) 45%, transparent);
+  outline-offset: -2px;
 }
 
 .item[data-active="true"] {

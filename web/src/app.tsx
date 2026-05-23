@@ -23,6 +23,7 @@ import { LogsRoute } from "@/routes/logs";
 import { DebugRoute } from "@/routes/debug";
 import { AnalyticsRoute } from "@/routes/analytics";
 import { AdvancedRoute } from "@/routes/advanced";
+import { ImOnboardingRoute } from "@/routes/im-onboarding";
 
 function NewTaskRedirect() {
   const { search } = useLocation();
@@ -55,6 +56,7 @@ export function App() {
           <Route path="/profiles" element={<ProfilesRoute />} />
           <Route path="/memory" element={<MemoryRoute />} />
           <Route path="/cron" element={<CronRoute />} />
+          <Route path="/im/*" element={<ErrorBoundary><ImOnboardingRoute /></ErrorBoundary>} />
           <Route path="/health" element={<HealthRoute />} />
           <Route path="/analytics" element={<AnalyticsRoute />} />
           <Route path="/logs" element={<LogsRoute />} />

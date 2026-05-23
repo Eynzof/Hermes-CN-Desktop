@@ -1,6 +1,14 @@
 import type {
   FileUploadInput,
   HermesMessageMetadata,
+  ImOnboardingApplyInput,
+  ImOnboardingApplyResult,
+  ImOnboardingBeginInput,
+  ImOnboardingBeginResult,
+  ImOnboardingPollInput,
+  ImOnboardingPollResult,
+  ImOnboardingStateInput,
+  ImOnboardingStateResult,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -141,6 +149,10 @@ declare global {
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
       rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
+      imOnboardingState?(input: ImOnboardingStateInput): Promise<ImOnboardingStateResult>;
+      imOnboardingBegin?(input: ImOnboardingBeginInput): Promise<ImOnboardingBeginResult>;
+      imOnboardingPoll?(input: ImOnboardingPollInput): Promise<ImOnboardingPollResult>;
+      imOnboardingApply?(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult>;
       readSkillMarkdown?(input: { name: string }): Promise<SkillMarkdownResult>;
       readMemory?(): Promise<MemoryInfo>;
       addMemoryEntry?(content: string): Promise<MemoryMutationResult>;
