@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -104,6 +105,24 @@ function cleanOutputDir() {
   }
 }
 
+function relocateMacosFrameworksForNotary(dir) {
+  let relocated = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const source = join(dir, entry.name);
+    if (entry.name.endsWith(".framework")) {
+      const target = `${source}.payload`;
+      rmSync(target, { recursive: true, force: true });
+      renameSync(source, target);
+      relocated += 1;
+      relocated += relocateMacosFrameworksForNotary(target);
+    } else {
+      relocated += relocateMacosFrameworksForNotary(source);
+    }
+  }
+  return relocated;
+}
+
 function expandRuntimeZip(zipBytes) {
   const tmpZipPath = join(outDir, `.${zipName}.download`);
   const expandedRuntimeDir = join(outDir, runtimeName);
@@ -124,6 +143,10 @@ function expandRuntimeZip(zipBytes) {
   }
   if (!existsSync(expandedRuntimeDir)) {
     throw new Error(`expanded runtime root was not created: ${expandedRuntimeDir}`);
+  }
+  if (platform === "darwin") {
+    const relocated = relocateMacosFrameworksForNotary(expandedRuntimeDir);
+    console.log(`relocated ${relocated} macOS framework directories for notarization`);
   }
   return expandedRuntimeDir;
 }
@@ -160,6 +183,7 @@ writeFileSync(join(outDir, "README.generated.txt"), [
   `repo=${repo}`,
   `tag=${tag}`,
   `stagingMode=${expandArtifact ? "expanded" : "zip"}`,
+  `macosFrameworkLayout=${expandArtifact && platform === "darwin" ? "relocated" : "native"}`,
   `runtimeVersion=${manifest.runtimeVersion}`,
   `kernelVersion=${manifest.kernelVersion}`,
   `runtimeFlavor=${manifest.runtimeFlavor}`,
