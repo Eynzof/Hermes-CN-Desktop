@@ -33,43 +33,12 @@ is_macho() {
 
 sign_macho() {
   local path="$1"
-  case "$path" in
-    *.framework/*)
-      # PyInstaller's Python.framework is not laid out like a normal Apple
-      # framework: it has real Mach-O copies directly under the framework root
-      # instead of the usual symlink structure. Running codesign on those paths
-      # makes codesign try to treat the parent directory as a framework bundle
-      # and fail with "bundle format is ambiguous". Sign a temporary bare
-      # Mach-O copy, then copy the signed bytes back.
-      local tmp_dir tmp_file
-      tmp_dir="$(mktemp -d)"
-      tmp_file="$tmp_dir/$(basename "$path")"
-      cp -p "$path" "$tmp_file"
-      codesign "${sign_args[@]}" "$tmp_file"
-      cp -p "$tmp_file" "$path"
-      rm -rf "$tmp_dir"
-      ;;
-    *)
-      codesign "${sign_args[@]}" "$path"
-      ;;
-  esac
+  codesign "${sign_args[@]}" "$path"
 }
 
 verify_macho() {
   local path="$1"
-  case "$path" in
-    *.framework/*)
-      local tmp_dir tmp_file
-      tmp_dir="$(mktemp -d)"
-      tmp_file="$tmp_dir/$(basename "$path")"
-      cp -p "$path" "$tmp_file"
-      codesign --verify --strict --verbose=2 "$tmp_file"
-      rm -rf "$tmp_dir"
-      ;;
-    *)
-      codesign --verify --strict --verbose=2 "$path"
-      ;;
-  esac
+  codesign --verify --strict --verbose=2 "$path"
 }
 
 echo "Signing bundled macOS runtime payload with identity: $identity"

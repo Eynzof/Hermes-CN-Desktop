@@ -25,6 +25,7 @@ const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
 const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
 const BUNDLED_SKILLS_RESOURCE_DIR: &str = "bundled-skills";
 const BUNDLED_SKILLS_DIR: &str = "skills";
+const MACOS_FRAMEWORK_PAYLOAD_SUFFIX: &str = ".framework.payload";
 const RUNTIME_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -748,6 +749,44 @@ fn sync_available_runtime_resources_from_resource(
     Ok(result)
 }
 
+fn restore_macos_runtime_framework_payloads(dir: &Path) -> Result<usize, String> {
+    if !dir.is_dir() {
+        return Ok(0);
+    }
+
+    let mut restored = 0;
+    let entries = fs::read_dir(dir).map_err(|e| e.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if let Some(restored_name) = name.strip_suffix(".payload") {
+            if name.ends_with(MACOS_FRAMEWORK_PAYLOAD_SUFFIX) {
+                let restored_path = path.with_file_name(restored_name);
+                if restored_path.exists() {
+                    return Err(format!(
+                        "Cannot restore macOS framework payload because target exists: {}",
+                        restored_path.display()
+                    ));
+                }
+                fs::rename(&path, &restored_path).map_err(|e| e.to_string())?;
+                restored += 1;
+                restored += restore_macos_runtime_framework_payloads(&restored_path)?;
+                continue;
+            }
+        }
+
+        restored += restore_macos_runtime_framework_payloads(&path)?;
+    }
+
+    Ok(restored)
+}
+
 fn bundled_manifest_path(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join(format!(
         "{}-{}-{}.json",
@@ -1299,6 +1338,14 @@ async fn install_runtime_tree(
             installed: None,
             previous: None,
             error: Some(format!("Failed to stage runtime tree: {}", e)),
+        };
+    }
+    if let Err(e) = restore_macos_runtime_framework_payloads(&staged_runtime_tree) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!("Failed to restore macOS framework payloads: {}", e)),
         };
     }
 
@@ -2320,6 +2367,38 @@ mod tests {
         assert!(synced.dashboard_web_dist.is_none());
         assert!(synced.bundled_skills.is_none());
         assert!(!runtime.join("_internal").exists());
+    }
+
+    #[test]
+    fn restore_macos_runtime_framework_payloads_restores_relocated_frameworks() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("runtime");
+        let payload = root
+            .join("_internal")
+            .join("Python.framework.payload")
+            .join("Versions")
+            .join("3.11");
+        std::fs::create_dir_all(&payload).unwrap();
+        std::fs::write(payload.join("Python"), b"python").unwrap();
+
+        let restored = restore_macos_runtime_framework_payloads(&root).unwrap();
+
+        assert_eq!(restored, 1);
+        assert!(!root
+            .join("_internal")
+            .join("Python.framework.payload")
+            .exists());
+        assert_eq!(
+            std::fs::read(
+                root.join("_internal")
+                    .join("Python.framework")
+                    .join("Versions")
+                    .join("3.11")
+                    .join("Python")
+            )
+            .unwrap(),
+            b"python"
+        );
     }
 
     #[test]

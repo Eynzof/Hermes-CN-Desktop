@@ -33,9 +33,11 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
 解决方向：**桌面端自带 runtime**。Windows 与 macOS 的正式安装包都应
 预置目标平台的 `hermes-agent-cn` runtime payload + manifest，首次启动优先从
 包内资源安装；云端下载只作为包内 runtime 缺失、运行时升级或兜底修复路径。
-Windows 直接预置 runtime zip；macOS 预置展开后的 runtime 目录，让 Tauri
-的应用签名流程能够覆盖里面的 `.so`、framework 等 Mach-O 文件，否则 Apple
-notary 会把嵌在 zip 内部的未签名二进制也当作拒绝项。
+Windows 直接预置 runtime zip；macOS 预置展开后的 runtime 目录，并在打包
+前对里面的 Mach-O 文件重新做 Developer ID 签名。PyInstaller 的
+`Python.framework` 不是标准 framework 布局，macOS 安装包资源里会临时写成
+`Python.framework.payload`，首次安装 runtime 时再恢复原名，否则 Apple
+notary 会按 framework bundle 规则误判这个目录。
 整套机制叫 **managed runtime**。
 
 ## 二、组件 + 文件分布
@@ -287,7 +289,7 @@ desktop CI release-desktop.yml 触发：
     2. pnpm install
     3. 解析 runtime manifest 的 sourceCommit，checkout 对应 hermes-agent-cn
     4. stage Dashboard web_dist、bundled skills、目标平台 runtime payload + manifest
-       Windows 使用 zip；macOS 使用已展开目录，避免 notarization 扫到 zip 内未签名 Mach-O
+       Windows 使用 zip；macOS 使用已展开目录、Developer ID 重签名，并把非标准 Python.framework 临时改成 .payload
     5. tauri-apps/tauri-action@v0 → 打 .msi / .dmg
        runtime URL + 公钥仍是 baked-in 兜底，不需要 env wire 进 CI
   ↓
