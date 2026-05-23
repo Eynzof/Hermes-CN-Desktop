@@ -64,6 +64,12 @@ interface RpcAsyncAck {
   async: true;
 }
 
+interface PendingRpcResponse {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 function isAsyncAck(result: unknown): result is RpcAsyncAck {
   return (
     typeof result === "object" &&
@@ -72,6 +78,8 @@ function isAsyncAck(result: unknown): result is RpcAsyncAck {
     (result as RpcAsyncAck).async === true
   );
 }
+
+const MAX_EARLY_RPC_RESPONSES = 100;
 
 export class GatewaySseClient implements GatewayClientLike {
   private eventSource: EventSource | null = null;
@@ -85,6 +93,8 @@ export class GatewaySseClient implements GatewayClientLike {
   private autoReconnect = false;
   private intentionalClose = false;
   private tauriProxyConnected = false;
+  private pendingRpcResponses = new Map<string, PendingRpcResponse>();
+  private earlyRpcResponses = new Map<string, any>();
 
   get state(): ConnectionState {
     return this._state;
@@ -288,6 +298,7 @@ export class GatewaySseClient implements GatewayClientLike {
     try {
       tauriErrorUnlisten?.();
     } catch {}
+    this.rejectPendingRpcResponses("SSE connection closed");
   }
 
   // --- events ---
@@ -338,6 +349,12 @@ export class GatewaySseClient implements GatewayClientLike {
   }
 
   private handleFrame(frame: any): void {
+    const rpcId = this.rpcResponseId(frame);
+    if (rpcId) {
+      this.handleRpcResponse(rpcId, frame);
+      return;
+    }
+
     if (frame?.method === "event" && frame.params) {
       const ev = parseGatewayEvent({
         type: frame.params.type,
@@ -346,6 +363,81 @@ export class GatewaySseClient implements GatewayClientLike {
       });
       this.emit(ev);
     }
+  }
+
+  private rpcResponseId(frame: any): string | null {
+    if (!frame || typeof frame !== "object") return null;
+    const id = frame.id;
+    if (typeof id !== "string" && typeof id !== "number") return null;
+    if (!Object.prototype.hasOwnProperty.call(frame, "result") &&
+      !Object.prototype.hasOwnProperty.call(frame, "error")) {
+      return null;
+    }
+    return String(id);
+  }
+
+  private handleRpcResponse(id: string, frame: any): void {
+    const pending = this.pendingRpcResponses.get(id);
+    if (!pending) {
+      this.earlyRpcResponses.set(id, frame);
+      while (this.earlyRpcResponses.size > MAX_EARLY_RPC_RESPONSES) {
+        const oldest = this.earlyRpcResponses.keys().next().value;
+        if (!oldest) break;
+        this.earlyRpcResponses.delete(oldest);
+      }
+      return;
+    }
+
+    this.pendingRpcResponses.delete(id);
+    clearTimeout(pending.timer);
+    this.resolveRpcResponseFrame(frame, pending.resolve, pending.reject);
+  }
+
+  private resolveRpcResponseFrame(
+    frame: any,
+    resolve: (value: unknown) => void,
+    reject: (error: Error) => void,
+  ): void {
+    if (frame?.error) {
+      const msg = frame.error.message ?? `RPC error ${frame.error.code}`;
+      reject(new Error(msg));
+      return;
+    }
+    resolve(frame?.result);
+  }
+
+  private waitForAsyncRpcResponse<T>(
+    id: string,
+    method: string,
+    timeoutMs: number,
+  ): Promise<T> {
+    const early = this.earlyRpcResponses.get(id);
+    if (early) {
+      this.earlyRpcResponses.delete(id);
+      return new Promise<T>((resolve, reject) => {
+        this.resolveRpcResponseFrame(early, resolve as (value: unknown) => void, reject);
+      });
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        this.pendingRpcResponses.delete(id);
+        reject(new Error(`RPC timeout waiting for async response: ${method}`));
+      }, timeoutMs);
+      this.pendingRpcResponses.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        timer,
+      });
+    });
+  }
+
+  private rejectPendingRpcResponses(message: string): void {
+    for (const [, pending] of this.pendingRpcResponses) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error(message));
+    }
+    this.pendingRpcResponses.clear();
   }
 
   // --- RPC ---
@@ -430,6 +522,9 @@ export class GatewaySseClient implements GatewayClientLike {
     if (parsed?.error) {
       const msg = parsed.error.message ?? `RPC error ${parsed.error.code}`;
       throw new Error(msg);
+    }
+    if (isAsyncAck(parsed?.result)) {
+      return await this.waitForAsyncRpcResponse<T>(id, method, timeoutMs);
     }
     return parsed.result as T;
   }

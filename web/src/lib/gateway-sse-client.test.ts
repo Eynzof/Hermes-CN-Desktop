@@ -222,6 +222,102 @@ describe("GatewaySseClient", () => {
     await expect(client.request("foo")).rejects.toThrow(/unknown method: foo/);
   });
 
+  it("waits for the matching SSE response when RPC returns an async ack", async () => {
+    const client = new GatewaySseClient();
+    const connectP = client.connect();
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "cid-async" });
+    await connectP;
+
+    globalThis.fetch = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { accepted: true, async: true },
+        }),
+        { status: 200 },
+      );
+    }) as any;
+
+    const request = client.request<{ session_id: string; resumed: string }>(
+      "session.resume",
+      { session_id: "persist-1" },
+    );
+    await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledOnce());
+    const posted = JSON.parse(String((globalThis.fetch as any).mock.calls[0][1].body));
+
+    es.emitMessage({
+      jsonrpc: "2.0",
+      id: posted.id,
+      result: { session_id: "gw-1", resumed: "persist-1" },
+    });
+
+    await expect(request).resolves.toEqual({ session_id: "gw-1", resumed: "persist-1" });
+  });
+
+  it("uses an early SSE response if it arrives before the async ack is parsed", async () => {
+    const client = new GatewaySseClient();
+    const connectP = client.connect();
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "cid-race" });
+    await connectP;
+
+    globalThis.fetch = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      es.emitMessage({
+        jsonrpc: "2.0",
+        id: body.id,
+        result: { session_id: "gw-race", resumed: "persist-race" },
+      });
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { accepted: true, async: true },
+        }),
+        { status: 200 },
+      );
+    }) as any;
+
+    await expect(
+      client.request("session.resume", { session_id: "persist-race" }),
+    ).resolves.toEqual({ session_id: "gw-race", resumed: "persist-race" });
+  });
+
+  it("rejects async RPC requests when the SSE response is an error", async () => {
+    const client = new GatewaySseClient();
+    const connectP = client.connect();
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "cid-error" });
+    await connectP;
+
+    globalThis.fetch = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: { accepted: true, async: true },
+        }),
+        { status: 200 },
+      );
+    }) as any;
+
+    const request = client.request("session.resume", { session_id: "missing" });
+    await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledOnce());
+    const posted = JSON.parse(String((globalThis.fetch as any).mock.calls[0][1].body));
+
+    es.emitMessage({
+      jsonrpc: "2.0",
+      id: posted.id,
+      error: { code: 4007, message: "session not found" },
+    });
+
+    await expect(request).rejects.toThrow(/session not found/);
+  });
+
   it("uses one Tauri SSE proxy connection across repeated RPC requests", async () => {
     vi.useRealTimers();
     const listeners = new Map<string, (event: { payload: string }) => void>();
