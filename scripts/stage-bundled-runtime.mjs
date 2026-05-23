@@ -3,12 +3,14 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
+  mkdtempSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -58,7 +60,6 @@ const arch = argValue("--arch", process.env.HERMES_RUNTIME_ARCH ?? "x64");
 const outDir = resolve(repoRoot, argValue("--out", "static/bundled-runtime"));
 const expandArtifact = hasFlag("--expand-artifact");
 const keepExisting = hasFlag("--keep-existing");
-const macosFrameworkPayloadSuffix = "__hermes_framework_payload";
 
 const runtimeName = `hermes-agent-cn-runtime-${platform}-${arch}`;
 const manifestName = `${channel}-${platform}-${arch}.json`;
@@ -67,30 +68,71 @@ const baseUrl = tag === "latest"
   ? `https://github.com/${repo}/releases/latest/download`
   : `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}`;
 
-async function download(url, timeoutMs) {
-  console.log(`download: ${url}`);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  let response;
+async function sleep(ms) {
+  await new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+}
+
+function downloadWithCurl(url, timeoutMs) {
+  const tmpDownloadDir = mkdtempSync(join(tmpdir(), "hermes-runtime-download-"));
+  const tmpDownloadPath = join(tmpDownloadDir, "download");
   try {
-    response = await fetch(url, {
-      headers: {
-        "User-Agent": "hermes-agent-cn-desktop-runtime-stager",
-      },
-      signal: controller.signal,
+    const result = spawnSync("curl", [
+      "-L",
+      "--fail",
+      "--connect-timeout",
+      "15",
+      "--max-time",
+      String(Math.ceil(timeoutMs / 1000)),
+      "-H",
+      "User-Agent: hermes-agent-cn-desktop-runtime-stager",
+      "-o",
+      tmpDownloadPath,
+      url,
+    ], {
+      encoding: "utf8",
     });
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      throw new Error(`${url} -> timed out after ${Math.round(timeoutMs / 1000)}s`);
+    if (result.status !== 0) {
+      throw new Error(`curl failed with exit code ${result.status}: ${result.stderr || result.stdout}`);
     }
-    throw error;
+    return readFileSync(tmpDownloadPath);
   } finally {
-    clearTimeout(timeout);
+    rmSync(tmpDownloadDir, { recursive: true, force: true });
   }
-  if (!response.ok) {
-    throw new Error(`${url} -> HTTP ${response.status}`);
+}
+
+async function download(url, timeoutMs, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    console.log(`download: ${url}${attempt > 1 ? ` (attempt ${attempt}/${attempts})` : ""}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "User-Agent": "hermes-agent-cn-desktop-runtime-stager",
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`${url} -> HTTP ${response.status}`);
+      }
+      return Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        lastError = new Error(`${url} -> timed out after ${Math.round(timeoutMs / 1000)}s`);
+      } else {
+        lastError = error;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (attempt < attempts) {
+      await sleep(1000 * attempt);
+    }
   }
-  return Buffer.from(await response.arrayBuffer());
+  console.warn(`fetch failed after ${attempts} attempt(s), falling back to curl: ${lastError?.message ?? lastError}`);
+  return downloadWithCurl(url, timeoutMs);
 }
 
 function sha256(data) {
@@ -104,27 +146,6 @@ function cleanOutputDir() {
     if (name === ".gitkeep") continue;
     rmSync(join(outDir, name), { recursive: true, force: true });
   }
-}
-
-function relocateMacosFrameworksForNotary(dir) {
-  let relocated = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const source = join(dir, entry.name);
-    if (entry.name.endsWith(".framework")) {
-      const target = join(
-        dir,
-        `${entry.name.slice(0, -".framework".length)}${macosFrameworkPayloadSuffix}`,
-      );
-      rmSync(target, { recursive: true, force: true });
-      renameSync(source, target);
-      relocated += 1;
-      relocated += relocateMacosFrameworksForNotary(target);
-    } else {
-      relocated += relocateMacosFrameworksForNotary(source);
-    }
-  }
-  return relocated;
 }
 
 function expandRuntimeZip(zipBytes) {
@@ -148,15 +169,11 @@ function expandRuntimeZip(zipBytes) {
   if (!existsSync(expandedRuntimeDir)) {
     throw new Error(`expanded runtime root was not created: ${expandedRuntimeDir}`);
   }
-  if (platform === "darwin") {
-    const relocated = relocateMacosFrameworksForNotary(expandedRuntimeDir);
-    console.log(`relocated ${relocated} macOS framework directories for notarization`);
-  }
   return expandedRuntimeDir;
 }
 
 cleanOutputDir();
-const manifestBytes = await download(`${baseUrl}/${manifestName}`, 30_000);
+const manifestBytes = await download(`${baseUrl}/${manifestName}`, 120_000);
 const manifest = JSON.parse(manifestBytes.toString("utf8"));
 
 if (manifest.schemaVersion !== 2) {
@@ -187,7 +204,7 @@ writeFileSync(join(outDir, "README.generated.txt"), [
   `repo=${repo}`,
   `tag=${tag}`,
   `stagingMode=${expandArtifact ? "expanded" : "zip"}`,
-  `macosFrameworkLayout=${expandArtifact && platform === "darwin" ? "relocated" : "native"}`,
+  `macosFrameworkLayout=${expandArtifact && platform === "darwin" ? "signed-native" : "native"}`,
   `runtimeVersion=${manifest.runtimeVersion}`,
   `kernelVersion=${manifest.kernelVersion}`,
   `runtimeFlavor=${manifest.runtimeFlavor}`,

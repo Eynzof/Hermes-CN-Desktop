@@ -25,7 +25,6 @@ const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
 const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
 const BUNDLED_SKILLS_RESOURCE_DIR: &str = "bundled-skills";
 const BUNDLED_SKILLS_DIR: &str = "skills";
-const MACOS_FRAMEWORK_PAYLOAD_SUFFIX: &str = "__hermes_framework_payload";
 const RUNTIME_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -749,42 +748,6 @@ fn sync_available_runtime_resources_from_resource(
     Ok(result)
 }
 
-fn restore_macos_runtime_framework_payloads(dir: &Path) -> Result<usize, String> {
-    if !dir.is_dir() {
-        return Ok(0);
-    }
-
-    let mut restored = 0;
-    let entries = fs::read_dir(dir).map_err(|e| e.to_string())?;
-    for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path();
-        if !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
-            continue;
-        }
-
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if let Some(framework_stem) = name.strip_suffix(MACOS_FRAMEWORK_PAYLOAD_SUFFIX) {
-            let restored_path = path.with_file_name(format!("{}.framework", framework_stem));
-            if restored_path.exists() {
-                return Err(format!(
-                    "Cannot restore macOS framework payload because target exists: {}",
-                    restored_path.display()
-                ));
-            }
-            fs::rename(&path, &restored_path).map_err(|e| e.to_string())?;
-            restored += 1;
-            restored += restore_macos_runtime_framework_payloads(&restored_path)?;
-            continue;
-        }
-
-        restored += restore_macos_runtime_framework_payloads(&path)?;
-    }
-
-    Ok(restored)
-}
-
 fn bundled_manifest_path(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join(format!(
         "{}-{}-{}.json",
@@ -1338,14 +1301,6 @@ async fn install_runtime_tree(
             error: Some(format!("Failed to stage runtime tree: {}", e)),
         };
     }
-    if let Err(e) = restore_macos_runtime_framework_payloads(&staged_runtime_tree) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(format!("Failed to restore macOS framework payloads: {}", e)),
-        };
-    }
 
     let executable = match find_executable_in(staging.path(), 2) {
         Some(e) => e,
@@ -1417,10 +1372,11 @@ async fn install_runtime_tree(
 /// Install the runtime bundled inside the desktop installer, if present.
 ///
 /// This is used for packaged builds that should work without a first-run
-/// network download. Windows stages the upstream zip directly. macOS stages an
-/// expanded runtime tree so the app bundle signing pass can sign nested Mach-O
-/// files before notarization; Apple notarization rejects unsigned binaries even
-/// when they are nested inside a zip resource.
+/// network download. Windows and macOS both stage the upstream zip directly.
+/// On macOS the upstream runtime release is already Developer-ID signed and
+/// zipped with framework symlinks preserved; keeping the zip opaque avoids
+/// Tauri's resource copy dereferencing `Python.framework` symlinks before
+/// notarization.
 pub async fn install_bundled_runtime_if_needed(
     resource_dir: Option<&Path>,
 ) -> RuntimeInstallUpdateResult {
@@ -1757,6 +1713,12 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
             return Err(format!("Path escapes destination: {:?}", relative));
         }
 
+        let mode = entry.unix_mode();
+        #[cfg(unix)]
+        let is_symlink = mode.map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
+        #[cfg(not(unix))]
+        let is_symlink = false;
+
         if entry.is_dir() {
             fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
         } else {
@@ -1771,15 +1733,43 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
             if let Some(parent) = out_path.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            let mut out_file = fs::File::create(&out_path).map_err(|e| e.to_string())?;
-            std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
 
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if let Some(mode) = entry.unix_mode() {
-                    fs::set_permissions(&out_path, fs::Permissions::from_mode(mode))
+            if is_symlink {
+                #[cfg(unix)]
+                {
+                    use std::path::Component;
+
+                    let mut target_bytes = Vec::new();
+                    entry
+                        .read_to_end(&mut target_bytes)
                         .map_err(|e| e.to_string())?;
+                    let target = String::from_utf8(target_bytes)
+                        .map_err(|e| format!("Invalid UTF-8 symlink target: {}", e))?;
+                    let target_path = Path::new(&target);
+                    if target_path.components().any(|component| {
+                        matches!(
+                            component,
+                            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                        )
+                    }) {
+                        return Err(format!("Refusing unsafe symlink target: {:?}", target));
+                    }
+                    std::os::unix::fs::symlink(target_path, &out_path)
+                        .map_err(|e| e.to_string())?;
+                }
+                #[cfg(not(unix))]
+                return Err("Zip symlink entries are only supported on Unix platforms".to_string());
+            } else {
+                let mut out_file = fs::File::create(&out_path).map_err(|e| e.to_string())?;
+                std::io::copy(&mut entry, &mut out_file).map_err(|e| e.to_string())?;
+
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if let Some(mode) = mode {
+                        fs::set_permissions(&out_path, fs::Permissions::from_mode(mode))
+                            .map_err(|e| e.to_string())?;
+                    }
                 }
             }
         }
@@ -1816,7 +1806,14 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
     for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let target = dst.join(entry.file_name());
-        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+        let file_type = entry.file_type().map_err(|e| e.to_string())?;
+        #[cfg(unix)]
+        if file_type.is_symlink() {
+            let link_target = fs::read_link(entry.path()).map_err(|e| e.to_string())?;
+            std::os::unix::fs::symlink(link_target, &target).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if file_type.is_dir() {
             copy_dir_all(&entry.path(), &target)?;
         } else {
             fs::copy(entry.path(), &target).map_err(|e| e.to_string())?;
@@ -2241,6 +2238,59 @@ mod tests {
         assert_eq!(mode & 0o777, 0o755);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn extract_zip_preserves_unix_symlinks() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("symlink.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let file_opts = zip::write::SimpleFileOptions::default().unix_permissions(0o644);
+        writer.start_file("target.txt", file_opts).unwrap();
+        writer.write_all(b"target").unwrap();
+        let link_opts = zip::write::SimpleFileOptions::default();
+        writer
+            .add_symlink("link.txt", "target.txt", link_opts)
+            .unwrap();
+        writer.finish().unwrap();
+
+        extract_zip(&zip_path, &dest).unwrap();
+
+        assert_eq!(
+            std::fs::read_link(dest.join("link.txt")).unwrap(),
+            PathBuf::from("target.txt")
+        );
+        assert_eq!(std::fs::read(dest.join("link.txt")).unwrap(), b"target");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_zip_rejects_unsafe_symlink_targets() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("symlink.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        writer
+            .add_symlink("link.txt", "../escape.txt", opts)
+            .unwrap();
+        writer.finish().unwrap();
+
+        let err = extract_zip(&zip_path, &dest).unwrap_err();
+        assert!(
+            err.contains("unsafe symlink target"),
+            "unexpected error: {}",
+            err
+        );
+        assert!(!dest.join("link.txt").exists());
+    }
+
     // -------- copy_dir_all --------
 
     #[test]
@@ -2268,6 +2318,25 @@ mod tests {
         std::fs::create_dir_all(&src).unwrap();
         copy_dir_all(&src, &dst).unwrap();
         assert!(dst.is_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn copy_dir_all_preserves_symlinks() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("src");
+        let dst = dir.path().join("dst");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("target.txt"), b"target").unwrap();
+        std::os::unix::fs::symlink("target.txt", src.join("link.txt")).unwrap();
+
+        copy_dir_all(&src, &dst).unwrap();
+
+        assert_eq!(
+            std::fs::read_link(dst.join("link.txt")).unwrap(),
+            PathBuf::from("target.txt")
+        );
+        assert_eq!(std::fs::read(dst.join("link.txt")).unwrap(), b"target");
     }
 
     // -------- sync_bundled_skills_from_resource --------
@@ -2368,38 +2437,6 @@ mod tests {
     }
 
     #[test]
-    fn restore_macos_runtime_framework_payloads_restores_relocated_frameworks() {
-        let dir = TempDir::new().unwrap();
-        let root = dir.path().join("runtime");
-        let payload = root
-            .join("_internal")
-            .join("Python__hermes_framework_payload")
-            .join("Versions")
-            .join("3.11");
-        std::fs::create_dir_all(&payload).unwrap();
-        std::fs::write(payload.join("Python"), b"python").unwrap();
-
-        let restored = restore_macos_runtime_framework_payloads(&root).unwrap();
-
-        assert_eq!(restored, 1);
-        assert!(!root
-            .join("_internal")
-            .join("Python__hermes_framework_payload")
-            .exists());
-        assert_eq!(
-            std::fs::read(
-                root.join("_internal")
-                    .join("Python.framework")
-                    .join("Versions")
-                    .join("3.11")
-                    .join("Python")
-            )
-            .unwrap(),
-            b"python"
-        );
-    }
-
-    #[test]
     fn bundled_runtime_available_accepts_expanded_runtime_tree() {
         let dir = TempDir::new().unwrap();
         let resource = dir.path().join("resources");
@@ -2494,6 +2531,86 @@ mod tests {
             .join("demo")
             .join("SKILL.md")
             .is_file());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    #[serial]
+    async fn install_bundled_runtime_from_zip_preserves_symlinks() {
+        let dir = TempDir::new().unwrap();
+        let runtime_root = dir.path().join("runtime-root");
+        let resource = dir.path().join("resources");
+        let bundled = resource.join("bundled-runtime");
+        let web_dist = resource
+            .join(DASHBOARD_RESOURCE_DIR)
+            .join(DASHBOARD_WEB_DIST_DIR);
+        let skills = resource
+            .join(BUNDLED_SKILLS_RESOURCE_DIR)
+            .join("creative")
+            .join("demo");
+        std::fs::create_dir_all(&bundled).unwrap();
+        std::fs::create_dir_all(&web_dist).unwrap();
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::write(web_dist.join("index.html"), b"<html></html>").unwrap();
+        std::fs::write(skills.join("SKILL.md"), b"---\nname: demo\n---\n").unwrap();
+
+        let zip_path = bundled_artifact_path(&bundled);
+        let runtime_dir_name = format!(
+            "{}-{}-{}",
+            RUNTIME_BASENAME,
+            current_platform(),
+            current_arch()
+        );
+        let executable_entry = format!("{runtime_dir_name}/{}", primary_runtime_name());
+        let target_entry = format!("{runtime_dir_name}/target.txt");
+        let link_entry = format!("{runtime_dir_name}/link.txt");
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let exe_opts = zip::write::SimpleFileOptions::default().unix_permissions(0o755);
+        writer.start_file(&executable_entry, exe_opts).unwrap();
+        writer.write_all(b"#!/bin/sh\nexit 0\n").unwrap();
+        let file_opts = zip::write::SimpleFileOptions::default().unix_permissions(0o644);
+        writer.start_file(&target_entry, file_opts).unwrap();
+        writer.write_all(b"target").unwrap();
+        writer
+            .add_symlink(
+                &link_entry,
+                "target.txt",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        writer.finish().unwrap();
+
+        let (key, pem) = test_keypair();
+        let mut manifest = fixture_manifest();
+        manifest.runtime_version = "9.9.9-cn.2".to_string();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        manifest.sha256 = file_sha256(&zip_path).unwrap();
+        sign_manifest(&key, &mut manifest);
+        write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
+
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
+
+        let result = install_bundled_runtime_if_needed(Some(&resource)).await;
+
+        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        assert!(result.ok, "unexpected install error: {:?}", result.error);
+        let installed = result.installed.expect("runtime should be installed");
+        let installed_root = Path::new(&installed.path).join(runtime_dir_name);
+        assert_eq!(installed.runtime_version, "9.9.9-cn.2");
+        assert_eq!(
+            std::fs::read_link(installed_root.join("link.txt")).unwrap(),
+            PathBuf::from("target.txt")
+        );
+        assert_eq!(
+            std::fs::read(installed_root.join("link.txt")).unwrap(),
+            b"target"
+        );
     }
 
     // -------- find_executable_in --------

@@ -33,11 +33,11 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
 解决方向：**桌面端自带 runtime**。Windows 与 macOS 的正式安装包都应
 预置目标平台的 `hermes-agent-cn` runtime payload + manifest，首次启动优先从
 包内资源安装；云端下载只作为包内 runtime 缺失、运行时升级或兜底修复路径。
-Windows 直接预置 runtime zip；macOS 预置展开后的 runtime 目录，并在打包
-前对里面的 Mach-O 文件重新做 Developer ID 签名。PyInstaller 的
-`Python.framework` 不是标准 framework 布局，macOS 安装包资源里会临时写成
-`Python__hermes_framework_payload`，首次安装 runtime 时再恢复原名，否则 Apple
-notary 会按 framework bundle 规则误判这个目录。
+Windows 与 macOS 都直接预置 runtime zip。macOS runtime 本身由
+`hermes-agent-cn` 的 release workflow 产出，在上游打包阶段已经把 PyInstaller
+复制出来的 `Python.framework` 规范化成标准 framework symlink 布局，并完成
+Developer ID 签名；桌面端只验证这份签名友好的 zip，避免 Tauri resource
+复制展开目录时破坏 framework symlink，不再重签、不再临时改名 `.framework`。
 整套机制叫 **managed runtime**。
 
 ## 二、组件 + 文件分布
