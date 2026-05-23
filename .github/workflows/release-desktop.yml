@@ -134,9 +134,6 @@ jobs:
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
-          if [ "${{ matrix.runtime_platform }}" = "darwin" ]; then
-            args+=(--expand-artifact)
-          fi
           node "${args[@]}"
 
       - name: Prepare macOS signing credentials
@@ -182,12 +179,10 @@ jobs:
           security list-keychains -d user -s "$signing_keychain" $(security list-keychains -d user | tr -d '"')
           security find-identity -v -p codesigning "$signing_keychain"
 
-      - name: Sign bundled macOS runtime payload
+      - name: Verify bundled macOS runtime payload signatures
         if: matrix.runner == 'macos-14'
         shell: bash
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: scripts/sign-macos-runtime-payload.sh
+        run: scripts/verify-macos-runtime-payload.sh
 
       - name: Build + upload installers
         uses: tauri-apps/tauri-action@v0
