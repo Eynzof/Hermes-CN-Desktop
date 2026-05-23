@@ -105,11 +105,14 @@ function openExternal(url: string) {
   window.open(trimmed, "_blank", "noopener,noreferrer");
 }
 
-function QrPanel({ data, url, status, message }: {
+function QrPanel({ data, url, status, message, onStart, startLabel, startBusy }: {
   data?: string | null;
   url?: string | null;
   status?: string;
   message?: string | null;
+  onStart?: () => void;
+  startLabel?: string;
+  startBusy?: boolean;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
@@ -135,7 +138,18 @@ function QrPanel({ data, url, status, message }: {
   return (
     <section className={`${s.section} ${s.qrSection}`}>
       <div className={s.qrBox} aria-label="二维码区域">
-        {src ? <img src={src} alt="扫码接入二维码" /> : <div className={s.qrPlaceholder}>QR</div>}
+        {src ? (
+          <img src={src} alt="扫码接入二维码" />
+        ) : (
+          <div className={s.qrPlaceholder}>
+            <span>QR</span>
+            {onStart ? (
+              <button className={`${s.btn} ${s.primary} ${s.qrStartBtn}`} type="button" onClick={onStart} disabled={startBusy}>
+                <ScanLine size={14} />{startBusy ? "生成中…" : startLabel ?? "开始扫码"}
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
       <div className={s.qrCopy}>
         <div className={s.miniEyebrow}>QR ONBOARDING</div>
@@ -713,7 +727,15 @@ function FeishuRoute() {
           {method === "qr" ? <>
             <div ref={qrAnchorRef} className={s.anchorBlock}>
               <SectionTitle num="[ STEP 02A ]" title="扫码授权并获取凭据" meta={flow ? `轮询间隔 ${flow.intervalSeconds}s；凭据获取后还要配置后台` : "device_code 只保存在桌面端内存"} />
-              <QrPanel data={pollResult?.qrScanData ?? flow?.qrScanData} url={pollResult?.qrUrl ?? flow?.qrUrl} status={status} message={pollResult?.message ?? flow?.message} />
+              <QrPanel
+                data={pollResult?.qrScanData ?? flow?.qrScanData}
+                url={pollResult?.qrUrl ?? flow?.qrUrl}
+                status={status}
+                message={pollResult?.message ?? flow?.message}
+                onStart={start}
+                startLabel="开始扫码"
+                startBusy={begin.isPending}
+              />
             </div>
             <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RefreshCw size={14} />立即检查</button></div>
           </> : <>
@@ -851,7 +873,15 @@ function WeixinRoute() {
           </div></section>
           <div ref={qrAnchorRef} className={s.anchorBlock}>
             <SectionTitle num="[ STEP 02 ]" title="微信扫码绑定 iLink bot" meta="默认 8 分钟超时，二维码过期后最多自动刷新 3 次" />
-            <QrPanel data={pollResult?.qrScanData ?? flow?.qrScanData} url={pollResult?.qrUrl ?? flow?.qrUrl} status={status} message={pollResult?.message ?? flow?.message} />
+            <QrPanel
+              data={pollResult?.qrScanData ?? flow?.qrScanData}
+              url={pollResult?.qrUrl ?? flow?.qrUrl}
+              status={status}
+              message={pollResult?.message ?? flow?.message}
+              onStart={start}
+              startLabel="开始扫码"
+              startBusy={begin.isPending}
+            />
           </div>
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RotateCw size={14} />立即检查</button></div>
           <SectionTitle num="[ STEP 03 ]" title="凭据与高级连接配置" meta="普通用户无需手填 token，扫码成功后自动写入" />
