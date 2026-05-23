@@ -369,7 +369,7 @@ function FeishuTestGuide({ result }: { result: ImOnboardingApplyResult | null })
         <div className={s.miniEyebrow}>LIVE TEST</div>
         <h3>最后用真实消息验证闭环</h3>
         <p>{result?.ok
-          ? "Gateway 已尝试重启。现在请在飞书里用两条消息验证：私聊机器人发送 hi；在群聊里 @机器人 hi。"
+          ? "桌面端 managed runtime Gateway 已启动。现在请在飞书里用两条消息验证：私聊机器人发送 hi；在群聊里 @机器人 hi。"
           : "保存并重启 Gateway、完成飞书后台权限/事件/发布之后，再回来做真实消息验证。"}</p>
       </div>
       <div className={s.testCards}>
@@ -605,9 +605,10 @@ function ReviewTable({ rows }: { rows: Array<[string, string, string]> }) {
 
 function ApplyResult({ result }: { result: ImOnboardingApplyResult | null }) {
   if (!result) return null;
+  const Icon = result.restart.ok ? CheckCircle2 : XCircle;
   return (
     <div className={s.resultBox} data-ok={result.restart.ok ? "true" : undefined}>
-      <CheckCircle2 size={16} />
+      <Icon size={16} />
       <div>
         <b>配置已写入当前 profile：{result.currentProfile}</b>
         <span>env: <code>{result.envPath}</code>{result.backupPath ? <> · backup: <code>{result.backupPath}</code></> : null}</span>
