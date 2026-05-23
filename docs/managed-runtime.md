@@ -36,7 +36,7 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
 Windows 直接预置 runtime zip；macOS 预置展开后的 runtime 目录，并在打包
 前对里面的 Mach-O 文件重新做 Developer ID 签名。PyInstaller 的
 `Python.framework` 不是标准 framework 布局，macOS 安装包资源里会临时写成
-`Python.framework.payload`，首次安装 runtime 时再恢复原名，否则 Apple
+`Python__hermes_framework_payload`，首次安装 runtime 时再恢复原名，否则 Apple
 notary 会按 framework bundle 规则误判这个目录。
 整套机制叫 **managed runtime**。
 

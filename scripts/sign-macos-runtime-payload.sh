@@ -31,61 +31,14 @@ is_macho() {
   file "$1" | grep -q 'Mach-O'
 }
 
-is_relocated_framework_payload_path() {
-  [[ "$1" == *".framework.payload/"* ]]
-}
-
-with_plain_macho_path() {
-  local source_path="$1"
-  local action="$2"
-  local temp_dir
-  local temp_path
-  local rc=0
-
-  temp_dir="$(mktemp -d)"
-  temp_path="$temp_dir/macho"
-  cp -p "$source_path" "$temp_path"
-
-  case "$action" in
-    sign)
-      codesign "${sign_args[@]}" "$temp_path" || rc=$?
-      if [[ "$rc" -eq 0 ]]; then
-        cp -p "$temp_path" "$source_path" || rc=$?
-      fi
-      ;;
-    verify)
-      codesign --verify --strict --verbose=2 "$temp_path" || rc=$?
-      ;;
-    *)
-      echo "unknown Mach-O action: $action" >&2
-      rc=1
-      ;;
-  esac
-
-  rm -rf "$temp_dir"
-  return "$rc"
-}
-
 sign_macho() {
   local path="$1"
-  if is_relocated_framework_payload_path "$path"; then
-    # codesign still applies framework bundle heuristics to paths containing
-    # ".framework.", even after staging renamed PyInstaller's nonstandard
-    # Python.framework to Python.framework.payload. Sign the raw Mach-O bytes
-    # from a neutral temporary path, then copy the signed binary back.
-    with_plain_macho_path "$path" sign
-  else
-    codesign "${sign_args[@]}" "$path"
-  fi
+  codesign "${sign_args[@]}" "$path"
 }
 
 verify_macho() {
   local path="$1"
-  if is_relocated_framework_payload_path "$path"; then
-    with_plain_macho_path "$path" verify
-  else
-    codesign --verify --strict --verbose=2 "$path"
-  fi
+  codesign --verify --strict --verbose=2 "$path"
 }
 
 echo "Signing bundled macOS runtime payload with identity: $identity"
