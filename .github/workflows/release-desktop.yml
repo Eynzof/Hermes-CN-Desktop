@@ -143,15 +143,51 @@ jobs:
         if: matrix.runner == 'macos-14'
         shell: bash
         env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
+          test -n "$APPLE_CERTIFICATE"
+          test -n "$APPLE_CERTIFICATE_PASSWORD"
+          test -n "$APPLE_SIGNING_IDENTITY"
           test -n "$APPLE_API_KEY"
           test -n "$APPLE_API_PRIVATE_KEY"
 
           mkdir -p "$RUNNER_TEMP/appstoreconnect/private_keys"
           printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8"
           chmod 600 "$RUNNER_TEMP/appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8"
+
+          signing_keychain_password="$(uuidgen)"
+          signing_keychain="$RUNNER_TEMP/hermes-signing.keychain-db"
+          certificate_path="$RUNNER_TEMP/hermes-apple-certificate.p12"
+
+          security create-keychain -p "$signing_keychain_password" "$signing_keychain"
+          security set-keychain-settings -lut 21600 "$signing_keychain"
+          security unlock-keychain -p "$signing_keychain_password" "$signing_keychain"
+
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          security import "$certificate_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$signing_keychain"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$signing_keychain_password" \
+            "$signing_keychain"
+          security list-keychains -d user -s "$signing_keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$signing_keychain"
+
+      - name: Sign bundled macOS runtime payload
+        if: matrix.runner == 'macos-14'
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: scripts/sign-macos-runtime-payload.sh
 
       - name: Build + upload installers
         uses: tauri-apps/tauri-action@v0
@@ -205,11 +241,38 @@ jobs:
 
           for dmg in "${dmgs[@]}"; do
             echo "Notarizing final DMG: $dmg"
+            submit_json="$RUNNER_TEMP/notary-submit-$(basename "$dmg").json"
             xcrun notarytool submit "$dmg" \
               --key "$APPLE_API_KEY_PATH" \
               --key-id "$APPLE_API_KEY" \
               --issuer "$APPLE_API_ISSUER" \
-              --wait
+              --wait \
+              --output-format json | tee "$submit_json"
+
+            submission_id="$(python3 - "$submit_json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], "r", encoding="utf-8") as fh:
+              print(json.load(fh).get("id", ""))
+          PY
+          )"
+            submission_status="$(python3 - "$submit_json" <<'PY'
+          import json, sys
+          with open(sys.argv[1], "r", encoding="utf-8") as fh:
+              print(json.load(fh).get("status", ""))
+          PY
+          )"
+
+            if [ "$submission_status" != "Accepted" ]; then
+              echo "Notarization failed with status: $submission_status" >&2
+              if [ -n "$submission_id" ]; then
+                xcrun notarytool log "$submission_id" \
+                  --key "$APPLE_API_KEY_PATH" \
+                  --key-id "$APPLE_API_KEY" \
+                  --issuer "$APPLE_API_ISSUER" \
+                  --output-format json | tee "$RUNNER_TEMP/notary-log-$submission_id.json" || true
+              fi
+              exit 1
+            fi
 
             xcrun stapler staple "$dmg"
             xcrun stapler validate "$dmg"
