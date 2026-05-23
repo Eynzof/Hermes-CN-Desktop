@@ -20,7 +20,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test:unit": "pnpm -r --workspace-concurrency=1 test:unit",
     "runtime:stage-bundled-windows": "node scripts/stage-bundled-runtime.mjs --platform win32 --arch x64",
-    "runtime:stage-bundled-macos": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch arm64",
+    "runtime:stage-bundled-macos": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch arm64 --expand-artifact",
     "dashboard:stage-web-dist": "node scripts/stage-dashboard-web-dist.mjs",
     "skills:stage-bundled": "node scripts/stage-bundled-skills.mjs",
     "bundle:stage-windows": "pnpm run runtime:stage-bundled-windows && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled",

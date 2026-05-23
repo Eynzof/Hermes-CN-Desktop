@@ -6,7 +6,9 @@
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
 #   4. Stages the bundled dashboard frontend, bundled skills, and bundled
-#      hermes-agent-cn runtime zip + manifest for the target platform.
+#      hermes-agent-cn runtime payload + manifest for the target platform.
+#      macOS stages an expanded runtime tree so app signing can cover nested
+#      Mach-O files before notarization.
 #   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
 #      env vars are NOT set here; src/process/runtime.rs ships hardcoded
 #      production fallbacks. Set them only if you fork the project and
@@ -124,7 +126,18 @@ jobs:
         run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
 
       - name: Stage bundled hermes-agent-cn runtime
-        run: node scripts/stage-bundled-runtime.mjs --tag "${{ github.event.inputs.bundled_runtime_tag || 'latest' }}" --platform ${{ matrix.runtime_platform }} --arch ${{ matrix.runtime_arch }}
+        shell: bash
+        run: |
+          args=(
+            scripts/stage-bundled-runtime.mjs
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'latest' }}"
+            --platform "${{ matrix.runtime_platform }}"
+            --arch "${{ matrix.runtime_arch }}"
+          )
+          if [ "${{ matrix.runtime_platform }}" = "darwin" ]; then
+            args+=(--expand-artifact)
+          fi
+          node "${args[@]}"
 
       - name: Prepare macOS signing credentials
         if: matrix.runner == 'macos-14'
@@ -147,9 +160,6 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
         with:
           # tauri-action looks up the tag from this input. On a push:tags
           # trigger it falls back to GITHUB_REF, but we pass it explicitly
