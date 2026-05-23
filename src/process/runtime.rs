@@ -25,7 +25,7 @@ const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
 const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
 const BUNDLED_SKILLS_RESOURCE_DIR: &str = "bundled-skills";
 const BUNDLED_SKILLS_DIR: &str = "skills";
-const MACOS_FRAMEWORK_PAYLOAD_SUFFIX: &str = ".framework.payload";
+const MACOS_FRAMEWORK_PAYLOAD_SUFFIX: &str = "__hermes_framework_payload";
 const RUNTIME_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -765,20 +765,18 @@ fn restore_macos_runtime_framework_payloads(dir: &Path) -> Result<usize, String>
 
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if let Some(restored_name) = name.strip_suffix(".payload") {
-            if name.ends_with(MACOS_FRAMEWORK_PAYLOAD_SUFFIX) {
-                let restored_path = path.with_file_name(restored_name);
-                if restored_path.exists() {
-                    return Err(format!(
-                        "Cannot restore macOS framework payload because target exists: {}",
-                        restored_path.display()
-                    ));
-                }
-                fs::rename(&path, &restored_path).map_err(|e| e.to_string())?;
-                restored += 1;
-                restored += restore_macos_runtime_framework_payloads(&restored_path)?;
-                continue;
+        if let Some(framework_stem) = name.strip_suffix(MACOS_FRAMEWORK_PAYLOAD_SUFFIX) {
+            let restored_path = path.with_file_name(format!("{}.framework", framework_stem));
+            if restored_path.exists() {
+                return Err(format!(
+                    "Cannot restore macOS framework payload because target exists: {}",
+                    restored_path.display()
+                ));
             }
+            fs::rename(&path, &restored_path).map_err(|e| e.to_string())?;
+            restored += 1;
+            restored += restore_macos_runtime_framework_payloads(&restored_path)?;
+            continue;
         }
 
         restored += restore_macos_runtime_framework_payloads(&path)?;
@@ -2375,7 +2373,7 @@ mod tests {
         let root = dir.path().join("runtime");
         let payload = root
             .join("_internal")
-            .join("Python.framework.payload")
+            .join("Python__hermes_framework_payload")
             .join("Versions")
             .join("3.11");
         std::fs::create_dir_all(&payload).unwrap();
@@ -2386,7 +2384,7 @@ mod tests {
         assert_eq!(restored, 1);
         assert!(!root
             .join("_internal")
-            .join("Python.framework.payload")
+            .join("Python__hermes_framework_payload")
             .exists());
         assert_eq!(
             std::fs::read(

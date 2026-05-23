@@ -58,6 +58,7 @@ const arch = argValue("--arch", process.env.HERMES_RUNTIME_ARCH ?? "x64");
 const outDir = resolve(repoRoot, argValue("--out", "static/bundled-runtime"));
 const expandArtifact = hasFlag("--expand-artifact");
 const keepExisting = hasFlag("--keep-existing");
+const macosFrameworkPayloadSuffix = "__hermes_framework_payload";
 
 const runtimeName = `hermes-agent-cn-runtime-${platform}-${arch}`;
 const manifestName = `${channel}-${platform}-${arch}.json`;
@@ -111,7 +112,10 @@ function relocateMacosFrameworksForNotary(dir) {
     if (!entry.isDirectory()) continue;
     const source = join(dir, entry.name);
     if (entry.name.endsWith(".framework")) {
-      const target = `${source}.payload`;
+      const target = join(
+        dir,
+        `${entry.name.slice(0, -".framework".length)}${macosFrameworkPayloadSuffix}`,
+      );
       rmSync(target, { recursive: true, force: true });
       renameSync(source, target);
       relocated += 1;
