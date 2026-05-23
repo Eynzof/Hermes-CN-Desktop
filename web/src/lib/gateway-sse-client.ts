@@ -227,6 +227,7 @@ export class GatewaySseClient implements GatewayClientLike {
           }
           this.eventSource = null;
           this.clientId = null;
+          this.rejectPendingRpcResponses("SSE connection closed");
           this.emitDisconnect();
           this.setState("closed");
           // Browser native reconnect already gave up. If autoReconnect is on,
@@ -419,6 +420,10 @@ export class GatewaySseClient implements GatewayClientLike {
       });
     }
 
+    if (!this.hasOpenAsyncRpcStream()) {
+      return Promise.reject(new Error("SSE connection closed"));
+    }
+
     return new Promise<T>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pendingRpcResponses.delete(id);
@@ -438,6 +443,12 @@ export class GatewaySseClient implements GatewayClientLike {
       pending.reject(new Error(message));
     }
     this.pendingRpcResponses.clear();
+  }
+
+  private hasOpenAsyncRpcStream(): boolean {
+    if (!this.clientId) return false;
+    if (isTauriProduction()) return this.tauriProxyConnected;
+    return !!this.eventSource && this.eventSource.readyState !== EventSource.CLOSED;
   }
 
   // --- RPC ---
@@ -589,6 +600,7 @@ export class GatewaySseClient implements GatewayClientLike {
         } else {
           this.tauriProxyConnected = false;
           this.clientId = null;
+          this.rejectPendingRpcResponses("SSE connection closed");
           try {
             this.tauriUnlisten?.();
           } catch {}
