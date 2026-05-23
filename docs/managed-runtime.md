@@ -30,8 +30,10 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
    还要装对 Python 版本（3.11+）、装对 fork 而不是上游。不是面向
    终端用户的产品形态。
 
-解决方向：**桌面端自带 runtime**。安装包带不进去（150MB 太大），
-所以走"首次启动云拉"路线。整套机制叫 **managed runtime**。
+解决方向：**桌面端自带 runtime**。Windows 与 macOS 的正式安装包都应
+预置目标平台的 `hermes-agent-cn` runtime zip + manifest，首次启动优先从
+包内资源安装；云端下载只作为包内 runtime 缺失、运行时升级或兜底修复路径。
+整套机制叫 **managed runtime**。
 
 ## 二、组件 + 文件分布
 
@@ -78,8 +80,12 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
   ↓
 2. runtime::get_runtime_info() → current.json 不存在
   ↓
-3. info.updates_configured == true 因为 BASE_URL + 公钥都有
-   （baked-in fallback 在 src/process/runtime.rs:30-37 行）
+3. runtime::install_bundled_runtime_if_needed(resource_dir) 先检查安装包资源：
+   static/bundled-runtime/stable-<platform>-<arch>.json
+   static/bundled-runtime/hermes-agent-cn-runtime-<platform>-<arch>.zip
+   如果存在，走本地验签、SHA-256 校验、解压、smoke test，并把
+   Dashboard web_dist 与 bundled skills 同步进 runtime/_internal
+   如果不存在，才进入云端 managed runtime 下载兜底
   ↓
 4. tauri::async_runtime::spawn(async move {...}) 起一个后台任务，
    setup() 立刻 return Ok(()) → 窗口立刻弹出
@@ -90,14 +96,14 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
    → 拿到 api_base_url="" 因为 Rust 还没填
   ↓
 6. 检测到 prod 模式 + 空 url → 注入 Block H 覆盖层 DOM
-   "正在下载 hermes-agent-cn runtime..."
+   "正在启动Hermes Agent内核..."，随后根据 runtime-status 展示安装或启动状态
   ↓
 7. 监听 Tauri 事件 "runtime-status"
   ↓
 [同时 Rust 后台任务在跑]
   ↓
 8. emit runtime-status "installing"
-   runtime::install_runtime_update(None) 开始：
+   如果包内 runtime 不存在或不可用，runtime::install_runtime_update(None) 开始：
    a. configured_manifest_url() →
       https://github.com/Eynzof/hermes-agent-cn/releases/latest/download/stable-win32-x64.json
    b. reqwest GET → 拿到 manifest JSON
@@ -114,6 +120,7 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
    j. fs::rename(staging, target) 装到
       %APPDATA%/cn.hermes.agent.desktop/runtime/versions/0.14.0-cn.1/
    k. write current.json 指向这个版本
+   包内 runtime 路径同样会写 current.json，区别只是 source="bundled"
   ↓
 9. emit runtime-status "starting-dashboard"
    dashboard::ensure_hermes_dashboard():
@@ -274,14 +281,16 @@ desktop CI release-desktop.yml 触发：
   per job:
     1. setup-node + pnpm + rust toolchain
     2. pnpm install
-    3. tauri-apps/tauri-action@v0 → 打 .msi / .dmg / .AppImage
-       runtime URL + 公钥 都是 baked-in（src/process/runtime.rs
-       的硬编码 fallback），不需要 env wire 进 CI
+    3. 解析 runtime manifest 的 sourceCommit，checkout 对应 hermes-agent-cn
+    4. stage Dashboard web_dist、bundled skills、目标平台 runtime zip + manifest
+    5. tauri-apps/tauri-action@v0 → 打 .msi / .dmg
+       runtime URL + 公钥仍是 baked-in 兜底，不需要 env wire 进 CI
   ↓
 新装包发到 releases/v0.2.0 → 用户下载装新版
   ↓
-新版起来后，看到 current.json 已经有 runtime → 不下载 → 直接用
-（除非要升级 runtime，那是独立流程，见上一节）
+新版起来后，看到 current.json 已经有 runtime → 不下载 → 直接用。
+全新安装则先使用安装包内置 runtime；除非内置资源缺失或用户主动升级，
+才进入云端下载流程。
 ```
 
 ## 七、信任链 / 攻击面
@@ -330,7 +339,7 @@ keypair 同时签的过渡期（这个我们的代码现在不支持，要的话
 
 | 现象 | 多半的原因 | 怎么查 |
 |---|---|---|
-| 桌面端窗口卡在 "正在下载 runtime" 不动 | manifest URL 404 / 网络不通 | F12 → Network 看 GET stable-win32-x64.json |
+| 桌面端窗口卡在 "正在下载 runtime" 不动 | 包内 runtime 缺失且 manifest URL 404 / 网络不通 | 先检查安装包内 `Contents/Resources/bundled-runtime/` 是否有当前平台 manifest + zip，再看 GET stable-<platform>-<arch>.json |
 | 显示 "runtime 安装失败：SHA-256 mismatch" | artifact 被劫持 / CDN 缓存了旧版 | 强制刷新 GitHub Release 缓存，或重发布 |
 | 显示 "runtime 安装失败：Signature verification failed" | 公私钥不匹配 / fork 重签了 manifest | 对照桌面端二进制里的公钥 vs `RUNTIME_SIGN_PRIVATE_KEY_PEM` |
 | dashboard 起来但 UI 报 "SSE closed during connect" | dashboard 缺 P-009 路由 | `curl http://localhost:9120/openapi.json | jq '.paths | keys' | grep v2`，应该看到 events + rpc |

@@ -5,8 +5,8 @@
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
-#   4. Stages the bundled dashboard frontend + bundled skills. Windows also
-#      stages the bundled hermes-agent-cn runtime zip + manifest.
+#   4. Stages the bundled dashboard frontend, bundled skills, and bundled
+#      hermes-agent-cn runtime zip + manifest for the target platform.
 #   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
 #      env vars are NOT set here; src/process/runtime.rs ships hardcoded
 #      production fallbacks. Set them only if you fork the project and
@@ -27,7 +27,7 @@ on:
         description: "Tag name to associate the build with (e.g. v0.1.0)"
         required: true
       bundled_runtime_tag:
-        description: "hermes-agent-cn runtime release tag to embed in Windows installer, or latest"
+        description: "hermes-agent-cn runtime release tag to embed in desktop installers, or latest"
         default: "latest"
         required: false
 
@@ -42,8 +42,12 @@ jobs:
         include:
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
+            runtime_platform: win32
+            runtime_arch: x64
           - runner: macos-14
             target: aarch64-apple-darwin
+            runtime_platform: darwin
+            runtime_arch: arm64
 
     runs-on: ${{ matrix.runner }}
 
@@ -76,6 +80,8 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'latest' }}
+          RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
+          RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
           node - <<'NODE'
           const fs = require("node:fs");
@@ -84,7 +90,9 @@ jobs:
             const baseUrl = tag === "latest"
               ? "https://github.com/Eynzof/hermes-agent-cn/releases/latest/download"
               : `https://github.com/Eynzof/hermes-agent-cn/releases/download/${encodeURIComponent(tag)}`;
-            const response = await fetch(`${baseUrl}/stable-win32-x64.json`, {
+            const platform = process.env.RUNTIME_PLATFORM;
+            const arch = process.env.RUNTIME_ARCH;
+            const response = await fetch(`${baseUrl}/stable-${platform}-${arch}.json`, {
               headers: { "User-Agent": "hermes-agent-cn-desktop-release-workflow" },
             });
             if (!response.ok) {
@@ -116,8 +124,7 @@ jobs:
         run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
 
       - name: Stage bundled hermes-agent-cn runtime
-        if: matrix.runner == 'windows-latest'
-        run: node scripts/stage-bundled-runtime.mjs --tag "${{ github.event.inputs.bundled_runtime_tag || 'latest' }}" --platform win32 --arch x64
+        run: node scripts/stage-bundled-runtime.mjs --tag "${{ github.event.inputs.bundled_runtime_tag || 'latest' }}" --platform ${{ matrix.runtime_platform }} --arch ${{ matrix.runtime_arch }}
 
       - name: Prepare macOS signing credentials
         if: matrix.runner == 'macos-14'
@@ -158,11 +165,8 @@ jobs:
             安装包已内置来自 hermes-agent-cn
             ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端和内置技能。
 
-            Windows 安装包同时内置 hermes-agent-cn runtime
+            Windows 和 macOS 安装包同时内置 hermes-agent-cn runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。
-
-            macOS 会在首次启动时从以下地址下载 runtime：
-            https://github.com/Eynzof/hermes-agent-cn/releases/latest/download
 
             如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
           releaseDraft: false

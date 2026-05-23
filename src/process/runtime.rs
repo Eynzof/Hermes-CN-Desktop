@@ -25,8 +25,21 @@ const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
 const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
 const BUNDLED_SKILLS_RESOURCE_DIR: &str = "bundled-skills";
 const BUNDLED_SKILLS_DIR: &str = "skills";
-const SMOKE_TIMEOUT: Duration = Duration::from_secs(10);
-static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+const RUNTIME_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+// The release runtime is a PyInstaller-style onefile binary. On a cold macOS
+// launch it has to unpack its embedded Python payload before argparse can even
+// print `dashboard --help`; current arm64 artifacts routinely take ~18s on the
+// first run. Keep the smoke check long enough for the cold path and let normal
+// launches stay fast via the runtime's own cache.
+const SMOKE_TIMEOUT: Duration = Duration::from_secs(60);
+static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .connect_timeout(RUNTIME_HTTP_CONNECT_TIMEOUT)
+        .build()
+        .expect("valid runtime update HTTP client")
+});
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -635,6 +648,22 @@ pub fn current_dashboard_web_dist_dir() -> Option<PathBuf> {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeResourceSyncResult {
+    pub dashboard_web_dist: Option<PathBuf>,
+    pub bundled_skills: Option<PathBuf>,
+}
+
+pub fn sync_runtime_resources_if_available(
+    resource_dir: Option<&Path>,
+) -> Result<RuntimeResourceSyncResult, String> {
+    let Some(current) = read_current_record() else {
+        return Ok(RuntimeResourceSyncResult::default());
+    };
+
+    sync_available_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
+}
+
 pub fn current_bundled_skills_dir() -> Option<PathBuf> {
     let current = read_current_record()?;
     let dir = runtime_bundled_skills_dir(Path::new(&current.path));
@@ -695,6 +724,28 @@ fn sync_runtime_resources_from_resource(
     sync_dashboard_web_dist_from_resource(resource_dir, runtime_dir)?;
     sync_bundled_skills_from_resource(resource_dir, runtime_dir)?;
     Ok(())
+}
+
+fn sync_available_runtime_resources_from_resource(
+    resource_dir: Option<&Path>,
+    runtime_dir: &Path,
+) -> Result<RuntimeResourceSyncResult, String> {
+    let mut result = RuntimeResourceSyncResult::default();
+
+    if let Some(source) = bundled_dashboard_web_dist_dir(resource_dir) {
+        if source.join("index.html").is_file() {
+            result.dashboard_web_dist =
+                sync_dashboard_web_dist_from_resource(resource_dir, runtime_dir)?;
+        }
+    }
+
+    if let Some(source) = bundled_skills_dir(resource_dir) {
+        if contains_skill_markdown(&source) {
+            result.bundled_skills = sync_bundled_skills_from_resource(resource_dir, runtime_dir)?;
+        }
+    }
+
+    Ok(result)
 }
 
 fn bundled_manifest_path(runtime_dir: &Path) -> PathBuf {
@@ -830,7 +881,12 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
         }
     };
 
-    match RUNTIME_HTTP_CLIENT.get(&url).send().await {
+    match RUNTIME_HTTP_CLIENT
+        .get(&url)
+        .timeout(RUNTIME_MANIFEST_HTTP_TIMEOUT)
+        .send()
+        .await
+    {
         Ok(res) if res.status().is_success() => match res.json::<RuntimeUpdateManifest>().await {
             Ok(manifest) => {
                 if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
@@ -1330,7 +1386,12 @@ pub async fn install_runtime_update(
         }
     }
 
-    let artifact = match RUNTIME_HTTP_CLIENT.get(&resolved.artifact_url).send().await {
+    let artifact = match RUNTIME_HTTP_CLIENT
+        .get(&resolved.artifact_url)
+        .timeout(RUNTIME_ARTIFACT_HTTP_TIMEOUT)
+        .send()
+        .await
+    {
         Ok(res) if res.status().is_success() => match res.bytes().await {
             Ok(b) => b.to_vec(),
             Err(e) => {
@@ -2051,6 +2112,58 @@ mod tests {
 
         assert!(err.contains("missing SKILL.md"), "unexpected error: {err}");
         assert!(!runtime.join("_internal").join("skills").exists());
+    }
+
+    #[test]
+    fn sync_available_runtime_resources_from_resource_copies_present_assets() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let web_dist = resource
+            .join(DASHBOARD_RESOURCE_DIR)
+            .join(DASHBOARD_WEB_DIST_DIR);
+        let skills = resource
+            .join(BUNDLED_SKILLS_RESOURCE_DIR)
+            .join("creative")
+            .join("demo");
+        let runtime = dir.path().join("runtime");
+        std::fs::create_dir_all(web_dist.join("assets")).unwrap();
+        std::fs::write(web_dist.join("index.html"), b"<html></html>").unwrap();
+        std::fs::write(web_dist.join("assets").join("app.js"), b"console.log(1)").unwrap();
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::write(skills.join("SKILL.md"), b"---\nname: demo\n---\n").unwrap();
+
+        let synced = sync_available_runtime_resources_from_resource(Some(&resource), &runtime)
+            .expect("sync should succeed");
+
+        let expected_web_dist = runtime
+            .join("_internal")
+            .join("hermes_cli")
+            .join(DASHBOARD_WEB_DIST_DIR);
+        let expected_skills = runtime.join("_internal").join(BUNDLED_SKILLS_DIR);
+        assert_eq!(synced.dashboard_web_dist, Some(expected_web_dist.clone()));
+        assert_eq!(synced.bundled_skills, Some(expected_skills.clone()));
+        assert!(expected_web_dist.join("index.html").is_file());
+        assert!(expected_web_dist.join("assets").join("app.js").is_file());
+        assert!(expected_skills
+            .join("creative")
+            .join("demo")
+            .join("SKILL.md")
+            .is_file());
+    }
+
+    #[test]
+    fn sync_available_runtime_resources_from_resource_is_noop_when_assets_absent() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let runtime = dir.path().join("runtime");
+        std::fs::create_dir_all(&resource).unwrap();
+
+        let synced = sync_available_runtime_resources_from_resource(Some(&resource), &runtime)
+            .expect("missing optional resources should not fail");
+
+        assert!(synced.dashboard_web_dist.is_none());
+        assert!(synced.bundled_skills.is_none());
+        assert!(!runtime.join("_internal").exists());
     }
 
     // -------- find_executable_in --------

@@ -270,6 +270,11 @@ fn main() {
                                  dashboard startup will fail until a managed runtime is installed."
                             );
                         }
+                        if let Err(err) = runtime::sync_runtime_resources_if_available(
+                            resource_dir_for_task.as_deref(),
+                        ) {
+                            log::warn!("Failed to sync bundled runtime resources: {}", err);
+                        }
 
                         emit_runtime_status(
                             &app_handle,
@@ -396,6 +401,7 @@ fn main() {
                         let boot_home_for_task = boot_home_str.clone();
                         let base_for_task = base_str.clone();
                         let profile_for_task = current_profile.clone();
+                        let resource_dir_for_task = bundled_resource_dir.clone();
 
                         tauri::async_runtime::spawn(async move {
                             emit_runtime_status(
@@ -431,6 +437,11 @@ fn main() {
                                     "Installed managed runtime v{}",
                                     installed.runtime_version
                                 );
+                            }
+                            if let Err(err) = runtime::sync_runtime_resources_if_available(
+                                resource_dir_for_task.as_deref(),
+                            ) {
+                                log::warn!("Failed to sync bundled runtime resources: {}", err);
                             }
 
                             emit_runtime_status(
@@ -527,6 +538,11 @@ fn main() {
                          is not configured. PATH `hermes` fallback is disabled; \
                          dashboard startup will fail until a managed runtime is installed."
                         );
+                    }
+                    if let Err(err) =
+                        runtime::sync_runtime_resources_if_available(bundled_resource_dir.as_deref())
+                    {
+                        log::warn!("Failed to sync bundled runtime resources: {}", err);
                     }
 
                     match tauri::async_runtime::block_on(dashboard::ensure_hermes_dashboard(
