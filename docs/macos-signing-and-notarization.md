@@ -64,7 +64,7 @@ APPLE_API_PRIVATE_KEY       AuthKey_<KEY_ID>.p8 的完整文本内容
 
 发版入口是 `.github/workflows/release-desktop.yml`。它在推送 `v*` tag 时运行，也支持手动 `workflow_dispatch` 指定 tag。macOS job 运行在 `macos-14`，目标架构是 `aarch64-apple-darwin`。
 
-流程大致是：先安装 Node、pnpm、Rust 和 Tauri 依赖，再拉取 `hermes-agent-cn` 对应 runtime manifest 的 dashboard 前端与内置技能。随后 macOS job 会把 `APPLE_API_PRIVATE_KEY` 写到 runner 临时目录中的 `AuthKey_<KEY_ID>.p8`，再调用 `tauri-apps/tauri-action` 构建并上传 `.dmg`。
+流程大致是：先安装 Node、pnpm、Rust 和 Tauri 依赖，再拉取 `hermes-agent-cn` 对应 runtime manifest 的 Dashboard 前端、内置技能以及 macOS arm64 runtime zip + manifest。随后 macOS job 会把 `APPLE_API_PRIVATE_KEY` 写到 runner 临时目录中的 `AuthKey_<KEY_ID>.p8`，再调用 `tauri-apps/tauri-action` 构建并上传 `.dmg`。
 
 Tauri 构建结束后，workflow 会对最终 `.dmg` 做一次显式公证、staple 和验证：
 
