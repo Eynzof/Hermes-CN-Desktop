@@ -64,7 +64,7 @@ APPLE_API_PRIVATE_KEY       AuthKey_<KEY_ID>.p8 的完整文本内容
 
 发版入口是 `.github/workflows/release-desktop.yml`。它在推送 `v*` tag 时运行，也支持手动 `workflow_dispatch` 指定 tag。macOS job 运行在 `macos-14`，目标架构是 `aarch64-apple-darwin`。
 
-流程大致是：先安装 Node、pnpm、Rust 和 Tauri 依赖，再拉取 `hermes-agent-cn` 对应 runtime manifest 的 Dashboard 前端、内置技能以及 macOS arm64 runtime manifest，并把 runtime zip 展开成 `Contents/Resources/bundled-runtime/hermes-agent-cn-runtime-darwin-arm64/`。macOS 不能把原始 runtime zip 直接塞进 app 资源里，因为 notary 会递归扫描 zip 内的 `.so`、`Python.framework` 等 Mach-O 文件；展开后让 Tauri 的应用签名流程覆盖这些文件，再对最终 `.dmg` 做公证。
+流程大致是：先安装 Node、pnpm、Rust 和 Tauri 依赖，再拉取 `hermes-agent-cn` 对应 runtime manifest 的 Dashboard 前端、内置技能以及 macOS arm64 runtime manifest，并把 runtime zip 展开成 `Contents/Resources/bundled-runtime/hermes-agent-cn-runtime-darwin-arm64/`。macOS 不能把原始 runtime zip 直接塞进 app 资源里，因为 notary 会递归扫描 zip 内的 `.so`、`Python.framework` 等 Mach-O 文件；展开后的 runtime payload 还要在进入 Tauri 打包前用 Developer ID 重新签名，把上游 PyInstaller 产物里的 ad-hoc 签名替换成带 timestamp 的 Developer ID 签名，然后再对最终 `.dmg` 做公证。
 
 Tauri 构建结束后，workflow 会对最终 `.dmg` 做一次显式公证、staple 和验证：
 
