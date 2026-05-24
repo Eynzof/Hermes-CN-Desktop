@@ -30,6 +30,7 @@ static/bundled-skills/*
 
 # Local logs
 .codex-logs/
+.codex-tmp/
 
 # Runtime release signing private key (gh secret RUNTIME_SIGN_PRIVATE_KEY_PEM)
 .runtime-keys/
