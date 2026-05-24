@@ -5,7 +5,7 @@
 [![web-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml)
 [![rust-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml)
 [![release-desktop](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![License: PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-orange.svg)](./LICENSE)
 
 Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，原生支持Windows与MacOS系统。项目基于 [Tauri v2](https://v2.tauri.app/)、Rust、React 和 TypeScript 构建，包含 [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) 中文社区修改版的 Hermes Agent 内核。
 
@@ -201,4 +201,4 @@ v0.1.1
 
 ## 许可
 
-本项目使用 [MIT License](./LICENSE)。
+本项目的非商业使用遵守 [PolyForm Noncommercial License 1.0.0](./LICENSE)。商业使用、商业分发、商业集成、托管销售或作为商业产品组成部分使用，需提前获得青岛万德缦思网络科技有限公司的单独商业授权；授权联系邮箱：lijiale@wanderminds.cn。
