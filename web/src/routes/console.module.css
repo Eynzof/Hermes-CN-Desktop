@@ -1,0 +1,314 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  min-height: 100%;
+}
+
+.mainColumn {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sideColumn {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.topActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondaryButton,
+.dangerButton {
+  border: 1px solid var(--h-line);
+  border-radius: 10px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--h-bg-chip);
+  color: var(--h-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.secondaryButton:hover,
+.dangerButton:hover:not(:disabled) {
+  color: var(--h-text);
+  border-color: rgba(255, 122, 61, 0.42);
+}
+
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.summaryCard,
+.terminalCard,
+.panel,
+.errorBox {
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-surface);
+  border-radius: 18px;
+  box-shadow: var(--h-shadow-soft);
+}
+
+.summaryCard {
+  padding: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.eyebrow {
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  color: var(--h-accent);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.summaryCard h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+  color: var(--h-text);
+}
+
+.summaryCard p {
+  margin: 0;
+  max-width: 640px;
+  color: var(--h-text-2);
+  line-height: 1.65;
+  font-size: 13px;
+}
+
+.summaryStats {
+  display: grid;
+  gap: 8px;
+}
+
+.summaryStats div {
+  border: 1px solid var(--h-line-soft);
+  border-radius: 13px;
+  background: var(--h-bg-pane);
+  padding: 10px 12px;
+}
+
+.summaryStats span {
+  display: block;
+  color: var(--h-text-3);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.summaryStats strong {
+  display: block;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminalCard {
+  overflow: hidden;
+  height: clamp(520px, 58vh, 720px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminalHeader {
+  height: 42px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--h-line);
+  background: var(--h-bg-pane);
+}
+
+.terminalTitle,
+.terminalMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--h-text-2);
+  font-size: 12px;
+}
+
+.terminalTitle {
+  color: var(--h-text);
+  font-weight: 600;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d7a84d;
+  box-shadow: 0 0 0 3px rgba(215, 168, 77, 0.15);
+}
+
+.terminalCard[data-status="ready"] .statusDot {
+  background: #7fc083;
+  box-shadow: 0 0 0 3px rgba(127, 192, 131, 0.16);
+}
+
+.terminalCard[data-status="error"] .statusDot,
+.terminalCard[data-status="closed"] .statusDot,
+.terminalCard[data-status="unsupported"] .statusDot {
+  background: #d76f54;
+  box-shadow: 0 0 0 3px rgba(215, 111, 84, 0.15);
+}
+
+.terminalSurface {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #080807;
+  padding: 12px;
+}
+
+.terminalSurface :global(.xterm) {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.terminalSurface :global(.xterm-viewport) {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.terminalSurface :global(.xterm-screen),
+.terminalSurface :global(.xterm-viewport) {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.terminalSurface :global(.xterm-rows) {
+  width: 100%;
+}
+
+.panel {
+  padding: 16px;
+}
+
+.panelTitle {
+  color: var(--h-text);
+  font-weight: 650;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.commandList {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.commandCard {
+  border: 1px solid var(--h-line-soft);
+  border-radius: 14px;
+  background: var(--h-bg-pane);
+  color: var(--h-text-2);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 7px;
+}
+
+.commandCard:hover:not(:disabled),
+.commandCard[data-active="true"] {
+  border-color: rgba(255, 122, 61, 0.42);
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.commandCard:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.commandCardHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--h-text);
+  font-weight: 650;
+  font-size: 12.5px;
+}
+
+.commandCard code,
+.helpText code {
+  font-family: var(--h-font-mono);
+  color: var(--h-accent);
+  background: rgba(255, 122, 61, 0.1);
+  border: 1px solid rgba(255, 122, 61, 0.16);
+  border-radius: 6px;
+  padding: 2px 5px;
+}
+
+.commandCard code {
+  display: inline-block;
+  width: fit-content;
+  font-size: 11px;
+}
+
+.commandCard span:last-child,
+.helpText {
+  color: var(--h-text-3);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.helpText + .helpText {
+  margin-top: 10px;
+}
+
+.errorBox {
+  padding: 12px 14px;
+  color: #ffd1c2;
+  background: rgba(215, 111, 84, 0.1);
+  border-color: rgba(215, 111, 84, 0.24);
+  font-size: 12px;
+}
+
+@media (max-width: 1320px) {
+  .commandList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .layout,
+  .summaryCard,
+  .sideColumn {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .commandList {
+    grid-template-columns: 1fr;
+  }
+}

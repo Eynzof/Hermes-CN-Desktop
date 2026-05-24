@@ -650,6 +650,10 @@ fn main() {
             commands::ui_store::ui_store_record_turn_stats,
             commands::ui_store::ui_store_get_turn_stats,
             commands::ui_store::ui_store_record_event,
+            commands::terminal::terminal_start,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_close,
         ])
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::Destroyed = event {
