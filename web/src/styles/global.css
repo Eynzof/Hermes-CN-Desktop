@@ -43,16 +43,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-body[data-hermes-window-type="tauri"][data-hermes-host-os="macos"] {
-  /*
-   * macOS transparent title bars place the WebView under the native window
-   * control area. AppShell and AppTopBar already consume this variable; keep
-   * the offset here so browser previews and non-macOS desktop builds stay
-   * unchanged.
-   */
-  --h-window-control-safe-top: 28px;
-}
-
 :where(p, li, blockquote, dd, dt) {
   text-spacing-trim: trim-start;
   text-autospace: ideograph-alpha ideograph-numeric;
