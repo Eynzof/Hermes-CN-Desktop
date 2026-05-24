@@ -24,7 +24,15 @@ import type {
   SwitchProfileInput,
   SwitchProfileResult,
 } from "@hermes/protocol";
-import type { SkillMarkdownResult, UiEventInput, UiStoreSnapshot, UiTurnStats } from "./runtime";
+import type {
+  SkillMarkdownResult,
+  TerminalEventPayload,
+  TerminalStartInput,
+  TerminalStartResult,
+  UiEventInput,
+  UiStoreSnapshot,
+  UiTurnStats,
+} from "./runtime";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
 
@@ -211,6 +219,40 @@ const tauriBridge = {
   async uiStoreRecordEvent(input: UiEventInput): Promise<boolean> {
     const inv = await ensureInvoke();
     return inv("ui_store_record_event", { input });
+  },
+
+  async terminalStart(input: TerminalStartInput): Promise<TerminalStartResult> {
+    const inv = await ensureInvoke();
+    return inv("terminal_start", { input });
+  },
+
+  async terminalWrite(input: { terminalId: string; data: string }): Promise<boolean> {
+    const inv = await ensureInvoke();
+    return inv("terminal_write", { input });
+  },
+
+  async terminalResize(input: { terminalId: string; cols: number; rows: number }): Promise<boolean> {
+    const inv = await ensureInvoke();
+    return inv("terminal_resize", { input });
+  },
+
+  async terminalClose(input: { terminalId: string }): Promise<boolean> {
+    const inv = await ensureInvoke();
+    return inv("terminal_close", { input });
+  },
+
+  onTerminalOutput(handler: (event: TerminalEventPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen<TerminalEventPayload>("terminal-output", (event) => {
+        handler(event.payload);
+      }).then((fn) => {
+        unlisten = fn;
+      });
+    });
+    return () => {
+      unlisten?.();
+    };
   },
 
   onSystemResume(handler: () => void): () => void {
@@ -401,6 +443,7 @@ export async function installTauriBridge(): Promise<void> {
   window.__HERMES_RUNTIME__ = {
     platform: "tauri" as const,
     apiBaseUrl: isDevMode ? undefined : config.apiBaseUrl,
+    dashboardApiBaseUrl: config.apiBaseUrl,
     gatewayUrl: isDevMode ? undefined : config.gatewayUrl,
     sessionToken: isDevMode ? undefined : config.sessionToken,
     currentProfile: config.currentProfile,

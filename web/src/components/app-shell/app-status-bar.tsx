@@ -30,13 +30,25 @@ function tilde(path: string | undefined): string {
   return path.replace(/\\/g, "/");
 }
 
-function portFromHealthUrl(url: string | null | undefined): string {
-  if (!url) return DEFAULT_DESKTOP_DASHBOARD_PORT;
+function portFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
   try {
-    return new URL(url).port || DEFAULT_DESKTOP_DASHBOARD_PORT;
+    return new URL(url).port || null;
   } catch {
-    return DEFAULT_DESKTOP_DASHBOARD_PORT;
+    return null;
   }
+}
+
+function dashboardPortFallback(): string {
+  if (typeof window === "undefined") return DEFAULT_DESKTOP_DASHBOARD_PORT;
+  return portFromUrl(window.__HERMES_RUNTIME__?.dashboardApiBaseUrl)
+    ?? portFromUrl(window.__HERMES_RUNTIME__?.apiBaseUrl)
+    ?? portFromUrl(import.meta.env.VITE_HERMES_DASHBOARD_ORIGIN)
+    ?? DEFAULT_DESKTOP_DASHBOARD_PORT;
+}
+
+function portFromHealthUrl(url: string | null | undefined): string {
+  return portFromUrl(url) ?? dashboardPortFallback();
 }
 
 export function AppStatusBar() {

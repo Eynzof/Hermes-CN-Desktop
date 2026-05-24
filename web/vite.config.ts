@@ -246,6 +246,7 @@ export default defineConfig({
   define: {
     "import.meta.env.VITE_HERMES_BUILD_COMMIT": JSON.stringify(gitShortCommit()),
     "import.meta.env.VITE_HERMES_DESKTOP_VERSION": JSON.stringify(desktopAppVersion()),
+    "import.meta.env.VITE_HERMES_DASHBOARD_ORIGIN": JSON.stringify(API_PROXY_TARGET),
   },
   resolve: {
     alias: {

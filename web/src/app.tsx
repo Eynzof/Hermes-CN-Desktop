@@ -18,6 +18,7 @@ import { McpRoute } from "@/routes/mcp";
 import { ProfilesRoute } from "@/routes/profiles";
 import { MemoryRoute } from "@/routes/memory";
 import { CronRoute } from "@/routes/cron";
+import { ConsoleRoute } from "@/routes/console";
 import { HealthRoute } from "@/routes/health";
 import { LogsRoute } from "@/routes/logs";
 import { DebugRoute } from "@/routes/debug";
@@ -57,6 +58,7 @@ export function App() {
           <Route path="/memory" element={<MemoryRoute />} />
           <Route path="/cron" element={<CronRoute />} />
           <Route path="/im/*" element={<ErrorBoundary><ImOnboardingRoute /></ErrorBoundary>} />
+          <Route path="/console" element={<ConsoleRoute />} />
           <Route path="/health" element={<HealthRoute />} />
           <Route path="/analytics" element={<AnalyticsRoute />} />
           <Route path="/logs" element={<LogsRoute />} />

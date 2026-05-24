@@ -25,7 +25,14 @@ export function ModelOnboardingGuard() {
     setDismissed(false);
   }, [configured]);
 
-  if (isLoading || isError || configured || dismissed || location.pathname.startsWith("/models")) {
+  if (
+    isLoading ||
+    isError ||
+    configured ||
+    dismissed ||
+    location.pathname.startsWith("/models") ||
+    location.pathname.startsWith("/console")
+  ) {
     return null;
   }
 

@@ -8,6 +8,7 @@ import {
   Cpu,
   Puzzle,
   Sparkles,
+  TerminalSquare,
   type LucideIcon,
 } from "lucide-react";
 import s from "./debug-sidebar.module.css";
@@ -29,6 +30,7 @@ const CONFIG_ITEMS: readonly CapabilityItem[] = [
   },
   { label: "技能", path: "/skills", icon: Sparkles },
   { label: "MCP", path: "/mcp", icon: Puzzle },
+  { label: "终端", path: "/console", icon: TerminalSquare, title: "Hermes Console：直接运行 Hermes 命令" },
   { label: "记忆", path: "/memory", icon: Brain },
 ];
 

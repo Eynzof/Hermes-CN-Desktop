@@ -121,6 +121,35 @@ export interface UiEventInput {
   appVersion?: string;
 }
 
+export interface TerminalStartInput {
+  purpose?: "shell" | "gatewaySetup" | "gatewayStatus";
+  cwd?: string;
+  cols?: number;
+  rows?: number;
+  initialInput?: string;
+}
+
+export interface TerminalStartResult {
+  terminalId: string;
+  cwd: string;
+  shell: string;
+  profile: string;
+  hermesHome: string;
+  managedRuntime?: {
+    runtimeVersion: string;
+    executablePath: string;
+    shimDir: string;
+  } | null;
+}
+
+export interface TerminalEventPayload {
+  terminalId: string;
+  kind: "data" | "exit" | "error";
+  data?: string;
+  exitCode?: number | null;
+  message?: string | null;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -128,6 +157,8 @@ declare global {
     __HERMES_RUNTIME__?: {
       platform?: RuntimePlatform;
       apiBaseUrl?: string;
+      /** Actual dashboard API origin even in Vite dev, where apiBaseUrl is intentionally hidden. */
+      dashboardApiBaseUrl?: string;
       gatewayUrl?: string;
       sessionToken?: string;
       currentProfile?: string;
@@ -165,6 +196,11 @@ declare global {
       uiStoreRecordTurnStats?(input: UiTurnStats): Promise<boolean>;
       uiStoreGetTurnStats?(input: { sessionId: string }): Promise<UiTurnStats[]>;
       uiStoreRecordEvent?(input: UiEventInput): Promise<boolean>;
+      terminalStart?(input: TerminalStartInput): Promise<TerminalStartResult>;
+      terminalWrite?(input: { terminalId: string; data: string }): Promise<boolean>;
+      terminalResize?(input: { terminalId: string; cols: number; rows: number }): Promise<boolean>;
+      terminalClose?(input: { terminalId: string }): Promise<boolean>;
+      onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
       onSystemResume?(handler: () => void): () => void;
     };
   }

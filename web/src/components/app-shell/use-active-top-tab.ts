@@ -38,7 +38,8 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/models") ||
       path.startsWith("/memory") ||
       path.startsWith("/cron") ||
-      path.startsWith("/im"),
+      path.startsWith("/im") ||
+      path.startsWith("/console"),
   },
   {
     id: "advanced",
