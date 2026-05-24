@@ -1296,8 +1296,7 @@ fn validate_managed_gateway_target(
     if let Some(marker_home) = dashboard_home {
         if !same_path(marker_home, hermes_home) {
             return Err(
-                "拒绝重启 Gateway：dashboard 所属 HERMES_HOME 与当前 profile 不一致。"
-                    .to_string(),
+                "拒绝重启 Gateway：dashboard 所属 HERMES_HOME 与当前 profile 不一致。".to_string(),
             );
         }
     }
@@ -1409,13 +1408,22 @@ async fn restart_gateway(state: &State<'_, AppState>, requested: bool) -> ImRest
         Ok(inner) => (
             inner.api_base_url.clone(),
             inner.hermes_home.clone(),
-            inner.dashboard_handle.as_ref().map(|handle| handle.owns_process).unwrap_or(false),
+            inner
+                .dashboard_handle
+                .as_ref()
+                .map(|handle| handle.owns_process)
+                .unwrap_or(false),
             inner.dashboard_handle.as_ref().and_then(|handle| {
                 handle
                     .ownership_marker_path
                     .as_ref()
                     .and_then(|path| fs::read_to_string(path).ok())
-                    .and_then(|content| serde_json::from_str::<crate::process::dashboard::DashboardOwnershipMarker>(&content).ok())
+                    .and_then(|content| {
+                        serde_json::from_str::<crate::process::dashboard::DashboardOwnershipMarker>(
+                            &content,
+                        )
+                        .ok()
+                    })
                     .map(|marker| marker.hermes_home)
             }),
         ),
@@ -1647,13 +1655,8 @@ mod tests {
     fn managed_gateway_target_rejects_global_9119() {
         let dir = TempDir::new().unwrap();
         let home = dir.path().to_str().unwrap();
-        let err = validate_managed_gateway_target(
-            "http://127.0.0.1:9119",
-            true,
-            Some(home),
-            home,
-        )
-        .unwrap_err();
+        let err = validate_managed_gateway_target("http://127.0.0.1:9119", true, Some(home), home)
+            .unwrap_err();
         assert!(err.contains("非桌面端 managed runtime"));
     }
 
@@ -1661,13 +1664,8 @@ mod tests {
     fn managed_gateway_target_rejects_unowned_dashboard() {
         let dir = TempDir::new().unwrap();
         let home = dir.path().to_str().unwrap();
-        let err = validate_managed_gateway_target(
-            "http://127.0.0.1:9120",
-            false,
-            Some(home),
-            home,
-        )
-        .unwrap_err();
+        let err = validate_managed_gateway_target("http://127.0.0.1:9120", false, Some(home), home)
+            .unwrap_err();
         assert!(err.contains("不是桌面端托管进程"));
     }
 
@@ -1689,8 +1687,7 @@ mod tests {
     fn managed_gateway_target_accepts_owned_runtime_dashboard() {
         let dir = TempDir::new().unwrap();
         let home = dir.path().to_str().unwrap();
-        validate_managed_gateway_target("http://127.0.0.1:9120", true, Some(home), home)
-            .unwrap();
+        validate_managed_gateway_target("http://127.0.0.1:9120", true, Some(home), home).unwrap();
     }
 
     #[tokio::test]
