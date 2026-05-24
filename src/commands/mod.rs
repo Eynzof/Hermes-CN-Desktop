@@ -1,6 +1,7 @@
 pub mod api_proxy;
 pub mod file_dialogs;
 pub mod gateway;
+pub mod im_onboarding;
 pub mod memory;
 pub mod profiles;
 pub mod runtime_manager;

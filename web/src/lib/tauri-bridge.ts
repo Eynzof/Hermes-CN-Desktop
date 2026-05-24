@@ -10,6 +10,14 @@ import type {
   ApiRequestResult,
   FilePickerResult,
   FileUploadInput,
+  ImOnboardingApplyInput,
+  ImOnboardingApplyResult,
+  ImOnboardingBeginInput,
+  ImOnboardingBeginResult,
+  ImOnboardingPollInput,
+  ImOnboardingPollResult,
+  ImOnboardingStateInput,
+  ImOnboardingStateResult,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -123,6 +131,26 @@ const tauriBridge = {
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {
     const inv = await ensureInvoke();
     return inv("switch_profile", { input });
+  },
+
+  async imOnboardingState(input: ImOnboardingStateInput): Promise<ImOnboardingStateResult> {
+    const inv = await ensureInvoke();
+    return inv("im_onboarding_state", { input });
+  },
+
+  async imOnboardingBegin(input: ImOnboardingBeginInput): Promise<ImOnboardingBeginResult> {
+    const inv = await ensureInvoke();
+    return inv("im_onboarding_begin", { input });
+  },
+
+  async imOnboardingPoll(input: ImOnboardingPollInput): Promise<ImOnboardingPollResult> {
+    const inv = await ensureInvoke();
+    return inv("im_onboarding_poll", { input });
+  },
+
+  async imOnboardingApply(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult> {
+    const inv = await ensureInvoke();
+    return inv("im_onboarding_apply", { input });
   },
 
   async readSkillMarkdown(input: { name: string }): Promise<SkillMarkdownResult> {

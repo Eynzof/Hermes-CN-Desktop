@@ -86,6 +86,7 @@ const PROFILE_AWARE_QUERY_KEYS = [
   "sessions-search",
   "cron-jobs",
   "analytics",
+  "im-onboarding",
 ] as const;
 
 // Mutation result distinguishes the two switching strategies for callers

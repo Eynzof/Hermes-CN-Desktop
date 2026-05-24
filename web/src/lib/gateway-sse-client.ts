@@ -67,7 +67,7 @@ interface RpcAsyncAck {
 interface PendingRpcResponse {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
+  timer: number;
 }
 
 function isAsyncAck(result: unknown): result is RpcAsyncAck {
