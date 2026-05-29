@@ -45,15 +45,7 @@ async fn install_bundled_runtime_for_bootstrap(
             .error
             .clone()
             .unwrap_or_else(|| "unknown bundled runtime install error".into());
-        log::error!("Bundled runtime install failed: {}", msg);
-        {
-            use tauri::Manager;
-            let state = app.state::<AppState>();
-            if let Ok(mut inner) = state.inner.lock() {
-                inner.last_runtime_error = Some(format!("内置 runtime 安装失败: {}", msg));
-            };
-        }
-        emit_runtime_status(app, "error", &format!("内置 runtime 安装失败: {}", msg));
+        record_bootstrap_error(app, format!("内置 runtime 安装失败: {}", msg));
         return false;
     }
 
@@ -64,6 +56,141 @@ async fn install_bundled_runtime_for_bootstrap(
         );
     }
     true
+}
+
+/// Build a `DashboardHandle` describing an externally-managed dev dashboard we
+/// merely attach to (and never spawn or own).
+fn external_dev_handle(api_base_url: String) -> DashboardHandle {
+    DashboardHandle {
+        api_base_url,
+        owns_process: false,
+        command_program: None,
+        command_args: vec![],
+        gateway_runtime_dir: None,
+        gateway_lock_dir: None,
+        ownership_marker_path: None,
+        ownership_state: Some("external-dev".to_string()),
+        job_handle: None,
+        child: None,
+    }
+}
+
+/// Record a fatal bootstrap error: log it, stash it in AppState for the UI to
+/// read, and emit a "runtime-status" error event. Returns the message so
+/// callers can write `return Err(record_bootstrap_error(...))`.
+fn record_bootstrap_error(app: &tauri::AppHandle, message: String) -> String {
+    use tauri::Manager;
+    log::error!("{}", message);
+    let state = app.state::<AppState>();
+    if let Ok(mut inner) = state.inner.lock() {
+        inner.last_runtime_error = Some(message.clone());
+    }
+    emit_runtime_status(app, "error", &message);
+    message
+}
+
+/// Install the managed runtime if needed, sync bundled resources, and ensure
+/// the dashboard process is running. Shared by every (non-external) bootstrap
+/// path. On failure the error is surfaced via `record_bootstrap_error` and
+/// returned as `Err`.
+///
+/// `install_bundled` controls whether the bundled-runtime install runs here;
+/// the synchronous fallback already does it up front and passes `false`.
+async fn acquire_managed_dashboard(
+    app: &tauri::AppHandle,
+    options: dashboard::EnsureDashboardOptions,
+    resource_dir: Option<PathBuf>,
+    install_bundled: bool,
+) -> Result<DashboardHandle, String> {
+    if install_bundled && !install_bundled_runtime_for_bootstrap(app, resource_dir.as_deref()).await
+    {
+        // install_bundled_runtime_for_bootstrap already recorded the error.
+        return Err("bundled runtime install failed".to_string());
+    }
+
+    let info = runtime::get_runtime_info(None);
+    if info.current.is_none() && info.updates_configured {
+        emit_runtime_status(app, "installing", "正在下载 hermes-agent-cn runtime...");
+        log::info!("Bootstrap: install_runtime_update");
+        let install = runtime::install_runtime_update(None).await;
+        if !install.ok {
+            let msg = install
+                .error
+                .unwrap_or_else(|| "unknown install error".into());
+            return Err(record_bootstrap_error(
+                app,
+                format!("runtime 安装失败: {}", msg),
+            ));
+        }
+        if let Some(installed) = &install.installed {
+            log::info!("Installed managed runtime v{}", installed.runtime_version);
+        }
+    } else if info.current.is_none() {
+        log::warn!(
+            "No managed runtime installed and update channel is not configured. \
+             PATH `hermes` fallback is disabled; dashboard startup will fail \
+             until a managed runtime is installed."
+        );
+    }
+
+    if let Err(err) = runtime::sync_runtime_resources_if_available(resource_dir.as_deref()) {
+        log::warn!("Failed to sync bundled runtime resources: {}", err);
+    }
+
+    emit_runtime_status(app, "starting-dashboard", "正在启动 dashboard...");
+    dashboard::ensure_hermes_dashboard(options)
+        .await
+        .map_err(|e| record_bootstrap_error(app, format!("dashboard 启动失败: {}", e)))
+}
+
+/// Finish bootstrap once a dashboard handle is available: warn if SSE is
+/// unsupported, fetch the session token, build the gateway URL, populate
+/// AppState, and emit the "ready" event the frontend waits on.
+async fn finalize_bootstrap(
+    app: &tauri::AppHandle,
+    handle: DashboardHandle,
+    hermes_home: String,
+    hermes_home_base: String,
+    profile: String,
+) {
+    use tauri::Manager;
+
+    // The desktop's default transport is SSE; if the dashboard lacks
+    // `/api/v2/events` the UI hits "SSE closed during connect" the moment it
+    // sends a message. Surface a clear warning so bug reports name the root
+    // cause rather than chasing the opaque error.
+    if !dashboard::dashboard_supports_sse(&handle.api_base_url).await {
+        log::error!(
+            "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
+             SSE transport will fail; set HERMES_TRANSPORT=ws in the UI store \
+             as a workaround, or upgrade the agent to a hermes-agent-cn build \
+             with the P-009 patch applied. See \
+             https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
+            handle.api_base_url
+        );
+    }
+
+    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
+    let session_token = match env_token {
+        Some(t) => Some(t),
+        None => dashboard::fetch_session_token(&handle.api_base_url).await,
+    };
+    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
+
+    {
+        let state = app.state::<AppState>();
+        let mut inner = state.inner.lock().unwrap();
+        inner.api_base_url = handle.api_base_url.clone();
+        inner.gateway_url = gateway_url;
+        inner.hermes_home = hermes_home;
+        inner.hermes_home_base = hermes_home_base;
+        inner.session_token = session_token;
+        inner.current_profile = profile;
+        inner.dashboard_handle = Some(handle);
+    }
+
+    emit_runtime_status(app, "ready", "");
+    log::info!("Hermes Agent 中文社区桌面版 ready");
 }
 
 fn shutdown_owned_runtime(app: &tauri::AppHandle, reason: &str) {
@@ -170,29 +297,43 @@ fn main() {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(dashboard::DEFAULT_DESKTOP_DASHBOARD_PORT);
 
-            // 4. Bootstrap dashboard outside setup's critical path so the
-            // window can appear immediately. Set HERMES_DESKTOP_SYNC_BOOTSTRAP
-            // only as an emergency fallback to the old blocking path.
+            // 4. Bootstrap mode flags. The window appears immediately; the
+            // dashboard is brought up off the critical path unless the
+            // emergency HERMES_DESKTOP_SYNC_BOOTSTRAP fallback is set.
             let is_dev = std::env::var("HERMES_DESKTOP_DEV_URL").is_ok() || cfg!(debug_assertions);
             let async_bootstrap = std::env::var("HERMES_DESKTOP_SYNC_BOOTSTRAP").is_err();
             let external_dev_dashboard = is_dev && dashboard::dev_external_dashboard_enabled();
             let allow_external_agent = dashboard::external_agent_allowed();
             let allow_port_fallback = !is_dev;
 
-            if async_bootstrap {
-                {
-                    let mut inner = state.inner.lock().unwrap();
-                    inner.hermes_home = boot_home_str.clone();
-                    inner.hermes_home_base = base_str.clone();
-                    inner.current_profile = current_profile.clone();
-                }
+            // Seed AppState with the static fields the UI needs while it waits
+            // (HERMES_HOME, profile name). finalize_bootstrap fills in the rest
+            // — apiBaseUrl/gatewayUrl/token — once the dashboard is up. The
+            // bridge waits on the `runtime-status` "ready" event before mounting
+            // the React app. See web/src/lib/tauri-bridge.ts.
+            {
+                let mut inner = state.inner.lock().unwrap();
+                inner.hermes_home = boot_home_str.clone();
+                inner.hermes_home_base = base_str.clone();
+                inner.current_profile = current_profile.clone();
+            }
 
+            let options = dashboard::EnsureDashboardOptions {
+                host: host.clone(),
+                port,
+                hermes_home: boot_home_str.clone(),
+                allow_external_agent,
+                allow_port_fallback,
+            };
+
+            // --- Default path: bring the dashboard up in the background. ---
+            if async_bootstrap {
                 let app_handle = app.handle().clone();
+                let resource_dir = bundled_resource_dir.clone();
                 let host_for_task = host.clone();
                 let boot_home_for_task = boot_home_str.clone();
                 let base_for_task = base_str.clone();
                 let profile_for_task = current_profile.clone();
-                let resource_dir_for_task = bundled_resource_dir.clone();
 
                 tauri::async_runtime::spawn(async move {
                     let handle = if external_dev_dashboard {
@@ -203,420 +344,114 @@ fn main() {
                                 api_base_url
                             );
                         }
-                        DashboardHandle {
-                            api_base_url,
-                            owns_process: false,
-                            command_program: None,
-                            command_args: vec![],
-                            gateway_runtime_dir: None,
-                            gateway_lock_dir: None,
-                            ownership_marker_path: None,
-                            ownership_state: Some("external-dev".to_string()),
-                            job_handle: None,
-                            child: None,
-                        }
+                        external_dev_handle(api_base_url)
                     } else {
-                        if !install_bundled_runtime_for_bootstrap(
-                            &app_handle,
-                            resource_dir_for_task.as_deref(),
-                        )
-                        .await
-                        {
-                            return;
-                        }
-
-                        let info = runtime::get_runtime_info(None);
-                        let needs_install = info.current.is_none() && info.updates_configured;
-
-                        if needs_install {
-                            emit_runtime_status(
-                                &app_handle,
-                                "installing",
-                                "正在下载 hermes-agent-cn runtime...",
-                            );
-                            log::info!("Background bootstrap: install_runtime_update");
-                            let install = runtime::install_runtime_update(None).await;
-                            if !install.ok {
-                                let msg = install
-                                    .error
-                                    .clone()
-                                    .unwrap_or_else(|| "unknown install error".into());
-                                log::error!("Bootstrap install failed: {}", msg);
-                                {
-                                    use tauri::Manager;
-                                    let state = app_handle.state::<AppState>();
-                                    if let Ok(mut inner) = state.inner.lock() {
-                                        inner.last_runtime_error =
-                                            Some(format!("runtime 安装失败: {}", msg));
-                                    };
-                                }
-                                emit_runtime_status(
-                                    &app_handle,
-                                    "error",
-                                    &format!("runtime 安装失败: {}", msg),
-                                );
-                                return;
-                            }
-                            if let Some(installed) = &install.installed {
-                                log::info!(
-                                    "Installed managed runtime v{}",
-                                    installed.runtime_version
-                                );
-                            }
-                        } else if info.current.is_none() {
-                            log::warn!(
-                                "No managed runtime installed and update channel \
-                                 is not configured. PATH `hermes` fallback is disabled; \
-                                 dashboard startup will fail until a managed runtime is installed."
-                            );
-                        }
-                        if let Err(err) = runtime::sync_runtime_resources_if_available(
-                            resource_dir_for_task.as_deref(),
-                        ) {
-                            log::warn!("Failed to sync bundled runtime resources: {}", err);
-                        }
-
-                        emit_runtime_status(
-                            &app_handle,
-                            "starting-dashboard",
-                            "正在启动 dashboard...",
-                        );
-                        match dashboard::ensure_hermes_dashboard(
-                            dashboard::EnsureDashboardOptions {
-                                host: host_for_task,
-                                port,
-                                hermes_home: boot_home_for_task.clone(),
-                                allow_external_agent,
-                                allow_port_fallback,
-                            },
-                        )
-                        .await
+                        match acquire_managed_dashboard(&app_handle, options, resource_dir, true)
+                            .await
                         {
                             Ok(h) => h,
-                            Err(e) => {
-                                log::error!("Bootstrap dashboard ensure failed: {}", e);
-                                let msg = format!("dashboard 启动失败: {}", e);
-                                {
-                                    use tauri::Manager;
-                                    let state = app_handle.state::<AppState>();
-                                    if let Ok(mut inner) = state.inner.lock() {
-                                        inner.last_runtime_error = Some(msg.clone());
-                                    };
-                                }
-                                emit_runtime_status(&app_handle, "error", &msg);
-                                return;
-                            }
+                            // Error already surfaced to the UI via runtime-status.
+                            Err(_) => return,
                         }
                     };
 
-                    if !dashboard::dashboard_supports_sse(&handle.api_base_url).await {
-                        log::error!(
-                            "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
-                             SSE transport will fail; set HERMES_TRANSPORT=ws in the \
-                             UI store as a workaround, or upgrade the agent \
-                             to a hermes-agent-cn build with the P-009 patch applied. \
-                             See https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
-                            handle.api_base_url
-                        );
-                    }
-
-                    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-                    let session_token = match env_token {
-                        Some(t) => Some(t),
-                        None => dashboard::fetch_session_token(&handle.api_base_url).await,
-                    };
-                    let gateway_url = dashboard::build_gateway_url(
-                        &handle.api_base_url,
-                        session_token.as_deref(),
-                    );
-
-                    {
-                        use tauri::Manager;
-                        let state = app_handle.state::<AppState>();
-                        let mut inner = state.inner.lock().unwrap();
-                        inner.api_base_url = handle.api_base_url.clone();
-                        inner.gateway_url = gateway_url;
-                        inner.hermes_home = boot_home_for_task;
-                        inner.hermes_home_base = base_for_task;
-                        inner.session_token = session_token;
-                        inner.current_profile = profile_for_task;
-                        inner.dashboard_handle = Some(handle);
-                    }
-
-                    emit_runtime_status(&app_handle, "ready", "");
-                    log::info!("Hermes Agent 中文社区桌面版 ready");
+                    finalize_bootstrap(
+                        &app_handle,
+                        handle,
+                        boot_home_for_task,
+                        base_for_task,
+                        profile_for_task,
+                    )
+                    .await;
                 });
 
                 log::info!("Hermes Agent 中文社区桌面版 bootstrapping in background");
-                Ok(())
-            } else {
-                let handle = if external_dev_dashboard {
-                    let api_base_url = dashboard::dashboard_base_url(&host, port);
-                    let alive =
-                        tauri::async_runtime::block_on(dashboard::probe_dashboard(&api_base_url));
-                    if !alive {
-                        log::warn!(
-                            "External dev dashboard mode: dashboard not reachable at {}",
-                            api_base_url
-                        );
-                    }
-                    DashboardHandle {
-                        api_base_url,
-                        owns_process: false,
-                        command_program: None,
-                        command_args: vec![],
-                        gateway_runtime_dir: None,
-                        gateway_lock_dir: None,
-                        ownership_marker_path: None,
-                        ownership_state: Some("external-dev".to_string()),
-                        job_handle: None,
-                        child: None,
-                    }
-                } else {
-                    if !tauri::async_runtime::block_on(install_bundled_runtime_for_bootstrap(
-                        app.handle(),
-                        bundled_resource_dir.as_deref(),
-                    )) {
-                        return Ok(());
-                    }
+                return Ok(());
+            }
 
-                    let info = runtime::get_runtime_info(None);
-                    let needs_install = info.current.is_none() && info.updates_configured;
-
-                    if needs_install {
-                        // First-run with the update channel configured but no
-                        // managed runtime on disk yet. The honest UX is "open the
-                        // window now, show progress, finish boot in the background"
-                        // rather than freezing for 10-30s on the first launch.
-                        //
-                        // We seed AppState with only the static fields the UI
-                        // needs while it waits (HERMES_HOME, profile name), spawn
-                        // a task to do install → ensure → token → state update,
-                        // and emit `runtime-status` events the frontend's overlay
-                        // listens for. The webview shows a Chinese-language
-                        // status screen until the task emits phase="ready".
-                        // See web/src/lib/tauri-bridge.ts.
-                        let app_handle = app.handle().clone();
-                        let host_for_task = host.clone();
-                        let boot_home_for_task = boot_home_str.clone();
-                        let base_for_task = base_str.clone();
-                        let profile_for_task = current_profile.clone();
-                        let resource_dir_for_task = bundled_resource_dir.clone();
-
-                        tauri::async_runtime::spawn(async move {
-                            emit_runtime_status(
-                                &app_handle,
-                                "installing",
-                                "正在下载 hermes-agent-cn runtime...",
-                            );
-                            log::info!("Background bootstrap: install_runtime_update");
-                            let install = runtime::install_runtime_update(None).await;
-                            if !install.ok {
-                                let msg = install
-                                    .error
-                                    .clone()
-                                    .unwrap_or_else(|| "unknown install error".into());
-                                log::error!("Bootstrap install failed: {}", msg);
-                                {
-                                    use tauri::Manager;
-                                    let state = app_handle.state::<AppState>();
-                                    if let Ok(mut inner) = state.inner.lock() {
-                                        inner.last_runtime_error =
-                                            Some(format!("runtime 安装失败: {}", msg));
-                                    };
-                                }
-                                emit_runtime_status(
-                                    &app_handle,
-                                    "error",
-                                    &format!("runtime 安装失败: {}", msg),
-                                );
-                                return;
-                            }
-                            if let Some(installed) = &install.installed {
-                                log::info!(
-                                    "Installed managed runtime v{}",
-                                    installed.runtime_version
-                                );
-                            }
-                            if let Err(err) = runtime::sync_runtime_resources_if_available(
-                                resource_dir_for_task.as_deref(),
-                            ) {
-                                log::warn!("Failed to sync bundled runtime resources: {}", err);
-                            }
-
-                            emit_runtime_status(
-                                &app_handle,
-                                "starting-dashboard",
-                                "正在启动 dashboard...",
-                            );
-                            let handle = match dashboard::ensure_hermes_dashboard(
-                                dashboard::EnsureDashboardOptions {
-                                    host: host_for_task,
-                                    port,
-                                    hermes_home: boot_home_for_task.clone(),
-                                    allow_external_agent,
-                                    allow_port_fallback,
-                                },
-                            )
-                            .await
-                            {
-                                Ok(h) => h,
-                                Err(e) => {
-                                    log::error!("Bootstrap dashboard ensure failed: {}", e);
-                                    let msg = format!("dashboard 启动失败: {}", e);
-                                    {
-                                        use tauri::Manager;
-                                        let state = app_handle.state::<AppState>();
-                                        if let Ok(mut inner) = state.inner.lock() {
-                                            inner.last_runtime_error = Some(msg.clone());
-                                        };
-                                    }
-                                    emit_runtime_status(&app_handle, "error", &msg);
-                                    return;
-                                }
-                            };
-
-                            if !dashboard::dashboard_supports_sse(&handle.api_base_url).await {
-                                log::error!(
-                                    "Bootstrap installed runtime at {} but it lacks \
-                                 /api/v2/events — likely a packaging bug in the \
-                                 release manifest.",
-                                    handle.api_base_url
-                                );
-                            }
-
-                            let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-                            let session_token = match env_token {
-                                Some(t) => Some(t),
-                                None => dashboard::fetch_session_token(&handle.api_base_url).await,
-                            };
-                            let gateway_url = dashboard::build_gateway_url(
-                                &handle.api_base_url,
-                                session_token.as_deref(),
-                            );
-
-                            {
-                                use tauri::Manager;
-                                let state = app_handle.state::<AppState>();
-                                let mut inner = state.inner.lock().unwrap();
-                                inner.api_base_url = handle.api_base_url.clone();
-                                inner.gateway_url = gateway_url;
-                                inner.hermes_home = boot_home_for_task;
-                                inner.hermes_home_base = base_for_task;
-                                inner.session_token = session_token;
-                                inner.current_profile = profile_for_task;
-                                inner.dashboard_handle = Some(handle);
-                            }
-
-                            emit_runtime_status(&app_handle, "ready", "");
-                            log::info!(
-                                "Hermes Agent 中文社区桌面版 ready (after background install)"
-                            );
-                        });
-
-                        // Seed AppState with what the UI needs while it waits. The
-                        // bridge's `get_runtime_config` will return empty
-                        // apiBaseUrl/gatewayUrl until the background task fills
-                        // them in; the bridge waits on `runtime-status` ready
-                        // before mounting the React app.
-                        {
-                            let mut inner = state.inner.lock().unwrap();
-                            inner.hermes_home = boot_home_str;
-                            inner.hermes_home_base = base_str;
-                            inner.current_profile = current_profile;
-                        }
-                        log::info!("Hermes Agent 中文社区桌面版 bootstrapping in background");
-                        return Ok(());
-                    }
-
-                    // No install needed (managed runtime already present, or
-                    // update channel not configured). Fall through to the
-                    // blocking happy path — fast on a normal launch.
-                    if info.current.is_none() {
-                        log::warn!(
-                            "No managed runtime installed and update channel \
-                         is not configured. PATH `hermes` fallback is disabled; \
-                         dashboard startup will fail until a managed runtime is installed."
-                        );
-                    }
-                    if let Err(err) =
-                        runtime::sync_runtime_resources_if_available(bundled_resource_dir.as_deref())
-                    {
-                        log::warn!("Failed to sync bundled runtime resources: {}", err);
-                    }
-
-                    match tauri::async_runtime::block_on(dashboard::ensure_hermes_dashboard(
-                        dashboard::EnsureDashboardOptions {
-                            host: host.clone(),
-                            port,
-                            hermes_home: boot_home_str.clone(),
-                            allow_external_agent,
-                            allow_port_fallback,
-                        },
-                    )) {
-                        Ok(h) => h,
-                        Err(e) => {
-                            log::error!("Failed to start dashboard: {}", e);
-                            return Err(
-                                Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>
-                            );
-                        }
-                    }
-                };
-
-                // 4b. P-009 probe: the desktop's default transport is SSE
-                // (gateway-client.ts:572). If the dashboard lacks `/api/v2/events`
-                // the UI will hit "SSE closed during connect" the moment it tries
-                // to send a message. Surface a clear warning at startup so users
-                // and bug reports know the root cause rather than chasing the
-                // opaque error. See managed runtime compatibility notes.
-                let supports_sse = tauri::async_runtime::block_on(
-                    dashboard::dashboard_supports_sse(&handle.api_base_url),
-                );
-                if !supports_sse {
-                    log::error!(
-                        "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
-                     SSE transport will fail; set HERMES_TRANSPORT=ws in the \
-                     UI store as a workaround, or upgrade the agent \
-                     to a hermes-agent-cn build with the P-009 patch applied. \
-                     See https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
-                        handle.api_base_url
+            // --- Synchronous fallback (HERMES_DESKTOP_SYNC_BOOTSTRAP). ---
+            if external_dev_dashboard {
+                let api_base_url = dashboard::dashboard_base_url(&host, port);
+                if !tauri::async_runtime::block_on(dashboard::probe_dashboard(&api_base_url)) {
+                    log::warn!(
+                        "External dev dashboard mode: dashboard not reachable at {}",
+                        api_base_url
                     );
                 }
-
-                // 5. Fetch session token
-                let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-                let session_token = match env_token {
-                    Some(t) => Some(t),
-                    None => tauri::async_runtime::block_on(dashboard::fetch_session_token(
-                        &handle.api_base_url,
-                    )),
-                };
-
-                let gateway_url =
-                    dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
-
-                // 6. Populate state
-                {
-                    let mut inner = state.inner.lock().unwrap();
-                    inner.api_base_url = handle.api_base_url.clone();
-                    inner.gateway_url = gateway_url;
-                    inner.hermes_home = boot_home_str;
-                    inner.hermes_home_base = base_str;
-                    inner.session_token = session_token;
-                    inner.current_profile = current_profile;
-                    inner.dashboard_handle = Some(handle);
-                }
-
-                // Emit "ready" immediately on the happy path so the bridge's
-                // event listener (which is unconditional in tauri-bridge.ts)
-                // can also unblock here — even though we never went through
-                // the "installing" phase.
-                emit_runtime_status(app.handle(), "ready", "");
-
-                log::info!("Hermes Agent 中文社区桌面版 ready");
-                Ok(())
+                tauri::async_runtime::block_on(finalize_bootstrap(
+                    app.handle(),
+                    external_dev_handle(api_base_url),
+                    boot_home_str,
+                    base_str,
+                    current_profile,
+                ));
+                return Ok(());
             }
+
+            // In sync mode the bundled-runtime install runs up front (blocking)
+            // so acquire_managed_dashboard below is told not to repeat it.
+            if !tauri::async_runtime::block_on(install_bundled_runtime_for_bootstrap(
+                app.handle(),
+                bundled_resource_dir.as_deref(),
+            )) {
+                return Ok(());
+            }
+
+            let info = runtime::get_runtime_info(None);
+            if info.current.is_none() && info.updates_configured {
+                // First run with the update channel configured but no managed
+                // runtime on disk yet. Open the window now and finish boot in
+                // the background rather than freezing for 10-30s.
+                let app_handle = app.handle().clone();
+                let resource_dir = bundled_resource_dir.clone();
+                let boot_home_for_task = boot_home_str.clone();
+                let base_for_task = base_str.clone();
+                let profile_for_task = current_profile.clone();
+
+                tauri::async_runtime::spawn(async move {
+                    let handle =
+                        match acquire_managed_dashboard(&app_handle, options, resource_dir, false)
+                            .await
+                        {
+                            Ok(h) => h,
+                            Err(_) => return,
+                        };
+                    finalize_bootstrap(
+                        &app_handle,
+                        handle,
+                        boot_home_for_task,
+                        base_for_task,
+                        profile_for_task,
+                    )
+                    .await;
+                });
+
+                log::info!("Hermes Agent 中文社区桌面版 bootstrapping in background");
+                return Ok(());
+            }
+
+            // Managed runtime already present (or update channel not configured):
+            // block on the happy path — fast on a normal launch.
+            let handle = match tauri::async_runtime::block_on(acquire_managed_dashboard(
+                app.handle(),
+                options,
+                bundled_resource_dir.clone(),
+                false,
+            )) {
+                Ok(h) => h,
+                Err(e) => {
+                    return Err(Box::new(std::io::Error::other(e)) as Box<dyn std::error::Error>)
+                }
+            };
+
+            tauri::async_runtime::block_on(finalize_bootstrap(
+                app.handle(),
+                handle,
+                boot_home_str,
+                base_str,
+                current_profile,
+            ));
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::gateway::get_runtime_config,
