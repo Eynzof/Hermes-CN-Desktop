@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -471,11 +472,21 @@ fn initial_input_for(purpose: Option<&str>, explicit: Option<&str>) -> Option<St
 fn spawn_reader_thread(app: AppHandle, terminal_id: String, mut reader: Box<dyn Read + Send>) {
     thread::spawn(move || {
         let mut buf = [0_u8; 8192];
+        // Carry buffer for a multi-byte UTF-8 sequence split across reads.
+        // Without this, a chunk boundary inside e.g. a Chinese character would
+        // be mangled into a `�` replacement char by lossy decoding.
+        let mut pending: Vec<u8> = Vec::new();
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    pending.extend_from_slice(&buf[..n]);
+                    let data = drain_utf8(&mut pending);
+                    if data.is_empty() {
+                        // Only an incomplete trailing sequence so far; wait for
+                        // the rest before emitting.
+                        continue;
+                    }
                     emit_terminal_event(
                         &app,
                         TerminalEventPayload {
@@ -501,6 +512,21 @@ fn spawn_reader_thread(app: AppHandle, terminal_id: String, mut reader: Box<dyn 
                     break;
                 }
             }
+        }
+
+        // Flush any trailing bytes (e.g. a truncated sequence left when the PTY
+        // closed) so the final output isn't silently dropped.
+        if !pending.is_empty() {
+            emit_terminal_event(
+                &app,
+                TerminalEventPayload {
+                    terminal_id: terminal_id.clone(),
+                    kind: "data".to_string(),
+                    data: Some(String::from_utf8_lossy(&pending).to_string()),
+                    exit_code: None,
+                    message: None,
+                },
+            );
         }
 
         let exit_code = {
@@ -531,10 +557,114 @@ fn emit_terminal_event(app: &AppHandle, payload: TerminalEventPayload) {
     let _ = app.emit(TERMINAL_EVENT, payload);
 }
 
+/// Decode as much valid UTF-8 as possible from `pending`, leaving only an
+/// incomplete trailing multi-byte sequence (at most 3 bytes) in the buffer for
+/// the next read to complete. Genuinely invalid bytes are replaced with the
+/// Unicode replacement character so the stream can't stall.
+fn drain_utf8(pending: &mut Vec<u8>) -> String {
+    let mut out = String::new();
+    loop {
+        match std::str::from_utf8(pending) {
+            Ok(valid) => {
+                out.push_str(valid);
+                pending.clear();
+                return out;
+            }
+            Err(err) => {
+                let valid_up_to = err.valid_up_to();
+                // Bytes before `valid_up_to` are guaranteed valid UTF-8.
+                out.push_str(
+                    std::str::from_utf8(&pending[..valid_up_to])
+                        .expect("prefix up to valid_up_to is valid UTF-8"),
+                );
+                match err.error_len() {
+                    // Incomplete sequence at the end — keep it for the next read.
+                    None => {
+                        pending.drain(..valid_up_to);
+                        return out;
+                    }
+                    // Genuinely invalid bytes — emit a replacement char, skip
+                    // them, and keep decoding the remainder.
+                    Some(bad_len) => {
+                        out.push('\u{FFFD}');
+                        pending.drain(..valid_up_to + bad_len);
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn new_terminal_id() -> String {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or_default();
-    format!("term-{millis}-{}", std::process::id())
+    // A monotonic counter keeps IDs unique even when two terminals start in the
+    // same millisecond; otherwise the HashMap insert would silently overwrite
+    // (and leak) the earlier session's PTY/child.
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("term-{millis}-{}-{seq}", std::process::id())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn drain_utf8_passes_through_ascii() {
+        let mut pending = b"hello".to_vec();
+        assert_eq!(drain_utf8(&mut pending), "hello");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn drain_utf8_keeps_incomplete_trailing_sequence() {
+        // "中" is 0xE4 0xB8 0xAD. Feed only the first two bytes.
+        let full = "中".as_bytes();
+        let mut pending = full[..2].to_vec();
+        // Nothing decodable yet; both bytes are retained for the next read.
+        assert_eq!(drain_utf8(&mut pending), "");
+        assert_eq!(pending, full[..2].to_vec());
+
+        // Supply the final byte: the full character now decodes.
+        pending.push(full[2]);
+        assert_eq!(drain_utf8(&mut pending), "中");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn drain_utf8_splits_multibyte_across_chunk_boundary() {
+        // A chunk that ends mid-character must not corrupt it.
+        let text = "héllo世界";
+        let bytes = text.as_bytes();
+        let mut decoded = String::new();
+        let mut pending = Vec::new();
+        // Feed one byte at a time — the worst-case split.
+        for &b in bytes {
+            pending.push(b);
+            decoded.push_str(&drain_utf8(&mut pending));
+        }
+        assert_eq!(decoded, text);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn drain_utf8_replaces_invalid_bytes_without_stalling() {
+        // 0xFF is never valid UTF-8; it must be replaced, not retained forever.
+        let mut pending = vec![b'a', 0xFF, b'b'];
+        assert_eq!(drain_utf8(&mut pending), "a\u{FFFD}b");
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn new_terminal_id_is_unique_within_same_millisecond() {
+        let ids: Vec<String> = (0..1000).map(|_| new_terminal_id()).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ids.len(), "terminal ids must be unique");
+    }
 }
