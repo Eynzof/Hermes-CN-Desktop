@@ -101,3 +101,20 @@ describe("profileSwitchingAtom", () => {
     expect(calls).toBe(2);
   });
 });
+
+describe("runtimeUpdatingAtom", () => {
+  it("defaults to { active: false }", async () => {
+    const { runtimeUpdatingAtom } = await loadUi();
+    const store = createStore();
+    expect(store.get(runtimeUpdatingAtom)).toEqual({ active: false });
+  });
+
+  it("carries the mode when activating", async () => {
+    const { runtimeUpdatingAtom } = await loadUi();
+    const store = createStore();
+    store.set(runtimeUpdatingAtom, { active: true, mode: "install" });
+    expect(store.get(runtimeUpdatingAtom)).toEqual({ active: true, mode: "install" });
+    store.set(runtimeUpdatingAtom, { active: true, mode: "rollback" });
+    expect(store.get(runtimeUpdatingAtom)).toEqual({ active: true, mode: "rollback" });
+  });
+});
