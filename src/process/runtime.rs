@@ -1439,6 +1439,23 @@ pub async fn install_bundled_runtime_if_needed(
     }
 
     if let Some(current) = read_current_record() {
+        // A local-source dev runtime (installed by
+        // scripts/install-local-runtime.mjs, written with source ==
+        // "local-source") must never be replaced by the bundled runtime. Its
+        // synthetic `dev-local-*` version never equals the bundled manifest
+        // version, so without this guard the install below would clobber the
+        // developer's local kernel build — and overwrite current.json with the
+        // older bundled runtime — on every launch. Leave it untouched, and
+        // skip the resource sync too so the locally built dashboard/skill
+        // assets are not replaced by the bundled ones.
+        if current.source == "local-source" {
+            return RuntimeInstallUpdateResult {
+                ok: true,
+                installed: None,
+                previous: Some(current),
+                error: None,
+            };
+        }
         if current.runtime_version == manifest.runtime_version {
             if let Err(e) =
                 sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
@@ -2531,6 +2548,92 @@ mod tests {
             .join("demo")
             .join("SKILL.md")
             .is_file());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn install_bundled_runtime_does_not_overwrite_local_source_runtime() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // A local-source dev runtime (installed by
+        // scripts/install-local-runtime.mjs) must survive bootstrap. Its
+        // synthetic `dev-local-*` version never matches the bundled manifest
+        // version, so the guard must skip the install — otherwise the bundled
+        // runtime would clobber the developer's local kernel build on launch.
+        let dir = TempDir::new().unwrap();
+        let runtime_root = dir.path().join("runtime-root");
+        let resource = dir.path().join("resources");
+        let bundled = resource.join("bundled-runtime");
+        let expanded = bundled_expanded_runtime_dir(&bundled);
+
+        // Stage a valid, signed bundled runtime that WOULD install if the guard
+        // were removed, so this test fails loudly on regression.
+        std::fs::create_dir_all(&expanded).unwrap();
+        let bundled_exe = expanded.join(primary_runtime_name());
+        std::fs::write(&bundled_exe, b"#!/bin/sh\nexit 0\n").unwrap();
+        let mut perms = std::fs::metadata(&bundled_exe).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&bundled_exe, perms).unwrap();
+
+        let (key, pem) = test_keypair();
+        let mut manifest = fixture_manifest();
+        manifest.runtime_version = "0.14.0-cn.4".to_string();
+        manifest.kernel_version = "0.14.0".to_string();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        manifest.sha256 =
+            "37f4d6d615188f1e84bd361a0292e2a26376d72225b2420e5e91a62e7b2ebd0c".to_string();
+        sign_manifest(&key, &mut manifest);
+
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
+
+        write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
+
+        // Stage the local-source runtime pointer that install-local-runtime.mjs
+        // writes (source == "local-source", synthetic dev-local version).
+        let local_version = "dev-local-0.15.2-882062c24a18-dirty-2f96f8280c44";
+        let local_dir = runtime_root.join("versions").join(local_version);
+        let local_exe = local_dir.join("venv").join("bin").join("hermes");
+        std::fs::create_dir_all(local_exe.parent().unwrap()).unwrap();
+        std::fs::write(&local_exe, b"#!/bin/sh\nexit 0\n").unwrap();
+        let local_record = RuntimeInstallRecord {
+            schema_version: MANIFEST_SCHEMA_VERSION,
+            runtime_version: local_version.to_string(),
+            kernel_version: "0.15.2".to_string(),
+            runtime_flavor: "cn-local".to_string(),
+            runtime_revision: 0,
+            platform: current_platform().to_string(),
+            arch: current_arch().to_string(),
+            path: local_dir.to_string_lossy().to_string(),
+            executable_path: local_exe.to_string_lossy().to_string(),
+            source: "local-source".to_string(),
+            installed_at: "2026-06-03T00:00:00.000Z".to_string(),
+            source_repo: Some("/repo/hermes-agent-cn".to_string()),
+            source_commit: Some("882062c24a18".to_string()),
+            local_dirty_hash: Some("2f96f8280c44".to_string()),
+            artifact_sha256: None,
+            previous_runtime_version: None,
+        };
+        write_json_file(&current_record_path(), &local_record).unwrap();
+
+        let result = install_bundled_runtime_if_needed(Some(&resource)).await;
+        // Re-read while the runtime-root override is still in effect.
+        let after = read_current_record();
+
+        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        assert!(result.ok, "unexpected error: {:?}", result.error);
+        assert!(
+            result.installed.is_none(),
+            "bundled runtime must not install over a local-source runtime"
+        );
+
+        let after = after.expect("local-source current record should still exist");
+        assert_eq!(after.source, "local-source");
+        assert_eq!(after.runtime_version, local_version);
+        assert_eq!(after.kernel_version, "0.15.2");
     }
 
     #[cfg(unix)]
