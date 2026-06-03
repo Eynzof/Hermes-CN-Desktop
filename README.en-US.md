@@ -193,6 +193,12 @@ The short-term roadmap is focused on:
 - polishing macOS and Windows packaging behavior;
 - documenting the desktop/runtime boundary for contributors.
 
+## Star Track
+
+Use the chart below to track this repository's GitHub Star growth over time.
+
+[![Hermes Agent CN Desktop Star History Chart](https://api.star-history.com/svg?repos=Eynzof/hermes-agent-cn-desktop&type=Date)](https://www.star-history.com/#Eynzof/hermes-agent-cn-desktop&Date)
+
 ## Contributing
 
 Issues and pull requests are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before contributing.
