@@ -9,16 +9,14 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::commands::restart::{self, RespawnOutcome};
 use crate::error::AppError;
-
-use crate::process::dashboard;
 use crate::state::AppState;
 
 static PROFILE_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -87,15 +85,6 @@ pub fn read_active_profile_sticky(base: &str) -> String {
     }
 }
 
-fn host_and_port() -> (String, u16) {
-    let host = std::env::var("HERMES_DESKTOP_API_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = std::env::var("HERMES_DESKTOP_API_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(dashboard::DEFAULT_DESKTOP_DASHBOARD_PORT);
-    (host, port)
-}
-
 fn is_valid_profile_name(name: &str) -> bool {
     PROFILE_NAME_RE.is_match(name)
 }
@@ -132,14 +121,6 @@ pub async fn switch_profile(
             });
         }
 
-        if inner.switch_profile_in_flight {
-            return Ok(SwitchProfileResult {
-                ok: false,
-                error: Some("Another profile switch is in progress".to_string()),
-                ..Default::default()
-            });
-        }
-
         if name == inner.current_profile {
             return Ok(SwitchProfileResult {
                 ok: true,
@@ -169,10 +150,14 @@ pub async fn switch_profile(
         });
     }
 
-    // Set in-flight flag
-    {
-        let mut inner = state.inner.lock()?;
-        inner.switch_profile_in_flight = true;
+    // Claim the shared dashboard-restart guard (atomic check-and-set) so a
+    // profile switch and a YOLO toggle can't race two restarts.
+    if !restart::try_begin_restart(&state)? {
+        return Ok(SwitchProfileResult {
+            ok: false,
+            error: Some("运行时正在切换中，请稍后再试".to_string()),
+            ..Default::default()
+        });
     }
 
     let result = do_switch_profile(
@@ -185,11 +170,7 @@ pub async fn switch_profile(
     )
     .await;
 
-    // Clear in-flight flag
-    {
-        let mut inner = state.inner.lock()?;
-        inner.switch_profile_in_flight = false;
-    }
+    restart::end_restart(&state);
 
     Ok(result)
 }
@@ -202,12 +183,14 @@ async fn do_switch_profile(
     previous_profile: &str,
     previous_home: &str,
 ) -> SwitchProfileResult {
-    let (host, port) = host_and_port();
+    let (host, port) = restart::host_and_port();
 
-    // 1. Stop existing dashboard
-    {
-        let mut inner = match state.inner.lock() {
-            Ok(i) => i,
+    // Stop the current dashboard and respawn against the target profile's home,
+    // falling back to the previous profile's home if the target fails to boot.
+    let respawn =
+        match restart::respawn_managed_dashboard(state, &host, port, new_home, previous_home).await
+        {
+            Ok(r) => r,
             Err(e) => {
                 return SwitchProfileResult {
                     ok: false,
@@ -216,127 +199,44 @@ async fn do_switch_profile(
                 }
             }
         };
-        if let Some(stop) = inner.gateway_sse_stop.take() {
-            stop.store(true, Ordering::Relaxed);
-        }
-        let session_token = inner.session_token.clone();
-        if let Some(ref mut handle) = inner.dashboard_handle {
-            handle.stop_with_token(session_token.as_deref());
-        }
-        inner.dashboard_handle = None;
-    }
 
-    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-
-    // 2. Spawn new dashboard
-    let handle = match dashboard::ensure_hermes_dashboard(dashboard::EnsureDashboardOptions {
-        host: host.clone(),
-        port,
-        hermes_home: new_home.to_string(),
-        allow_external_agent: dashboard::external_agent_allowed(),
-        allow_port_fallback: true,
-    })
-    .await
-    {
-        Ok(h) => h,
-        Err(e) => {
-            // Recovery: try to respawn previous profile's dashboard
-            log::error!("Failed to start dashboard for {}: {}", name, e);
-            match try_recover_previous(state, &host, port, previous_home).await {
-                Ok(_) => {
-                    return SwitchProfileResult {
-                        ok: false,
-                        error: Some(format!("切换到 {} 失败：{}", name, e)),
-                        recovered_previous_profile: Some(true),
-                        ..Default::default()
-                    };
-                }
-                Err(re) => {
-                    return SwitchProfileResult {
-                        ok: false,
-                        error: Some(format!(
-                            "切换失败 ({})；恢复 {} 也失败 ({})。重启桌面端。",
-                            e, previous_profile, re
-                        )),
-                        recovered_previous_profile: Some(false),
-                        ..Default::default()
-                    };
-                }
+    match respawn.outcome {
+        RespawnOutcome::Spawned => {
+            // respawn already adopted the new connection + hermes_home; record
+            // the profile-specific state and persist the sticky default.
+            if let Ok(mut inner) = state.inner.lock() {
+                inner.current_profile = name.to_string();
+            }
+            write_active_profile_sticky(base, name);
+            SwitchProfileResult {
+                ok: true,
+                profile_name: Some(name.to_string()),
+                api_base_url: respawn.api_base_url,
+                gateway_url: respawn.gateway_url,
+                session_token: respawn.session_token,
+                hermes_home: Some(new_home.to_string()),
+                error: None,
+                recovered_previous_profile: None,
             }
         }
-    };
-
-    // 3. Fetch fresh token and update state
-    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-    let token = match env_token {
-        Some(t) => Some(t),
-        None => dashboard::fetch_session_token(&handle.api_base_url).await,
-    };
-    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
-    let api_base_url = handle.api_base_url.clone();
-
-    {
-        let mut inner = match state.inner.lock() {
-            Ok(i) => i,
-            Err(e) => {
-                return SwitchProfileResult {
-                    ok: false,
-                    error: Some(e.to_string()),
-                    ..Default::default()
-                }
-            }
-        };
-        inner.api_base_url = handle.api_base_url.clone();
-        inner.gateway_url = gateway_url.clone();
-        inner.session_token = token.clone();
-        inner.hermes_home = new_home.to_string();
-        inner.current_profile = name.to_string();
-        inner.dashboard_handle = Some(handle);
+        RespawnOutcome::Recovered { error } => SwitchProfileResult {
+            ok: false,
+            error: Some(format!("切换到 {name} 失败：{error}")),
+            recovered_previous_profile: Some(true),
+            ..Default::default()
+        },
+        RespawnOutcome::Down {
+            error,
+            recovery_error,
+        } => SwitchProfileResult {
+            ok: false,
+            error: Some(format!(
+                "切换失败 ({error})；恢复 {previous_profile} 也失败 ({recovery_error})。重启桌面端。"
+            )),
+            recovered_previous_profile: Some(false),
+            ..Default::default()
+        },
     }
-
-    // Write sticky file
-    write_active_profile_sticky(base, name);
-
-    SwitchProfileResult {
-        ok: true,
-        profile_name: Some(name.to_string()),
-        api_base_url: Some(api_base_url),
-        gateway_url: Some(gateway_url),
-        session_token: token,
-        hermes_home: Some(new_home.to_string()),
-        error: None,
-        recovered_previous_profile: None,
-    }
-}
-
-async fn try_recover_previous(
-    state: &State<'_, AppState>,
-    host: &str,
-    port: u16,
-    previous_home: &str,
-) -> Result<(), AppError> {
-    let handle = dashboard::ensure_hermes_dashboard(dashboard::EnsureDashboardOptions {
-        host: host.to_string(),
-        port,
-        hermes_home: previous_home.to_string(),
-        allow_external_agent: dashboard::external_agent_allowed(),
-        allow_port_fallback: true,
-    })
-    .await?;
-
-    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-    let token = match env_token {
-        Some(t) => Some(t),
-        None => dashboard::fetch_session_token(&handle.api_base_url).await,
-    };
-    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
-
-    let mut inner = state.inner.lock()?;
-    inner.api_base_url = handle.api_base_url.clone();
-    inner.gateway_url = gateway_url;
-    inner.session_token = token;
-    inner.dashboard_handle = Some(handle);
-    Ok(())
 }
 
 #[cfg(test)]

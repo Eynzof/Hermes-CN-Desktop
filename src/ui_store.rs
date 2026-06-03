@@ -501,6 +501,45 @@ pub fn kv_value(hermes_home: &str, key: &str) -> AppResult<Option<Value>> {
         .transpose()
 }
 
+/// UI-store KV key holding the desktop "YOLO mode" preference, scoped to the
+/// active profile's HERMES_HOME. When truthy, the desktop launches the managed
+/// runtime with `HERMES_YOLO_MODE=1`, which makes the backend auto-approve
+/// dangerous-command prompts (equivalent to the `--yolo` CLI flag).
+pub const YOLO_MODE_KEY: &str = "desktop.yoloMode";
+
+fn value_is_truthy(value: &Value) -> bool {
+    match value {
+        Value::Bool(b) => *b,
+        // Accept both integer (1) and float (1.0) JSON numbers; legacy or
+        // hand-edited values may be either.
+        Value::Number(n) => n.as_f64().map(|v| v != 0.0).unwrap_or(false),
+        Value::String(s) => crate::util::str_is_truthy(s),
+        _ => false,
+    }
+}
+
+/// Read the persisted desktop YOLO-mode preference for `hermes_home`.
+///
+/// Returns `false` when the key is unset or on any read error — YOLO mode must
+/// never be enabled by accident, so we fail closed.
+pub fn yolo_mode_enabled(hermes_home: &str) -> bool {
+    match kv_value(hermes_home, YOLO_MODE_KEY) {
+        Ok(Some(value)) => value_is_truthy(&value),
+        _ => false,
+    }
+}
+
+/// Persist the desktop YOLO-mode preference for `hermes_home`.
+pub fn set_yolo_mode(hermes_home: &str, enabled: bool) -> AppResult<()> {
+    set_kv(
+        hermes_home,
+        UiStoreSetKvInput {
+            key: YOLO_MODE_KEY.to_string(),
+            value: Value::Bool(enabled),
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -529,6 +568,56 @@ mod tests {
         assert!(read_archived_session_ids(dir.path().to_str().unwrap()).contains("s1"));
         set_session_archived(dir.path().to_str().unwrap(), "s1", false).unwrap();
         assert!(!read_archived_session_ids(dir.path().to_str().unwrap()).contains("s1"));
+    }
+
+    #[test]
+    fn yolo_mode_defaults_off_and_roundtrips() {
+        let dir = TempDir::new().unwrap();
+        let home = dir.path().to_str().unwrap();
+        // Unset → fail closed.
+        assert!(!yolo_mode_enabled(home));
+        set_yolo_mode(home, true).unwrap();
+        assert!(yolo_mode_enabled(home));
+        set_yolo_mode(home, false).unwrap();
+        assert!(!yolo_mode_enabled(home));
+    }
+
+    #[test]
+    fn yolo_mode_reads_legacy_truthy_values() {
+        let dir = TempDir::new().unwrap();
+        let home = dir.path().to_str().unwrap();
+        for raw in [
+            serde_json::json!(1),
+            serde_json::json!("1"),
+            serde_json::json!("true"),
+            serde_json::json!("on"),
+        ] {
+            set_kv(
+                home,
+                UiStoreSetKvInput {
+                    key: YOLO_MODE_KEY.into(),
+                    value: raw.clone(),
+                },
+            )
+            .unwrap();
+            assert!(yolo_mode_enabled(home), "expected truthy for {raw}");
+        }
+        for raw in [
+            serde_json::json!(0),
+            serde_json::json!("0"),
+            serde_json::json!("false"),
+            serde_json::json!(null),
+        ] {
+            set_kv(
+                home,
+                UiStoreSetKvInput {
+                    key: YOLO_MODE_KEY.into(),
+                    value: raw.clone(),
+                },
+            )
+            .unwrap();
+            assert!(!yolo_mode_enabled(home), "expected falsy for {raw}");
+        }
     }
 
     #[test]

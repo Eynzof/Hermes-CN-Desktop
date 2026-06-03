@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import {
   Activity,
+  AlertTriangle,
   Bug,
   CheckCircle2,
   Copy,
@@ -13,19 +14,20 @@ import {
   ShieldCheck,
   Terminal,
 } from "lucide-react";
-import { useTheme, type ThemeConfig } from "@hermes/shared-ui";
+import { Dialog, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import { useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
 import { useLogs } from "@/hooks/use-logs";
 import { useStatus } from "@/hooks/use-status";
+import { useYoloMode, useSetYoloMode, isYoloModeSupported } from "@/hooks/use-yolo-mode";
 import {
   useCheckRuntimeUpdate,
   useInstallRuntimeUpdate,
   useRollbackRuntime,
   useRuntimeInfo,
 } from "@/hooks/use-runtime-update";
-import { showReasoningAtom } from "@/stores/ui";
+import { showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
@@ -54,6 +56,98 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       <Row label="显示推理过程" sub="在会话中展示模型的思考和推理内容" right={
         <RadioGroup value={showReasoning ? "on" : "off"} options={[{ value: "off", label: "隐藏" }, { value: "on", label: "显示" }]} onChange={(v) => setShowReasoning(v === "on")} />
       } />
+      {isYoloModeSupported() && <YoloDangerZone />}
+    </div>
+  );
+}
+
+/* ── Danger zone: YOLO mode ──────────────────────────────────────────── */
+
+const YOLO_DESC =
+  "自动批准所有危险命令（等同后端 --yolo / HERMES_YOLO_MODE）。开启后 Agent 执行 shell、删除文件等高危操作时不再二次确认，切换会重启内核。请仅在受信任的工作区使用。";
+
+function YoloDangerZone() {
+  const { data: yolo } = useYoloMode();
+  const setYolo = useSetYoloMode();
+  // A profile switch and a YOLO toggle both restart the dashboard and share
+  // this overlay; block the controls while either restart is in flight so we
+  // don't kick off a second restart (or tear the overlay down early).
+  const restartInFlight = useAtomValue(profileSwitchingAtom).active;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+
+  const enabled = !!yolo?.enabled;
+  const pending = yolo != null && yolo.enabled !== yolo.effective;
+  const busy = setYolo.isPending || restartInFlight;
+
+  const openConfirm = () => {
+    if (busy) return;
+    setAcknowledged(false);
+    setConfirmOpen(true);
+  };
+  const confirmEnable = () => {
+    setConfirmOpen(false);
+    setYolo.mutate(true);
+  };
+
+  return (
+    <div className={s.dangerZone}>
+      <div className={s.dangerZoneHead}>
+        <AlertTriangle size={14} aria-hidden="true" />
+        高风险操作
+      </div>
+      <Row
+        label="YOLO 模式"
+        sub={YOLO_DESC + (pending ? "（已保存，重启桌面端后生效）" : "")}
+        right={
+          enabled ? (
+            <div className={s.dangerActions}>
+              <span className={pending ? s.dangerBadgePending : s.dangerBadge}>
+                {pending ? "待生效" : "已开启"}
+              </span>
+              <button className={s.btn} disabled={busy} onClick={() => !busy && setYolo.mutate(false)}>
+                关闭
+              </button>
+            </div>
+          ) : (
+            <button className={s.btnDanger} disabled={busy} onClick={openConfirm}>
+              开启
+            </button>
+          )
+        }
+      />
+
+      <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content className={s.dangerDialog} aria-describedby="yolo-confirm-desc">
+            <Dialog.Title className={s.dangerDialogTitle}>
+              <AlertTriangle size={16} aria-hidden="true" />
+              确认开启 YOLO 模式？
+            </Dialog.Title>
+            <Dialog.Description id="yolo-confirm-desc" className={s.dangerDialogBody}>
+              开启后，Agent 执行 shell 命令、删除文件等高危操作时将<strong>不再弹出二次确认</strong>，
+              全部自动批准。请确认你信任当前工作区、并清楚 Agent 将要做什么。切换会重启内核（约 5-15 秒）。
+            </Dialog.Description>
+            <label className={s.dangerConfirmRow}>
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+              />
+              我已了解风险
+            </label>
+            <div className={s.dangerDialogActions}>
+              <Dialog.Close asChild>
+                <button className={s.btn}>取消</button>
+              </Dialog.Close>
+              <button className={s.btnDanger} disabled={!acknowledged} onClick={confirmEnable}>
+                确认开启
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
