@@ -1,46 +1,89 @@
+import { useRuntimeInfo } from "@/hooks/use-runtime-update";
 import { useStatus } from "@/hooks/use-status";
+import type { RuntimeInfo, StatusResponse } from "@hermes/protocol";
 import s from "./app-shell.module.css";
 
 const FALLBACK_VERSION = "0.14.0";
+const UNKNOWN = "—";
+const UNKNOWN_DATE = "日期未知";
 const BUILD_COMMIT = import.meta.env.VITE_HERMES_BUILD_COMMIT || "unknown";
+const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.1.0";
 
 function versionLabel(version: string | undefined): string {
   const value = version?.trim() || FALLBACK_VERSION;
   return value.startsWith("v") || value.startsWith("V") ? value : `v${value}`;
 }
 
-function shortCommit(commit: string): string {
-  const normalized = commit.trim();
-  if (!normalized || normalized === "unknown") return "—";
+function shortCommit(commit: string | undefined): string {
+  const normalized = commit?.trim() ?? "";
+  if (!normalized || normalized === "unknown") return UNKNOWN;
   return normalized.slice(0, 7);
+}
+
+function formatCommitDate(value: string | undefined): string {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return UNKNOWN_DATE;
+  const datePrefix = normalized.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  if (datePrefix) return datePrefix;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return UNKNOWN_DATE;
+  return date.toISOString().slice(0, 10);
+}
+
+function runtimeCommitDate(runtimeInfo: RuntimeInfo | undefined): string {
+  const sourceCommit = runtimeInfo?.current?.sourceCommit?.trim();
+  if (!sourceCommit) return UNKNOWN_DATE;
+  const match = runtimeInfo?.source?.recentCommits.find((commit) =>
+    commit.hash === sourceCommit || commit.hash.startsWith(sourceCommit) || sourceCommit.startsWith(commit.hash),
+  );
+  return formatCommitDate(match?.date);
+}
+
+export interface SidebarVersionRowsInput {
+  status?: Pick<StatusResponse, "version" | "release_date">;
+  runtimeInfo?: RuntimeInfo;
+  buildCommit?: string;
+  desktopVersion?: string;
+}
+
+export interface SidebarVersionRows {
+  kernel: string;
+  ui: string;
+}
+
+export function buildSidebarVersionRows({
+  status,
+  runtimeInfo,
+  buildCommit = BUILD_COMMIT,
+  desktopVersion = DESKTOP_VERSION,
+}: SidebarVersionRowsInput): SidebarVersionRows {
+  const kernelVersion = versionLabel(runtimeInfo?.current?.kernelVersion ?? status?.version);
+  const kernelCommit = shortCommit(runtimeInfo?.current?.sourceCommit);
+  const kernelDate = runtimeCommitDate(runtimeInfo);
+  const uiVersion = versionLabel(desktopVersion);
+  const uiCommit = shortCommit(buildCommit);
+
+  return {
+    kernel: `内核 ${kernelVersion} · ${kernelCommit} · ${kernelDate}`,
+    ui: `UI ${uiVersion} · ${uiCommit}`,
+  };
 }
 
 export function SidebarVersionTag() {
   const { data: status } = useStatus();
-  const commit = shortCommit(BUILD_COMMIT);
-  const items = [
-    versionLabel(status?.version),
-    status?.release_date?.trim() || undefined,
-    commit !== "—" ? commit : undefined,
-  ].filter(Boolean);
+  const { data: runtimeInfo } = useRuntimeInfo();
+  const rows = buildSidebarVersionRows({ status, runtimeInfo });
+  const title = `${rows.kernel}\n${rows.ui}\n预览版本，不代表最终品质`;
 
   return (
     <div
       className={s.sidebarInfoPanel}
       aria-label="构建与运行信息"
-      title={`${items.join(" · ")}\n预览版本，不代表最终品质`}
+      title={title}
     >
       <div className={s.sidebarInfoMeta}>
-        {items.map((item, index) => (
-          <span key={item} className={index === 0 ? s.sidebarInfoVersion : undefined}>
-            {index > 0 && (
-              <span className={s.sidebarInfoDot} aria-hidden="true">
-                ·
-              </span>
-            )}
-            {item}
-          </span>
-        ))}
+        <span className={s.sidebarInfoVersion}>{rows.kernel}</span>
+        <span>{rows.ui}</span>
       </div>
       <div className={s.sidebarInfoNote}>预览版本，不代表最终品质</div>
     </div>
