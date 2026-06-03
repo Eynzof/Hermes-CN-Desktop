@@ -262,11 +262,12 @@ fn sanitize_profile_name(raw: &str) -> String {
         if ch.is_ascii_alphanumeric() {
             out.push(ch);
             last_sep = false;
-        } else if matches!(ch, '-' | '_') || ch.is_ascii_whitespace() || ch == '.' {
-            if !last_sep && !out.is_empty() {
-                out.push('-');
-                last_sep = true;
-            }
+        } else if (matches!(ch, '-' | '_') || ch.is_ascii_whitespace() || ch == '.')
+            && !last_sep
+            && !out.is_empty()
+        {
+            out.push('-');
+            last_sep = true;
         }
         if out.len() >= 28 {
             break;
