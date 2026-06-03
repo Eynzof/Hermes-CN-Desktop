@@ -186,6 +186,7 @@ async fn finalize_bootstrap(
         inner.hermes_home_base = hermes_home_base;
         inner.session_token = session_token;
         inner.current_profile = profile;
+        inner.yolo_mode = dashboard::yolo_mode_effective(&inner.hermes_home);
         inner.dashboard_handle = Some(handle);
     }
 
@@ -456,6 +457,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::gateway::get_runtime_config,
             commands::gateway::refresh_gateway_url,
+            commands::config_migration::config_migration_scan,
+            commands::config_migration::config_migration_import,
             commands::im_onboarding::im_onboarding_state,
             commands::im_onboarding::im_onboarding_begin,
             commands::im_onboarding::im_onboarding_poll,
@@ -472,6 +475,8 @@ fn main() {
             commands::runtime_manager::runtime_install_update,
             commands::runtime_manager::runtime_rollback,
             commands::profiles::switch_profile,
+            commands::yolo::get_yolo_mode,
+            commands::yolo::set_yolo_mode,
             commands::skills::read_skill_markdown,
             commands::memory::read_memory,
             commands::memory::add_memory_entry,

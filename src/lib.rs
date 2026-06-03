@@ -7,3 +7,4 @@ pub mod session_log;
 pub mod state;
 pub mod ui_store;
 pub mod update_stage;
+pub mod util;

@@ -1,4 +1,8 @@
 import type {
+  ConfigMigrationImportInput,
+  ConfigMigrationImportResult,
+  ConfigMigrationScanInput,
+  ConfigMigrationScanResult,
   FileUploadInput,
   HermesMessageMetadata,
   ImOnboardingApplyInput,
@@ -12,8 +16,11 @@ import type {
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
+  SetYoloModeInput,
+  SetYoloModeResult,
   SwitchProfileInput,
   SwitchProfileResult,
+  YoloModeStatus,
 } from "@hermes/protocol";
 
 export type RuntimePlatform = "web" | "electron" | "tauri";
@@ -180,6 +187,10 @@ declare global {
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
       rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
+      scanConfigMigration?(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult>;
+      importConfigMigration?(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult>;
+      getYoloMode?(): Promise<YoloModeStatus>;
+      setYoloMode?(input: SetYoloModeInput): Promise<SetYoloModeResult>;
       imOnboardingState?(input: ImOnboardingStateInput): Promise<ImOnboardingStateResult>;
       imOnboardingBegin?(input: ImOnboardingBeginInput): Promise<ImOnboardingBeginResult>;
       imOnboardingPoll?(input: ImOnboardingPollInput): Promise<ImOnboardingPollResult>;
@@ -289,5 +300,34 @@ export const runtime = {
     if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
     if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
     if (result.profileName) window.__HERMES_RUNTIME__.currentProfile = result.profileName;
+  },
+
+  // After set_yolo_mode restarts the managed runtime, the session token rotated
+  // and the gateway URL/port may have shifted. Adopt the new values so the next
+  // transport call and SSE reconnect use the live dashboard.
+  applyYoloRestartResult(result: SetYoloModeResult): void {
+    if (!result.ok || !result.restarted || !window.__HERMES_RUNTIME__) return;
+    if (result.apiBaseUrl) {
+      // In Vite dev `apiBaseUrl` is intentionally undefined (relative paths go
+      // through the proxy); only refresh it when production already set it.
+      if (window.__HERMES_RUNTIME__.apiBaseUrl) {
+        window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;
+      }
+      window.__HERMES_RUNTIME__.dashboardApiBaseUrl = result.apiBaseUrl;
+    }
+    if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
+    if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
+  },
+  applyConfigMigrationResult(result: ConfigMigrationImportResult): void {
+    if (!result.ok || !window.__HERMES_RUNTIME__) return;
+    if (result.apiBaseUrl) {
+      if (window.__HERMES_RUNTIME__.apiBaseUrl) {
+        window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;
+      }
+      window.__HERMES_RUNTIME__.dashboardApiBaseUrl = result.apiBaseUrl;
+    }
+    if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
+    if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
+    if (result.targetProfileName) window.__HERMES_RUNTIME__.currentProfile = result.targetProfileName;
   },
 };

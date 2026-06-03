@@ -118,8 +118,15 @@ pub struct AppStateInner {
     pub current_profile: String,
     pub dashboard_handle: Option<DashboardHandle>,
     pub gateway_sse_stop: Option<Arc<AtomicBool>>,
-    pub switch_profile_in_flight: bool,
+    /// Set while a managed-dashboard restart is in progress (profile switch or
+    /// YOLO toggle). Guards against two restarts racing on `dashboard_handle`.
+    pub dashboard_restart_in_flight: bool,
     pub last_runtime_error: Option<String>,
+    /// Whether the *currently running* managed dashboard was launched with
+    /// YOLO mode (`HERMES_YOLO_MODE=1`). This is the effective runtime state,
+    /// which can briefly differ from the persisted preference between a toggle
+    /// and the runtime restart that applies it.
+    pub yolo_mode: bool,
 }
 
 /// Thread-safe wrapper. Tauri manages this via `app.manage(AppState::new())`.
@@ -139,8 +146,9 @@ impl AppState {
                 current_profile: "default".to_string(),
                 dashboard_handle: None,
                 gateway_sse_stop: None,
-                switch_profile_in_flight: false,
+                dashboard_restart_in_flight: false,
                 last_runtime_error: None,
+                yolo_mode: false,
             }),
         }
     }

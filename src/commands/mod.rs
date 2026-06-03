@@ -1,11 +1,14 @@
 pub mod api_proxy;
+pub mod config_migration;
 pub mod file_dialogs;
 pub mod gateway;
 pub mod im_onboarding;
 pub mod memory;
 pub mod profiles;
+pub mod restart;
 pub mod runtime_manager;
 pub mod skills;
 pub mod sse_proxy;
 pub mod terminal;
 pub mod ui_store;
+pub mod yolo;

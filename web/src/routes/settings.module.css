@@ -1956,3 +1956,102 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Danger zone (high-risk operations, e.g. YOLO mode) ──────────────── */
+.dangerZone {
+  margin-top: 28px;
+  border: 1px solid color-mix(in srgb, var(--h-err) 45%, var(--h-line));
+  border-radius: var(--h-r-md);
+  background: color-mix(in srgb, var(--h-err) 5%, transparent);
+  padding: 4px 16px 8px;
+}
+
+.dangerZoneHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--h-err);
+  padding: 12px 0 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--h-err) 22%, transparent);
+  margin-bottom: 4px;
+}
+
+/* The danger zone hosts a single row; drop the divider the shared .row adds. */
+.dangerZone .row {
+  border-bottom: none;
+}
+
+.dangerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dangerBadge,
+.dangerBadgePending {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--h-r-pill);
+  white-space: nowrap;
+}
+
+.dangerBadge {
+  color: var(--h-err);
+  background: color-mix(in srgb, var(--h-err) 12%, transparent);
+}
+
+.dangerBadgePending {
+  color: var(--h-warn);
+  background: var(--h-warn-soft);
+}
+
+/* Confirmation dialog */
+.dangerDialog {
+  padding: 20px 22px 18px;
+  gap: 14px;
+  max-width: min(440px, calc(100vw - 32px));
+}
+
+.dangerDialogTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--h-err);
+  margin: 0;
+}
+
+.dangerDialogBody {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--h-text-2);
+  margin: 0;
+}
+
+.dangerConfirmRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--h-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.dangerConfirmRow input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--h-err);
+  cursor: pointer;
+}
+
+.dangerDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}

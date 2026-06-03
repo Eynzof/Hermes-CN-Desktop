@@ -8,6 +8,10 @@
 import type {
   ApiRequestInput,
   ApiRequestResult,
+  ConfigMigrationImportInput,
+  ConfigMigrationImportResult,
+  ConfigMigrationScanInput,
+  ConfigMigrationScanResult,
   FilePickerResult,
   FileUploadInput,
   ImOnboardingApplyInput,
@@ -21,8 +25,11 @@ import type {
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
+  SetYoloModeInput,
+  SetYoloModeResult,
   SwitchProfileInput,
   SwitchProfileResult,
+  YoloModeStatus,
 } from "@hermes/protocol";
 import type {
   SkillMarkdownResult,
@@ -139,6 +146,27 @@ const tauriBridge = {
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {
     const inv = await ensureInvoke();
     return inv("switch_profile", { input });
+  },
+
+
+  async scanConfigMigration(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult> {
+    const inv = await ensureInvoke();
+    return inv("config_migration_scan", { input: input ?? null });
+  },
+
+  async importConfigMigration(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult> {
+    const inv = await ensureInvoke();
+    return inv("config_migration_import", { input });
+  },
+
+  async getYoloMode(): Promise<YoloModeStatus> {
+    const inv = await ensureInvoke();
+    return inv("get_yolo_mode");
+  },
+
+  async setYoloMode(input: SetYoloModeInput): Promise<SetYoloModeResult> {
+    const inv = await ensureInvoke();
+    return inv("set_yolo_mode", { input });
   },
 
   async imOnboardingState(input: ImOnboardingStateInput): Promise<ImOnboardingStateResult> {
