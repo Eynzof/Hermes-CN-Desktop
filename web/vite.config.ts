@@ -105,12 +105,12 @@ function gitCommitDate(): string {
 
 function desktopAppVersion(): string {
   if (process.env.HERMES_DESKTOP_APP_VERSION) return process.env.HERMES_DESKTOP_APP_VERSION;
-  try {
-    const pkg = JSON.parse(readFileSync(resolve(__dirname, "..", "package.json"), "utf8")) as { version?: unknown };
-    return typeof pkg.version === "string" && pkg.version.trim() ? pkg.version.trim() : "0.2.0";
-  } catch {
-    return "0.2.0";
+  const pkgPath = resolve(__dirname, "..", "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: unknown };
+  if (typeof pkg.version !== "string" || !pkg.version.trim()) {
+    throw new Error(`${pkgPath} must define a desktop version`);
   }
+  return pkg.version.trim();
 }
 
 function hermesHomePath(): string {

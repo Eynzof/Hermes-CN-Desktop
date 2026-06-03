@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { RuntimeInfo } from "@hermes/protocol";
+import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import { buildSidebarVersionRows } from "./sidebar-version-tag";
+
+const DESKTOP_VERSION_LABEL = versionLabel(DESKTOP_VERSION);
 
 function runtimeInfo(overrides: Partial<RuntimeInfo> = {}): RuntimeInfo {
   return {
@@ -56,13 +59,13 @@ describe("buildSidebarVersionRows", () => {
       status: { version: "0.14.0", release_date: "2026.5.29.2" },
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
       buildDate: "2026-06-03T16:00:00+08:00",
-      desktopVersion: "0.2.0",
+      desktopVersion: DESKTOP_VERSION,
     });
 
     expect(rows.kernel).toBe("内核 v0.15.2 · 882062c · 05.29");
-    expect(rows.ui).toBe("UI v0.2.0 · 80157e4 · 06.03");
+    expect(rows.ui).toBe(`UI ${DESKTOP_VERSION_LABEL} · 80157e4 · 06.03`);
     expect(rows.title).toContain("内核 v0.15.2 · 882062c · 2026-05-29");
-    expect(rows.title).toContain("UI v0.2.0 · 80157e4 · 2026-06-03");
+    expect(rows.title).toContain(`UI ${DESKTOP_VERSION_LABEL} · 80157e4 · 2026-06-03`);
     expect(rows.kernel).not.toContain("2026.5.29.2");
   });
 
@@ -71,11 +74,11 @@ describe("buildSidebarVersionRows", () => {
       status: { version: "0.15.2", release_date: "2026.5.29.2" },
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
       buildDate: "2026-06-03T16:00:00+08:00",
-      desktopVersion: "0.2.0",
+      desktopVersion: DESKTOP_VERSION,
     });
 
     expect(rows.kernel).toBe("内核 v0.15.2 · — · 日期未知");
-    expect(rows.ui).toBe("UI v0.2.0 · 80157e4 · 06.03");
+    expect(rows.ui).toBe(`UI ${DESKTOP_VERSION_LABEL} · 80157e4 · 06.03`);
     expect(rows.kernel).not.toContain("2026.5.29.2");
   });
 
@@ -92,10 +95,20 @@ describe("buildSidebarVersionRows", () => {
       }),
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
       buildDate: "2026-06-03T16:00:00+08:00",
-      desktopVersion: "0.2.0",
+      desktopVersion: DESKTOP_VERSION,
     });
 
     expect(rows.kernel).toBe("内核 v0.15.2 · 882062c · 日期未知");
+  });
+
+  it("shows a dash instead of a hard-coded kernel version when status is unavailable", () => {
+    const rows = buildSidebarVersionRows({
+      buildCommit: "unknown",
+      buildDate: "unknown",
+      desktopVersion: DESKTOP_VERSION,
+    });
+
+    expect(rows.kernel).toBe("内核 v— · — · 日期未知");
   });
 
   it("shows a dash when the UI build commit is unknown", () => {
@@ -103,9 +116,9 @@ describe("buildSidebarVersionRows", () => {
       runtimeInfo: runtimeInfo(),
       buildCommit: "unknown",
       buildDate: "2026-06-03T16:00:00+08:00",
-      desktopVersion: "0.2.0",
+      desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.ui).toBe("UI v0.2.0 · — · 06.03");
+    expect(rows.ui).toBe(`UI ${DESKTOP_VERSION_LABEL} · — · 06.03`);
   });
 });

@@ -1,23 +1,13 @@
 import { useRuntimeInfo } from "@/hooks/use-runtime-update";
 import { useStatus } from "@/hooks/use-status";
+import { BUILD_COMMIT, BUILD_DATE, DESKTOP_VERSION, UNKNOWN_DATE, UNKNOWN_VALUE, versionLabel } from "@/lib/build-info";
 import type { RuntimeInfo, StatusResponse } from "@hermes/protocol";
 import s from "./app-shell.module.css";
 
-const FALLBACK_VERSION = "0.14.0";
-const UNKNOWN = "—";
-const UNKNOWN_DATE = "日期未知";
-const BUILD_COMMIT = import.meta.env.VITE_HERMES_BUILD_COMMIT || "unknown";
-const BUILD_DATE = import.meta.env.VITE_HERMES_BUILD_DATE || "unknown";
-const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.2.0";
-
-function versionLabel(version: string | undefined): string {
-  const value = version?.trim() || FALLBACK_VERSION;
-  return value.startsWith("v") || value.startsWith("V") ? value : `v${value}`;
-}
 
 function shortCommit(commit: string | undefined): string {
   const normalized = commit?.trim() ?? "";
-  if (!normalized || normalized === "unknown") return UNKNOWN;
+  if (!normalized || normalized === "unknown") return UNKNOWN_VALUE;
   return normalized.slice(0, 7);
 }
 
@@ -87,8 +77,6 @@ export function SidebarVersionTag() {
   const { data: status } = useStatus();
   const { data: runtimeInfo } = useRuntimeInfo();
   const rows = buildSidebarVersionRows({ status, runtimeInfo });
-  const title = `${rows.kernel}\n${rows.ui}\n预览版本，不代表最终品质`;
-
   return (
     <div
       className={s.sidebarInfoPanel}

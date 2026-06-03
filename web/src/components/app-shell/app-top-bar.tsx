@@ -4,13 +4,11 @@ import { Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
+import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
 
-const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.2.0";
-const DESKTOP_VERSION_PARAM = DESKTOP_VERSION.startsWith("v") || DESKTOP_VERSION.startsWith("V")
-  ? DESKTOP_VERSION
-  : `v${DESKTOP_VERSION}`;
+const DESKTOP_VERSION_PARAM = versionLabel(DESKTOP_VERSION);
 const BRAND_URL = `https://hermesagent.org.cn?source=cn_desktop&version=${encodeURIComponent(DESKTOP_VERSION_PARAM)}`;
 
 export function AppTopBar() {
