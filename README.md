@@ -194,6 +194,12 @@ v0.1.1
 - 打磨 macOS 与 Windows 的打包和安装行为；
 - 完善桌面端与 runtime 边界文档，降低贡献门槛。
 
+## Star Track
+
+可以通过下面的趋势图查看本仓库 GitHub Star 的增长变化。
+
+[![Hermes Agent CN Desktop Star 趋势图](https://api.star-history.com/svg?repos=Eynzof/hermes-agent-cn-desktop&type=Date)](https://www.star-history.com/#Eynzof/hermes-agent-cn-desktop&Date)
+
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request。参与贡献前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
