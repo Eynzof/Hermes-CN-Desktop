@@ -16,6 +16,8 @@ export const Channels = {
   runtimeInstallUpdate: ch("runtime-install-update"),
   runtimeRollback: ch("runtime-rollback"),
   switchProfile: ch("switch-profile"),
+  configMigrationScan: ch("config-migration-scan"),
+  configMigrationImport: ch("config-migration-import"),
   getSessionToken: ch("get-session-token"),
   systemResume: ch("system-resume"),
 } as const;
@@ -300,6 +302,59 @@ export interface SwitchProfileResult {
 // --yolo CLI flag): the agent auto-approves dangerous-command prompts. The
 // backend freezes this at import, so the desktop persists a per-profile
 // preference and (re)launches the managed runtime to apply it.
+
+export interface ConfigMigrationScanInput {
+  manualPath?: string;
+}
+
+export interface ConfigMigrationCopyEntry {
+  path: string;
+  kind: "file" | "directory";
+  sizeBytes?: number;
+  containsSecrets: boolean;
+}
+
+export interface ConfigMigrationCandidate {
+  id: string;
+  label: string;
+  path: string;
+  sourceKind: string;
+  distro?: string;
+  profileName?: string;
+  recommendedTargetProfile: string;
+  hasConfig: boolean;
+  hasEnv: boolean;
+  hasAuth: boolean;
+  hasSkills: boolean;
+  hasMemories: boolean;
+  copyEntries: ConfigMigrationCopyEntry[];
+  warnings: string[];
+}
+
+export interface ConfigMigrationScanResult {
+  desktopHermesHome: string;
+  currentProfile: string;
+  candidates: ConfigMigrationCandidate[];
+  warnings: string[];
+}
+
+export interface ConfigMigrationImportInput {
+  sourcePath: string;
+  targetProfileName?: string;
+  recommendedTargetProfile?: string;
+}
+
+export interface ConfigMigrationImportResult {
+  ok: boolean;
+  targetProfileName?: string;
+  hermesHome?: string;
+  apiBaseUrl?: string;
+  gatewayUrl?: string;
+  sessionToken?: string;
+  importedEntries: string[];
+  warnings: string[];
+  error?: string;
+}
 
 export interface YoloModeStatus {
   /** Persisted desktop preference for the active profile's HERMES_HOME. */

@@ -8,6 +8,10 @@
 import type {
   ApiRequestInput,
   ApiRequestResult,
+  ConfigMigrationImportInput,
+  ConfigMigrationImportResult,
+  ConfigMigrationScanInput,
+  ConfigMigrationScanResult,
   FilePickerResult,
   FileUploadInput,
   ImOnboardingApplyInput,
@@ -142,6 +146,17 @@ const tauriBridge = {
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {
     const inv = await ensureInvoke();
     return inv("switch_profile", { input });
+  },
+
+
+  async scanConfigMigration(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult> {
+    const inv = await ensureInvoke();
+    return inv("config_migration_scan", { input: input ?? null });
+  },
+
+  async importConfigMigration(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult> {
+    const inv = await ensureInvoke();
+    return inv("config_migration_import", { input });
   },
 
   async getYoloMode(): Promise<YoloModeStatus> {

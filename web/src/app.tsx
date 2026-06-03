@@ -15,6 +15,7 @@ import { ProjectsRoute } from "@/routes/projects";
 import { ProjectDetailRoute } from "@/routes/project-detail";
 import { SkillsRoute } from "@/routes/skills";
 import { ModelsRoute } from "@/routes/models";
+import { ConfigMigrationRoute } from "@/routes/config-migration";
 import { McpRoute } from "@/routes/mcp";
 import { ProfilesRoute } from "@/routes/profiles";
 import { MemoryRoute } from "@/routes/memory";
@@ -54,6 +55,7 @@ export function App() {
           <Route path="/projects/:workspacePath" element={<ProjectDetailRoute />} />
           <Route path="/skills" element={<SkillsRoute />} />
           <Route path="/models" element={<ModelsRoute />} />
+          <Route path="/config-migration" element={<ConfigMigrationRoute />} />
           <Route path="/mcp" element={<McpRoute />} />
           <Route path="/profiles" element={<ProfilesRoute />} />
           <Route path="/memory" element={<MemoryRoute />} />

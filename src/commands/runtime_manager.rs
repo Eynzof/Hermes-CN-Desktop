@@ -141,7 +141,7 @@ pub async fn runtime_rollback(
 }
 
 /// Stop the current dashboard and spawn a new one.
-async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> {
+pub(crate) async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> {
     let (host, port, hermes_home) = {
         let mut inner = state.inner.lock()?;
         // Stop existing dashboard and any long-lived SSE proxy before swapping runtime.

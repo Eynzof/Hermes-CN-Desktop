@@ -1,4 +1,5 @@
 pub mod api_proxy;
+pub mod config_migration;
 pub mod file_dialogs;
 pub mod gateway;
 pub mod im_onboarding;

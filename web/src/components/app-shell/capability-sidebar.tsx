@@ -20,8 +20,9 @@ interface CapabilityItem {
   title?: string;
 }
 
-const CONFIG_ITEMS: readonly CapabilityItem[] = [
+export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "模型", path: "/models", icon: Cpu },
+  { label: "配置迁移", path: "/config-migration", icon: Sparkles },
   {
     label: "档案",
     path: "/profiles",
