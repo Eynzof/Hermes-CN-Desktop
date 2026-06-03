@@ -90,6 +90,19 @@ function gitShortCommit(): string {
   }
 }
 
+function gitCommitDate(): string {
+  if (process.env.HERMES_BUILD_DATE) return process.env.HERMES_BUILD_DATE;
+  try {
+    return execSync("git log -1 --format=%cI HEAD", {
+      cwd: resolve(__dirname, ".."),
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 function desktopAppVersion(): string {
   if (process.env.HERMES_DESKTOP_APP_VERSION) return process.env.HERMES_DESKTOP_APP_VERSION;
   try {
@@ -245,6 +258,7 @@ export default defineConfig({
   plugins: [react(), hermesTokenPlugin(), hermesSessionLogPlugin(), hermesSessionArchivePlugin()],
   define: {
     "import.meta.env.VITE_HERMES_BUILD_COMMIT": JSON.stringify(gitShortCommit()),
+    "import.meta.env.VITE_HERMES_BUILD_DATE": JSON.stringify(gitCommitDate()),
     "import.meta.env.VITE_HERMES_DESKTOP_VERSION": JSON.stringify(desktopAppVersion()),
     "import.meta.env.VITE_HERMES_DASHBOARD_ORIGIN": JSON.stringify(API_PROXY_TARGET),
   },

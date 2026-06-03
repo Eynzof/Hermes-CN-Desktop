@@ -55,11 +55,14 @@ describe("buildSidebarVersionRows", () => {
       runtimeInfo: runtimeInfo(),
       status: { version: "0.14.0", release_date: "2026.5.29.2" },
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
+      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: "0.1.0",
     });
 
-    expect(rows.kernel).toBe("内核 v0.15.2 · 882062c · 2026-05-29");
-    expect(rows.ui).toBe("UI v0.1.0 · 80157e4");
+    expect(rows.kernel).toBe("内核 v0.15.2 · 882062c · 05.29");
+    expect(rows.ui).toBe("UI v0.1.0 · 80157e4 · 06.03");
+    expect(rows.title).toContain("内核 v0.15.2 · 882062c · 2026-05-29");
+    expect(rows.title).toContain("UI v0.1.0 · 80157e4 · 2026-06-03");
     expect(rows.kernel).not.toContain("2026.5.29.2");
   });
 
@@ -67,10 +70,12 @@ describe("buildSidebarVersionRows", () => {
     const rows = buildSidebarVersionRows({
       status: { version: "0.15.2", release_date: "2026.5.29.2" },
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
+      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: "0.1.0",
     });
 
     expect(rows.kernel).toBe("内核 v0.15.2 · — · 日期未知");
+    expect(rows.ui).toBe("UI v0.1.0 · 80157e4 · 06.03");
     expect(rows.kernel).not.toContain("2026.5.29.2");
   });
 
@@ -86,6 +91,7 @@ describe("buildSidebarVersionRows", () => {
         },
       }),
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
+      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: "0.1.0",
     });
 
@@ -96,9 +102,10 @@ describe("buildSidebarVersionRows", () => {
     const rows = buildSidebarVersionRows({
       runtimeInfo: runtimeInfo(),
       buildCommit: "unknown",
+      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: "0.1.0",
     });
 
-    expect(rows.ui).toBe("UI v0.1.0 · —");
+    expect(rows.ui).toBe("UI v0.1.0 · — · 06.03");
   });
 });
