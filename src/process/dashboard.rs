@@ -551,6 +551,18 @@ fn env_flag(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Whether YOLO mode should be active for a managed dashboard bound to
+/// `hermes_home`.
+///
+/// Combines the persisted desktop toggle (UI-store KV, see
+/// [`crate::ui_store::yolo_mode_enabled`]) with an explicit `HERMES_YOLO_MODE`
+/// override in the desktop's own environment. The env override keeps the
+/// documented power-user / dev escape hatch working even before the UI toggle
+/// is flipped.
+pub fn yolo_mode_effective(hermes_home: &str) -> bool {
+    crate::ui_store::yolo_mode_enabled(hermes_home) || env_flag("HERMES_YOLO_MODE")
+}
+
 pub fn external_agent_allowed() -> bool {
     if env_flag("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT")
         || env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD")
@@ -639,6 +651,21 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     }
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
+
+    // YOLO mode: the backend freezes HERMES_YOLO_MODE at import time, so it can
+    // only be toggled by (re)launching the runtime. Drive it from the persisted
+    // desktop preference (per HERMES_HOME) and make the decision authoritative:
+    // when off, explicitly clear any inherited HERMES_YOLO_MODE so the runtime
+    // never silently bypasses approval prompts.
+    if yolo_mode_effective(&options.hermes_home) {
+        cmd.env("HERMES_YOLO_MODE", "1");
+        log::warn!(
+            "YOLO mode is ON: the managed runtime will auto-approve dangerous-command prompts"
+        );
+    } else {
+        cmd.env_remove("HERMES_YOLO_MODE");
+    }
+
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     #[cfg(unix)]
@@ -944,6 +971,30 @@ mod tests {
 
         std::env::remove_var("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT");
         std::env::remove_var("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD");
+    }
+
+    #[test]
+    #[serial]
+    fn yolo_mode_effective_combines_persisted_pref_and_env() {
+        use tempfile::TempDir;
+        std::env::remove_var("HERMES_YOLO_MODE");
+        let dir = TempDir::new().unwrap();
+        let home = dir.path().to_str().unwrap();
+
+        // Neither persisted nor env → off.
+        assert!(!yolo_mode_effective(home));
+
+        // Persisted preference toggles it.
+        crate::ui_store::set_yolo_mode(home, true).unwrap();
+        assert!(yolo_mode_effective(home));
+        crate::ui_store::set_yolo_mode(home, false).unwrap();
+        assert!(!yolo_mode_effective(home));
+
+        // Env override enables it even when the persisted pref is off.
+        std::env::set_var("HERMES_YOLO_MODE", "1");
+        assert!(yolo_mode_effective(home));
+        std::env::remove_var("HERMES_YOLO_MODE");
+        assert!(!yolo_mode_effective(home));
     }
 
     #[test]

@@ -19,6 +19,7 @@ import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import { useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
 import { useLogs } from "@/hooks/use-logs";
 import { useStatus } from "@/hooks/use-status";
+import { useYoloMode, useSetYoloMode, isYoloModeSupported } from "@/hooks/use-yolo-mode";
 import {
   useCheckRuntimeUpdate,
   useInstallRuntimeUpdate,
@@ -41,6 +42,15 @@ interface SettingsSectionProps {
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
+  const yoloSupported = isYoloModeSupported();
+  const { data: yolo } = useYoloMode();
+  const setYolo = useSetYoloMode();
+
+  const yoloEnabled = !!yolo?.enabled;
+  const yoloPending = yolo != null && yolo.enabled !== yolo.effective;
+  const yoloSub =
+    "自动批准所有危险命令，等同后端 --yolo / HERMES_YOLO_MODE。开启后 Agent 执行 shell、删除文件等高危操作时不再二次确认，切换会重启内核。请仅在受信任的工作区使用。" +
+    (yoloPending ? "（已保存，重启桌面端后生效）" : "");
 
   return (
     <div>
@@ -54,6 +64,19 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       <Row label="显示推理过程" sub="在会话中展示模型的思考和推理内容" right={
         <RadioGroup value={showReasoning ? "on" : "off"} options={[{ value: "off", label: "隐藏" }, { value: "on", label: "显示" }]} onChange={(v) => setShowReasoning(v === "on")} />
       } />
+      {yoloSupported && (
+        <Row label="YOLO 模式" sub={yoloSub} right={
+          <RadioGroup
+            value={yoloEnabled ? "on" : "off"}
+            options={[{ value: "off", label: "关闭" }, { value: "on", label: "开启" }]}
+            onChange={(v) => {
+              const next = v === "on";
+              if (setYolo.isPending || next === yoloEnabled) return;
+              setYolo.mutate(next);
+            }}
+          />
+        } />
+      )}
     </div>
   );
 }

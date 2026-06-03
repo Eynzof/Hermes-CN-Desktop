@@ -295,3 +295,38 @@ export interface SwitchProfileResult {
   error?: string;
   recoveredPreviousProfile?: boolean;
 }
+
+// "YOLO mode" maps to the backend HERMES_YOLO_MODE=1 env var (equivalent to the
+// --yolo CLI flag): the agent auto-approves dangerous-command prompts. The
+// backend freezes this at import, so the desktop persists a per-profile
+// preference and (re)launches the managed runtime to apply it.
+
+export interface YoloModeStatus {
+  /** Persisted desktop preference for the active profile's HERMES_HOME. */
+  enabled: boolean;
+  /**
+   * What the currently-running managed runtime was actually started with.
+   * Differs from `enabled` only between a toggle and the restart that applies
+   * it.
+   */
+  effective: boolean;
+}
+
+export interface SetYoloModeInput {
+  enabled: boolean;
+}
+
+// On `restarted: true`, the renderer must adopt the fresh
+// `apiBaseUrl / gatewayUrl / sessionToken` (the dashboard restarted and the
+// session token rotated), just like SwitchProfileResult. On `restarted: false`
+// the preference was saved but applies on the next desktop launch.
+export interface SetYoloModeResult {
+  ok: boolean;
+  enabled: boolean;
+  effective: boolean;
+  restarted: boolean;
+  apiBaseUrl?: string;
+  gatewayUrl?: string;
+  sessionToken?: string;
+  error?: string;
+}

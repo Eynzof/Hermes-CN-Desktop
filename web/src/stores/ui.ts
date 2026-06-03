@@ -36,7 +36,15 @@ export const showReasoningAtom = atom(
 // subprocess for a profile switch. The window-level overlay in ProfileSwitcherOverlay
 // reads this and blocks UI interaction until the new dashboard is ready.
 // Stays false in web mode (sticky-only switch is instant).
-export const profileSwitchingAtom = atom<{ active: boolean; targetName?: string }>({
+// `title`/`body` override the default profile-switch copy so the same overlay
+// can mask any dashboard restart (e.g. toggling YOLO mode), since the user-
+// facing concern ("don't panic at the transient errors") is identical.
+export const profileSwitchingAtom = atom<{
+  active: boolean;
+  targetName?: string;
+  title?: string;
+  body?: string;
+}>({
   active: false,
 });
 
