@@ -71,11 +71,12 @@ export function useBootstrapActiveProfile() {
 }
 
 // 切 profile 时需要 invalidate 的 query keys——和下面在 hook 里加 profileId
-// 的清单保持一致。改这里时记得同步改 use-config / use-env / use-skills /
-// use-mcp-servers / use-sessions / use-cron / use-analytics。
+// 的清单保持一致。改这里时记得同步改 use-config / use-soul / use-env /
+// use-skills / use-mcp-servers / use-sessions / use-cron / use-analytics。
 export const PROFILE_AWARE_QUERY_KEYS = [
   "config",
   "model-info",
+  "soul",
   "env",
   "skills",
   "mcp-servers",
