@@ -1,0 +1,176 @@
+.introCard {
+  border: 1px solid var(--h-line);
+  border-radius: 16px;
+  background: var(--h-bg-pane);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.introTitle {
+  margin: 0 0 8px;
+  color: var(--h-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.introText {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.notice,
+.error,
+.success {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  margin: 12px 0;
+}
+
+.notice {
+  color: var(--h-text-2);
+  border: 1px solid var(--h-line-soft);
+  background: var(--h-bg-soft);
+}
+
+.error {
+  color: var(--h-err);
+  border: 1px solid var(--h-line);
+  background: color-mix(in srgb, var(--h-err) 10%, transparent);
+}
+
+.success {
+  color: var(--h-ok);
+  border: 1px solid var(--h-ok-soft);
+  background: var(--h-ok-soft);
+}
+
+.candidateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.candidateCard {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--h-line);
+  border-radius: 14px;
+  background: var(--h-bg-pane);
+  padding: 14px;
+  cursor: pointer;
+  color: var(--h-text);
+  font-family: var(--h-font-cn);
+}
+
+.candidateCard:hover,
+.candidateCard[data-active="true"] {
+  border-color: var(--h-accent);
+  background: color-mix(in srgb, var(--h-bg-pane) 88%, var(--h-accent) 12%);
+}
+
+.candidateHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.candidateTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--h-text);
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.badge,
+.secretBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: var(--h-r-pill);
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.badge {
+  color: var(--h-text-2);
+  background: var(--h-bg-chip);
+}
+
+.secretBadge {
+  color: var(--h-warn);
+  background: var(--h-warn-soft);
+}
+
+.pathText,
+.codeText {
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-3);
+  word-break: break-all;
+}
+
+.previewPanel {
+  border: 1px solid var(--h-line);
+  border-radius: 16px;
+  background: var(--h-bg-app);
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.previewTitle {
+  margin: 0 0 10px;
+  color: var(--h-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.entryList {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.entryItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 10px;
+  background: var(--h-bg-pane);
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.entryMeta {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.warningList {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.65;
+}

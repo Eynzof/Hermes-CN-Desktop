@@ -1,4 +1,8 @@
 import type {
+  ConfigMigrationImportInput,
+  ConfigMigrationImportResult,
+  ConfigMigrationScanInput,
+  ConfigMigrationScanResult,
   FileUploadInput,
   HermesMessageMetadata,
   ImOnboardingApplyInput,
@@ -183,6 +187,8 @@ declare global {
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
       rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
+      scanConfigMigration?(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult>;
+      importConfigMigration?(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult>;
       getYoloMode?(): Promise<YoloModeStatus>;
       setYoloMode?(input: SetYoloModeInput): Promise<SetYoloModeResult>;
       imOnboardingState?(input: ImOnboardingStateInput): Promise<ImOnboardingStateResult>;
@@ -311,5 +317,17 @@ export const runtime = {
     }
     if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
     if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
+  },
+  applyConfigMigrationResult(result: ConfigMigrationImportResult): void {
+    if (!result.ok || !window.__HERMES_RUNTIME__) return;
+    if (result.apiBaseUrl) {
+      if (window.__HERMES_RUNTIME__.apiBaseUrl) {
+        window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;
+      }
+      window.__HERMES_RUNTIME__.dashboardApiBaseUrl = result.apiBaseUrl;
+    }
+    if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
+    if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
+    if (result.targetProfileName) window.__HERMES_RUNTIME__.currentProfile = result.targetProfileName;
   },
 };
