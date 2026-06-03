@@ -7,7 +7,7 @@ import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
 
-const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.1.0";
+const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.2.0";
 const DESKTOP_VERSION_PARAM = DESKTOP_VERSION.startsWith("v") || DESKTOP_VERSION.startsWith("V")
   ? DESKTOP_VERSION
   : `v${DESKTOP_VERSION}`;

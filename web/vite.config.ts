@@ -107,9 +107,9 @@ function desktopAppVersion(): string {
   if (process.env.HERMES_DESKTOP_APP_VERSION) return process.env.HERMES_DESKTOP_APP_VERSION;
   try {
     const pkg = JSON.parse(readFileSync(resolve(__dirname, "..", "package.json"), "utf8")) as { version?: unknown };
-    return typeof pkg.version === "string" && pkg.version.trim() ? pkg.version.trim() : "0.1.0";
+    return typeof pkg.version === "string" && pkg.version.trim() ? pkg.version.trim() : "0.2.0";
   } catch {
-    return "0.1.0";
+    return "0.2.0";
   }
 }
 

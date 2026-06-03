@@ -8,7 +8,7 @@ const UNKNOWN = "—";
 const UNKNOWN_DATE = "日期未知";
 const BUILD_COMMIT = import.meta.env.VITE_HERMES_BUILD_COMMIT || "unknown";
 const BUILD_DATE = import.meta.env.VITE_HERMES_BUILD_DATE || "unknown";
-const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.1.0";
+const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || "0.2.0";
 
 function versionLabel(version: string | undefined): string {
   const value = version?.trim() || FALLBACK_VERSION;
