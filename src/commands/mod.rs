@@ -4,6 +4,7 @@ pub mod gateway;
 pub mod im_onboarding;
 pub mod memory;
 pub mod profiles;
+pub mod restart;
 pub mod runtime_manager;
 pub mod skills;
 pub mod sse_proxy;

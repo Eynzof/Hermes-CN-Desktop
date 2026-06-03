@@ -544,10 +544,7 @@ struct SpawnedDashboard {
 fn env_flag(name: &str) -> bool {
     std::env::var(name)
         .ok()
-        .map(|value| {
-            let value = value.trim().to_ascii_lowercase();
-            matches!(value.as_str(), "1" | "true" | "yes" | "on")
-        })
+        .map(|value| crate::util::str_is_truthy(&value))
         .unwrap_or(false)
 }
 

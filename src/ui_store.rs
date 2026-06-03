@@ -510,11 +510,10 @@ pub const YOLO_MODE_KEY: &str = "desktop.yoloMode";
 fn value_is_truthy(value: &Value) -> bool {
     match value {
         Value::Bool(b) => *b,
-        Value::Number(n) => n.as_i64().map(|v| v != 0).unwrap_or(false),
-        Value::String(s) => matches!(
-            s.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "yes" | "on"
-        ),
+        // Accept both integer (1) and float (1.0) JSON numbers; legacy or
+        // hand-edited values may be either.
+        Value::Number(n) => n.as_f64().map(|v| v != 0.0).unwrap_or(false),
+        Value::String(s) => crate::util::str_is_truthy(s),
         _ => false,
     }
 }

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import {
   Activity,
   Bug,
@@ -26,7 +26,7 @@ import {
   useRollbackRuntime,
   useRuntimeInfo,
 } from "@/hooks/use-runtime-update";
-import { showReasoningAtom } from "@/stores/ui";
+import { showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
@@ -45,6 +45,10 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const yoloSupported = isYoloModeSupported();
   const { data: yolo } = useYoloMode();
   const setYolo = useSetYoloMode();
+  // A profile switch and a YOLO toggle both restart the dashboard and share
+  // this overlay; block the toggle while either restart is in flight so we
+  // don't kick off a second restart (or tear the overlay down early).
+  const restartInFlight = useAtomValue(profileSwitchingAtom).active;
 
   const yoloEnabled = !!yolo?.enabled;
   const yoloPending = yolo != null && yolo.enabled !== yolo.effective;
@@ -71,7 +75,7 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
             options={[{ value: "off", label: "关闭" }, { value: "on", label: "开启" }]}
             onChange={(v) => {
               const next = v === "on";
-              if (setYolo.isPending || next === yoloEnabled) return;
+              if (setYolo.isPending || restartInFlight || next === yoloEnabled) return;
               setYolo.mutate(next);
             }}
           />

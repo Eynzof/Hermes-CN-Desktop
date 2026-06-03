@@ -11,11 +11,10 @@
 // the change takes effect immediately, mirroring the stop+respawn flow used by
 // `switch_profile`.
 
-use std::sync::atomic::Ordering;
-
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::commands::restart::{self, RespawnOutcome};
 use crate::error::AppError;
 use crate::process::dashboard;
 use crate::state::AppState;
@@ -58,15 +57,6 @@ pub struct SetYoloModeResult {
     pub error: Option<String>,
 }
 
-fn host_and_port() -> (String, u16) {
-    let host = std::env::var("HERMES_DESKTOP_API_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let port = std::env::var("HERMES_DESKTOP_API_PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(dashboard::DEFAULT_DESKTOP_DASHBOARD_PORT);
-    (host, port)
-}
-
 #[tauri::command]
 pub fn get_yolo_mode(state: State<'_, AppState>) -> Result<YoloModeStatus, AppError> {
     let inner = state.inner.lock()?;
@@ -87,15 +77,6 @@ pub async fn set_yolo_mode(
     // a restart regardless of what happens to the live process.
     let (hermes_home, owns_process) = {
         let inner = state.inner.lock()?;
-        if inner.switch_profile_in_flight {
-            return Ok(SetYoloModeResult {
-                ok: false,
-                enabled: crate::ui_store::yolo_mode_enabled(&inner.hermes_home),
-                effective: inner.yolo_mode,
-                error: Some("运行时正在切换中，请稍后再试".to_string()),
-                ..Default::default()
-            });
-        }
         let owns = inner
             .dashboard_handle
             .as_ref()
@@ -120,122 +101,96 @@ pub async fn set_yolo_mode(
         });
     }
 
-    {
-        let mut inner = state.inner.lock()?;
-        inner.switch_profile_in_flight = true;
+    // Claim the shared restart guard so a profile switch and a YOLO toggle can't
+    // race two stop+respawn sequences on the same dashboard handle.
+    if !restart::try_begin_restart(&state)? {
+        let inner = state.inner.lock()?;
+        return Ok(SetYoloModeResult {
+            ok: false,
+            enabled: crate::ui_store::yolo_mode_enabled(&inner.hermes_home),
+            effective: inner.yolo_mode,
+            error: Some("运行时正在切换中，请稍后再试".to_string()),
+            ..Default::default()
+        });
     }
 
     let result = restart_for_yolo(&state, &hermes_home, enabled).await;
 
-    {
-        let mut inner = state.inner.lock()?;
-        inner.switch_profile_in_flight = false;
-    }
+    restart::end_restart(&state);
 
     Ok(result)
 }
 
-/// Stop the desktop-owned dashboard and respawn it against the same
-/// HERMES_HOME so the freshly-persisted YOLO preference is picked up by
-/// `spawn_dashboard`.
+/// Respawn the desktop-owned dashboard so the freshly-persisted YOLO preference
+/// is picked up by `spawn_dashboard`. Delegates the stop+spawn+recovery dance to
+/// the shared [`restart::respawn_managed_dashboard`] primitive; the recovery
+/// home is the same HERMES_HOME, so a transient first-spawn failure that
+/// recovers still ends up running with the new preference.
 async fn restart_for_yolo(
     state: &State<'_, AppState>,
     hermes_home: &str,
     enabled: bool,
 ) -> SetYoloModeResult {
-    let (host, port) = host_and_port();
+    let (host, port) = restart::host_and_port();
 
-    // 1. Stop the running dashboard.
-    {
-        let mut inner = match state.inner.lock() {
-            Ok(i) => i,
-            Err(e) => {
-                return SetYoloModeResult {
-                    ok: false,
-                    enabled,
-                    error: Some(e.to_string()),
-                    ..Default::default()
-                }
-            }
-        };
-        if let Some(stop) = inner.gateway_sse_stop.take() {
-            stop.store(true, Ordering::Relaxed);
-        }
-        let session_token = inner.session_token.clone();
-        if let Some(ref mut handle) = inner.dashboard_handle {
-            handle.stop_with_token(session_token.as_deref());
-        }
-        inner.dashboard_handle = None;
-    }
-
-    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-
-    // 2. Respawn against the same HERMES_HOME.
-    let handle = match dashboard::ensure_hermes_dashboard(dashboard::EnsureDashboardOptions {
-        host: host.clone(),
+    let respawn = match restart::respawn_managed_dashboard(
+        state,
+        &host,
         port,
-        hermes_home: hermes_home.to_string(),
-        allow_external_agent: dashboard::external_agent_allowed(),
-        allow_port_fallback: true,
-    })
+        hermes_home,
+        hermes_home,
+    )
     .await
     {
-        Ok(h) => h,
+        Ok(r) => r,
         Err(e) => {
-            log::error!("Failed to restart dashboard after YOLO toggle: {}", e);
-            let effective = state.inner.lock().map(|i| i.yolo_mode).unwrap_or(false);
             return SetYoloModeResult {
                 ok: false,
                 enabled,
-                effective,
-                restarted: false,
-                error: Some(format!(
-                    "已保存 YOLO 设置，但重启内核失败：{}。重启桌面端后生效。",
-                    e
-                )),
+                error: Some(e.to_string()),
                 ..Default::default()
-            };
+            }
         }
     };
 
-    // 3. Fetch a fresh token (process-local, rotates on restart) and update
-    //    state so the renderer can reconnect.
-    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-    let token = match env_token {
-        Some(t) => Some(t),
-        None => dashboard::fetch_session_token(&handle.api_base_url).await,
-    };
-    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
-    let api_base_url = handle.api_base_url.clone();
-    let effective = dashboard::yolo_mode_effective(hermes_home);
-
-    {
-        let mut inner = match state.inner.lock() {
-            Ok(i) => i,
-            Err(e) => {
-                return SetYoloModeResult {
-                    ok: false,
-                    enabled,
-                    error: Some(e.to_string()),
-                    ..Default::default()
-                }
+    match respawn.outcome {
+        // For YOLO the recovery home is the same home, so a recovered spawn also
+        // booted with the new preference — treat both as success.
+        RespawnOutcome::Spawned | RespawnOutcome::Recovered { .. } => {
+            let effective = dashboard::yolo_mode_effective(hermes_home);
+            if let Ok(mut inner) = state.inner.lock() {
+                inner.yolo_mode = effective;
             }
-        };
-        inner.api_base_url = handle.api_base_url.clone();
-        inner.gateway_url = gateway_url.clone();
-        inner.session_token = token.clone();
-        inner.yolo_mode = effective;
-        inner.dashboard_handle = Some(handle);
-    }
-
-    SetYoloModeResult {
-        ok: true,
-        enabled,
-        effective,
-        restarted: true,
-        api_base_url: Some(api_base_url),
-        gateway_url: Some(gateway_url),
-        session_token: token,
-        error: None,
+            SetYoloModeResult {
+                ok: true,
+                enabled,
+                effective,
+                restarted: true,
+                api_base_url: respawn.api_base_url,
+                gateway_url: respawn.gateway_url,
+                session_token: respawn.session_token,
+                error: None,
+            }
+        }
+        RespawnOutcome::Down {
+            error,
+            recovery_error,
+        } => {
+            // No runtime is running, so nothing is enforcing (or bypassing)
+            // approvals — report effective=false rather than the stale value.
+            if let Ok(mut inner) = state.inner.lock() {
+                inner.yolo_mode = false;
+            }
+            SetYoloModeResult {
+                ok: false,
+                enabled,
+                effective: false,
+                restarted: false,
+                error: Some(format!(
+                    "已保存 YOLO 设置，但重启内核失败：{error}（恢复也失败：{recovery_error}）。重启桌面端后生效。"
+                )),
+                ..Default::default()
+            }
+        }
     }
 }

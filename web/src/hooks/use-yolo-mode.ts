@@ -3,6 +3,7 @@ import { useSetAtom } from "jotai";
 import { runtime } from "@/lib/runtime";
 import { reloadUiStore } from "@/lib/ui-store";
 import { profileSwitchingAtom } from "@/stores/ui";
+import { PROFILE_AWARE_QUERY_KEYS } from "@/hooks/use-profiles";
 import type { YoloModeStatus } from "@hermes/protocol";
 
 /** YOLO mode is a desktop-only feature: it depends on (re)launching the managed
@@ -53,11 +54,20 @@ export function useSetYoloMode() {
       }
     },
     onSuccess: async () => {
-      // The runtime restarted: reconnect the gateway with the rotated token and
-      // refresh status/profile-derived state.
+      // The runtime restarted (same HERMES_HOME, rotated session token), just
+      // like a profile switch — reconnect the UI store and refetch every
+      // profile-aware query that was talking to the now-dead process.
       await reloadUiStore();
       qc.invalidateQueries({ queryKey: ["yolo-mode"] });
-      qc.invalidateQueries({ queryKey: ["status"] });
+      for (const key of PROFILE_AWARE_QUERY_KEYS) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
+    },
+    onError: () => {
+      // A restart may have failed after the preference was already persisted.
+      // Refetch so the toggle reflects the saved value (and the "applies on
+      // restart" hint) instead of snapping back to a stale position.
+      qc.invalidateQueries({ queryKey: ["yolo-mode"] });
     },
   });
 }
