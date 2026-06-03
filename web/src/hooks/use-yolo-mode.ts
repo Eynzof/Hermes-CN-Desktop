@@ -38,7 +38,7 @@ export function useSetYoloMode() {
       setSwitching({
         active: true,
         title: enabled ? "正在开启 YOLO 模式…" : "正在关闭 YOLO 模式…",
-        body: "桌面端正在重启内核以使设置生效，通常 2-3 秒，请稍候。",
+        body: "桌面端正在重启内核以使设置生效，通常 5-15 秒，请稍候。",
       });
       try {
         const result = await window.hermesDesktop.setYoloMode({ enabled });

@@ -127,7 +127,7 @@ function YoloDangerZone() {
             </Dialog.Title>
             <Dialog.Description id="yolo-confirm-desc" className={s.dangerDialogBody}>
               开启后，Agent 执行 shell 命令、删除文件等高危操作时将<strong>不再弹出二次确认</strong>，
-              全部自动批准。请确认你信任当前工作区、并清楚 Agent 将要做什么。切换会重启内核（约 2-3 秒）。
+              全部自动批准。请确认你信任当前工作区、并清楚 Agent 将要做什么。切换会重启内核（约 5-15 秒）。
             </Dialog.Description>
             <label className={s.dangerConfirmRow}>
               <input
