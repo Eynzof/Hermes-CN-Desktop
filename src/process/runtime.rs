@@ -271,8 +271,31 @@ pub fn runtime_root() -> PathBuf {
         }
     }
 
-    let data_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
-    data_dir.join("cn.org.hermesagent.desktop").join("runtime")
+    let base = resolve_runtime_data_base(dirs::data_dir(), dirs::home_dir()).expect(
+        "无法确定可写的数据目录：系统数据目录与用户主目录都不可用。\
+         请设置环境变量 HERMES_DESKTOP_RUNTIME_ROOT 指向一个可写目录后重试。",
+    );
+    base.join("cn.org.hermesagent.desktop").join("runtime")
+}
+
+/// Resolve the base directory under which the managed runtime tree lives,
+/// without ever silently falling back to the current working directory (which
+/// for a packaged app may be read-only, a network path, or otherwise
+/// unexpected — writing the runtime/downloads/HERMES_HOME there causes
+/// permission and data-isolation problems). Prefer the OS data dir, then a
+/// well-known location under the user's home, and otherwise return an
+/// actionable error. Pure/injectable so it can be unit tested. (#53)
+fn resolve_runtime_data_base(
+    data_dir: Option<PathBuf>,
+    home_dir: Option<PathBuf>,
+) -> Result<PathBuf, String> {
+    if let Some(dir) = data_dir {
+        return Ok(dir);
+    }
+    if let Some(home) = home_dir {
+        return Ok(home.join(".local").join("share"));
+    }
+    Err("system data dir and home dir are both unavailable".to_string())
 }
 
 pub fn hermes_home_dir() -> PathBuf {
@@ -1904,6 +1927,25 @@ mod tests {
         assert!(now.ends_with('Z'), "missing Z suffix: {now}");
         assert_eq!(&now[4..5], "-");
         assert_eq!(&now[10..11], "T");
+    }
+
+    #[test]
+    fn resolve_runtime_data_base_prefers_os_data_dir() {
+        let base =
+            resolve_runtime_data_base(Some(PathBuf::from("/data")), Some(PathBuf::from("/home/u")));
+        assert_eq!(base, Ok(PathBuf::from("/data")));
+    }
+
+    #[test]
+    fn resolve_runtime_data_base_falls_back_to_home_not_cwd() {
+        let base = resolve_runtime_data_base(None, Some(PathBuf::from("/home/u")));
+        // Must NOT be "." (the current working directory) — that is the bug (#53).
+        assert_eq!(base, Ok(PathBuf::from("/home/u/.local/share")));
+    }
+
+    #[test]
+    fn resolve_runtime_data_base_errors_when_nothing_available() {
+        assert!(resolve_runtime_data_base(None, None).is_err());
     }
 
     // -------- Fixtures --------
