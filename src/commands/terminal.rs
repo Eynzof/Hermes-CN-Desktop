@@ -4,11 +4,10 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use once_cell::sync::Lazy;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -22,8 +21,8 @@ const DEFAULT_ROWS: u16 = 30;
 const MAX_COLS: u16 = 300;
 const MAX_ROWS: u16 = 120;
 
-static TERMINAL_SESSIONS: Lazy<Mutex<HashMap<String, TerminalSession>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static TERMINAL_SESSIONS: LazyLock<Mutex<HashMap<String, TerminalSession>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 struct TerminalSession {
     master: Box<dyn MasterPty + Send>,
