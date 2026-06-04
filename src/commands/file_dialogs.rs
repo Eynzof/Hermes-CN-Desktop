@@ -120,17 +120,101 @@ pub fn create_workspace_project() -> AppResult<FilePickerResult> {
     })
 }
 
-#[tauri::command]
-pub async fn open_workspace_path(input: WorkspacePathInput) -> AppResult<SimpleApiResult> {
-    let path = input.path.trim();
+/// Returns true when `s` looks like a `scheme://...` URL. A Windows drive path
+/// such as `C:\Users\x` is intentionally NOT a URL (it has `:\`, not `://`).
+fn looks_like_url(s: &str) -> bool {
+    match s.find("://") {
+        Some(idx) if idx > 0 => {
+            let scheme = &s[..idx];
+            scheme
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic())
+                && scheme
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+        }
+        _ => false,
+    }
+}
+
+/// Validate a user-supplied workspace path before handing it to the OS opener.
+/// Rejects empty input and URL-like targets (so `open::that` can't be steered
+/// into opening a browser / arbitrary shell target), and requires the path to
+/// resolve to an accessible local filesystem entry.
+fn validate_open_target(raw: &str) -> AppResult<PathBuf> {
+    let path = raw.trim();
     if path.is_empty() {
         return Err(AppError::InvalidRequest("Empty path".to_string()));
     }
+    if looks_like_url(path) {
+        return Err(AppError::InvalidRequest(format!(
+            "Refusing to open URL target: {path}"
+        )));
+    }
+    let candidate = PathBuf::from(path);
+    fs::metadata(&candidate)
+        .map_err(|e| AppError::InvalidRequest(format!("Path is not accessible: {e}")))?;
+    Ok(candidate)
+}
 
-    open::that(path).map_err(|e| AppError::FileError(format!("Failed to open: {}", e)))?;
+#[tauri::command]
+pub async fn open_workspace_path(input: WorkspacePathInput) -> AppResult<SimpleApiResult> {
+    let target = validate_open_target(&input.path)?;
+
+    open::that(&target).map_err(|e| AppError::FileError(format!("Failed to open: {}", e)))?;
 
     Ok(SimpleApiResult {
         ok: true,
         message: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_url_targets() {
+        for url in [
+            "http://example.com",
+            "https://example.com/path",
+            "file:///etc/passwd",
+            "ftp://host/file",
+        ] {
+            assert!(looks_like_url(url), "{url} should look like a URL");
+            assert!(
+                matches!(validate_open_target(url), Err(AppError::InvalidRequest(_))),
+                "{url} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn does_not_treat_filesystem_paths_as_urls() {
+        assert!(!looks_like_url("/Users/enzo/project"));
+        assert!(!looks_like_url("C:\\Users\\enzo\\project"));
+        assert!(!looks_like_url("relative/dir"));
+        assert!(!looks_like_url(""));
+    }
+
+    #[test]
+    fn rejects_empty_and_missing_paths() {
+        assert!(matches!(
+            validate_open_target("   "),
+            Err(AppError::InvalidRequest(_))
+        ));
+        assert!(matches!(
+            validate_open_target("/no/such/path/hermes-xyz-404"),
+            Err(AppError::InvalidRequest(_))
+        ));
+    }
+
+    #[test]
+    fn accepts_existing_directory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().to_string_lossy().to_string();
+        let resolved = validate_open_target(&path).expect("existing dir accepted");
+        assert_eq!(resolved.as_path(), dir.path());
+    }
 }
