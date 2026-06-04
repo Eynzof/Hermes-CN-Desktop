@@ -40,6 +40,8 @@ import type {
   UiStoreSnapshot,
   UiTurnStats,
 } from "./runtime";
+import { BUILD_COMMIT, BUILD_DATE, DESKTOP_VERSION, versionLabel } from "./build-info";
+import hermesLogoSvg from "../../../icons/icon.svg?raw";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
 
@@ -48,6 +50,38 @@ export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
 }
 
 const BASE64_CHUNK_SIZE = 0x8000;
+
+interface BootstrapVersionLine {
+  label: "界面";
+  version: string;
+  commit: string;
+  date: string;
+}
+
+function shortBootstrapCommit(commit: string | undefined): string {
+  const normalized = commit?.trim() ?? "";
+  if (!normalized || normalized === "unknown") return "—";
+  return normalized.slice(0, 4);
+}
+
+function shortBootstrapCommitDate(value: string | undefined): string {
+  const normalized = value?.trim() ?? "";
+  if (!normalized || normalized === "unknown") return "日期未知";
+  const datePrefix = normalized.match(/^\d{4}-(\d{2})-(\d{2})/)?.slice(1, 3);
+  if (datePrefix) return `${datePrefix[0]}.${datePrefix[1]}`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "日期未知";
+  return `${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function buildBootstrapVersionLine(): BootstrapVersionLine {
+  return {
+    label: "界面",
+    version: versionLabel(DESKTOP_VERSION),
+    commit: shortBootstrapCommit(BUILD_COMMIT),
+    date: shortBootstrapCommitDate(BUILD_DATE),
+  };
+}
 
 export function arrayBufferToBase64(data: ArrayBuffer): string {
   const bytes = new Uint8Array(data);
@@ -308,35 +342,140 @@ function showBootstrapOverlay(initialMessage: string): {
   update(phase: string, message: string): void;
   dismiss(): void;
 } {
+  let lastErrorMessage = "";
+
   const root = document.createElement("div");
   root.id = "hermes-bootstrap-overlay";
   root.setAttribute(
     "style",
-    "position:fixed;inset:0;background:#0a0a0a;color:#fbfaf6;" +
-      "display:flex;flex-direction:column;align-items:center;justify-content:center;" +
+    "position:fixed;inset:0;background:" +
+      "radial-gradient(circle at 50% 40%,rgba(201,107,58,0.30) 0%,rgba(201,107,58,0.18) 22%,rgba(201,107,58,0.08) 42%,transparent 62%),#0a0a0a;" +
+      "color:#fbfaf6;display:flex;align-items:center;justify-content:center;" +
       "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
-      "z-index:2147483647;gap:24px;padding:48px;",
+      "z-index:2147483647;padding:48px;box-sizing:border-box;overflow:auto;",
   );
 
-  // Block H mark — matches icons/icon.svg
-  const mark = document.createElement("div");
+  const panel = document.createElement("section");
+  panel.setAttribute("aria-live", "polite");
+  panel.setAttribute(
+    "style",
+    "width:min(760px,calc(100vw - 64px));display:flex;flex-direction:column;" +
+      "align-items:center;gap:18px;text-align:center;",
+  );
+
+  const mark = document.createElement("img");
+  mark.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(hermesLogoSvg)}`;
+  mark.alt = "Hermes Agent Logo";
   mark.setAttribute(
     "style",
-    "width:96px;height:96px;background:#fbfaf6;color:#0a0a0a;border-radius:22px;" +
-      "display:flex;align-items:center;justify-content:center;font-weight:700;" +
-      "font-size:64px;letter-spacing:-0.04em;line-height:1;",
+    "width:104px;height:104px;border-radius:24px;display:block;" +
+      "box-shadow:0 24px 60px rgba(0,0,0,0.45),0 0 80px rgba(201,107,58,0.42),0 0 0 1px rgba(255,255,255,0.08);",
   );
-  mark.textContent = "H";
-  root.appendChild(mark);
+  panel.appendChild(mark);
+
+  const title = document.createElement("div");
+  title.setAttribute(
+    "style",
+    "font-size:16px;font-weight:700;letter-spacing:0.02em;color:#fbfaf6;",
+  );
+  title.textContent = "Hermes Agent 中文社区桌面版";
+  panel.appendChild(title);
+
+  const brand = document.createElement("div");
+  brand.setAttribute(
+    "style",
+    "margin-top:-10px;font-size:12px;font-weight:600;color:rgba(251,250,246,0.54);" +
+      "letter-spacing:0.08em;text-transform:uppercase;",
+  );
+  brand.textContent = "Hermes Agent 中文社区 · hermesagent.org.cn";
+  panel.appendChild(brand);
 
   const message = document.createElement("div");
   message.id = "hermes-bootstrap-message";
   message.setAttribute(
     "style",
-    "font-size:15px;color:#fbfaf6;text-align:center;max-width:480px;line-height:1.5;",
+    "font-size:15px;color:rgba(251,250,246,0.9);max-width:620px;line-height:1.6;",
   );
   message.textContent = initialMessage;
-  root.appendChild(message);
+  panel.appendChild(message);
+
+  const detail = document.createElement("div");
+  detail.id = "hermes-bootstrap-error-detail";
+  detail.setAttribute(
+    "style",
+    "display:none;width:100%;box-sizing:border-box;margin-top:4px;border:1px solid rgba(251,250,246,0.14);" +
+      "border-radius:18px;background:rgba(18,18,18,0.86);box-shadow:0 18px 48px rgba(0,0,0,0.28);overflow:hidden;",
+  );
+
+  const detailHeader = document.createElement("div");
+  detailHeader.setAttribute(
+    "style",
+    "display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;" +
+      "border-bottom:1px solid rgba(251,250,246,0.1);",
+  );
+
+  const detailTitle = document.createElement("div");
+  detailTitle.setAttribute(
+    "style",
+    "font-size:12px;font-weight:700;color:rgba(251,250,246,0.72);letter-spacing:0.08em;text-transform:uppercase;",
+  );
+  detailTitle.textContent = "完整错误信息";
+  detailHeader.appendChild(detailTitle);
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.disabled = true;
+  copyButton.setAttribute(
+    "style",
+    "appearance:none;border:1px solid rgba(251,250,246,0.18);background:rgba(251,250,246,0.08);" +
+      "color:#fbfaf6;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700;" +
+      "font-family:inherit;cursor:pointer;",
+  );
+  copyButton.textContent = "复制错误信息";
+  detailHeader.appendChild(copyButton);
+  detail.appendChild(detailHeader);
+
+  const errorText = document.createElement("pre");
+  errorText.id = "hermes-bootstrap-error-text";
+  errorText.tabIndex = 0;
+  errorText.setAttribute(
+    "style",
+    "margin:0;max-height:min(300px,38vh);overflow:auto;padding:14px;text-align:left;" +
+      "white-space:pre-wrap;word-break:break-word;user-select:text;" +
+      "font-family:'JetBrains Mono','SFMono-Regular',Consolas,ui-monospace,monospace;" +
+      "font-size:12px;line-height:1.6;color:rgba(251,250,246,0.88);",
+  );
+  detail.appendChild(errorText);
+  panel.appendChild(detail);
+
+  const versionPanel = document.createElement("div");
+  versionPanel.setAttribute(
+    "style",
+    "display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:2px;" +
+      "font-family:'JetBrains Mono','SFMono-Regular',Consolas,ui-monospace,monospace;" +
+      "font-size:10px;line-height:1.45;letter-spacing:0.06em;color:rgba(133,126,111,0.76);",
+  );
+
+  const uiVersionRow = document.createElement("div");
+  const versionNote = document.createElement("div");
+
+  const applyVersionRow = (rowEl: HTMLDivElement, line: BootstrapVersionLine) => {
+    rowEl.setAttribute(
+      "style",
+      "font-variant-numeric:tabular-nums;white-space:nowrap;color:rgba(133,126,111,0.76);",
+    );
+    rowEl.textContent = `${line.label} ${line.version} · ${line.commit} · ${line.date}`;
+  };
+
+  applyVersionRow(uiVersionRow, buildBootstrapVersionLine());
+  versionNote.setAttribute(
+    "style",
+    "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
+      "font-size:10px;font-weight:500;letter-spacing:0.03em;color:rgba(133,126,111,0.5);",
+  );
+  versionNote.textContent = "预览版本，不代表最终品质";
+  versionPanel.append(uiVersionRow, versionNote);
+  panel.appendChild(versionPanel);
 
   const sub = document.createElement("div");
   sub.id = "hermes-bootstrap-sub";
@@ -346,16 +485,50 @@ function showBootstrapOverlay(initialMessage: string): {
       "color:rgba(255,255,255,0.45);letter-spacing:0.06em;text-transform:uppercase;",
   );
   sub.textContent = "Hermes Agent 中文社区桌面版 · 首次启动";
-  root.appendChild(sub);
+  panel.appendChild(sub);
+
+  root.appendChild(panel);
 
   document.body.appendChild(root);
 
+  const copyErrorMessage = async () => {
+    if (!lastErrorMessage) return;
+    try {
+      await navigator.clipboard.writeText(lastErrorMessage);
+      copyButton.textContent = "已复制";
+      window.setTimeout(() => {
+        copyButton.textContent = "复制错误信息";
+      }, 1600);
+    } catch {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(errorText);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      copyButton.textContent = "已选中，可手动复制";
+      window.setTimeout(() => {
+        copyButton.textContent = "复制错误信息";
+      }, 2200);
+    }
+  };
+
+  copyButton.addEventListener("click", () => {
+    void copyErrorMessage();
+  });
+
   return {
     update(phase, msg) {
-      message.textContent = msg || message.textContent;
       if (phase === "error") {
-        mark.style.background = "#c96b3a";
+        lastErrorMessage = msg || "未知启动错误";
+        root.setAttribute("role", "alert");
+        panel.setAttribute("aria-live", "assertive");
+        message.textContent = "启动 Hermes Agent 内核时遇到问题，请复制下方完整错误信息用于排查。";
+        errorText.textContent = lastErrorMessage;
+        detail.style.display = "block";
+        copyButton.disabled = false;
         sub.textContent = "首次启动失败";
+      } else if (msg) {
+        message.textContent = msg;
       }
     },
     dismiss() {
@@ -424,6 +597,7 @@ async function waitForBootstrap(
 
 export async function installTauriBridge(): Promise<void> {
   const inv = await ensureInvoke();
+
   let config = await inv<{
     apiBaseUrl: string;
     gatewayUrl: string;
