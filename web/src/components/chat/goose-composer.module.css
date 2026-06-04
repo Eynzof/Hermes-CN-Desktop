@@ -1141,12 +1141,14 @@
 }
 
 .sendButton {
+  --composer-send-accent: var(--persimmon);
+
   min-width: 88px;
   height: var(--composer-action-height);
   gap: 7px;
-  border: 1px solid var(--h-accent);
+  border: 1px solid var(--composer-send-accent);
   border-radius: var(--h-r-md);
-  background: var(--h-accent);
+  background: var(--composer-send-accent);
   color: #fff;
   box-shadow: none;
   font-size: 13px;
@@ -1160,8 +1162,8 @@
 }
 
 .sendButton:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--h-accent) 84%, var(--h-text));
-  background: color-mix(in srgb, var(--h-accent) 84%, var(--h-text));
+  border-color: color-mix(in srgb, var(--composer-send-accent) 84%, var(--h-text));
+  background: color-mix(in srgb, var(--composer-send-accent) 84%, var(--h-text));
 }
 
 .sendButton:disabled,
@@ -1175,15 +1177,15 @@
 
 .sendButton[data-mode="stop"] {
   min-width: 44px;
-  border-color: var(--h-err);
-  background: var(--h-err);
+  border-color: var(--composer-send-accent);
+  background: var(--composer-send-accent);
   color: #fff;
   padding: 0 12px;
 }
 
 .sendButton[data-mode="stop"]:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--h-err) 84%, var(--h-text));
-  background: color-mix(in srgb, var(--h-err) 84%, var(--h-text));
+  border-color: color-mix(in srgb, var(--composer-send-accent) 84%, var(--h-text));
+  background: color-mix(in srgb, var(--composer-send-accent) 84%, var(--h-text));
 }
 
 .sendIcon {

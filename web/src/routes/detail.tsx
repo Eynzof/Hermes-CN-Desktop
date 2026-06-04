@@ -361,7 +361,7 @@ export function DetailRoute() {
                     ? "已复制"
                     : sessionIdCopyState === "error"
                       ? "复制失败"
-                      : "复制ID"}
+                      : "复制会话 ID"}
                 </span>
               </TopBarActionButton>
             ) : null}
