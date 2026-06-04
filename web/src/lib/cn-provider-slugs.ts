@@ -19,10 +19,8 @@ export const CN_BACKEND_PROVIDER_SLUGS = [
   "minimax-oauth",
   "stepfun",
   "xiaomi",
-  "tencent-tokenhub",
-  "qwen-oauth",
   "anthropic",   // ANTHROPIC_API_KEY widely used even in CN edition
-  "openrouter",  // a common fallback aggregator
+  "openrouter",  // kept as an explicit user-requested fallback aggregator
 ] as const;
 
 export type CnBackendProviderSlug = (typeof CN_BACKEND_PROVIDER_SLUGS)[number];

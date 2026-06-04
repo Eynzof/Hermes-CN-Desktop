@@ -1050,8 +1050,19 @@
 
 .providerListToolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+.providerToolbarActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.providerToolbarActions .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .customProviderBackdrop {
@@ -1129,6 +1140,52 @@
   line-height: 1.55;
   color: var(--h-text-3);
   font-family: var(--h-font-cn);
+}
+
+.localProviderGuide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px 0 6px;
+}
+
+.localProviderCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+  color: var(--h-text-2);
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.localProviderCard:hover {
+  border-color: var(--h-accent);
+  background: var(--h-bg-soft);
+}
+
+.localProviderCard strong {
+  color: var(--h-text);
+  font-size: 12px;
+}
+
+.localProviderCard code {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--h-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.localProviderCard span {
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .customProviderActions {
@@ -1689,6 +1746,10 @@
   }
 
   .providerListToolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .localProviderGuide {
     grid-template-columns: minmax(0, 1fr);
   }
 
