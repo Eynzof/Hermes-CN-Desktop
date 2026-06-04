@@ -30,6 +30,7 @@ import {
 import { showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
+import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import s from "./settings.module.css";
@@ -199,6 +200,7 @@ export function ConfigSection({ showHeading = true }: SettingsSectionProps) {
         return key.toLowerCase().includes(lowerSearch)
           || label.toLowerCase().includes(lowerSearch)
           || f.description.toLowerCase().includes(lowerSearch)
+          || translateConfigField(key, f.description).toLowerCase().includes(lowerSearch)
           || (CATEGORY_CN[f.category] ?? f.category).toLowerCase().includes(lowerSearch);
       })
     : Object.entries(schema.fields).filter(([, f]) => f.category === activeCategory);
@@ -899,14 +901,14 @@ function ConfigFieldRow({ fieldKey, field, value, onSave, showCategory }: {
     setEditing(false);
   };
 
-  const label = field.description || fieldKey;
+  const label = translateConfigField(fieldKey, field.description || fieldKey);
 
   if (field.type === "select" && field.options) {
     return (
       <Row
         label={label}
         sub={showCategory ? `[${CATEGORY_CN[field.category] ?? field.category}] ${fieldKey}` : fieldKey}
-        right={<select className={s.select} value={String(value ?? "")} onChange={(e) => onSave(e.target.value)}>{field.options.map((o) => <option key={o} value={o}>{o || "(默认)"}</option>)}</select>}
+        right={<select className={s.select} value={String(value ?? "")} onChange={(e) => onSave(e.target.value)}>{field.options.map((o) => <option key={o} value={o}>{translateConfigOption(fieldKey, o)}</option>)}</select>}
       />
     );
   }
