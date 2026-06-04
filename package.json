@@ -6,6 +6,7 @@
   "homepage": "https://hermesagent.org.cn",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
+    "preinstall": "node scripts/only-pnpm.mjs",
     "version:sync": "node scripts/sync-desktop-version.mjs",
     "version:check": "node scripts/sync-desktop-version.mjs --check",
     "dev": "pnpm web:dev",
