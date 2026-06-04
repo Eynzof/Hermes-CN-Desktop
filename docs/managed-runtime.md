@@ -236,14 +236,18 @@ pnpm runtime:install-local -- --force
 pnpm tauri:dev
 ```
 
-只有明确需要连外部 dashboard 时才用旧模式：
+桌面端已锁定到 managed runtime：默认和 dev 都走 managed runtime，不再支持连接外部
+dashboard。
 
 ```
 pnpm tauri:dev:external
 ```
 
-该模式会设置 `HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1` 和
-`HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT=1`，用于调试，不是产品默认路径。
+`pnpm tauri:dev:external` 现在只是**已废弃的兼容别名**，它走的是和 `pnpm tauri:dev`
+完全相同的 managed dev 路径（脚本会显式设置 `HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT=0`）。
+代码侧 `external_agent_allowed()` 会忽略 `HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT` 和
+`HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD`、始终返回 `false`，因此这两个环境变量已不再生效，
+别名仅为向后兼容保留。
 
 ## 五、Runtime 升级
 
