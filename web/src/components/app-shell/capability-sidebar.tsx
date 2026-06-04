@@ -3,6 +3,7 @@ import {
   Boxes,
   Brain,
   Clock,
+  Ghost,
   MessageCircle,
   MessageSquareText,
   Cpu,
@@ -33,6 +34,7 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "MCP", path: "/mcp", icon: Puzzle },
   { label: "终端", path: "/console", icon: TerminalSquare, title: "Hermes Console：直接运行 Hermes 命令" },
   { label: "记忆", path: "/memory", icon: Brain },
+  { label: "灵魂", path: "/soul", icon: Ghost, title: "SOUL.md：智能体的核心人格（系统提示词第一身份）" },
 ];
 
 const AUTOMATION_ITEMS: readonly CapabilityItem[] = [

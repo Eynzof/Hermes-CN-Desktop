@@ -15,4 +15,10 @@ describe("TOP_TABS", () => {
   it("shows config migration in the 021 config sidebar section", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "配置迁移" && item.path === "/config-migration")).toBe(true);
   });
+
+  it("keeps soul under the 02 config tab and sidebar section", () => {
+    expect(tabFor("/soul")).toBe("skills");
+    expect(tabFor("/soul/edit")).toBe("skills");
+    expect(CONFIG_ITEMS.some((item) => item.label === "灵魂" && item.path === "/soul")).toBe(true);
+  });
 });

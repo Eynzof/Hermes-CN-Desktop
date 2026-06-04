@@ -45,7 +45,7 @@ describe("provider catalog config updates", () => {
       api_mode: "chat_completions",
     });
     expect(config.providers["cp.compshare.cn"]).toMatchObject({
-      name: "优云智算 · Coding Plan",
+      name: "优云智算 · Agent Plan",
       api_key: "test-key",
       model: "glm-5.1",
     });
@@ -129,6 +129,80 @@ describe("provider catalog config updates", () => {
       preset!.models.some((m) => m.id === preset!.defaultModel),
       `${id}.defaultModel "${preset!.defaultModel}" must appear in models[]`,
     ).toBe(true);
+  });
+
+  it("ships direct CN providers without 302.AI and keeps OpenRouter as the explicit aggregator", () => {
+    const ids = BUILTIN_PROVIDER_CATALOG.providers.map((provider) => provider.id);
+
+    expect(ids).not.toContain("ai302");
+    expect(ids).toContain("openrouter");
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("keeps plan-specific endpoints separate from pay-as-you-go endpoints", () => {
+    const byId = new Map(BUILTIN_PROVIDER_CATALOG.providers.map((provider) => [provider.id, provider]));
+
+    expect(byId.get("modelverse")).toMatchObject({
+      name: "优云智算 · API 按量付费",
+      baseUrl: "https://api.modelverse.cn/v1",
+    });
+    expect(byId.get("cp.compshare.cn")).toMatchObject({
+      name: "优云智算 · Agent Plan",
+      baseUrl: "https://cp.compshare.cn/v1",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("alibaba")).toMatchObject({
+      name: "阿里云百炼 · API 按量付费",
+      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    });
+    expect(byId.get("alibaba-coding-cn")).toMatchObject({
+      name: "阿里云百炼 · Coding Plan",
+      baseUrl: "https://coding.dashscope.aliyuncs.com/v1",
+      defaultModel: "qwen3-coder-plus",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("zai")).toMatchObject({
+      name: "智谱 GLM · API 按量付费",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    });
+    expect(byId.get("zai-coding-cn")).toMatchObject({
+      name: "智谱 GLM · Coding Plan",
+      baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+      defaultModel: "glm-5.1",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("volcengine-ark")).toMatchObject({
+      name: "火山方舟 · API 按量付费",
+      baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+    });
+    expect(byId.get("volcengine-ark-coding")).toMatchObject({
+      name: "火山方舟 · Coding Plan",
+      baseUrl: "https://ark.cn-beijing.volces.com/api/coding/v3",
+      defaultModel: "ark-code-latest",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("stepfun")).toMatchObject({
+      name: "阶跃星辰 · API 按量付费",
+      baseUrl: "https://api.stepfun.com/v1",
+    });
+    expect(byId.get("stepfun-step-plan")).toMatchObject({
+      name: "阶跃星辰 · Step Plan",
+      baseUrl: "https://api.stepfun.ai/step_plan/v1",
+      defaultModel: "step-3.7-flash",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("minimax-cn")).toMatchObject({
+      name: "MiniMax · Token Plan",
+      baseUrl: "https://api.minimaxi.com/anthropic",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      supportsModelListing: false,
+    });
   });
 
   it("orders featured CN providers first, then other CN, then global", () => {
