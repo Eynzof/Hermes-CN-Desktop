@@ -8,7 +8,7 @@ import s from "./app-shell.module.css";
 function shortCommit(commit: string | undefined): string {
   const normalized = commit?.trim() ?? "";
   if (!normalized || normalized === "unknown") return UNKNOWN_VALUE;
-  return normalized.slice(0, 7);
+  return normalized.slice(0, 4);
 }
 
 function fullCommitDate(value: string | undefined): string {
@@ -44,9 +44,18 @@ export interface SidebarVersionRowsInput {
   desktopVersion?: string;
 }
 
+export interface SidebarVersionLine {
+  label: "内核" | "界面";
+  version: string;
+  commit: string;
+  date: string;
+}
+
 export interface SidebarVersionRows {
   kernel: string;
   ui: string;
+  kernelLine: SidebarVersionLine;
+  uiLine: SidebarVersionLine;
   title: string;
 }
 
@@ -68,9 +77,45 @@ export function buildSidebarVersionRows({
 
   return {
     kernel: `内核 ${kernelVersion} · ${kernelCommit} · ${kernelDate}`,
-    ui: `UI ${uiVersion} · ${uiCommit} · ${uiDate}`,
-    title: `内核 ${kernelVersion} · ${kernelCommit} · ${kernelFullDate}\nUI ${uiVersion} · ${uiCommit} · ${uiFullDate}\n预览版本，不代表最终品质`,
+    ui: `界面 ${uiVersion} · ${uiCommit} · ${uiDate}`,
+    kernelLine: {
+      label: "内核",
+      version: kernelVersion,
+      commit: kernelCommit,
+      date: kernelDate,
+    },
+    uiLine: {
+      label: "界面",
+      version: uiVersion,
+      commit: uiCommit,
+      date: uiDate,
+    },
+    title: `内核 ${kernelVersion} · ${kernelCommit} · ${kernelFullDate}\n界面 ${uiVersion} · ${uiCommit} · ${uiFullDate}\n预览版本，不代表最终品质`,
   };
+}
+
+function VersionLine({
+  accent,
+  line,
+  text,
+}: {
+  accent?: boolean;
+  line: SidebarVersionLine;
+  text: string;
+}) {
+  return (
+    <div
+      className={`${s.sidebarInfoRow} ${accent ? s.sidebarInfoVersion : ""}`}
+      aria-label={text}
+    >
+      <span className={s.sidebarInfoCell}>{line.label}</span>
+      <span className={s.sidebarInfoCell}>{line.version}</span>
+      <span className={s.sidebarInfoDot} aria-hidden="true">·</span>
+      <span className={s.sidebarInfoCell}>{line.commit}</span>
+      <span className={s.sidebarInfoDot} aria-hidden="true">·</span>
+      <span className={s.sidebarInfoCell}>{line.date}</span>
+    </div>
+  );
 }
 
 export function SidebarVersionTag() {
@@ -84,8 +129,8 @@ export function SidebarVersionTag() {
       title={rows.title}
     >
       <div className={s.sidebarInfoMeta}>
-        <span className={s.sidebarInfoVersion}>{rows.kernel}</span>
-        <span>{rows.ui}</span>
+        <VersionLine accent line={rows.kernelLine} text={rows.kernel} />
+        <VersionLine line={rows.uiLine} text={rows.ui} />
       </div>
       <div className={s.sidebarInfoNote}>预览版本，不代表最终品质</div>
     </div>

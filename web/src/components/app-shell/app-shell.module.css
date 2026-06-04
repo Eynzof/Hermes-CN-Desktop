@@ -29,7 +29,7 @@
 .sidebarInfoPanel {
   position: absolute;
   left: 16px;
-  right: 16px;
+  right: 6px;
   bottom: 15px;
   display: flex;
   flex-direction: column;
@@ -46,22 +46,30 @@
 }
 
 .sidebarInfoMeta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: grid;
   gap: 1px;
   max-width: 100%;
 }
 
-.sidebarInfoMeta span {
-  display: block;
+.sidebarInfoRow {
+  display: grid;
+  grid-template-columns: 2.4em 8.7ch 2.2ch 5ch 2.2ch max-content;
+  column-gap: 0;
+  align-items: baseline;
   max-width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebarInfoCell {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .sidebarInfoDot {
+  text-align: center;
   color: rgba(133, 126, 111, 0.54);
 }
 

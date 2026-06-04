@@ -62,10 +62,10 @@ describe("buildSidebarVersionRows", () => {
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.kernel).toBe("内核 v0.15.2 · 882062c · 05.29");
-    expect(rows.ui).toBe(`UI ${DESKTOP_VERSION_LABEL} · 80157e4 · 06.03`);
-    expect(rows.title).toContain("内核 v0.15.2 · 882062c · 2026-05-29");
-    expect(rows.title).toContain(`UI ${DESKTOP_VERSION_LABEL} · 80157e4 · 2026-06-03`);
+    expect(rows.kernel).toBe("内核 v0.15.2 · 8820 · 05.29");
+    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · 8015 · 06.03`);
+    expect(rows.title).toContain("内核 v0.15.2 · 8820 · 2026-05-29");
+    expect(rows.title).toContain(`界面 ${DESKTOP_VERSION_LABEL} · 8015 · 2026-06-03`);
     expect(rows.kernel).not.toContain("2026.5.29.2");
   });
 
@@ -78,7 +78,7 @@ describe("buildSidebarVersionRows", () => {
     });
 
     expect(rows.kernel).toBe("内核 v0.15.2 · — · 日期未知");
-    expect(rows.ui).toBe(`UI ${DESKTOP_VERSION_LABEL} · 80157e4 · 06.03`);
+    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · 8015 · 06.03`);
     expect(rows.kernel).not.toContain("2026.5.29.2");
   });
 
@@ -98,7 +98,7 @@ describe("buildSidebarVersionRows", () => {
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.kernel).toBe("内核 v0.15.2 · 882062c · 日期未知");
+    expect(rows.kernel).toBe("内核 v0.15.2 · 8820 · 日期未知");
   });
 
   it("shows a dash instead of a hard-coded kernel version when status is unavailable", () => {
@@ -119,6 +119,6 @@ describe("buildSidebarVersionRows", () => {
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.ui).toBe(`UI ${DESKTOP_VERSION_LABEL} · — · 06.03`);
+    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · — · 06.03`);
   });
 });
