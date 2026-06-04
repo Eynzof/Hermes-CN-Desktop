@@ -40,6 +40,7 @@ import type {
   UiStoreSnapshot,
   UiTurnStats,
 } from "./runtime";
+import { BUILD_COMMIT, BUILD_DATE, DESKTOP_VERSION, versionLabel } from "./build-info";
 import hermesLogoSvg from "../../../icons/icon.svg?raw";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
@@ -49,6 +50,38 @@ export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
 }
 
 const BASE64_CHUNK_SIZE = 0x8000;
+
+interface BootstrapVersionLine {
+  label: "界面";
+  version: string;
+  commit: string;
+  date: string;
+}
+
+function shortBootstrapCommit(commit: string | undefined): string {
+  const normalized = commit?.trim() ?? "";
+  if (!normalized || normalized === "unknown") return "—";
+  return normalized.slice(0, 4);
+}
+
+function shortBootstrapCommitDate(value: string | undefined): string {
+  const normalized = value?.trim() ?? "";
+  if (!normalized || normalized === "unknown") return "日期未知";
+  const datePrefix = normalized.match(/^\d{4}-(\d{2})-(\d{2})/)?.slice(1, 3);
+  if (datePrefix) return `${datePrefix[0]}.${datePrefix[1]}`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "日期未知";
+  return `${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function buildBootstrapVersionLine(): BootstrapVersionLine {
+  return {
+    label: "界面",
+    version: versionLabel(DESKTOP_VERSION),
+    commit: shortBootstrapCommit(BUILD_COMMIT),
+    date: shortBootstrapCommitDate(BUILD_DATE),
+  };
+}
 
 export function arrayBufferToBase64(data: ArrayBuffer): string {
   const bytes = new Uint8Array(data);
@@ -348,6 +381,15 @@ function showBootstrapOverlay(initialMessage: string): {
   title.textContent = "Hermes Agent 中文社区桌面版";
   panel.appendChild(title);
 
+  const brand = document.createElement("div");
+  brand.setAttribute(
+    "style",
+    "margin-top:-10px;font-size:12px;font-weight:600;color:rgba(251,250,246,0.54);" +
+      "letter-spacing:0.08em;text-transform:uppercase;",
+  );
+  brand.textContent = "Hermes Agent 中文社区 · hermesagent.org.cn";
+  panel.appendChild(brand);
+
   const message = document.createElement("div");
   message.id = "hermes-bootstrap-message";
   message.setAttribute(
@@ -405,6 +447,35 @@ function showBootstrapOverlay(initialMessage: string): {
   );
   detail.appendChild(errorText);
   panel.appendChild(detail);
+
+  const versionPanel = document.createElement("div");
+  versionPanel.setAttribute(
+    "style",
+    "display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:2px;" +
+      "font-family:'JetBrains Mono','SFMono-Regular',Consolas,ui-monospace,monospace;" +
+      "font-size:10px;line-height:1.45;letter-spacing:0.06em;color:rgba(133,126,111,0.76);",
+  );
+
+  const uiVersionRow = document.createElement("div");
+  const versionNote = document.createElement("div");
+
+  const applyVersionRow = (rowEl: HTMLDivElement, line: BootstrapVersionLine) => {
+    rowEl.setAttribute(
+      "style",
+      "font-variant-numeric:tabular-nums;white-space:nowrap;color:rgba(133,126,111,0.76);",
+    );
+    rowEl.textContent = `${line.label} ${line.version} · ${line.commit} · ${line.date}`;
+  };
+
+  applyVersionRow(uiVersionRow, buildBootstrapVersionLine());
+  versionNote.setAttribute(
+    "style",
+    "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
+      "font-size:10px;font-weight:500;letter-spacing:0.03em;color:rgba(133,126,111,0.5);",
+  );
+  versionNote.textContent = "预览版本，不代表最终品质";
+  versionPanel.append(uiVersionRow, versionNote);
+  panel.appendChild(versionPanel);
 
   const sub = document.createElement("div");
   sub.id = "hermes-bootstrap-sub";
@@ -526,6 +597,7 @@ async function waitForBootstrap(
 
 export async function installTauriBridge(): Promise<void> {
   const inv = await ensureInvoke();
+
   let config = await inv<{
     apiBaseUrl: string;
     gatewayUrl: string;
