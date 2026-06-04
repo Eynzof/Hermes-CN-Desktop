@@ -12,6 +12,7 @@ import {
 import type { SessionSummary } from "@hermes/protocol";
 import { useSessions } from "@/hooks/use-sessions";
 import { formatTokens, relativeTime } from "@/lib/format";
+import { shortenPath } from "@/lib/paths";
 import {
   normalizeWorkspacePath,
   readSessionWorkspaceMap,
@@ -58,18 +59,6 @@ function pickTopModel(sessions: SessionSummary[]): string | null {
     }
   }
   return bestModel;
-}
-
-function shortenPath(path: string): string {
-  if (!path) return "—";
-  const home = "/Users/";
-  if (path.startsWith(home)) {
-    const segments = path.slice(home.length).split("/");
-    if (segments.length >= 2) {
-      return "~/" + segments.slice(1).join("/");
-    }
-  }
-  return path;
 }
 
 interface RowMenuProps {
