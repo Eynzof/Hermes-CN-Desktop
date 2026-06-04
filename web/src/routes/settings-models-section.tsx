@@ -35,14 +35,17 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
   { prefix: "GLM_", name: "GLM / Z.AI", priority: 5 },
   { prefix: "ZAI_", name: "GLM / Z.AI", priority: 5 },
   { prefix: "Z_AI_", name: "GLM / Z.AI", priority: 5 },
+  { prefix: "STEP_", name: "StepFun", priority: 6 },
   { prefix: "HF_", name: "Hugging Face", priority: 6 },
   { prefix: "KIMI_", name: "Kimi / Moonshot", priority: 7 },
+  { prefix: "ARK_", name: "Volcengine", priority: 8 },
   { prefix: "MINIMAX_CN_", name: "MiniMax (China)", priority: 9 },
   { prefix: "MINIMAX_", name: "MiniMax", priority: 8 },
   { prefix: "OPENCODE_GO_", name: "OpenCode Go", priority: 10 },
   { prefix: "OPENCODE_ZEN_", name: "OpenCode Zen", priority: 11 },
   { prefix: "OPENROUTER_", name: "OpenRouter", priority: 12 },
   { prefix: "XIAOMI_", name: "Xiaomi MiMo", priority: 13 },
+  { prefix: "MIMO_", name: "Xiaomi MiMo", priority: 13 },
   { prefix: "COMPSHARE_", name: "优云智算 (Compshare)", priority: 14 },
 ];
 

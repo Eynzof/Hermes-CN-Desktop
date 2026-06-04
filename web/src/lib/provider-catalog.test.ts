@@ -131,6 +131,53 @@ describe("provider catalog config updates", () => {
     ).toBe(true);
   });
 
+  it("ships direct CN providers without 302.AI and keeps OpenRouter as the explicit aggregator", () => {
+    const ids = BUILTIN_PROVIDER_CATALOG.providers.map((provider) => provider.id);
+
+    expect(ids).not.toContain("ai302");
+    expect(ids).toContain("openrouter");
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("keeps plan-specific endpoints separate from pay-as-you-go endpoints", () => {
+    const byId = new Map(BUILTIN_PROVIDER_CATALOG.providers.map((provider) => [provider.id, provider]));
+
+    expect(byId.get("alibaba")?.baseUrl).toBe("https://dashscope.aliyuncs.com/compatible-mode/v1");
+    expect(byId.get("alibaba-coding-cn")).toMatchObject({
+      baseUrl: "https://coding.dashscope.aliyuncs.com/v1",
+      defaultModel: "qwen3-coder-plus",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("zai")?.baseUrl).toBe("https://open.bigmodel.cn/api/paas/v4");
+    expect(byId.get("zai-coding-cn")).toMatchObject({
+      baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
+      defaultModel: "glm-5.1",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("volcengine-ark")?.baseUrl).toBe("https://ark.cn-beijing.volces.com/api/v3");
+    expect(byId.get("volcengine-ark-coding")).toMatchObject({
+      baseUrl: "https://ark.cn-beijing.volces.com/api/coding/v3",
+      defaultModel: "ark-code-latest",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("stepfun")?.baseUrl).toBe("https://api.stepfun.com/v1");
+    expect(byId.get("stepfun-step-plan")).toMatchObject({
+      baseUrl: "https://api.stepfun.ai/step_plan/v1",
+      defaultModel: "step-3.7-flash",
+      supportsModelListing: false,
+    });
+
+    expect(byId.get("minimax-cn")).toMatchObject({
+      baseUrl: "https://api.minimaxi.com/anthropic",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      supportsModelListing: false,
+    });
+  });
+
   it("orders featured CN providers first, then other CN, then global", () => {
     const sorted = sortProvidersForCnEdition(BUILTIN_PROVIDER_CATALOG.providers);
     const sortedIds = sorted.map((p) => p.id);
