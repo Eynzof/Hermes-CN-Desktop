@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { hydrateThemeAtom, usePlatform } from "@hermes/shared-ui";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
 import { readUiValue } from "@/lib/ui-store";
@@ -34,6 +34,14 @@ function NewTaskRedirect() {
   return <Navigate to={{ pathname: "/", search }} replace />;
 }
 
+// Wrap each route's content in a local ErrorBoundary so a single page crash
+// keeps AppShell (sidebar + nav) usable instead of blanking the whole app via
+// the root boundary. Each route element mounts its own boundary, which resets
+// naturally on navigation. (#37)
+function withBoundary(node: ReactNode) {
+  return <ErrorBoundary>{node}</ErrorBoundary>;
+}
+
 export function App() {
   const platform = usePlatform();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
@@ -48,27 +56,27 @@ export function App() {
     <div lang="zh-CN" data-hermes-platform={platform}>
       <AppShell>
         <Routes>
-          <Route path="/" element={<PanelRoute />} />
+          <Route path="/" element={withBoundary(<PanelRoute />)} />
           <Route path="/new" element={<NewTaskRedirect />} />
-          <Route path="/tasks/:taskId" element={<ErrorBoundary><DetailRoute /></ErrorBoundary>} />
-          <Route path="/history" element={<HistoryRoute />} />
-          <Route path="/projects" element={<ProjectsRoute />} />
-          <Route path="/projects/:workspacePath" element={<ProjectDetailRoute />} />
-          <Route path="/skills" element={<SkillsRoute />} />
-          <Route path="/models" element={<ModelsRoute />} />
-          <Route path="/config-migration" element={<ConfigMigrationRoute />} />
-          <Route path="/mcp" element={<McpRoute />} />
-          <Route path="/profiles" element={<ProfilesRoute />} />
-          <Route path="/memory" element={<MemoryRoute />} />
-          <Route path="/soul" element={<SoulRoute />} />
-          <Route path="/cron" element={<CronRoute />} />
-          <Route path="/im/*" element={<ErrorBoundary><ImOnboardingRoute /></ErrorBoundary>} />
-          <Route path="/console" element={<ConsoleRoute />} />
-          <Route path="/health" element={<HealthRoute />} />
-          <Route path="/analytics" element={<AnalyticsRoute />} />
-          <Route path="/logs" element={<LogsRoute />} />
-          <Route path="/debug" element={<DebugRoute />} />
-          <Route path="/advanced/*" element={<ErrorBoundary><AdvancedRoute /></ErrorBoundary>} />
+          <Route path="/tasks/:taskId" element={withBoundary(<DetailRoute />)} />
+          <Route path="/history" element={withBoundary(<HistoryRoute />)} />
+          <Route path="/projects" element={withBoundary(<ProjectsRoute />)} />
+          <Route path="/projects/:workspacePath" element={withBoundary(<ProjectDetailRoute />)} />
+          <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
+          <Route path="/models" element={withBoundary(<ModelsRoute />)} />
+          <Route path="/config-migration" element={withBoundary(<ConfigMigrationRoute />)} />
+          <Route path="/mcp" element={withBoundary(<McpRoute />)} />
+          <Route path="/profiles" element={withBoundary(<ProfilesRoute />)} />
+          <Route path="/memory" element={withBoundary(<MemoryRoute />)} />
+          <Route path="/soul" element={withBoundary(<SoulRoute />)} />
+          <Route path="/cron" element={withBoundary(<CronRoute />)} />
+          <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />
+          <Route path="/console" element={withBoundary(<ConsoleRoute />)} />
+          <Route path="/health" element={withBoundary(<HealthRoute />)} />
+          <Route path="/analytics" element={withBoundary(<AnalyticsRoute />)} />
+          <Route path="/logs" element={withBoundary(<LogsRoute />)} />
+          <Route path="/debug" element={withBoundary(<DebugRoute />)} />
+          <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/settings" element={<Navigate to="/advanced" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
