@@ -53,6 +53,7 @@ const PROVIDER_ACTION_LOADING_MIN_MS = 450;
 const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 
 type ModelSettingsTab = "main" | "auxiliary";
+type CustomProviderMode = "custom" | "local";
 
 type AuxiliaryTaskId =
   | "vision"
@@ -84,6 +85,13 @@ interface AuxiliaryTaskForm {
   apiKey: string;
   downloadTimeout: string;
   extraBody: string;
+}
+
+interface LocalProviderPreset {
+  name: string;
+  baseUrl: string;
+  model: string;
+  tutorial: string;
 }
 
 const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
@@ -174,6 +182,33 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
     description: "Skill 使用审查 fork 会走这个槽位，可能持续数分钟。",
     defaultTimeout: 600,
     group: "advanced",
+  },
+];
+
+const LOCAL_PROVIDER_PRESETS: LocalProviderPreset[] = [
+  {
+    name: "LM Studio",
+    baseUrl: "http://127.0.0.1:1234/v1",
+    model: "local-model",
+    tutorial: "打开 Developer / Local Server，加载模型后点击 Start Server；模型名以 /v1/models 返回为准。",
+  },
+  {
+    name: "Ollama",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    model: "qwen2.5-coder:7b",
+    tutorial: "先运行 ollama pull qwen2.5-coder:7b，并确认 ollama serve 正在运行；API Key 通常留空。",
+  },
+  {
+    name: "vLLM",
+    baseUrl: "http://127.0.0.1:8000/v1",
+    model: "Qwen/Qwen2.5-Coder-7B-Instruct",
+    tutorial: "启动 OpenAI-compatible server，建议用 --served-model-name 固定一个容易填写的模型名。",
+  },
+  {
+    name: "llama.cpp",
+    baseUrl: "http://127.0.0.1:8080/v1",
+    model: "local-model",
+    tutorial: "启动 llama-server 的 OpenAI 兼容接口；未启用鉴权时 API Key 留空即可。",
   },
 ];
 
@@ -417,6 +452,20 @@ function getProviderPriority(name: string): number {
   return PROVIDER_GROUPS.find((g) => g.name === name)?.priority ?? 99;
 }
 
+function isLocalProviderBaseUrl(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host.endsWith(".local");
+  } catch {
+    return false;
+  }
+}
+
 export function ModelsSection() {
   const { data: envVars, isLoading } = useEnvVars();
   const { data: config, isLoading: configLoading } = useConfig();
@@ -463,6 +512,7 @@ export function ModelsSection() {
   const [showEnvAdvanced, setShowEnvAdvanced] = useState(false);
   const [providerSearch, setProviderSearch] = useState("");
   const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customProviderMode, setCustomProviderMode] = useState<CustomProviderMode>("custom");
   const [customForm, setCustomForm] = useState({
     name: "",
     baseUrl: "",
@@ -499,7 +549,23 @@ export function ModelsSection() {
 
   const closeCustomForm = useCallback(() => {
     setShowCustomForm(false);
+    setCustomProviderMode("custom");
     setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+  }, []);
+
+  const openCustomProviderForm = useCallback((mode: CustomProviderMode) => {
+    setCustomProviderMode(mode);
+    setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+    setShowCustomForm(true);
+  }, []);
+
+  const applyLocalProviderPreset = useCallback((preset: LocalProviderPreset) => {
+    setCustomForm((prev) => ({
+      ...prev,
+      name: preset.name,
+      baseUrl: preset.baseUrl,
+      model: preset.model,
+    }));
   }, []);
   useEffect(() => {
     if (!showCustomForm) return;
@@ -524,7 +590,7 @@ export function ModelsSection() {
       customs.push({
         id,
         name: typeof v.name === "string" && v.name ? v.name : id.replace(/^custom:/, ""),
-        vendor: "自定义",
+        vendor: isLocalProviderBaseUrl(typeof v.base_url === "string" ? v.base_url : "") ? "本地部署" : "自定义",
         region: "cn",
         baseUrl: typeof v.base_url === "string" ? v.base_url : "",
         apiMode: v.api_mode === "anthropic_messages" || v.api_mode === "codex_responses"
@@ -593,6 +659,9 @@ export function ModelsSection() {
     : {};
   const selectedHasCredentials = selectedProvider
     ? providerHasSavedCredentials(config, selectedProvider.id)
+    : false;
+  const selectedProviderCanOmitApiKey = selectedProvider
+    ? isLocalProviderBaseUrl(providerForm.baseUrl || selectedProvider.baseUrl)
     : false;
   const currentProviderId = modelInfo?.provider ||
     (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
@@ -881,7 +950,7 @@ export function ModelsSection() {
     const preset: ProviderPreset = {
       id: candidate,
       name,
-      vendor: "自定义",
+      vendor: customProviderMode === "local" ? "本地部署" : "自定义",
       region: "cn",
       baseUrl,
       apiMode: "chat_completions",
@@ -896,8 +965,7 @@ export function ModelsSection() {
       {
         onSuccess: () => {
           selectProvider(candidate);
-          setShowCustomForm(false);
-          setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+          closeCustomForm();
           setProviderForm({ apiKey: "", baseUrl, model });
         },
       },
@@ -983,6 +1051,24 @@ export function ModelsSection() {
   if (!envVars || !config) return null;
 
   const needsInitialModelSetup = !modelInfo?.model?.trim() || !modelInfo?.provider?.trim() || configuredCount === 0;
+  const customProviderIsLocal = customProviderMode === "local";
+  const customProviderTitle = customProviderIsLocal ? "添加本地部署 Provider" : "添加自定义 Provider";
+  const customProviderHint = customProviderIsLocal
+    ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务并加载模型，再选择下面的端点或手动填写。"
+    : "添加任意 OpenAI Chat Completions 兼容服务（百度千帆 / 腾讯混元 / SiliconFlow / 私有部署等）。提交后可在左侧列表里随时切换。";
+  const customProviderPlaceholders = customProviderIsLocal
+    ? {
+        name: "例如：LM Studio",
+        baseUrl: "http://127.0.0.1:1234/v1",
+        model: "qwen2.5-coder:7b",
+        apiKey: "本地服务一般可留空，启用鉴权时再填写",
+      }
+    : {
+        name: "例如：Deepseek",
+        baseUrl: "https://api.example.com/v1",
+        model: "deepseek-v4-flash",
+        apiKey: "可选，先建后填也可以",
+      };
 
   return (
     <div className={s.modelsSettings}>
@@ -1049,10 +1135,17 @@ export function ModelsSection() {
                 />
                 <button
                   className={s.btn}
-                  onClick={() => setShowCustomForm(true)}
+                  onClick={() => openCustomProviderForm("custom")}
                   title="添加自定义 OpenAI 兼容 provider"
                 >
                   + 自定义
+                </button>
+                <button
+                  className={s.btn}
+                  onClick={() => openCustomProviderForm("local")}
+                  title="添加本地部署 OpenAI 兼容 provider"
+                >
+                  本地部署
                 </button>
                 <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
               </div>
@@ -1112,7 +1205,13 @@ export function ModelsSection() {
                           data-mono="true"
                           type="password"
                           value={providerForm.apiKey}
-                          placeholder={selectedHasCredentials ? "已保存" : "粘贴 API Key"}
+                          placeholder={
+                            selectedHasCredentials
+                              ? "已保存"
+                              : selectedProviderCanOmitApiKey
+                                ? "本地服务一般可留空"
+                                : "粘贴 API Key"
+                          }
                           onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
                         />
                       </label>
@@ -1167,7 +1266,7 @@ export function ModelsSection() {
                           providerSavePending ||
                           providerSetCurrentPending ||
                           !isFormDirty ||
-                          (!selectedHasCredentials && !providerForm.apiKey.trim())
+                          (!selectedHasCredentials && !providerForm.apiKey.trim() && !selectedProviderCanOmitApiKey)
                         }
                         onClick={() => void handleProviderSave()}
                       >
@@ -1189,13 +1288,13 @@ export function ModelsSection() {
                           providerSavePending ||
                           providerSetCurrentPending ||
                           !selectedProviderModel ||
-                          !selectedHasCredentials
+                          (!selectedHasCredentials && !selectedProviderCanOmitApiKey)
                         }
                         onClick={() => void handleSetCurrentModel()}
                         title={
                           selectedProviderIsCurrent
                             ? "当前已在使用这个模型"
-                            : selectedHasCredentials
+                            : selectedHasCredentials || selectedProviderCanOmitApiKey
                               ? "切换当前运行模型；如刚修改了 Base URL / API Key，请先保存配置"
                               : "请先保存 API Key / provider 配置"
                         }
@@ -1298,7 +1397,7 @@ export function ModelsSection() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className={s.customProviderTitleBar}>
-              <h2 id={customDialogTitleId}>添加自定义 Provider</h2>
+              <h2 id={customDialogTitleId}>{customProviderTitle}</h2>
               <button
                 type="button"
                 className={s.customProviderClose}
@@ -1310,14 +1409,30 @@ export function ModelsSection() {
             </div>
             <div className={s.customProviderBody}>
               <p className={s.customProviderHint}>
-                添加任意 OpenAI Chat Completions 兼容服务（百度千帆 / 腾讯混元 / SiliconFlow / 私有部署等）。提交后可在左侧列表里随时切换。
+                {customProviderHint}
               </p>
+              {customProviderIsLocal && (
+                <div className={s.localProviderGuide} aria-label="常用本地部署端点">
+                  {LOCAL_PROVIDER_PRESETS.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className={s.localProviderCard}
+                      onClick={() => applyLocalProviderPreset(preset)}
+                    >
+                      <strong>{preset.name}</strong>
+                      <code>{preset.baseUrl}</code>
+                      <span>{preset.tutorial}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <label className={s.fieldRow}>
                 <div className={s.fieldLabel}>名称</div>
                 <input
                   className={s.fieldInput}
                   value={customForm.name}
-                  placeholder="例如：Deepseek"
+                  placeholder={customProviderPlaceholders.name}
                   autoFocus
                   onChange={(e) => setCustomForm((p) => ({ ...p, name: e.target.value }))}
                 />
@@ -1328,7 +1443,7 @@ export function ModelsSection() {
                   className={s.fieldInput}
                   data-mono="true"
                   value={customForm.baseUrl}
-                  placeholder="https://api.example.com/v1"
+                  placeholder={customProviderPlaceholders.baseUrl}
                   onChange={(e) => setCustomForm((p) => ({ ...p, baseUrl: e.target.value }))}
                 />
               </label>
@@ -1338,7 +1453,7 @@ export function ModelsSection() {
                   className={s.fieldInput}
                   data-mono="true"
                   value={customForm.model}
-                  placeholder="deepseek-v4-flash"
+                  placeholder={customProviderPlaceholders.model}
                   onChange={(e) => setCustomForm((p) => ({ ...p, model: e.target.value }))}
                 />
               </label>
@@ -1349,7 +1464,7 @@ export function ModelsSection() {
                   data-mono="true"
                   type="password"
                   value={customForm.apiKey}
-                  placeholder="可选，先建后填也可以"
+                  placeholder={customProviderPlaceholders.apiKey}
                   onChange={(e) => setCustomForm((p) => ({ ...p, apiKey: e.target.value }))}
                 />
               </label>
