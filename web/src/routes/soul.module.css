@@ -1,0 +1,276 @@
+.soulPage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1120px;
+}
+
+.desc {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.desc strong {
+  color: var(--h-text);
+  font-weight: 650;
+}
+
+.inlineLink {
+  color: var(--h-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+/* ── header right slot ─────────────────────────────────────── */
+.headRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileChip {
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-2);
+  background: var(--h-bg-chip);
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-pill);
+  padding: 3px 10px;
+}
+
+/* ── buttons ───────────────────────────────────────────────── */
+.iconButton,
+.primaryButton,
+.secondaryButton {
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  height: 30px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--h-font-ui);
+}
+
+.iconButton,
+.secondaryButton {
+  color: var(--h-text-2);
+  background: var(--h-bg-soft);
+}
+
+.iconButton:hover,
+.secondaryButton:hover {
+  color: var(--h-text);
+  background: var(--h-bg-chip);
+}
+
+.primaryButton {
+  color: #1a0c04;
+  background: var(--h-accent);
+  border-color: color-mix(in srgb, var(--h-accent) 75%, var(--h-line));
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ── panel ─────────────────────────────────────────────────── */
+.panel {
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-lg);
+  background: var(--h-bg-pane);
+  overflow: hidden;
+}
+
+.panelHead {
+  min-height: 52px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--h-line-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.panelHead > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.panelHead strong {
+  color: var(--h-text);
+  font-size: 14px;
+}
+
+.panelHead span {
+  color: var(--h-text-3);
+  font-size: 12px;
+}
+
+.headActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.saved {
+  color: var(--h-ok);
+  font-weight: 650;
+  font-size: 12px;
+}
+
+/* ── edit / preview segmented control ──────────────────────── */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-soft);
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  background: transparent;
+  color: var(--h-text-2);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--h-font-ui);
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--h-line);
+}
+
+.segmented button:hover {
+  color: var(--h-text);
+}
+
+.segmented button[data-active="true"] {
+  background: color-mix(in srgb, var(--h-accent) 12%, var(--h-bg-pane));
+  color: var(--h-text);
+}
+
+/* ── toolbar ───────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-soft);
+}
+
+.toolbarHint {
+  color: var(--h-text-3);
+  font-size: 12px;
+}
+
+/* ── editor body ───────────────────────────────────────────── */
+.editorBody {
+  padding: 14px 16px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 360px;
+  resize: vertical;
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  padding: 12px 14px;
+  outline: none;
+  line-height: 1.7;
+  font-size: 13px;
+  font-family: var(--h-font-mono);
+}
+
+.textarea:focus {
+  border-color: var(--h-accent-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 12%, transparent);
+}
+
+.preview {
+  min-height: 360px;
+  background: var(--h-bg-input);
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  padding: 4px 16px;
+  color: var(--h-text);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.previewEmpty {
+  padding: 28px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  font-size: 13px;
+}
+
+/* ── footer ────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.count {
+  margin-right: auto;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.count[data-over="true"] {
+  color: var(--h-warn);
+}
+
+/* ── states ────────────────────────────────────────────────── */
+.emptyState,
+.errorState {
+  margin: 0;
+  padding: 28px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--h-text-3);
+  font-size: 13px;
+  border-radius: var(--h-r-md);
+}
+
+.errorState {
+  justify-content: flex-start;
+  padding: 12px 14px;
+  color: var(--h-err);
+  background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-pane));
+  border: 1px solid color-mix(in srgb, var(--h-err) 24%, var(--h-line));
+}

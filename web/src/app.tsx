@@ -19,6 +19,7 @@ import { ConfigMigrationRoute } from "@/routes/config-migration";
 import { McpRoute } from "@/routes/mcp";
 import { ProfilesRoute } from "@/routes/profiles";
 import { MemoryRoute } from "@/routes/memory";
+import { SoulRoute } from "@/routes/soul";
 import { CronRoute } from "@/routes/cron";
 import { ConsoleRoute } from "@/routes/console";
 import { HealthRoute } from "@/routes/health";
@@ -59,6 +60,7 @@ export function App() {
           <Route path="/mcp" element={<McpRoute />} />
           <Route path="/profiles" element={<ProfilesRoute />} />
           <Route path="/memory" element={<MemoryRoute />} />
+          <Route path="/soul" element={<SoulRoute />} />
           <Route path="/cron" element={<CronRoute />} />
           <Route path="/im/*" element={<ErrorBoundary><ImOnboardingRoute /></ErrorBoundary>} />
           <Route path="/console" element={<ConsoleRoute />} />
