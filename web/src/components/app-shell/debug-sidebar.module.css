@@ -61,11 +61,15 @@
 }
 
 .item {
+  appearance: none;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 34px;
   padding: 6px 16px;
   font-size: 12.5px;
+  line-height: var(--h-lh);
   color: var(--h-text-2);
   cursor: pointer;
   position: relative;
