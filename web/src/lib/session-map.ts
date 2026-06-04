@@ -84,3 +84,37 @@ export function resolveGatewaySessionId(sessionId: string | undefined): string |
   }
   return undefined;
 }
+
+interface ResolveSessionIdAliasOptions {
+  includeExpired?: boolean;
+}
+
+export function resolveSessionIdAliases(
+  sessionId: string | undefined,
+  options: ResolveSessionIdAliasOptions = {},
+): string[] {
+  if (!sessionId) return [];
+  const normalized = sessionId.trim();
+  if (!normalized) return [];
+
+  const aliases = new Set<string>([normalized]);
+  const map = readMap();
+  const now = Date.now();
+  const isFresh = (entry: SessionEntry) => now - entry.ts <= MAX_AGE_MS;
+  const isUsable = (entry: SessionEntry) => options.includeExpired || isFresh(entry);
+
+  const direct = map[normalized];
+  if (direct && isUsable(direct)) {
+    aliases.add(direct.persistentId);
+  }
+
+  for (const [gatewayId, entry] of Object.entries(map)) {
+    if (!isUsable(entry)) continue;
+    if (gatewayId === normalized || entry.persistentId === normalized) {
+      aliases.add(gatewayId);
+      aliases.add(entry.persistentId);
+    }
+  }
+
+  return Array.from(aliases);
+}

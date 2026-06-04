@@ -22,6 +22,7 @@ import {
 } from "@/lib/model-options-cache";
 import { buildGatewayModelConfigValue } from "@/lib/provider-id";
 import { rememberSessionMapping, resolveGatewaySessionId } from "@/lib/session-map";
+import { mirrorSessionWorkspaceMapping } from "@/lib/workspaces";
 import {
   applyGatewayEventAtom,
   chatRuntimeBySessionAtom,
@@ -134,6 +135,7 @@ async function rememberPersistentSessionKey(gatewaySessionId: string) {
     );
     if (result.session_key) {
       rememberSessionMapping(gatewaySessionId, result.session_key);
+      mirrorSessionWorkspaceMapping(gatewaySessionId, result.session_key);
     }
   } catch {}
 }
@@ -219,6 +221,7 @@ export function useGateway() {
     setGwSessionId(result.session_id);
     resetChatSession(result.session_id);
     rememberSessionMapping(result.session_id, result.resumed ?? persistentSessionId);
+    mirrorSessionWorkspaceMapping(result.session_id, result.resumed ?? persistentSessionId);
     return result.session_id;
   }, [ensureSubscribed, resetChatSession, setGwSessionId]);
 
@@ -418,6 +421,7 @@ export function useGateway() {
       );
       if (result.session_key) {
         rememberSessionMapping(sessionId, result.session_key);
+        mirrorSessionWorkspaceMapping(sessionId, result.session_key);
       }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["sessions"] }),
