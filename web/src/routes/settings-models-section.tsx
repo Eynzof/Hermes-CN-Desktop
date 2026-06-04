@@ -98,7 +98,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "vision",
     name: "视觉分析",
-    shortName: "Vision",
+    shortName: "视觉",
     description: "图片附件、浏览器截图和 vision_analyze 会走这个槽位；主模型不支持图片时尤其重要。",
     defaultTimeout: 120,
     group: "common",
@@ -106,7 +106,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "compression",
     name: "上下文压缩",
-    shortName: "Compression",
+    shortName: "压缩",
     description: "长会话压缩和上下文总结会走这个槽位，建议使用便宜且长上下文的模型。",
     defaultTimeout: 120,
     group: "common",
@@ -114,7 +114,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "web_extract",
     name: "网页抽取",
-    shortName: "Web Extract",
+    shortName: "抽取",
     description: "网页、PDF 等内容抽取后的总结和合成会走这个槽位，默认超时更长。",
     defaultTimeout: 360,
     group: "common",
@@ -122,7 +122,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "title_generation",
     name: "标题生成",
-    shortName: "Title",
+    shortName: "标题",
     description: "新会话标题自动生成会走这个槽位，适合很快、很便宜的小模型。",
     defaultTimeout: 30,
     group: "common",
@@ -130,7 +130,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "approval",
     name: "智能审批",
-    shortName: "Approval",
+    shortName: "审批",
     description: "smart approval 判断低风险命令时会走这个槽位，要求稳定但不需要大模型。",
     defaultTimeout: 30,
     group: "common",
@@ -145,8 +145,8 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   },
   {
     id: "skills_hub",
-    name: "Skills Hub",
-    shortName: "Skills",
+    name: "技能中心",
+    shortName: "技能",
     description: "Skill Hub 相关辅助调用使用这个槽位。",
     defaultTimeout: 30,
     group: "advanced",
@@ -154,7 +154,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "triage_specifier",
     name: "Kanban 需求扩写",
-    shortName: "Triage",
+    shortName: "扩写",
     description: "把 Kanban triage 中的一句话扩写为可执行规格。",
     defaultTimeout: 120,
     group: "advanced",
@@ -162,7 +162,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "kanban_decomposer",
     name: "Kanban 任务分解",
-    shortName: "Decomposer",
+    shortName: "分解",
     description: "把 Kanban 任务拆成任务图并路由到对应档案。",
     defaultTimeout: 180,
     group: "advanced",
@@ -178,7 +178,7 @@ const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
   {
     id: "curator",
     name: "Skill 审查",
-    shortName: "Curator",
+    shortName: "审查",
     description: "Skill 使用审查 fork 会走这个槽位，可能持续数分钟。",
     defaultTimeout: 600,
     group: "advanced",
@@ -1052,7 +1052,7 @@ export function ModelsSection() {
 
   const needsInitialModelSetup = !modelInfo?.model?.trim() || !modelInfo?.provider?.trim() || configuredCount === 0;
   const customProviderIsLocal = customProviderMode === "local";
-  const customProviderTitle = customProviderIsLocal ? "添加本地部署 Provider" : "添加自定义 Provider";
+  const customProviderTitle = customProviderIsLocal ? "添加本地部署服务商" : "添加自定义服务商";
   const customProviderHint = customProviderIsLocal
     ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务并加载模型，再选择下面的端点或手动填写。"
     : "添加任意 OpenAI Chat Completions 兼容服务（百度千帆 / 腾讯混元 / SiliconFlow / 私有部署等）。提交后可在左侧列表里随时切换。";
@@ -1119,7 +1119,7 @@ export function ModelsSection() {
               </p>
             </div>
             <div className={s.catalogMeta}>
-              <span>Provider Catalog {catalog.version}</span>
+              <span>提供商目录 {catalog.version}</span>
               {catalogMessage && <span className={s.catalogMessage}>{catalogMessage}</span>}
             </div>
           </div>
@@ -1137,14 +1137,14 @@ export function ModelsSection() {
                   <button
                     className={s.btn}
                     onClick={() => openCustomProviderForm("custom")}
-                    title="添加自定义 OpenAI 兼容 provider"
+                    title="添加自定义 OpenAI 兼容服务商"
                   >
                     + 自定义
                   </button>
                   <button
                     className={s.btn}
                     onClick={() => openCustomProviderForm("local")}
-                    title="添加本地部署 OpenAI 兼容 provider"
+                    title="添加本地部署 OpenAI 兼容服务商"
                   >
                     + 本地部署
                   </button>
@@ -1557,7 +1557,7 @@ function AuxiliaryModelsPanel({
         <div>
           <div className={s.auxIntroTitle}>辅助模型按任务生效</div>
           <p>
-            这里配置的是 <b>auxiliary.&lt;task&gt;</b> 槽位。Auto 会优先复用主模型，再按后端策略 fallback；显式指定后，该任务会固定走选中的 provider/model。
+            这里配置的是 <b>auxiliary.&lt;task&gt;</b> 槽位。「自动」会优先复用主模型，再按后端策略 fallback；显式指定后，该任务会固定走选中的 provider/model。
           </p>
           {modelInfo?.model && (
             <p>
@@ -1575,9 +1575,9 @@ function AuxiliaryModelsPanel({
               onChange={(event) =>
                 onImageInputModeChange(event.target.value as "auto" | "native" | "text")}
             >
-              <option value="auto">auto · 主模型支持图片时原生，否则走 vision</option>
-              <option value="text">text · 始终先用 vision 分析成文字</option>
-              <option value="native">native · 始终尝试原生传图</option>
+              <option value="auto">自动 · 主模型支持图片时原生，否则走 vision</option>
+              <option value="text">文本 · 始终先用 vision 分析成文字</option>
+              <option value="native">原生 · 始终尝试原生传图</option>
             </select>
           </label>
           {savedTask === "image_mode" && <div className={s.auxSavedHint}>✓ 图片输入模式已保存</div>}
@@ -1594,7 +1594,7 @@ function AuxiliaryModelsPanel({
           disabled={savingTask === "__all__"}
           onClick={onResetAll}
         >
-          {savingTask === "__all__" ? "恢复中…" : "全部恢复 Auto"}
+          {savingTask === "__all__" ? "恢复中…" : "全部恢复为自动"}
         </button>
       </div>
 
@@ -1623,13 +1623,13 @@ function AuxiliaryModelsPanel({
               <div className={s.auxEditorSubtitle}>{selectedDefinition.description}</div>
             </div>
             <span className={s.statusBadge} data-on={!isAutoProvider}>
-              {isAutoProvider ? "Auto" : providerName}
+              {isAutoProvider ? "自动" : providerName}
             </span>
           </div>
 
           <div className={s.providerFormGrid}>
             <label className={s.fieldRow}>
-              <div className={s.fieldLabel}>Provider</div>
+              <div className={s.fieldLabel}>服务商</div>
               <select
                 className={s.select}
                 value={form.provider}
@@ -1656,7 +1656,7 @@ function AuxiliaryModelsPanel({
                 value={form.model}
                 onChange={(next) => updateForm({ model: next })}
                 options={modelOptions}
-                placeholder={isAutoProvider ? "Auto 模式下不需要填写模型" : "搜索或输入辅助模型 ID"}
+                placeholder={isAutoProvider ? "自动模式下不需要填写模型" : "搜索或输入辅助模型 ID"}
                 disabled={isAutoProvider}
               />
             </label>
@@ -1675,7 +1675,7 @@ function AuxiliaryModelsPanel({
 
           {showVisionAutoHint && (
             <div className={s.auxNotice}>
-              Auto 会尝试寻找可用视觉后端；如果没有 Anthropic、OpenRouter、Nous 或自定义视觉 endpoint 的可用凭据，主模型是 MiniMax/DeepSeek 这类文本模型时仍然无法真正读图。
+              「自动」会尝试寻找可用视觉后端；如果没有 Anthropic、OpenRouter、Nous 或自定义视觉 endpoint 的可用凭据，主模型是 MiniMax/DeepSeek 这类文本模型时仍然无法真正读图。
             </div>
           )}
           {showVisionWarning && (
@@ -1706,7 +1706,7 @@ function AuxiliaryModelsPanel({
                 />
               </label>
               <label className={s.fieldRow}>
-                <div className={s.fieldLabel}>Inline API Key</div>
+                <div className={s.fieldLabel}>内联 API Key</div>
                 <input
                   className={s.fieldInput}
                   data-mono="true"
@@ -1743,7 +1743,7 @@ function AuxiliaryModelsPanel({
 
           {error && <div className={s.modelPickerError}>操作失败：{error}</div>}
           {currentSaved && <div className={s.auxSavedHint}>✓ {selectedDefinition.name} 已保存</div>}
-          {savedTask === "__all__" && <div className={s.auxSavedHint}>✓ 所有辅助任务已恢复 Auto</div>}
+          {savedTask === "__all__" && <div className={s.auxSavedHint}>✓ 所有辅助任务已恢复为自动</div>}
 
           <div className={s.providerActions}>
             <button
@@ -1760,7 +1760,7 @@ function AuxiliaryModelsPanel({
               disabled={savingTask === selectedTask}
               onClick={() => onResetTask(selectedTask)}
             >
-              恢复此任务 Auto
+              恢复为自动
             </button>
           </div>
         </div>
@@ -1801,7 +1801,7 @@ function AuxiliaryTaskGroup({
               <span className={s.auxTaskDesc}>{task.shortName}</span>
             </span>
             <span className={s.auxTaskState} data-auto={isAuto}>
-              {summary}
+              {isAuto ? "自动" : summary}
             </span>
           </button>
         );
