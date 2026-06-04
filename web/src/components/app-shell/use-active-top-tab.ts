@@ -37,6 +37,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/profiles") ||
       path.startsWith("/models") ||
       path.startsWith("/config-migration") ||
+      path.startsWith("/soul") ||
       path.startsWith("/memory") ||
       path.startsWith("/cron") ||
       path.startsWith("/im") ||
