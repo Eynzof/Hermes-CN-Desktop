@@ -23,6 +23,7 @@ import {
 import { buildGatewayModelConfigValue } from "@/lib/provider-id";
 import { rememberSessionMapping, resolveGatewaySessionId } from "@/lib/session-map";
 import { mirrorSessionWorkspaceMapping } from "@/lib/workspaces";
+import { humanizeGatewayError, parseGatewayResult } from "@/lib/gateway-result";
 import {
   applyGatewayEventAtom,
   chatRuntimeBySessionAtom,
@@ -115,7 +116,7 @@ function subscribeGateway(
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error || "发生错误");
+  return humanizeGatewayError(error);
 }
 
 function isSessionBusyError(error: unknown): boolean {
@@ -123,15 +124,17 @@ function isSessionBusyError(error: unknown): boolean {
 }
 
 function errorMessageFromUnknown(error: unknown): string {
-  return error instanceof Error ? error.message : String(error || "发生错误");
+  return humanizeGatewayError(error);
 }
 
 async function rememberPersistentSessionKey(gatewaySessionId: string) {
   try {
-    const result = SessionTitleResult.parse(
+    const result = parseGatewayResult(
+      SessionTitleResult,
       await getGatewayClient().request("session.title", {
         session_id: gatewaySessionId,
       }),
+      "session.title",
     );
     if (result.session_key) {
       rememberSessionMapping(gatewaySessionId, result.session_key);
@@ -177,8 +180,10 @@ export function useGateway() {
 
   const createSession = useCallback(async (options?: CreateSessionOptions): Promise<string> => {
     ensureSubscribed();
-    const result = SessionCreateResult.parse(
+    const result = parseGatewayResult(
+      SessionCreateResult,
       await getGatewayClient().request("session.create", {}),
+      "session.create",
     );
     if (options?.activate !== false) {
       setGwSessionId(result.session_id);
@@ -213,10 +218,12 @@ export function useGateway() {
 
   const resumeSession = useCallback(async (persistentSessionId: string): Promise<string> => {
     ensureSubscribed();
-    const result = SessionResumeResult.parse(
+    const result = parseGatewayResult(
+      SessionResumeResult,
       await getGatewayClient().request("session.resume", {
         session_id: persistentSessionId,
       }),
+      "session.resume",
     );
     setGwSessionId(result.session_id);
     resetChatSession(result.session_id);
@@ -272,8 +279,10 @@ export function useGateway() {
   const getSessionUsage = useCallback(
     async (sessionId: string): Promise<SessionUsageResult> => {
       ensureSubscribed();
-      return SessionUsageResult.parse(
+      return parseGatewayResult(
+        SessionUsageResult,
         await getGatewayClient().request("session.usage", { session_id: sessionId }),
+        "session.usage",
       );
     },
     [ensureSubscribed],
@@ -284,7 +293,8 @@ export function useGateway() {
       ensureSubscribed();
       return getCachedModelOptions(
         sessionId,
-        async () => ModelOptionsResult.parse(
+        async () => parseGatewayResult(
+          ModelOptionsResult,
           await getGatewayClient().request(
             "model.options",
             {
@@ -292,6 +302,7 @@ export function useGateway() {
               ...(sessionId ? { session_id: sessionId } : {}),
             },
           ),
+          "model.options",
         ),
       );
     },
@@ -306,8 +317,10 @@ export function useGateway() {
       timeout_ms?: number;
     }): Promise<ProviderProbeResult> => {
       ensureSubscribed();
-      return ProviderProbeResult.parse(
+      return parseGatewayResult(
+        ProviderProbeResult,
         await getGatewayClient().request("provider.probe", params),
+        "provider.probe",
       );
     },
     [ensureSubscribed],
@@ -321,12 +334,14 @@ export function useGateway() {
     ): Promise<ConfigSetResult> => {
       ensureSubscribed();
       const value = buildGatewayModelConfigValue(model, provider);
-      const result = ConfigSetResult.parse(
+      const result = parseGatewayResult(
+        ConfigSetResult,
         await getGatewayClient().request("config.set", {
           session_id: sessionId,
           key: "model",
           value,
         }),
+        "config.set",
       );
       invalidateModelOptionsCache(sessionId);
       await Promise.all([
@@ -345,11 +360,13 @@ export function useGateway() {
       provider?: string,
     ): Promise<ConfigSetResult> => {
       ensureSubscribed();
-      const result = ConfigSetResult.parse(
+      const result = parseGatewayResult(
+        ConfigSetResult,
         await getGatewayClient().request("config.set", {
           key: "model",
           value: buildGatewayModelConfigValue(model, provider),
         }),
+        "config.set",
       );
       invalidateModelOptionsCache();
       await Promise.all([
@@ -365,11 +382,13 @@ export function useGateway() {
   const attachImage = useCallback(
     async (sessionId: string, path: string): Promise<ImageAttachResult> => {
       ensureSubscribed();
-      return ImageAttachResult.parse(
+      return parseGatewayResult(
+        ImageAttachResult,
         await getGatewayClient().request("image.attach", {
           session_id: sessionId,
           path,
         }),
+        "image.attach",
       );
     },
     [ensureSubscribed],
@@ -378,11 +397,13 @@ export function useGateway() {
   const detectDroppedPath = useCallback(
     async (sessionId: string, path: string): Promise<InputDetectDropResult> => {
       ensureSubscribed();
-      return InputDetectDropResult.parse(
+      return parseGatewayResult(
+        InputDetectDropResult,
         await getGatewayClient().request("input.detect_drop", {
           session_id: sessionId,
           text: path,
         }),
+        "input.detect_drop",
       );
     },
     [ensureSubscribed],
@@ -413,11 +434,13 @@ export function useGateway() {
       const cleanTitle = title.trim();
       if (!sessionId || !cleanTitle) return;
       ensureSubscribed();
-      const result = SessionTitleResult.parse(
+      const result = parseGatewayResult(
+        SessionTitleResult,
         await getGatewayClient().request("session.title", {
           session_id: sessionId,
           title: cleanTitle,
         }),
+        "session.title",
       );
       if (result.session_key) {
         rememberSessionMapping(sessionId, result.session_key);

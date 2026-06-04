@@ -19,20 +19,19 @@ pub struct ConnectGatewayInput {
     pub client_id: Option<String>,
 }
 
-/// Build the SSE endpoint URL with token/client_id query params.
-/// Pure function so it can be unit tested without spinning up reqwest.
-pub fn build_sse_url(api_base_url: &str, token: Option<&str>, client_id: Option<&str>) -> String {
+/// Build the SSE endpoint URL with the `client_id` query param only.
+///
+/// The session token is intentionally NOT placed in the query string for the
+/// Tauri proxy path: `open_sse_response` authenticates via the `Authorization`
+/// header instead, so a token in the URL would be redundant and only risk
+/// leaking into logs. (The browser-native EventSource path in
+/// `web/src/lib/gateway-sse-client.ts` still passes the token via query because
+/// EventSource cannot set request headers — that is a separate, documented
+/// case.) Pure function so it can be unit tested without spinning up reqwest.
+pub fn build_sse_url(api_base_url: &str, client_id: Option<&str>) -> String {
     let mut url = format!("{}/api/v2/events", api_base_url.trim_end_matches('/'));
-    let mut params: Vec<String> = vec![];
-    if let Some(token) = token {
-        params.push(format!("token={}", urlencoding::encode(token)));
-    }
     if let Some(cid) = client_id {
-        params.push(format!("client_id={}", urlencoding::encode(cid)));
-    }
-    if !params.is_empty() {
-        url.push('?');
-        url.push_str(&params.join("&"));
+        url.push_str(&format!("?client_id={}", urlencoding::encode(cid)));
     }
     url
 }
@@ -69,7 +68,7 @@ async fn open_sse_response(
     session_token: Option<&str>,
     client_id: Option<&str>,
 ) -> Result<reqwest::Response, AppError> {
-    let url = build_sse_url(api_base_url, session_token, client_id);
+    let url = build_sse_url(api_base_url, client_id);
     let mut req = SSE_HTTP_CLIENT
         .get(&url)
         .header("Accept", "text/event-stream");
@@ -172,42 +171,35 @@ mod tests {
     // --- build_sse_url ----------------------------------------------------
 
     #[test]
-    fn build_sse_url_without_token_or_client_id() {
-        let url = build_sse_url("http://127.0.0.1:9119", None, None);
+    fn build_sse_url_without_client_id() {
+        let url = build_sse_url("http://127.0.0.1:9119", None);
         assert_eq!(url, "http://127.0.0.1:9119/api/v2/events");
     }
 
     #[test]
     fn build_sse_url_strips_trailing_slash_from_base() {
-        let url = build_sse_url("http://127.0.0.1:9119/", None, None);
+        let url = build_sse_url("http://127.0.0.1:9119/", None);
         assert_eq!(url, "http://127.0.0.1:9119/api/v2/events");
     }
 
     #[test]
-    fn build_sse_url_with_token_only() {
-        let url = build_sse_url("http://x", Some("tok"), None);
-        assert_eq!(url, "http://x/api/v2/events?token=tok");
-    }
-
-    #[test]
     fn build_sse_url_with_client_id_only() {
-        let url = build_sse_url("http://x", None, Some("cid-1"));
+        let url = build_sse_url("http://x", Some("cid-1"));
         assert_eq!(url, "http://x/api/v2/events?client_id=cid-1");
     }
 
     #[test]
-    fn build_sse_url_with_both_params() {
-        let url = build_sse_url("http://x", Some("tok"), Some("cid-1"));
-        assert_eq!(url, "http://x/api/v2/events?token=tok&client_id=cid-1");
+    fn build_sse_url_never_includes_token_query() {
+        // #46: the Tauri proxy authenticates via the Authorization header, so the
+        // session token must never appear in the URL (it would leak into logs).
+        let url = build_sse_url("http://x", Some("cid-1"));
+        assert!(!url.contains("token"), "token must not be in URL: {url}");
     }
 
     #[test]
-    fn build_sse_url_encodes_query_params() {
-        let url = build_sse_url("http://x", Some("tok+with space&x=y"), Some("cid/1?x=2"));
-        assert_eq!(
-            url,
-            "http://x/api/v2/events?token=tok%2Bwith%20space%26x%3Dy&client_id=cid%2F1%3Fx%3D2"
-        );
+    fn build_sse_url_encodes_client_id() {
+        let url = build_sse_url("http://x", Some("cid/1?x=2"));
+        assert_eq!(url, "http://x/api/v2/events?client_id=cid%2F1%3Fx%3D2");
     }
 
     // --- parse_sse_chunk --------------------------------------------------
