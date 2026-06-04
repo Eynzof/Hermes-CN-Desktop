@@ -1317,7 +1317,7 @@ export function ModelsSection() {
                 <input
                   className={s.fieldInput}
                   value={customForm.name}
-                  placeholder="例如：腾讯混元"
+                  placeholder="例如：Deepseek"
                   autoFocus
                   onChange={(e) => setCustomForm((p) => ({ ...p, name: e.target.value }))}
                 />
@@ -1338,7 +1338,7 @@ export function ModelsSection() {
                   className={s.fieldInput}
                   data-mono="true"
                   value={customForm.model}
-                  placeholder="hunyuan-turbos-latest"
+                  placeholder="deepseek-v4-flash"
                   onChange={(e) => setCustomForm((p) => ({ ...p, model: e.target.value }))}
                 />
               </label>
@@ -1349,7 +1349,7 @@ export function ModelsSection() {
                   data-mono="true"
                   type="password"
                   value={customForm.apiKey}
-                  placeholder="可选，先建后填也行"
+                  placeholder="可选，先建后填也可以"
                   onChange={(e) => setCustomForm((p) => ({ ...p, apiKey: e.target.value }))}
                 />
               </label>
