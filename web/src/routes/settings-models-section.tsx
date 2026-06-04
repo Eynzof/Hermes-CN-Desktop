@@ -1133,21 +1133,23 @@ export function ModelsSection() {
                   onChange={(event) => setProviderSearch(event.target.value)}
                   placeholder="搜索模型平台..."
                 />
-                <button
-                  className={s.btn}
-                  onClick={() => openCustomProviderForm("custom")}
-                  title="添加自定义 OpenAI 兼容 provider"
-                >
-                  + 自定义
-                </button>
-                <button
-                  className={s.btn}
-                  onClick={() => openCustomProviderForm("local")}
-                  title="添加本地部署 OpenAI 兼容 provider"
-                >
-                  本地部署
-                </button>
-                <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
+                <div className={s.providerToolbarActions}>
+                  <button
+                    className={s.btn}
+                    onClick={() => openCustomProviderForm("custom")}
+                    title="添加自定义 OpenAI 兼容 provider"
+                  >
+                    + 自定义
+                  </button>
+                  <button
+                    className={s.btn}
+                    onClick={() => openCustomProviderForm("local")}
+                    title="添加本地部署 OpenAI 兼容 provider"
+                  >
+                    + 本地部署
+                  </button>
+                  <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
+                </div>
               </div>
               <div className={s.providerPresetList}>
                 {filteredProviders.map((provider) => {

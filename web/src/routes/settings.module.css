@@ -1050,8 +1050,19 @@
 
 .providerListToolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+.providerToolbarActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.providerToolbarActions .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .customProviderBackdrop {
