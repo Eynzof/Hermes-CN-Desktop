@@ -81,7 +81,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   providers: [
     {
       id: "cp.compshare.cn",
-      name: "优云智算 · Coding Plan",
+      name: "优云智算 · Agent Plan",
       vendor: "优云智算 (Compshare)",
       region: "cn",
       baseUrl: "https://cp.compshare.cn/v1",
@@ -97,7 +97,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "modelverse",
-      name: "优云智算 · Direct API",
+      name: "优云智算 · API 按量付费",
       vendor: "优云智算 (Compshare)",
       region: "cn",
       baseUrl: "https://api.modelverse.cn/v1",
@@ -112,7 +112,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "alibaba",
-      name: "阿里云百炼 DashScope",
+      name: "阿里云百炼 · API 按量付费",
       vendor: "Alibaba Cloud",
       region: "cn",
       baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -170,7 +170,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "zai",
-      name: "智谱 GLM / Z.ai",
+      name: "智谱 GLM · API 按量付费",
       vendor: "Zhipu AI",
       region: "cn",
       baseUrl: "https://open.bigmodel.cn/api/paas/v4",
@@ -225,7 +225,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "stepfun",
-      name: "阶跃星辰 StepFun",
+      name: "阶跃星辰 · API 按量付费",
       vendor: "StepFun",
       region: "cn",
       baseUrl: "https://api.stepfun.com/v1",
@@ -258,7 +258,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "volcengine-ark",
-      name: "火山方舟",
+      name: "火山方舟 · API 按量付费",
       vendor: "Volcengine",
       region: "cn",
       baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
@@ -300,7 +300,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "minimax-cn",
-      name: "MiniMax 中国区 Token Plan",
+      name: "MiniMax · Token Plan",
       vendor: "MiniMax",
       region: "cn",
       baseUrl: "https://api.minimaxi.com/anthropic",
