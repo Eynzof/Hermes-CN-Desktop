@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   normalizeWorkspacePath,
+  mirrorSessionWorkspaceMapping,
   readSessionWorkspaceMap,
   readWorkspaceProjects,
   rememberSessionWorkspace,
@@ -8,7 +9,8 @@ import {
   removeWorkspaceProject,
   workspaceNameFromPath,
 } from "./workspaces";
-import { __resetUiStoreForTests } from "./ui-store";
+import { rememberSessionMapping } from "./session-map";
+import { __resetUiStoreForTests, writeUiValue } from "./ui-store";
 
 describe("workspace persistence helpers", () => {
   beforeEach(() => {
@@ -71,6 +73,41 @@ describe("workspace persistence helpers", () => {
     expect(readWorkspaceProjects()[0]).toMatchObject({
       path: "/Users/claw/Project",
       name: "Project",
+    });
+  });
+
+  it("resolves workspace links across gateway and persistent session ids", () => {
+    rememberSessionMapping("gw-1", "20260426_000000_abcd");
+    rememberSessionWorkspace("gw-1", "/Users/claw/Project");
+
+    expect(readSessionWorkspaceMap()).toEqual({
+      "gw-1": "/Users/claw/Project",
+      "20260426_000000_abcd": "/Users/claw/Project",
+    });
+  });
+
+  it("keeps historical workspace links after session id mappings become stale", () => {
+    writeUiValue("hermes:gateway-session-map", {
+      "gw-old": {
+        persistentId: "20260426_000000_abcd",
+        ts: Date.now() - 25 * 60 * 60 * 1000,
+      },
+    });
+    rememberSessionWorkspace("gw-old", "/Users/claw/Project");
+
+    expect(readSessionWorkspaceMap()).toEqual({
+      "gw-old": "/Users/claw/Project",
+      "20260426_000000_abcd": "/Users/claw/Project",
+    });
+  });
+
+  it("mirrors an existing gateway workspace when the persistent id becomes known", () => {
+    rememberSessionWorkspace("gw-1", "/Users/claw/Project");
+    mirrorSessionWorkspaceMapping("gw-1", "20260426_000000_abcd");
+
+    expect(readSessionWorkspaceMap()).toEqual({
+      "gw-1": "/Users/claw/Project",
+      "20260426_000000_abcd": "/Users/claw/Project",
     });
   });
 

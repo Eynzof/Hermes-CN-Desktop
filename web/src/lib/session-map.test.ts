@@ -4,6 +4,7 @@ import {
   rememberSessionMapping,
   resolveGatewaySessionId,
   resolvePersistentSessionId,
+  resolveSessionIdAliases,
 } from "./session-map";
 
 describe("session-map", () => {
@@ -28,6 +29,15 @@ describe("session-map", () => {
     expect(resolveGatewaySessionId("unknown")).toBeUndefined();
   });
 
+  it("returns both gateway and persistent aliases", () => {
+    rememberSessionMapping("gw-1", "20260426_000000_abcd");
+    expect(resolveSessionIdAliases("gw-1")).toEqual(["gw-1", "20260426_000000_abcd"]);
+    expect(resolveSessionIdAliases("20260426_000000_abcd")).toEqual([
+      "20260426_000000_abcd",
+      "gw-1",
+    ]);
+  });
+
   it("expires entries older than 24 hours", () => {
     rememberSessionMapping("gw-old", "sess-old");
     const raw = readUiValue<Record<string, { persistentId: string; ts: number }>>(
@@ -39,6 +49,11 @@ describe("session-map", () => {
 
     expect(resolvePersistentSessionId("gw-old")).toBe("gw-old");
     expect(resolveGatewaySessionId("sess-old")).toBeUndefined();
+    expect(resolveSessionIdAliases("gw-old")).toEqual(["gw-old"]);
+    expect(resolveSessionIdAliases("gw-old", { includeExpired: true })).toEqual([
+      "gw-old",
+      "sess-old",
+    ]);
   });
 
   it("migrates legacy string-value format", () => {

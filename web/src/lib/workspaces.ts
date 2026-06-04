@@ -1,4 +1,5 @@
 import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
+import { resolveSessionIdAliases } from "@/lib/session-map";
 export interface WorkspaceProject {
   path: string;
   name: string;
@@ -104,12 +105,36 @@ export function rememberWorkspaceProject(path: string, name?: string): Workspace
   return nextProject;
 }
 
+function readRawSessionWorkspaceMap(): Record<string, string> {
+  const raw = readJSON<unknown>(SESSION_WORKSPACE_STORAGE_KEY, {});
+  if (!isRecord(raw)) return {};
+  return Object.fromEntries(
+    Object.entries(raw).flatMap(([sessionId, path]) => {
+      const normalizedSessionId = sessionId.trim();
+      const normalized = normalizeWorkspacePath(path);
+      return normalizedSessionId && normalized ? [[normalizedSessionId, normalized]] : [];
+    }),
+  );
+}
+
+function withSessionIdAliases(map: Record<string, string>): Record<string, string> {
+  const expanded = { ...map };
+  for (const [sessionId, workspacePath] of Object.entries(map)) {
+    for (const alias of resolveSessionIdAliases(sessionId, { includeExpired: true })) {
+      if (!expanded[alias]) {
+        expanded[alias] = workspacePath;
+      }
+    }
+  }
+  return expanded;
+}
+
 export function removeWorkspaceProject(path: string): void {
   const normalized = normalizeWorkspacePath(path);
   if (!normalized) return;
 
   const projects = readWorkspaceProjects().filter((item) => item.path !== normalized);
-  const sessionMap = readSessionWorkspaceMap();
+  const sessionMap = readRawSessionWorkspaceMap();
   const nextSessionMap = Object.fromEntries(
     Object.entries(sessionMap).filter(([, workspacePath]) => workspacePath !== normalized),
   );
@@ -123,14 +148,7 @@ export function removeWorkspaceProject(path: string): void {
 }
 
 export function readSessionWorkspaceMap(): Record<string, string> {
-  const raw = readJSON<unknown>(SESSION_WORKSPACE_STORAGE_KEY, {});
-  if (!isRecord(raw)) return {};
-  return Object.fromEntries(
-    Object.entries(raw).flatMap(([sessionId, path]) => {
-      const normalized = normalizeWorkspacePath(path);
-      return sessionId && normalized ? [[sessionId, normalized]] : [];
-    }),
-  );
+  return withSessionIdAliases(readRawSessionWorkspaceMap());
 }
 
 export function rememberSessionWorkspace(sessionId: string | null | undefined, path: string): void {
@@ -138,10 +156,34 @@ export function rememberSessionWorkspace(sessionId: string | null | undefined, p
   const normalizedPath = normalizeWorkspacePath(path);
   if (!normalizedSessionId || !normalizedPath) return;
 
-  const map = readSessionWorkspaceMap();
-  map[normalizedSessionId] = normalizedPath;
+  const map = readRawSessionWorkspaceMap();
+  const aliases = resolveSessionIdAliases(normalizedSessionId, { includeExpired: true });
+  for (const alias of aliases.length > 0 ? aliases : [normalizedSessionId]) {
+    map[alias] = normalizedPath;
+  }
   writeJSON(SESSION_WORKSPACE_STORAGE_KEY, map);
   rememberWorkspaceProject(normalizedPath);
+}
+
+export function mirrorSessionWorkspaceMapping(
+  gatewaySessionId: string | null | undefined,
+  persistentSessionId: string | null | undefined,
+): void {
+  const gatewayId = gatewaySessionId?.trim();
+  const persistentId = persistentSessionId?.trim();
+  if (!gatewayId || !persistentId || gatewayId === persistentId) return;
+
+  const map = readRawSessionWorkspaceMap();
+  const workspacePath = normalizeWorkspacePath(map[gatewayId] ?? map[persistentId]);
+  if (!workspacePath) return;
+
+  if (map[gatewayId] === workspacePath && map[persistentId] === workspacePath) {
+    return;
+  }
+  map[gatewayId] = workspacePath;
+  map[persistentId] = workspacePath;
+  writeJSON(SESSION_WORKSPACE_STORAGE_KEY, map);
+  rememberWorkspaceProject(workspacePath);
 }
 
 export function subscribeWorkspaceChanges(listener: () => void): () => void {
