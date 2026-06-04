@@ -27,7 +27,7 @@ describe("summarizeToolActivity", () => {
     );
 
     expect(summary.status).toBe("done");
-    expect(summary.label).toBe("Ran 10 terminal commands");
+    expect(summary.label).toBe("运行了 10 条终端命令");
     expect(summary.meta).toBeUndefined();
     expect(summary.elapsedMs).toBe(950);
   });
@@ -41,7 +41,7 @@ describe("summarizeToolActivity", () => {
     ]);
 
     expect(summary.status).toBe("done");
-    expect(summary.label).toBe("Used 4 tools");
+    expect(summary.label).toBe("使用了 4 个工具");
     expect(summary.meta).toContain("terminal x2");
     expect(summary.meta).toContain("edit x1");
     expect(summary.meta).toContain("file_read x1");
@@ -54,7 +54,7 @@ describe("summarizeToolActivity", () => {
     );
 
     expect(summary.status).toBe("running");
-    expect(summary.label).toBe("Running terminal command");
+    expect(summary.label).toBe("正在运行终端命令");
     expect(summary.elapsedMs).toBe(1_500);
   });
 
@@ -71,7 +71,7 @@ describe("summarizeToolActivity", () => {
     ]);
 
     expect(summary.status).toBe("error");
-    expect(summary.label).toBe("Used 2 tools, 1 failed");
+    expect(summary.label).toBe("使用了 2 个工具，1 个失败");
     expect(summary.error).toBe("permission denied");
   });
 });

@@ -25,14 +25,6 @@ function isTerminalTool(name: string): boolean {
   return TERMINAL_TOOL_NAMES.has(normalizeName(name).toLowerCase());
 }
 
-function terminalCommandLabel(count: number): string {
-  return count === 1 ? "terminal command" : "terminal commands";
-}
-
-function pluralToolLabel(count: number): string {
-  return count === 1 ? "tool" : "tools";
-}
-
 function summarizeCounts(tools: readonly ChatToolItem[]): string | undefined {
   const counts = new Map<string, number>();
   tools.forEach((tool) => {
@@ -88,28 +80,26 @@ function activityLabel(
   const count = tools.length;
   const terminalOnly = tools.every((tool) => isTerminalTool(tool.name));
 
+  // 中文 UI：状态词本地化，工具原始名称（displayName）保留以便识别。
   if (terminalOnly) {
-    const commandLabel = terminalCommandLabel(count);
-    if (status === "running") return `Running ${commandLabel}`;
+    if (status === "running") return "正在运行终端命令";
     if (status === "error") {
-      if (count === 1) return "Terminal command failed";
-      return `Ran ${count} ${commandLabel}, ${errorCount} failed`;
+      if (count === 1) return "终端命令失败";
+      return `运行了 ${count} 条终端命令，${errorCount} 条失败`;
     }
-    return count === 1 ? "Ran terminal command" : `Ran ${count} ${commandLabel}`;
+    return count === 1 ? "运行了终端命令" : `运行了 ${count} 条终端命令`;
   }
 
   if (count === 1) {
     const name = displayName(tools[0]?.name ?? "tool");
-    if (status === "running") return `Running ${name}`;
-    if (status === "error") return `${name} failed`;
-    return `Used ${name}`;
+    if (status === "running") return `正在运行 ${name}`;
+    if (status === "error") return `${name} 失败`;
+    return `使用了 ${name}`;
   }
 
-  if (status === "running") return `Using ${count} ${pluralToolLabel(count)}`;
-  if (status === "error") {
-    return `Used ${count} ${pluralToolLabel(count)}, ${errorCount} failed`;
-  }
-  return `Used ${count} ${pluralToolLabel(count)}`;
+  if (status === "running") return `正在使用 ${count} 个工具`;
+  if (status === "error") return `使用了 ${count} 个工具，${errorCount} 个失败`;
+  return `使用了 ${count} 个工具`;
 }
 
 export function summarizeToolActivity(
