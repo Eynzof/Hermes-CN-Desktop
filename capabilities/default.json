@@ -7,9 +7,6 @@
     "core:default",
     "core:window:allow-start-dragging",
     "dialog:default",
-    "dialog:allow-open",
-    "shell:default",
-    "shell:allow-open",
-    "fs:default"
+    "dialog:allow-open"
   ]
 }
