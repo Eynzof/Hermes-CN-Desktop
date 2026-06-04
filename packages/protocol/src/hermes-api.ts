@@ -506,6 +506,14 @@ export const ActiveProfileResponse = z.object({
 });
 export type ActiveProfileResponse = z.infer<typeof ActiveProfileResponse>;
 
+// SOUL.md（按档案存储的首要身份）— GET /api/profiles/{name}/soul
+// content 为档案下 SOUL.md 的原文；exists=false 表示尚未创建（content 为空）。
+export const ProfileSoulResponse = z.object({
+  content: z.string(),
+  exists: z.boolean(),
+});
+export type ProfileSoulResponse = z.infer<typeof ProfileSoulResponse>;
+
 export const ProfileCreateRequest = z.object({
   name: z.string(),
   clone_from_default: z.boolean().optional(),
