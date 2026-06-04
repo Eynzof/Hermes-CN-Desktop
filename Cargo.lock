@@ -1637,7 +1637,6 @@ dependencies = [
  "log",
  "objc2",
  "objc2-foundation",
- "once_cell",
  "open",
  "portable-pty",
  "pretty_assertions",

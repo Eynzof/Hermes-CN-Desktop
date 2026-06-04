@@ -1,4 +1,3 @@
-use once_cell::sync::Lazy;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,7 +7,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::State;
@@ -17,14 +16,15 @@ use url::Url;
 use crate::error::AppError;
 use crate::state::AppState;
 
-static HTTP: Lazy<Client> = Lazy::new(|| {
+static HTTP: LazyLock<Client> = LazyLock::new(|| {
     Client::builder()
         .timeout(Duration::from_secs(15))
         .build()
         .expect("valid IM onboarding HTTP client")
 });
 
-static FLOWS: Lazy<Mutex<HashMap<String, FlowState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static FLOWS: LazyLock<Mutex<HashMap<String, FlowState>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const FEISHU_ACCOUNTS_BASE: &str = "https://accounts.feishu.cn";
 const FEISHU_OPEN_BASE: &str = "https://open.feishu.cn";

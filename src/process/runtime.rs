@@ -1840,11 +1840,41 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
 }
 
 fn chrono_now() -> String {
-    // Simple ISO 8601 timestamp without pulling in the chrono crate
-    let duration = std::time::SystemTime::now()
+    let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-    format!("{}Z", duration.as_secs())
+        .unwrap_or_default()
+        .as_secs();
+    format_rfc3339_utc(secs)
+}
+
+/// Format a Unix timestamp (UTC seconds since epoch) as an RFC 3339 / ISO 8601
+/// string like `2026-05-23T12:34:56Z`, without pulling in chrono/time. The old
+/// `format!("{}Z", secs)` produced `1715731200Z`, which no standard parser
+/// accepts; this value is what gets written to a runtime record's `installed_at`.
+fn format_rfc3339_utc(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let rem = secs % 86_400;
+    let hh = rem / 3_600;
+    let mm = (rem % 3_600) / 60;
+    let ss = rem % 60;
+    let (year, month, day) = civil_from_days(days);
+    format!("{year:04}-{month:02}-{day:02}T{hh:02}:{mm:02}:{ss:02}Z")
+}
+
+/// Convert days since 1970-01-01 into `(year, month, day)` in the proleptic
+/// Gregorian calendar. Adapted from Howard Hinnant's `civil_from_days`.
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // [0, 399]
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let month = if mp < 10 { mp + 3 } else { mp - 9 }; // [1, 12]
+    let year = if month <= 2 { year + 1 } else { year };
+    (year, month as u32, day)
 }
 
 #[cfg(test)]
@@ -1857,6 +1887,24 @@ mod tests {
     use serial_test::serial;
     use std::io::Write;
     use tempfile::TempDir;
+
+    #[test]
+    fn format_rfc3339_utc_emits_parseable_timestamps() {
+        assert_eq!(format_rfc3339_utc(0), "1970-01-01T00:00:00Z");
+        assert_eq!(format_rfc3339_utc(86_400), "1970-01-02T00:00:00Z");
+        // 1_000_000_000 is the well-known Unix billennium.
+        assert_eq!(format_rfc3339_utc(1_000_000_000), "2001-09-09T01:46:40Z");
+    }
+
+    #[test]
+    fn chrono_now_is_rfc3339_shaped() {
+        let now = chrono_now();
+        // YYYY-MM-DDTHH:MM:SSZ
+        assert_eq!(now.len(), 20, "unexpected timestamp: {now}");
+        assert!(now.ends_with('Z'), "missing Z suffix: {now}");
+        assert_eq!(&now[4..5], "-");
+        assert_eq!(&now[10..11], "T");
+    }
 
     // -------- Fixtures --------
 

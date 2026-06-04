@@ -13,6 +13,7 @@ import type { SessionSummary } from "@hermes/protocol";
 import { useSessions } from "@/hooks/use-sessions";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { formatTokens, relativeTime } from "@/lib/format";
+import { shortenPath } from "@/lib/paths";
 import { getSourceMeta } from "@/lib/source-meta";
 import {
   normalizeWorkspacePath,
@@ -33,16 +34,6 @@ function lastActivitySec(session: SessionSummary): number {
 
 function shortId(id: string): string {
   return id.slice(-6);
-}
-
-function shortenPath(path: string): string {
-  if (!path) return "—";
-  const home = "/Users/";
-  if (path.startsWith(home)) {
-    const segments = path.slice(home.length).split("/");
-    if (segments.length >= 2) return "~/" + segments.slice(1).join("/");
-  }
-  return path;
 }
 
 function formatTimestampDate(unixSec: number): string {

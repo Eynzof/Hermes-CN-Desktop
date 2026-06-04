@@ -75,13 +75,6 @@ updateJson("tauri.conf.json", (config) => {
   config.version = desktopVersion;
 });
 
-updateJson("package-lock.json", (lock) => {
-  lock.version = desktopVersion;
-  if (lock.packages?.[""]) {
-    lock.packages[""].version = desktopVersion;
-  }
-});
-
 updateText("Cargo.toml", (text) => replaceOrThrow(
   text,
   /(^\[package\][\s\S]*?^version\s*=\s*)"[^"]+"/m,
