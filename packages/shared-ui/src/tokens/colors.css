@@ -74,10 +74,10 @@
   --h-bg-code: var(--ink-200);
   --h-line: #2a2725;
   --h-line-soft: #1d1b19;
-  --h-text: var(--bone-100);
-  --h-text-2: var(--bone-300);
-  --h-text-3: var(--bone-400);
-  --h-text-4: var(--bone-600);
+  --h-text: #faf7f0;
+  --h-text-2: var(--bone-200);
+  --h-text-3: var(--bone-300);
+  --h-text-4: var(--bone-500);
   --h-ok: var(--moss);
   --h-ok-soft: rgba(141, 181, 128, 0.08);
   --h-warn: var(--amber);
