@@ -81,7 +81,7 @@ export function useSaveUserProfile() {
   });
 }
 
-export function useMemoryProviders() {
+export function useMemoryProviders(options: { enabled?: boolean } = {}) {
   const profile = useActiveProfileName();
   return useQuery<MemoryProvidersState>({
     queryKey: ["memory-providers", profile],
@@ -94,6 +94,7 @@ export function useMemoryProviders() {
       };
     },
     staleTime: 30_000,
+    enabled: options.enabled,
   });
 }
 
