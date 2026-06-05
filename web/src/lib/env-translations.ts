@@ -228,9 +228,45 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
     label: "Discord 允许用户",
     description: "允许使用机器人的 Discord 用户 ID，多个值用英文逗号分隔。",
   },
+  DISCORD_ALLOW_ALL_USERS: {
+    label: "Discord 允许所有用户",
+    description: "是否允许任意 Discord 用户触发机器人，仅建议开发调试时开启。",
+  },
   DISCORD_REPLY_TO_MODE: {
     label: "Discord 回复模式",
     description: "控制 Discord 消息是否带 reply 引用：off、first 或 all。",
+  },
+  DISCORD_HOME_CHANNEL: {
+    label: "Discord Home Channel",
+    description: "cron 投递、提醒和通知使用的默认 Discord 频道 ID。",
+  },
+  DISCORD_HOME_CHANNEL_NAME: {
+    label: "Discord Home Channel 名称",
+    description: "Discord 主频道在日志和状态输出中的显示名称。",
+  },
+  GOOGLE_CHAT_PROJECT_ID: {
+    label: "Google Chat GCP 项目 ID",
+    description: "托管 Chat 事件 Pub/Sub 主题的 GCP 项目 ID；未设置时回退到 GOOGLE_CLOUD_PROJECT。",
+  },
+  GOOGLE_CHAT_SUBSCRIPTION_NAME: {
+    label: "Google Chat Pub/Sub 订阅",
+    description: "完整 Pub/Sub 订阅路径，例如 projects/<proj>/subscriptions/<sub>；旧版别名为 GOOGLE_CHAT_SUBSCRIPTION。",
+  },
+  GOOGLE_CHAT_SERVICE_ACCOUNT_JSON: {
+    label: "Google Chat 服务账号 JSON",
+    description: "Service Account JSON key 的文件路径或内联 JSON；留空时在 Cloud Run / GCE 使用应用默认凭据，并可回退到 GOOGLE_APPLICATION_CREDENTIALS。",
+  },
+  GOOGLE_CHAT_ALLOWED_USERS: {
+    label: "Google Chat 允许用户",
+    description: "允许与机器人交互的用户邮箱，多个值用英文逗号分隔。",
+  },
+  GOOGLE_CHAT_HOME_CHANNEL: {
+    label: "Google Chat Home Space",
+    description: "cron 投递、提醒和通知使用的默认 Google Chat 空间，例如 spaces/AAAA...。",
+  },
+  GOOGLE_CHAT_HOME_CHANNEL_NAME: {
+    label: "Google Chat Home Space 名称",
+    description: "Google Chat 主空间在日志和状态输出中的显示名称。",
   },
   SLACK_BOT_TOKEN: {
     label: "Slack Bot Token",
@@ -275,6 +311,42 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
   MATRIX_ALLOWED_USERS: {
     label: "Matrix 允许用户",
     description: "允许使用机器人的 Matrix 用户 ID，格式为 @user:server。",
+  },
+  NTFY_TOPIC: {
+    label: "ntfy 订阅主题",
+    description: "机器人要订阅的 ntfy topic，例如 hermes-in。",
+  },
+  NTFY_SERVER_URL: {
+    label: "ntfy 服务地址",
+    description: "ntfy 服务器 URL，默认 https://ntfy.sh；也可以填写自托管服务地址。",
+  },
+  NTFY_TOKEN: {
+    label: "ntfy 认证 Token",
+    description: "ntfy Bearer token，或用于 Basic auth 的 user:pass；可选。",
+  },
+  NTFY_PUBLISH_TOPIC: {
+    label: "ntfy 发布主题",
+    description: "机器人回复要发布到的 ntfy topic；留空时默认使用 NTFY_TOPIC。",
+  },
+  NTFY_MARKDOWN: {
+    label: "ntfy 启用 Markdown",
+    description: "是否在回复请求中发送 X-Markdown: true header，默认 false。",
+  },
+  NTFY_ALLOWED_USERS: {
+    label: "ntfy 允许主题",
+    description: "允许与机器人交互的 ntfy topic 白名单，多个值用英文逗号分隔。",
+  },
+  NTFY_ALLOW_ALL_USERS: {
+    label: "ntfy 允许所有主题",
+    description: "是否允许任意 ntfy topic 与机器人交互；仅建议开发调试时开启，开启后会禁用白名单。",
+  },
+  NTFY_HOME_CHANNEL: {
+    label: "ntfy Home Topic",
+    description: "cron 投递、提醒和通知使用的默认 ntfy topic。",
+  },
+  NTFY_HOME_CHANNEL_NAME: {
+    label: "ntfy Home Topic 名称",
+    description: "ntfy 默认 topic 的显示名称；留空时使用 topic 名称。",
   },
   BLUEBUBBLES_SERVER_URL: {
     label: "BlueBubbles 服务地址",
@@ -328,6 +400,10 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
     label: "IRC 服务器",
     description: "要连接的 IRC 服务器主机名，例如 irc.libera.chat。",
   },
+  IRC_PORT: {
+    label: "IRC 端口",
+    description: "IRC 服务器端口；启用 TLS 时默认 6697，不启用 TLS 时默认 6667。",
+  },
   IRC_CHANNEL: {
     label: "IRC 频道",
     description: "机器人要加入的 IRC 频道，例如 #hermes。",
@@ -335,6 +411,30 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
   IRC_NICKNAME: {
     label: "IRC 昵称",
     description: "机器人在 IRC 中使用的昵称，默认 hermes-bot。",
+  },
+  IRC_USE_TLS: {
+    label: "IRC 启用 TLS",
+    description: "是否使用 TLS 连接 IRC；填写 1、true 或 yes 表示启用，端口 6697 默认启用。",
+  },
+  IRC_SERVER_PASSWORD: {
+    label: "IRC 服务器密码",
+    description: "IRC PASS 命令使用的服务器密码，可选。",
+  },
+  IRC_NICKSERV_PASSWORD: {
+    label: "IRC NickServ 密码",
+    description: "连接后自动 IDENTIFY 使用的 NickServ 密码，可选。",
+  },
+  IRC_ALLOWED_USERS: {
+    label: "IRC 允许用户",
+    description: "允许与机器人聊天的 IRC 昵称，多个值用英文逗号分隔。",
+  },
+  IRC_ALLOW_ALL_USERS: {
+    label: "IRC 允许所有用户",
+    description: "是否允许频道内任意用户与机器人聊天，仅建议开发调试时开启。",
+  },
+  IRC_HOME_CHANNEL: {
+    label: "IRC Home Channel",
+    description: "cron 投递、提醒和通知使用的 IRC 频道；留空时默认使用 IRC_CHANNEL。",
   },
   WEBHOOK_ENABLED: {
     label: "启用 Webhook 平台",
@@ -380,6 +480,202 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
   },
 };
 
+const PROVIDER_PREFIX_TRANSLATIONS: Record<string, string> = {
+  AI302: "302.AI",
+  ALIBABA_CODING_PLAN: "阿里云百炼 Coding Plan",
+  ANTHROPIC: "Anthropic",
+  ARCEE: "Arcee AI",
+  ARCEEAI: "Arcee AI",
+  ARK: "火山方舟",
+  AZURE_FOUNDRY: "Azure AI Foundry",
+  CLAUDE_CODE: "Claude Code",
+  COMPSHARE: "优云智算",
+  COPILOT_GITHUB: "GitHub Copilot",
+  DASHSCOPE: "阿里云百炼 DashScope",
+  DEEPSEEK: "DeepSeek",
+  GEMINI: "Gemini",
+  GH: "GitHub",
+  GLM: "智谱 GLM",
+  GMI: "GMI Cloud",
+  GOOGLE: "Google AI Studio",
+  HERMES_GEMINI: "Gemini OAuth",
+  HERMES_QWEN: "Qwen Portal",
+  HF: "Hugging Face",
+  HUNYUAN: "腾讯混元",
+  KILOCODE: "Kilo Code",
+  KIMI: "Kimi / Moonshot",
+  KIMI_CN: "Kimi / Moonshot 中国",
+  LM: "LM Studio",
+  LONGCAT: "LongCat",
+  MIMO: "小米 MiMo",
+  MINIMAX: "MiniMax",
+  MINIMAX_CN: "MiniMax 中国",
+  MODELSCOPE: "ModelScope",
+  NOUS: "Nous Portal",
+  NOVITA: "Novita",
+  NVIDIA: "NVIDIA NIM",
+  OLLAMA: "Ollama Cloud",
+  OPENCODE_GO: "OpenCode Go",
+  OPENCODE_ZEN: "OpenCode Zen",
+  OPENROUTER: "OpenRouter",
+  QIANFAN: "百度千帆",
+  QWEN: "Qwen",
+  SILICONFLOW: "SiliconFlow",
+  STEPFUN: "StepFun",
+  XAI: "xAI",
+  XIAOMI: "小米 MiMo",
+  ZAI: "Z.AI",
+  Z_AI: "Z.AI",
+};
+
+interface ProviderFieldTranslation {
+  label: string;
+  description: (provider: string) => string;
+}
+
+const PROVIDER_FIELD_TRANSLATIONS: Array<[suffix: string, field: ProviderFieldTranslation]> = [
+  [
+    "_SERVICE_ACCOUNT_JSON",
+    {
+      label: "服务账号 JSON",
+      description: (provider) => `${provider} 服务账号 JSON 路径或内联 JSON，用于服务账号认证。`,
+    },
+  ],
+  [
+    "_SECRET_ACCESS_KEY",
+    {
+      label: "Secret Access Key",
+      description: (provider) => `${provider} Secret Access Key，用于云服务鉴权。`,
+    },
+  ],
+  [
+    "_ACCESS_KEY_ID",
+    {
+      label: "Access Key ID",
+      description: (provider) => `${provider} Access Key ID，用于云服务鉴权。`,
+    },
+  ],
+  [
+    "_CLIENT_SECRET",
+    {
+      label: "Client Secret",
+      description: (provider) => `${provider} OAuth Client Secret；可选，通常与 Client ID 搭配使用。`,
+    },
+  ],
+  [
+    "_CLIENT_ID",
+    {
+      label: "Client ID",
+      description: (provider) => `${provider} OAuth Client ID；可选，留空时使用默认客户端配置。`,
+    },
+  ],
+  [
+    "_PROJECT_ID",
+    {
+      label: "项目 ID",
+      description: (provider) => `${provider} 项目 ID，用于绑定云端项目或计费项目。`,
+    },
+  ],
+  [
+    "_OAUTH_TOKEN",
+    {
+      label: "OAuth Token",
+      description: (provider) => `${provider} OAuth Token，用于通过 OAuth 访问该模型服务商。`,
+    },
+  ],
+  [
+    "_ACCESS_TOKEN",
+    {
+      label: "Access Token",
+      description: (provider) => `${provider} Access Token，用于访问该模型服务商。`,
+    },
+  ],
+  [
+    "_BASE_URL",
+    {
+      label: "Base URL",
+      description: (provider) => `${provider} API Base URL 覆盖；留空时使用默认端点。`,
+    },
+  ],
+  [
+    "_API_URL",
+    {
+      label: "API URL",
+      description: (provider) => `${provider} API URL 覆盖；留空时使用默认端点。`,
+    },
+  ],
+  [
+    "_API_KEY",
+    {
+      label: "API Key",
+      description: (provider) => `${provider} API Key，用于访问该模型服务商。`,
+    },
+  ],
+  [
+    "_TOKEN",
+    {
+      label: "Token",
+      description: (provider) => `${provider} Token，用于访问该模型服务商。`,
+    },
+  ],
+  [
+    "_REGION",
+    {
+      label: "区域",
+      description: (provider) => `${provider} 区域或地域设置。`,
+    },
+  ],
+  [
+    "_PROFILE",
+    {
+      label: "配置档案",
+      description: (provider) => `${provider} 本地配置档案名称。`,
+    },
+  ],
+  [
+    "_MODEL",
+    {
+      label: "模型",
+      description: (provider) => `${provider} 默认模型名称。`,
+    },
+  ],
+  [
+    "_ENDPOINT",
+    {
+      label: "端点",
+      description: (provider) => `${provider} 服务端点覆盖。`,
+    },
+  ],
+];
+
+function providerNameFromPrefix(prefix: string): string {
+  return PROVIDER_PREFIX_TRANSLATIONS[prefix] ?? prefix
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function translateProviderEnvVar(envKey: string, info: EnvVarInfo): EnvVarTranslation | null {
+  if (info.category !== "provider") return null;
+
+  for (const [suffix, field] of PROVIDER_FIELD_TRANSLATIONS) {
+    if (!envKey.endsWith(suffix)) continue;
+    const prefix = envKey.slice(0, -suffix.length);
+    const provider = providerNameFromPrefix(prefix);
+    return {
+      label: `${provider} ${field.label}`,
+      description: field.description(provider),
+    };
+  }
+
+  const provider = providerNameFromPrefix(envKey.replace(/_(?:KEY|URL|TOKEN|SECRET|ID)$/u, ""));
+  return {
+    label: provider === envKey ? envKey.replace(/_/gu, " ") : provider,
+    description: `模型服务商相关高级环境变量。原始变量名：${envKey}。`,
+  };
+}
+
 export function translateEnvCategory(category: string): string {
   return ENV_CATEGORY_TRANSLATIONS[category] ?? category;
 }
@@ -387,6 +683,8 @@ export function translateEnvCategory(category: string): string {
 export function translateEnvVar(envKey: string, info: EnvVarInfo): EnvVarTranslation {
   const hit = ENV_VAR_TRANSLATIONS[envKey];
   if (hit) return hit;
+  const providerHit = translateProviderEnvVar(envKey, info);
+  if (providerHit) return providerHit;
   return {
     label: envKey,
     description: info.description || envKey,
