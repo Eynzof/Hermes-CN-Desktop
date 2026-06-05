@@ -23,13 +23,6 @@ function formatContext(ctx: number | null | undefined): string {
   return `${ctx}`;
 }
 
-function tilde(path: string | undefined): string {
-  if (!path) return "—";
-  const home = path.match(/[A-Z]:[\\/]Users[\\/][^\\/]+/i)?.[0];
-  if (home && path.startsWith(home)) return path.replace(home, "~").replace(/\\/g, "/");
-  return path.replace(/\\/g, "/");
-}
-
 function portFromUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   try {
@@ -65,7 +58,6 @@ export function AppStatusBar() {
   const contextLabel = formatContext(
     modelInfo?.effective_context_length ?? modelInfo?.auto_context_length,
   );
-  const homeLabel = tilde(status?.hermes_home);
 
   const runningCount = useMemo(() => {
     if (!sessions?.sessions) return status?.active_sessions ?? 0;
@@ -102,11 +94,6 @@ export function AppStatusBar() {
       <span className={s.stat}>
         <span className={s.lbl}>上下文</span>
         <span className={s.val}>{contextLabel}</span>
-      </span>
-      <span className={s.sep} />
-      <span className={s.stat} title={status?.hermes_home}>
-        <span className={s.lbl}>主目录</span>
-        <span className={s.val}>{homeLabel}</span>
       </span>
 
       <div className={s.right}>

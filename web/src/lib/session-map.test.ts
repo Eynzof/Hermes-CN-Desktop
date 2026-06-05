@@ -102,4 +102,17 @@ describe("session-map", () => {
     expect(resolvePersistentSessionId(undefined)).toBeUndefined();
     expect(resolveGatewaySessionId(undefined)).toBeUndefined();
   });
+
+  it("resolves to the most recent gateway id when several map to one session", () => {
+    // A resumed session accumulates several gateway ids over time (app relaunch,
+    // reconnect, session.busy → interrupt → re-resume). The live one is the
+    // newest; resolution must return it, not the first-inserted stale id — else
+    // detail renders an empty runtime bucket and a freshly-sent message stays
+    // invisible until a REST refetch.
+    writeUiValue("hermes:gateway-session-map", {
+      "gw-stale": { persistentId: "sess-1", ts: Date.now() - 60_000 },
+      "gw-live": { persistentId: "sess-1", ts: Date.now() - 1_000 },
+    });
+    expect(resolveGatewaySessionId("sess-1")).toBe("gw-live");
+  });
 });
