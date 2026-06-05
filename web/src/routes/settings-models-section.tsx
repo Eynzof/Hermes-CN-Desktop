@@ -8,7 +8,6 @@ import { useProviderModels } from "@/hooks/use-provider-models";
 import type { ModelInfo, ProviderProbeResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
-  buildCurrentModelConfigUpdate,
   buildProviderConfigUpdate,
   buildProviderSettingsUpdate,
   getProviderEntry,
@@ -900,18 +899,35 @@ export function ModelsSection() {
   const handleSetCurrentModel = async () => {
     if (!config || !selectedProvider) return;
     const pendingStartedAt = performance.now();
+    const newApiKey = providerForm.apiKey.trim();
+    const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
     const providerName = selectedProvider.name;
+    const isCustomProvider = providerId.startsWith("custom:");
     setProviderSetCurrentPending(true);
     setProviderSaveError("");
     try {
-      // Same hot-switch path as the composer model picker: update the live
-      // gateway runtime explicitly instead of only editing provider metadata.
-      await setRuntimeModel(savedModel, providerId);
+      if (newApiKey && !isCustomProvider && selectedProvider.apiKeyLabel) {
+        await setEnv.mutateAsync({ key: selectedProvider.apiKeyLabel, value: newApiKey });
+      }
+      // Persist both providers.<id> and model.* before asking the live gateway
+      // to hot-switch. First-run setups otherwise have no current provider for
+      // gateway _apply_model_switch() to resolve, so it can fail before it ever
+      // considers the explicit `--provider <id>` argument.
       await saveConfig.mutateAsync(
-        buildCurrentModelConfigUpdate(config, selectedProvider, providerForm),
+        buildProviderConfigUpdate(config, selectedProvider, providerForm),
       );
+      // Same hot-switch path as the composer model picker: update the live
+      // gateway runtime explicitly after disk config is already usable.
+      await setRuntimeModel(savedModel, providerId);
+      setProviderForm((prev) => ({ ...prev, apiKey: "" }));
+      setSavedSnapshot({
+        baseUrl: savedBaseUrl,
+        model: savedModel,
+        providerId,
+      });
+      setSavedFlashFor(providerId);
       // PanelComposer seeds its model picker from the UI store.
       // This mirrors picking a model from the workbench composer, so the next
       // new session carries this explicit choice even before /api/model/info
