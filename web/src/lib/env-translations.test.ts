@@ -37,6 +37,16 @@ describe("translateEnvVar", () => {
     expect(translateEnvVar("WEIXIN_TOKEN", envInfo("Weixin token")).description).toContain("iLink bot");
   });
 
+  it("returns Chinese labels for plugin-provided messaging keys", () => {
+    expect(translateEnvVar("DISCORD_ALLOW_ALL_USERS", envInfo("Allow any Discord user")).label).toBe(
+      "Discord 允许所有用户",
+    );
+    expect(translateEnvVar("GOOGLE_CHAT_PROJECT_ID", envInfo("GCP project ID")).description).toContain(
+      "Pub/Sub",
+    );
+    expect(translateEnvVar("IRC_PORT", envInfo("IRC server port")).label).toBe("IRC 端口");
+  });
+
   it("falls back to backend-provided metadata for unknown keys", () => {
     const translated = translateEnvVar("SOME_NEW_ENV", envInfo("Backend English description"));
     expect(translated).toEqual({
