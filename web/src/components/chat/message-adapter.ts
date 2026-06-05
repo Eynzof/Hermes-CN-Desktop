@@ -730,7 +730,26 @@ export function mergeHermesUIMessages(
     if (!usedLiveIndexes.has(index)) merged.push(liveMessage);
   });
 
-  return merged;
+  // Issue #98: a live message that fails to match any stored row — typically
+  // the current turn's user prompt whose canonical text diverged from the
+  // persisted copy — is pushed onto the end above, which lands it *below* the
+  // assistant reply once that reply is refetched into `stored`. Re-order the
+  // merged turn by createdAt so it keeps its chronological shape after the
+  // reply completes. The sort is stable: on an exact createdAt tie (startPrompt
+  // stamps the optimistic user + assistant with the same `now`) the user is
+  // floated before the assistant, otherwise the original order is preserved.
+  return merged
+    .map((message, index) => ({ message, index }))
+    .sort((a, b) => {
+      if (a.message.createdAt !== b.message.createdAt) {
+        return a.message.createdAt - b.message.createdAt;
+      }
+      const rank = (role: HermesUIMessage["role"]) => (role === "user" ? 0 : 1);
+      const rankDelta = rank(a.message.role) - rank(b.message.role);
+      if (rankDelta !== 0) return rankDelta;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.message);
 }
 
 export function storedMessageToChatMessage(msg: SessionMessage): ChatMessage | null {
