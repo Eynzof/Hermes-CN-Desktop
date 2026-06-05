@@ -312,6 +312,42 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
     label: "Matrix 允许用户",
     description: "允许使用机器人的 Matrix 用户 ID，格式为 @user:server。",
   },
+  NTFY_TOPIC: {
+    label: "ntfy 订阅主题",
+    description: "机器人要订阅的 ntfy topic，例如 hermes-in。",
+  },
+  NTFY_SERVER_URL: {
+    label: "ntfy 服务地址",
+    description: "ntfy 服务器 URL，默认 https://ntfy.sh；也可以填写自托管服务地址。",
+  },
+  NTFY_TOKEN: {
+    label: "ntfy 认证 Token",
+    description: "ntfy Bearer token，或用于 Basic auth 的 user:pass；可选。",
+  },
+  NTFY_PUBLISH_TOPIC: {
+    label: "ntfy 发布主题",
+    description: "机器人回复要发布到的 ntfy topic；留空时默认使用 NTFY_TOPIC。",
+  },
+  NTFY_MARKDOWN: {
+    label: "ntfy 启用 Markdown",
+    description: "是否在回复请求中发送 X-Markdown: true header，默认 false。",
+  },
+  NTFY_ALLOWED_USERS: {
+    label: "ntfy 允许主题",
+    description: "允许与机器人交互的 ntfy topic 白名单，多个值用英文逗号分隔。",
+  },
+  NTFY_ALLOW_ALL_USERS: {
+    label: "ntfy 允许所有主题",
+    description: "是否允许任意 ntfy topic 与机器人交互；仅建议开发调试时开启，开启后会禁用白名单。",
+  },
+  NTFY_HOME_CHANNEL: {
+    label: "ntfy Home Topic",
+    description: "cron 投递、提醒和通知使用的默认 ntfy topic。",
+  },
+  NTFY_HOME_CHANNEL_NAME: {
+    label: "ntfy Home Topic 名称",
+    description: "ntfy 默认 topic 的显示名称；留空时使用 topic 名称。",
+  },
   BLUEBUBBLES_SERVER_URL: {
     label: "BlueBubbles 服务地址",
     description: "用于 iMessage 集成的 BlueBubbles Server URL。",

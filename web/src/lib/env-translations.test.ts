@@ -47,6 +47,12 @@ describe("translateEnvVar", () => {
     expect(translateEnvVar("IRC_PORT", envInfo("IRC server port")).label).toBe("IRC 端口");
   });
 
+  it("returns Chinese labels for ntfy platform env vars", () => {
+    expect(translateEnvVar("NTFY_TOPIC", envInfo("Topic name to subscribe to")).label).toBe("ntfy 订阅主题");
+    expect(translateEnvVar("NTFY_TOKEN", envInfo("Bearer token")).description).toContain("Basic auth");
+    expect(translateEnvVar("NTFY_ALLOW_ALL_USERS", envInfo("Allow any topic")).label).toBe("ntfy 允许所有主题");
+  });
+
   it("builds Chinese display text for advanced provider env vars", () => {
     expect(translateEnvVar("NOUS_BASE_URL", envInfo("Nous Portal base URL override", "provider"))).toEqual({
       label: "Nous Portal Base URL",
