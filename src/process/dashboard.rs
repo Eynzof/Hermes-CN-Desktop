@@ -21,11 +21,12 @@ use serde::{Deserialize, Serialize};
 use crate::error::AppError;
 use crate::state::{DashboardHandle, DashboardJobHandle};
 
-// A freshly installed onefile runtime can spend ~20s on macOS unpacking its
-// embedded Python payload before the dashboard process begins serving HTTP.
-// Use a production-safe margin so first launch does not fail right after a
-// successful runtime install on slower machines.
-const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(60);
+// A freshly installed onefile runtime can spend tens of seconds on macOS
+// unpacking/importing its embedded Python payload before the dashboard process
+// begins serving HTTP. Local-source dev runtimes can also cross the old 60s
+// boundary on cold caches, leaving a dashboard that becomes ready just after
+// bootstrap has already failed. Keep a wider production-safe margin.
+const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(120);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(900);
 const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_millis(1200);
 const SHUTDOWN_HTTP_TIMEOUT: Duration = Duration::from_millis(800);
