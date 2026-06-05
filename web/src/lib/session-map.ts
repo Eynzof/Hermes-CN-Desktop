@@ -77,12 +77,20 @@ export function resolveGatewaySessionId(sessionId: string | undefined): string |
   if (!sessionId) return undefined;
   const map = readMap();
   const now = Date.now();
+  // Several gateway ids can point at one persistent id (a map persisted across
+  // an app relaunch, a reconnect / re-resume minting a fresh id). Object
+  // iteration order is insertion order, so returning the first match hands back
+  // the *oldest* (dead) id — detail then renders an empty runtime bucket while
+  // the live one keeps streaming. Pick the newest live mapping instead.
+  let bestId: string | undefined;
+  let bestTs = -Infinity;
   for (const [gatewayId, entry] of Object.entries(map)) {
-    if (entry.persistentId === sessionId && now - entry.ts < MAX_AGE_MS) {
-      return gatewayId;
+    if (entry.persistentId === sessionId && now - entry.ts < MAX_AGE_MS && entry.ts > bestTs) {
+      bestId = gatewayId;
+      bestTs = entry.ts;
     }
   }
-  return undefined;
+  return bestId;
 }
 
 interface ResolveSessionIdAliasOptions {
