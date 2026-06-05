@@ -82,6 +82,38 @@ describe("provider catalog config updates", () => {
     });
   });
 
+
+  it("writes Volcengine Coding Plan as a resolvable provider and current model", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "volcengine-ark-coding");
+    expect(preset).toBeTruthy();
+
+    const config = buildProviderConfigUpdate(
+      {},
+      preset!,
+      {
+        apiKey: "ark-coding-key",
+        baseUrl: "https://ark.cn-beijing.volces.com/api/coding/v3",
+        model: "doubao-seed-2.0-code",
+      },
+    );
+
+    expect(config.providers["volcengine-ark-coding"]).toMatchObject({
+      name: "火山方舟 · Coding Plan",
+      api_key: "ark-coding-key",
+      base_url: "https://ark.cn-beijing.volces.com/api/coding/v3",
+      api_mode: "chat_completions",
+      transport: "openai_chat",
+      model: "doubao-seed-2.0-code",
+    });
+    expect(config.model).toMatchObject({
+      provider: "volcengine-ark-coding",
+      default: "doubao-seed-2.0-code",
+      base_url: "https://ark.cn-beijing.volces.com/api/coding/v3",
+      api_mode: "chat_completions",
+      api_key: "ark-coding-key",
+    });
+  });
+
   it("can set the current model without rewriting provider metadata", () => {
     const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "kimi-for-coding");
     expect(preset).toBeTruthy();
