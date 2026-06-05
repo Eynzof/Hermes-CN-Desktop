@@ -121,6 +121,25 @@ fn write_ownership_marker(marker: &DashboardOwnershipMarker) -> Result<(), Strin
     fs::write(path, format!("{}\n", json)).map_err(|e| e.to_string())
 }
 
+fn rewrite_ownership_marker_for_current_desktop(
+    marker: &DashboardOwnershipMarker,
+) -> Result<DashboardOwnershipMarker, String> {
+    let next = DashboardOwnershipMarker {
+        schema_version: OWNERSHIP_MARKER_SCHEMA_VERSION,
+        run_id: format!("{}-{}", std::process::id(), now_millis()),
+        desktop_pid: std::process::id(),
+        dashboard_pid: marker.dashboard_pid,
+        api_base_url: marker.api_base_url.clone(),
+        hermes_home: marker.hermes_home.clone(),
+        runtime_root: marker.runtime_root.clone(),
+        gateway_runtime_dir: marker.gateway_runtime_dir.clone(),
+        started_at_ms: now_millis(),
+        runtime_version: marker.runtime_version.clone(),
+    };
+    write_ownership_marker(&next)?;
+    Ok(next)
+}
+
 pub fn remove_ownership_marker_path(path: Option<&str>) {
     let marker_path = path
         .map(PathBuf::from)
@@ -812,8 +831,41 @@ pub async fn ensure_hermes_dashboard(
     );
     if primary_occupied && primary_marker_state == MarkerOwnerState::StaleDesktopOwner {
         if let Some(marker) = ownership_marker.as_ref() {
+            if dashboard_is_compatible(&api_base_url, &options.hermes_home).await {
+                log::warn!(
+                    "Adopting compatible stale desktop-owned dashboard at {} (orphan pid {})",
+                    api_base_url,
+                    marker.dashboard_pid
+                );
+                let adopted_marker = match rewrite_ownership_marker_for_current_desktop(marker) {
+                    Ok(next) => next,
+                    Err(err) => {
+                        log::warn!("Failed to refresh dashboard ownership marker: {}", err);
+                        marker.clone()
+                    }
+                };
+                let gateway_runtime_dir = adopted_marker.gateway_runtime_dir.clone();
+                let gateway_lock_dir = PathBuf::from(&gateway_runtime_dir)
+                    .join("token-locks")
+                    .to_string_lossy()
+                    .to_string();
+                return Ok(DashboardHandle {
+                    api_base_url,
+                    owns_process: true,
+                    command_program: None,
+                    command_args: vec![],
+                    gateway_runtime_dir: Some(gateway_runtime_dir),
+                    gateway_lock_dir: Some(gateway_lock_dir),
+                    ownership_marker_path: Some(ownership_marker_path_display()),
+                    ownership_state: Some("attached-stale-compatible".to_string()),
+                    job_handle: None,
+                    attached_pid: Some(adopted_marker.dashboard_pid),
+                    child: None,
+                });
+            }
+
             log::warn!(
-                "Found stale desktop-owned dashboard marker for {}; cleaning orphan pid {}",
+                "Found stale but incompatible desktop-owned dashboard marker for {}; cleaning orphan pid {}",
                 api_base_url,
                 marker.dashboard_pid
             );
@@ -828,8 +880,8 @@ pub async fn ensure_hermes_dashboard(
             primary_occupied = probe_dashboard(&api_base_url).await;
             if primary_occupied {
                 return Err(AppError::DashboardStartup(format!(
-                    "{} is still occupied after cleaning a stale desktop-owned runtime. Stop the remaining process and retry.",
-                    api_base_url
+                    "{} is still occupied by an incompatible dashboard after cleaning a stale desktop-owned runtime. Stop the remaining process on port {} and retry.",
+                    api_base_url, options.port
                 )));
             }
         }
@@ -843,7 +895,7 @@ pub async fn ensure_hermes_dashboard(
             MarkerOwnerState::LiveDesktopOwner => "attached-live-desktop-owner",
             MarkerOwnerState::Missing => "attached-compatible-unmarked",
             MarkerOwnerState::NotThisDashboard => "attached-compatible-unmatched-marker",
-            MarkerOwnerState::StaleDesktopOwner => "attached-stale-cleanup-failed",
+            MarkerOwnerState::StaleDesktopOwner => "attached-stale-compatible",
         };
         log::info!(
             "Reusing compatible dashboard at {} ({})",
@@ -860,6 +912,7 @@ pub async fn ensure_hermes_dashboard(
             ownership_marker_path: Some(ownership_marker_path_display()),
             ownership_state: Some(ownership_state.to_string()),
             job_handle: None,
+            attached_pid: None,
             child: None,
         });
     }
@@ -901,6 +954,7 @@ pub async fn ensure_hermes_dashboard(
                         ownership_marker_path: Some(ownership_marker_path_display()),
                         ownership_state: Some("attached-compatible-fallback".to_string()),
                         job_handle: None,
+                        attached_pid: None,
                         child: None,
                     });
                 }
@@ -948,6 +1002,7 @@ pub async fn ensure_hermes_dashboard(
         ownership_marker_path: Some(spawned.ownership_marker_path),
         ownership_state: Some("owned".to_string()),
         job_handle: spawned.job_handle,
+        attached_pid: None,
         child: child_opt,
     })
 }
@@ -957,6 +1012,8 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use serial_test::serial;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     #[serial]
@@ -1077,6 +1134,49 @@ mod tests {
         }
     }
 
+    fn host_port_from_uri(uri: &str) -> (String, u16) {
+        let parsed = url::Url::parse(uri).expect("mock server uri");
+        (
+            parsed.host_str().expect("mock host").to_string(),
+            parsed.port().expect("mock port"),
+        )
+    }
+
+    async fn mount_dashboard_mock(
+        server: &MockServer,
+        hermes_home: &str,
+        include_required_routes: bool,
+    ) {
+        Mock::given(method("GET"))
+            .and(path("/api/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "hermes_home": hermes_home,
+            })))
+            .mount(server)
+            .await;
+
+        let paths = if include_required_routes {
+            serde_json::json!({
+                "/api/upload": {},
+                "/api/v2/events": {},
+                "/api/v2/rpc": {},
+            })
+        } else {
+            serde_json::json!({
+                "/api/upload": {},
+                "/api/v2/events": {},
+            })
+        };
+        Mock::given(method("GET"))
+            .and(path("/openapi.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "openapi": "3.1.0",
+                "paths": paths,
+            })))
+            .mount(server)
+            .await;
+    }
+
     #[test]
     fn marker_owner_state_detects_live_and_stale_desktop_owner() {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -1117,5 +1217,98 @@ mod tests {
             marker_owner_state(Some(&marker), "http://127.0.0.1:9120", &other_home),
             MarkerOwnerState::NotThisDashboard
         );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn stale_desktop_owned_compatible_dashboard_is_adopted_before_cleanup() {
+        let runtime = tempfile::tempdir().expect("runtime root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", runtime.path());
+        let home = runtime.path().join("hermes-home");
+        std::fs::create_dir_all(&home).expect("home");
+        let home = home.to_string_lossy().to_string();
+
+        let server = MockServer::start().await;
+        mount_dashboard_mock(&server, &home, true).await;
+        let (host, port) = host_port_from_uri(&server.uri());
+        let api_base_url = dashboard_base_url(&host, port);
+
+        let marker = DashboardOwnershipMarker {
+            dashboard_pid: 0,
+            gateway_runtime_dir: runtime
+                .path()
+                .join("gateway-runtime")
+                .to_string_lossy()
+                .to_string(),
+            ..test_marker(0, &api_base_url, &home)
+        };
+        write_ownership_marker(&marker).expect("write stale marker");
+
+        let handle = ensure_hermes_dashboard(EnsureDashboardOptions {
+            host,
+            port,
+            hermes_home: home,
+            allow_external_agent: false,
+            allow_port_fallback: false,
+        })
+        .await
+        .expect("compatible stale dashboard should be adopted");
+
+        assert_eq!(handle.api_base_url, api_base_url);
+        assert!(handle.owns_process);
+        assert_eq!(handle.attached_pid, Some(0));
+        assert_eq!(
+            handle.ownership_state.as_deref(),
+            Some("attached-stale-compatible")
+        );
+        let refreshed = read_ownership_marker().expect("refreshed marker");
+        assert_eq!(refreshed.desktop_pid, std::process::id());
+        assert_eq!(refreshed.api_base_url, api_base_url);
+
+        drop(handle);
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn stale_desktop_owned_incompatible_dashboard_is_not_reused() {
+        let runtime = tempfile::tempdir().expect("runtime root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", runtime.path());
+        let home = runtime.path().join("hermes-home");
+        std::fs::create_dir_all(&home).expect("home");
+        let home = home.to_string_lossy().to_string();
+
+        let server = MockServer::start().await;
+        mount_dashboard_mock(&server, &home, false).await;
+        let (host, port) = host_port_from_uri(&server.uri());
+        let api_base_url = dashboard_base_url(&host, port);
+
+        let marker = DashboardOwnershipMarker {
+            dashboard_pid: 0,
+            gateway_runtime_dir: runtime
+                .path()
+                .join("gateway-runtime")
+                .to_string_lossy()
+                .to_string(),
+            ..test_marker(0, &api_base_url, &home)
+        };
+        write_ownership_marker(&marker).expect("write stale marker");
+
+        let result = ensure_hermes_dashboard(EnsureDashboardOptions {
+            host,
+            port,
+            hermes_home: home,
+            allow_external_agent: false,
+            allow_port_fallback: false,
+        })
+        .await;
+        let err = match result {
+            Ok(_) => panic!("incompatible stale dashboard must not be reused"),
+            Err(err) => err.to_string(),
+        };
+
+        assert!(err.contains("incompatible dashboard"));
+        assert!(read_ownership_marker().is_none());
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 }

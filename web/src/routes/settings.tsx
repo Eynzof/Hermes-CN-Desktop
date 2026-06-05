@@ -6,8 +6,14 @@ import {
   Bug,
   CheckCircle2,
   Copy,
+  ExternalLink as ExternalLinkIcon,
   FolderOpen,
   GitCommit,
+  GitFork,
+  Globe2,
+  Heart,
+  Info,
+  MessageCircle,
   RefreshCw,
   RotateCcw,
   Server,
@@ -29,10 +35,12 @@ import {
 } from "@/hooks/use-runtime-update";
 import { showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
+import { openExternalUrl } from "@/lib/external-links";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
+import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import s from "./settings.module.css";
 
 /* ── General ─────────────────────────────────────────────────────────── */
@@ -467,9 +475,9 @@ function FilterGroup({ label, children }: { label: string; children: React.React
   );
 }
 
-/* ── About ───────────────────────────────────────────────────────────── */
+/* ── Kernel ──────────────────────────────────────────────────────────── */
 
-export function AboutSection({ showHeading = true }: SettingsSectionProps) {
+export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const statusQuery = useStatus();
   const status = statusQuery.data;
   const runtimeInfo = useRuntimeInfo();
@@ -562,7 +570,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
 
   return (
     <div>
-      {showHeading && <h2 className={s.heading}>关于</h2>}
+      {showHeading && <h2 className={s.heading}>内核</h2>}
       <div className={s.aboutHero} data-ok={isolationOk}>
         <div className={s.aboutHeroMark}>{isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}</div>
         <div className={s.aboutHeroBody}>
@@ -782,6 +790,100 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   );
 }
 
+/* ── About ───────────────────────────────────────────────────────────── */
+
+export function AboutSection({ showHeading = true }: SettingsSectionProps) {
+  return (
+    <div>
+      {showHeading && <h2 className={s.heading}>关于</h2>}
+      <div className={s.aboutHero}>
+        <div className={s.aboutHeroMark}><Heart size={24} /></div>
+        <div className={s.aboutHeroBody}>
+          <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版</div>
+          <h3>联系与致谢</h3>
+          <p>
+            这里会放中文社区桌面版的联系方式、社区入口、项目链接和致谢信息。
+          </p>
+        </div>
+      </div>
+
+      <div className={s.aboutDebugGrid}>
+        <DebugCard icon={<Info size={15} />} title="致谢" sub="感谢支持和贡献" wide>
+          <div className={s.thanksText}>
+            <p>
+              感谢 Hermes Agent 官方
+              <ExternalTextLink href="https://nousresearch.com/">Nous Research</ExternalTextLink>
+              的支持，以及参与测试、反馈、共建的中文社区朋友。
+            </p>
+            <p>
+              感谢
+              <ExternalTextLink href="https://github.com/MaxwellGengYF">MaxwellGeng</ExternalTextLink>
+              的代码贡献，及
+              <ExternalTextLink href="https://www.compshare.cn/">优云智算</ExternalTextLink>
+              的支持。
+            </p>
+          </div>
+        </DebugCard>
+
+        <DebugCard icon={<MessageCircle size={15} />} title="联系方式" sub="社区入口和反馈渠道" wide>
+          <div className={s.contactLayout}>
+            <div className={s.runtimeGrid}>
+              <ExternalLinkField label="官网" href="https://hermesagent.org.cn" text="hermesagent.org.cn" />
+              <ContactField label="反馈">
+                <ExternalTextLink href="https://github.com/Eynzof/hermes-agent-cn-desktop/issues">
+                  到桌面端仓库 UI 层提交 issue 或建议
+                </ExternalTextLink>
+                <ExternalTextLink href="https://github.com/Eynzof/hermes-agent-cn/issues">
+                  到桌面端内核仓库提交 issue 或建议
+                </ExternalTextLink>
+              </ContactField>
+              <ContactField label="商务合作、企业定制化开发等" className={s.businessContactField}>
+                <div className={s.businessContactLines}>
+                  <ContactCopyLine label="电子邮箱" value="eynzof@gmail.com" />
+                  <ContactCopyLine label="微信号" value="Eynzof" />
+                </div>
+              </ContactField>
+            </div>
+            <div className={s.wechatQrPanel}>
+              <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
+              <p>这是 Hermes Agent 中文社区微信群入口，微信扫码即可加入。</p>
+            </div>
+          </div>
+        </DebugCard>
+
+        <DebugCard icon={<GitFork size={15} />} title="项目链接" sub="桌面端与内核项目" wide>
+          <div className={s.runtimeGrid}>
+            <ExternalLinkField
+              label="桌面端"
+              href="https://github.com/Eynzof/hermes-agent-cn-desktop"
+              text="github.com/Eynzof/hermes-agent-cn-desktop"
+              wide
+            />
+            <ExternalLinkField
+              label="内核"
+              href="https://github.com/Eynzof/hermes-agent-cn"
+              text="github.com/Eynzof/hermes-agent-cn"
+              wide
+            />
+          </div>
+          <p className={s.desc}>
+            桌面端会继续围绕中文社区的使用习惯做体验优化，也欢迎通过
+            <ExternalTextLink href="https://github.com/Eynzof/hermes-agent-cn-desktop/issues">仓库反馈问题和建议</ExternalTextLink>。
+          </p>
+        </DebugCard>
+
+        <DebugCard icon={<Globe2 size={15} />} title="中文社区" sub="本地化体验和使用文档" wide>
+          <p className={s.desc}>
+            中文社区桌面版会把常用配置、消息平台接入、运行状态和排障入口收进一个桌面工作台，尽量减少命令行门槛。
+            后续社区入口和使用文档会同步到
+            <ExternalTextLink href="https://hermesagent.org.cn">中文社区官网</ExternalTextLink>。
+          </p>
+        </DebugCard>
+      </div>
+    </div>
+  );
+}
+
 function DebugCard({ icon, title, sub, children, wide }: {
   icon: React.ReactNode;
   title: string;
@@ -815,6 +917,65 @@ function RuntimeField({ label, value, mono, wide }: {
       <span>{label}</span>
       <b data-mono={mono ? "true" : undefined}>{display}</b>
     </div>
+  );
+}
+
+function ExternalLinkField({ label, href, text, wide }: {
+  label: string;
+  href: string;
+  text: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={s.runtimeField} data-wide={wide ? "true" : undefined}>
+      <span>{label}</span>
+      <b data-mono="true">
+        <ExternalTextLink href={href}>{text}</ExternalTextLink>
+      </b>
+    </div>
+  );
+}
+
+function ContactField({ label, children, className }: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`${s.runtimeField} ${className ?? ""}`} data-wide="true">
+      <span>{label}</span>
+      <div className={s.contactLines}>{children}</div>
+    </div>
+  );
+}
+
+function ContactCopyLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className={s.contactCopyLine}>
+      <span className={s.contactCopyLabel}>{label}：</span>
+      <b className={s.contactCopyValue}>{value}</b>
+      <CopyButton className={s.contactCopyButton} text={value} showStatusIcon={false}>
+        复制
+      </CopyButton>
+    </div>
+  );
+}
+
+function ExternalTextLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      className={`${s.link} ${s.externalLink}`}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(event) => {
+        event.preventDefault();
+        void openExternalUrl(href);
+      }}
+    >
+      {children}
+      <ExternalLinkIcon size={11} aria-hidden="true" />
+    </a>
   );
 }
 

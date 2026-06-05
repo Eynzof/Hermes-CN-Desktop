@@ -7,6 +7,7 @@ import { applyPlatformToDOM, applyThemeToDOM } from "@hermes/shared-ui";
 import { queryClient } from "./lib/query-client";
 import { applyHostOSToDOM, runtime } from "./lib/runtime";
 import { installDebugCapture } from "./lib/debug-install";
+import { installExternalLinkHandling } from "./lib/external-links";
 import { initUiStore, readUiValue } from "./lib/ui-store";
 import { ErrorBoundary } from "./components/error-boundary";
 import "./styles/global.css";
@@ -38,6 +39,7 @@ async function bootstrap() {
     await installTauriBridge();
   }
 
+  installExternalLinkHandling();
   await initUiStore();
 
   const initialTheme = readUiValue<{ theme?: string; density?: string }>("hermes-theme", {});

@@ -71,6 +71,7 @@ fn external_dev_handle(api_base_url: String) -> DashboardHandle {
         ownership_marker_path: None,
         ownership_state: Some("external-dev".to_string()),
         job_handle: None,
+        attached_pid: None,
         child: None,
     }
 }
@@ -465,6 +466,7 @@ fn main() {
             commands::file_dialogs::pick_directory,
             commands::file_dialogs::create_workspace_project,
             commands::file_dialogs::open_workspace_path,
+            commands::file_dialogs::open_external_url,
             commands::api_proxy::api_request,
             commands::api_proxy::external_request,
             commands::api_proxy::upload_file,

@@ -137,7 +137,7 @@
   text-autospace: ideograph-alpha ideograph-numeric;
   hanging-punctuation: first allow-end last;
   font-kerning: normal;
-  font-variant-east-asian: proportional-width;
+  font-variant-east-asian: normal;
 }
 
 /* global.css disables selection across the app to keep desktop chrome from
@@ -368,7 +368,7 @@
   line-height: 1.72;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-variant-east-asian: proportional-width;
+  font-variant-east-asian: normal;
 }
 
 .codeBlock {

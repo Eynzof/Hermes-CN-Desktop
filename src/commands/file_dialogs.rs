@@ -17,6 +17,12 @@ pub struct WorkspacePathInput {
     pub path: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalUrlInput {
+    pub url: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SimpleApiResult {
@@ -158,11 +164,57 @@ fn validate_open_target(raw: &str) -> AppResult<PathBuf> {
     Ok(candidate)
 }
 
+fn validate_external_url(raw: &str) -> AppResult<String> {
+    let target = raw.trim();
+    if target.is_empty() {
+        return Err(AppError::InvalidRequest("Empty URL".to_string()));
+    }
+
+    let parsed = url::Url::parse(target)
+        .map_err(|e| AppError::InvalidRequest(format!("Invalid URL: {e}")))?;
+
+    match parsed.scheme() {
+        "http" | "https" => {
+            if parsed.host().is_none() {
+                return Err(AppError::InvalidRequest(
+                    "URL must include a host".to_string(),
+                ));
+            }
+        }
+        "mailto" => {
+            if parsed.path().trim().is_empty() {
+                return Err(AppError::InvalidRequest(
+                    "mailto URL must include an address".to_string(),
+                ));
+            }
+        }
+        scheme => {
+            return Err(AppError::InvalidRequest(format!(
+                "Refusing to open unsupported URL scheme: {scheme}"
+            )));
+        }
+    }
+
+    Ok(parsed.to_string())
+}
+
 #[tauri::command]
 pub async fn open_workspace_path(input: WorkspacePathInput) -> AppResult<SimpleApiResult> {
     let target = validate_open_target(&input.path)?;
 
     open::that(&target).map_err(|e| AppError::FileError(format!("Failed to open: {}", e)))?;
+
+    Ok(SimpleApiResult {
+        ok: true,
+        message: None,
+    })
+}
+
+#[tauri::command]
+pub async fn open_external_url(input: ExternalUrlInput) -> AppResult<SimpleApiResult> {
+    let target = validate_external_url(&input.url)?;
+
+    open::that(&target).map_err(|e| AppError::FileError(format!("Failed to open URL: {}", e)))?;
 
     Ok(SimpleApiResult {
         ok: true,
@@ -216,5 +268,39 @@ mod tests {
         let path = dir.path().to_string_lossy().to_string();
         let resolved = validate_open_target(&path).expect("existing dir accepted");
         assert_eq!(resolved.as_path(), dir.path());
+    }
+
+    #[test]
+    fn accepts_safe_external_urls() {
+        assert_eq!(
+            validate_external_url(" https://hermesagent.org.cn/path?q=1 ").unwrap(),
+            "https://hermesagent.org.cn/path?q=1"
+        );
+        assert_eq!(
+            validate_external_url("http://example.com").unwrap(),
+            "http://example.com/"
+        );
+        assert_eq!(
+            validate_external_url("mailto:hello@example.com").unwrap(),
+            "mailto:hello@example.com"
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_external_urls() {
+        for raw in [
+            "",
+            "   ",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "tauri://localhost",
+            "ftp://example.com/file",
+            "mailto:",
+        ] {
+            assert!(
+                matches!(validate_external_url(raw), Err(AppError::InvalidRequest(_))),
+                "{raw:?} should be rejected"
+            );
+        }
     }
 }

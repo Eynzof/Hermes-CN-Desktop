@@ -42,8 +42,8 @@ const AUTOMATION_ITEMS: readonly CapabilityItem[] = [
 ];
 
 const IM_ITEMS: readonly CapabilityItem[] = [
-  { label: "飞书接入", path: "/im/feishu", icon: MessageCircle, title: "飞书 / Lark 开放平台机器人接入" },
-  { label: "微信接入", path: "/im/weixin", icon: MessageSquareText, title: "个人微信 iLink bot 接入" },
+  { label: "飞书接入", path: "/im/feishu", icon: MessageCircle, title: "将飞书消息平台接入中文社区桌面版" },
+  { label: "微信接入", path: "/im/weixin", icon: MessageSquareText, title: "将微信消息平台接入中文社区桌面版" },
 ];
 
 export const CAPABILITY_SECTIONS: readonly {

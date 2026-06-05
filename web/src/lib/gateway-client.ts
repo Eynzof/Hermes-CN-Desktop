@@ -601,6 +601,10 @@ export function getGatewayClient(): GatewayClientLike {
   return instance;
 }
 
+export function forceExistingGatewayReconnect(reason = "runtime-restart"): void {
+  instance?.forceReconnect(reason);
+}
+
 export function getActiveTransport(): GatewayTransport | null {
   return activeTransport;
 }

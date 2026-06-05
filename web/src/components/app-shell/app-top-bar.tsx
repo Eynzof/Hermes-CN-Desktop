@@ -5,6 +5,7 @@ import { useTheme } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
+import { openExternalUrl } from "@/lib/external-links";
 import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
 
@@ -20,7 +21,7 @@ export function AppTopBar() {
   const themeToggleLabel = themeConfig.theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
   const openBrandSite = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    window.open(BRAND_URL, "_blank", "noopener,noreferrer");
+    void openExternalUrl(BRAND_URL);
   };
 
   return (

@@ -32,7 +32,11 @@ pub fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, 
                 hermes_home_base: inner.hermes_home_base.clone(),
                 current_profile: inner.current_profile.clone(),
                 owns_process: handle.owns_process,
-                pid: handle.child.as_ref().map(|child| child.id()),
+                pid: handle
+                    .child
+                    .as_ref()
+                    .map(|child| child.id())
+                    .or(handle.attached_pid),
                 command_program: handle.command_program.clone(),
                 command_args: handle.command_args.clone(),
                 command_line,

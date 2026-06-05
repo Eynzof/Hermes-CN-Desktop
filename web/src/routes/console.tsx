@@ -6,6 +6,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { Play, Power, RotateCcw, TerminalSquare } from "lucide-react";
 import type { TerminalEventPayload, TerminalStartResult } from "@/lib/runtime";
+import { openExternalUrl } from "@/lib/external-links";
 import { runtime } from "@/lib/runtime";
 import { SectionShell } from "./section-shell";
 import s from "./console.module.css";
@@ -120,7 +121,9 @@ export function ConsoleRoute() {
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
+    term.loadAddon(new WebLinksAddon((_event, uri) => {
+      void openExternalUrl(uri);
+    }));
     term.open(containerRef.current);
     fit.fit();
     term.focus();
@@ -131,9 +134,9 @@ export function ConsoleRoute() {
       term.writeln("\x1b[38;5;214mHermes\x1b[0m \x1b[38;5;81mConsole\x1b[0m");
       term.writeln("这里是真实终端。你可以直接输入 Hermes 命令，也可以点下方常用操作自动填入。推荐先运行 hermes --tui。");
       if (autoPurpose === "gatewaySetup") {
-        term.writeln("正在为你打开消息接入向导：hermes gateway setup\r\n");
+        term.writeln("正在为你打开消息平台接入向导\r\n");
       } else if (autoPurpose === "gatewayStatus") {
-        term.writeln("正在为你查看消息接入状态：hermes gateway status\r\n");
+        term.writeln("正在为你查看消息平台接入状态\r\n");
       } else {
         term.writeln("");
       }

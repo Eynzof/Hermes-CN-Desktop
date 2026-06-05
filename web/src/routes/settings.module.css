@@ -318,6 +318,8 @@
 }
 
 .modelTag {
+  appearance: none;
+  cursor: pointer;
   font-family: var(--h-font-mono);
   font-size: 11px;
   padding: 4px 10px;
@@ -636,6 +638,128 @@
   column-gap: 14px;
 }
 
+.thanksText {
+  display: grid;
+  gap: 8px;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.thanksText p {
+  margin: 0;
+}
+
+.contactLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 184px;
+  gap: 18px;
+  align-items: start;
+}
+
+.wechatQrPanel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+}
+
+.wechatQrPanel img {
+  display: block;
+  width: 148px;
+  height: 148px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.wechatQrPanel p {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 11.5px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.contactLines {
+  display: grid;
+  gap: 6px;
+  color: var(--h-text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.businessContactField > span {
+  margin-bottom: 10px;
+}
+
+.businessContactLines {
+  display: grid;
+  gap: 2px;
+}
+
+.contactCopyLine {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  line-height: 1.55;
+}
+
+.contactCopyLabel {
+  min-width: 0;
+  color: var(--h-text-2);
+  font-size: 12px;
+}
+
+.contactCopyValue {
+  color: var(--h-text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: inherit;
+}
+
+:global(#root) .contactCopyValue {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+.contactCopyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 19px;
+  padding: 0 7px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--h-text-3);
+  font-family: var(--h-font-cn);
+  font-size: 10.5px;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-0.02em);
+}
+
+.contactCopyButton:hover {
+  border-color: color-mix(in srgb, var(--h-accent) 38%, var(--h-line));
+  color: var(--h-accent);
+}
+
+.contactCopyButton[data-copy-state="copied"] {
+  border-color: color-mix(in srgb, var(--h-ok) 42%, var(--h-line));
+  background: var(--h-ok-soft);
+  color: var(--h-ok);
+}
+
+.contactCopyButton[data-copy-state="error"] {
+  border-color: color-mix(in srgb, var(--h-err) 42%, var(--h-line));
+  color: var(--h-err);
+}
+
 .debugCard {
   display: inline-block;
   width: 100%;
@@ -768,14 +892,14 @@
   grid-column: 1 / -1;
 }
 
-.runtimeField span {
+.runtimeField > span {
   display: block;
   margin-bottom: 3px;
   color: var(--h-text-3);
   font-size: 10.5px;
 }
 
-.runtimeField b {
+.runtimeField > b {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -786,12 +910,12 @@
   white-space: nowrap;
 }
 
-.runtimeField b[data-mono="true"] {
+.runtimeField > b[data-mono="true"] {
   font-family: var(--h-font-mono);
   font-size: 11px;
 }
 
-.runtimeField[data-wide="true"] b {
+.runtimeField[data-wide="true"] > b {
   overflow: visible;
   text-overflow: clip;
   white-space: normal;
@@ -901,6 +1025,23 @@
 .link {
   color: var(--h-accent);
   cursor: pointer;
+}
+
+.externalLink {
+  display: inline;
+  line-height: inherit;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.externalLink svg {
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: -0.12em;
+}
+
+.externalLink:hover {
+  text-decoration: underline;
 }
 
 .catalogToolbar {
@@ -1733,6 +1874,18 @@
   .aboutHero .statusBadge {
     grid-column: 1 / -1;
     justify-self: flex-start;
+  }
+
+  .contactLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .wechatQrPanel {
+    justify-items: flex-start;
+  }
+
+  .wechatQrPanel p {
+    text-align: left;
   }
 
   .providerPresetHeader {

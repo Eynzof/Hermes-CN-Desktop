@@ -148,6 +148,11 @@ const tauriBridge = {
     return inv("open_workspace_path", { input });
   },
 
+  async openExternalUrl(input: { url: string }): Promise<{ ok: boolean; message?: string | null }> {
+    const inv = await ensureInvoke();
+    return inv("open_external_url", { input });
+  },
+
   getRuntimeConfig() {
     return window.__HERMES_RUNTIME__;
   },
