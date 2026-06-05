@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import { runtime } from "@/lib/runtime";
+import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
 import { profileSwitchingAtom } from "@/stores/ui";
 import { PROFILE_AWARE_QUERY_KEYS } from "@/hooks/use-profiles";
@@ -47,6 +48,7 @@ export function useSetYoloMode() {
         }
         if (result.restarted) {
           runtime.applyYoloRestartResult(result);
+          forceExistingGatewayReconnect("yolo-restart");
         }
         return { enabled: result.enabled, restarted: result.restarted };
       } finally {

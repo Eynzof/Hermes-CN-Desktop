@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteJSON, fetchJSON, postJSON, putJSON } from "@/lib/transport";
 import { runtime } from "@/lib/runtime";
+import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
 import { activeProfileAtom, profileSwitchingAtom } from "@/stores/ui";
 import {
@@ -121,6 +122,7 @@ export function useSetActiveProfile() {
           const result = await window.hermesDesktop.switchProfile({ name });
           if (result.ok) {
             runtime.applySwitchProfileResult(result);
+            forceExistingGatewayReconnect("profile-switch");
             return { mode: "electron-restart", profileName: name };
           }
           // recoveredPreviousProfile=true means dashboard rolled back, the

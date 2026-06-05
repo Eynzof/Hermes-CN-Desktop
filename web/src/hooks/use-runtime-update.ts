@@ -6,6 +6,7 @@ import type {
   RuntimeUpdateCheckResult,
 } from "@hermes/protocol";
 import { runtime } from "@/lib/runtime";
+import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { runtimeUpdatingAtom } from "@/stores/ui";
 
 const RUNTIME_INFO_KEY = ["desktop-runtime-info"] as const;
@@ -19,6 +20,7 @@ function hasRuntimeBridge(): boolean {
 async function refreshDesktopGateway(): Promise<void> {
   if (window.hermesDesktop?.refreshGatewayUrl) {
     await runtime.refreshGatewayUrl();
+    forceExistingGatewayReconnect("runtime-update");
   }
 }
 

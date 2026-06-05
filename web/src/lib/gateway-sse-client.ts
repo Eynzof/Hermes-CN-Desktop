@@ -555,6 +555,8 @@ export class GatewaySseClient implements GatewayClientLike {
       if (settled) return;
       settled = true;
       this.connectPromise = null;
+      this.clientId = null;
+      this.tauriProxyConnected = false;
       this.setState("error");
       reject(new Error("Tauri SSE proxy connect timeout"));
     }, timeoutMs);
@@ -569,6 +571,8 @@ export class GatewaySseClient implements GatewayClientLike {
         this.setState("open");
         resolve();
       } else {
+        this.clientId = null;
+        this.tauriProxyConnected = false;
         this.setState("error");
         reject(err ?? new Error("SSE proxy failed"));
       }
@@ -582,7 +586,7 @@ export class GatewaySseClient implements GatewayClientLike {
       this.tauriUnlisten = await listen<string>("gateway-sse-event", (event) => {
         try {
           const parsed = JSON.parse(event.payload);
-          if (parsed.client_id && !this.clientId) {
+          if (parsed.client_id) {
             this.clientId = parsed.client_id;
             const waiters = this.clientIdResolvers;
             this.clientIdResolvers = [];

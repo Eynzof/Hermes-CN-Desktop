@@ -10,6 +10,7 @@ import {
   BUILTIN_PROVIDER_CATALOG,
   buildProviderConfigUpdate,
   buildProviderSettingsUpdate,
+  getProviderCredentialPreview,
   getProviderEntry,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
@@ -658,8 +659,11 @@ export function ModelsSection() {
     ? getProviderEntry(config, selectedProvider.id)
     : {};
   const selectedHasCredentials = selectedProvider
-    ? providerHasSavedCredentials(config, selectedProvider.id)
+    ? providerHasSavedCredentials(config, selectedProvider.id, envVars, selectedProvider)
     : false;
+  const selectedProviderCredentialPreview = selectedProvider
+    ? getProviderCredentialPreview(config, envVars, selectedProvider)
+    : undefined;
   const selectedProviderCanOmitApiKey = selectedProvider
     ? isLocalProviderBaseUrl(providerForm.baseUrl || selectedProvider.baseUrl)
     : false;
@@ -675,8 +679,9 @@ export function ModelsSection() {
     [config],
   );
   const configuredCount = useMemo(
-    () => allProviders.filter((provider) => providerHasSavedCredentials(config, provider.id)).length,
-    [allProviders, config],
+    () => allProviders.filter((provider) =>
+      providerHasSavedCredentials(config, provider.id, envVars, provider)).length,
+    [allProviders, config, envVars],
   );
   const providerEnvEntries = useMemo(
     () => Object.entries(envVars ?? {})
@@ -1169,7 +1174,7 @@ export function ModelsSection() {
               </div>
               <div className={s.providerPresetList}>
                 {filteredProviders.map((provider) => {
-                  const configured = providerHasSavedCredentials(config, provider.id);
+                  const configured = providerHasSavedCredentials(config, provider.id, envVars, provider);
                   const current = currentProviderId === provider.id;
                   return (
                     <button
@@ -1225,7 +1230,7 @@ export function ModelsSection() {
                           value={providerForm.apiKey}
                           placeholder={
                             selectedHasCredentials
-                              ? "已保存"
+                              ? selectedProviderCredentialPreview ?? "已保存"
                               : selectedProviderCanOmitApiKey
                                 ? "本地服务一般可留空"
                                 : "粘贴 API Key"
@@ -1273,7 +1278,15 @@ export function ModelsSection() {
 
                     <div className={s.modelTags}>
                       {mergedModelOptions.slice(0, 8).map((id) => (
-                        <span key={id} className={s.modelTag}>{id}</span>
+                        <button
+                          key={id}
+                          type="button"
+                          className={s.modelTag}
+                          onClick={() => setProviderForm((prev) => ({ ...prev, model: id }))}
+                          title={`填入模型 ${id}`}
+                        >
+                          {id}
+                        </button>
                       ))}
                     </div>
 

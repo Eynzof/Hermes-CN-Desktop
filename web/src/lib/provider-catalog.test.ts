@@ -6,7 +6,9 @@ import {
   buildProviderConfigUpdate,
   buildProviderSettingsUpdate,
   fetchRemoteProviderCatalog,
+  getProviderCredentialPreview,
   getProviderEntry,
+  maskSecretPreview,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
   TOP5_PROVIDER_IDS,
@@ -289,6 +291,71 @@ describe("provider catalog config updates", () => {
 
     expect(getProviderEntry(config, preset.id).api_key).toBe("existing-key");
     expect(providerHasSavedCredentials(config, preset.id)).toBe(true);
+  });
+
+  it("masks local provider api_key previews with first and last four characters", () => {
+    expect(maskSecretPreview("sk-1234567890abcd")).toBe("sk-1...abcd");
+    expect(maskSecretPreview("short-key")).toBe("***");
+  });
+
+  it("prefers env redacted_value over config api_key for credential previews", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "deepseek");
+    expect(preset).toBeTruthy();
+
+    const preview = getProviderCredentialPreview(
+      {
+        providers: {
+          deepseek: {
+            api_key: "config-secret-should-not-win",
+          },
+        },
+      },
+      {
+        DEEPSEEK_API_KEY: {
+          is_set: true,
+          redacted_value: "env-...tail",
+        },
+      },
+      preset!,
+    );
+
+    expect(preview).toBe("env-...tail");
+  });
+
+  it("falls back to locally masked config api_key when no env preview is available", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "deepseek");
+    expect(preset).toBeTruthy();
+
+    const preview = getProviderCredentialPreview(
+      {
+        providers: {
+          deepseek: {
+            api_key: "abcd-1234567890",
+          },
+        },
+      },
+      undefined,
+      preset!,
+    );
+
+    expect(preview).toBe("abcd...7890");
+  });
+
+  it("treats env-only provider keys as saved credentials", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "deepseek");
+    expect(preset).toBeTruthy();
+
+    expect(providerHasSavedCredentials(
+      {},
+      "deepseek",
+      {
+        DEEPSEEK_API_KEY: {
+          is_set: true,
+          redacted_value: "deep...tail",
+        },
+      },
+      preset!,
+    )).toBe(true);
   });
 
   it("loads remote catalog through fetchExternalJSON timeout path", async () => {

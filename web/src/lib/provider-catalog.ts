@@ -34,6 +34,11 @@ export interface ProviderCatalog {
   providers: ProviderPreset[];
 }
 
+export type EnvVarPreviewMap = Record<string, {
+  is_set?: boolean;
+  redacted_value?: string | null;
+}>;
+
 /**
  * Providers we feature first in the Chinese community edition. Any change to
  * this list reorders the Models tab list and the onboarding picker.
@@ -74,7 +79,7 @@ export interface ProviderConfigInput {
   model: string;
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.04";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.05";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -164,8 +169,6 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       models: [
         { id: "deepseek-v4-flash", supportsTools: true },
         { id: "deepseek-v4-pro", supportsTools: true, supportsReasoning: true },
-        { id: "deepseek-chat", supportsTools: true },
-        { id: "deepseek-reasoner", supportsReasoning: true },
       ],
     },
     {
@@ -444,11 +447,48 @@ export function getProviderEntry(config: Record<string, any> | undefined, provid
   return asRecord(asRecord(config?.providers)[providerId]);
 }
 
+export function maskSecretPreview(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.length < 12) return "***";
+  return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+}
+
+function envPreview(envVars: EnvVarPreviewMap | undefined, key: string | undefined): string | undefined {
+  const envKey = key?.trim();
+  if (!envKey) return undefined;
+  const info = envVars?.[envKey];
+  if (!info?.is_set) return undefined;
+  const preview = info.redacted_value?.trim();
+  return preview || undefined;
+}
+
+export function getProviderCredentialPreview(
+  config: Record<string, any> | undefined,
+  envVars: EnvVarPreviewMap | undefined,
+  provider: ProviderPreset,
+): string | undefined {
+  const entry = getProviderEntry(config, provider.id);
+  const previewFromProviderEnv = envPreview(envVars, provider.apiKeyLabel);
+  if (previewFromProviderEnv) return previewFromProviderEnv;
+
+  const previewFromEntryEnv = envPreview(envVars, String(entry.key_env || ""));
+  if (previewFromEntryEnv) return previewFromEntryEnv;
+
+  const rawApiKey = typeof entry.api_key === "string" ? entry.api_key : "";
+  return rawApiKey.trim() ? maskSecretPreview(rawApiKey) : undefined;
+}
+
 export function providerHasSavedCredentials(
   config: Record<string, any> | undefined,
   providerId: string,
+  envVars?: EnvVarPreviewMap,
+  provider?: ProviderPreset,
 ): boolean {
   const entry = getProviderEntry(config, providerId);
+  if (provider?.apiKeyLabel && envVars?.[provider.apiKeyLabel]?.is_set) return true;
+  const keyEnv = typeof entry.key_env === "string" ? entry.key_env : "";
+  if (keyEnv && envVars?.[keyEnv]?.is_set) return true;
   return Boolean(entry.api_key || entry.key_env);
 }
 

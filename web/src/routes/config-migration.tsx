@@ -8,6 +8,7 @@ import type {
   ConfigMigrationScanResult,
 } from "@hermes/protocol";
 import { runtime } from "@/lib/runtime";
+import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
 import { activeProfileAtom, profileSwitchingAtom } from "@/stores/ui";
 import { SectionShell } from "./section-shell";
@@ -196,6 +197,7 @@ export function ConfigMigrationRoute() {
       setLastImport(result);
       if (!result.ok) throw new Error(result.error || "迁移失败");
       runtime.applyConfigMigrationResult(result);
+      forceExistingGatewayReconnect("config-migration");
       if (result.targetProfileName) setActiveProfile(result.targetProfileName);
       await reloadUiStore();
       await queryClient.invalidateQueries();

@@ -480,6 +480,97 @@ describe("GatewaySseClient", () => {
     expect(request.mock.calls[0]?.[0].headers?.["X-Hermes-Client-Id"]).toBe("cid-tauri");
   });
 
+  it("resolves a Tauri reconnect when the server echoes an existing client_id", async () => {
+    vi.useRealTimers();
+    const listeners = new Map<string, (event: { payload: string }) => void>();
+    const refreshGatewayUrl = vi.fn(async () => ({
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=fresh-token",
+      sessionToken: "fresh-token",
+    }));
+
+    (window as any).__TAURI_INTERNALS__ = {};
+    window.__HERMES_RUNTIME__ = {
+      platform: "tauri",
+      apiBaseUrl: "http://127.0.0.1:9119",
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=fresh-token",
+      sessionToken: "fresh-token",
+      transport: "sse",
+    };
+    window.__HERMES_SESSION_TOKEN__ = "fresh-token";
+    window.hermesDesktop = {
+      windowType: "tauri",
+      refreshGatewayUrl,
+      request: vi.fn(),
+    };
+
+    tauriMocks.listen.mockImplementation(
+      async (eventName: string, cb: (event: { payload: string }) => void) => {
+        listeners.set(eventName, cb);
+        return vi.fn();
+      },
+    );
+    tauriMocks.invoke.mockResolvedValue(undefined);
+
+    const client = new GatewaySseClient();
+    (client as any).clientId = "cid-reused";
+
+    const connectP = client.connect({ timeoutMs: 5_000 });
+    await vi.waitFor(() => expect(tauriMocks.invoke).toHaveBeenCalledOnce());
+
+    expect(tauriMocks.invoke.mock.calls[0]?.[1]).toEqual({
+      input: { clientId: "cid-reused" },
+    });
+
+    listeners.get("gateway-sse-event")?.({
+      payload: JSON.stringify({ client_id: "cid-reused" }),
+    });
+
+    await expect(connectP).resolves.toBeUndefined();
+    expect(client.state).toBe("open");
+  });
+
+  it("clears stale Tauri client_id when proxy connect times out", async () => {
+    const listeners = new Map<string, (event: { payload: string }) => void>();
+    const refreshGatewayUrl = vi.fn(async () => ({
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=fresh-token",
+      sessionToken: "fresh-token",
+    }));
+
+    (window as any).__TAURI_INTERNALS__ = {};
+    window.__HERMES_RUNTIME__ = {
+      platform: "tauri",
+      apiBaseUrl: "http://127.0.0.1:9119",
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=fresh-token",
+      sessionToken: "fresh-token",
+      transport: "sse",
+    };
+    window.__HERMES_SESSION_TOKEN__ = "fresh-token";
+    window.hermesDesktop = {
+      windowType: "tauri",
+      refreshGatewayUrl,
+      request: vi.fn(),
+    };
+
+    tauriMocks.listen.mockImplementation(
+      async (eventName: string, cb: (event: { payload: string }) => void) => {
+        listeners.set(eventName, cb);
+        return vi.fn();
+      },
+    );
+    tauriMocks.invoke.mockResolvedValue(undefined);
+
+    const client = new GatewaySseClient();
+    (client as any).clientId = "cid-stale";
+
+    const connectP = client.connect({ timeoutMs: 50 });
+    vi.advanceTimersByTime(51);
+
+    await expect(connectP).rejects.toThrow("Tauri SSE proxy connect timeout");
+    expect((client as any).clientId).toBeNull();
+    expect((client as any).tauriProxyConnected).toBe(false);
+    expect(client.state).toBe("error");
+  });
+
   it("close() tears down EventSource and resets state to idle", async () => {
     const client = new GatewaySseClient();
     const p = client.connect();
