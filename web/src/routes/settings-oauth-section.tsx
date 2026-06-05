@@ -10,6 +10,7 @@ import {
   useCancelOAuthSession,
 } from "@/hooks/use-oauth-providers";
 import { CopyButton } from "@/components/ui/copy-button";
+import { openExternalUrl } from "@/lib/external-links";
 import settings from "./settings.module.css";
 import s from "./settings-oauth-section.module.css";
 
@@ -208,10 +209,10 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
       setCountdown(result.expires_in);
 
       if (result.flow === "pkce") {
-        window.open(result.auth_url, "_blank");
+        void openExternalUrl(result.auth_url);
         setPhase("awaiting_user");
       } else {
-        window.open(result.verification_url, "_blank");
+        void openExternalUrl(result.verification_url);
         setPhase("polling");
       }
     }).catch((err) => {
@@ -327,7 +328,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               </button>
               <button
                 className={s.linkBtn}
-                onClick={() => window.open((startResult as StartResultPkce).auth_url, "_blank")}
+                onClick={() => void openExternalUrl((startResult as StartResultPkce).auth_url)}
               >
                 重新打开授权页
               </button>
@@ -348,7 +349,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               </CopyButton>
               <button
                 className={s.linkBtn}
-                onClick={() => window.open(startResult.verification_url, "_blank")}
+                onClick={() => void openExternalUrl(startResult.verification_url)}
               >
                 重新打开验证页
               </button>

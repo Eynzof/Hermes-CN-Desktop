@@ -46,6 +46,11 @@ export interface ElectronFilePickerResult {
   paths: string[];
 }
 
+export interface ElectronSimpleResult {
+  ok: boolean;
+  message?: string | null;
+}
+
 export interface MemoryEntry {
   index: number;
   content: string;
@@ -180,6 +185,7 @@ declare global {
       pickDirectory?(): Promise<ElectronFilePickerResult>;
       createWorkspaceProject?(): Promise<ElectronFilePickerResult>;
       openWorkspacePath?(input: { path: string }): Promise<ElectronApiRequestResult>;
+      openExternalUrl?(input: { url: string }): Promise<ElectronSimpleResult>;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
       refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;
       getRuntimeInfo?(): Promise<RuntimeInfo>;

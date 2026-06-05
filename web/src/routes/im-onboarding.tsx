@@ -36,6 +36,7 @@ import {
   useImOnboardingState,
   usePollImOnboarding,
 } from "@/hooks/use-im-onboarding";
+import { openExternalUrl } from "@/lib/external-links";
 import { SectionShell } from "./section-shell";
 import s from "./im-onboarding.module.css";
 
@@ -92,15 +93,7 @@ function textFromError(error: unknown): string | null {
 function openExternal(url: string) {
   const trimmed = url.trim();
   if (!trimmed) return;
-
-  if (window.hermesDesktop?.openWorkspacePath) {
-    void window.hermesDesktop.openWorkspacePath({ path: trimmed }).catch(() => {
-      window.open(trimmed, "_blank", "noopener,noreferrer");
-    });
-    return;
-  }
-
-  window.open(trimmed, "_blank", "noopener,noreferrer");
+  void openExternalUrl(trimmed);
 }
 
 function QrPanel({ data, url, status, message, onStart, startLabel, startBusy }: {

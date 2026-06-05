@@ -6,6 +6,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { Play, Power, RotateCcw, TerminalSquare } from "lucide-react";
 import type { TerminalEventPayload, TerminalStartResult } from "@/lib/runtime";
+import { openExternalUrl } from "@/lib/external-links";
 import { runtime } from "@/lib/runtime";
 import { SectionShell } from "./section-shell";
 import s from "./console.module.css";
@@ -120,7 +121,9 @@ export function ConsoleRoute() {
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
+    term.loadAddon(new WebLinksAddon((_event, uri) => {
+      void openExternalUrl(uri);
+    }));
     term.open(containerRef.current);
     fit.fit();
     term.focus();

@@ -38,7 +38,9 @@ body {
   line-break: strict;
   hanging-punctuation: first allow-end last;
   font-kerning: normal;
-  font-variant-east-asian: proportional-width;
+  /* Keep Chinese punctuation in its native full-width form. `proportional-width`
+     makes `，。；：` render like narrow Latin punctuation in WebView fonts. */
+  font-variant-east-asian: normal;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

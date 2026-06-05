@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   Bug,
+  Cpu,
   FileCog,
   FileText,
   HeartPulse,
@@ -27,6 +28,7 @@ const OBSERVABILITY_ITEMS: readonly AdvancedItem[] = [
 const ADVANCED_ITEMS: readonly AdvancedItem[] = [
   { label: "常规", path: "/advanced", icon: SlidersHorizontal },
   { label: "配置", path: "/advanced/config", icon: FileCog },
+  { label: "内核", path: "/advanced/kernel", icon: Cpu },
   { label: "关于", path: "/advanced/about", icon: Info },
 ];
 
