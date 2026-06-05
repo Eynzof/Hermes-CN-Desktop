@@ -22,6 +22,29 @@
   line-height: 1;
 }
 
+.gatewayButton {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.gatewayButton:hover .lbl,
+.gatewayButton:hover .val,
+.gatewayButton:focus-visible .lbl,
+.gatewayButton:focus-visible .val {
+  color: var(--h-accent);
+}
+
+.gatewayButton:focus-visible {
+  outline: 1px solid var(--h-accent-border);
+  outline-offset: 3px;
+  border-radius: var(--h-r-xs);
+}
+
 .stat[data-tone="warn"] .val {
   color: var(--amber);
 }

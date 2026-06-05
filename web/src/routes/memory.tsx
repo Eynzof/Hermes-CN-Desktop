@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Brain, Check, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useSessions } from "@/hooks/use-sessions";
 import {
   useAddMemoryEntry,
   useMemory,
@@ -11,6 +10,7 @@ import {
   useUpdateMemoryEntry,
   type MemoryProviderOption,
 } from "@/hooks/use-memory";
+import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
 import s from "./memory.module.css";
 
@@ -59,6 +59,10 @@ function providerDescription(provider: MemoryProviderOption): string {
   return PROVIDER_DESCRIPTIONS[key] ?? (raw || "外置记忆系统。");
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function CapacityBar({ label, used, limit }: { label: string; used: number; limit: number }) {
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const tone = pct > 90 ? "err" : pct > 70 ? "warn" : "ok";
@@ -77,15 +81,13 @@ function CapacityBar({ label, used, limit }: { label: string; used: number; limi
 
 export function MemoryRoute() {
   const memoryQuery = useMemory();
-  const sessionsQuery = useSessions(500);
-  const providersQuery = useMemoryProviders();
+  const [tab, setTab] = useState<"entries" | "profile" | "providers">("entries");
+  const providersQuery = useMemoryProviders({ enabled: tab === "providers" });
   const setProvider = useSetMemoryProvider();
   const addEntry = useAddMemoryEntry();
   const updateEntry = useUpdateMemoryEntry();
   const removeEntry = useRemoveMemoryEntry();
   const saveUser = useSaveUserProfile();
-
-  const [tab, setTab] = useState<"entries" | "profile" | "providers">("entries");
   const [showAdd, setShowAdd] = useState(false);
   const [newEntry, setNewEntry] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -102,14 +104,7 @@ export function MemoryRoute() {
     setUserContent(data.user.content);
   }, [data, userDirty]);
 
-  const stats = useMemo(() => {
-    const sessions = sessionsQuery.data?.sessions ?? [];
-    return {
-      totalSessions: sessionsQuery.data?.total ?? data?.stats.totalSessions ?? 0,
-      totalMessages: sessions.reduce((sum, sess) => sum + sess.message_count, 0) || data?.stats.totalMessages || 0,
-      memories: data?.memory.entries.length ?? 0,
-    };
-  }, [data?.memory.entries.length, data?.stats.totalMessages, data?.stats.totalSessions, sessionsQuery.data]);
+  const stats = useMemo(() => data ? memoryPageStats(data) : [], [data]);
 
   const providers = useMemo(() => {
     const builtin: MemoryProviderOption = { name: "builtin", description: PROVIDER_DESCRIPTIONS.builtin };
@@ -123,6 +118,7 @@ export function MemoryRoute() {
   }, [providersQuery.data?.options]);
 
   const activeProvider = providersQuery.data?.active || "builtin";
+  const activeProviderLabel = providersQuery.data ? activeProvider : "配置";
   const isLoading = memoryQuery.isLoading;
   const error = memoryQuery.error || addEntry.error || updateEntry.error || saveUser.error;
 
@@ -166,7 +162,12 @@ export function MemoryRoute() {
 
   return (
     <SectionShell title="记忆" sub="MEMORY.md / USER.md" right={right}>
-      {isLoading || !data ? (
+      {memoryQuery.isError && !data ? (
+        <div className={s.memoryPage}>
+          <div className={s.errorState}>无法读取记忆：{errorMessage(memoryQuery.error)}</div>
+          <button type="button" className={s.secondaryButton} onClick={() => void memoryQuery.refetch()}>重试</button>
+        </div>
+      ) : isLoading || !data ? (
         <div className={s.emptyState}>加载记忆中…</div>
       ) : (
         <div className={s.memoryPage}>
@@ -175,9 +176,12 @@ export function MemoryRoute() {
           </p>
 
           <div className={s.statsGrid}>
-            <div className={s.statCard}><span>{stats.totalSessions}</span><small>会话</small></div>
-            <div className={s.statCard}><span>{stats.totalMessages}</span><small>消息</small></div>
-            <div className={s.statCard}><span>{stats.memories}</span><small>记忆</small></div>
+            {stats.map((item) => (
+              <div key={item.label} className={s.statCard}>
+                <span>{formatMemoryPageStat(item.value)}</span>
+                <small>{item.label}</small>
+              </div>
+            ))}
           </div>
 
           <div className={s.capacityGrid}>
@@ -193,11 +197,11 @@ export function MemoryRoute() {
               用户画像 <span>{timeAgo(data.user.lastModified)}</span>
             </button>
             <button type="button" data-active={tab === "providers" ? "true" : undefined} onClick={() => setTab("providers")}>
-              外置记忆系统 <span>{activeProvider}</span>
+              外置记忆系统 <span>{activeProviderLabel}</span>
             </button>
           </div>
 
-          {error && <div className={s.errorState}>{error instanceof Error ? error.message : String(error)}</div>}
+          {error && <div className={s.errorState}>{errorMessage(error)}</div>}
 
           {tab === "entries" && (
             <section className={s.panel}>
