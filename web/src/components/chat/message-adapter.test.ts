@@ -409,6 +409,73 @@ describe("message adapter", () => {
     });
   });
 
+  // Regression for issue #98: once a reply completes the stored refetch carries
+  // the persisted assistant turn, but the live user prompt can fail to match a
+  // stored row (its canonical text diverged), so it was appended *after* the
+  // assistant and rendered below the reply. The merge now re-orders by createdAt.
+  it("keeps the user prompt above the assistant reply after a completed turn", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-assistant",
+        role: "assistant",
+        createdAt: 5_001,
+        parts: [{ type: "text", text: "这是回复。" }],
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-user",
+        role: "user",
+        createdAt: 5_000,
+        parts: [{ type: "text", text: "帮我开发一个项目" }],
+      }),
+      uiMessage({
+        id: "live-assistant",
+        role: "assistant",
+        status: "streaming",
+        createdAt: 5_001,
+        parts: [{ type: "text", text: "这是回复。" }],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(merged[0]?.id).toBe("live-user");
+  });
+
+  // The optimistic user + assistant get the same `now` from startPromptAtom, so
+  // the createdAt sort relies on a user-before-assistant tiebreak on exact ties.
+  it("orders the user before the assistant when their createdAt ties", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-assistant",
+        role: "assistant",
+        createdAt: 7_000,
+        parts: [{ type: "text", text: "答复" }],
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-user",
+        role: "user",
+        createdAt: 7_000,
+        parts: [{ type: "text", text: "问题" }],
+      }),
+      uiMessage({
+        id: "live-assistant",
+        role: "assistant",
+        status: "streaming",
+        createdAt: 7_000,
+        parts: [{ type: "text", text: "答复" }],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged.map((message) => message.role)).toEqual(["user", "assistant"]);
+  });
+
   it("does not duplicate a stored refetch that matches a live assistant response", () => {
     const stored = legacySessionMessagesToHermesUIMessages([
       sessionMessage({ id: 1, role: "assistant", content: "完成", timestamp: 100 }),
