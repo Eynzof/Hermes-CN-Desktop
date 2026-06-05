@@ -43,7 +43,7 @@
     "category": "DeveloperTool",
     "shortDescription": "Hermes Agent Chinese Community Desktop",
     "longDescription": "Desktop app for Hermes Agent Chinese Community Edition.",
-    "licenseFile": "legal/EULA.zh-CN.txt",
+    "licenseFile": "legal/EULA.zh-CN.rtf",
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",
       "static/dashboard/": "dashboard/",
