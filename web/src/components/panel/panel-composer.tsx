@@ -134,8 +134,7 @@ export function PanelComposer() {
         onSend={onSend}
         initial={prefilledText}
         initialWorkspacePath={initialWorkspacePath}
-        placeholder="描述你想完成的任务，Shift+Enter 发送…"
-        submitShortcut="shift-enter"
+        placeholder="描述你想完成的任务，Enter 发送，Shift+Enter 换行…"
         variant="big"
         headerLabel="新任务"
         hints={[

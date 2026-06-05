@@ -802,7 +802,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版</div>
           <h3>联系与致谢</h3>
           <p>
-            这里会放中文社区桌面版的联系方式、社区入口、项目链接和致谢信息。
+            致谢，联系方式及项目链接。
           </p>
         </div>
       </div>
