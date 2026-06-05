@@ -9,6 +9,8 @@
     "preinstall": "node scripts/only-pnpm.mjs",
     "version:sync": "node scripts/sync-desktop-version.mjs",
     "version:check": "node scripts/sync-desktop-version.mjs --check",
+    "license:sync": "node scripts/generate-license-rtf.mjs",
+    "license:check": "node scripts/generate-license-rtf.mjs --check",
     "dev": "pnpm web:dev",
     "web:dev": "pnpm run version:sync && pnpm --filter @hermes/web dev",
     "web:build": "pnpm run version:sync && pnpm --filter @hermes/web build",
@@ -17,10 +19,10 @@
     "tauri:dev": "pnpm run version:sync && node scripts/tauri-dev-managed.mjs",
     "tauri:dev:managed": "pnpm run version:sync && node scripts/tauri-dev-managed.mjs",
     "tauri:dev:external": "pnpm run version:sync && node scripts/tauri-dev-external.mjs",
-    "tauri:build": "pnpm run version:sync && pnpm exec tauri build",
-    "tauri:build:debug": "pnpm run version:sync && pnpm exec tauri build --debug",
+    "tauri:build": "pnpm run license:sync && pnpm run version:sync && pnpm exec tauri build",
+    "tauri:build:debug": "pnpm run license:sync && pnpm run version:sync && pnpm exec tauri build --debug",
     "tauri:run": "pnpm run version:sync && cargo run",
-    "typecheck": "pnpm run version:check && pnpm -r run typecheck",
+    "typecheck": "pnpm run license:check && pnpm run version:check && pnpm -r run typecheck",
     "test:unit": "pnpm -r --workspace-concurrency=1 test:unit",
     "runtime:stage-bundled-windows": "node scripts/stage-bundled-runtime.mjs --platform win32 --arch x64",
     "runtime:stage-bundled-macos": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch arm64",
@@ -28,8 +30,8 @@
     "skills:stage-bundled": "node scripts/stage-bundled-skills.mjs",
     "bundle:stage-windows": "pnpm run runtime:stage-bundled-windows && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled",
     "bundle:stage-macos": "pnpm run runtime:stage-bundled-macos && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled",
-    "tauri:build:bundled-windows": "pnpm run version:sync && pnpm run bundle:stage-windows && pnpm exec tauri build --bundles nsis",
-    "tauri:build:bundled-macos": "pnpm run version:sync && pnpm run bundle:stage-macos && pnpm exec tauri build --bundles dmg"
+    "tauri:build:bundled-windows": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-windows && pnpm exec tauri build --bundles nsis",
+    "tauri:build:bundled-macos": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos && pnpm exec tauri build --bundles dmg"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"
