@@ -19,6 +19,7 @@ import {
 } from "@/lib/provider-catalog";
 import { useProviderCatalog } from "@/hooks/use-provider-catalog";
 import { ModelCombobox } from "@/components/settings/model-combobox";
+import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
 import type { EnvVarInfo } from "@hermes/protocol";
 import { OAuthProvidersSection } from "./settings-oauth-section";
@@ -686,11 +687,10 @@ export function ModelsSection() {
   );
   const nonProviderGroups = useMemo(() => {
     if (!envVars) return [];
-    const catLabels: Record<string, string> = { tool: "工具密钥", messaging: "消息平台", setting: "设置", service: "服务" };
     return ["tool", "messaging", "setting", "service"]
       .map((cat) => ({
         category: cat,
-        label: catLabels[cat] ?? cat,
+        label: translateEnvCategory(cat),
         entries: Object.entries(envVars).filter(([, v]) => v.category === cat && !v.advanced),
       }))
       .filter((g) => g.entries.length > 0);
@@ -1814,12 +1814,16 @@ function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEdi
   envKey: string; info: EnvVarInfo; revealedValue?: string; isEditing: boolean; editVal: string;
   onEdit: () => void; onEditChange: (v: string) => void; onSave: () => void; onCancel: () => void; onReveal: () => void; onDelete: () => void;
 }) {
+  const translated = translateEnvVar(envKey, info);
+  const showEnvKeyInSub = translated.label !== envKey;
+
   return (
     <div className={s.row}>
       <div className={s.rowLeft}>
-        <div className={s.rowLabel}>{envKey}</div>
+        <div className={s.rowLabel}>{translated.label}</div>
         <div className={s.rowSub}>
-          {info.description}
+          {showEnvKeyInSub && <>{envKey} · </>}
+          {translated.description}
           {info.url && <> · <a href={info.url} target="_blank" rel="noreferrer" className={s.link}>获取 Key ↗</a></>}
           {info.tools.length > 0 && ` · 用于: ${info.tools.join(", ")}`}
         </div>
