@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { EnvVarInfo } from "@hermes/protocol";
 import { translateEnvCategory, translateEnvVar } from "./env-translations";
 
-function envInfo(description: string): EnvVarInfo {
+function envInfo(description: string, category = "tool"): EnvVarInfo {
   return {
     is_set: false,
     redacted_value: null,
     description,
     url: null,
-    category: "tool",
+    category,
     is_password: true,
     tools: [],
     advanced: false,
@@ -45,6 +45,29 @@ describe("translateEnvVar", () => {
       "Pub/Sub",
     );
     expect(translateEnvVar("IRC_PORT", envInfo("IRC server port")).label).toBe("IRC 端口");
+  });
+
+  it("builds Chinese display text for advanced provider env vars", () => {
+    expect(translateEnvVar("NOUS_BASE_URL", envInfo("Nous Portal base URL override", "provider"))).toEqual({
+      label: "Nous Portal Base URL",
+      description: "Nous Portal API Base URL 覆盖；留空时使用默认端点。",
+    });
+    expect(translateEnvVar("OPENROUTER_API_KEY", envInfo("OpenRouter API key", "provider")).description).toBe(
+      "OpenRouter API Key，用于访问该模型服务商。",
+    );
+    expect(translateEnvVar("HERMES_GEMINI_CLIENT_SECRET", envInfo("Google OAuth client secret", "provider")).label).toBe(
+      "Gemini OAuth Client Secret",
+    );
+  });
+
+  it("uses a provider fallback instead of backend English for unknown provider keys", () => {
+    expect(translateEnvVar("NEWCO_API_KEY", envInfo("New provider API key", "provider"))).toEqual({
+      label: "Newco API Key",
+      description: "Newco API Key，用于访问该模型服务商。",
+    });
+    expect(translateEnvVar("SOME_PROVIDER_CUSTOM_FLAG", envInfo("Some English text", "provider")).description).toBe(
+      "模型服务商相关高级环境变量。原始变量名：SOME_PROVIDER_CUSTOM_FLAG。",
+    );
   });
 
   it("falls back to backend-provided metadata for unknown keys", () => {

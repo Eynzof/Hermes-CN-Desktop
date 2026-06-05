@@ -444,6 +444,202 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
   },
 };
 
+const PROVIDER_PREFIX_TRANSLATIONS: Record<string, string> = {
+  AI302: "302.AI",
+  ALIBABA_CODING_PLAN: "阿里云百炼 Coding Plan",
+  ANTHROPIC: "Anthropic",
+  ARCEE: "Arcee AI",
+  ARCEEAI: "Arcee AI",
+  ARK: "火山方舟",
+  AZURE_FOUNDRY: "Azure AI Foundry",
+  CLAUDE_CODE: "Claude Code",
+  COMPSHARE: "优云智算",
+  COPILOT_GITHUB: "GitHub Copilot",
+  DASHSCOPE: "阿里云百炼 DashScope",
+  DEEPSEEK: "DeepSeek",
+  GEMINI: "Gemini",
+  GH: "GitHub",
+  GLM: "智谱 GLM",
+  GMI: "GMI Cloud",
+  GOOGLE: "Google AI Studio",
+  HERMES_GEMINI: "Gemini OAuth",
+  HERMES_QWEN: "Qwen Portal",
+  HF: "Hugging Face",
+  HUNYUAN: "腾讯混元",
+  KILOCODE: "Kilo Code",
+  KIMI: "Kimi / Moonshot",
+  KIMI_CN: "Kimi / Moonshot 中国",
+  LM: "LM Studio",
+  LONGCAT: "LongCat",
+  MIMO: "小米 MiMo",
+  MINIMAX: "MiniMax",
+  MINIMAX_CN: "MiniMax 中国",
+  MODELSCOPE: "ModelScope",
+  NOUS: "Nous Portal",
+  NOVITA: "Novita",
+  NVIDIA: "NVIDIA NIM",
+  OLLAMA: "Ollama Cloud",
+  OPENCODE_GO: "OpenCode Go",
+  OPENCODE_ZEN: "OpenCode Zen",
+  OPENROUTER: "OpenRouter",
+  QIANFAN: "百度千帆",
+  QWEN: "Qwen",
+  SILICONFLOW: "SiliconFlow",
+  STEPFUN: "StepFun",
+  XAI: "xAI",
+  XIAOMI: "小米 MiMo",
+  ZAI: "Z.AI",
+  Z_AI: "Z.AI",
+};
+
+interface ProviderFieldTranslation {
+  label: string;
+  description: (provider: string) => string;
+}
+
+const PROVIDER_FIELD_TRANSLATIONS: Array<[suffix: string, field: ProviderFieldTranslation]> = [
+  [
+    "_SERVICE_ACCOUNT_JSON",
+    {
+      label: "服务账号 JSON",
+      description: (provider) => `${provider} 服务账号 JSON 路径或内联 JSON，用于服务账号认证。`,
+    },
+  ],
+  [
+    "_SECRET_ACCESS_KEY",
+    {
+      label: "Secret Access Key",
+      description: (provider) => `${provider} Secret Access Key，用于云服务鉴权。`,
+    },
+  ],
+  [
+    "_ACCESS_KEY_ID",
+    {
+      label: "Access Key ID",
+      description: (provider) => `${provider} Access Key ID，用于云服务鉴权。`,
+    },
+  ],
+  [
+    "_CLIENT_SECRET",
+    {
+      label: "Client Secret",
+      description: (provider) => `${provider} OAuth Client Secret；可选，通常与 Client ID 搭配使用。`,
+    },
+  ],
+  [
+    "_CLIENT_ID",
+    {
+      label: "Client ID",
+      description: (provider) => `${provider} OAuth Client ID；可选，留空时使用默认客户端配置。`,
+    },
+  ],
+  [
+    "_PROJECT_ID",
+    {
+      label: "项目 ID",
+      description: (provider) => `${provider} 项目 ID，用于绑定云端项目或计费项目。`,
+    },
+  ],
+  [
+    "_OAUTH_TOKEN",
+    {
+      label: "OAuth Token",
+      description: (provider) => `${provider} OAuth Token，用于通过 OAuth 访问该模型服务商。`,
+    },
+  ],
+  [
+    "_ACCESS_TOKEN",
+    {
+      label: "Access Token",
+      description: (provider) => `${provider} Access Token，用于访问该模型服务商。`,
+    },
+  ],
+  [
+    "_BASE_URL",
+    {
+      label: "Base URL",
+      description: (provider) => `${provider} API Base URL 覆盖；留空时使用默认端点。`,
+    },
+  ],
+  [
+    "_API_URL",
+    {
+      label: "API URL",
+      description: (provider) => `${provider} API URL 覆盖；留空时使用默认端点。`,
+    },
+  ],
+  [
+    "_API_KEY",
+    {
+      label: "API Key",
+      description: (provider) => `${provider} API Key，用于访问该模型服务商。`,
+    },
+  ],
+  [
+    "_TOKEN",
+    {
+      label: "Token",
+      description: (provider) => `${provider} Token，用于访问该模型服务商。`,
+    },
+  ],
+  [
+    "_REGION",
+    {
+      label: "区域",
+      description: (provider) => `${provider} 区域或地域设置。`,
+    },
+  ],
+  [
+    "_PROFILE",
+    {
+      label: "配置档案",
+      description: (provider) => `${provider} 本地配置档案名称。`,
+    },
+  ],
+  [
+    "_MODEL",
+    {
+      label: "模型",
+      description: (provider) => `${provider} 默认模型名称。`,
+    },
+  ],
+  [
+    "_ENDPOINT",
+    {
+      label: "端点",
+      description: (provider) => `${provider} 服务端点覆盖。`,
+    },
+  ],
+];
+
+function providerNameFromPrefix(prefix: string): string {
+  return PROVIDER_PREFIX_TRANSLATIONS[prefix] ?? prefix
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function translateProviderEnvVar(envKey: string, info: EnvVarInfo): EnvVarTranslation | null {
+  if (info.category !== "provider") return null;
+
+  for (const [suffix, field] of PROVIDER_FIELD_TRANSLATIONS) {
+    if (!envKey.endsWith(suffix)) continue;
+    const prefix = envKey.slice(0, -suffix.length);
+    const provider = providerNameFromPrefix(prefix);
+    return {
+      label: `${provider} ${field.label}`,
+      description: field.description(provider),
+    };
+  }
+
+  const provider = providerNameFromPrefix(envKey.replace(/_(?:KEY|URL|TOKEN|SECRET|ID)$/u, ""));
+  return {
+    label: provider === envKey ? envKey.replace(/_/gu, " ") : provider,
+    description: `模型服务商相关高级环境变量。原始变量名：${envKey}。`,
+  };
+}
+
 export function translateEnvCategory(category: string): string {
   return ENV_CATEGORY_TRANSLATIONS[category] ?? category;
 }
@@ -451,6 +647,8 @@ export function translateEnvCategory(category: string): string {
 export function translateEnvVar(envKey: string, info: EnvVarInfo): EnvVarTranslation {
   const hit = ENV_VAR_TRANSLATIONS[envKey];
   if (hit) return hit;
+  const providerHit = translateProviderEnvVar(envKey, info);
+  if (providerHit) return providerHit;
   return {
     label: envKey,
     description: info.description || envKey,
