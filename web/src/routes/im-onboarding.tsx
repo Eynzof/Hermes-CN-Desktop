@@ -16,7 +16,6 @@ import {
   Send,
   ShieldCheck,
   Stethoscope,
-  UsersRound,
   X,
   XCircle,
   Zap,
@@ -44,7 +43,6 @@ type ImSection = "feishu" | "weixin";
 type FeishuMethod = "qr" | "manual";
 type DmPolicy = "pairing" | "allowlist" | "open" | "disabled";
 type FeishuGroupPolicy = "mention" | "disabled";
-type WeixinGroupPolicy = "disabled" | "open" | "allowlist";
 
 const FEISHU_DEVELOPER_URL = "https://open.feishu.cn/app";
 export const FEISHU_REQUIRED_SCOPES = [
@@ -153,12 +151,12 @@ function QrPanel({ data, url, status, message, onStart, startLabel, startBusy }:
       </div>
       <div className={s.qrCopy}>
         <div className={s.miniEyebrow}>QR ONBOARDING</div>
-        <h3>使用手机扫码确认</h3>
-        <p>{message || "生成二维码后，使用对应移动端扫码并在手机端确认。"}</p>
-        <div className={s.traceRow}><span>状态</span><b>{statusText(status)}</b><em>{data ? "二维码数据只保存在当前页面" : "尚未生成二维码"}</em></div>
+        <h3>用手机扫一下</h3>
+        <p>{message || "二维码生成后，打开对应 App 扫码确认，桌面端会自动继续下一步。"}</p>
+        <div className={s.traceRow}><span>状态</span><b>{statusText(status)}</b><em>{data ? "二维码只在本页临时使用" : "还没有生成二维码"}</em></div>
         {url && <code className={s.urlPreview}>{url}</code>}
         <div className={s.buttonRow}>
-          <button className={s.btn} type="button" onClick={copy} disabled={!data}><ClipboardList size={14} />复制二维码数据</button>
+          <button className={s.btn} type="button" onClick={copy} disabled={!data}><ClipboardList size={14} />复制二维码内容</button>
           {url && <button className={s.btn} type="button" onClick={() => openExternal(url)}><ExternalLink size={14} />打开备用链接</button>}
         </div>
       </div>
@@ -177,16 +175,16 @@ function Hero({ platform, stateSub, onPrimary, primaryBusy }: {
     <div className={s.headBand}>
       <div className={s.heroCopy}>
         <div className={s.heroKicker}><span>{isFeishu ? "№ 023A" : "№ 023B"}</span><span>IM ONBOARDING</span><em>配置 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
-        <h1>把<em>{isFeishu ? "飞书" : "微信"}</em>接到<br />Hermes。</h1>
+        <h1>将<em>{isFeishu ? "飞书消息平台" : "微信消息平台"}</em>接入<br />中文社区桌面版</h1>
         <p className={s.sub}>{isFeishu
-          ? "将命令行里的 hermes gateway setup 拆成桌面端向导：获取应用凭据、写入当前 profile、启动长连接，再完成飞书后台权限、事件订阅、发版与真实消息验证。"
-          : "微信接入不是企业微信或公众号回调。这里绑定 Tencent iLink bot 身份，并用 getupdates 长轮询接收消息。"}</p>
+          ? "跟着向导用手机扫码，保存到当前档案后，再按提示到飞书后台勾选权限并发布。全程不需要敲命令，新手也能一步步完成。"
+          : "跟着向导用微信扫码确认，桌面端会保存接入账号并自动接收新消息。"}</p>
       </div>
       <div className={s.heroActions}>
         <span className={s.heroState}>{stateSub}</span>
         <button className={`${s.btn} ${s.primary}`} type="button" onClick={onPrimary} disabled={primaryBusy}>
           {isFeishu ? <ScanLine size={14} /> : <MessageSquareText size={14} />}
-          {primaryBusy ? "处理中…" : isFeishu ? "获取凭据" : "开始扫码"}
+          {primaryBusy ? "处理中…" : "开始扫码"}
         </button>
       </div>
     </div>
@@ -206,8 +204,8 @@ function ActionFeedback({ busy, error, flow, status, onJump }: {
   return (
     <div className={s.actionFeedback} data-tone={tone} role={message ? "alert" : "status"}>
       <div>
-        <b>{message ? "开始接入失败" : busy ? "正在生成扫码接入二维码" : "二维码已生成"}</b>
-        <span>{message || (busy ? "正在调用桌面端接入命令，请稍候。" : `状态：${statusText(status ?? flow?.status)}。请到扫码区域继续操作。`)}</span>
+        <b>{message ? "开始接入失败" : busy ? "正在准备二维码" : "二维码准备好了"}</b>
+        <span>{message || (busy ? "桌面端正在准备二维码，请稍等。" : `状态：${statusText(status ?? flow?.status)}。请到扫码区域继续操作。`)}</span>
       </div>
       {flow && !message ? <button className={s.inlineBtn} type="button" onClick={onJump}>查看二维码</button> : null}
     </div>
@@ -221,16 +219,19 @@ function MetaStrip({ platform, profile, statusData, configured }: {
   configured: Record<string, ImRedactedValue>;
 }) {
   const runtime = platformState(statusData, platform);
+  const connectionLabel = platform === "feishu"
+    ? (configured.FEISHU_CONNECTION_MODE?.redactedValue === "webhook" ? "回调模式" : "长连接")
+    : "自动轮询";
   const credentialSet = platform === "feishu"
     ? Boolean(configured.FEISHU_APP_ID?.isSet && configured.FEISHU_APP_SECRET?.isSet)
     : Boolean(configured.WEIXIN_ACCOUNT_ID?.isSet && configured.WEIXIN_TOKEN?.isSet);
   return (
     <div className={s.metaStrip}>
-      <div><span>传输</span><b>{platform === "feishu" ? (configured.FEISHU_CONNECTION_MODE?.redactedValue ?? "WebSocket") : "Long-poll"}</b></div>
+      <div><span>连接方式</span><b>{connectionLabel}</b></div>
       <div><span>档案</span><b>{profile || "default"}</b></div>
-      <div><span>Gateway</span><b data-tone={statusData?.gateway_running ? "ok" : "warn"}>{statusData?.gateway_running ? "running" : "stopped"}</b></div>
+      <div><span>接收服务</span><b data-tone={statusData?.gateway_running ? "ok" : "warn"}>{statusData?.gateway_running ? "已运行" : "未运行"}</b></div>
       <div><span>凭据</span><b data-tone={credentialSet ? "ok" : "warn"}>{credentialSet ? "已保存" : "未保存"}</b></div>
-      <div><span>平台</span><b data-tone={runtime?.state === "connected" ? "ok" : undefined}>{runtime?.state || "pending"}</b></div>
+      <div><span>平台连接</span><b data-tone={runtime?.state === "connected" ? "ok" : undefined}>{runtime?.state === "connected" ? "已连接" : "待连接"}</b></div>
     </div>
   );
 }
@@ -239,8 +240,8 @@ function FlowSteps({ platform, status, saved }: { platform: ImPlatform; status?:
   const scanned = status === "scanned" || status === "confirmed";
   const confirmed = status === "confirmed";
   const labels = platform === "feishu"
-    ? [["选择方式", "扫码或手动"], ["获取凭据", "扫码或手动填写"], ["保存启动", "写入 profile 并重启"], ["后台配置", "权限、事件与发布"], ["测试消息", "私聊和群聊 @ 验证"]]
-    : [["环境检查", "依赖与 Gateway"], ["扫码绑定", "微信确认 iLink bot"], ["访问策略", "私聊、群聊与 home"], ["保存验证", "重启并检查 long-poll"]];
+    ? [["选择方式", "推荐扫码"], ["绑定应用", "用手机确认"], ["保存设置", "写入当前档案"], ["打开权限", "按提示勾选发布"], ["试发消息", "私聊和群聊验证"]]
+    : [["环境检查", "确认能启动"], ["扫码绑定", "用微信确认"], ["访问范围", "设置可用用户"], ["保存验证", "重启后自动检查"]];
   const states = platform === "feishu"
     ? [true, scanned || confirmed, saved, false, false]
     : [true, scanned || confirmed, confirmed, saved];
@@ -316,8 +317,8 @@ function FeishuBackendChecklist() {
       <div className={s.checkIntro}>
         <div>
           <div className={s.miniEyebrow}>FEISHU CONSOLE</div>
-          <h3>扫码成功后，还要完成飞书后台配置</h3>
-          <p>App ID / Secret 只是凭据。要让 Hermes 真正收到私聊、群聊 @ 并发出回复，需要在飞书开放平台确认机器人能力、长连接事件、权限和版本发布。</p>
+          <h3>飞书后台还要点几下</h3>
+          <p>扫码只是把应用信息带回来。想让桌面端真的收到消息，需要在飞书开放平台打开机器人能力、消息事件和发送权限，最后发布一次版本。</p>
         </div>
         <button className={`${s.btn} ${s.externalBtn}`} type="button" onClick={() => openExternal(FEISHU_DEVELOPER_URL)}>
           <ExternalLink size={14} />打开飞书开发者后台
@@ -327,19 +328,19 @@ function FeishuBackendChecklist() {
       <div className={s.consoleSteps}>
         <div className={s.consoleStep}>
           <span>1</span>
-          <b>先保存并启动 Gateway</b>
-          <p>长连接订阅保存时可能要求应用已经建立连接，所以先把凭据写入当前 profile 并重启 Gateway。</p>
+          <b>先点上面的保存</b>
+          <p>保存后桌面端会启动接收服务，飞书后台才能把消息投递过来。</p>
         </div>
         <div className={s.consoleStep}>
           <span>2</span>
-          <b>事件订阅选择长连接</b>
-          <p>在「事件与回调」里选择使用长连接接收事件，然后添加应用身份事件「接收消息 v2.0」。</p>
+          <b>订阅接收消息</b>
+          <p>在「事件与回调」里选择长连接接收事件，然后添加「接收消息 v2.0」。</p>
           <code>{FEISHU_RECEIVE_EVENT}</code>
         </div>
         <div className={s.consoleStep}>
           <span>3</span>
-          <b>开通并发布权限</b>
-          <p>权限开通后仍需创建版本并发布，未发布时飞书客户端里通常表现为机器人不回复。</p>
+          <b>开权限并发布</b>
+          <p>权限加完以后记得创建版本并发布，否则飞书里看起来就像机器人没反应。</p>
         </div>
       </div>
 
@@ -367,14 +368,14 @@ function FeishuTestGuide({ result }: { result: ImOnboardingApplyResult | null })
     <section className={`${s.section} ${s.testGuide}`} data-ready={result?.ok ? "true" : undefined}>
       <div>
         <div className={s.miniEyebrow}>LIVE TEST</div>
-        <h3>最后用真实消息验证闭环</h3>
+        <h3>最后发消息试一下</h3>
         <p>{result?.ok
-          ? "桌面端 managed runtime Gateway 已启动。现在请在飞书里用两条消息验证：私聊机器人发送 hi；在群聊里 @机器人 hi。"
-          : "保存并重启 Gateway、完成飞书后台权限/事件/发布之后，再回来做真实消息验证。"}</p>
+          ? "接收服务已经启动。现在去飞书里试两条：私聊机器人发 hi；群里 @机器人 发 hi。"
+          : "先保存、完成飞书后台设置并发布，再回来发消息验证。"}</p>
       </div>
       <div className={s.testCards}>
-        <div><MessageSquareText size={15} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到 Hermes 回复或配对提示。</span></div>
-        <div><Send size={15} /><b>群聊 @ 测试</b><span>把机器人拉入群并发送 <code>@机器人 hi</code>，默认只响应 @ 消息。</span></div>
+        <div><MessageSquareText size={15} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到回复或配对提示。</span></div>
+        <div><Send size={15} /><b>群聊测试</b><span>把机器人拉入群并发送 <code>@机器人 hi</code>，默认只响应 @ 消息。</span></div>
       </div>
     </section>
   );
@@ -411,11 +412,11 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
         tone: "ok",
         eyebrow: "CHECKLIST",
         title: "飞书后台检查清单",
-        summary: "扫码拿到凭据不等于能聊天；需要保存启动 Gateway 后，再确认飞书后台权限、事件订阅和发版状态。",
+        summary: "扫码只完成第一步。要能聊天，还要保存设置、打开飞书后台的消息权限，并发布应用。",
         sections: [
           {
             title: "最小闭环",
-            items: ["机器人能力已启用", `长连接订阅方式已保存`, `事件订阅包含 ${FEISHU_RECEIVE_EVENT}`, "应用已创建版本并发布"],
+            items: ["机器人能力已打开", "消息事件已订阅", `事件里包含 ${FEISHU_RECEIVE_EVENT}`, "应用已创建版本并发布"],
           },
           {
             title: "必须权限",
@@ -430,17 +431,17 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
         label: "推荐",
         tone: "accent",
         eyebrow: "WHY WS",
-        title: "为什么默认 WebSocket",
-        summary: "桌面端运行在用户本机，WebSocket 能避开公网回调地址、域名和内网穿透要求。",
+        title: "为什么默认用长连接",
+        summary: "新手不用准备公网地址或内网穿透，桌面端会自己和飞书保持连接。",
         sections: [
           {
             title: "产品默认",
-            body: "长连接由官方 SDK 与开放平台建立，但飞书后台仍要添加接收消息事件并发布应用，事件才会真正投递到本地 Gateway。",
+            body: "长连接会由桌面端和飞书后台建立。你仍然需要在飞书后台添加接收消息事件并发布应用，消息才会真正送到本机。",
             chips: ["无需公网 IP", "适合桌面端", "链路更稳定"],
           },
           {
-            title: "何时用 Webhook",
-            items: ["已有企业统一回调网关", "需要集中审计所有开放平台事件", "明确有可访问公网域名"],
+            title: "何时用回调模式",
+            items: ["公司已经有统一回调入口", "需要集中审计所有开放平台事件", "已经准备好可访问的公网域名"],
           },
         ],
       },
@@ -451,15 +452,15 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
         tone: "warn",
         eyebrow: "DIAGNOSIS",
         title: "常见失败诊断",
-        summary: "这里仅展示可复现故障线索，不输出 app secret、token 或扫码凭据。",
+        summary: "这里只看配置缺口和常见原因，不显示密钥或 token 原文。",
         sections: [
           {
             title: "快速排查",
-            items: ["私聊无响应：确认已开通 im:message.p2p_msg:readonly 并发布", "群聊无响应：确认已开通 im:message.group_at_msg:readonly 且消息里 @ 机器人", "能收不能发：确认已开通 im:message:send_as_bot", "事件日志为空：确认已订阅接收消息 v2.0 并创建版本发布"],
+            items: ["私聊没反应：确认已开通私聊消息权限并发布", "群里没反应：确认已开通群聊 @ 消息权限，并且消息里 @ 了机器人", "能收不能发：确认已开通机器人发送消息权限", "事件日志为空：确认已订阅接收消息 v2.0 并发布版本"],
           },
           {
             title: "日志关键词",
-            chips: ["gateway_platforms.feishu", "event subscription", "bot disabled"],
+            chips: ["飞书连接状态", "事件订阅", "机器人未启用"],
           },
         ],
       },
@@ -473,37 +474,17 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
       label: "iLink",
       tone: "accent",
       eyebrow: "ILINK BOT",
-      title: "这是个人微信 iLink 接入",
-      summary: "该页面不是企业微信、公众号或普通微信群稳定回调配置，只绑定 iLink bot 身份。",
+      title: "这是微信消息平台接入",
+      summary: "这里接的是微信消息平台，不是企业微信或公众号后台。",
       sections: [
         {
           title: "接入边界",
-          items: ["扫码得到 iLink bot account_id 与 token", "消息通过 getupdates 长轮询进入 Gateway", "媒体走独立 CDN base url"],
+          items: ["扫码获取微信接入账号和口令", "桌面端会定时拉取新消息", "图片和文件走单独的媒体地址"],
         },
         {
           title: "安全默认",
-          body: "account_id、token 和 base_url 在摘要中脱敏展示，保存时只写入当前 profile。",
-          chips: ["非企微", "非公众号", "非微信群回调"],
-        },
-      ],
-    },
-    {
-      id: "why",
-      icon: UsersRound,
-      label: "群聊",
-      tone: "warn",
-      eyebrow: "GROUP LIMIT",
-      title: "微信群聊默认关闭",
-      summary: "iLink bot 身份通常不能像普通联系人一样加入微信群，也不保证投递普通微信群事件。",
-      sections: [
-        {
-          title: "默认策略",
-          body: "先保证私聊扫码、配对审批和 Gateway 长轮询闭环，群聊能力只在真实投递可验证时开启。",
-          chips: ["默认 disabled", "私聊优先", "可白名单试验"],
-        },
-        {
-          title: "开启前确认",
-          items: ["确认 iLink 实际投递 group id", "限制允许群聊列表", "避免把个人号群消息误当稳定 API"],
+          body: "账号和口令只写入当前配置档案，页面摘要会自动打码。",
+          chips: ["非企微", "非公众号"],
         },
       ],
     },
@@ -514,15 +495,15 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
       tone: "warn",
       eyebrow: "DIAGNOSIS",
       title: "常见失败诊断",
-      summary: "诊断只展示依赖、轮询状态和配置缺口，不展示 token 原文。",
+      summary: "这里只显示依赖、接收状态和配置缺口，不显示 token 原文。",
       sections: [
         {
           title: "快速排查",
-          items: ["missing dependency：修复 aiohttp / cryptography", "WEIXIN_TOKEN missing：重新扫码或手动恢复", "token already locked：停止另一 Gateway"],
+          items: ["提示依赖缺失：按提示安装 aiohttp / cryptography", "提示未绑定：重新扫码或手动恢复账号", "提示已被占用：先停止另一个接收服务"],
         },
         {
           title: "日志关键词",
-          chips: ["gateway_platforms.weixin", "getupdates", "poller locked"],
+          chips: ["微信连接状态", "消息拉取", "接收服务占用"],
         },
       ],
     },
@@ -610,8 +591,8 @@ function ApplyResult({ result }: { result: ImOnboardingApplyResult | null }) {
     <div className={s.resultBox} data-ok={result.restart.ok ? "true" : undefined}>
       <Icon size={16} />
       <div>
-        <b>配置已写入当前 profile：{result.currentProfile}</b>
-        <span>env: <code>{result.envPath}</code>{result.backupPath ? <> · backup: <code>{result.backupPath}</code></> : null}</span>
+        <b>配置已写入当前档案：{result.currentProfile}</b>
+        <span>配置文件：<code>{result.envPath}</code>{result.backupPath ? <> · 备份：<code>{result.backupPath}</code></> : null}</span>
         <span>{result.restart.message}</span>
       </div>
     </div>
@@ -706,7 +687,7 @@ function FeishuRoute() {
   const rows: Array<[string, string, string]> = [
     ["连接模式", `FEISHU_CONNECTION_MODE=${connectionMode}`, connectionMode === "websocket" ? "推荐" : "高级"],
     ["区域", `FEISHU_DOMAIN=${domain}`, "已选择"],
-    ["私聊策略", `FEISHU_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, dmPolicy],
+    ["私聊策略", `FEISHU_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, dmPolicy === "pairing" ? "推荐：先确认" : dmPolicy],
     ["群聊策略", `FEISHU_GROUP_POLICY=${groupPolicy === "disabled" ? "disabled" : "open"}`, groupPolicy === "mention" ? "仅 @ 响应" : "关闭"],
     ["首页频道", `FEISHU_HOME_CHANNEL=${homeChannel || ""}`, homeChannel ? "已填写" : "稍后设置"],
   ];
@@ -715,19 +696,19 @@ function FeishuRoute() {
     <SectionShell title="消息平台接入 · 飞书" sub="02 配置 / 023 消息平台接入" rail={<Rail platform="feishu" />} railLabel="飞书接入诊断边栏">
       <div className={s.wrap}>
         <main className={s.mainCol}>
-          <Hero platform="feishu" stateSub={`当前 profile：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={method === "qr" ? start : save} primaryBusy={busy} />
+          <Hero platform="feishu" stateSub={`当前档案：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={method === "qr" ? start : save} primaryBusy={busy} />
           <ActionFeedback busy={begin.isPending} error={begin.error} flow={flow} status={status} onJump={jumpToQr} />
           <MetaStrip platform="feishu" profile={stateQuery.data?.currentProfile ?? "default"} statusData={statusQuery.data} configured={configured} />
           <FlowSteps platform="feishu" status={status} saved={Boolean(result?.ok)} />
-          <SectionTitle num="[ STEP 01 ]" title="选择接入方式" meta="普通用户走扫码，企业已有应用走手动凭据" />
+          <SectionTitle num="[ STEP 01 ]" title="先选择怎么接入" meta="新手推荐扫码；已有飞书应用再手动填写" />
           <section className={s.section}><div className={s.choiceGrid}>
-            <ChoiceCard active={method === "qr"} icon="scan" badge="推荐" title="扫码获取应用凭据" desc="用飞书手机端扫码授权，自动获取 App ID、App Secret 与机器人信息；后续仍需确认后台权限、事件与发布。" foot="无需公网回调地址" onClick={() => setMethod("qr")} />
-            <ChoiceCard active={method === "manual"} icon="key" badge="高级" title="手动输入已有应用" desc="适合企业已有自建应用，需启用机器人能力并订阅消息事件。" foot="可切换 Webhook 模式" onClick={() => setMethod("manual")} />
+            <ChoiceCard active={method === "qr"} icon="scan" badge="推荐" title="手机扫码接入" desc="用飞书手机端扫一下，桌面端会自动拿到应用信息。扫码后还需要按提示去飞书后台确认权限。" foot="推荐新手使用" onClick={() => setMethod("qr")} />
+            <ChoiceCard active={method === "manual"} icon="key" badge="高级" title="我已有飞书应用" desc="如果公司已经建好自建应用，可以在这里填写应用信息。" foot="适合熟悉飞书后台的用户" onClick={() => setMethod("manual")} />
           </div></section>
 
           {method === "qr" ? <>
             <div ref={qrAnchorRef} className={s.anchorBlock}>
-              <SectionTitle num="[ STEP 02A ]" title="扫码授权并获取凭据" meta={flow ? `轮询间隔 ${flow.intervalSeconds}s；凭据获取后还要配置后台` : "device_code 只保存在桌面端内存"} />
+              <SectionTitle num="[ STEP 02A ]" title="用飞书扫码确认" meta={flow ? `每 ${flow.intervalSeconds} 秒自动检查一次；成功后继续下一步` : "二维码只在当前页面临时使用"} />
               <QrPanel
                 data={pollResult?.qrScanData ?? flow?.qrScanData}
                 url={pollResult?.qrUrl ?? flow?.qrUrl}
@@ -740,43 +721,43 @@ function FeishuRoute() {
             </div>
             <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RefreshCw size={14} />立即检查</button></div>
           </> : <>
-            <SectionTitle num="[ STEP 02B ]" title="手动输入已有飞书应用" meta="App Secret 不会进入诊断输出" />
+            <SectionTitle num="[ STEP 02B ]" title="填写已有飞书应用" meta="密码类信息不会在诊断里明文显示" />
             <section className={s.section}>
-              <Field label="区域" desc="选择飞书中国或 Lark 国际。" meta="FEISHU_DOMAIN"><select value={domain} onChange={(e) => setDomain(e.target.value)}><option value="feishu">飞书中国 · feishu</option><option value="lark">Lark 国际 · lark</option></select></Field>
-              <Field label="连接模式" desc="桌面端默认 WebSocket，无需公网地址。" meta="FEISHU_CONNECTION_MODE"><select value={connectionMode} onChange={(e) => setConnectionMode(e.target.value)}><option value="websocket">WebSocket（推荐）</option><option value="webhook">Webhook（高级）</option></select></Field>
-              <Field label="App ID" desc="来自飞书开放平台的应用凭证。" meta="FEISHU_APP_ID"><input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="cli_xxx" /></Field>
-              <Field label="App Secret" desc="敏感凭据，仅用于保存到当前 profile。" meta="FEISHU_APP_SECRET"><input type="password" value={appSecret} onChange={(e) => setAppSecret(e.target.value)} placeholder="••••••••" /></Field>
+              <Field label="区域" desc="选择你使用的是飞书中国版还是 Lark 国际版。" meta="FEISHU_DOMAIN"><select value={domain} onChange={(e) => setDomain(e.target.value)}><option value="feishu">飞书中国 · feishu</option><option value="lark">Lark 国际 · lark</option></select></Field>
+              <Field label="连接模式" desc="新手保持默认即可，不需要准备公网地址。" meta="FEISHU_CONNECTION_MODE"><select value={connectionMode} onChange={(e) => setConnectionMode(e.target.value)}><option value="websocket">长连接（推荐）</option><option value="webhook">回调模式（高级）</option></select></Field>
+              <Field label="App ID" desc="在飞书开放平台应用详情里复制。" meta="FEISHU_APP_ID"><input value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="cli_xxx" /></Field>
+              <Field label="App Secret" desc="应用密钥，只保存在当前配置档案里。" meta="FEISHU_APP_SECRET"><input type="password" value={appSecret} onChange={(e) => setAppSecret(e.target.value)} placeholder="••••••••" /></Field>
               {connectionMode === "webhook" && <>
-                <Field label="Webhook Host" desc="仅 Webhook 模式需要。" meta="FEISHU_WEBHOOK_HOST"><input value={webhookHost} onChange={(e) => setWebhookHost(e.target.value)} /></Field>
-                <Field label="Webhook Port" desc="本地 handler 端口。" meta="FEISHU_WEBHOOK_PORT"><input value={webhookPort} onChange={(e) => setWebhookPort(e.target.value)} /></Field>
-                <Field label="Webhook Path" desc="开放平台回调路径。" meta="FEISHU_WEBHOOK_PATH"><input value={webhookPath} onChange={(e) => setWebhookPath(e.target.value)} /></Field>
-                <Field label="Webhook 安全" desc="Encrypt Key，可留空后续补充。" meta="FEISHU_ENCRYPT_KEY"><input type="password" value={encryptKey} onChange={(e) => setEncryptKey(e.target.value)} /></Field>
-                <Field label="Verification Token" desc="签名校验 token。" meta="FEISHU_VERIFICATION_TOKEN"><input type="password" value={verificationToken} onChange={(e) => setVerificationToken(e.target.value)} /></Field>
+                <Field label="回调地址" desc="只有选择回调模式时才需要填写。" meta="FEISHU_WEBHOOK_HOST"><input value={webhookHost} onChange={(e) => setWebhookHost(e.target.value)} /></Field>
+                <Field label="回调端口" desc="本机接收飞书回调的端口。" meta="FEISHU_WEBHOOK_PORT"><input value={webhookPort} onChange={(e) => setWebhookPort(e.target.value)} /></Field>
+                <Field label="回调路径" desc="飞书后台里填写的回调路径。" meta="FEISHU_WEBHOOK_PATH"><input value={webhookPath} onChange={(e) => setWebhookPath(e.target.value)} /></Field>
+                <Field label="回调加密" desc="如果后台要求加密，填这里；不确定可以先留空。" meta="FEISHU_ENCRYPT_KEY"><input type="password" value={encryptKey} onChange={(e) => setEncryptKey(e.target.value)} /></Field>
+                <Field label="校验口令" desc="飞书后台的校验口令，不确定可以先留空。" meta="FEISHU_VERIFICATION_TOKEN"><input type="password" value={verificationToken} onChange={(e) => setVerificationToken(e.target.value)} /></Field>
               </>}
               <div className={s.sectionActions}><button className={`${s.btn} ${s.externalBtn}`} onClick={() => openExternal(FEISHU_DEVELOPER_URL)}><ExternalLink size={14} />打开飞书开发者后台</button></div>
             </section>
           </>}
 
-          <SectionTitle num="[ STEP 03 ]" title="保存本地策略并启动 Gateway" meta="这一步只写入当前 profile，不代表飞书后台已经可聊天" />
+          <SectionTitle num="[ STEP 03 ]" title="保存设置并启动接收服务" meta="只会更新当前配置档案；飞书后台还需要继续按提示确认" />
           <section className={s.section}>
             <div className={s.policyGrid}>
-              <PolicyCard active={dmPolicy === "pairing"} title="私聊配对审批" desc="未知用户可发起请求，由管理员批准。" onClick={() => setDmPolicy("pairing")} />
-              <PolicyCard active={dmPolicy === "allowlist"} title="指定 open_id 白名单" desc="只允许列表中的成员触发。" onClick={() => setDmPolicy("allowlist")} />
-              <PolicyCard active={dmPolicy === "open"} warning title="允许所有私聊" desc="最快试用，但风险更高。" onClick={() => setDmPolicy("open")} />
+              <PolicyCard active={dmPolicy === "pairing"} title="需要确认再放行" desc="陌生用户先发起申请，管理员同意后可用。" onClick={() => setDmPolicy("pairing")} />
+              <PolicyCard active={dmPolicy === "allowlist"} title="只允许指定用户" desc="只让列表里的用户 ID 使用。" onClick={() => setDmPolicy("allowlist")} />
+              <PolicyCard active={dmPolicy === "open"} warning title="所有私聊都可用" desc="方便试用，但不建议长期开放。" onClick={() => setDmPolicy("open")} />
             </div>
-            {dmPolicy === "allowlist" && <Field label="允许用户" desc="多个 open_id 用英文逗号分隔。" meta="FEISHU_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} /></Field>}
-            <Field label="群聊策略" desc="减少噪声，默认仅 @Hermes 时响应。" meta="FEISHU_GROUP_POLICY"><select value={groupPolicy} onChange={(e) => setGroupPolicy(e.target.value as FeishuGroupPolicy)}><option value="mention">启用群聊，仅 @Hermes 时响应</option><option value="disabled">禁用群聊</option></select></Field>
-            <Field label="通知 Home Channel" desc="用于 cron 和跨平台通知，可稍后设置。" meta="FEISHU_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder="oc_xxx 或留空" /></Field>
+            {dmPolicy === "allowlist" && <Field label="允许用户" desc="多个用户 ID 用英文逗号分隔；不知道用户 ID 可先跳过。" meta="FEISHU_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} /></Field>}
+            <Field label="群聊策略" desc="为了避免刷屏，默认只有 @Hermes 时才回复。" meta="FEISHU_GROUP_POLICY"><select value={groupPolicy} onChange={(e) => setGroupPolicy(e.target.value as FeishuGroupPolicy)}><option value="mention">启用群聊，仅 @Hermes 时响应</option><option value="disabled">关闭群聊</option></select></Field>
+            <Field label="默认通知会话" desc="用于定时任务和通知；不知道可以先留空。" meta="FEISHU_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder="oc_xxx 或留空" /></Field>
           </section>
 
-          <SectionTitle num="[ REVIEW ]" title="保存前配置摘要" meta="secret 只显示脱敏摘要；保存后继续配置飞书后台" />
-          {credential && <div className={s.summaryLine}>扫码结果：App ID {last(credential.appId)} · App Secret {last(credential.appSecret)} · Bot {credential.botName ?? "未探测"}</div>}
+          <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="密钥会自动打码；保存后继续去飞书后台确认" />
+          {credential && <div className={s.summaryLine}>扫码结果：应用 ID {last(credential.appId)} · 应用密钥 {last(credential.appSecret)} · 机器人 {credential.botName ?? "未探测"}</div>}
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual)}><Save size={14} />保存并重启 Gateway</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual)}><Save size={14} />保存并启动接收服务</button></div>
           <ApplyResult result={result} />
-          <SectionTitle num="[ STEP 04 ]" title="配置飞书后台权限与事件" meta="必须完成接收消息 v2.0、权限开通和版本发布" />
+          <SectionTitle num="[ STEP 04 ]" title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
           <FeishuBackendChecklist />
-          <SectionTitle num="[ STEP 05 ]" title="发送测试消息" meta="用私聊和群聊 @ 验证真正可聊天" />
+          <SectionTitle num="[ STEP 05 ]" title="发一条消息试试" meta="私聊和群聊各试一次，确认真的能回复" />
           <FeishuTestGuide result={result} />
           {(begin.error || poll.error || apply.error || stateQuery.error) && <div className={s.errorBox}><XCircle size={16} />{textFromError(begin.error || poll.error || apply.error || stateQuery.error)}</div>}
         </main>
@@ -792,9 +773,7 @@ function WeixinRoute() {
   const poll = usePollImOnboarding();
   const apply = useApplyImOnboarding("weixin");
   const [dmPolicy, setDmPolicy] = useState<DmPolicy>("pairing");
-  const [groupPolicy, setGroupPolicy] = useState<WeixinGroupPolicy>("disabled");
   const [allowedUsers, setAllowedUsers] = useState("");
-  const [groupAllowed, setGroupAllowed] = useState("");
   const [homeChannel, setHomeChannel] = useState("");
   const [accountId, setAccountId] = useState("");
   const [token, setToken] = useState("");
@@ -840,8 +819,8 @@ function WeixinRoute() {
     WEIXIN_DM_POLICY: dmPolicy,
     WEIXIN_ALLOW_ALL_USERS: dmPolicy === "open" ? "true" : "false",
     WEIXIN_ALLOWED_USERS: dmPolicy === "allowlist" ? allowedUsers.replaceAll(" ", "") : "",
-    WEIXIN_GROUP_POLICY: groupPolicy,
-    WEIXIN_GROUP_ALLOWED_USERS: groupPolicy === "allowlist" ? groupAllowed.replaceAll(" ", "") : "",
+    WEIXIN_GROUP_POLICY: "disabled",
+    WEIXIN_GROUP_ALLOWED_USERS: "",
     WEIXIN_HOME_CHANNEL: homeChannel.trim(),
   });
   const save = () => apply.mutate({
@@ -854,26 +833,25 @@ function WeixinRoute() {
   const rows: Array<[string, string, string]> = [
     ["账号 ID", `WEIXIN_ACCOUNT_ID=${credential?.accountId?.redactedValue ?? accountId}`, credential ? "扫码返回" : "手动"],
     ["认证 Token", `WEIXIN_TOKEN=${credential?.token?.redactedValue ?? (token ? "••••" : "")}`, "敏感"],
-    ["私聊策略", `WEIXIN_DM_POLICY=${dmPolicy}`, "推荐 pairing"],
+    ["私聊策略", `WEIXIN_DM_POLICY=${dmPolicy}`, dmPolicy === "pairing" ? "推荐：先确认" : dmPolicy],
     ["允许所有用户", `WEIXIN_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, "安全默认"],
-    ["群聊策略", `WEIXIN_GROUP_POLICY=${groupPolicy}`, groupPolicy === "disabled" ? "推荐" : "高级"],
   ];
 
   return (
     <SectionShell title="消息平台接入 · 微信" sub="02 配置 / 023 消息平台接入" rail={<Rail platform="weixin" />} railLabel="微信接入诊断边栏">
       <div className={s.wrap}>
         <main className={s.mainCol}>
-          <Hero platform="weixin" stateSub={`当前 profile：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={start} primaryBusy={busy} />
+          <Hero platform="weixin" stateSub={`当前档案：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={start} primaryBusy={busy} />
           <ActionFeedback busy={begin.isPending} error={begin.error} flow={flow} status={status} onJump={jumpToQr} />
           <MetaStrip platform="weixin" profile={stateQuery.data?.currentProfile ?? "default"} statusData={statusQuery.data} configured={configured} />
           <FlowSteps platform="weixin" status={status} saved={Boolean(result?.ok)} />
-          <SectionTitle num="[ STEP 01 ]" title="运行环境检查" meta="微信需要 aiohttp、cryptography 与唯一 token poller" />
+          <SectionTitle num="[ STEP 01 ]" title="先检查能不能接收消息" meta="桌面端会检查所需组件和接收服务" />
           <section className={s.section}><div className={s.verifyGrid}>
-            <div className={s.verifyRow}><ShieldCheck size={16} /><div><b>Gateway 状态</b><small>{statusQuery.data?.gateway_running ? "当前 Gateway 可重启。" : "Gateway 未运行，保存后会尝试重启。"}</small></div></div>
-            <div className={s.verifyRow}><KeyRound size={16} /><div><b>账号配置</b><small>{configured.WEIXIN_ACCOUNT_ID?.isSet ? `已保存 ${last(configured.WEIXIN_ACCOUNT_ID)}` : "尚未绑定 iLink bot。"}</small></div></div>
+            <div className={s.verifyRow}><ShieldCheck size={16} /><div><b>接收服务状态</b><small>{statusQuery.data?.gateway_running ? "当前接收服务可重启。" : "接收服务还没启动，保存后会自动尝试启动。"}</small></div></div>
+            <div className={s.verifyRow}><KeyRound size={16} /><div><b>微信绑定</b><small>{configured.WEIXIN_ACCOUNT_ID?.isSet ? `已保存 ${last(configured.WEIXIN_ACCOUNT_ID)}` : "尚未完成微信扫码绑定。"}</small></div></div>
           </div></section>
           <div ref={qrAnchorRef} className={s.anchorBlock}>
-            <SectionTitle num="[ STEP 02 ]" title="微信扫码绑定 iLink bot" meta="默认 8 分钟超时，二维码过期后最多自动刷新 3 次" />
+            <SectionTitle num="[ STEP 02 ]" title="用微信扫码确认" meta="默认 8 分钟有效，过期后会自动刷新几次" />
             <QrPanel
               data={pollResult?.qrScanData ?? flow?.qrScanData}
               url={pollResult?.qrUrl ?? flow?.qrUrl}
@@ -885,28 +863,26 @@ function WeixinRoute() {
             />
           </div>
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RotateCw size={14} />立即检查</button></div>
-          <SectionTitle num="[ STEP 03 ]" title="凭据与高级连接配置" meta="普通用户无需手填 token，扫码成功后自动写入" />
+          <SectionTitle num="[ STEP 03 ]" title="账号信息和连接地址" meta="新手不用手填，扫码成功后会自动保存" />
           <section className={s.section}>
-            <Field label="Account ID" desc="扫码成功后自动得到，也可用于恢复已有配置。" meta="WEIXIN_ACCOUNT_ID"><input value={accountId} onChange={(e) => setAccountId(e.target.value)} placeholder={last(credential?.accountId)} /></Field>
-            <Field label="Bot Token" desc="敏感凭据，仅保存到当前 profile。" meta="WEIXIN_TOKEN"><input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={last(credential?.token)} /></Field>
-            <Field label="iLink API" desc="默认不需要修改。" meta="WEIXIN_BASE_URL"><input value={credential?.baseUrl ?? baseUrl} onChange={(e) => setBaseUrl(e.target.value)} /></Field>
-            <Field label="CDN Base" desc="媒体加密上传与下载使用。" meta="WEIXIN_CDN_BASE_URL"><input value={cdnBaseUrl} onChange={(e) => setCdnBaseUrl(e.target.value)} /></Field>
+            <Field label="微信接入账号" desc="扫码成功后自动带出；恢复旧配置时才需要手动填。" meta="WEIXIN_ACCOUNT_ID"><input value={accountId} onChange={(e) => setAccountId(e.target.value)} placeholder={last(credential?.accountId)} /></Field>
+            <Field label="微信接入口令" desc="敏感信息，只保存在当前配置档案。" meta="WEIXIN_TOKEN"><input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={last(credential?.token)} /></Field>
+            <Field label="消息接口地址" desc="默认值即可，不知道就不要改。" meta="WEIXIN_BASE_URL"><input value={credential?.baseUrl ?? baseUrl} onChange={(e) => setBaseUrl(e.target.value)} /></Field>
+            <Field label="媒体接口地址" desc="用于图片、文件等媒体内容，默认即可。" meta="WEIXIN_CDN_BASE_URL"><input value={cdnBaseUrl} onChange={(e) => setCdnBaseUrl(e.target.value)} /></Field>
           </section>
-          <SectionTitle num="[ STEP 04 ]" title="访问策略" meta="默认私聊配对审批，群聊保持关闭" />
+          <SectionTitle num="[ STEP 04 ]" title="设置谁可以使用" meta="默认需要先确认，避免陌生用户直接使用" />
           <section className={s.section}>
             <div className={s.policyGrid}>
-              <PolicyCard active={dmPolicy === "pairing"} title="私聊配对审批" desc="未知用户私聊时生成 pairing code。" onClick={() => setDmPolicy("pairing")} />
-              <PolicyCard active={dmPolicy === "allowlist"} title="指定用户 ID" desc="只允许 WEIXIN_ALLOWED_USERS 中的用户。" onClick={() => setDmPolicy("allowlist")} />
-              <PolicyCard active={dmPolicy === "open"} warning title="允许所有私聊" desc="试用最快，但访问面最大。" onClick={() => setDmPolicy("open")} />
+              <PolicyCard active={dmPolicy === "pairing"} title="需要确认再放行" desc="陌生用户私聊时先生成确认码。" onClick={() => setDmPolicy("pairing")} />
+              <PolicyCard active={dmPolicy === "allowlist"} title="只允许指定用户" desc="只有列表里的微信用户 ID 可用。" onClick={() => setDmPolicy("allowlist")} />
+              <PolicyCard active={dmPolicy === "open"} warning title="所有私聊都可用" desc="方便试用，但不建议长期开放。" onClick={() => setDmPolicy("open")} />
             </div>
-            {dmPolicy === "allowlist" && <Field label="允许用户" desc="多个用户 ID 用英文逗号分隔。" meta="WEIXIN_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} /></Field>}
-            <Field label="群聊策略" desc="iLink bot 身份通常收不到普通微信群事件。" meta="WEIXIN_GROUP_POLICY"><select value={groupPolicy} onChange={(e) => setGroupPolicy(e.target.value as WeixinGroupPolicy)}><option value="disabled">禁用群聊（推荐）</option><option value="open">允许所有群聊（仅 iLink 实际投递时有效）</option><option value="allowlist">仅允许指定群聊 ID</option></select></Field>
-            {groupPolicy === "allowlist" && <Field label="允许群聊" desc="填写群聊 ID，不是成员用户 ID。" meta="WEIXIN_GROUP_ALLOWED_USERS"><input value={groupAllowed} onChange={(e) => setGroupAllowed(e.target.value)} /></Field>}
-            <Field label="Home Channel" desc="用于 cron 和通知，可先用扫码返回 user_id。" meta="WEIXIN_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder="wxid_xxx / filehelper / user_id" /></Field>
+            {dmPolicy === "allowlist" && <Field label="允许用户" desc="多个用户 ID 用英文逗号分隔；不确定可先跳过。" meta="WEIXIN_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} /></Field>}
+            <Field label="默认通知会话" desc="用于定时任务和通知；可以先留空。" meta="WEIXIN_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder="wxid_xxx / filehelper / user_id" /></Field>
           </section>
-          <SectionTitle num="[ REVIEW ]" title="将写入的配置摘要" meta="token 永远只显示脱敏摘要" />
+          <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="口令会自动打码" />
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual)}><Save size={14} />保存并重启 Gateway</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual)}><Save size={14} />保存并启动接收服务</button></div>
           <ApplyResult result={result} />
           {(begin.error || poll.error || apply.error || stateQuery.error) && <div className={s.errorBox}><XCircle size={16} />{textFromError(begin.error || poll.error || apply.error || stateQuery.error)}</div>}
         </main>

@@ -67,6 +67,10 @@ pub struct DashboardHandle {
     pub ownership_state: Option<String>,
     /// Windows Job Object keeping the owned runtime process tree tied to this handle.
     pub job_handle: Option<DashboardJobHandle>,
+    /// PID for an already-running desktop-owned dashboard that this process
+    /// adopted from a stale ownership marker. `child` is unavailable in that
+    /// case, but the PID still lets normal desktop shutdown clean the orphan.
+    pub attached_pid: Option<u32>,
     /// The child process, if we own it.
     pub child: Option<Child>,
 }
@@ -84,7 +88,11 @@ impl DashboardHandle {
             self.child = None;
             return;
         }
-        let fallback_pid = self.child.as_ref().map(|child| child.id());
+        let fallback_pid = self
+            .child
+            .as_ref()
+            .map(|child| child.id())
+            .or(self.attached_pid);
         crate::process::dashboard::terminate_owned_dashboard_tree(
             &self.api_base_url,
             self.child.as_mut(),
@@ -93,6 +101,7 @@ impl DashboardHandle {
         );
         self.child = None;
         self.job_handle = None;
+        self.attached_pid = None;
         self.owns_process = false;
         crate::process::dashboard::remove_ownership_marker_path(
             self.ownership_marker_path.as_deref(),

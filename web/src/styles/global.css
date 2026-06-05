@@ -57,6 +57,11 @@ select {
   font-family: inherit;
 }
 
+:where(#root em) {
+  font-family: var(--h-font-serif);
+  font-style: normal;
+}
+
 #root :where(input, textarea, select, [contenteditable="true"], [contenteditable="true"] *) {
   -webkit-user-select: text;
   user-select: text;

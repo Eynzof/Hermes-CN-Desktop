@@ -10,8 +10,8 @@
 .heroKicker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--h-text-3); font-family: var(--h-font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .heroKicker span { color: var(--h-accent); border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent); padding: 2px 6px; border-radius: var(--h-r-sm); background: color-mix(in srgb, var(--h-accent) 8%, transparent); }
 .heroKicker em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--h-text-2); }
-.headBand h1 { margin: 14px 0 10px; color: var(--h-text); font-size: clamp(34px, 5vw, 58px); line-height: .96; letter-spacing: -.055em; }
-.headBand h1 em { color: var(--h-accent); font-style: normal; }
+.headBand h1 { margin: 14px 0 10px; color: var(--h-text); font-family: var(--h-font-display-cn); font-style: normal; font-weight: 400; font-size: clamp(34px, 5vw, 58px); line-height: 1.05; letter-spacing: -.015em; }
+.headBand h1 em { color: var(--h-accent); font-style: normal; font-weight: 650; }
 .sub { max-width: 720px; margin: 0; color: var(--h-text-2); line-height: 1.8; font-size: 13px; }
 .heroActions { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 12px; flex-shrink: 0; }
 .heroState { color: var(--h-text-3); font-family: var(--h-font-mono); font-size: 11px; }

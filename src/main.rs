@@ -71,6 +71,7 @@ fn external_dev_handle(api_base_url: String) -> DashboardHandle {
         ownership_marker_path: None,
         ownership_state: Some("external-dev".to_string()),
         job_handle: None,
+        attached_pid: None,
         child: None,
     }
 }

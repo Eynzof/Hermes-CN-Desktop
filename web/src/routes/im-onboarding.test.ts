@@ -28,7 +28,7 @@ describe("im onboarding routing helpers", () => {
 
   it("keeps context rail entries compact and secret-safe", () => {
     expect(railPanels("feishu").map((panel) => panel.label)).toEqual(["检查", "推荐", "诊断"]);
-    expect(railPanels("weixin").map((panel) => panel.label)).toEqual(["iLink", "群聊", "诊断"]);
+    expect(railPanels("weixin").map((panel) => panel.label)).toEqual(["iLink", "诊断"]);
 
     const visibleCopy = JSON.stringify([railPanels("feishu"), railPanels("weixin")]).toLowerCase();
     expect(visibleCopy).not.toContain("app_secret=");
