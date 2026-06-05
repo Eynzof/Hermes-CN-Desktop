@@ -5,11 +5,11 @@ import { useModelInfo } from "@/hooks/use-config";
 import { useSessions } from "@/hooks/use-sessions";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
+import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-url";
+import { openExternalUrl } from "@/lib/external-links";
 import { isSessionRunning } from "@/lib/session-activity";
 import { formatTokens } from "@/lib/format";
 import s from "./app-status-bar.module.css";
-
-const DEFAULT_DESKTOP_DASHBOARD_PORT = "9120";
 
 function formatModelShort(model: string | null | undefined): string {
   if (!model) return "—";
@@ -23,27 +23,6 @@ function formatContext(ctx: number | null | undefined): string {
   return `${ctx}`;
 }
 
-function portFromUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url).port || null;
-  } catch {
-    return null;
-  }
-}
-
-function dashboardPortFallback(): string {
-  if (typeof window === "undefined") return DEFAULT_DESKTOP_DASHBOARD_PORT;
-  return portFromUrl(window.__HERMES_RUNTIME__?.dashboardApiBaseUrl)
-    ?? portFromUrl(window.__HERMES_RUNTIME__?.apiBaseUrl)
-    ?? portFromUrl(import.meta.env.VITE_HERMES_DASHBOARD_ORIGIN)
-    ?? DEFAULT_DESKTOP_DASHBOARD_PORT;
-}
-
-function portFromHealthUrl(url: string | null | undefined): string {
-  return portFromUrl(url) ?? dashboardPortFallback();
-}
-
 export function AppStatusBar() {
   const { data: status, isError: statusError } = useStatus();
   const { data: modelInfo } = useModelInfo();
@@ -51,7 +30,12 @@ export function AppStatusBar() {
   const { data: analytics } = useAnalytics(1);
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
 
-  const port = portFromHealthUrl(status?.gateway_health_url);
+  const dashboardUrl = dashboardUrlFromInputs({
+    healthUrl: status?.gateway_health_url,
+    runtimeConfig: typeof window === "undefined" ? null : window.__HERMES_RUNTIME__,
+    envOrigin: import.meta.env.VITE_HERMES_DASHBOARD_ORIGIN,
+  });
+  const port = dashboardPortFromUrl(dashboardUrl);
   const gatewayOnline = !!status && !statusError;
 
   const modelLabel = formatModelShort(modelInfo?.model);
@@ -80,11 +64,17 @@ export function AppStatusBar() {
 
   return (
     <footer className={s.statusbar} role="status" aria-label="运行状态">
-      <span className={s.stat}>
+      <button
+        type="button"
+        className={`${s.stat} ${s.gatewayButton}`}
+        onClick={() => void openExternalUrl(dashboardUrl)}
+        title={`打开 ${dashboardUrl}`}
+        aria-label={`打开 Dashboard ${dashboardUrl}`}
+      >
         <span className={s.dot} data-state={gatewayOnline ? "running" : "offline"} />
         <span className={s.lbl}>网关</span>
         <span className={s.val}>{port}</span>
-      </span>
+      </button>
       <span className={s.sep} />
       <span className={s.stat}>
         <span className={s.lbl}>模型</span>
