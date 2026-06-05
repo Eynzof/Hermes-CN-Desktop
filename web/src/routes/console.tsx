@@ -21,9 +21,9 @@ interface CommandAction {
 
 const QUICK_COMMANDS: CommandAction[] = [
   {
-    label: "打开 Hermes TUI",
-    command: "hermes --tui",
-    desc: "进入 Hermes 交互式界面，直接按提示完成对话、配置和接入操作。",
+    label: "打开 Hermes",
+    command: "hermes",
+    desc: "进入 Hermes 命令入口，直接按提示完成对话、配置和接入操作。",
   },
   {
     label: "查看接入状态",
@@ -132,7 +132,7 @@ export function ConsoleRoute() {
 
     const writeBanner = () => {
       term.writeln("\x1b[38;5;214mHermes\x1b[0m \x1b[38;5;81mConsole\x1b[0m");
-      term.writeln("这里是真实终端。你可以直接输入 Hermes 命令，也可以点下方常用操作自动填入。推荐先运行 hermes --tui。");
+      term.writeln("这里是真实终端。你可以直接输入 Hermes 命令，也可以点下方常用操作自动填入。推荐先运行 hermes。");
       if (autoPurpose === "gatewaySetup") {
         term.writeln("正在为你打开消息平台接入向导\r\n");
       } else if (autoPurpose === "gatewayStatus") {
@@ -338,7 +338,7 @@ export function ConsoleRoute() {
           <div className={s.panel}>
             <div className={s.panelTitle}>接入提示</div>
             <p className={s.helpText}>
-              推荐先点击“打开 Hermes TUI”。进入交互式界面后，你可以按提示完成对话、配置和飞书、微信等消息入口接入。
+              推荐先点击“打开 Hermes”。进入 Hermes 命令入口后，你可以按提示完成对话、配置和飞书、微信等消息入口接入。
             </p>
             <p className={s.helpText}>
               这个终端默认使用当前档案的 <code>HERMES_HOME</code>，不会切到其它档案，也不会读浏览器里的临时状态。
