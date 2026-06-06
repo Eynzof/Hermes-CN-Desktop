@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  FEISHU_GROUP_SCOPE,
   FEISHU_RECOMMENDED_SCOPES,
   FEISHU_REQUIRED_SCOPES,
   railPanels,
@@ -40,10 +41,13 @@ describe("im onboarding routing helpers", () => {
       "im:message.p2p_msg:readonly",
       "im:message:send_as_bot",
     ]);
+    expect(FEISHU_REQUIRED_SCOPES).not.toContain(FEISHU_GROUP_SCOPE);
+    expect(FEISHU_GROUP_SCOPE).toBe("im:message.group_at_msg:readonly");
     expect(FEISHU_RECOMMENDED_SCOPES).toContain("im:resource");
 
     const feishuRailCopy = JSON.stringify(railPanels("feishu"));
     expect(feishuRailCopy).toContain("im.message.receive_v1");
+    expect(feishuRailCopy).toContain(FEISHU_GROUP_SCOPE);
     expect(feishuRailCopy).toContain("创建版本并发布");
   });
 });
