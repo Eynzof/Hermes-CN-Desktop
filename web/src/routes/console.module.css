@@ -296,9 +296,9 @@
 
 .infoBox {
   padding: 12px 14px;
-  color: #d6f4d8;
-  background: rgba(127, 192, 131, 0.1);
-  border-color: rgba(127, 192, 131, 0.24);
+  color: var(--h-text);
+  background: var(--h-ok-soft);
+  border-color: color-mix(in srgb, var(--h-ok) 38%, var(--h-line));
   font-size: 12px;
 }
 
