@@ -9,6 +9,7 @@ import {
   getProviderCredentialPreview,
   getProviderEntry,
   maskSecretPreview,
+  providerApiKeyLabels,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
   TOP5_PROVIDER_IDS,
@@ -358,6 +359,51 @@ describe("provider catalog config updates", () => {
     )).toBe(true);
   });
 
+  it("uses XIAOMI_API_KEY as the canonical Xiaomi key while keeping MIMO_API_KEY as a legacy alias", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "xiaomi");
+    expect(preset).toBeTruthy();
+
+    expect(preset!.apiKeyLabel).toBe("XIAOMI_API_KEY");
+    expect(providerApiKeyLabels(preset!)).toEqual(["XIAOMI_API_KEY", "MIMO_API_KEY"]);
+  });
+
+  it("treats legacy Xiaomi MIMO_API_KEY as saved credentials", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "xiaomi");
+    expect(preset).toBeTruthy();
+
+    const envVars = {
+      MIMO_API_KEY: {
+        is_set: true,
+        redacted_value: "mimo...tail",
+      },
+    };
+
+    expect(providerHasSavedCredentials({}, "xiaomi", envVars, preset!)).toBe(true);
+    expect(getProviderCredentialPreview({}, envVars, preset!)).toBe("mimo...tail");
+  });
+
+  it("prefers canonical Xiaomi XIAOMI_API_KEY over the legacy MIMO_API_KEY alias", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "xiaomi");
+    expect(preset).toBeTruthy();
+
+    const preview = getProviderCredentialPreview(
+      {},
+      {
+        XIAOMI_API_KEY: {
+          is_set: true,
+          redacted_value: "xiao...tail",
+        },
+        MIMO_API_KEY: {
+          is_set: true,
+          redacted_value: "mimo...tail",
+        },
+      },
+      preset!,
+    );
+
+    expect(preview).toBe("xiao...tail");
+  });
+
   it("loads remote catalog through fetchExternalJSON timeout path", async () => {
     mockedFetchExternalJSON.mockResolvedValue({
       version: "remote-v1",
@@ -371,6 +417,7 @@ describe("provider catalog config updates", () => {
           apiMode: "chat_completions",
           transport: "openai_chat",
           apiKeyLabel: "REMOTE_API_KEY",
+          apiKeyAliases: ["REMOTE_LEGACY_KEY", "REMOTE_LEGACY_KEY", ""],
           defaultModel: "remote-model",
           models: [{ id: "remote-model" }],
         },
@@ -388,6 +435,7 @@ describe("provider catalog config updates", () => {
       providers: [
         {
           id: "remote-provider",
+          apiKeyAliases: ["REMOTE_LEGACY_KEY"],
           defaultModel: "remote-model",
         },
       ],
