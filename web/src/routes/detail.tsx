@@ -385,7 +385,6 @@ export function DetailRoute() {
       <div className={s.composerArea}>
         <GooseComposer
           onSend={onSend}
-          placeholder="发送消息，Enter 发送，Shift+Enter 换行…"
           loadingPlaceholder={composerLoadingPlaceholder}
           showMeta={false}
           loading={runtimeIsBusy}

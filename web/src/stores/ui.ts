@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
 
 export const activeSessionIdAtom = atom<string | null>(null);
@@ -29,6 +30,24 @@ export const showReasoningAtom = atom(
   (_get, set, next: boolean) => {
     set(showReasoningBaseAtom, next);
     writeUiValue("hermes.show-reasoning", next);
+  },
+);
+
+const COMPOSER_SUBMIT_SHORTCUT_KEY = "hermes.composer-submit-shortcut";
+
+function normalizeComposerSubmitShortcut(value: unknown): ComposerSubmitShortcut {
+  return value === "ctrl-enter" ? "ctrl-enter" : "enter";
+}
+
+const composerSubmitShortcutBaseAtom = atom<ComposerSubmitShortcut>(
+  normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "enter")),
+);
+export const composerSubmitShortcutAtom = atom(
+  (get) => get(composerSubmitShortcutBaseAtom),
+  (_get, set, next: ComposerSubmitShortcut) => {
+    const value = normalizeComposerSubmitShortcut(next);
+    set(composerSubmitShortcutBaseAtom, value);
+    writeUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, value);
   },
 );
 

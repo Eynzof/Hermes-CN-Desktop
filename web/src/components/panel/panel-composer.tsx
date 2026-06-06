@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
 import { useCreateAndSendSession } from "@/hooks/use-create-and-send-session";
@@ -8,12 +8,14 @@ import { useModelOptions } from "@/hooks/use-model-options";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
+import { composerSubmitShortcutHint } from "@/lib/composer-submit-shortcut";
 import {
   normalizeWorkspacePath,
   rememberWorkspaceProject,
   writeWorkspacePath,
 } from "@/lib/workspaces";
 import { composerPrefillAtom } from "@/stores/panel";
+import { composerSubmitShortcutAtom } from "@/stores/ui";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import type {
   ComposerModelSelection,
@@ -39,8 +41,10 @@ export function PanelComposer() {
   );
   const [prefilledText, setPrefilledText] = useState("");
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
+  const composerSubmitShortcut = useAtomValue(composerSubmitShortcutAtom);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
+  const submitShortcutHint = composerSubmitShortcutHint(composerSubmitShortcut);
 
   useEffect(() => {
     if (!initialWorkspacePath) return;
@@ -134,7 +138,7 @@ export function PanelComposer() {
         onSend={onSend}
         initial={prefilledText}
         initialWorkspacePath={initialWorkspacePath}
-        placeholder="描述你想完成的任务，Enter 发送，Shift+Enter 换行…"
+        placeholder={`描述你想完成的任务，${submitShortcutHint}…`}
         variant="big"
         headerLabel="新任务"
         hints={[

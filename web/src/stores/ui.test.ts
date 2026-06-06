@@ -71,6 +71,33 @@ describe("showReasoningAtom (persisted)", () => {
   });
 });
 
+describe("composerSubmitShortcutAtom (persisted)", () => {
+  it("defaults to Enter submit when nothing is stored", async () => {
+    const { composerSubmitShortcutAtom } = await loadUi();
+    const store = createStore();
+    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+  });
+
+  it("restores Ctrl+Enter submit from the UI store", async () => {
+    const { composerSubmitShortcutAtom } = await loadUi({
+      "hermes.composer-submit-shortcut": "ctrl-enter",
+    });
+    const store = createStore();
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
+  });
+
+  it("persists shortcut changes and normalizes unsupported values", async () => {
+    const { composerSubmitShortcutAtom, uiStore } = await loadUi();
+    const store = createStore();
+    store.set(composerSubmitShortcutAtom, "ctrl-enter");
+    expect(uiStore.readUiValue("hermes.composer-submit-shortcut", "")).toBe("ctrl-enter");
+
+    store.set(composerSubmitShortcutAtom, "shift-enter" as never);
+    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(uiStore.readUiValue("hermes.composer-submit-shortcut", "")).toBe("enter");
+  });
+});
+
 describe("profileSwitchingAtom", () => {
   it("defaults to { active: false }", async () => {
     const { profileSwitchingAtom } = await loadUi();
