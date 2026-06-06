@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod environment;
 pub mod error;
 pub mod prevent_sleep;
 pub mod process;
