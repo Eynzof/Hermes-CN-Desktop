@@ -247,6 +247,35 @@
   background: var(--h-bg-chip);
 }
 
+.cronFeedback {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: var(--h-r-md);
+  border: 1px solid var(--h-line);
+  color: var(--h-text-2);
+  background: var(--h-bg-app);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cronFeedback[data-tone="ok"] {
+  color: var(--h-ok);
+  border-color: color-mix(in srgb, var(--h-ok) 36%, transparent);
+  background: var(--h-ok-soft);
+}
+
+.cronFeedback[data-tone="info"] {
+  color: var(--h-accent);
+  border-color: color-mix(in srgb, var(--h-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--h-accent) 12%, transparent);
+}
+
+.cronFeedback[data-tone="error"] {
+  color: var(--h-danger, #d45c5c);
+  border-color: color-mix(in srgb, var(--h-danger, #d45c5c) 36%, transparent);
+  background: color-mix(in srgb, var(--h-danger, #d45c5c) 12%, transparent);
+}
+
 .envStatusBadge {
   min-width: 68px;
   gap: 6px;

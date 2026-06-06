@@ -368,16 +368,41 @@ export type AnalyticsResponse = z.infer<typeof AnalyticsResponse>;
 
 // ── Cron (/api/cron/jobs) ─────────────────────────────────────────────
 
+export const CronSchedule = z.union([
+  z.string(),
+  z.object({
+    kind: z.string().optional(),
+    expr: z.string().optional(),
+    display: z.string().optional(),
+    value: z.string().optional(),
+  }).passthrough(),
+]).nullable().optional();
+export type CronSchedule = z.infer<typeof CronSchedule>;
+
 export const CronJob = z.object({
   id: z.string(),
-  name: z.string().optional(),
-  schedule: z.string(),
-  prompt: z.string().optional(),
-  deliver: z.string().optional(),
-  enabled: z.boolean(),
+  name: z.string().nullable().optional(),
+  schedule: CronSchedule,
+  schedule_display: z.string().nullable().optional(),
+  prompt: z.string().nullable().optional(),
+  script: z.string().nullable().optional(),
+  deliver: z.string().nullable().optional(),
+  enabled: z.boolean().default(true),
+  state: z.string().nullable().optional(),
   last_run: z.number().nullable().optional(),
   next_run: z.number().nullable().optional(),
-});
+  last_run_at: z.string().nullable().optional(),
+  next_run_at: z.string().nullable().optional(),
+  last_status: z.string().nullable().optional(),
+  last_error: z.string().nullable().optional(),
+  paused_at: z.string().nullable().optional(),
+  paused_reason: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  profile: z.string().nullable().optional(),
+  profile_name: z.string().nullable().optional(),
+  hermes_home: z.string().nullable().optional(),
+  is_default_profile: z.boolean().optional(),
+}).passthrough();
 export type CronJob = z.infer<typeof CronJob>;
 
 export const CronJobsResponse = z.array(CronJob);
