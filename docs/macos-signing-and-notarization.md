@@ -117,7 +117,7 @@ target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 如果需要手动公证和 staple，可以对最终 DMG 执行：
 
 ```bash
-DMG="target/aarch64-apple-darwin/release/bundle/dmg/Hermes Agent CN Desktop_0.2.1_aarch64.dmg"
+DMG="target/aarch64-apple-darwin/release/bundle/dmg/Hermes Agent CN Desktop_0.2.2_aarch64.dmg"
 
 xcrun notarytool submit "$DMG" \
   --key "$APPLE_API_KEY_PATH" \

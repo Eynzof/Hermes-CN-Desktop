@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.2.1`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.2.2`).
 #
 # Desktop release build runs in parallel for Windows and macOS. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -26,11 +26,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.2.1)"
+        description: "Tag name to associate the build with (e.g. v0.2.2)"
         required: true
       bundled_runtime_tag:
         description: "hermes-agent-cn runtime release tag to embed in desktop installers, or latest"
-        default: "latest"
+        default: "runtime-v0.16.0-cn.1"
         required: false
 
 permissions:
@@ -81,7 +81,7 @@ jobs:
         id: runtime_manifest
         shell: bash
         env:
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'latest' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.1' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -130,7 +130,7 @@ jobs:
         run: |
           args=(
             scripts/stage-bundled-runtime.mjs
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'latest' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.1' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )

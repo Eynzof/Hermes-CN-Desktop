@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
   "productName": "Hermes Agent CN Desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "identifier": "cn.org.hermesagent.desktop",
   "build": {
     "beforeDevCommand": "pnpm --filter @hermes/web dev",
