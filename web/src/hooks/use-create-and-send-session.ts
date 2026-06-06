@@ -8,6 +8,7 @@ import type {
 } from "@/components/chat/composer-types";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { buildComposerDisplayText, prepareComposerPrompt } from "@/lib/composer-prompt";
+import { resolveComposerSkillCommand } from "@/lib/composer-skills";
 import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
 import { uploadAttachmentFile } from "@/lib/transport";
@@ -29,6 +30,7 @@ export function useCreateAndSendSession() {
     sendPrompt,
     setSessionTitle,
     setSessionModel,
+    dispatchCommand,
     attachImage,
     detectDroppedPath,
   } = useGateway();
@@ -81,12 +83,27 @@ export function useCreateAndSendSession() {
             payload.modelSelection.provider,
           );
         }
+        let transportText: string | undefined;
+        const skillCommand = resolveComposerSkillCommand(
+          payload.text,
+          payload.skillCommandNames,
+        );
+        if (skillCommand) {
+          const dispatched = await dispatchCommand(
+            sessionId,
+            skillCommand.name,
+            skillCommand.arg,
+          );
+          if (dispatched.type === "skill" && dispatched.message?.trim()) {
+            transportText = dispatched.message;
+          }
+        }
         const prepared = await prepareComposerPrompt(sessionId, payload, {
           attachImage,
           detectDroppedPath,
           uploadFile: uploadAttachmentFile,
           onAttachmentUpdate: controls.updateAttachment,
-        });
+        }, { transportText });
         await sendPrompt(sessionId, prepared.promptText, {
           displayText: prepared.displayText,
           displayImages: prepared.displayImages,
@@ -117,6 +134,7 @@ export function useCreateAndSendSession() {
     beginPrompt,
     createSession,
     detectDroppedPath,
+    dispatchCommand,
     failPrompt,
     navigate,
     sendPrompt,

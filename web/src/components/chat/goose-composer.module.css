@@ -294,6 +294,137 @@
   line-height: 1.3;
 }
 
+.skillPanel {
+  margin: 8px 2px 0;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-pane);
+  box-shadow: var(--h-shadow);
+  color: var(--h-text);
+  overflow: hidden;
+}
+
+.box[data-variant="big"] .skillPanel {
+  margin: 0 18px 12px;
+}
+
+.skillPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--h-line-soft);
+  padding: 8px 10px;
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+.skillPanelHead span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--h-text-2);
+  font-weight: 600;
+}
+
+.skillPanelHead svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+  color: var(--h-accent);
+}
+
+.skillPanelHead small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--h-text-3);
+}
+
+.skillList {
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.skillOption {
+  display: grid;
+  grid-template-columns: minmax(128px, 0.35fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.skillOption:hover,
+.skillOption[data-active="true"] {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.skillCommand {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skillMain {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.skillName,
+.skillDesc,
+.skillMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skillName {
+  color: var(--h-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.skillDesc,
+.skillMeta {
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+.skillMeta {
+  justify-self: end;
+}
+
+.skillPanelState {
+  padding: 12px;
+  color: var(--h-text-3);
+  font-size: 12px;
+}
+
+.skillPanelState[data-tone="error"] {
+  color: var(--h-err);
+}
+
 .box[data-variant="big"] .toolbar {
   padding: 10px 14px 10px;
   border-top: 1px solid var(--h-line-soft);
@@ -1240,6 +1371,15 @@
 
   .leftTools {
     flex-wrap: wrap;
+  }
+
+  .skillOption {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .skillMeta {
+    justify-self: start;
   }
 
   .modelGrid {

@@ -5,6 +5,7 @@ import { useGateway } from "@/hooks/use-gateway";
 import { useCreateAndSendSession } from "@/hooks/use-create-and-send-session";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
+import { useSkills } from "@/hooks/use-skills";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
@@ -34,6 +35,7 @@ export function PanelComposer() {
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
+  const skillsQuery = useSkills();
   const saveConfig = useSaveConfig();
   const [sending, setSending] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
@@ -45,6 +47,10 @@ export function PanelComposer() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
   const submitShortcutHint = composerSubmitShortcutHint(composerSubmitShortcut);
+  const enabledSkills = useMemo(
+    () => (skillsQuery.data ?? []).filter((skill) => skill.enabled),
+    [skillsQuery.data],
+  );
 
   useEffect(() => {
     if (!initialWorkspacePath) return;
@@ -156,6 +162,14 @@ export function PanelComposer() {
           onSelect: onModelSelect,
           onSelectAndSetDefault,
           onConfigureProvider,
+          disabled: sending,
+        }}
+        skillPicker={{
+          skills: enabledSkills,
+          loading: skillsQuery.isLoading || skillsQuery.isFetching,
+          error: skillsQuery.isError
+            ? (skillsQuery.error instanceof Error ? skillsQuery.error.message : "Skill 加载失败")
+            : undefined,
           disabled: sending,
         }}
         contextUsage={
