@@ -116,4 +116,14 @@ describe("isTauriDevMode", () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.message).toBe("Desktop runtime not ready");
   });
+
+  it("exposes profile backup export/import through Tauri IPC", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.exportProfileBackup?.();
+    await window.hermesDesktop?.importProfileBackup?.();
+
+    expect(mockInvoke).toHaveBeenCalledWith("backup_export_profile");
+    expect(mockInvoke).toHaveBeenCalledWith("backup_import_profile");
+  });
 });

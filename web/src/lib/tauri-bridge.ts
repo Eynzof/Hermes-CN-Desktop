@@ -8,6 +8,8 @@
 import type {
   ApiRequestInput,
   ApiRequestResult,
+  BackupExportResult,
+  BackupImportResult,
   ConfigMigrationImportInput,
   ConfigMigrationImportResult,
   ConfigMigrationScanInput,
@@ -212,6 +214,16 @@ const tauriBridge = {
 
   async rollbackRuntime(): Promise<RuntimeInstallUpdateResult> {
     return invokeCommand("runtime_rollback");
+  },
+
+  async exportProfileBackup(): Promise<BackupExportResult> {
+    const inv = await ensureInvoke();
+    return inv("backup_export_profile");
+  },
+
+  async importProfileBackup(): Promise<BackupImportResult> {
+    const inv = await ensureInvoke();
+    return inv("backup_import_profile");
   },
 
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {

@@ -16,6 +16,11 @@ describe("TOP_TABS", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "配置迁移" && item.path === "/config-migration")).toBe(true);
   });
 
+  it("keeps backup restore under the 02 config tab and sidebar section", () => {
+    expect(tabFor("/backup")).toBe("skills");
+    expect(CONFIG_ITEMS.some((item) => item.label === "备份恢复" && item.path === "/backup")).toBe(true);
+  });
+
   it("keeps soul under the 02 config tab and sidebar section", () => {
     expect(tabFor("/soul")).toBe("skills");
     expect(tabFor("/soul/edit")).toBe("skills");

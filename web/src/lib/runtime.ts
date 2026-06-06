@@ -1,4 +1,6 @@
 import type {
+  BackupExportResult,
+  BackupImportResult,
   ConfigMigrationImportInput,
   ConfigMigrationImportResult,
   ConfigMigrationScanInput,
@@ -207,6 +209,8 @@ declare global {
       checkRuntimeUpdate?(): Promise<RuntimeUpdateCheckResult>;
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
       rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
+      exportProfileBackup?(): Promise<BackupExportResult>;
+      importProfileBackup?(): Promise<BackupImportResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
       scanConfigMigration?(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult>;
       importConfigMigration?(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult>;
@@ -350,5 +354,17 @@ export const runtime = {
     if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
     if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
     if (result.targetProfileName) window.__HERMES_RUNTIME__.currentProfile = result.targetProfileName;
+  },
+  applyBackupImportResult(result: BackupImportResult): void {
+    if ((!result.ok && !result.recoveredPreviousProfile) || !window.__HERMES_RUNTIME__) return;
+    if (result.apiBaseUrl) {
+      if (window.__HERMES_RUNTIME__.apiBaseUrl) {
+        window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;
+      }
+      window.__HERMES_RUNTIME__.dashboardApiBaseUrl = result.apiBaseUrl;
+    }
+    if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
+    if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
+    if (result.ok && result.targetProfileName) window.__HERMES_RUNTIME__.currentProfile = result.targetProfileName;
   },
 };
