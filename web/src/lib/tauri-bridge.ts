@@ -33,6 +33,8 @@ import type {
 } from "@hermes/protocol";
 import type {
   SkillMarkdownResult,
+  ExportDebugBundleInput,
+  ExportDebugBundleResult,
   TerminalEventPayload,
   TerminalStartInput,
   TerminalStartResult,
@@ -181,6 +183,11 @@ const tauriBridge = {
 
   async openExternalUrl(input: { url: string }): Promise<{ ok: boolean; message?: string | null }> {
     return invokeCommand("open_external_url", { input });
+  },
+
+  async exportDebugBundle(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult> {
+    const inv = await ensureInvoke();
+    return inv("export_debug_bundle", { input: input ?? null });
   },
 
   getRuntimeConfig() {

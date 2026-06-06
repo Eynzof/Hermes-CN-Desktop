@@ -662,6 +662,22 @@
   margin: 12px 0 18px;
 }
 
+.debugHeroActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.debugHeroActions span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--h-text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .aboutDebugGrid {
   column-count: 2;
   column-gap: 14px;
@@ -1903,6 +1919,11 @@
   .aboutHero .statusBadge {
     grid-column: 1 / -1;
     justify-self: flex-start;
+  }
+
+  .debugHeroActions {
+    grid-column: 1 / -1;
+    align-items: flex-start;
   }
 
   .contactLayout {

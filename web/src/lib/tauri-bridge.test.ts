@@ -70,6 +70,22 @@ describe("isTauriDevMode", () => {
     });
   });
 
+  it("exposes debug bundle export through Tauri IPC", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.exportDebugBundle?.({
+      frontendDebug: [{ type: "console", summary: "hello" }],
+      rendererDiagnostics: { route: "/debug" },
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("export_debug_bundle", {
+      input: {
+        frontendDebug: [{ type: "console", summary: "hello" }],
+        rendererDiagnostics: { route: "/debug" },
+      },
+    });
+  });
+
   it("exposes external URL opening through Tauri IPC", async () => {
     await installTauriBridge();
 
