@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAtomValue, useSetAtom } from "jotai";
 import {
   ConfigSetResult,
+  CommandDispatchResult,
   ImageAttachResult,
   InputDetectDropResult,
   ModelOptionsResult,
@@ -11,6 +12,7 @@ import {
   SessionCreateResult,
   SessionResumeResult,
   SessionTitleResult,
+  SlashCompletionResult,
   SessionUsageResult,
   type GatewayEvent,
 } from "@hermes/protocol";
@@ -319,6 +321,38 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  const completeSlash = useCallback(
+    async (text: string): Promise<SlashCompletionResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        SlashCompletionResult,
+        await getGatewayClient().request("complete.slash", { text }),
+        "complete.slash",
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  const dispatchCommand = useCallback(
+    async (
+      sessionId: string,
+      name: string,
+      arg = "",
+    ): Promise<CommandDispatchResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        CommandDispatchResult,
+        await getGatewayClient().request("command.dispatch", {
+          session_id: sessionId,
+          name,
+          arg,
+        }),
+        "command.dispatch",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const probeProvider = useCallback(
     async (params: {
       provider: string;
@@ -483,6 +517,8 @@ export function useGateway() {
     sendPrompt,
     getSessionUsage,
     getModelOptions,
+    completeSlash,
+    dispatchCommand,
     probeProvider,
     setSessionModel,
     setRuntimeModel,

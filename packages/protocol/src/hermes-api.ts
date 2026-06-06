@@ -645,6 +645,28 @@ export const PromptSubmitParams = z.object({
 });
 export type PromptSubmitParams = z.infer<typeof PromptSubmitParams>;
 
+export const SlashCompletionItem = z.object({
+  text: z.string(),
+  display: z.string().optional(),
+  meta: z.string().optional(),
+}).passthrough();
+export type SlashCompletionItem = z.infer<typeof SlashCompletionItem>;
+
+export const SlashCompletionResult = z.object({
+  items: z.array(SlashCompletionItem).default([]),
+  replace_from: z.number().optional(),
+}).passthrough();
+export type SlashCompletionResult = z.infer<typeof SlashCompletionResult>;
+
+export const CommandDispatchResult = z.object({
+  type: z.string().optional(),
+  message: z.string().optional(),
+  name: z.string().optional(),
+  output: z.string().optional(),
+  target: z.string().optional(),
+}).passthrough();
+export type CommandDispatchResult = z.infer<typeof CommandDispatchResult>;
+
 export const SessionUsageResult = z.object({
   model: z.string().optional(),
   input: z.number().optional(),
