@@ -196,38 +196,38 @@ pub async fn collect_environment_check(inner: &AppStateInner) -> EnvironmentChec
     let current = runtime::read_current_record();
     let mut items = Vec::new();
 
-    items.push(check_writable_item(
-        "runtime-root",
-        EnvironmentCheckCategory::Core,
-        "Runtime 根目录",
-        true,
-        &runtime_root,
-        "runtime 根目录可写",
-        "runtime 根目录不可写，桌面端无法安装或更新 managed runtime",
-        Some("检查目录权限，或设置 HERMES_DESKTOP_RUNTIME_ROOT 指向可写目录"),
-    ));
+    items.push(check_writable_item(WritableCheck {
+        id: "runtime-root",
+        category: EnvironmentCheckCategory::Core,
+        label: "Runtime 根目录",
+        required: true,
+        path: &runtime_root,
+        ok_summary: "runtime 根目录可写",
+        fail_summary: "runtime 根目录不可写，桌面端无法安装或更新 managed runtime",
+        recommendation: Some("检查目录权限，或设置 HERMES_DESKTOP_RUNTIME_ROOT 指向可写目录"),
+    }));
 
-    items.push(check_writable_item(
-        "hermes-home",
-        EnvironmentCheckCategory::Core,
-        "HERMES_HOME",
-        true,
-        Path::new(&hermes_home),
-        "HERMES_HOME 可写",
-        "HERMES_HOME 不可写，配置、会话与日志无法保存",
-        Some("检查目录权限，或重新安装桌面端"),
-    ));
+    items.push(check_writable_item(WritableCheck {
+        id: "hermes-home",
+        category: EnvironmentCheckCategory::Core,
+        label: "HERMES_HOME",
+        required: true,
+        path: Path::new(&hermes_home),
+        ok_summary: "HERMES_HOME 可写",
+        fail_summary: "HERMES_HOME 不可写，配置、会话与日志无法保存",
+        recommendation: Some("检查目录权限，或重新安装桌面端"),
+    }));
 
-    items.push(check_writable_item(
-        "gateway-runtime-dir",
-        EnvironmentCheckCategory::Core,
-        "Gateway runtime 目录",
-        true,
-        &runtime::gateway_runtime_dir(),
-        "Gateway runtime 目录可写",
-        "Gateway runtime 目录不可写，消息网关锁文件和运行态无法写入",
-        Some("检查 runtime 目录权限后重启桌面端"),
-    ));
+    items.push(check_writable_item(WritableCheck {
+        id: "gateway-runtime-dir",
+        category: EnvironmentCheckCategory::Core,
+        label: "Gateway runtime 目录",
+        required: true,
+        path: &runtime::gateway_runtime_dir(),
+        ok_summary: "Gateway runtime 目录可写",
+        fail_summary: "Gateway runtime 目录不可写，消息网关锁文件和运行态无法写入",
+        recommendation: Some("检查 runtime 目录权限后重启桌面端"),
+    }));
 
     match &current {
         Some(record) => {
@@ -360,67 +360,71 @@ pub async fn collect_environment_check(inner: &AppStateInner) -> EnvironmentChec
         );
     }
 
-    items.push(tool_item(
-        "git",
-        "Git",
-        &["git"],
-        &["--version"],
-        false,
-        "Git 可用，用于源码更新、部分技能和仓库操作",
-        "Git 未找到；大多数基础功能可用，但源码/仓库相关能力会受限",
-        Some("安装 Git：macOS 可运行 xcode-select --install，Windows 安装 Git for Windows"),
-    ));
-    items.push(tool_item(
-        "bash",
-        "Bash / Git Bash",
-        bash_candidates().as_slice(),
-        &["--version"],
-        false,
-        "Bash 可用，终端工具可执行 POSIX shell 命令",
-        "Bash 未找到；Windows 上终端工具通常需要 Git Bash",
-        Some("Windows 请安装 Git for Windows；macOS/Linux 通常系统自带 bash"),
-    ));
+    items.push(tool_item(ToolCheck {
+        id: "git",
+        label: "Git",
+        commands: &["git"],
+        version_args: &["--version"],
+        required: false,
+        ok_summary: "Git 可用，用于源码更新、部分技能和仓库操作",
+        missing_summary: "Git 未找到；大多数基础功能可用，但源码/仓库相关能力会受限",
+        recommendation: Some(
+            "安装 Git：macOS 可运行 xcode-select --install，Windows 安装 Git for Windows",
+        ),
+    }));
+    items.push(tool_item(ToolCheck {
+        id: "bash",
+        label: "Bash / Git Bash",
+        commands: bash_candidates().as_slice(),
+        version_args: &["--version"],
+        required: false,
+        ok_summary: "Bash 可用，终端工具可执行 POSIX shell 命令",
+        missing_summary: "Bash 未找到；Windows 上终端工具通常需要 Git Bash",
+        recommendation: Some("Windows 请安装 Git for Windows；macOS/Linux 通常系统自带 bash"),
+    }));
     items.push(check_node_item());
-    items.push(tool_item(
-        "npm",
-        "npm",
-        npm_candidates().as_slice(),
-        &["--version"],
-        false,
-        "npm 可用，可安装浏览器工具等 Node 依赖",
-        "npm 未找到；浏览器工具或部分扩展能力可能无法安装",
-        Some("安装 Node.js LTS，或确认 npm 所在目录已加入 PATH"),
-    ));
-    items.push(tool_item(
-        "ripgrep",
-        "ripgrep (rg)",
-        &["rg"],
-        &["--version"],
-        false,
-        "ripgrep 可用，文件搜索会更快",
-        "ripgrep 未找到；文件搜索会退回较慢实现或部分能力不可用",
-        Some("安装 ripgrep：brew install ripgrep / winget install BurntSushi.ripgrep.MSVC"),
-    ));
-    items.push(tool_item(
-        "ffmpeg",
-        "ffmpeg",
-        &["ffmpeg"],
-        &["-version"],
-        false,
-        "ffmpeg 可用，音视频处理能力可用",
-        "ffmpeg 未找到；音视频转码、部分语音/媒体能力会受限",
-        Some("安装 ffmpeg：brew install ffmpeg / winget install Gyan.FFmpeg"),
-    ));
-    let mut agent_browser = tool_item(
-        "agent-browser",
-        "agent-browser",
-        agent_browser_candidates().as_slice(),
-        &["--version"],
-        false,
-        "agent-browser CLI 可用，浏览器自动化能力更完整",
-        "agent-browser 未找到；浏览器自动化工具可能不可用",
-        Some("安装 Node.js 后运行 npm install -g agent-browser"),
-    );
+    items.push(tool_item(ToolCheck {
+        id: "npm",
+        label: "npm",
+        commands: npm_candidates().as_slice(),
+        version_args: &["--version"],
+        required: false,
+        ok_summary: "npm 可用，可安装浏览器工具等 Node 依赖",
+        missing_summary: "npm 未找到；浏览器工具或部分扩展能力可能无法安装",
+        recommendation: Some("安装 Node.js LTS，或确认 npm 所在目录已加入 PATH"),
+    }));
+    items.push(tool_item(ToolCheck {
+        id: "ripgrep",
+        label: "ripgrep (rg)",
+        commands: &["rg"],
+        version_args: &["--version"],
+        required: false,
+        ok_summary: "ripgrep 可用，文件搜索会更快",
+        missing_summary: "ripgrep 未找到；文件搜索会退回较慢实现或部分能力不可用",
+        recommendation: Some(
+            "安装 ripgrep：brew install ripgrep / winget install BurntSushi.ripgrep.MSVC",
+        ),
+    }));
+    items.push(tool_item(ToolCheck {
+        id: "ffmpeg",
+        label: "ffmpeg",
+        commands: &["ffmpeg"],
+        version_args: &["-version"],
+        required: false,
+        ok_summary: "ffmpeg 可用，音视频处理能力可用",
+        missing_summary: "ffmpeg 未找到；音视频转码、部分语音/媒体能力会受限",
+        recommendation: Some("安装 ffmpeg：brew install ffmpeg / winget install Gyan.FFmpeg"),
+    }));
+    let mut agent_browser = tool_item(ToolCheck {
+        id: "agent-browser",
+        label: "agent-browser",
+        commands: agent_browser_candidates().as_slice(),
+        version_args: &["--version"],
+        required: false,
+        ok_summary: "agent-browser CLI 可用，浏览器自动化能力更完整",
+        missing_summary: "agent-browser 未找到；浏览器自动化工具可能不可用",
+        recommendation: Some("安装 Node.js 后运行 npm install -g agent-browser"),
+    });
     agent_browser.category = EnvironmentCheckCategory::Browser;
     items.push(agent_browser);
     items.push(browser_executable_item(Path::new(&hermes_home)));
@@ -477,37 +481,39 @@ async fn check_dashboard_status(api_base_url: &str, token: Option<&str>) -> Envi
     }
 }
 
-fn check_writable_item(
-    id: &str,
+struct WritableCheck<'a> {
+    id: &'a str,
     category: EnvironmentCheckCategory,
-    label: &str,
+    label: &'a str,
     required: bool,
-    path: &Path,
-    ok_summary: &str,
-    fail_summary: &str,
-    recommendation: Option<&str>,
-) -> EnvironmentCheckItem {
-    match check_writable_dir(path) {
+    path: &'a Path,
+    ok_summary: &'a str,
+    fail_summary: &'a str,
+    recommendation: Option<&'a str>,
+}
+
+fn check_writable_item(check: WritableCheck<'_>) -> EnvironmentCheckItem {
+    match check_writable_dir(check.path) {
         Ok(()) => EnvironmentCheckItem::new(
-            id,
-            category,
-            label,
+            check.id,
+            check.category,
+            check.label,
             EnvironmentCheckStatus::Ok,
-            required,
-            ok_summary,
+            check.required,
+            check.ok_summary,
         )
-        .path(Some(path)),
+        .path(Some(check.path)),
         Err(err) => EnvironmentCheckItem::new(
-            id,
-            category,
-            label,
+            check.id,
+            check.category,
+            check.label,
             EnvironmentCheckStatus::Error,
-            required,
-            fail_summary,
+            check.required,
+            check.fail_summary,
         )
-        .path(Some(path))
+        .path(Some(check.path))
         .details(Some(err))
-        .recommendation(recommendation),
+        .recommendation(check.recommendation),
     }
 }
 
@@ -519,17 +525,19 @@ fn check_writable_dir(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn tool_item(
-    id: &str,
-    label: &str,
-    commands: &[&str],
-    version_args: &[&str],
+struct ToolCheck<'a> {
+    id: &'a str,
+    label: &'a str,
+    commands: &'a [&'a str],
+    version_args: &'a [&'a str],
     required: bool,
-    ok_summary: &str,
-    missing_summary: &str,
-    recommendation: Option<&str>,
-) -> EnvironmentCheckItem {
-    let probe = probe_commands(commands, version_args);
+    ok_summary: &'a str,
+    missing_summary: &'a str,
+    recommendation: Option<&'a str>,
+}
+
+fn tool_item(check: ToolCheck<'_>) -> EnvironmentCheckItem {
+    let probe = probe_commands(check.commands, check.version_args);
     if probe.found {
         let status = if probe.error.is_some() {
             EnvironmentCheckStatus::Warning
@@ -537,12 +545,12 @@ fn tool_item(
             EnvironmentCheckStatus::Ok
         };
         EnvironmentCheckItem::new(
-            id,
+            check.id,
             EnvironmentCheckCategory::Tools,
-            label,
+            check.label,
             status,
-            required,
-            ok_summary,
+            check.required,
+            check.ok_summary,
         )
         .path(probe.path.as_ref())
         .version(probe.version)
@@ -553,19 +561,19 @@ fn tool_item(
         )
     } else {
         EnvironmentCheckItem::new(
-            id,
+            check.id,
             EnvironmentCheckCategory::Tools,
-            label,
-            if required {
+            check.label,
+            if check.required {
                 EnvironmentCheckStatus::Error
             } else {
                 EnvironmentCheckStatus::Warning
             },
-            required,
-            missing_summary,
+            check.required,
+            check.missing_summary,
         )
         .details(probe.error)
-        .recommendation(recommendation)
+        .recommendation(check.recommendation)
     }
 }
 
