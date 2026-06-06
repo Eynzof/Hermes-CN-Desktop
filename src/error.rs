@@ -99,11 +99,101 @@ pub enum AppError {
     Internal(String),
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppErrorIpc {
+    code: &'static str,
+    kind: &'static str,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<serde_json::Value>,
+}
+
+impl AppError {
+    pub fn code(&self) -> &'static str {
+        match self {
+            AppError::DashboardStartup(_) => "dashboard_startup",
+            AppError::DashboardUnreachable(_) => "dashboard_unreachable",
+            AppError::DashboardProbe(_) => "dashboard_probe",
+            AppError::SseConnect(_) => "sse_connect",
+            AppError::SseStream(_) => "sse_stream",
+            AppError::RuntimeManifestNotConfigured => "runtime_manifest_not_configured",
+            AppError::RuntimeCheckFailed(_) => "runtime_check_failed",
+            AppError::RuntimeDownloadFailed(_) => "runtime_download_failed",
+            AppError::RuntimeSignatureInvalid(_) => "runtime_signature_invalid",
+            AppError::RuntimeChecksumMismatch { .. } => "runtime_checksum_mismatch",
+            AppError::RuntimeExtractFailed(_) => "runtime_extract_failed",
+            AppError::RuntimeSmokeFailed(_) => "runtime_smoke_failed",
+            AppError::RuntimeInstallFailed(_) => "runtime_install_failed",
+            AppError::RuntimeUnavailable(_) => "runtime_unavailable",
+            AppError::RuntimeNoPreviousVersion => "runtime_no_previous_version",
+            AppError::ProfileInvalidName(_) => "profile_invalid_name",
+            AppError::ProfileDirMissing(_) => "profile_dir_missing",
+            AppError::ProfileSwitchInFlight => "profile_switch_in_flight",
+            AppError::ProfileNotOwner => "profile_not_owner",
+            AppError::ProfileSwitchFailed(_) => "profile_switch_failed",
+            AppError::InvalidRequest(_) => "invalid_request",
+            AppError::ProxyError(_) => "proxy_error",
+            AppError::OriginViolation(_) => "origin_violation",
+            AppError::FileError(_) => "file_error",
+            AppError::StateLockPoisoned => "state_lock_poisoned",
+            AppError::NotReady => "not_ready",
+            AppError::Internal(_) => "internal",
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            AppError::DashboardStartup(_)
+            | AppError::DashboardUnreachable(_)
+            | AppError::DashboardProbe(_) => "dashboard",
+            AppError::SseConnect(_) | AppError::SseStream(_) => "sse",
+            AppError::RuntimeManifestNotConfigured
+            | AppError::RuntimeCheckFailed(_)
+            | AppError::RuntimeDownloadFailed(_)
+            | AppError::RuntimeSignatureInvalid(_)
+            | AppError::RuntimeChecksumMismatch { .. }
+            | AppError::RuntimeExtractFailed(_)
+            | AppError::RuntimeSmokeFailed(_)
+            | AppError::RuntimeInstallFailed(_)
+            | AppError::RuntimeUnavailable(_)
+            | AppError::RuntimeNoPreviousVersion => "runtime",
+            AppError::ProfileInvalidName(_)
+            | AppError::ProfileDirMissing(_)
+            | AppError::ProfileSwitchInFlight
+            | AppError::ProfileNotOwner
+            | AppError::ProfileSwitchFailed(_) => "profile",
+            AppError::InvalidRequest(_)
+            | AppError::ProxyError(_)
+            | AppError::OriginViolation(_) => "api_proxy",
+            AppError::FileError(_) => "file",
+            AppError::StateLockPoisoned | AppError::NotReady => "state",
+            AppError::Internal(_) => "internal",
+        }
+    }
+
+    fn details(&self) -> Option<serde_json::Value> {
+        match self {
+            AppError::RuntimeChecksumMismatch { expected, actual } => {
+                Some(serde_json::json!({ "expected": expected, "actual": actual }))
+            }
+            _ => None,
+        }
+    }
+}
+
 // Tauri requires Serialize to return errors to the frontend.
-// We serialize as the Display string — the frontend sees a human-readable message.
+// Keep the human-readable message, but preserve a stable code/kind so the
+// frontend can choose recovery UI without parsing localized text.
 impl Serialize for AppError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
+        AppErrorIpc {
+            code: self.code(),
+            kind: self.kind(),
+            message: self.to_string(),
+            details: self.details(),
+        }
+        .serialize(serializer)
     }
 }
 
@@ -182,10 +272,30 @@ mod tests {
     }
 
     #[test]
-    fn serialize_emits_display_string() {
+    fn serialize_emits_structured_ipc_error() {
         let err = AppError::DashboardStartup("boom".to_string());
-        let json = serde_json::to_string(&err).unwrap();
-        assert_eq!(json, "\"Dashboard startup failed: boom\"");
+        let json: serde_json::Value = serde_json::to_value(&err).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "code": "dashboard_startup",
+                "kind": "dashboard",
+                "message": "Dashboard startup failed: boom"
+            })
+        );
+    }
+
+    #[test]
+    fn serialize_checksum_error_includes_machine_readable_details() {
+        let err = AppError::RuntimeChecksumMismatch {
+            expected: "abc".to_string(),
+            actual: "def".to_string(),
+        };
+        let json: serde_json::Value = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["code"], "runtime_checksum_mismatch");
+        assert_eq!(json["kind"], "runtime");
+        assert_eq!(json["details"]["expected"], "abc");
+        assert_eq!(json["details"]["actual"], "def");
     }
 
     #[test]

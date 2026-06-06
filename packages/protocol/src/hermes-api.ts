@@ -2,6 +2,16 @@ import { z } from "zod";
 
 const NullableStringAsEmpty = z.string().nullable().optional().transform((value) => value ?? "");
 
+function stringifyMessageContent(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value == null) return null;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 // ── Status (/api/status) ──────────────────────────────────────────────
 
 export const PlatformStatus = z.object({
@@ -56,6 +66,34 @@ export const SessionSummary = z.object({
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
 
+export const HermesImageSource = z.union([
+  z.string(),
+  z
+    .object({
+      url: z.string().optional(),
+      src: z.string().optional(),
+      path: z.string().optional(),
+      data: z.string().optional(),
+      image_url: z.unknown().optional(),
+      imageUrl: z.unknown().optional(),
+      alt: z.string().optional(),
+      title: z.string().optional(),
+      name: z.string().optional(),
+      filename: z.string().optional(),
+      file_name: z.string().optional(),
+      mimeType: z.string().optional(),
+      mime_type: z.string().optional(),
+      mediaType: z.string().optional(),
+      contentType: z.string().optional(),
+      content_type: z.string().optional(),
+      is_image: z.boolean().optional(),
+    })
+    .passthrough(),
+]);
+export type HermesImageSource = z.infer<typeof HermesImageSource>;
+
+const MessageContent = z.unknown().transform(stringifyMessageContent);
+
 export const SessionDetail = SessionSummary.extend({
   last_active: z.number().optional(),
 }).passthrough();
@@ -82,7 +120,8 @@ export const SessionMessage = z.object({
   // returns null for roles it doesn't know how to draw, which drops
   // those rows cleanly without crashing the parse.
   role: z.string(),
-  content: z.union([z.string(), z.null()]),
+  content: MessageContent,
+  images: z.array(HermesImageSource).optional(),
   tool_call_id: z.string().nullable(),
   tool_calls: z.any().nullable(),
   tool_name: z.string().nullable(),
@@ -152,6 +191,29 @@ const HermesProgressMessagePart = z.object({
   text: z.string(),
 });
 
+const HermesImageMessagePart = z
+  .object({
+    type: z.literal("image"),
+    url: z.string().optional(),
+    src: z.string().optional(),
+    path: z.string().optional(),
+    data: z.string().optional(),
+    image_url: z.unknown().optional(),
+    imageUrl: z.unknown().optional(),
+    alt: z.string().optional(),
+    title: z.string().optional(),
+    name: z.string().optional(),
+    filename: z.string().optional(),
+    file_name: z.string().optional(),
+    mimeType: z.string().optional(),
+    mime_type: z.string().optional(),
+    mediaType: z.string().optional(),
+    contentType: z.string().optional(),
+    content_type: z.string().optional(),
+    is_image: z.boolean().optional(),
+  })
+  .passthrough();
+
 const HermesToolMessagePart = z
   .object({
     type: z.literal("tool"),
@@ -177,6 +239,7 @@ export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesTextMessagePart,
   HermesReasoningMessagePart,
   HermesProgressMessagePart,
+  HermesImageMessagePart,
   HermesToolMessagePart,
   HermesNoticeMessagePart,
 ]);
