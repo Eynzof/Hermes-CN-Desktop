@@ -14,7 +14,6 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::process::{dashboard, runtime};
-use crate::state::AppStateInner;
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -64,6 +63,25 @@ pub struct EnvironmentCheckResult {
     pub hermes_home: String,
     pub current_profile: String,
     pub items: Vec<EnvironmentCheckItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnvironmentCheckInput {
+    pub api_base_url: String,
+    pub hermes_home: String,
+    pub session_token: Option<String>,
+    pub current_profile: String,
+}
+
+impl EnvironmentCheckInput {
+    pub fn from_state(inner: &crate::state::AppStateInner) -> Self {
+        Self {
+            api_base_url: inner.api_base_url.clone(),
+            hermes_home: inner.hermes_home.clone(),
+            session_token: inner.session_token.clone(),
+            current_profile: inner.current_profile.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -186,12 +204,12 @@ pub fn check_bootstrap_environment(hermes_home: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn collect_environment_check(inner: &AppStateInner) -> EnvironmentCheckResult {
+pub async fn collect_environment_check(input: EnvironmentCheckInput) -> EnvironmentCheckResult {
     let runtime_root = runtime::runtime_root();
-    let hermes_home = if inner.hermes_home.trim().is_empty() {
+    let hermes_home = if input.hermes_home.trim().is_empty() {
         runtime::hermes_home_dir().to_string_lossy().to_string()
     } else {
-        inner.hermes_home.clone()
+        input.hermes_home.clone()
     };
     let current = runtime::read_current_record();
     let mut items = Vec::new();
@@ -305,7 +323,7 @@ pub async fn collect_environment_check(inner: &AppStateInner) -> EnvironmentChec
         }
     }
 
-    if inner.api_base_url.trim().is_empty() {
+    if input.api_base_url.trim().is_empty() {
         items.push(
             EnvironmentCheckItem::new(
                 "dashboard-api",
@@ -329,9 +347,9 @@ pub async fn collect_environment_check(inner: &AppStateInner) -> EnvironmentChec
         ));
     } else {
         items.push(
-            check_dashboard_status(&inner.api_base_url, inner.session_token.as_deref()).await,
+            check_dashboard_status(&input.api_base_url, input.session_token.as_deref()).await,
         );
-        let supports_sse = dashboard::dashboard_supports_sse(&inner.api_base_url).await;
+        let supports_sse = dashboard::dashboard_supports_sse(&input.api_base_url).await;
         items.push(
             EnvironmentCheckItem::new(
                 "dashboard-sse",
@@ -351,7 +369,7 @@ pub async fn collect_environment_check(inner: &AppStateInner) -> EnvironmentChec
             )
             .path(Some(format!(
                 "{}/api/v2/events",
-                inner.api_base_url.trim_end_matches('/')
+                input.api_base_url.trim_end_matches('/')
             )))
             .recommendation(
                 (!supports_sse)
@@ -435,7 +453,7 @@ pub async fn collect_environment_check(inner: &AppStateInner) -> EnvironmentChec
         arch: std::env::consts::ARCH.to_string(),
         runtime_root: runtime_root.to_string_lossy().to_string(),
         hermes_home,
-        current_profile: inner.current_profile.clone(),
+        current_profile: input.current_profile.clone(),
         items,
     }
 }
