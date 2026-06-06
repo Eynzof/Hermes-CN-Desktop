@@ -6,6 +6,7 @@ import {
   gatewayRestartTitle,
   isGatewayRestartBusy,
   isGatewayRestartLocked,
+  isGatewayRestartObservedRunning,
   type GatewayActionStatusResponse,
 } from "./gateway-restart";
 
@@ -72,6 +73,25 @@ describe("gateway restart helpers", () => {
       ok: false,
       message: "Gateway 重启失败（exit 75）",
     });
+  });
+
+  it("treats a foreground gateway process as completed once /api/status sees it running", () => {
+    const action = status({ running: true, pid: 33560 });
+    expect(isGatewayRestartObservedRunning(action, {
+      gateway_running: true,
+      gateway_pid: 33560,
+      gateway_state: "running",
+    })).toBe(true);
+    expect(isGatewayRestartObservedRunning(action, {
+      gateway_running: true,
+      gateway_pid: 98288,
+      gateway_state: "running",
+    })).toBe(false);
+    expect(isGatewayRestartObservedRunning(action, {
+      gateway_running: false,
+      gateway_pid: 33560,
+      gateway_state: "stopped",
+    })).toBe(false);
   });
 
   it("extracts structured restart response errors", () => {

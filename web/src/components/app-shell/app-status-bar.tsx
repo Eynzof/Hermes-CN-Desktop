@@ -65,6 +65,9 @@ export function AppStatusBar() {
 
   const todayTokens =
     (analytics?.daily?.[0]?.input_tokens ?? 0) + (analytics?.daily?.[0]?.output_tokens ?? 0);
+  const restartTitle = gatewayOnline || gatewayRestart.phase !== "idle"
+    ? gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)
+    : "当前状态接口未确认在线，仍会尝试请求 Dashboard 重启 Gateway";
 
   return (
     <footer className={s.statusbar} role="status" aria-label="运行状态">
@@ -85,9 +88,9 @@ export function AppStatusBar() {
           className={s.restartButton}
           data-state={gatewayRestart.phase}
           onClick={() => void gatewayRestart.restart()}
-          disabled={gatewayRestart.locked || !gatewayOnline}
-          title={gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
-          aria-label={gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
+          disabled={gatewayRestart.locked}
+          title={restartTitle}
+          aria-label={restartTitle}
           aria-busy={gatewayRestart.busy}
         >
           <RotateCcw size={11} aria-hidden="true" />

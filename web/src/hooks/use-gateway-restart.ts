@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchJSON, postJSON } from "@/lib/transport";
+import { debugBus } from "@/lib/debug-bus";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { runtime } from "@/lib/runtime";
 import {
   GATEWAY_RESTART_ACTION_NAME,
   classifyGatewayActionStatus,
   gatewayRestartResponseError,
+  isGatewayRestartObservedRunning,
   isGatewayRestartBusy,
   isGatewayRestartLocked,
   type GatewayActionStatusResponse,
+  type GatewayRuntimeStatus,
   type GatewayRestartPhase,
   type GatewayRestartResponse,
 } from "@/lib/gateway-restart";
@@ -38,6 +41,19 @@ function errorMessage(error: unknown): string {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
+  });
+}
+
+function recordRestartDebug(
+  level: "info" | "warn" | "error",
+  summary: string,
+  payload?: Record<string, unknown>,
+): void {
+  debugBus.push({
+    type: "gateway",
+    level,
+    summary,
+    payload,
   });
 }
 
@@ -71,6 +87,7 @@ export function useGatewayRestartAction() {
   }, [clearResetTimer, setState]);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       clearResetTimer();
@@ -89,6 +106,7 @@ export function useGatewayRestartAction() {
 
   const finishSuccess = useCallback(async (runId: number, message: string) => {
     if (!mountedRef.current || runIdRef.current !== runId) return;
+    recordRestartDebug("info", "Gateway restart completed", { message });
     setState({ phase: "success", message });
     scheduleSuccessReset();
     await refreshAfterRestart();
@@ -110,6 +128,16 @@ export function useGatewayRestartAction() {
 
         const classification = classifyGatewayActionStatus(status);
         if (!classification.done) {
+          const runtimeStatus = await fetchJSON<GatewayRuntimeStatus>("/api/status")
+            .catch(() => null);
+          if (
+            runtimeStatus &&
+            isGatewayRestartObservedRunning(status, runtimeStatus)
+          ) {
+            await finishSuccess(runId, "Gateway 重启已完成");
+            return;
+          }
+
           setState({
             phase: "running",
             message: classification.message,
@@ -121,6 +149,11 @@ export function useGatewayRestartAction() {
         if (classification.ok) {
           await finishSuccess(runId, classification.message);
         } else {
+          recordRestartDebug("error", "Gateway restart action failed", {
+            message: classification.message,
+            exitCode: status.exit_code,
+            pid: status.pid,
+          });
           setState({
             phase: "error",
             message: classification.message,
@@ -131,6 +164,9 @@ export function useGatewayRestartAction() {
       } catch {
         statusFailures += 1;
         if (statusFailures >= MAX_STATUS_FAILURES_BEFORE_FALLBACK) {
+          recordRestartDebug("warn", "Gateway restart status polling unavailable; assuming request was accepted", {
+            failures: statusFailures,
+          });
           await finishSuccess(runId, "已发起 Gateway 重启，正在刷新连接…");
           return;
         }
@@ -141,11 +177,20 @@ export function useGatewayRestartAction() {
   }, [finishSuccess, setState]);
 
   const restart = useCallback(async () => {
-    if (isGatewayRestartBusy(stateRef.current.phase)) return;
+    if (isGatewayRestartBusy(stateRef.current.phase)) {
+      recordRestartDebug("warn", "Gateway restart click ignored because another restart is running", {
+        phase: stateRef.current.phase,
+      });
+      return;
+    }
 
     clearResetTimer();
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
+    recordRestartDebug("info", "Gateway restart click accepted", {
+      platform: runtime.platform,
+      phase: stateRef.current.phase,
+    });
     setState({ phase: "starting", message: "正在请求重启 Gateway…" });
 
     try {
@@ -159,6 +204,10 @@ export function useGatewayRestartAction() {
       if (structuredError) throw new Error(structuredError);
 
       const pid = response.pid ?? null;
+      recordRestartDebug("info", "Gateway restart request accepted by dashboard", {
+        pid,
+        action: response.name ?? GATEWAY_RESTART_ACTION_NAME,
+      });
       setState({
         phase: "running",
         message: pid ? `已发起 Gateway 重启（PID ${pid}），等待完成…` : "已发起 Gateway 重启，等待完成…",
@@ -167,9 +216,11 @@ export function useGatewayRestartAction() {
       void trackRestart(runId);
     } catch (error) {
       if (!mountedRef.current || runIdRef.current !== runId) return;
+      const message = errorMessage(error);
+      recordRestartDebug("error", "Gateway restart request failed", { message });
       setState({
         phase: "error",
-        message: errorMessage(error),
+        message,
       });
     }
   }, [clearResetTimer, setState, trackRestart]);

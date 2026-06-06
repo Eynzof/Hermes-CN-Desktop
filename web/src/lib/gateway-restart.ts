@@ -24,6 +24,12 @@ export interface GatewayActionStatusClassification {
   message: string;
 }
 
+export interface GatewayRuntimeStatus {
+  gateway_running?: boolean;
+  gateway_pid?: number | null;
+  gateway_state?: string | null;
+}
+
 export function isGatewayRestartBusy(phase: GatewayRestartPhase): boolean {
   return phase === "starting" || phase === "running";
 }
@@ -74,6 +80,23 @@ export function classifyGatewayActionStatus(
     ok: false,
     message: `Gateway 重启失败（exit ${status.exit_code}）`,
   };
+}
+
+export function isGatewayRestartObservedRunning(
+  actionStatus: GatewayActionStatusResponse,
+  runtimeStatus: GatewayRuntimeStatus,
+): boolean {
+  if (!runtimeStatus.gateway_running) return false;
+  if (
+    actionStatus.pid &&
+    runtimeStatus.gateway_pid &&
+    actionStatus.pid !== runtimeStatus.gateway_pid
+  ) {
+    return false;
+  }
+
+  const state = (runtimeStatus.gateway_state ?? "").trim().toLowerCase();
+  return state === "" || state === "running" || state === "ready";
 }
 
 export function gatewayRestartResponseError(response: GatewayRestartResponse): string | null {

@@ -55,8 +55,8 @@
   appearance: none;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-xs);
-  min-height: 18px;
-  padding: 0 6px;
+  min-height: 20px;
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -83,6 +83,10 @@
 .restartButton:disabled {
   cursor: not-allowed;
   opacity: 0.56;
+}
+
+.restartButton[data-state="success"]:disabled {
+  opacity: 0.82;
 }
 
 .restartButton[data-state="starting"] svg,
