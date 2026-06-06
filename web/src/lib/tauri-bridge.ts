@@ -102,23 +102,58 @@ async function ensureInvoke() {
   return invoke;
 }
 
+export interface TauriIpcError extends Error {
+  code?: string;
+  kind?: string;
+  details?: unknown;
+  raw?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function normalizeTauriInvokeError(error: unknown): Error {
+  if (error instanceof Error) return error;
+
+  if (isRecord(error)) {
+    const message = typeof error.message === "string" && error.message.trim()
+      ? error.message
+      : JSON.stringify(error);
+    const normalized = new Error(message) as TauriIpcError;
+    if (typeof error.code === "string") normalized.code = error.code;
+    if (typeof error.kind === "string") normalized.kind = error.kind;
+    if ("details" in error) normalized.details = error.details;
+    normalized.raw = error;
+    return normalized;
+  }
+
+  return new Error(String(error));
+}
+
+async function invokeCommand<T = any>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const inv = await ensureInvoke();
+  try {
+    return await inv<T>(command, args);
+  } catch (error) {
+    throw normalizeTauriInvokeError(error);
+  }
+}
+
 const tauriBridge = {
   windowType: "tauri" as const,
 
   async request(input: ApiRequestInput): Promise<ApiRequestResult> {
-    const inv = await ensureInvoke();
-    return inv("api_request", { input });
+    return invokeCommand("api_request", { input });
   },
 
   async externalRequest(input: ApiRequestInput): Promise<ApiRequestResult> {
-    const inv = await ensureInvoke();
-    return inv("external_request", { input });
+    return invokeCommand("external_request", { input });
   },
 
   async uploadFile(input: FileUploadInput): Promise<ApiRequestResult> {
-    const inv = await ensureInvoke();
     const base64 = arrayBufferToBase64(input.data);
-    return inv("upload_file", {
+    return invokeCommand("upload_file", {
       input: {
         sessionId: input.sessionId,
         name: input.name,
@@ -129,28 +164,23 @@ const tauriBridge = {
   },
 
   async pickFiles(): Promise<FilePickerResult> {
-    const inv = await ensureInvoke();
-    return inv("pick_files");
+    return invokeCommand("pick_files");
   },
 
   async pickDirectory(): Promise<FilePickerResult> {
-    const inv = await ensureInvoke();
-    return inv("pick_directory");
+    return invokeCommand("pick_directory");
   },
 
   async createWorkspaceProject(): Promise<FilePickerResult> {
-    const inv = await ensureInvoke();
-    return inv("create_workspace_project");
+    return invokeCommand("create_workspace_project");
   },
 
   async openWorkspacePath(input: { path: string }): Promise<ApiRequestResult> {
-    const inv = await ensureInvoke();
-    return inv("open_workspace_path", { input });
+    return invokeCommand("open_workspace_path", { input });
   },
 
   async openExternalUrl(input: { url: string }): Promise<{ ok: boolean; message?: string | null }> {
-    const inv = await ensureInvoke();
-    return inv("open_external_url", { input });
+    return invokeCommand("open_external_url", { input });
   },
 
   getRuntimeConfig() {
@@ -158,154 +188,124 @@ const tauriBridge = {
   },
 
   async refreshGatewayUrl(): Promise<{ gatewayUrl: string; sessionToken?: string }> {
-    const inv = await ensureInvoke();
-    return inv("refresh_gateway_url");
+    return invokeCommand("refresh_gateway_url");
   },
 
   async getRuntimeInfo(): Promise<RuntimeInfo> {
-    const inv = await ensureInvoke();
-    return inv("runtime_info");
+    return invokeCommand("runtime_info");
   },
 
   async checkRuntimeUpdate(): Promise<RuntimeUpdateCheckResult> {
-    const inv = await ensureInvoke();
-    return inv("runtime_check_update");
+    return invokeCommand("runtime_check_update");
   },
 
   async installRuntimeUpdate(): Promise<RuntimeInstallUpdateResult> {
-    const inv = await ensureInvoke();
-    return inv("runtime_install_update");
+    return invokeCommand("runtime_install_update");
   },
 
   async rollbackRuntime(): Promise<RuntimeInstallUpdateResult> {
-    const inv = await ensureInvoke();
-    return inv("runtime_rollback");
+    return invokeCommand("runtime_rollback");
   },
 
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {
-    const inv = await ensureInvoke();
-    return inv("switch_profile", { input });
+    return invokeCommand("switch_profile", { input });
   },
 
 
   async scanConfigMigration(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult> {
-    const inv = await ensureInvoke();
-    return inv("config_migration_scan", { input: input ?? null });
+    return invokeCommand("config_migration_scan", { input: input ?? null });
   },
 
   async importConfigMigration(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult> {
-    const inv = await ensureInvoke();
-    return inv("config_migration_import", { input });
+    return invokeCommand("config_migration_import", { input });
   },
 
   async getYoloMode(): Promise<YoloModeStatus> {
-    const inv = await ensureInvoke();
-    return inv("get_yolo_mode");
+    return invokeCommand("get_yolo_mode");
   },
 
   async setYoloMode(input: SetYoloModeInput): Promise<SetYoloModeResult> {
-    const inv = await ensureInvoke();
-    return inv("set_yolo_mode", { input });
+    return invokeCommand("set_yolo_mode", { input });
   },
 
   async imOnboardingState(input: ImOnboardingStateInput): Promise<ImOnboardingStateResult> {
-    const inv = await ensureInvoke();
-    return inv("im_onboarding_state", { input });
+    return invokeCommand("im_onboarding_state", { input });
   },
 
   async imOnboardingBegin(input: ImOnboardingBeginInput): Promise<ImOnboardingBeginResult> {
-    const inv = await ensureInvoke();
-    return inv("im_onboarding_begin", { input });
+    return invokeCommand("im_onboarding_begin", { input });
   },
 
   async imOnboardingPoll(input: ImOnboardingPollInput): Promise<ImOnboardingPollResult> {
-    const inv = await ensureInvoke();
-    return inv("im_onboarding_poll", { input });
+    return invokeCommand("im_onboarding_poll", { input });
   },
 
   async imOnboardingApply(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult> {
-    const inv = await ensureInvoke();
-    return inv("im_onboarding_apply", { input });
+    return invokeCommand("im_onboarding_apply", { input });
   },
 
   async readSkillMarkdown(input: { name: string }): Promise<SkillMarkdownResult> {
-    const inv = await ensureInvoke();
-    return inv("read_skill_markdown", { input });
+    return invokeCommand("read_skill_markdown", { input });
   },
 
   async readMemory() {
-    const inv = await ensureInvoke();
-    return inv("read_memory");
+    return invokeCommand("read_memory");
   },
 
   async addMemoryEntry(content: string) {
-    const inv = await ensureInvoke();
-    return inv("add_memory_entry", { content });
+    return invokeCommand("add_memory_entry", { content });
   },
 
   async updateMemoryEntry(index: number, content: string) {
-    const inv = await ensureInvoke();
-    return inv("update_memory_entry", { index, content });
+    return invokeCommand("update_memory_entry", { index, content });
   },
 
   async removeMemoryEntry(index: number) {
-    const inv = await ensureInvoke();
-    return inv("remove_memory_entry", { index });
+    return invokeCommand("remove_memory_entry", { index });
   },
 
   async writeUserProfile(content: string) {
-    const inv = await ensureInvoke();
-    return inv("write_user_profile", { content });
+    return invokeCommand("write_user_profile", { content });
   },
 
   async uiStoreSnapshot(): Promise<UiStoreSnapshot> {
-    const inv = await ensureInvoke();
-    return inv("ui_store_snapshot");
+    return invokeCommand("ui_store_snapshot");
   },
 
   async uiStoreSetKv(input: { key: string; value: unknown }): Promise<boolean> {
-    const inv = await ensureInvoke();
-    return inv("ui_store_set_kv", { input });
+    return invokeCommand("ui_store_set_kv", { input });
   },
 
   async uiStoreRemoveKv(input: { key: string }): Promise<boolean> {
-    const inv = await ensureInvoke();
-    return inv("ui_store_remove_kv", { input });
+    return invokeCommand("ui_store_remove_kv", { input });
   },
 
   async uiStoreRecordTurnStats(input: UiTurnStats): Promise<boolean> {
-    const inv = await ensureInvoke();
-    return inv("ui_store_record_turn_stats", { input });
+    return invokeCommand("ui_store_record_turn_stats", { input });
   },
 
   async uiStoreGetTurnStats(input: { sessionId: string }): Promise<UiTurnStats[]> {
-    const inv = await ensureInvoke();
-    return inv("ui_store_get_turn_stats", { input });
+    return invokeCommand("ui_store_get_turn_stats", { input });
   },
 
   async uiStoreRecordEvent(input: UiEventInput): Promise<boolean> {
-    const inv = await ensureInvoke();
-    return inv("ui_store_record_event", { input });
+    return invokeCommand("ui_store_record_event", { input });
   },
 
   async terminalStart(input: TerminalStartInput): Promise<TerminalStartResult> {
-    const inv = await ensureInvoke();
-    return inv("terminal_start", { input });
+    return invokeCommand("terminal_start", { input });
   },
 
   async terminalWrite(input: { terminalId: string; data: string }): Promise<boolean> {
-    const inv = await ensureInvoke();
-    return inv("terminal_write", { input });
+    return invokeCommand("terminal_write", { input });
   },
 
   async terminalResize(input: { terminalId: string; cols: number; rows: number }): Promise<boolean> {
-    const inv = await ensureInvoke();
-    return inv("terminal_resize", { input });
+    return invokeCommand("terminal_resize", { input });
   },
 
   async terminalClose(input: { terminalId: string }): Promise<boolean> {
-    const inv = await ensureInvoke();
-    return inv("terminal_close", { input });
+    return invokeCommand("terminal_close", { input });
   },
 
   onTerminalOutput(handler: (event: TerminalEventPayload) => void): () => void {
@@ -601,9 +601,7 @@ async function waitForBootstrap(
 }
 
 export async function installTauriBridge(): Promise<void> {
-  const inv = await ensureInvoke();
-
-  let config = await inv<{
+  let config = await invokeCommand<{
     apiBaseUrl: string;
     gatewayUrl: string;
     sessionToken?: string;
@@ -630,8 +628,8 @@ export async function installTauriBridge(): Promise<void> {
   if (!config.apiBaseUrl) {
     const result = await waitForBootstrap(
       "正在启动Hermes Agent内核...",
-      () => inv("get_runtime_config"),
-      () => inv("runtime_info"),
+      () => invokeCommand("get_runtime_config"),
+      () => invokeCommand("runtime_info"),
     );
     if (result.failed) {
       // Leave the overlay up — the user needs to see the message
@@ -640,7 +638,7 @@ export async function installTauriBridge(): Promise<void> {
       // we never mounted React; the overlay IS the UI right now.
       throw new Error(`runtime bootstrap failed: ${result.message}`);
     }
-    config = await inv("get_runtime_config");
+    config = await invokeCommand("get_runtime_config");
   }
 
   const transport = (config.transport === "ws" || config.transport === "sse")

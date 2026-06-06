@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { arrayBufferToBase64, installTauriBridge, isTauriDevMode } from "./tauri-bridge";
+import {
+  arrayBufferToBase64,
+  installTauriBridge,
+  isTauriDevMode,
+  normalizeTauriInvokeError,
+} from "./tauri-bridge";
 
 const mockInvoke = vi.fn();
 
@@ -73,5 +78,26 @@ describe("isTauriDevMode", () => {
     expect(mockInvoke).toHaveBeenCalledWith("open_external_url", {
       input: { url: "https://hermesagent.org.cn" },
     });
+  });
+
+  it("normalizes structured Tauri IPC errors while preserving code and kind", () => {
+    const error = normalizeTauriInvokeError({
+      code: "not_ready",
+      kind: "state",
+      message: "Desktop runtime not ready",
+      details: { phase: "starting-dashboard" },
+    });
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe("Desktop runtime not ready");
+    expect((error as any).code).toBe("not_ready");
+    expect((error as any).kind).toBe("state");
+    expect((error as any).details).toEqual({ phase: "starting-dashboard" });
+  });
+
+  it("normalizes legacy string Tauri IPC errors", () => {
+    const error = normalizeTauriInvokeError("Desktop runtime not ready");
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe("Desktop runtime not ready");
   });
 });
