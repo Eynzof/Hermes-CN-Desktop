@@ -79,7 +79,7 @@ export interface ProviderConfigInput {
   model: string;
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.05";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.07";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -268,14 +268,22 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "ARK_API_KEY",
-      docsUrl: "https://www.volcengine.com/docs/82379",
-      defaultModel: "doubao-seed-1-6",
+      docsUrl: "https://www.volcengine.com/docs/82379/1554709",
+      defaultModel: "doubao-seed-2-0-lite-260428",
       models: [
-        { id: "doubao-seed-1-6", supportsTools: true },
-        { id: "doubao-1-5-pro-32k", supportsTools: true },
-        { id: "deepseek-v3-1", supportsTools: true },
-        { id: "deepseek-r1", supportsReasoning: true },
+        { id: "doubao-seed-2-0-lite-260428", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "doubao-seed-2-0-mini-260428", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "doubao-seed-2-0-pro-260215", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "doubao-seed-2-0-lite-260215", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "doubao-seed-1-8-251228", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "doubao-seed-1-6-251015", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "doubao-seed-1-6-flash-250828", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "doubao-1-5-pro-32k-250115", supportsTools: true },
+        { id: "deepseek-v4-pro-260425", supportsTools: true, supportsReasoning: true },
+        { id: "deepseek-v4-flash-260425", supportsTools: true, supportsReasoning: true },
+        { id: "deepseek-v3-2-251201", supportsTools: true, supportsReasoning: true },
       ],
+      supportsModelListing: false,
     },
     {
       id: "volcengine-ark-coding",
