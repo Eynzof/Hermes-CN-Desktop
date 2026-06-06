@@ -1,8 +1,6 @@
 .wrap {
   min-height: 100%;
-  background:
-    radial-gradient(circle at 78% 4%, color-mix(in srgb, var(--h-accent) 10%, transparent), transparent 26%),
-    linear-gradient(180deg, var(--h-bg-app), var(--h-bg-app));
+  background: var(--h-bg-app);
 }
 .mainCol { min-width: 0; display: grid; gap: 14px; align-content: start; }
 .headBand { display: flex; justify-content: space-between; gap: 18px; padding: 24px; border: 1px solid var(--h-line); background: linear-gradient(135deg, var(--h-bg-pane), var(--h-bg-soft)); border-radius: var(--h-r-lg); box-shadow: var(--h-shadow); }
@@ -57,6 +55,7 @@
 .anchorBlock { scroll-margin-top: 16px; display: grid; gap: 12px; }
 .choiceGrid, .policyGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .choiceGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.policyGrid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .choiceCard, .policyCard { text-align: left; border: 1px solid var(--h-line); background: var(--h-bg-soft); border-radius: var(--h-r-md); padding: 14px; color: var(--h-text); cursor: pointer; }
 .choiceCard[data-active="true"], .policyCard[data-active="true"] { border-color: color-mix(in srgb, var(--h-accent) 55%, var(--h-line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h-accent) 16%, transparent); }
 .choiceTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -74,6 +73,12 @@
 .fieldControl input, .fieldControl select { width: 100%; height: 32px; border: 1px solid var(--h-line); background: var(--h-bg-input); color: var(--h-text); border-radius: var(--h-r-sm); padding: 0 10px; font-family: var(--h-font-ui); }
 .fieldControl input[type="password"], .field code, .urlPreview, .reviewTable code { font-family: var(--h-font-mono); }
 .field code { color: var(--h-text-3); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.identityNote { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border: 1px solid color-mix(in srgb, var(--h-ok) 30%, var(--h-line)); border-radius: var(--h-r-md); background: color-mix(in srgb, var(--h-ok) 7%, var(--h-bg-soft)); padding: 10px 12px; color: var(--h-text-2); font-size: 12px; line-height: 1.65; }
+.identityNote b { color: var(--h-text); white-space: nowrap; }
+.identityNote span { min-width: 0; }
+.identityNote code, .checkToggle code { color: var(--h-accent); font-family: var(--h-font-mono); font-size: 11px; }
+.checkToggle { display: flex; align-items: center; gap: 9px; border: 1px solid var(--h-line-soft); border-radius: var(--h-r-md); background: var(--h-bg-soft); padding: 10px 12px; color: var(--h-text-2); font-size: 12px; cursor: pointer; }
+.checkToggle input { width: 14px; height: 14px; accent-color: var(--h-accent); }
 .qrSection { grid-template-columns: 256px 1fr; align-items: center; }
 .qrBox { width: 240px; height: 240px; display: grid; place-items: center; border-radius: var(--h-r-lg); border: 1px solid var(--h-line); background: var(--bone-100); overflow: hidden; }
 .qrBox img { width: 232px; height: 232px; display: block; }

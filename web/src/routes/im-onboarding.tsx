@@ -42,10 +42,11 @@ import s from "./im-onboarding.module.css";
 
 type ImSection = "feishu" | "weixin";
 type FeishuMethod = "qr" | "manual";
-type DmPolicy = "pairing" | "allowlist" | "open" | "disabled";
+type DmPolicy = "scanned" | "pairing" | "allowlist" | "open" | "disabled";
 type FeishuGroupPolicy = "mention" | "disabled";
 
 const FEISHU_DEVELOPER_URL = "https://open.feishu.cn/app";
+const FEISHU_SCANNED_OPEN_ID_TOKEN = "__HERMES_SCANNED_FEISHU_OPEN_ID__";
 export const FEISHU_REQUIRED_SCOPES = [
   "im:message.p2p_msg:readonly",
   "im:message.group_at_msg:readonly",
@@ -67,6 +68,29 @@ export function sectionFromPath(pathname: string): ImSection | null {
 
 function last(value?: ImRedactedValue | null): string {
   return value?.redactedValue ?? "未设置";
+}
+
+function isSet(value?: ImRedactedValue | null): value is ImRedactedValue {
+  return Boolean(value?.isSet);
+}
+
+function splitAllowedUsers(value: string): string[] {
+  return value
+    .split(/[,，\s]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function compactList(items: string[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of items) {
+    const trimmed = item.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out.join(",");
 }
 
 export function statusText(status?: string): string {
@@ -409,7 +433,7 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
         sections: [
           {
             title: "最小闭环",
-            items: ["机器人能力已打开", "消息事件已订阅", `事件里包含 ${FEISHU_RECEIVE_EVENT}`, "应用已创建版本并发布"],
+            items: ["允许对话用户 open_id 已写入 FEISHU_ALLOWED_USERS", "机器人能力已打开", "消息事件已订阅", `事件里包含 ${FEISHU_RECEIVE_EVENT}`, "应用已创建版本并发布"],
           },
           {
             title: "必须权限",
@@ -606,6 +630,7 @@ function FeishuRoute() {
   const [appId, setAppId] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [allowedUsers, setAllowedUsers] = useState("");
+  const [includeScannedOpenId, setIncludeScannedOpenId] = useState(true);
   const [homeChannel, setHomeChannel] = useState("");
   const [webhookHost, setWebhookHost] = useState("127.0.0.1");
   const [webhookPort, setWebhookPort] = useState("8765");
@@ -620,6 +645,7 @@ function FeishuRoute() {
   const configured = stateQuery.data?.configured ?? {};
   const status = pollResult?.status ?? flow?.status;
   const credential = pollResult?.credentialSummary;
+  const scannedOpenId = isSet(credential?.openId) ? credential.openId : null;
   const canApplyQr = method === "qr" && credential && pollResult?.status === "confirmed";
   const canApplyManual = method === "manual" && appId.trim() && appSecret.trim();
   const busy = begin.isPending || poll.isPending || apply.isPending;
@@ -648,17 +674,31 @@ function FeishuRoute() {
     const id = window.setInterval(pollOnce, delay);
     return () => window.clearInterval(id);
   }, [flow?.flowId, flow?.intervalSeconds, pollResult?.status]);
+  useEffect(() => {
+    if (method === "qr" && pollResult?.status === "confirmed" && scannedOpenId && dmPolicy === "pairing") {
+      setDmPolicy("scanned");
+      setIncludeScannedOpenId(true);
+    }
+  }, [method, pollResult?.status, scannedOpenId?.fingerprint, dmPolicy]);
 
+  const shouldAutoHomeChannel = Boolean(scannedOpenId) && !homeChannel.trim();
   const settings = () => {
     const allowAll = dmPolicy === "open" ? "true" : "false";
+    const useScannedOpenId = Boolean(scannedOpenId) && (dmPolicy === "scanned" || (dmPolicy === "allowlist" && includeScannedOpenId));
+    const allowedList = dmPolicy === "scanned" || dmPolicy === "allowlist"
+      ? compactList([
+        ...(useScannedOpenId ? [FEISHU_SCANNED_OPEN_ID_TOKEN] : []),
+        ...splitAllowedUsers(allowedUsers),
+      ])
+      : "";
     return {
       FEISHU_DOMAIN: domain,
       FEISHU_CONNECTION_MODE: connectionMode,
       FEISHU_ALLOW_ALL_USERS: allowAll,
-      FEISHU_ALLOWED_USERS: dmPolicy === "allowlist" ? allowedUsers.replaceAll(" ", "") : "",
+      FEISHU_ALLOWED_USERS: allowedList,
       FEISHU_GROUP_POLICY: groupPolicy === "disabled" ? "disabled" : "open",
       FEISHU_REQUIRE_MENTION: groupPolicy === "mention" ? "true" : "false",
-      FEISHU_HOME_CHANNEL: homeChannel.trim(),
+      FEISHU_HOME_CHANNEL: shouldAutoHomeChannel ? FEISHU_SCANNED_OPEN_ID_TOKEN : homeChannel.trim(),
       ...(connectionMode === "webhook" ? {
         FEISHU_WEBHOOK_HOST: webhookHost.trim(),
         FEISHU_WEBHOOK_PORT: webhookPort.trim(),
@@ -677,12 +717,31 @@ function FeishuRoute() {
       restartGateway: true,
     }, { onSuccess: setResult });
   };
+  const manualAllowedCount = splitAllowedUsers(allowedUsers).length;
+  const useScannedOpenId = Boolean(scannedOpenId) && (dmPolicy === "scanned" || (dmPolicy === "allowlist" && includeScannedOpenId));
+  const allowPolicyReady = dmPolicy === "scanned"
+    ? Boolean(scannedOpenId)
+    : dmPolicy === "allowlist"
+      ? Boolean(useScannedOpenId || manualAllowedCount > 0)
+      : true;
+  const allowlistReview = dmPolicy === "scanned"
+    ? `扫码用户 ${last(scannedOpenId)}`
+    : dmPolicy === "allowlist"
+      ? compactList([
+        ...(useScannedOpenId ? [`扫码用户 ${last(scannedOpenId)}`] : []),
+        ...(manualAllowedCount > 0 ? [`手动 ${manualAllowedCount} 个`] : []),
+      ]) || "未填写"
+      : "";
+  const allowlistStatus = dmPolicy === "open" ? "未限制" : dmPolicy === "pairing" ? "走配对确认" : allowPolicyReady ? "可保存" : "缺少 open_id";
+  const homeChannelReview = shouldAutoHomeChannel ? `扫码用户 ${last(scannedOpenId)}` : homeChannel.trim();
+  const homeChannelStatus = shouldAutoHomeChannel ? "自动设置" : homeChannel.trim() ? "已填写" : "稍后设置";
   const rows: Array<[string, string, string]> = [
     ["连接模式", `FEISHU_CONNECTION_MODE=${connectionMode}`, connectionMode === "websocket" ? "推荐" : "高级"],
     ["区域", `FEISHU_DOMAIN=${domain}`, "已选择"],
-    ["私聊策略", `FEISHU_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, dmPolicy === "pairing" ? "推荐：先确认" : dmPolicy],
+    ["私聊策略", `FEISHU_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, dmPolicy === "scanned" ? "只允许扫码用户" : dmPolicy === "pairing" ? "需要确认" : dmPolicy],
+    ["允许对话用户", `FEISHU_ALLOWED_USERS=${allowlistReview}`, allowlistStatus],
     ["群聊策略", `FEISHU_GROUP_POLICY=${groupPolicy === "disabled" ? "disabled" : "open"}`, groupPolicy === "mention" ? "仅 @ 响应" : "关闭"],
-    ["首页频道", `FEISHU_HOME_CHANNEL=${homeChannel || ""}`, homeChannel ? "已填写" : "稍后设置"],
+    ["默认通知会话", `FEISHU_HOME_CHANNEL=${homeChannelReview}`, homeChannelStatus],
   ];
 
   return (
@@ -696,7 +755,7 @@ function FeishuRoute() {
           <SectionTitle num="[ STEP 01 ]" title="先选择怎么接入" meta="新手推荐扫码；已有飞书应用再手动填写" />
           <section className={s.section}><div className={s.choiceGrid}>
             <ChoiceCard active={method === "qr"} icon="scan" badge="推荐" title="手机扫码接入" desc="用飞书手机端扫一下，桌面端会自动拿到应用信息。扫码后还需要按提示去飞书后台确认权限。" foot="推荐新手使用" onClick={() => setMethod("qr")} />
-            <ChoiceCard active={method === "manual"} icon="key" badge="高级" title="我已有飞书应用" desc="如果公司已经建好自建应用，可以在这里填写应用信息。" foot="适合熟悉飞书后台的用户" onClick={() => setMethod("manual")} />
+            <ChoiceCard active={method === "manual"} icon="key" badge="高级" title="我已有飞书应用" desc="如果公司已经建好自建应用，可以在这里填写应用信息。" foot="适合熟悉飞书后台的用户" onClick={() => { setMethod("manual"); if (dmPolicy === "scanned") setDmPolicy("allowlist"); }} />
           </div></section>
 
           {method === "qr" ? <>
@@ -734,19 +793,34 @@ function FeishuRoute() {
           <SectionTitle num="[ STEP 03 ]" title="保存设置并启动接收服务" meta="只会更新当前配置档案；飞书后台还需要继续按提示确认" />
           <section className={s.section}>
             <div className={s.policyGrid}>
+              {scannedOpenId && <PolicyCard active={dmPolicy === "scanned"} title="只允许扫码用户" desc={`把本次扫码用户的 open_id（${last(scannedOpenId)}）写入允许列表。`} onClick={() => setDmPolicy("scanned")} />}
               <PolicyCard active={dmPolicy === "pairing"} title="需要确认再放行" desc="陌生用户先发起申请，管理员同意后可用。" onClick={() => setDmPolicy("pairing")} />
-              <PolicyCard active={dmPolicy === "allowlist"} title="只允许指定用户" desc="只让列表里的用户 ID 使用。" onClick={() => setDmPolicy("allowlist")} />
+              <PolicyCard active={dmPolicy === "allowlist"} title="只允许指定用户" desc="只让列表里的飞书 open_id 使用，可把扫码用户一起加入。" onClick={() => setDmPolicy("allowlist")} />
               <PolicyCard active={dmPolicy === "open"} warning title="所有私聊都可用" desc="方便试用，但不建议长期开放。" onClick={() => setDmPolicy("open")} />
             </div>
-            {dmPolicy === "allowlist" && <Field label="允许用户" desc="多个用户 ID 用英文逗号分隔；不知道用户 ID 可先跳过。" meta="FEISHU_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} /></Field>}
+            {scannedOpenId && (dmPolicy === "scanned" || dmPolicy === "allowlist") && (
+              <div className={s.identityNote}>
+                <b>已拿到扫码用户 open_id</b>
+                <span>界面只显示打码值 <code>{last(scannedOpenId)}</code>，保存时桌面端会把完整 open_id 写入 <code>FEISHU_ALLOWED_USERS</code>；默认通知会话留空时，也会自动写入 <code>FEISHU_HOME_CHANNEL</code>。</span>
+              </div>
+            )}
+            {dmPolicy === "allowlist" && <>
+              {scannedOpenId && (
+                <label className={s.checkToggle}>
+                  <input type="checkbox" checked={includeScannedOpenId} onChange={(e) => setIncludeScannedOpenId(e.target.checked)} />
+                  <span>同时加入本次扫码用户 <code>{last(scannedOpenId)}</code></span>
+                </label>
+              )}
+              <Field label="允许对话用户 open_id" desc={scannedOpenId ? "可继续添加其他飞书用户 open_id；多个值用英文逗号分隔。" : "多个飞书 open_id 用英文逗号分隔；可从飞书消息事件 sender_id.open_id 获取。"} meta="FEISHU_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} placeholder="ou_xxx,ou_yyy" /></Field>
+            </>}
             <Field label="群聊策略" desc="为了避免刷屏，默认只有 @Hermes 时才回复。" meta="FEISHU_GROUP_POLICY"><select value={groupPolicy} onChange={(e) => setGroupPolicy(e.target.value as FeishuGroupPolicy)}><option value="mention">启用群聊，仅 @Hermes 时响应</option><option value="disabled">关闭群聊</option></select></Field>
-            <Field label="默认通知会话" desc="用于定时任务和通知；不知道可以先留空。" meta="FEISHU_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder="oc_xxx 或留空" /></Field>
+            <Field label="默认通知会话" desc={scannedOpenId ? "用于定时任务和跨平台通知；留空会自动使用本次扫码用户的私聊。" : "用于定时任务和跨平台通知；扫码成功后会自动填到当前用户，也可以手动填 chat_id。"} meta="FEISHU_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder={scannedOpenId ? "留空自动使用扫码用户" : "oc_xxx 或留空"} /></Field>
           </section>
 
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="密钥会自动打码；保存后继续去飞书后台确认" />
-          {credential && <div className={s.summaryLine}>扫码结果：应用 ID {last(credential.appId)} · 应用密钥 {last(credential.appSecret)} · 机器人 {credential.botName ?? "未探测"}</div>}
+          {credential && <div className={s.summaryLine}>扫码结果：应用 ID {last(credential.appId)} · 应用密钥 {last(credential.appSecret)} · 扫码用户 open_id {last(credential.openId)} · 机器人 {credential.botName ?? "未探测"}</div>}
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual)}><Save size={14} />保存并启动接收服务</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual) || !allowPolicyReady}><Save size={14} />保存并启动接收服务</button></div>
           <ApplyResult result={result} />
           <SectionTitle num="[ STEP 04 ]" title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
           <FeishuBackendChecklist />
