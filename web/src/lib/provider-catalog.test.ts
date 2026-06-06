@@ -212,6 +212,8 @@ describe("provider catalog config updates", () => {
     expect(byId.get("volcengine-ark")).toMatchObject({
       name: "火山方舟 · API 按量付费",
       baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+      defaultModel: "doubao-seed-2-0-lite-260428",
+      supportsModelListing: false,
     });
     expect(byId.get("volcengine-ark-coding")).toMatchObject({
       name: "火山方舟 · Coding Plan",
