@@ -56,12 +56,6 @@ function groupItems(items: readonly EnvironmentCheckItem[]) {
   });
 }
 
-function statusTone(status: EnvironmentCheckStatus): "true" | "false" | undefined {
-  if (status === "ok") return "true";
-  if (status === "error" || status === "warning") return "false";
-  return undefined;
-}
-
 function formatGeneratedAt(value: number | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -160,16 +154,20 @@ export function EnvironmentSection({ showHeading = true }: { showHeading?: boole
 
 function EnvironmentItemRow({ item, onOpenPath }: { item: EnvironmentCheckItem; onOpenPath: (path: string | undefined) => Promise<void> }) {
   return (
-    <div className={s.platformItem} data-active={item.status === "ok" ? "true" : undefined}>
-      <span>
-        <StatusIcon status={item.status} />
-        {item.label}
-        {item.required && <em>必需</em>}
-      </span>
-      <b data-tone={statusTone(item.status)}>{STATUS_LABELS[item.status]}</b>
-      <em>{item.summary}</em>
+    <div className={s.envCheckItem} data-status={item.status}>
+      <div className={s.envCheckHeader}>
+        <div className={s.envCheckTitle}>
+          <span className={s.envCheckIcon} data-status={item.status}>
+            <StatusIcon status={item.status} />
+          </span>
+          <span className={s.envCheckLabel}>{item.label}</span>
+          {item.required && <span className={s.envRequiredTag}>必需</span>}
+        </div>
+        <span className={s.envStatusTag} data-status={item.status}>{STATUS_LABELS[item.status]}</span>
+      </div>
+      <p className={s.envCheckSummary} data-status={item.status}>{item.summary}</p>
       {(item.version || item.path || item.details || item.recommendation) && (
-        <div className={s.runtimeGrid} style={{ marginTop: 8 }}>
+        <div className={[s.runtimeGrid, s.envCheckDetails].join(" ")}>
           {item.version && <RuntimeField label="版本" value={item.version} mono wide />}
           {item.path && <RuntimeField label="路径" value={item.path} mono wide />}
           {item.details && <RuntimeField label="详情" value={item.details} mono wide />}
@@ -177,7 +175,7 @@ function EnvironmentItemRow({ item, onOpenPath }: { item: EnvironmentCheckItem; 
         </div>
       )}
       {item.path && window.hermesDesktop?.openWorkspacePath && (
-        <button className={s.btn} type="button" onClick={() => void onOpenPath(item.path)} style={{ marginTop: 8 }}>
+        <button className={[s.btn, s.envOpenPathButton].join(" ")} type="button" onClick={() => void onOpenPath(item.path)}>
           <FolderOpen size={13} />
           打开路径
         </button>
