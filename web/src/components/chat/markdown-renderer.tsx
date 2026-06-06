@@ -2,6 +2,7 @@ import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
 import type { ComponentProps } from "react";
 import { Streamdown } from "streamdown";
+import { MessageImage } from "./message-image";
 
 interface MarkdownTextProps {
   text: string;
@@ -42,7 +43,26 @@ function MarkdownAnchor({
   );
 }
 
-const streamdownComponents = { a: MarkdownAnchor };
+function MarkdownImage({
+  src,
+  alt,
+  title,
+  node: _node,
+  ..._props
+}: ComponentProps<"img"> & { node?: unknown }) {
+  return (
+    <MessageImage
+      image={{
+        url: typeof src === "string" ? src : undefined,
+        alt: typeof alt === "string" && alt ? alt : undefined,
+        title: typeof title === "string" && title ? title : undefined,
+        name: typeof alt === "string" && alt ? alt : undefined,
+      }}
+    />
+  );
+}
+
+const streamdownComponents = { a: MarkdownAnchor, img: MarkdownImage };
 
 export function MarkdownText({ text, streaming = false }: MarkdownTextProps) {
   return (

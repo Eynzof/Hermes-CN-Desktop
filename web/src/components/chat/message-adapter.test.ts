@@ -64,6 +64,7 @@ describe("protocol schemas", () => {
       parts: [
         { type: "reasoning", text: "plan" },
         { type: "tool", toolCallId: "call-1", name: "read_file", state: "done", output: "ok" },
+        { type: "image", url: "https://example.test/chart.png", alt: "chart" },
         { type: "text", text: "done" },
         { type: "notice", level: "warning", text: "quota low" },
       ],
@@ -81,6 +82,7 @@ describe("protocol schemas", () => {
     expect(parsed.parts.map((part) => part.type)).toEqual([
       "reasoning",
       "tool",
+      "image",
       "text",
       "notice",
     ]);
@@ -250,6 +252,43 @@ describe("message adapter", () => {
       status: "streaming",
     });
     expect(message?.blocks).toEqual([{ type: "progress", text: "ಠ_ಠ deliberating..." }]);
+  });
+
+  it("preserves structured image parts as renderable chat images", () => {
+    const message = hermesUIMessageToChatMessage(uiMessage({
+      id: "assistant-image",
+      parts: [
+        { type: "text", text: "这是图片：" },
+        { type: "image", url: "https://example.test/result.png", alt: "生成结果" },
+      ],
+    }));
+
+    expect(message?.text).toBe("这是图片：");
+    expect(message?.images).toEqual([
+      expect.objectContaining({
+        url: "https://example.test/result.png",
+        alt: "生成结果",
+      }),
+    ]);
+    expect(message?.blocks?.map((block) => block.type)).toEqual(["text", "image"]);
+  });
+
+  it("turns legacy message images fields into image parts instead of dropping them", () => {
+    const messages = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({
+        id: 1,
+        role: "user",
+        content: "看这张图",
+        images: [{ url: "/api/session/s1/files/chart.png", alt: "chart" }],
+      }),
+    ]);
+    const chat = hermesUIMessagesToChatMessages(messages);
+
+    expect(messages[0]?.parts.map((part) => part.type)).toEqual(["text", "image"]);
+    expect(chat[0]?.images?.[0]).toMatchObject({
+      url: "/api/session/s1/files/chart.png",
+      alt: "chart",
+    });
   });
 
   it("merges historical tool call/result pairs into one compact assistant turn", () => {

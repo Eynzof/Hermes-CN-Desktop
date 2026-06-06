@@ -99,6 +99,27 @@ function attachmentDisplayName(attachment: ComposerAttachment): string {
   return attachment.uploadedName || attachment.name || fileNameFromPath(attachment.path ?? "");
 }
 
+function readFileAsDataUrl(file: File): Promise<string | undefined> {
+  if (typeof FileReader === "undefined") return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve(typeof reader.result === "string" ? reader.result : undefined);
+    }, { once: true });
+    reader.addEventListener("error", () => resolve(undefined), { once: true });
+    reader.readAsDataURL(file);
+  });
+}
+
+async function imageDisplayUrl(attachment: ComposerAttachment, path: string): Promise<string | undefined> {
+  if (attachment.file?.type.startsWith("image/")) {
+    const dataUrl = await readFileAsDataUrl(attachment.file);
+    if (dataUrl) return dataUrl;
+  }
+  if (attachment.previewUrl && !attachment.previewUrl.startsWith("blob:")) return attachment.previewUrl;
+  return path || undefined;
+}
+
 export function buildComposerDisplayText(payload: ComposerSubmitPayload): string {
   const text = payload.text.trim();
   const attachments = payload.attachments.map(attachmentDisplayName);
@@ -120,8 +141,25 @@ export async function prepareComposerPrompt(
     detectDroppedPath(sessionId: string, path: string): Promise<InputDetectDropResult>;
     onAttachmentUpdate?(id: string, patch: Partial<ComposerAttachment>): void;
   },
-): Promise<{ promptText: string; displayText: string }> {
+): Promise<{
+  promptText: string;
+  displayText: string;
+  displayImages: Array<{
+    url?: string;
+    alt?: string;
+    title?: string;
+    name?: string;
+    mimeType?: string;
+  }>;
+}> {
   const parts: string[] = [];
+  const displayImages: Array<{
+    url?: string;
+    alt?: string;
+    title?: string;
+    name?: string;
+    mimeType?: string;
+  }> = [];
 
   for (const attachment of payload.attachments) {
     try {
@@ -177,6 +215,14 @@ export async function prepareComposerPrompt(
             IMAGE_BLOCK_END,
           ].join("\n"));
         }
+        const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
+        displayImages.push({
+          url: await imageDisplayUrl(attachment, attached.path || path),
+          alt: label,
+          title: label,
+          name: label,
+          mimeType: attachment.mimeType,
+        });
         helpers.onAttachmentUpdate?.(attachment.id, { status: "done", progress: 100 });
         continue;
       }
@@ -214,5 +260,6 @@ export async function prepareComposerPrompt(
   return {
     promptText,
     displayText: buildComposerDisplayText(payload),
+    displayImages,
   };
 }

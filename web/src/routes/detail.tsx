@@ -247,6 +247,7 @@ export function DetailRoute() {
     });
     await sendPrompt(gatewaySessionId, prepared.promptText, {
       displayText: prepared.displayText,
+      displayImages: prepared.displayImages,
     });
   }, [attachImage, detectDroppedPath, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
 
