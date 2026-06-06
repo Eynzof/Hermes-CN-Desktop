@@ -148,7 +148,6 @@ export function PanelComposer() {
         variant="big"
         headerLabel="新任务"
         hints={[
-          { kbd: "@", label: "引用文件" },
           { kbd: "/", label: "选择 Skill" },
           { label: "把文件拖入此处直接附加" },
         ]}
