@@ -8,13 +8,15 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::environment;
 use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
+use hermes_agent_cn::tray;
 use tauri::Emitter;
 
 /// Emit a "runtime-status" event for the frontend overlay to consume.
@@ -266,14 +268,28 @@ fn main() {
     env_logger::init();
 
     let app_state = AppState::new();
+    let quit_requested = Arc::new(AtomicBool::new(false));
+    let close_quit_requested = Arc::clone(&quit_requested);
+    let tray_available = Arc::new(AtomicBool::new(false));
+    let setup_tray_available = Arc::clone(&tray_available);
+    let close_tray_available = Arc::clone(&tray_available);
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(app_state)
-        .setup(|app| {
+        .setup(move |app| {
             use tauri::Manager;
             let state = app.state::<AppState>();
             let bundled_resource_dir = app.path().resource_dir().ok();
+
+            match tray::install(app) {
+                Ok(()) => {
+                    setup_tray_available.store(true, Ordering::Relaxed);
+                }
+                Err(err) => {
+                    log::warn!("Failed to install system tray: {}", err);
+                }
+            }
 
             // 1. Resolve HERMES_HOME
             let hermes_home_base = resolve_hermes_home();
@@ -507,17 +523,34 @@ fn main() {
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
         ])
-        .on_window_event(|_window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
+        .on_window_event(move |window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. }
+                if window.label() == tray::MAIN_WINDOW_LABEL
+                    && close_tray_available.load(Ordering::Relaxed)
+                    && !close_quit_requested.load(Ordering::Relaxed) =>
+            {
+                api.prevent_close();
+                tray::hide_main_window_to_tray(window);
+            }
+            tauri::WindowEvent::Destroyed if window.label() == tray::MAIN_WINDOW_LABEL => {
                 log::info!("Main window destroyed");
             }
+            _ => {}
         })
         .build(tauri::generate_context!())
         .expect("error while building Hermes Agent 中文社区桌面版");
 
-    app.run(|app_handle, event| {
-        if let tauri::RunEvent::Exit = event {
+    app.run(move |app_handle, event| match event {
+        tauri::RunEvent::ExitRequested { .. } => {
+            quit_requested.store(true, Ordering::Relaxed);
+        }
+        tauri::RunEvent::Exit => {
             shutdown_owned_runtime(app_handle, "app exit");
         }
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => {
+            tray::show_main_window(app_handle);
+        }
+        _ => {}
     });
 }
