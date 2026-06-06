@@ -17,9 +17,16 @@ const SENSITIVE_KEYS = [
 ];
 
 const SENSITIVE_KEY_SET = new Set(SENSITIVE_KEYS.map((k) => k.toLowerCase()));
+const SENSITIVE_TEXT_KEYS = [...SENSITIVE_KEYS, "token"] as const;
 
 const BEARER_RE = /(Bearer\s+)([A-Za-z0-9_.\-+/=]{8,})/gi;
 const LONG_TOKEN_RE = /\b(sk-[A-Za-z0-9_\-]{16,}|gh[pous]_[A-Za-z0-9_]{20,}|xox[abprsu]-[A-Za-z0-9-]{10,})\b/g;
+const SENSITIVE_TEXT_KEY_RE = new RegExp(
+  `(^|[\\s,{\\[])(` +
+    SENSITIVE_TEXT_KEYS.map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") +
+    `)(\\s*[:=]\\s*)(["']?)([^"'\\s,;&}]+)(["']?)`,
+  "gi",
+);
 
 const MASK = "***";
 const MAX_DEPTH = 6;
@@ -27,7 +34,11 @@ const MAX_DEPTH = 6;
 function maskString(value: string): string {
   return value
     .replace(BEARER_RE, (_, prefix) => `${prefix}${MASK}`)
-    .replace(LONG_TOKEN_RE, MASK);
+    .replace(LONG_TOKEN_RE, MASK)
+    .replace(SENSITIVE_TEXT_KEY_RE, (_match, prefix, key, sep, openQuote, _secret, closeQuote) => {
+      const quote = openQuote && closeQuote ? openQuote : "";
+      return `${prefix}${key}${sep}${quote}${MASK}${quote}`;
+    });
 }
 
 function isSensitiveKey(key: string): boolean {

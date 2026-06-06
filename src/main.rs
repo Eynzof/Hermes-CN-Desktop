@@ -475,6 +475,7 @@ fn main() {
             commands::file_dialogs::create_workspace_project,
             commands::file_dialogs::open_workspace_path,
             commands::file_dialogs::open_external_url,
+            commands::log_export::export_log_snapshot,
             commands::debug_bundle::export_debug_bundle,
             commands::environment::environment_check,
             commands::api_proxy::api_request,
