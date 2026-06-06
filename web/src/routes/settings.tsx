@@ -39,7 +39,7 @@ import { openExternalUrl } from "@/lib/external-links";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
-import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
+import type { ConfigSchemaField, CronJob, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import s from "./settings.module.css";
@@ -328,8 +328,74 @@ export function SkillsSection() {
 
 /* ── Cron Jobs ───────────────────────────────────────────────────────── */
 
+function cronText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function cronScheduleDisplay(job: CronJob): string {
+  const schedule = job.schedule;
+  if (cronText(job.schedule_display)) return cronText(job.schedule_display);
+  if (typeof schedule === "string") return cronText(schedule) || "未设置";
+  if (schedule && typeof schedule === "object") {
+    return cronText(schedule.display) || cronText(schedule.expr) || cronText(schedule.value) || "未设置";
+  }
+  return "未设置";
+}
+
+function cronTitle(job: CronJob): string {
+  return cronText(job.name) || cronText(job.prompt).slice(0, 60) || cronText(job.script).slice(0, 60) || job.id;
+}
+
+function cronPromptPreview(job: CronJob): string {
+  return cronText(job.prompt) || (cronText(job.script) ? `脚本：${cronText(job.script)}` : "无任务描述");
+}
+
+function cronState(job: CronJob): string {
+  return cronText(job.state) || (job.enabled ? "scheduled" : "paused");
+}
+
+function cronStateLabel(job: CronJob): string {
+  const state = cronState(job);
+  if (state === "scheduled") return "计划中";
+  if (state === "paused") return "暂停";
+  if (state === "running") return "执行中";
+  if (state === "completed") return "已完成";
+  if (state === "error") return "错误";
+  return job.enabled ? "启用" : "暂停";
+}
+
+function cronResultLine(job: CronJob): string | null {
+  const status = cronText(job.last_status);
+  if (!status) return null;
+  if (status === "ok") return "上次结果：成功";
+  if (status === "error") return `上次结果：失败${cronText(job.last_error) ? ` · ${cronText(job.last_error)}` : ""}`;
+  return `上次结果：${status}`;
+}
+
+function cronIsPaused(job: CronJob): boolean {
+  return !job.enabled || cronState(job) === "paused";
+}
+
+function formatCronTime(value: string | number | null | undefined): string {
+  if (value == null) return "—";
+  const date = typeof value === "number"
+    ? new Date(value < 1_000_000_000_000 ? value * 1000 : value)
+    : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString();
+}
+
+function cronActionError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "请求失败");
+}
+
+type CronFeedback = {
+  tone: "ok" | "info" | "error";
+  message: string;
+};
+
 export function CronSection() {
-  const { data: jobs, isLoading } = useCronJobs();
+  const { data: jobs, isLoading, isError, error, refetch } = useCronJobs();
   const createJob = useCreateCronJob();
   const deleteJob = useDeleteCronJob();
   const cronAction = useCronAction();
@@ -337,45 +403,118 @@ export function CronSection() {
   const [newName, setNewName] = useState("");
   const [newSchedule, setNewSchedule] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
+  const [feedback, setFeedback] = useState<CronFeedback | null>(null);
+  const refreshTimersRef = useRef<number[]>([]);
+
+  const clearQueuedRefreshes = useCallback(() => {
+    refreshTimersRef.current.forEach((id) => window.clearTimeout(id));
+    refreshTimersRef.current = [];
+  }, []);
+
+  const queueFollowUpRefreshes = useCallback(() => {
+    clearQueuedRefreshes();
+    refreshTimersRef.current = [2_000, 8_000, 30_000, 65_000].map((delay) =>
+      window.setTimeout(() => void refetch(), delay),
+    );
+  }, [clearQueuedRefreshes, refetch]);
+
+  useEffect(() => clearQueuedRefreshes, [clearQueuedRefreshes]);
 
   const handleCreate = () => {
     if (!newSchedule || !newPrompt) return;
-    createJob.mutate({ name: newName || undefined, schedule: newSchedule, prompt: newPrompt });
-    setShowNew(false);
-    setNewName("");
-    setNewSchedule("");
-    setNewPrompt("");
+    createJob.mutate(
+      { name: newName || undefined, schedule: newSchedule, prompt: newPrompt },
+      {
+        onSuccess: (job) => {
+          setShowNew(false);
+          setNewName("");
+          setNewSchedule("");
+          setNewPrompt("");
+          setFeedback({ tone: "ok", message: `已创建定时任务「${cronTitle(job)}」。` });
+        },
+        onError: (err) => setFeedback({ tone: "error", message: `创建定时任务失败：${cronActionError(err)}` }),
+      },
+    );
+  };
+
+  const handleCronAction = (job: CronJob, action: "pause" | "resume" | "trigger") => {
+    cronAction.mutate(
+      { id: job.id, action },
+      {
+        onSuccess: (updated) => {
+          if (action === "trigger") {
+            setFeedback({
+              tone: "info",
+              message: `已触发「${cronTitle(updated)}」，内核会在下一次调度 tick 执行，通常 60 秒内会刷新运行结果。`,
+            });
+            queueFollowUpRefreshes();
+            return;
+          }
+          setFeedback({
+            tone: "ok",
+            message: `${action === "pause" ? "已暂停" : "已恢复"}「${cronTitle(updated)}」。`,
+          });
+        },
+        onError: (err) => {
+          const actionLabel = action === "pause" ? "暂停" : action === "resume" ? "恢复" : "触发";
+          setFeedback({ tone: "error", message: `${actionLabel}定时任务失败：${cronActionError(err)}` });
+        },
+      },
+    );
+  };
+
+  const handleDelete = (job: CronJob) => {
+    deleteJob.mutate(job.id, {
+      onSuccess: () => setFeedback({ tone: "ok", message: `已删除定时任务「${cronTitle(job)}」。` }),
+      onError: (err) => setFeedback({ tone: "error", message: `删除定时任务失败：${cronActionError(err)}` }),
+    });
   };
 
   return (
     <div>
       <p className={s.desc}>Agent 会按计划自动执行这些任务。</p>
-      {isLoading && <div className={s.desc}>加载中…</div>}
-      {jobs && jobs.length === 0 && !showNew && <div className={s.desc}>暂无定时任务。</div>}
-      {jobs?.map((job) => (
-        <div key={job.id} className={s.row}>
-          <div className={s.rowLeft}>
-            <div className={s.rowLabel}>{job.name || job.id}</div>
-            <div className={s.rowSub}>{job.schedule} · {job.prompt?.slice(0, 60)}</div>
-          </div>
-          <div className={s.rowRight} style={{ gap: 6 }}>
-            <span className={s.statusBadge} data-on={job.enabled}>{job.enabled ? "启用" : "暂停"}</span>
-            <button className={s.btn} onClick={() => cronAction.mutate({ id: job.id, action: job.enabled ? "pause" : "resume" })}>
-              {job.enabled ? "暂停" : "恢复"}
-            </button>
-            <button className={s.btn} onClick={() => cronAction.mutate({ id: job.id, action: "trigger" })}>触发</button>
-            <button className={s.btnDanger} onClick={() => deleteJob.mutate(job.id)}>删除</button>
-          </div>
+      {feedback && (
+        <div className={s.cronFeedback} data-tone={feedback.tone} role={feedback.tone === "error" ? "alert" : "status"}>
+          {feedback.message}
         </div>
-      ))}
+      )}
+      {isLoading && <div className={s.desc}>加载中…</div>}
+      {isError && (
+        <div className={s.providerDetail} style={{ marginTop: 12 }}>
+          <div className={s.desc}>加载定时任务失败：{error instanceof Error ? error.message : String(error)}</div>
+          <button className={s.btn} onClick={() => void refetch()}>重试</button>
+        </div>
+      )}
+      {!isLoading && !isError && jobs && jobs.length === 0 && !showNew && <div className={s.desc}>暂无定时任务。</div>}
+      {!isError && jobs?.map((job) => {
+        const paused = cronIsPaused(job);
+        return (
+          <div key={`${job.profile ?? "default"}:${job.id}`} className={s.row}>
+            <div className={s.rowLeft}>
+              <div className={s.rowLabel}>{cronTitle(job)}</div>
+              <div className={s.rowSub}>{cronScheduleDisplay(job)} · {cronPromptPreview(job).slice(0, 60)}</div>
+              <div className={s.rowSub}>下次：{formatCronTime(job.next_run_at ?? job.next_run)} · 上次：{formatCronTime(job.last_run_at ?? job.last_run)}</div>
+              {cronResultLine(job) && <div className={s.rowSub}>{cronResultLine(job)}</div>}
+            </div>
+            <div className={s.rowRight} style={{ gap: 6 }}>
+              <span className={s.statusBadge} data-on={!paused}>{cronStateLabel(job)}</span>
+              <button className={s.btn} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, paused ? "resume" : "pause")}>
+                {paused ? "恢复" : "暂停"}
+              </button>
+              <button className={s.btn} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, "trigger")}>触发</button>
+              <button className={s.btnDanger} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleDelete(job)}>删除</button>
+            </div>
+          </div>
+        );
+      })}
       {showNew ? (
         <div className={s.providerDetail} style={{ marginTop: 12 }}>
           <FieldRow label="名称（可选）" value={newName} onChange={setNewName} />
           <FieldRow label="Cron 表达式" value={newSchedule} onChange={setNewSchedule} placeholder="0 9 * * *" />
           <FieldRow label="Prompt" value={newPrompt} onChange={setNewPrompt} placeholder="每天执行的任务描述…" />
           <div className={s.providerActions}>
-            <button className={s.btnPrimary} onClick={handleCreate}>创建</button>
-            <button className={s.btn} onClick={() => setShowNew(false)}>取消</button>
+            <button className={s.btnPrimary} onClick={handleCreate} disabled={createJob.isPending}>创建</button>
+            <button className={s.btn} onClick={() => setShowNew(false)} disabled={createJob.isPending}>取消</button>
           </div>
         </div>
       ) : (
