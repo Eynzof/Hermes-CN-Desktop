@@ -7,6 +7,7 @@ import {
   FileText,
   HeartPulse,
   Info,
+  MonitorCog,
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const ADVANCED_ITEMS: readonly AdvancedItem[] = [
   { label: "常规", path: "/advanced", icon: SlidersHorizontal },
   { label: "配置", path: "/advanced/config", icon: FileCog },
   { label: "内核", path: "/advanced/kernel", icon: Cpu },
+  { label: "环境", path: "/advanced/env", icon: MonitorCog },
   { label: "关于", path: "/advanced/about", icon: Info },
 ];
 

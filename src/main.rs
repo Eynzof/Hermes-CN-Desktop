@@ -12,6 +12,7 @@ use std::sync::atomic::Ordering;
 
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
+use hermes_agent_cn::environment;
 use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use tauri::Emitter;
@@ -103,6 +104,11 @@ async fn acquire_managed_dashboard(
     resource_dir: Option<PathBuf>,
     install_bundled: bool,
 ) -> Result<DashboardHandle, String> {
+    emit_runtime_status(app, "checking-env", "正在检查本机环境...");
+    if let Err(err) = environment::check_bootstrap_environment(&options.hermes_home) {
+        return Err(record_bootstrap_error(app, err));
+    }
+
     if install_bundled && !install_bundled_runtime_for_bootstrap(app, resource_dir.as_deref()).await
     {
         // install_bundled_runtime_for_bootstrap already recorded the error.
@@ -470,6 +476,7 @@ fn main() {
             commands::file_dialogs::open_workspace_path,
             commands::file_dialogs::open_external_url,
             commands::debug_bundle::export_debug_bundle,
+            commands::environment::environment_check,
             commands::api_proxy::api_request,
             commands::api_proxy::external_request,
             commands::api_proxy::upload_file,

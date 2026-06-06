@@ -137,6 +137,34 @@ export interface RuntimeInfo {
   lastError?: string;
 }
 
+
+export type EnvironmentCheckStatus = "ok" | "warning" | "error" | "unknown";
+
+export type EnvironmentCheckCategory = "core" | "runtime" | "tools" | "browser" | "paths";
+
+export interface EnvironmentCheckItem {
+  id: string;
+  category: EnvironmentCheckCategory;
+  label: string;
+  status: EnvironmentCheckStatus;
+  required: boolean;
+  summary: string;
+  version?: string;
+  path?: string;
+  details?: string;
+  recommendation?: string;
+}
+
+export interface EnvironmentCheckResult {
+  generatedAtMs: number;
+  platform: string;
+  arch: string;
+  runtimeRoot: string;
+  hermesHome: string;
+  currentProfile: string;
+  items: EnvironmentCheckItem[];
+}
+
 export interface RuntimeUpdateManifest {
   schemaVersion: number;
   channel: string;
