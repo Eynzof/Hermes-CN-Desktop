@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info } from "lucide-react";
@@ -18,6 +18,8 @@ import {
   formatTokens,
 } from "@/lib/format";
 import type { SessionUsageResult } from "@hermes/protocol";
+
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface MessageTimelineProps {
   messages: ChatMessage[];
@@ -651,8 +653,12 @@ export function MessageTimeline({
   progressModel,
 }: MessageTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
+  const autoAnchorRef = useRef(false);
+  const autoAnchorTimerRef = useRef<number | null>(null);
   const messageCountRef = useRef(0);
+  const firstMessageIdRef = useRef<string | undefined>(undefined);
   const visibleMessages = useMemo(
     () =>
       messages.filter(
@@ -666,20 +672,98 @@ export function MessageTimeline({
     [messages],
   );
 
-  useEffect(() => {
-    const previousMessageCount = messageCountRef.current;
-    messageCountRef.current = visibleMessages.length;
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const container = containerRef.current;
-    if (!container || !nearBottomRef.current) return;
+    if (!container) return;
     container.scrollTo({
       top: container.scrollHeight,
-      behavior: previousMessageCount === visibleMessages.length ? "auto" : "smooth",
+      behavior,
     });
-  }, [visibleMessages, statusMessage, pendingApproval]);
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    const previousMessageCount = messageCountRef.current;
+    const previousFirstMessageId = firstMessageIdRef.current;
+    const nextFirstMessageId = visibleMessages[0]?.id;
+    const sessionChanged =
+      previousFirstMessageId !== undefined &&
+      nextFirstMessageId !== undefined &&
+      previousFirstMessageId !== nextFirstMessageId;
+
+    messageCountRef.current = visibleMessages.length;
+    firstMessageIdRef.current = nextFirstMessageId;
+
+    if (visibleMessages.length === 0) {
+      nearBottomRef.current = true;
+      return;
+    }
+
+    if (sessionChanged) {
+      nearBottomRef.current = true;
+    }
+
+    const container = containerRef.current;
+    if (!container || !nearBottomRef.current) return;
+    const initialHistoryRender = previousMessageCount === 0 || sessionChanged;
+    scrollToBottom(initialHistoryRender ? "auto" : "smooth");
+
+    // 长会话里 Markdown、表格、代码块等内容会在本次提交后继续改变实际高度。
+    // 初次进入历史会话时不要依赖一次平滑滚动，否则 WebKit/Tauri 里可能先滚到
+    // 一个尚未稳定的中间位置，用户看到空白，手动滚动后才触发重绘。
+    if (initialHistoryRender) {
+      autoAnchorRef.current = true;
+      if (autoAnchorTimerRef.current !== null) {
+        window.clearTimeout(autoAnchorTimerRef.current);
+      }
+      window.requestAnimationFrame(() => {
+        scrollToBottom("auto");
+        window.requestAnimationFrame(() => scrollToBottom("auto"));
+      });
+      autoAnchorTimerRef.current = window.setTimeout(() => {
+        scrollToBottom("auto");
+        nearBottomRef.current = true;
+        autoAnchorRef.current = false;
+        autoAnchorTimerRef.current = null;
+      }, 650);
+    }
+  }, [pendingApproval, scrollToBottom, statusMessage, visibleMessages]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const messagesElement = messagesRef.current;
+    if (!container || !messagesElement || typeof ResizeObserver === "undefined") return;
+
+    let frame = 0;
+    const anchorToBottom = () => {
+      if (!nearBottomRef.current && !autoAnchorRef.current) return;
+      container.scrollTop = container.scrollHeight;
+    };
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(anchorToBottom);
+    });
+    observer.observe(messagesElement);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (autoAnchorTimerRef.current !== null) {
+        window.clearTimeout(autoAnchorTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleScroll = () => {
     const container = containerRef.current;
     if (!container) return;
+    if (autoAnchorRef.current) {
+      nearBottomRef.current = true;
+      return;
+    }
     nearBottomRef.current =
       container.scrollHeight - container.scrollTop - container.clientHeight < 120;
   };
@@ -692,7 +776,7 @@ export function MessageTimeline({
       role="log"
       aria-live="polite"
     >
-      <div className={s.messages}>
+      <div ref={messagesRef} className={s.messages}>
         {loading ? <div className={s.empty}>加载对话中...</div> : null}
         {!loading && visibleMessages.length === 0 && !statusMessage && !pendingApproval ? (
           <div className={s.empty}>
