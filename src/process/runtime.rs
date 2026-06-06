@@ -1025,24 +1025,11 @@ fn verify_signature_with_key(
     public_key_pem: &str,
 ) -> Result<(), String> {
     use base64::Engine;
+    use ed25519_dalek::pkcs8::DecodePublicKey;
     use ed25519_dalek::{Signature, VerifyingKey};
 
-    // Parse PEM to extract the 32-byte public key
-    let pem_body: String = public_key_pem
-        .lines()
-        .filter(|l| !l.starts_with("-----"))
-        .collect();
-    let der = base64::engine::general_purpose::STANDARD
-        .decode(pem_body.trim())
+    let key = VerifyingKey::from_public_key_pem(public_key_pem.trim())
         .map_err(|e| format!("Invalid public key PEM: {}", e))?;
-    // Ed25519 SPKI DER: the last 32 bytes are the raw public key
-    if der.len() < 32 {
-        return Err("Public key DER too short".to_string());
-    }
-    let raw_key = &der[der.len() - 32..];
-    let key_bytes: [u8; 32] = raw_key.try_into().map_err(|_| "Invalid key length")?;
-    let key =
-        VerifyingKey::from_bytes(&key_bytes).map_err(|e| format!("Invalid public key: {}", e))?;
 
     let sig_bytes = base64::engine::general_purpose::STANDARD
         .decode(&manifest.signature)
@@ -2241,11 +2228,25 @@ mod tests {
 
     #[test]
     fn verify_rejects_too_short_der() {
-        // PEM body must base64-decode to ≥ 32 bytes for raw key extraction.
         let bad_pem = "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----\n";
         let m = fixture_manifest();
         let err = verify_signature_with_key(&m, bad_pem).unwrap_err();
-        assert!(err.contains("Public key DER too short"));
+        assert!(err.contains("Invalid public key PEM"));
+    }
+
+    #[test]
+    fn verify_rejects_raw_key_pem_without_spki_envelope() {
+        let (key, pem) = test_keypair();
+        let mut m = fixture_manifest();
+        sign_manifest(&key, &mut m);
+
+        let raw_key_pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+            base64::engine::general_purpose::STANDARD.encode(key.verifying_key().to_bytes())
+        );
+        assert!(verify_signature_with_key(&m, &pem).is_ok());
+        let err = verify_signature_with_key(&m, &raw_key_pem).unwrap_err();
+        assert!(err.contains("Invalid public key PEM"));
     }
 
     #[test]

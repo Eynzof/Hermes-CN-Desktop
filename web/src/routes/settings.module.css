@@ -662,6 +662,22 @@
   margin: 12px 0 18px;
 }
 
+.debugHeroActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.debugHeroActions span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--h-text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .aboutDebugGrid {
   column-count: 2;
   column-gap: 14px;
@@ -1905,6 +1921,11 @@
     justify-self: flex-start;
   }
 
+  .debugHeroActions {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+  }
+
   .contactLayout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2030,43 +2051,41 @@
   padding: 4px 14px;
 }
 
-/* Config tabs (horizontal scrollable category bar — document-style underline) */
+/* Config tabs (wrapping category chips; avoid hidden horizontal overflow) */
 .configTabs {
   display: flex;
-  gap: 0;
-  padding: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 0 14px;
   margin: 0 0 16px;
-  overflow-x: auto;
+  overflow: visible;
   border-bottom: 1px solid var(--h-line-soft);
-  scrollbar-width: none;
-}
-.configTabs::-webkit-scrollbar {
-  display: none;
 }
 
 .configTab {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: transparent;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-pill);
+  background: var(--h-bg-chip);
   color: var(--h-text-3);
   font-size: 12px;
   cursor: pointer;
   font-family: var(--h-font-cn);
   white-space: nowrap;
-  transition: color 0.12s, border-color 0.12s;
-  margin-bottom: -1px;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 .configTab:hover {
   color: var(--h-text);
+  border-color: var(--h-accent-border);
 }
 .configTab[data-active="true"] {
   color: var(--h-text);
-  border-bottom-color: var(--h-text);
+  border-color: var(--h-accent-border);
+  background: var(--h-accent-soft);
   font-weight: 500;
 }
 

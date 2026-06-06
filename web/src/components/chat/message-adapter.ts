@@ -11,11 +11,17 @@ import {
   normalizeReasoningText,
 } from "@/lib/reasoning-filter";
 import { stripHermesUiWorkspaceContext } from "@/lib/composer-prompt";
+import {
+  dedupeImageParts,
+  extractImagePartsFromUnknown,
+  imagePartFromSource,
+} from "@/lib/message-images";
 import { stableTextHash, type UiTurnStats } from "@/lib/ui-store";
 import type { AssistantTurnBlock } from "@/stores/chat";
-import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
+import type { AssistantMessageStats, ChatImageItem, ChatMessage, ChatToolItem } from "./chat-types";
 
 type HermesToolPart = Extract<HermesMessagePart, { type: "tool" }>;
+type HermesImagePart = Extract<HermesMessagePart, { type: "image" }>;
 
 export interface HermesUIMessageUpdate {
   sessionId: string;
@@ -52,6 +58,134 @@ function displayUnknown(value: unknown): string | undefined {
   } catch {
     return String(value);
   }
+}
+
+const HERMES_UI_IMAGE_BLOCK_RE = /\[Hermes UI Image\]\nname=([^\n]*)\ndescription:\n([\s\S]*?)\n\[\/Hermes UI Image\]/g;
+const IMAGE_FALLBACK_RE = /\[You can examine it with vision_analyze using image_url: ([^\]\n]+)\]/g;
+
+function parseJsonContent(value: string | null | undefined): unknown | undefined {
+  const text = value?.trim();
+  if (!text || !/^[{[]/.test(text)) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function imagePartToEntry(part: HermesImagePart): ChatImageItem {
+  const record = part as Record<string, unknown>;
+  const url =
+    part.url ||
+    part.src ||
+    part.path ||
+    part.data ||
+    (typeof record.image_url === "string" ? record.image_url : undefined) ||
+    (record.image_url && typeof record.image_url === "object"
+      ? (record.image_url as Record<string, unknown>).url
+      : undefined);
+  const name = part.name || part.filename || part.file_name || (typeof url === "string" && !url.startsWith("data:")
+    ? url.replace(/\\/g, "/").split("/").pop()
+    : undefined);
+  return {
+    ...(typeof url === "string" && url ? { url } : {}),
+    ...(part.alt || name ? { alt: part.alt || name } : {}),
+    ...(part.title ? { title: part.title } : {}),
+    ...(name ? { name } : {}),
+    ...(part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type
+      ? { mimeType: part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type }
+      : {}),
+  };
+}
+
+function imagePartsFromMessageImages(images: SessionMessage["images"]): HermesImagePart[] {
+  if (!images?.length) return [];
+  return dedupeImageParts(images.flatMap((image, index) => {
+    const part = imagePartFromSource(image, `image-${index + 1}`);
+    return part ? [part] : [];
+  }));
+}
+
+function imagePartsFromTransportText(text: string | null | undefined): HermesImagePart[] {
+  if (!text) return [];
+  const parts: HermesImagePart[] = [];
+
+  for (const match of text.matchAll(IMAGE_FALLBACK_RE)) {
+    const path = match[1]?.trim();
+    if (!path) continue;
+    const part = imagePartFromSource(path);
+    if (part) parts.push(part);
+  }
+
+  for (const match of text.matchAll(HERMES_UI_IMAGE_BLOCK_RE)) {
+    const name = match[1]?.trim();
+    const description = match[2]?.trim();
+    const extracted = extractImagePartsFromUnknown(description);
+    if (extracted.length) {
+      parts.push(...extracted.map((part) => ({
+        ...part,
+        ...(name ? { name, alt: part.alt || name } : {}),
+      })));
+      continue;
+    }
+    const part = imagePartFromSource({ name, alt: name || "图片附件" });
+    if (part) parts.push(part);
+  }
+
+  return dedupeImageParts(parts);
+}
+
+function textAndImagesFromStructuredContent(content: string | null | undefined): {
+  text?: string;
+  images: HermesImagePart[];
+} {
+  const parsed = parseJsonContent(content);
+  if (parsed === undefined) {
+    return {
+      text: content ?? undefined,
+      images: imagePartsFromTransportText(content),
+    };
+  }
+
+  const textParts: string[] = [];
+  const imageParts: HermesImagePart[] = [];
+  const visit = (value: unknown) => {
+    if (typeof value === "string") {
+      textParts.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    if (typeof record.text === "string") textParts.push(record.text);
+    if (typeof record.content === "string" && record.type === "text") textParts.push(record.content);
+    const direct = imagePartFromSource(record);
+    if (direct && (
+      record.type === "image" ||
+      record.type === "image_url" ||
+      record.type === "input_image" ||
+      record.type === "output_image" ||
+      record.is_image === true
+    )) {
+      imageParts.push(direct);
+    } else {
+      imageParts.push(...extractImagePartsFromUnknown(record));
+    }
+  };
+
+  visit(parsed);
+  const images = dedupeImageParts([
+    ...imageParts,
+    ...imagePartsFromTransportText(content),
+  ]);
+  if (!textParts.length && !images.length) return { text: content ?? undefined, images: [] };
+  return {
+    text: textParts.join("\n").trim() || undefined,
+    images,
+  };
 }
 
 function normalizeAssistantBlocks(
@@ -190,13 +324,18 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
     };
   }
 
-  const text = normalizeContent(msg.content);
+  const content = textAndImagesFromStructuredContent(msg.content);
+  const text = normalizeContent(content.text);
   const reasoning = normalizeContent(
     normalizeReasoningText(msg.reasoning_content ?? msg.reasoning ?? undefined),
   );
   const tools = parseToolCalls(msg.tool_calls, createdAt);
   const parts: HermesMessagePart[] = [];
   if (text) parts.push({ type: "text", text });
+  parts.push(...dedupeImageParts([
+    ...content.images,
+    ...imagePartsFromMessageImages(msg.images),
+  ]));
   if (reasoning) parts.push({ type: "reasoning", text: reasoning });
   tools.forEach((tool) => parts.push(tool));
 
@@ -318,6 +457,7 @@ export function messagesResponseToHermesUIMessages(response: MessagesResponse | 
 
 function toolPartToToolEntry(part: HermesToolPart, message: HermesUIMessage): ChatToolItem {
   const input = parseToolInput(part.input);
+  const images = extractImagePartsFromUnknown(part.output).map(imagePartToEntry);
   return {
     tool_id: part.toolCallId,
     name: part.name,
@@ -329,6 +469,7 @@ function toolPartToToolEntry(part: HermesToolPart, message: HermesUIMessage): Ch
     startedAt: part.startedAt ?? message.createdAt,
     completedAt: part.completedAt,
     arguments: input.arguments,
+    images: images.length ? images : undefined,
   };
 }
 
@@ -350,6 +491,10 @@ function partsToBlocks(
     }
     if (part.type === "progress") {
       if (options.includeProgress) blocks.push({ type: "progress", text: part.text });
+      continue;
+    }
+    if (part.type === "image") {
+      blocks.push({ type: "image", image: imagePartToEntry(part) });
       continue;
     }
     if (part.type === "tool") {
@@ -384,6 +529,13 @@ function noticeTextFromParts(parts: HermesMessagePart[]): string | undefined {
   return normalizeContent(text);
 }
 
+function imagesFromParts(parts: HermesMessagePart[]): ChatImageItem[] | undefined {
+  const images = parts
+    .filter((part): part is HermesImagePart => part.type === "image")
+    .map(imagePartToEntry);
+  return images.length ? images : undefined;
+}
+
 function messageHasErrorNotice(message: HermesUIMessage): boolean {
   return message.parts.some((part) => part.type === "notice" && part.level === "error");
 }
@@ -396,6 +548,9 @@ function statsHashFromMessage(message: HermesUIMessage): string | undefined {
   return stableTextHash([
     textFromParts(message.parts),
     reasoningFromParts(message.parts),
+    imagesFromParts(message.parts)
+      ?.map((image) => [image.url, image.name, image.alt].filter(Boolean).join(" "))
+      .join("\n"),
     toolText,
   ].filter(Boolean).join("\n"));
 }
@@ -552,6 +707,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     ? noticeTextFromParts(msg.parts) ?? textFromParts(msg.parts)
     : textFromParts(msg.parts);
   const reasoning = reasoningFromParts(msg.parts);
+  const images = imagesFromParts(msg.parts);
   const blocks = msg.role === "assistant"
     ? partsToBlocks(msg, { includeProgress })
     : undefined;
@@ -559,7 +715,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     ?.filter((block): block is Extract<AssistantTurnBlock, { type: "tool" }> => block.type === "tool")
     .map((block) => block.tool);
 
-  if (!text && !reasoning && !tools?.length && !blocks?.length) return null;
+  if (!text && !reasoning && !images?.length && !tools?.length && !blocks?.length) return null;
 
   return {
     id: msg.id,
@@ -567,6 +723,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     createdAt: msg.createdAt,
     text,
     reasoning,
+    images,
     tools: tools?.length ? tools : undefined,
     blocks,
     status: msg.status,
@@ -610,6 +767,14 @@ function canonicalReasoning(message: HermesUIMessage): string {
   return comparableText(reasoningFromParts(message.parts));
 }
 
+function canonicalImages(message: HermesUIMessage): string {
+  return comparableText(
+    imagesFromParts(message.parts)
+      ?.map((image) => [image.url, image.name, image.alt].filter(Boolean).join(" "))
+      .join("\n"),
+  );
+}
+
 function canonicalToolComparable(message: HermesUIMessage): string {
   return message.parts
     .filter((part): part is HermesToolPart => part.type === "tool")
@@ -640,6 +805,8 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
   const liveText = canonicalText(live);
   const storedReasoning = canonicalReasoning(stored);
   const liveReasoning = canonicalReasoning(live);
+  const storedImages = canonicalImages(stored);
+  const liveImages = canonicalImages(live);
 
   if (stored.role === "assistant") {
     if (storedText || liveText) {
@@ -663,11 +830,12 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
 
       return false;
     }
+    if (storedImages || liveImages) return storedImages === liveImages;
     return canonicalToolComparable(stored) !== "" &&
       canonicalToolComparable(stored) === canonicalToolComparable(live);
   }
 
-  return storedText === liveText && storedReasoning === liveReasoning;
+  return storedText === liveText && storedReasoning === liveReasoning && storedImages === liveImages;
 }
 
 function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMessage[] {

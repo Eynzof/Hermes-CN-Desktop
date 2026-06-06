@@ -11,6 +11,10 @@ import {
   normalizeCliThinkingProgress,
   normalizeReasoningText,
 } from "@/lib/reasoning-filter";
+import {
+  dedupeImageParts,
+  imagePartFromSource,
+} from "@/lib/message-images";
 import { resolvePersistentSessionId } from "@/lib/session-map";
 import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
 
@@ -26,10 +30,19 @@ export interface ToolEntry {
   completedAt?: number;
 }
 
+export interface ImageEntry {
+  url?: string;
+  alt?: string;
+  title?: string;
+  name?: string;
+  mimeType?: string;
+}
+
 export type AssistantTurnBlock =
   | { type: "text"; text: string }
   | { type: "reasoning"; text: string }
   | { type: "progress"; text: string }
+  | { type: "image"; image: ImageEntry }
   | { type: "tool"; tool: ToolEntry };
 
 export interface PendingApproval {
@@ -162,6 +175,52 @@ function looseComparableText(value: string | undefined): string {
 
 function withoutProgressParts(parts: HermesMessagePart[]): HermesMessagePart[] {
   return parts.filter((part) => part.type !== "progress");
+}
+
+function imagePartsFromPayload(payload: Record<string, any>): HermesMessagePart[] {
+  const sources = Array.isArray(payload.images)
+    ? payload.images
+    : payload.image !== undefined
+      ? [payload.image]
+      : payload.image_url !== undefined
+        ? [payload.image_url]
+        : [];
+
+  return dedupeImageParts(
+    sources.flatMap((source: unknown, index: number) => {
+      const part = imagePartFromSource(source, `image-${index + 1}`);
+      return part ? [part] : [];
+    }),
+  );
+}
+
+function appendImageParts(parts: HermesMessagePart[], images: HermesMessagePart[]): HermesMessagePart[] {
+  if (!images.length) return parts;
+  const progressIndex = parts.findIndex((part) => part.type === "progress");
+  const base = progressIndex === -1
+    ? parts
+    : [...parts.slice(0, progressIndex), ...parts.slice(progressIndex + 1)];
+  const currentImages = base.filter((part): part is Extract<HermesMessagePart, { type: "image" }> =>
+    part.type === "image"
+  );
+  const nextImages = dedupeImageParts([
+    ...currentImages,
+    ...images.filter((part): part is Extract<HermesMessagePart, { type: "image" }> => part.type === "image"),
+  ]);
+  const imageKeys = new Set(nextImages.map((part) => part.url || part.path || part.name || part.alt).filter(Boolean));
+  const withoutDuplicateImages = base.filter((part) => {
+    if (part.type !== "image") return true;
+    const key = part.url || part.path || part.name || part.alt;
+    return !key || !imageKeys.has(key);
+  });
+  const merged = [...withoutDuplicateImages, ...nextImages];
+  return progressIndex === -1
+    ? merged
+    : [
+      ...merged.slice(0, progressIndex),
+      parts[progressIndex]!,
+      ...merged.slice(progressIndex),
+    ];
 }
 
 function terminateRunningTools(parts: HermesMessagePart[]): HermesMessagePart[] {
@@ -444,6 +503,7 @@ function finalizeAssistantParts(
   if (finalReasoning) {
     parts = upsertReasoningPart(parts, finalReasoning);
   }
+  parts = appendImageParts(parts, imagePartsFromPayload(payload));
 
   return parts;
 }
@@ -482,6 +542,7 @@ export function reduceGatewayEvent(
 
     case "message.delta": {
       const text = typeof payload.text === "string" ? payload.text : "";
+      const images = imagePartsFromPayload(payload);
       const id = activeAssistantId(runtime, now);
       const next = updateActiveAssistant(
         clearProviderStatus({
@@ -497,7 +558,7 @@ export function reduceGatewayEvent(
         (message) => ({
           ...message,
           status: "streaming",
-          parts: appendTextPart(message.parts, text),
+          parts: appendImageParts(appendTextPart(message.parts, text), images),
         }),
       );
       return next;
@@ -898,9 +959,15 @@ export const recoverCompletedTurnFromStoredMessagesAtom = atom(
 
 export const startPromptAtom = atom(
   null,
-  (_get, set, params: { sessionId: string; text: string; now?: number }) => {
+  (_get, set, params: { sessionId: string; text: string; images?: ImageEntry[]; now?: number }) => {
     const now = params.now ?? Date.now();
     const assistantId = assistantClientId(now);
+    const userParts: HermesMessagePart[] = [];
+    if (params.text) userParts.push({ type: "text", text: params.text });
+    for (const image of params.images ?? []) {
+      const part = imagePartFromSource(image);
+      if (part) userParts.push(part);
+    }
     set(gwSessionIdAtom, params.sessionId);
     set(chatRuntimeBySessionAtom, (state) =>
       updateSessionRuntime(state, params.sessionId, (runtime) => ({
@@ -913,7 +980,7 @@ export const startPromptAtom = atom(
             role: "user",
             createdAt: now,
             status: "complete",
-            parts: [{ type: "text", text: params.text }],
+            parts: userParts.length ? userParts : [{ type: "text", text: params.text }],
           },
           {
             id: assistantId,
@@ -938,6 +1005,7 @@ function textForStatsHash(message: HermesUIMessage): string {
   return message.parts
     .flatMap((part) => {
       if (part.type === "text" || part.type === "reasoning") return [part.text];
+      if (part.type === "image") return [part.url, part.path, part.name, part.alt].filter(Boolean) as string[];
       if (part.type === "tool") {
         let output = "";
         if (typeof part.output === "string") {

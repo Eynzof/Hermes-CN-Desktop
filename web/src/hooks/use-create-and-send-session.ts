@@ -43,6 +43,17 @@ export function useCreateAndSendSession() {
     const sessionId = await (options?.createSession ?? createSession)();
     const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
     const optimisticDisplayText = buildComposerDisplayText(payload);
+    const optimisticDisplayImages = payload.attachments
+      .filter((attachment) => attachment.kind === "image")
+      .map((attachment) => ({
+        url: attachment.previewUrl && !attachment.previewUrl.startsWith("blob:")
+          ? attachment.previewUrl
+          : attachment.path,
+        alt: attachment.name,
+        title: attachment.name,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+      }));
 
     if (payload.modelSelection?.model) {
       rememberSessionModelOverride(sessionId, payload.modelSelection);
@@ -52,7 +63,7 @@ export function useCreateAndSendSession() {
       rememberSessionWorkspace(sessionId, payload.workspacePath);
     }
 
-    beginPrompt(sessionId, optimisticDisplayText, submittedAt);
+    beginPrompt(sessionId, optimisticDisplayText, submittedAt, optimisticDisplayImages);
     setActiveSessionId(sessionId);
     navigate(`/tasks/${sessionId}`);
 
@@ -78,6 +89,7 @@ export function useCreateAndSendSession() {
         });
         await sendPrompt(sessionId, prepared.promptText, {
           displayText: prepared.displayText,
+          displayImages: prepared.displayImages,
           skipOptimisticStart: true,
         });
       } catch (err) {
