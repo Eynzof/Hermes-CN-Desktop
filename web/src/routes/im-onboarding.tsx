@@ -27,13 +27,17 @@ import type {
   ImOnboardingPollResult,
   ImPlatform,
   ImRedactedValue,
+  MessagingPlatformInfo,
+  MessagingPlatformTestResponse,
 } from "@hermes/protocol";
 import { useStatus } from "@/hooks/use-status";
 import {
   useApplyImOnboarding,
   useBeginImOnboarding,
   useImOnboardingState,
+  useMessagingPlatform,
   usePollImOnboarding,
+  useTestMessagingPlatform,
 } from "@/hooks/use-im-onboarding";
 import { openExternalUrl } from "@/lib/external-links";
 import { SectionShell } from "./section-shell";
@@ -48,6 +52,7 @@ export const FEISHU_REQUIRED_SCOPES = [
   "im:message.p2p_msg:readonly",
   "im:message:send_as_bot",
 ] as const;
+export const FEISHU_GROUP_SCOPE = "im:message.group_at_msg:readonly";
 export const FEISHU_RECOMMENDED_SCOPES = [
   "im:resource",
   "cardkit:card:write",
@@ -233,7 +238,7 @@ function MetaStrip({ platform, profile, statusData, configured }: {
 }) {
   const runtime = platformState(statusData, platform);
   const connectionLabel = platform === "feishu"
-    ? (configured.FEISHU_CONNECTION_MODE?.redactedValue === "webhook" ? "回调模式" : "长连接")
+    ? "长连接"
     : "自动轮询";
   const credentialSet = platform === "feishu"
     ? Boolean(configured.FEISHU_APP_ID?.isSet && configured.FEISHU_APP_SECRET?.isSet)
@@ -316,12 +321,16 @@ function copyText(value: string) {
   void navigator.clipboard?.writeText(value);
 }
 
-function FeishuBackendChecklist() {
-  const requiredScopes = FEISHU_REQUIRED_SCOPES.join("\n");
+function FeishuBackendChecklist({ groupEnabled }: { groupEnabled: boolean }) {
+  const requiredScopeList = [
+    ...FEISHU_REQUIRED_SCOPES,
+    ...(groupEnabled ? [FEISHU_GROUP_SCOPE] : []),
+  ];
+  const requiredScopes = requiredScopeList.join("\n");
   const recommendedScopes = FEISHU_RECOMMENDED_SCOPES.join("\n");
   const importJson = JSON.stringify({
     scopes: {
-      tenant: [...FEISHU_REQUIRED_SCOPES, ...FEISHU_RECOMMENDED_SCOPES],
+      tenant: [...requiredScopeList, ...FEISHU_RECOMMENDED_SCOPES],
     },
   }, null, 2);
 
@@ -331,7 +340,9 @@ function FeishuBackendChecklist() {
         <div>
           <div className={s.miniEyebrow}>FEISHU CONSOLE</div>
           <h3>飞书后台还要点几下</h3>
-          <p>扫码只是把应用信息带回来。想让桌面端真的收到消息，需要在飞书开放平台打开机器人能力、消息事件和发送权限，最后发布一次版本。</p>
+          <p>{groupEnabled
+            ? "扫码只是把应用信息带回来。你已打开群聊高级选项，所以除了私聊权限，还要补上群聊 @ 消息权限，最后发布一次版本。"
+            : "扫码只是把应用信息带回来。先完成私聊最小闭环：打开机器人能力、消息事件和发送权限，最后发布一次版本。"}</p>
         </div>
         <button className={`${s.btn} ${s.externalBtn}`} type="button" onClick={() => openExternal(FEISHU_DEVELOPER_URL)}>
           <ExternalLink size={14} />打开飞书开发者后台
@@ -347,7 +358,7 @@ function FeishuBackendChecklist() {
         <div className={s.consoleStep}>
           <span>2</span>
           <b>订阅接收消息</b>
-          <p>在「事件与回调」里选择长连接接收事件，然后添加「接收消息 v2.0」。</p>
+          <p>在「事件与回调」里选择长连接接收事件，然后添加「接收消息 v2.0」。{groupEnabled ? "群聊场景也需要在消息权限里勾选群聊 @ 消息。" : ""}</p>
           <code>{FEISHU_RECEIVE_EVENT}</code>
         </div>
         <div className={s.consoleStep}>
@@ -359,8 +370,9 @@ function FeishuBackendChecklist() {
 
       <div className={s.scopeGrid}>
         <div className={s.scopeBox}>
-          <div className={s.scopeHead}><b>必须权限</b><button type="button" onClick={() => copyText(requiredScopes)}>复制</button></div>
-          {FEISHU_REQUIRED_SCOPES.map((scope) => <code key={scope}>{scope}</code>)}
+          <div className={s.scopeHead}><b>当前必须权限</b><button type="button" onClick={() => copyText(requiredScopes)}>复制</button></div>
+          {requiredScopeList.map((scope) => <code key={scope}>{scope}</code>)}
+          {!groupEnabled ? <small className={s.scopeNote}>默认只做私聊闭环；需要群聊时再到高级设置打开。</small> : null}
         </div>
         <div className={s.scopeBox}>
           <div className={s.scopeHead}><b>按需推荐</b><button type="button" onClick={() => copyText(recommendedScopes)}>复制</button></div>
@@ -376,18 +388,70 @@ function FeishuBackendChecklist() {
   );
 }
 
-function FeishuTestGuide({ result }: { result: ImOnboardingApplyResult | null }) {
+function platformStateText(state?: string | null): string {
+  switch (state) {
+    case "connected": return "已连接";
+    case "disabled": return "未启用";
+    case "not_configured": return "配置不完整";
+    case "pending_restart": return "等待重启";
+    case "gateway_stopped": return "接收服务未运行";
+    case "error": return "连接错误";
+    default: return state || "暂无状态";
+  }
+}
+
+function FeishuTestGuide({
+  result,
+  platform,
+  platformLoading,
+  testResult,
+  testError,
+  testPending,
+  onTest,
+}: {
+  result: ImOnboardingApplyResult | null;
+  platform?: MessagingPlatformInfo | null;
+  platformLoading: boolean;
+  testResult?: MessagingPlatformTestResponse | null;
+  testError?: unknown;
+  testPending: boolean;
+  onTest: () => void;
+}) {
+  const restartOk = Boolean(result?.restart.ok);
+  const connected = platform?.state === "connected";
+  const officialAvailable = platform !== null && platform !== undefined;
+  const testMessage = testResult?.message ?? textFromError(testError);
   return (
-    <section className={`${s.section} ${s.testGuide}`} data-ready={result?.ok ? "true" : undefined}>
-      <div>
+    <section className={`${s.section} ${s.testGuide}`} data-ready={restartOk || connected ? "true" : undefined}>
+      <div className={s.testIntro}>
         <div className={s.miniEyebrow}>LIVE TEST</div>
         <h3>最后发消息试一下</h3>
-        <p>{result?.ok
-          ? "接收服务已经启动。现在去飞书里私聊机器人发送 hi，确认能收到回复。"
+        <p>{restartOk
+          ? "接收服务已经按当前档案重启。先点一次检测确认链路，再去飞书里私聊机器人发送 hi。"
           : "先保存、完成飞书后台设置并发布，再回来私聊机器人验证。"}</p>
       </div>
-      <div className={s.testCards}>
-        <div><MessageSquareText size={15} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到回复或配对提示。</span></div>
+
+      <div className={s.testPanel}>
+        <div className={s.testCards}>
+          <div><MessageSquareText size={15} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到回复或配对提示。</span></div>
+          <div><Stethoscope size={15} /><b>官方检测</b><span>{platformLoading
+            ? "正在读取官方消息平台状态。"
+            : officialAvailable
+              ? `当前状态：${platformStateText(platform?.state)}${platform?.error_message ? `，${platform.error_message}` : ""}`
+              : "当前 runtime 暂无官方消息平台检测接口，已使用接收服务状态兜底。"}</span></div>
+        </div>
+
+        <div className={s.statusGrid}>
+          <div className={s.statusItem} data-tone={restartOk ? "ok" : "warn"}><b>保存重启</b><span>{restartOk ? result?.restart.message || "已完成" : "还没有成功保存并重启"}</span></div>
+          <div className={s.statusItem} data-tone={connected ? "ok" : undefined}><b>平台状态</b><span>{platformLoading ? "读取中…" : officialAvailable ? platformStateText(platform?.state) : "旧 runtime 未提供"}</span></div>
+          <div className={s.statusItem} data-tone={testResult?.ok ? "ok" : testResult ? "warn" : undefined}><b>检测结果</b><span>{testPending ? "检测中…" : testMessage || "可点击检测缺口"}</span></div>
+        </div>
+
+        <div className={s.testActions}>
+          <button className={s.btn} type="button" onClick={onTest} disabled={platformLoading || testPending}>
+            <RotateCw size={14} />{testPending ? "检测中…" : "检测飞书连接"}
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -434,6 +498,10 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
             title: "必须权限",
             items: Array.from(FEISHU_REQUIRED_SCOPES),
             chips: ["单聊可收", "机器人可发"],
+          },
+          {
+            title: "群聊可选",
+            items: [`需要群聊 @ 回复时，再打开高级设置并补充 ${FEISHU_GROUP_SCOPE}`, "默认先完成私聊闭环，少申请一个权限，小白更容易排错"],
           },
         ],
       },
@@ -617,11 +685,15 @@ function FeishuRoute() {
   const begin = useBeginImOnboarding();
   const poll = usePollImOnboarding();
   const apply = useApplyImOnboarding("feishu");
+  const messagingPlatformQuery = useMessagingPlatform("feishu");
+  const testPlatform = useTestMessagingPlatform("feishu");
   const domain = "feishu";
   const connectionMode = "websocket";
   const [dmPolicy, setDmPolicy] = useState<DmPolicy>("pairing");
   const [allowedUsers, setAllowedUsers] = useState("");
   const [includeScannedOpenId, setIncludeScannedOpenId] = useState(true);
+  const [groupEnabled, setGroupEnabled] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [homeChannel, setHomeChannel] = useState("");
   const [flow, setFlow] = useState<ImOnboardingBeginResult | null>(null);
   const [pollResult, setPollResult] = useState<ImOnboardingPollResult | null>(null);
@@ -639,6 +711,7 @@ function FeishuRoute() {
   const start = () => {
     begin.reset();
     poll.reset();
+    testPlatform.reset();
     setResult(null);
     begin.mutate({ platform: "feishu", domain }, {
       onSuccess: (next) => {
@@ -676,15 +749,18 @@ function FeishuRoute() {
         ...splitAllowedUsers(allowedUsers),
       ])
       : "";
-    return {
+    const patch: Record<string, string> = {
       FEISHU_DOMAIN: domain,
       FEISHU_CONNECTION_MODE: connectionMode,
       FEISHU_ALLOW_ALL_USERS: allowAll,
       FEISHU_ALLOWED_USERS: allowedList,
-      FEISHU_GROUP_POLICY: "disabled",
+      FEISHU_GROUP_POLICY: groupEnabled ? "open" : "disabled",
       FEISHU_REQUIRE_MENTION: "true",
-      FEISHU_HOME_CHANNEL: shouldAutoHomeChannel ? FEISHU_SCANNED_OPEN_ID_TOKEN : homeChannel.trim(),
     };
+    if (shouldAutoHomeChannel || homeChannel.trim()) {
+      patch.FEISHU_HOME_CHANNEL = shouldAutoHomeChannel ? FEISHU_SCANNED_OPEN_ID_TOKEN : homeChannel.trim();
+    }
+    return patch;
   };
   const save = () => {
     apply.mutate({
@@ -711,13 +787,14 @@ function FeishuRoute() {
       ]) || "未填写"
       : "";
   const allowlistStatus = dmPolicy === "open" ? "未限制" : dmPolicy === "pairing" ? "走配对确认" : allowPolicyReady ? "可保存" : "缺少 open_id";
-  const homeChannelReview = shouldAutoHomeChannel ? `扫码用户 ${last(scannedOpenId)}` : homeChannel.trim();
-  const homeChannelStatus = shouldAutoHomeChannel ? "自动设置" : homeChannel.trim() ? "已填写" : "稍后设置";
+  const homeChannelReview = shouldAutoHomeChannel ? `扫码用户 ${last(scannedOpenId)}` : homeChannel.trim() || "保持原配置";
+  const homeChannelStatus = shouldAutoHomeChannel ? "自动设置" : homeChannel.trim() ? "已填写" : "不改动";
   const rows: Array<[string, string, string]> = [
     ["连接模式", `FEISHU_CONNECTION_MODE=${connectionMode}`, connectionMode === "websocket" ? "推荐" : "高级"],
     ["区域", `FEISHU_DOMAIN=${domain}`, "已选择"],
     ["私聊策略", `FEISHU_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, dmPolicy === "scanned" ? "只允许扫码用户" : dmPolicy === "pairing" ? "需要确认" : dmPolicy],
     ["允许对话用户", `FEISHU_ALLOWED_USERS=${allowlistReview}`, allowlistStatus],
+    ["群聊入口", `FEISHU_GROUP_POLICY=${groupEnabled ? "open" : "disabled"}`, groupEnabled ? "高级：仅 @ 响应" : "默认关闭"],
     ["默认通知会话", `FEISHU_HOME_CHANNEL=${homeChannelReview}`, homeChannelStatus],
   ];
 
@@ -728,7 +805,7 @@ function FeishuRoute() {
           <Hero platform="feishu" stateSub={`当前档案：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={start} primaryBusy={busy} />
           <ActionFeedback busy={begin.isPending} error={begin.error} flow={flow} status={status} onJump={jumpToQr} />
           <MetaStrip platform="feishu" profile={stateQuery.data?.currentProfile ?? "default"} statusData={statusQuery.data} configured={configured} />
-          <FlowSteps platform="feishu" status={status} saved={Boolean(result?.ok)} />
+          <FlowSteps platform="feishu" status={status} saved={Boolean(result?.restart.ok)} />
           <div ref={qrAnchorRef} className={s.anchorBlock}>
             <SectionTitle num="[ STEP 01 ]" title="用飞书扫码确认" meta={flow ? `每 ${flow.intervalSeconds} 秒自动检查一次；成功后继续下一步` : "二维码只在当前页面临时使用"} />
             <QrPanel
@@ -767,6 +844,27 @@ function FeishuRoute() {
               <Field label="允许对话用户 open_id" desc={scannedOpenId ? "可继续添加其他飞书用户 open_id；多个值用英文逗号分隔。" : "多个飞书 open_id 用英文逗号分隔；可从飞书消息事件 sender_id.open_id 获取。"} meta="FEISHU_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} placeholder="ou_xxx,ou_yyy" /></Field>
             </>}
             <Field label="默认通知会话" desc={scannedOpenId ? "用于定时任务和跨平台通知；留空会自动使用本次扫码用户的私聊。" : "用于定时任务和跨平台通知；扫码成功后会自动填到当前用户，也可以手动填 chat_id。"} meta="FEISHU_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder={scannedOpenId ? "留空自动使用扫码用户" : "oc_xxx 或留空"} /></Field>
+            <div className={s.advancedPanel} data-open={showAdvanced ? "true" : undefined}>
+              <button className={s.advancedHeader} type="button" onClick={() => setShowAdvanced((value) => !value)} aria-expanded={showAdvanced}>
+                <span>
+                  <b>高级设置</b>
+                  <small>默认不需要动；只有要群聊、Lark 国际版或公司统一回调时才展开。</small>
+                </span>
+                <em>{showAdvanced ? "收起" : "展开"}</em>
+              </button>
+              {showAdvanced ? (
+                <div className={s.advancedBody}>
+                  <label className={s.checkToggle}>
+                    <input type="checkbox" checked={groupEnabled} onChange={(e) => setGroupEnabled(e.target.checked)} />
+                    <span>启用群聊 @ 机器人入口。打开后会写入 <code>FEISHU_GROUP_POLICY=open</code>，并在权限清单里补充 <code>{FEISHU_GROUP_SCOPE}</code>；关闭时保持 <code>disabled</code>。</span>
+                  </label>
+                  <div className={s.advancedHint}>
+                    <b>先别急着开高级项</b>
+                    <span>新手建议先跑通私聊。Webhook、Lark 国际版和已有企业应用的手动密钥仍可在环境变量页配置；这个向导默认采用飞书中国区长连接，避免准备公网回调地址。</span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </section>
 
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="密钥会自动打码；保存后继续去飞书后台确认" />
@@ -775,9 +873,17 @@ function FeishuRoute() {
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !canApplyQr || !allowPolicyReady}><Save size={14} />保存并启动接收服务</button></div>
           <ApplyResult result={result} />
           <SectionTitle num="[ STEP 03 ]" title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
-          <FeishuBackendChecklist />
+          <FeishuBackendChecklist groupEnabled={groupEnabled} />
           <SectionTitle num="[ STEP 04 ]" title="发一条消息试试" meta="私聊机器人，确认真的能回复" />
-          <FeishuTestGuide result={result} />
+          <FeishuTestGuide
+            result={result}
+            platform={messagingPlatformQuery.data}
+            platformLoading={messagingPlatformQuery.isLoading}
+            testResult={testPlatform.data}
+            testError={testPlatform.error}
+            testPending={testPlatform.isPending}
+            onTest={() => testPlatform.mutate()}
+          />
           {(begin.error || poll.error || apply.error || stateQuery.error) && <div className={s.errorBox}><XCircle size={16} />{textFromError(begin.error || poll.error || apply.error || stateQuery.error)}</div>}
         </main>
       </div>
