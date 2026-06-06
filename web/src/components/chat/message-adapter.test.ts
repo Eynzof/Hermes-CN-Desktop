@@ -6,6 +6,7 @@ import {
   type SessionMessage,
 } from "@hermes/protocol";
 import {
+  attachTurnStatsMetadata,
   deriveAssistantStats,
   hermesUIMessageToChatMessage,
   hermesUIMessagesToChatMessages,
@@ -534,6 +535,69 @@ describe("message adapter", () => {
 
     expect(merged).toHaveLength(1);
     expect(merged[0]?.id).toBe("live-assistant-10");
+  });
+
+  it("keeps persisted stats when a matching live message has no metadata", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-assistant-10",
+        parts: [{ type: "text", text: "完成" }],
+        metadata: {
+          usage: { tokensInput: 10, tokensOutput: 20, tokensTotal: 30 },
+          timing: { startedAt: 1_000, firstTokenAt: 1_250, completedAt: 2_000 },
+          model: "deepseek-v4-flash",
+        },
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-assistant-10",
+        parts: [{ type: "text", text: "完成" }],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("live-assistant-10");
+    expect(chat[0]?.stats).toMatchObject({
+      ttftMs: 250,
+      durationMs: 1_000,
+      tokensTotal: 30,
+      model: "deepseek-v4-flash",
+    });
+  });
+
+  it("enriches stored messages from turn stats metadata and scalar columns", () => {
+    const messages = [
+      uiMessage({
+        id: "stored-assistant-20",
+        parts: [{ type: "text", text: "完成" }],
+        metadata: { finishReason: "stop" },
+      }),
+    ];
+
+    const enriched = attachTurnStatsMetadata(messages, [
+      {
+        id: "stat-1",
+        sessionId: "s1",
+        turnIndex: 1,
+        metadata: { usage: { tokensTotal: 30 } },
+        model: "deepseek-v4-flash",
+        ttftMs: 250,
+        durationMs: 1_000,
+      },
+    ]);
+    const chat = hermesUIMessagesToChatMessages(enriched);
+
+    expect(chat[0]?.stats).toMatchObject({
+      ttftMs: 250,
+      durationMs: 1_000,
+      tokensTotal: 30,
+      model: "deepseek-v4-flash",
+      finishReason: "stop",
+    });
   });
 
   it("prefers stored complete assistant over a stale streaming partial", () => {
