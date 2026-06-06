@@ -22,6 +22,12 @@
   line-height: 1;
 }
 
+.gatewayGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .gatewayButton {
   appearance: none;
   border: 0;
@@ -43,6 +49,61 @@
   outline: 1px solid var(--h-accent-border);
   outline-offset: 3px;
   border-radius: var(--h-r-xs);
+}
+
+.restartButton {
+  appearance: none;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-xs);
+  min-height: 18px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--h-text-2);
+  background: var(--h-bg-soft);
+  font: inherit;
+  font-size: 9.5px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.restartButton:hover:not(:disabled),
+.restartButton:focus-visible {
+  color: var(--h-accent);
+  border-color: var(--h-accent-border);
+  background: var(--h-bg-chip);
+}
+
+.restartButton:focus-visible {
+  outline: 1px solid var(--h-accent-border);
+  outline-offset: 2px;
+}
+
+.restartButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.restartButton[data-state="starting"] svg,
+.restartButton[data-state="running"] svg {
+  animation: gateway-restart-spin 0.9s linear infinite;
+}
+
+.restartButton[data-state="success"] {
+  color: var(--moss);
+  border-color: color-mix(in srgb, var(--moss) 40%, var(--h-line));
+}
+
+.restartButton[data-state="error"] {
+  color: var(--rust);
+  border-color: color-mix(in srgb, var(--rust) 48%, var(--h-line));
+}
+
+@keyframes gateway-restart-spin {
+  to {
+    transform: rotate(-360deg);
+  }
 }
 
 .stat[data-tone="warn"] .val {
@@ -104,4 +165,16 @@
 
 .dot[data-state="unknown"] {
   background: var(--h-text-3);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

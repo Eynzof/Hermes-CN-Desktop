@@ -27,6 +27,7 @@ import { useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "
 import { useLogs } from "@/hooks/use-logs";
 import { useStatus } from "@/hooks/use-status";
 import { useYoloMode, useSetYoloMode, isYoloModeSupported } from "@/hooks/use-yolo-mode";
+import { useGatewayRestartAction } from "@/hooks/use-gateway-restart";
 import {
   useCheckRuntimeUpdate,
   useInstallRuntimeUpdate,
@@ -34,10 +35,10 @@ import {
   useRuntimeInfo,
 } from "@/hooks/use-runtime-update";
 import { composerSubmitShortcutAtom, showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
-import { postJSON } from "@/lib/transport";
 import { openExternalUrl } from "@/lib/external-links";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
+import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, CronJob, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -635,15 +636,9 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const checkRuntimeUpdate = useCheckRuntimeUpdate();
   const installRuntimeUpdate = useInstallRuntimeUpdate();
   const rollbackRuntime = useRollbackRuntime();
-  const [restarting, setRestarting] = useState(false);
+  const gatewayRestart = useGatewayRestartAction();
   const [runtimeMessage, setRuntimeMessage] = useState("");
   const [aboutMessage, setAboutMessage] = useState("");
-
-  const handleRestart = async () => {
-    setRestarting(true);
-    try { await postJSON("/api/gateway/restart", {}); }
-    finally { setTimeout(() => setRestarting(false), 3000); }
-  };
 
   const handleCheckRuntime = async () => {
     setRuntimeMessage("");
@@ -767,12 +762,23 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           <FolderOpen size={13} />
           打开 runtime
         </button>
-        <button className={s.btnPrimary} onClick={handleRestart} disabled={restarting}>
+        <button
+          className={s.btnPrimary}
+          onClick={() => void gatewayRestart.restart()}
+          disabled={gatewayRestart.locked}
+          title={gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
+          aria-busy={gatewayRestart.busy}
+        >
           <RotateCcw size={13} />
-          {restarting ? "重启中…" : "重启 Gateway"}
+          {gatewayRestart.phase === "idle" ? "重启 Gateway" : gatewayRestartButtonLabel(gatewayRestart.phase)}
         </button>
       </div>
       {aboutMessage && <div className={s.runtimeMessage} data-tone="error">{aboutMessage}</div>}
+      {gatewayRestart.message && (
+        <div className={s.runtimeMessage} data-tone={gatewayRestart.phase === "error" ? "error" : "normal"}>
+          {gatewayRestart.message}
+        </div>
+      )}
 
       <div className={s.aboutDebugGrid}>
         <DebugCard icon={<Server size={15} />} title="内核进程" sub="Dashboard 子进程与连接状态" wide>
