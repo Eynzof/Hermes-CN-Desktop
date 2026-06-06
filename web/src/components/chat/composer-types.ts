@@ -1,4 +1,4 @@
-import type { ModelOptionsResult } from "@hermes/protocol";
+import type { ModelOptionsResult, SkillInfo } from "@hermes/protocol";
 
 export type ComposerAttachmentKind = "image" | "file" | "directory";
 export type ComposerAttachmentSource = "browser" | "path" | "uploaded";
@@ -42,6 +42,7 @@ export interface ComposerSubmitPayload {
   attachments: ComposerAttachment[];
   workspacePath?: string;
   modelSelection?: ComposerModelSelection;
+  skillCommandNames?: string[];
 }
 
 export interface ComposerSubmitControls {
@@ -63,6 +64,13 @@ export interface ComposerModelPickerProps {
   /** Called when the user clicks "去设置" on an unconfigured provider card.
    * Host routes wire this to React Router navigation (/models#<provider>). */
   onConfigureProvider?: (providerId: string) => void;
+  disabled?: boolean;
+}
+
+export interface ComposerSkillPickerProps {
+  skills: SkillInfo[];
+  loading?: boolean;
+  error?: string;
   disabled?: boolean;
 }
 

@@ -224,6 +224,11 @@
   padding: 18px 18px 8px;
 }
 
+.box[data-variant="big"] .selectedSkillRow + .textarea {
+  min-height: 96px;
+  padding-top: 12px;
+}
+
 .box[data-variant="big"] .textarea::placeholder {
   font-style: normal;
 }
@@ -292,6 +297,251 @@
   padding: 1px 5px;
   border-radius: 4px;
   line-height: 1.3;
+}
+
+.selectedSkillRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 10px;
+}
+
+.box[data-variant="big"] .selectedSkillRow {
+  margin: 0;
+  padding: 14px 18px 0;
+}
+
+.selectedSkillChip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(100%, 460px);
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 36%, var(--h-line));
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--h-accent-soft) 74%, var(--h-bg-input)),
+      color-mix(in srgb, var(--h-bg-chip) 82%, var(--h-accent-soft)));
+  color: var(--h-text);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--h-accent) 12%, transparent);
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 5px 5px 8px;
+}
+
+.selectedSkillChip svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--h-accent);
+  stroke-width: 2.2;
+}
+
+.selectedSkillKicker {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--h-accent) 14%, transparent);
+  color: var(--h-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  text-transform: uppercase;
+}
+
+.selectedSkillName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedSkillCommand {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedSkillRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  padding: 0;
+}
+
+.selectedSkillRemove:hover {
+  background: color-mix(in srgb, var(--h-accent) 13%, transparent);
+  color: var(--h-text);
+}
+
+.selectedSkillRemove:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.selectedSkillRemove svg {
+  width: 13px;
+  height: 13px;
+  color: currentColor;
+}
+
+.selectedSkillHint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skillPanel {
+  margin: 8px 2px 0;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-pane);
+  box-shadow: var(--h-shadow);
+  color: var(--h-text);
+  overflow: hidden;
+}
+
+.box[data-variant="big"] .skillPanel {
+  margin: 0 18px 12px;
+}
+
+.skillPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--h-line-soft);
+  padding: 8px 10px;
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+.skillPanelHead span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--h-text-2);
+  font-weight: 600;
+}
+
+.skillPanelHead svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+  color: var(--h-accent);
+}
+
+.skillPanelHead small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--h-text-3);
+}
+
+.skillList {
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.skillOption {
+  display: grid;
+  grid-template-columns: minmax(128px, 0.35fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.skillOption:hover,
+.skillOption[data-active="true"] {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.skillCommand {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skillMain {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.skillName,
+.skillDesc,
+.skillMeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skillName {
+  color: var(--h-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.skillDesc,
+.skillMeta {
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+.skillMeta {
+  justify-self: end;
+}
+
+.skillPanelState {
+  padding: 12px;
+  color: var(--h-text-3);
+  font-size: 12px;
+}
+
+.skillPanelState[data-tone="error"] {
+  color: var(--h-err);
 }
 
 .box[data-variant="big"] .toolbar {
@@ -1240,6 +1490,15 @@
 
   .leftTools {
     flex-wrap: wrap;
+  }
+
+  .skillOption {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .skillMeta {
+    justify-self: start;
   }
 
   .modelGrid {
