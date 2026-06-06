@@ -1164,6 +1164,12 @@ fn apply_patch_from_input(
             patch
                 .entry("FEISHU_CONNECTION_MODE".to_string())
                 .or_insert_with(|| "websocket".to_string());
+            if let Some(connection_mode) = patch.get("FEISHU_CONNECTION_MODE").cloned() {
+                patch.insert(
+                    "FEISHU_CONNECTION_MODE".to_string(),
+                    connection_mode.trim().to_lowercase(),
+                );
+            }
             if let Some(allowed_users) = patch.get("FEISHU_ALLOWED_USERS").cloned() {
                 patch.insert(
                     "FEISHU_ALLOWED_USERS".to_string(),
@@ -1254,6 +1260,31 @@ fn validate_required(
                 return Err(AppError::InvalidRequest(
                     "FEISHU_APP_ID and FEISHU_APP_SECRET are required".to_string(),
                 ));
+            }
+            let mode = patch
+                .get("FEISHU_CONNECTION_MODE")
+                .map(|v| v.trim().to_lowercase())
+                .unwrap_or_else(|| "websocket".to_string());
+            if !matches!(mode.as_str(), "websocket" | "webhook") {
+                return Err(AppError::InvalidRequest(
+                    "FEISHU_CONNECTION_MODE must be websocket or webhook".to_string(),
+                ));
+            }
+            if mode == "webhook" {
+                let has_verification_token = patch
+                    .get("FEISHU_VERIFICATION_TOKEN")
+                    .map(|v| !v.trim().is_empty())
+                    .unwrap_or(false);
+                let has_encrypt_key = patch
+                    .get("FEISHU_ENCRYPT_KEY")
+                    .map(|v| !v.trim().is_empty())
+                    .unwrap_or(false);
+                if !has_verification_token && !has_encrypt_key {
+                    return Err(AppError::InvalidRequest(
+                        "FEISHU_VERIFICATION_TOKEN or FEISHU_ENCRYPT_KEY is required for webhook mode"
+                            .to_string(),
+                    ));
+                }
             }
         }
         ImPlatform::Weixin => {
@@ -1743,6 +1774,98 @@ mod tests {
             Some("ou_scanner_123456")
         );
         FLOWS.lock().unwrap().remove(&flow_id);
+    }
+
+    #[test]
+    fn feishu_apply_rejects_scanned_token_without_open_id() {
+        let flow_id = "feishu-test-missing-open-id".to_string();
+        {
+            let mut flows = FLOWS.lock().unwrap();
+            flows.insert(
+                flow_id.clone(),
+                FlowState::Feishu(FeishuFlow {
+                    device_code: "device-test".to_string(),
+                    domain: "feishu".to_string(),
+                    interval_seconds: 5,
+                    expires_at: Instant::now() + Duration::from_secs(60),
+                    expires_at_ms: now_ms() + 60_000,
+                    credential: Some(FeishuCredential {
+                        app_id: "cli_test".to_string(),
+                        app_secret: "secret-test".to_string(),
+                        domain: "feishu".to_string(),
+                        open_id: None,
+                        bot_name: None,
+                        bot_open_id: None,
+                    }),
+                }),
+            );
+        }
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Feishu,
+            flow_id: Some(flow_id.clone()),
+            manual_credentials: None,
+            settings: BTreeMap::from([(
+                "FEISHU_ALLOWED_USERS".to_string(),
+                FEISHU_SCANNED_OPEN_ID_TOKEN.to_string(),
+            )]),
+            restart_gateway: Some(false),
+        };
+
+        let err = apply_patch_from_input(&input).unwrap_err();
+
+        assert!(err.to_string().contains("Scanned Feishu open_id"));
+        FLOWS.lock().unwrap().remove(&flow_id);
+    }
+
+    #[test]
+    fn feishu_webhook_mode_requires_callback_secret() {
+        let base = ImManualCredentials {
+            app_id: Some("cli_test".to_string()),
+            app_secret: Some("secret-test".to_string()),
+            account_id: None,
+            token: None,
+            base_url: None,
+            user_id: None,
+        };
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Feishu,
+            flow_id: None,
+            manual_credentials: Some(base),
+            settings: BTreeMap::from([(
+                "FEISHU_CONNECTION_MODE".to_string(),
+                "webhook".to_string(),
+            )]),
+            restart_gateway: Some(false),
+        };
+
+        let err = apply_patch_from_input(&input).unwrap_err();
+        assert!(err.to_string().contains("FEISHU_VERIFICATION_TOKEN"));
+
+        let ok_input = ImOnboardingApplyInput {
+            platform: ImPlatform::Feishu,
+            flow_id: None,
+            manual_credentials: Some(ImManualCredentials {
+                app_id: Some("cli_test".to_string()),
+                app_secret: Some("secret-test".to_string()),
+                account_id: None,
+                token: None,
+                base_url: None,
+                user_id: None,
+            }),
+            settings: BTreeMap::from([
+                ("FEISHU_CONNECTION_MODE".to_string(), "Webhook".to_string()),
+                (
+                    "FEISHU_VERIFICATION_TOKEN".to_string(),
+                    "verify-token".to_string(),
+                ),
+            ]),
+            restart_gateway: Some(false),
+        };
+        let patch = apply_patch_from_input(&ok_input).unwrap();
+        assert_eq!(
+            patch.get("FEISHU_CONNECTION_MODE").map(String::as_str),
+            Some("webhook")
+        );
     }
 
     #[test]

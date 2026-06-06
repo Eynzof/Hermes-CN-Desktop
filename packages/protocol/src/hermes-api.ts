@@ -41,6 +41,68 @@ export const StatusResponse = z.object({
 });
 export type StatusResponse = z.infer<typeof StatusResponse>;
 
+// ── Messaging platforms (/api/messaging/platforms) ────────────────────
+
+export const MessagingEnvVarInfo = z
+  .object({
+    key: z.string(),
+    required: z.boolean().optional().default(false),
+    is_set: z.boolean().optional().default(false),
+    redacted_value: z.string().nullable().optional(),
+    prompt: z.string().optional().default(""),
+    description: z.string().optional().default(""),
+    advanced: z.boolean().optional().default(false),
+    is_password: z.boolean().optional().default(false),
+    url: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type MessagingEnvVarInfo = z.infer<typeof MessagingEnvVarInfo>;
+
+export const MessagingHomeChannel = z
+  .object({
+    chat_id: z.string(),
+    name: z.string(),
+    platform: z.string(),
+    thread_id: z.string().optional(),
+  })
+  .passthrough();
+export type MessagingHomeChannel = z.infer<typeof MessagingHomeChannel>;
+
+export const MessagingPlatformInfo = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().optional().default(""),
+    docs_url: z.string().optional().default(""),
+    enabled: z.boolean().optional().default(false),
+    configured: z.boolean().optional().default(false),
+    gateway_running: z.boolean().optional().default(false),
+    state: z.string().nullable().optional(),
+    error_code: z.string().nullable().optional(),
+    error_message: z.string().nullable().optional(),
+    updated_at: z.string().nullable().optional(),
+    home_channel: MessagingHomeChannel.nullable().optional(),
+    env_vars: z.array(MessagingEnvVarInfo).optional().default([]),
+  })
+  .passthrough();
+export type MessagingPlatformInfo = z.infer<typeof MessagingPlatformInfo>;
+
+export const MessagingPlatformsResponse = z
+  .object({
+    platforms: z.array(MessagingPlatformInfo),
+  })
+  .passthrough();
+export type MessagingPlatformsResponse = z.infer<typeof MessagingPlatformsResponse>;
+
+export const MessagingPlatformTestResponse = z
+  .object({
+    ok: z.boolean(),
+    message: z.string(),
+    state: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type MessagingPlatformTestResponse = z.infer<typeof MessagingPlatformTestResponse>;
+
 // ── Sessions (/api/sessions) ──────────────────────────────────────────
 
 export const SessionSummary = z.object({
