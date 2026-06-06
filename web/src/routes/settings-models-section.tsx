@@ -22,6 +22,7 @@ import { useProviderCatalog } from "@/hooks/use-provider-catalog";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
+import { fetchExternalJSON } from "@/lib/transport";
 import type { EnvVarInfo } from "@hermes/protocol";
 import { OAuthProvidersSection } from "./settings-oauth-section";
 import s from "./settings.module.css";
@@ -56,6 +57,7 @@ const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 
 type ModelSettingsTab = "main" | "auxiliary";
 type CustomProviderMode = "custom" | "local";
+type ProbeErrorKind = NonNullable<ProviderProbeResult["error_kind"]>;
 
 type AuxiliaryTaskId =
   | "vision"
@@ -94,6 +96,97 @@ interface LocalProviderPreset {
   baseUrl: string;
   model: string;
   tutorial: string;
+}
+
+function buildChatCompletionsUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+}
+
+function statusCodeFromErrorMessage(message: string): number | null {
+  const match = message.match(/\bHTTP\s+(\d{3})\b/i);
+  return match ? Number(match[1]) : null;
+}
+
+function probeErrorKind(statusCode: number | null, message: string): ProbeErrorKind {
+  const lower = message.toLowerCase();
+  if (statusCode === 401 || statusCode === 403 || /unauthor|api key|token|credential/.test(lower)) {
+    return "auth";
+  }
+  if (/timeout|timed out/.test(lower)) return "timeout";
+  if (statusCode != null) return "http";
+  if (/network|failed to fetch|cors|connection/.test(lower)) return "network";
+  return "unknown";
+}
+
+async function probeChatCompletionsProvider(input: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}): Promise<ProviderProbeResult> {
+  const apiKey = input.apiKey.trim();
+  const baseUrl = input.baseUrl.trim();
+  const model = input.model.trim();
+  if (!apiKey) {
+    return {
+      ok: false,
+      latency_ms: 0,
+      model_count: 0,
+      sample_models: [],
+      status_code: null,
+      error: "no API key (param empty, env vars unset)",
+      error_kind: "auth",
+    };
+  }
+  if (!baseUrl || !model) {
+    return {
+      ok: false,
+      latency_ms: 0,
+      model_count: 0,
+      sample_models: [],
+      status_code: null,
+      error: !baseUrl ? "base_url is required" : "model is required",
+      error_kind: "unknown",
+    };
+  }
+
+  const start = performance.now();
+  try {
+    await fetchExternalJSON<unknown>(buildChatCompletionsUrl(baseUrl), {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 1,
+        stream: false,
+      }),
+    });
+    return {
+      ok: true,
+      latency_ms: Math.max(0, Math.round(performance.now() - start)),
+      model_count: 1,
+      sample_models: [model],
+      status_code: 200,
+      error: null,
+      error_kind: null,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const statusCode = statusCodeFromErrorMessage(message);
+    return {
+      ok: false,
+      latency_ms: Math.max(0, Math.round(performance.now() - start)),
+      model_count: 0,
+      sample_models: [],
+      status_code: statusCode,
+      error: message,
+      error_kind: probeErrorKind(statusCode, message),
+    };
+  }
 }
 
 const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
@@ -788,12 +881,21 @@ export function ModelsSection() {
       // tencent-hunyuan — not in CANONICAL_PROVIDERS), we pass the catalog
       // id; the backend handler tolerates unknown slugs as long as api_key
       // + base_url are supplied explicitly.
-      const result = await probeProvider({
-        provider: selectedProvider.id,
-        api_key: apiKey || undefined,
-        base_url: baseUrl || undefined,
-        timeout_ms: 8000,
-      });
+      const shouldProbeChatCompletions =
+        selectedProvider.apiMode === "chat_completions" &&
+        selectedProvider.supportsModelListing === false;
+      const result = shouldProbeChatCompletions
+        ? await probeChatCompletionsProvider({
+          apiKey,
+          baseUrl,
+          model: providerForm.model.trim() || selectedProvider.defaultModel,
+        })
+        : await probeProvider({
+          provider: selectedProvider.id,
+          api_key: apiKey || undefined,
+          base_url: baseUrl || undefined,
+          timeout_ms: 8000,
+        });
       setProbeState({
         providerId: selectedProvider.id,
         status: result.ok ? "ok" : "error",
@@ -806,7 +908,7 @@ export function ModelsSection() {
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [probeProvider, providerForm.apiKey, providerForm.baseUrl, selectedProvider, selectedProviderEntry.api_key]);
+  }, [probeProvider, providerForm.apiKey, providerForm.baseUrl, providerForm.model, selectedProvider, selectedProviderEntry.api_key]);
 
   const probeForSelected = probeState && selectedProvider && probeState.providerId === selectedProvider.id
     ? probeState
@@ -1391,7 +1493,11 @@ export function ModelsSection() {
                           (!selectedHasCredentials && !providerForm.apiKey.trim())
                         }
                         onClick={() => void handleProbe()}
-                        title="向 /models 端点发一次 GET，验证 API Key + 网络通"
+                        title={
+                          selectedProvider?.apiMode === "chat_completions" && selectedProvider.supportsModelListing === false
+                            ? "向 /chat/completions 发一次极小请求，验证 API Key + Base URL + 模型"
+                            : "向 /models 端点发一次 GET，验证 API Key + 网络通"
+                        }
                       >
                         {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
                       </button>
