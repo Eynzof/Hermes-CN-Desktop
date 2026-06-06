@@ -74,7 +74,6 @@ export function AnalyticsSection({ showHeading = true }: { showHeading?: boolean
           label="总 Tokens"
           value={formatLargeNum((totals.total_input ?? 0) + (totals.total_output ?? 0))}
         />
-        <StatCard label="总费用" value={`$${(totals.total_estimated_cost ?? 0).toFixed(4)}`} />
         <StatCard label="会话数" value={String(totals.total_sessions ?? 0)} />
         <StatCard label="API 调用" value={String(totals.total_api_calls ?? 0)} />
       </div>
@@ -85,11 +84,8 @@ export function AnalyticsSection({ showHeading = true }: { showHeading?: boolean
           <div className={s.rowLeft}>
             <div className={s.rowLabel}>{model.model}</div>
           </div>
-          <div className={s.rowRight} style={{ gap: 12 }}>
+          <div className={s.rowRight}>
             <span className={s.rowSub}>{formatLargeNum(model.input_tokens + model.output_tokens)} tok</span>
-            {model.estimated_cost != null && (
-              <span className={s.rowSub}>${model.estimated_cost.toFixed(4)}</span>
-            )}
           </div>
         </div>
       ))}
@@ -98,7 +94,7 @@ export function AnalyticsSection({ showHeading = true }: { showHeading?: boolean
       <div className={s.logBlock}>
         {data.daily.map((day) => (
           <div key={day.day} className={s.logLine}>
-            {day.day} — {day.sessions} 会话 · {formatLargeNum(day.input_tokens + day.output_tokens)} tok · ${day.estimated_cost.toFixed(4)}
+            {day.day} — {day.sessions} 会话 · {formatLargeNum(day.input_tokens + day.output_tokens)} tok
           </div>
         ))}
       </div>

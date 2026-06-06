@@ -33,11 +33,12 @@ import {
   useRollbackRuntime,
   useRuntimeInfo,
 } from "@/hooks/use-runtime-update";
-import { showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
+import { composerSubmitShortcutAtom, showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
 import { openExternalUrl } from "@/lib/external-links";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
+import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
@@ -52,6 +53,7 @@ interface SettingsSectionProps {
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
+  const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
 
   return (
     <div>
@@ -64,6 +66,9 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       } />
       <Row label="显示推理过程" sub="在会话中展示模型的思考和推理内容" right={
         <RadioGroup value={showReasoning ? "on" : "off"} options={[{ value: "off", label: "隐藏" }, { value: "on", label: "显示" }]} onChange={(v) => setShowReasoning(v === "on")} />
+      } />
+      <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
+        <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
       {isYoloModeSupported() && <YoloDangerZone />}
     </div>
@@ -802,7 +807,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版</div>
           <h3>联系与致谢</h3>
           <p>
-            这里会放中文社区桌面版的联系方式、社区入口、项目链接和致谢信息。
+            致谢，联系方式及项目链接。
           </p>
         </div>
       </div>

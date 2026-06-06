@@ -9,10 +9,17 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react";
+import { useAtomValue } from "jotai";
 import { Cpu, Folder, Plus } from "lucide-react";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { fileNameFromPath } from "@/lib/composer-prompt";
 import { contextUsageRisk } from "@/lib/context-usage";
+import {
+  composerSubmitShortcutHint,
+  shouldSubmitComposerKey,
+  type ComposerSubmitShortcut,
+} from "@/lib/composer-submit-shortcut";
+import { composerSubmitShortcutAtom } from "@/stores/ui";
 import {
   normalizeWorkspacePath,
   readWorkspacePath,
@@ -72,8 +79,8 @@ interface GooseComposerProps {
   headerLabel?: string;
   /** Empty-state hints shown only in big variant when textarea is empty. */
   hints?: ComposerHint[];
-  /** Keyboard shortcut for submitting; plain Enter keeps the existing chat behavior. */
-  submitShortcut?: "enter" | "shift-enter";
+  /** Keyboard shortcut for submitting; defaults to the global composer setting. */
+  submitShortcut?: ComposerSubmitShortcut;
   loadingPlaceholder?: string;
   modelPicker?: ComposerModelPickerProps;
   contextUsage?: ComposerContextUsage | null;
@@ -87,7 +94,7 @@ function messageFromError(error: unknown): string {
 export function GooseComposer({
   onSend,
   onStop,
-  placeholder = "发送消息...",
+  placeholder,
   initial = "",
   autoFocus = false,
   disabled = false,
@@ -98,11 +105,13 @@ export function GooseComposer({
   headerLabel = "新任务",
   loadingPlaceholder,
   hints,
-  submitShortcut = "enter",
+  submitShortcut,
   modelPicker,
   contextUsage,
   initialWorkspacePath = "",
 }: GooseComposerProps) {
+  const configuredSubmitShortcut = useAtomValue(composerSubmitShortcutAtom);
+  const effectiveSubmitShortcut = submitShortcut ?? configuredSubmitShortcut;
   const isBig = variant === "big";
   const [value, setValue] = useState(initial);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
@@ -362,17 +371,22 @@ export function GooseComposer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.nativeEvent.isComposing || event.key !== "Enter" || event.altKey) return;
-    const shouldSubmit =
-      submitShortcut === "shift-enter"
-        ? event.shiftKey
-        : !event.shiftKey;
+    const shouldSubmit = shouldSubmitComposerKey({
+      key: event.key,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      isComposing: event.nativeEvent.isComposing,
+    }, effectiveSubmitShortcut);
 
     if (shouldSubmit) {
       event.preventDefault();
       void send();
     }
   };
+
+  const submitHint = composerSubmitShortcutHint(effectiveSubmitShortcut);
+  const resolvedPlaceholder = placeholder ?? `发送消息，${submitHint}…`;
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (controlsDisabled) return;
@@ -564,7 +578,7 @@ export function GooseComposer({
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={loading ? (loadingPlaceholder || "Hermes 正在响应...") : placeholder}
+          placeholder={loading ? (loadingPlaceholder || "Hermes 正在响应...") : resolvedPlaceholder}
           rows={1}
           className={s.textarea}
           disabled={disabled}
@@ -667,7 +681,7 @@ export function GooseComposer({
                 onClick={() => void send()}
                 disabled={!canSend}
                 aria-label="发送消息"
-                title="发送消息"
+                title={`发送消息（${submitHint}）`}
               >
                 <SendIcon />
                 <span>发送</span>
