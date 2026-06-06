@@ -6,6 +6,8 @@ import type {
   ConfigMigrationScanInput,
   ConfigMigrationScanResult,
   EnvironmentCheckResult,
+  ExportLogSnapshotInput,
+  ExportLogSnapshotResult,
   FileUploadInput,
   HermesMessageMetadata,
   ImOnboardingApplyInput,
@@ -215,6 +217,7 @@ declare global {
       createWorkspaceProject?(): Promise<ElectronFilePickerResult>;
       openWorkspacePath?(input: { path: string }): Promise<ElectronApiRequestResult>;
       openExternalUrl?(input: { url: string }): Promise<ElectronSimpleResult>;
+      exportLogSnapshot?(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult>;
       exportDebugBundle?(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult>;
       environmentCheck?(): Promise<EnvironmentCheckResult>;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];

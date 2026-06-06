@@ -65,4 +65,8 @@ describe("redactSummary", () => {
   it("leaves plain summaries untouched", () => {
     expect(redactSummary("message.complete · sid=abc")).toBe("message.complete · sid=abc");
   });
+  it("masks sensitive key-value fragments in log text", () => {
+    expect(redactSummary("gateway failed token=secret-value api_key='sk-abcdefghijklmnop1234567890'"))
+      .toBe("gateway failed token=*** api_key='***'");
+  });
 });

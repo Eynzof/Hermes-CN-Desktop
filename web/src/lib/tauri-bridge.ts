@@ -15,6 +15,8 @@ import type {
   ConfigMigrationScanInput,
   ConfigMigrationScanResult,
   EnvironmentCheckResult,
+  ExportLogSnapshotInput,
+  ExportLogSnapshotResult,
   FilePickerResult,
   FileUploadInput,
   ImOnboardingApplyInput,
@@ -188,6 +190,10 @@ const tauriBridge = {
 
   async openExternalUrl(input: { url: string }): Promise<{ ok: boolean; message?: string | null }> {
     return invokeCommand("open_external_url", { input });
+  },
+
+  async exportLogSnapshot(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult> {
+    return invokeCommand("export_log_snapshot", { input });
   },
 
   async exportDebugBundle(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult> {

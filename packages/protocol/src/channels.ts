@@ -51,6 +51,20 @@ export interface FilePickerResult {
   paths: string[];
 }
 
+export interface ExportLogSnapshotInput {
+  fileName: string;
+  content: string;
+  format: "log" | "jsonl";
+}
+
+export interface ExportLogSnapshotResult {
+  ok: boolean;
+  canceled: boolean;
+  path?: string;
+  bytes: number;
+  error?: string;
+}
+
 export interface WorkspacePathInput {
   path: string;
 }

@@ -86,6 +86,24 @@ describe("isTauriDevMode", () => {
     });
   });
 
+  it("exposes log snapshot export through Tauri IPC", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.exportLogSnapshot?.({
+      fileName: "hermes-logs-agent.log",
+      content: "hello\n",
+      format: "log",
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("export_log_snapshot", {
+      input: {
+        fileName: "hermes-logs-agent.log",
+        content: "hello\n",
+        format: "log",
+      },
+    });
+  });
+
   it("exposes external URL opening through Tauri IPC", async () => {
     await installTauriBridge();
 

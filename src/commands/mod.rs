@@ -6,6 +6,7 @@ pub mod environment;
 pub mod file_dialogs;
 pub mod gateway;
 pub mod im_onboarding;
+pub mod log_export;
 pub mod memory;
 pub mod profiles;
 pub mod restart;
