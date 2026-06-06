@@ -456,6 +456,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::gateway::get_runtime_config,
             commands::gateway::refresh_gateway_url,
+            commands::backup::backup_export_profile,
+            commands::backup::backup_import_profile,
             commands::config_migration::config_migration_scan,
             commands::config_migration::config_migration_import,
             commands::im_onboarding::im_onboarding_state,

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import {
+  Archive,
   Boxes,
   Brain,
   Clock,
@@ -23,6 +24,7 @@ interface CapabilityItem {
 
 export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "模型", path: "/models", icon: Cpu },
+  { label: "备份恢复", path: "/backup", icon: Archive },
   { label: "配置迁移", path: "/config-migration", icon: Sparkles },
   {
     label: "档案",

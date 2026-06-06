@@ -356,6 +356,35 @@ export interface ConfigMigrationImportResult {
   error?: string;
 }
 
+export interface BackupExportResult {
+  ok: boolean;
+  canceled: boolean;
+  profileName?: string;
+  hermesHome?: string;
+  backupPath?: string;
+  fileCount: number;
+  totalBytes: number;
+  warnings: string[];
+  error?: string;
+}
+
+export interface BackupImportResult {
+  ok: boolean;
+  canceled: boolean;
+  targetProfileName?: string;
+  hermesHome?: string;
+  backupPath?: string;
+  apiBaseUrl?: string;
+  gatewayUrl?: string;
+  sessionToken?: string;
+  importedEntries: string[];
+  fileCount: number;
+  totalBytes: number;
+  warnings: string[];
+  error?: string;
+  recoveredPreviousProfile?: boolean;
+}
+
 export interface YoloModeStatus {
   /** Persisted desktop preference for the active profile's HERMES_HOME. */
   enabled: boolean;
