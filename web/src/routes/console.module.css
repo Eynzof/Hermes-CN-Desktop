@@ -54,6 +54,7 @@
 .summaryCard,
 .terminalCard,
 .panel,
+.infoBox,
 .errorBox {
   border: 1px solid var(--h-line);
   background: var(--h-bg-surface);
@@ -290,6 +291,14 @@
   color: #ffd1c2;
   background: rgba(215, 111, 84, 0.1);
   border-color: rgba(215, 111, 84, 0.24);
+  font-size: 12px;
+}
+
+.infoBox {
+  padding: 12px 14px;
+  color: var(--h-text);
+  background: var(--h-ok-soft);
+  border-color: color-mix(in srgb, var(--h-ok) 38%, var(--h-line));
   font-size: 12px;
 }
 

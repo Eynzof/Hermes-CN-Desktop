@@ -4,7 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
-import { Play, Power, RotateCcw, TerminalSquare } from "lucide-react";
+import { ExternalLink, Play, Power, RotateCcw, TerminalSquare } from "lucide-react";
 import type { TerminalEventPayload, TerminalStartResult } from "@/lib/runtime";
 import { openExternalUrl } from "@/lib/external-links";
 import { runtime } from "@/lib/runtime";
@@ -59,8 +59,11 @@ export function ConsoleRoute() {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<TerminalStartResult | null>(null);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
+  const [externalOpening, setExternalOpening] = useState(false);
+  const [externalOpened, setExternalOpened] = useState<string | null>(null);
 
   const isDesktopTerminalAvailable = Boolean(window.hermesDesktop?.terminalStart);
+  const isExternalTerminalAvailable = Boolean(window.hermesDesktop?.terminalOpenExternal);
   const autoPurpose = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const run = params.get("run") ?? params.get("command") ?? "";
@@ -70,12 +73,12 @@ export function ConsoleRoute() {
   }, [location.search]);
 
   const statusText = useMemo(() => {
-    if (status === "ready") return session ? `已连接 · ${session.profile}` : "已连接";
+    if (status === "ready") return "已连接";
     if (status === "starting") return "正在打开终端…";
     if (status === "closed") return "终端已关闭";
     if (status === "unsupported") return "请在桌面端使用";
     return "终端不可用";
-  }, [session, status]);
+  }, [status]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -251,12 +254,37 @@ export function ConsoleRoute() {
     setStatus("closed");
   };
 
+  const openExternalTerminal = () => {
+    if (!window.hermesDesktop?.terminalOpenExternal || externalOpening) return;
+    setExternalOpening(true);
+    setExternalOpened(null);
+    setError(null);
+    window.hermesDesktop
+      .terminalOpenExternal({ purpose: autoPurpose })
+      .then((result) => {
+        setExternalOpened(`已在 ${result.terminal} 打开：${result.command}`);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => setExternalOpening(false));
+  };
+
   return (
     <SectionShell
       title="Hermes Console"
       sub={statusText}
       right={
         <div className={s.topActions}>
+          <button
+            type="button"
+            className={s.secondaryButton}
+            onClick={openExternalTerminal}
+            disabled={!isExternalTerminalAvailable || externalOpening}
+          >
+            <ExternalLink size={13} />
+            {externalOpening ? "正在打开…" : "在外部终端打开"}
+          </button>
           <button type="button" className={s.secondaryButton} onClick={restartTerminal}>
             <RotateCcw size={13} />
             重新打开
@@ -279,10 +307,6 @@ export function ConsoleRoute() {
               </p>
             </div>
             <div className={s.summaryStats}>
-              <div>
-                <span>当前档案</span>
-                <strong>{session?.profile ?? "—"}</strong>
-              </div>
               <div>
                 <span>Hermes 命令</span>
                 <strong>{session?.managedRuntime ? "已就绪" : "等待运行时"}</strong>
@@ -309,6 +333,7 @@ export function ConsoleRoute() {
           </div>
 
           {error && <div className={s.errorBox}>{error}</div>}
+          {externalOpened && <div className={s.infoBox}>{externalOpened}</div>}
         </section>
 
         <aside className={s.sideColumn}>
