@@ -224,6 +224,11 @@
   padding: 18px 18px 8px;
 }
 
+.box[data-variant="big"] .selectedSkillRow + .textarea {
+  min-height: 96px;
+  padding-top: 12px;
+}
+
 .box[data-variant="big"] .textarea::placeholder {
   font-style: normal;
 }
@@ -292,6 +297,120 @@
   padding: 1px 5px;
   border-radius: 4px;
   line-height: 1.3;
+}
+
+.selectedSkillRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 10px;
+}
+
+.box[data-variant="big"] .selectedSkillRow {
+  margin: 0;
+  padding: 14px 18px 0;
+}
+
+.selectedSkillChip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(100%, 460px);
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 36%, var(--h-line));
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--h-accent-soft) 74%, var(--h-bg-input)),
+      color-mix(in srgb, var(--h-bg-chip) 82%, var(--h-accent-soft)));
+  color: var(--h-text);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--h-accent) 12%, transparent);
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 5px 5px 8px;
+}
+
+.selectedSkillChip svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--h-accent);
+  stroke-width: 2.2;
+}
+
+.selectedSkillKicker {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--h-accent) 14%, transparent);
+  color: var(--h-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  text-transform: uppercase;
+}
+
+.selectedSkillName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedSkillCommand {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectedSkillRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  padding: 0;
+}
+
+.selectedSkillRemove:hover {
+  background: color-mix(in srgb, var(--h-accent) 13%, transparent);
+  color: var(--h-text);
+}
+
+.selectedSkillRemove:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.selectedSkillRemove svg {
+  width: 13px;
+  height: 13px;
+  color: currentColor;
+}
+
+.selectedSkillHint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .skillPanel {

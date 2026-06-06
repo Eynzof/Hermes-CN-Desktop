@@ -13,6 +13,11 @@ export interface SlashReplacement {
   cursor: number;
 }
 
+export interface SlashCommandBody {
+  text: string;
+  cursor: number;
+}
+
 export interface ComposerSkillCandidate {
   skill: SkillInfo;
   command: string;
@@ -79,10 +84,26 @@ export function replaceLeadingSlashToken(
   };
 }
 
+export function extractBodyAfterLeadingSlashToken(
+  text: string,
+  range: LeadingSlashToken,
+): SlashCommandBody {
+  const body = text.slice(range.end).replace(/^\s+/, "");
+  return {
+    text: body,
+    cursor: 0,
+  };
+}
+
+export function buildSkillCommandText(skillName: string, body: string): string {
+  const trimmedBody = body.trim();
+  return trimmedBody ? `/${skillName} ${trimmedBody}` : `/${skillName}`;
+}
+
 export function parseLeadingSlashCommand(text: string): ParsedSlashCommand | null {
   const trimmed = text.trimStart();
   if (!trimmed.startsWith("/")) return null;
-  const match = trimmed.match(/^\/([^\s/]+)(?:\s+([\s\S]*))?$/);
+  const match = trimmed.match(/^\/(\S+)(?:\s+([\s\S]*))?$/);
   if (!match?.[1]) return null;
   return {
     name: match[1],

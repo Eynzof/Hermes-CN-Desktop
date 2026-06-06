@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { SkillInfo } from "@hermes/protocol";
 import {
+  buildSkillCommandText,
+  extractBodyAfterLeadingSlashToken,
   filterComposerSkills,
   getLeadingSlashToken,
   parseLeadingSlashCommand,
@@ -44,6 +46,18 @@ describe("composer skill slash helpers", () => {
     expect(result.cursor).toBe("/github-pr-workflow ".length);
   });
 
+  it("extracts the visible body after turning a slash command into a skill chip", () => {
+    const token = getLeadingSlashToken("/cod 修复类型错误", 4);
+    expect(token).not.toBeNull();
+
+    expect(extractBodyAfterLeadingSlashToken("/cod 修复类型错误", token!)).toEqual({
+      text: "修复类型错误",
+      cursor: 0,
+    });
+    expect(buildSkillCommandText("codex", " 修复类型错误 ")).toBe("/codex 修复类型错误");
+    expect(buildSkillCommandText("codex", "")).toBe("/codex");
+  });
+
   it("filters enabled skills by command, translation and description", () => {
     const skills = [
       skill({
@@ -84,6 +98,10 @@ describe("composer skill slash helpers", () => {
     expect(resolveComposerSkillCommand("/CODEX 修复", ["codex"])).toEqual({
       name: "codex",
       arg: "修复",
+    });
+    expect(resolveComposerSkillCommand("/user/review 总结代码", ["user/review"])).toEqual({
+      name: "user/review",
+      arg: "总结代码",
     });
     expect(resolveComposerSkillCommand("/unknown 修复", ["codex"])).toBeNull();
   });
