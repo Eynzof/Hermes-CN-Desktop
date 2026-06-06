@@ -86,4 +86,34 @@ describe("MessageTimeline", () => {
     expect(html).toContain("chart.png");
     expect(html).toContain("/Users/enzo/Downloads/chart.png");
   });
+
+  it("shows turn navigation for multi-turn conversations", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "第一轮问题" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, text: "第一轮回答" },
+      { id: "user-2", role: "user", createdAt: 3, text: "第二轮追问" },
+      { id: "assistant-2", role: "assistant", createdAt: 4, text: "第二轮回答" },
+    ];
+
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MessageTimeline messages={messages} />,
+    );
+
+    expect(html).toContain("aria-label=\"对话轮次定位\"");
+    expect(html).toContain("aria-label=\"定位到第 1 轮对话\"");
+    expect(html).toContain("aria-label=\"定位到第 2 轮对话\"");
+  });
+
+  it("does not show turn navigation for a single user turn", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "只有一轮" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, text: "回答" },
+    ];
+
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MessageTimeline messages={messages} />,
+    );
+
+    expect(html).not.toContain("对话轮次定位");
+  });
 });

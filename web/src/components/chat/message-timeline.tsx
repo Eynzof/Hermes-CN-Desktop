@@ -31,6 +31,12 @@ interface MessageTimelineProps {
   progressModel?: string;
 }
 
+interface TurnAnchor {
+  id: string;
+  index: number;
+  title: string;
+}
+
 function formatDay(timestamp: number): string {
   const date = new Date(timestamp);
   const now = new Date();
@@ -51,6 +57,13 @@ function formatTime(timestamp: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function turnAnchorTitle(message: ChatMessage, index: number): string {
+  const preview = getCopyableText(message)?.replace(/\s+/g, " ").trim();
+  return preview
+    ? `第 ${index + 1} 轮：${truncateMiddle(preview, 34)}`
+    : `第 ${index + 1} 轮`;
 }
 
 const PROGRESS_TRANSLATIONS: Record<string, string> = {
@@ -654,11 +667,13 @@ export function MessageTimeline({
 }: MessageTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const turnAnchorRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const nearBottomRef = useRef(true);
   const autoAnchorRef = useRef(false);
   const autoAnchorTimerRef = useRef<number | null>(null);
   const messageCountRef = useRef(0);
   const firstMessageIdRef = useRef<string | undefined>(undefined);
+  const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
   const visibleMessages = useMemo(
     () =>
       messages.filter(
@@ -671,6 +686,70 @@ export function MessageTimeline({
       ),
     [messages],
   );
+  const turnAnchors = useMemo<TurnAnchor[]>(() => {
+    const anchors: TurnAnchor[] = [];
+    for (const message of visibleMessages) {
+      if (message.role !== "user") continue;
+      const index = anchors.length;
+      anchors.push({
+        id: message.id,
+        index,
+        title: turnAnchorTitle(message, index),
+      });
+    }
+    return anchors;
+  }, [visibleMessages]);
+  const showTurnRail = turnAnchors.length > 1;
+
+  const setTurnAnchorNode = useCallback((id: string, node: HTMLDivElement | null) => {
+    if (node) {
+      turnAnchorRefs.current.set(id, node);
+    } else {
+      turnAnchorRefs.current.delete(id);
+    }
+  }, []);
+
+  const updateActiveTurnFromScroll = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || turnAnchors.length < 2) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const thresholdY = containerRect.top + Math.min(container.clientHeight * 0.35, 180);
+    let currentId = turnAnchors[0]?.id ?? null;
+
+    for (const turn of turnAnchors) {
+      const node = turnAnchorRefs.current.get(turn.id);
+      if (!node) continue;
+      if (node.getBoundingClientRect().top <= thresholdY) {
+        currentId = turn.id;
+      } else {
+        break;
+      }
+    }
+
+    if (currentId) {
+      setActiveTurnId((previous) => previous === currentId ? previous : currentId);
+    }
+  }, [turnAnchors]);
+
+  const scrollToTurn = useCallback((id: string) => {
+    const container = containerRef.current;
+    const node = turnAnchorRefs.current.get(id);
+    if (!container || !node) return;
+
+    if (autoAnchorTimerRef.current !== null) {
+      window.clearTimeout(autoAnchorTimerRef.current);
+      autoAnchorTimerRef.current = null;
+    }
+    autoAnchorRef.current = false;
+
+    const containerRect = container.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    const top = container.scrollTop + nodeRect.top - containerRect.top - 12;
+    nearBottomRef.current = container.scrollHeight - top - container.clientHeight < 120;
+    container.scrollTo({ top, behavior: "smooth" });
+    setActiveTurnId(id);
+  }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const container = containerRef.current;
@@ -680,6 +759,26 @@ export function MessageTimeline({
       behavior,
     });
   }, []);
+
+  useEffect(() => {
+    const knownIds = new Set(turnAnchors.map((turn) => turn.id));
+    for (const id of Array.from(turnAnchorRefs.current.keys())) {
+      if (!knownIds.has(id)) turnAnchorRefs.current.delete(id);
+    }
+  }, [turnAnchors]);
+
+  useEffect(() => {
+    if (turnAnchors.length < 2) {
+      setActiveTurnId((previous) => previous === null ? previous : null);
+      return;
+    }
+
+    const hasActive = activeTurnId != null && turnAnchors.some((turn) => turn.id === activeTurnId);
+    if (hasActive && !nearBottomRef.current) return;
+
+    const lastId = turnAnchors[turnAnchors.length - 1]?.id ?? null;
+    setActiveTurnId((previous) => previous === lastId ? previous : lastId);
+  }, [activeTurnId, turnAnchors]);
 
   useIsomorphicLayoutEffect(() => {
     const previousMessageCount = messageCountRef.current;
@@ -766,6 +865,7 @@ export function MessageTimeline({
     }
     nearBottomRef.current =
       container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+    updateActiveTurnFromScroll();
   };
 
   return (
@@ -776,6 +876,27 @@ export function MessageTimeline({
       role="log"
       aria-live="polite"
     >
+      {showTurnRail ? (
+        <div className={s.turnRailWrap}>
+          <nav className={s.turnRail} aria-label="对话轮次定位">
+            {turnAnchors.map((turn) => {
+              const active = turn.id === activeTurnId;
+              return (
+                <button
+                  key={turn.id}
+                  type="button"
+                  className={s.turnDot}
+                  data-active={active ? "true" : undefined}
+                  aria-current={active ? "step" : undefined}
+                  aria-label={`定位到第 ${turn.index + 1} 轮对话`}
+                  title={turn.title}
+                  onClick={() => scrollToTurn(turn.id)}
+                />
+              );
+            })}
+          </nav>
+        </div>
+      ) : null}
       <div ref={messagesRef} className={s.messages}>
         {loading ? <div className={s.empty}>加载对话中...</div> : null}
         {!loading && visibleMessages.length === 0 && !statusMessage && !pendingApproval ? (
@@ -790,7 +911,11 @@ export function MessageTimeline({
           const showDate = !previous || formatDay(previous.createdAt) !== formatDay(message.createdAt);
           const isLast = index === visibleMessages.length - 1;
           return (
-            <div key={message.id}>
+            <div
+              key={message.id}
+              ref={message.role === "user" ? (node) => setTurnAnchorNode(message.id, node) : undefined}
+              data-turn-anchor={message.role === "user" ? "true" : undefined}
+            >
               {showDate ? <div className={s.dateSeparator}>{formatDay(message.createdAt)}</div> : null}
               <MessageBubble
                 message={message}

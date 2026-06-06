@@ -136,7 +136,7 @@ export function WorkbenchSidebar() {
       <button type="button" className={s.newTask} onClick={() => navigate("/")}>
         <span className={s.newTaskLead}>
           <Plus size={14} strokeWidth={2.2} />
-          <span>新建任务</span>
+          <span>新建对话</span>
         </span>
         <span className={s.newTaskKbd}>⌘ N</span>
       </button>
@@ -175,7 +175,7 @@ export function WorkbenchSidebar() {
             <span className={s.sideItemIcon}>
               <Folder size={14} />
             </span>
-            <span className={s.sideItemLabel}>项目列表</span>
+            <span className={s.sideItemLabel}>工作空间</span>
           </button>
         </section>
 
