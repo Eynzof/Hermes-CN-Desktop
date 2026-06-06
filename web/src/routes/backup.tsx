@@ -19,9 +19,23 @@ function formatBytes(value: number | undefined): string {
   return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-function openBackupPath(path: string | undefined) {
-  if (!path || !window.hermesDesktop?.openWorkspacePath) return;
-  void window.hermesDesktop.openWorkspacePath({ path });
+export function containingDirectory(path: string | undefined): string | undefined {
+  const trimmed = path?.trim();
+  if (!trimmed) return undefined;
+  const normalized = trimmed.replace(/[\\/]+$/, "");
+  const slash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  if (slash < 0) return undefined;
+  if (slash === 0) return normalized.slice(0, 1);
+  if (slash === 2 && /^[A-Za-z]:[\\/]/.test(normalized)) return normalized.slice(0, 3);
+  return normalized.slice(0, slash);
+}
+
+async function openBackupDirectory(path: string | undefined): Promise<string | null> {
+  const target = containingDirectory(path) ?? path;
+  if (!target || !window.hermesDesktop?.openWorkspacePath) return null;
+  const result = await window.hermesDesktop.openWorkspacePath({ path: target });
+  if (result.ok) return null;
+  return result.body || result.statusText || "无法打开文件夹";
 }
 
 export function BackupRoute() {
@@ -51,7 +65,12 @@ export function BackupRoute() {
         return;
       }
       if (!result.ok) throw new Error(result.error || "导出备份失败");
-      setMessage(`已导出当前档案 ${result.profileName ?? ""} 的备份压缩包。`);
+      const openError = await openBackupDirectory(result.backupPath);
+      setMessage(
+        openError
+          ? `已导出当前档案 ${result.profileName ?? ""} 的备份压缩包，但自动打开文件夹失败：${openError}`
+          : `已导出当前档案 ${result.profileName ?? ""} 的备份压缩包，并已打开所在文件夹。`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "导出备份失败");
     } finally {
@@ -169,11 +188,11 @@ export function BackupRoute() {
             <button
               type="button"
               className={settings.btn}
-              onClick={() => openBackupPath(lastExport.backupPath)}
+              onClick={() => void openBackupDirectory(lastExport.backupPath)}
               disabled={!lastExport.backupPath || !window.hermesDesktop?.openWorkspacePath}
             >
               <FolderOpen size={13} />
-              在文件管理器中打开
+              打开所在文件夹
             </button>
           </div>
         </section>
