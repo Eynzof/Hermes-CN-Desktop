@@ -235,6 +235,94 @@
   text-decoration: underline;
 }
 
+.imageBlock,
+.messageImages,
+.toolImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.messageImages {
+  margin-top: 10px;
+}
+
+.imageFrame {
+  display: inline-flex;
+  max-width: min(100%, 520px);
+  max-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+  color: inherit;
+  text-decoration: none;
+}
+
+.imageFrame:hover {
+  border-color: color-mix(in srgb, var(--h-accent) 40%, var(--h-line-soft));
+  text-decoration: none;
+}
+
+.imageFrame img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+}
+
+.imageFallback {
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  max-width: min(100%, 520px);
+  padding: 12px 14px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+  color: var(--h-text-2);
+  line-height: 1.45;
+}
+
+.imageFallback svg {
+  margin-top: 2px;
+  color: var(--h-text-3);
+}
+
+.imageFallbackBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.imageFallbackTitle {
+  color: var(--h-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.imageFallbackMeta {
+  color: var(--h-text-2);
+  font-size: 12px;
+}
+
+.imageFallback code {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--h-bg-code);
+  padding: 2px 6px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .messageText :global(.task-list-item) {
   list-style: none;
 }
@@ -256,10 +344,16 @@
 .turnText + .reasoning,
 .turnText + .progressBlock,
 .turnText + .toolChain,
+.turnText + .imageBlock,
+.imageBlock + .turnText,
+.imageBlock + .toolChain,
+.imageBlock + .progressBlock,
+.imageBlock + .reasoning,
 .reasoning + .toolChain,
 .reasoning + .turnText,
 .toolChain + .progressBlock,
-.toolChain + .turnText {
+.toolChain + .turnText,
+.toolChain + .imageBlock {
   margin-top: 10px;
 }
 

@@ -52,6 +52,7 @@ export function sessionLogToMessages(
       session_id: sessionId,
       role,
       content: asString(msg.content),
+      images: Array.isArray(msg.images) ? msg.images as SessionMessage["images"] : undefined,
       tool_call_id: asNullableString(msg.tool_call_id),
       tool_calls: msg.tool_calls ?? null,
       tool_name: asNullableString(msg.tool_name),

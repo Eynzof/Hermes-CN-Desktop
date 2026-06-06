@@ -35,6 +35,7 @@ import {
   setSessionErrorAtom,
   startPromptAtom,
   terminateAllStreamsAtom,
+  type ImageEntry,
 } from "@/stores/chat";
 
 type GatewayState = ReturnType<typeof getGatewayClient>["state"];
@@ -201,10 +202,10 @@ export function useGateway() {
   }, [ensureSubscribed, setGwSessionId]);
 
   const beginPrompt = useCallback(
-    (sessionId: string, text: string, now?: number) => {
+    (sessionId: string, text: string, now?: number, images?: ImageEntry[]) => {
       ensureSubscribed();
       ensureChatSession(sessionId);
-      startPrompt({ sessionId, text, now });
+      startPrompt({ sessionId, text, now, images });
     },
     [ensureChatSession, ensureSubscribed, startPrompt],
   );
@@ -236,12 +237,21 @@ export function useGateway() {
     async (
       sessionId: string,
       text: string,
-      options?: { displayText?: string; images?: string[]; skipOptimisticStart?: boolean },
+      options?: {
+        displayText?: string;
+        images?: string[];
+        displayImages?: ImageEntry[];
+        skipOptimisticStart?: boolean;
+      },
     ) => {
       ensureSubscribed();
       ensureChatSession(sessionId);
       if (!options?.skipOptimisticStart) {
-        startPrompt({ sessionId, text: options?.displayText ?? text });
+        startPrompt({
+          sessionId,
+          text: options?.displayText ?? text,
+          images: options?.displayImages,
+        });
       }
 
       try {
