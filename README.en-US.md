@@ -9,7 +9,7 @@
 
 Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese community, with native support for Windows and macOS. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and includes the Chinese community-modified Hermes Agent core from [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn).
 
-> Current release: `v0.2.1`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
+> Current release: `v0.2.2`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
 
 ## Demo
 
@@ -71,8 +71,8 @@ Pre-release builds are published on the [GitHub Releases](https://github.com/Eyn
 
 The current alpha release includes:
 
-- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.2.1_aarch64.dmg`
-- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.2.1_x64-setup.exe`
+- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.2.2_aarch64.dmg`
+- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.2.2_x64-setup.exe`
 
 The Windows installer currently stages a bundled `hermes-agent-cn` runtime. The macOS build uses the managed runtime download/update flow on first launch.
 
