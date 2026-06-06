@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useStatus } from "@/hooks/use-status";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useEnvVars } from "@/hooks/use-env";
@@ -22,6 +23,7 @@ interface CellData {
   mono?: boolean;
   title?: string;
   wide?: boolean;
+  actionTo?: string;
 }
 
 function formatContextLength(n: number | undefined | null): string {
@@ -48,26 +50,53 @@ function originFromHealthUrl(url: string | null | undefined): string {
   }
 }
 
-function Cell({ cell }: { cell: CellData }) {
-  return (
-    <div
-      className={s.cell}
-      data-size={cell.wide ? "wide" : undefined}
-      data-warn={cell.tone === "warn" ? "true" : undefined}
-      data-err={cell.tone === "err" ? "true" : undefined}
-      title={cell.title ?? [cell.value, cell.sub].filter(Boolean).join(" · ")}
-    >
+function Cell({ cell, onNavigate }: { cell: CellData; onNavigate: (to: string) => void }) {
+  const title = cell.title ?? [cell.value, cell.sub].filter(Boolean).join(" · ");
+  const content = (
+    <>
       <div className={s.label}>
         <Dot tone={cell.tone} />
         <span>{cell.label}</span>
       </div>
       <div className={s.value} data-mono={cell.mono ? "true" : undefined}>{cell.value}</div>
       {cell.sub && <div className={s.sub}>{cell.sub}</div>}
+    </>
+  );
+
+  if (cell.actionTo) {
+    const actionTo = cell.actionTo;
+    return (
+      <button
+        type="button"
+        className={s.cell}
+        data-size={cell.wide ? "wide" : undefined}
+        data-warn={cell.tone === "warn" ? "true" : undefined}
+        data-err={cell.tone === "err" ? "true" : undefined}
+        data-action="true"
+        title={title}
+        aria-label={`${cell.label}: ${cell.value}${cell.sub ? `，${cell.sub}` : ""}`}
+        onClick={() => onNavigate(actionTo)}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={s.cell}
+      data-size={cell.wide ? "wide" : undefined}
+      data-warn={cell.tone === "warn" ? "true" : undefined}
+      data-err={cell.tone === "err" ? "true" : undefined}
+      title={title}
+    >
+      {content}
     </div>
   );
 }
 
 export function HealthGrid() {
+  const navigate = useNavigate();
   const { data: status } = useStatus();
   const { data: modelInfo } = useModelInfo();
   const { data: config } = useConfig();
@@ -156,9 +185,10 @@ export function HealthGrid() {
         label: "模型",
         tone: modelName !== "—" ? "ok" : "warn",
         value: modelName,
-        sub: ctxLabel,
+        sub: modelName !== "—" ? ctxLabel : "前往模型设置",
         mono: true,
         wide: true,
+        actionTo: modelName === "—" ? "/models" : undefined,
       },
       {
         label: "Token",
@@ -166,7 +196,8 @@ export function HealthGrid() {
         value: anyTokenSet ? "已配置" : "未配置",
         sub: anyTokenSet
           ? setTokens.join(" · ").toLowerCase().replace(/_api_key/g, "")
-          : "前往设置",
+          : "前往模型设置",
+        actionTo: anyTokenSet ? undefined : "/models",
       },
       {
         label: "Skills",
@@ -192,11 +223,14 @@ export function HealthGrid() {
         sub: invalidProviders.length > 0
           ? `api_key 是 URL: ${invalidProviders.join(", ")}`
           : providerTotal === 0
-            ? "config.yaml 缺 providers"
+            ? "前往模型设置"
             : "api_key 字段健康",
         title: invalidProviders.length > 0
           ? `这些 provider 的 api_key 字段填的是 URL 不是真 key，会让 dashboard 发请求时把 URL 当 Bearer token，必定 401。请到 ~/.hermes/config.yaml 修正。`
-          : undefined,
+          : providerTotal === 0
+            ? "config.yaml 缺 providers。点击进入模型页选择服务商，填写 API Key，并设为当前模型。"
+            : undefined,
+        actionTo: providerTotal === 0 || invalidProviders.length > 0 ? "/models" : undefined,
       },
     ];
   }, [config, env, lastUsedModel, mcp, mcpError, modelInfo, skills, status]);
@@ -244,7 +278,7 @@ export function HealthGrid() {
       {open && (
         <div className={s.grid}>
           {cells.map((cell) => (
-            <Cell key={cell.label} cell={cell} />
+            <Cell key={cell.label} cell={cell} onNavigate={navigate} />
           ))}
         </div>
       )}

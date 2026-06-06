@@ -141,6 +141,9 @@ export async function prepareComposerPrompt(
     detectDroppedPath(sessionId: string, path: string): Promise<InputDetectDropResult>;
     onAttachmentUpdate?(id: string, patch: Partial<ComposerAttachment>): void;
   },
+  options: {
+    transportText?: string;
+  } = {},
 ): Promise<{
   promptText: string;
   displayText: string;
@@ -250,7 +253,7 @@ export async function prepareComposerPrompt(
     }
   }
 
-  const text = payload.text.trim();
+  const text = (options.transportText ?? payload.text).trim();
   if (text) parts.push(text);
 
   const workspace = buildWorkspaceContext(payload.workspacePath);

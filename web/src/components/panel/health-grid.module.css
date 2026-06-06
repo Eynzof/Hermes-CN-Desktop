@@ -62,6 +62,10 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .cell[data-size="wide"] {
@@ -76,6 +80,32 @@
 .cell[data-err="true"] {
   background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-pane));
   border-color: color-mix(in srgb, var(--h-err) 30%, var(--h-line));
+}
+
+.cell[data-action="true"] {
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+
+.cell[data-action="true"]:hover {
+  background: var(--h-bg-soft);
+  border-color: color-mix(in srgb, var(--h-accent) 35%, var(--h-line));
+  transform: translateY(-1px);
+}
+
+.cell[data-action="true"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--h-accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.cell[data-action="true"][data-warn="true"]:hover {
+  background: color-mix(in srgb, var(--h-warn-soft) 55%, var(--h-bg-pane));
+  border-color: color-mix(in srgb, var(--h-warn) 45%, var(--h-line));
+}
+
+.cell[data-action="true"][data-err="true"]:hover {
+  background: color-mix(in srgb, var(--h-err) 12%, var(--h-bg-pane));
+  border-color: color-mix(in srgb, var(--h-err) 45%, var(--h-line));
 }
 
 .label {

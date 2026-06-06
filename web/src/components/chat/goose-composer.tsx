@@ -10,9 +10,16 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useAtomValue } from "jotai";
-import { Cpu, Folder, Plus } from "lucide-react";
+import { Cpu, Folder, Plus, Sparkles, X } from "lucide-react";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { fileNameFromPath } from "@/lib/composer-prompt";
+import {
+  buildSkillCommandText,
+  extractBodyAfterLeadingSlashToken,
+  filterComposerSkills,
+  getLeadingSlashToken,
+  type ComposerSkillCandidate,
+} from "@/lib/composer-skills";
 import { contextUsageRisk } from "@/lib/context-usage";
 import {
   composerSubmitShortcutHint,
@@ -32,6 +39,7 @@ import {
   type ComposerContextUsage,
   type ComposerModelPickerProps,
   type ComposerModelSelection,
+  type ComposerSkillPickerProps,
   type ComposerSubmitControls,
   type ComposerSubmitPayload,
 } from "./composer-types";
@@ -83,6 +91,7 @@ interface GooseComposerProps {
   submitShortcut?: ComposerSubmitShortcut;
   loadingPlaceholder?: string;
   modelPicker?: ComposerModelPickerProps;
+  skillPicker?: ComposerSkillPickerProps;
   contextUsage?: ComposerContextUsage | null;
   initialWorkspacePath?: string;
 }
@@ -107,14 +116,18 @@ export function GooseComposer({
   hints,
   submitShortcut,
   modelPicker,
+  skillPicker,
   contextUsage,
   initialWorkspacePath = "",
 }: GooseComposerProps) {
   const configuredSubmitShortcut = useAtomValue(composerSubmitShortcutAtom);
   const effectiveSubmitShortcut = submitShortcut ?? configuredSubmitShortcut;
+  const submitHint = composerSubmitShortcutHint(effectiveSubmitShortcut);
   const isBig = variant === "big";
   const [value, setValue] = useState(initial);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [selectionStart, setSelectionStart] = useState(initial.length);
+  const [selectionEnd, setSelectionEnd] = useState(initial.length);
   const [workspacePath, setWorkspacePath] = useState(
     () => normalizeWorkspacePath(initialWorkspacePath) || readWorkspacePath(),
   );
@@ -128,6 +141,9 @@ export function GooseComposer({
   const [modelError, setModelError] = useState("");
   const [modelSearch, setModelSearch] = useState("");
   const [switchingModel, setSwitchingModel] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<ComposerSkillCandidate | null>(null);
+  const [skillActiveIndex, setSkillActiveIndex] = useState(0);
+  const [dismissedSlashToken, setDismissedSlashToken] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -140,16 +156,43 @@ export function GooseComposer({
   const contextWarning = contextRiskText(contextRisk, loading);
   const controlsDisabled = disabled || loading;
   const modelPickerDisabled = controlsDisabled || Boolean(modelPicker?.disabled);
+  const submitText = selectedSkill
+    ? buildSkillCommandText(selectedSkill.skill.name, value)
+    : value.trim();
+  const displayedTextLength = value.length;
   const canSend =
-    (value.trim().length > 0 || attachments.length > 0) &&
+    (submitText.length > 0 || attachments.length > 0) &&
     !controlsDisabled &&
     !hasProcessingAttachment;
+  const slashToken = useMemo(
+    () => selectedSkill ? null : getLeadingSlashToken(value, selectionStart, selectionEnd),
+    [selectionEnd, selectionStart, selectedSkill, value],
+  );
+  const skillCandidates = useMemo(
+    () => slashToken && skillPicker
+      ? filterComposerSkills(skillPicker.skills, slashToken.query)
+      : [],
+    [skillPicker, slashToken],
+  );
+  const skillPanelOpen = Boolean(
+    slashToken &&
+    skillPicker &&
+    !controlsDisabled &&
+    !skillPicker.disabled &&
+    dismissedSlashToken !== slashToken.token,
+  );
+  const resolvedPlaceholder = selectedSkill
+    ? `继续描述给 ${selectedSkill.displayName} 的任务…`
+    : placeholder ?? `发送消息，${submitHint}…`;
 
   // Make `initial` reactive so external prefill (e.g. quick-start recipes) takes
   // effect after mount. We focus the textarea on non-empty external pushes so
   // the user can keep typing without an extra click.
   useEffect(() => {
     setValue(initial);
+    setSelectedSkill(null);
+    setSelectionStart(initial.length);
+    setSelectionEnd(initial.length);
     if (initial) {
       window.requestAnimationFrame(() => {
         const ta = textareaRef.current;
@@ -200,9 +243,14 @@ export function GooseComposer({
     if (!controlsDisabled) return;
     setWorkspacePickerOpen(false);
     setModelOpen(false);
+    setDismissedSlashToken("");
     setDragActive(false);
     dragDepthRef.current = 0;
   }, [controlsDisabled]);
+
+  useEffect(() => {
+    setSkillActiveIndex(0);
+  }, [slashToken?.token, skillCandidates.length]);
 
   // Picker now groups candidates internally (recent / configured /
   // recommended / more) from the catalog + usage log. Composer just hands it
@@ -346,14 +394,50 @@ export function GooseComposer({
     );
   };
 
+  const syncTextareaSelection = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    setSelectionStart(textarea.selectionStart);
+    setSelectionEnd(textarea.selectionEnd);
+  };
+
+  const commitSkillSelection = (candidate: ComposerSkillCandidate) => {
+    if (!slashToken) return;
+    const next = extractBodyAfterLeadingSlashToken(value, slashToken);
+    setSelectedSkill(candidate);
+    setValue(next.text);
+    setSelectionStart(next.cursor);
+    setSelectionEnd(next.cursor);
+    setDismissedSlashToken("");
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(next.cursor, next.cursor);
+      setSelectionStart(next.cursor);
+      setSelectionEnd(next.cursor);
+    });
+  };
+
+  const clearSelectedSkill = () => {
+    setSelectedSkill(null);
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      setSelectionStart(textarea.selectionStart);
+      setSelectionEnd(textarea.selectionEnd);
+    });
+  };
+
   const send = async () => {
     if (!canSend) return;
-    const text = value.trim();
     const payload: ComposerSubmitPayload = {
-      text,
+      text: submitText,
       attachments,
       workspacePath: workspacePath.trim() || undefined,
       modelSelection: selectedModelRef.current ?? undefined,
+      skillCommandNames: skillPicker?.skills.map((skill) => skill.name),
     };
 
     setSubmitError("");
@@ -361,6 +445,10 @@ export function GooseComposer({
     try {
       await onSend?.(payload, { updateAttachment });
       setValue("");
+      setSelectedSkill(null);
+      setSelectionStart(0);
+      setSelectionEnd(0);
+      setDismissedSlashToken("");
       setAttachments((current) => {
         current.forEach(revokeAttachmentPreview);
         return [];
@@ -371,6 +459,45 @@ export function GooseComposer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      selectedSkill &&
+      event.key === "Backspace" &&
+      selectionStart === 0 &&
+      selectionEnd === 0 &&
+      !event.nativeEvent.isComposing
+    ) {
+      event.preventDefault();
+      clearSelectedSkill();
+      return;
+    }
+
+    if (skillPanelOpen && !event.nativeEvent.isComposing) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDismissedSlashToken(slashToken?.token ?? "");
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSkillActiveIndex((current) =>
+          skillCandidates.length ? (current + 1) % skillCandidates.length : 0);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSkillActiveIndex((current) =>
+          skillCandidates.length
+            ? (current - 1 + skillCandidates.length) % skillCandidates.length
+            : 0);
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && skillCandidates.length > 0) {
+        event.preventDefault();
+        commitSkillSelection(skillCandidates[Math.min(skillActiveIndex, skillCandidates.length - 1)]!);
+        return;
+      }
+    }
+
     const shouldSubmit = shouldSubmitComposerKey({
       key: event.key,
       shiftKey: event.shiftKey,
@@ -384,9 +511,6 @@ export function GooseComposer({
       void send();
     }
   };
-
-  const submitHint = composerSubmitShortcutHint(effectiveSubmitShortcut);
-  const resolvedPlaceholder = placeholder ?? `发送消息，${submitHint}…`;
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (controlsDisabled) return;
@@ -559,7 +683,7 @@ export function GooseComposer({
               {headerLabel}
             </span>
             <span className={s.bigHeaderRight}>
-              <span className={s.bigHeaderChars}>{value.length} 字</span>
+              <span className={s.bigHeaderChars}>{displayedTextLength} 字</span>
               {contextUsage ? (
                 <ContextIndicator
                   usage={contextUsage}
@@ -572,11 +696,45 @@ export function GooseComposer({
 
         <AttachmentTray attachments={attachments} onRemove={removeAttachment} />
 
+        {selectedSkill ? (
+          <div className={s.selectedSkillRow}>
+            <div
+              className={s.selectedSkillChip}
+              title={`${selectedSkill.displayName} · ${selectedSkill.command}`}
+            >
+              <Sparkles aria-hidden="true" />
+              <span className={s.selectedSkillKicker}>Skill</span>
+              <span className={s.selectedSkillName}>{selectedSkill.displayName}</span>
+              <span className={s.selectedSkillCommand}>{selectedSkill.command}</span>
+              <button
+                type="button"
+                className={s.selectedSkillRemove}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={clearSelectedSkill}
+                disabled={controlsDisabled}
+                aria-label={`移除 Skill ${selectedSkill.displayName}`}
+                title="移除 Skill"
+              >
+                <X aria-hidden="true" />
+              </button>
+            </div>
+            <span className={s.selectedSkillHint}>继续输入任务描述，Backspace 可移除</span>
+          </div>
+        ) : null}
+
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {
+            setValue(event.target.value);
+            setSelectionStart(event.target.selectionStart);
+            setSelectionEnd(event.target.selectionEnd);
+            setDismissedSlashToken("");
+          }}
           onKeyDown={handleKeyDown}
+          onKeyUp={syncTextareaSelection}
+          onClick={syncTextareaSelection}
+          onSelect={syncTextareaSelection}
           onPaste={handlePaste}
           placeholder={loading ? (loadingPlaceholder || "Hermes 正在响应...") : resolvedPlaceholder}
           rows={1}
@@ -585,7 +743,53 @@ export function GooseComposer({
           aria-label="输入消息"
         />
 
-        {isBig && hints && hints.length > 0 && value.length === 0 ? (
+        {skillPanelOpen ? (
+          <div className={s.skillPanel} role="listbox" aria-label="选择 Skill">
+            <div className={s.skillPanelHead}>
+              <span>
+                <Sparkles aria-hidden="true" />
+                选择 Skill
+              </span>
+              <small>Enter / Tab 选择，Esc 关闭</small>
+            </div>
+            {skillPicker?.loading && skillCandidates.length === 0 ? (
+              <div className={s.skillPanelState}>正在读取已启用 Skill…</div>
+            ) : skillPicker?.error && skillCandidates.length === 0 ? (
+              <div className={s.skillPanelState} data-tone="error">
+                {skillPicker.error}
+              </div>
+            ) : skillCandidates.length === 0 ? (
+              <div className={s.skillPanelState}>没有匹配的 Skill</div>
+            ) : (
+              <div className={s.skillList}>
+                {skillCandidates.map((candidate, index) => (
+                  <button
+                    key={candidate.skill.name}
+                    type="button"
+                    className={s.skillOption}
+                    data-active={index === skillActiveIndex}
+                    role="option"
+                    aria-selected={index === skillActiveIndex}
+                    onMouseEnter={() => setSkillActiveIndex(index)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => commitSkillSelection(candidate)}
+                  >
+                    <span className={s.skillCommand}>{candidate.command}</span>
+                    <span className={s.skillMain}>
+                      <span className={s.skillName}>{candidate.displayName}</span>
+                      <span className={s.skillDesc}>{candidate.description}</span>
+                    </span>
+                    <span className={s.skillMeta}>
+                      {candidate.originLabel} · {candidate.categoryLabel}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {isBig && !selectedSkill && hints && hints.length > 0 && value.length === 0 ? (
           <div className={s.hintRow}>
             {hints.map((hint, idx) => (
               <span key={`${hint.label}-${idx}`} className={s.hintItem}>

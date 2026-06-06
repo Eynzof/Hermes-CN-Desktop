@@ -64,4 +64,24 @@ describe("composer prompt preparation", () => {
 
     expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe("看一下这张图里面是什么内容\n\n附件：ga.png");
   });
+
+  it("uses a dispatched skill invocation as transport text without changing display text", async () => {
+    const result = await prepareComposerPrompt(
+      "s1",
+      {
+        text: "/codex 修复类型错误",
+        attachments: [],
+      },
+      {
+        attachImage: vi.fn(),
+        detectDroppedPath: vi.fn(),
+      },
+      {
+        transportText: "[Skill: codex]\n修复类型错误",
+      },
+    );
+
+    expect(result.promptText).toBe("[Skill: codex]\n修复类型错误");
+    expect(result.displayText).toBe("/codex 修复类型错误");
+  });
 });
