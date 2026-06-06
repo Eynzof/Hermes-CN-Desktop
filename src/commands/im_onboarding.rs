@@ -35,6 +35,7 @@ const WEIXIN_BASE_URL: &str = "https://ilinkai.weixin.qq.com";
 const WEIXIN_CDN_BASE_URL: &str = "https://novac2c.cdn.weixin.qq.com/c2c";
 const WEIXIN_CLIENT_VERSION: &str = "131584";
 const WEIXIN_QR_REFRESH_LIMIT: u8 = 3;
+const FEISHU_SCANNED_OPEN_ID_TOKEN: &str = "__HERMES_SCANNED_FEISHU_OPEN_ID__";
 
 const FEISHU_SECRET_KEYS: &[&str] = &[
     "FEISHU_APP_SECRET",
@@ -548,6 +549,45 @@ fn configured_for(
         }
     }
     result
+}
+
+fn resolve_feishu_scanned_open_id_token(
+    raw: &str,
+    scanned_open_id: Option<&str>,
+    key: &str,
+) -> Result<String, AppError> {
+    let trimmed = raw.trim();
+    if trimmed != FEISHU_SCANNED_OPEN_ID_TOKEN {
+        return Ok(trimmed.to_string());
+    }
+    scanned_open_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            AppError::InvalidRequest(format!(
+                "Scanned Feishu open_id is not available; enter {key} manually"
+            ))
+        })
+}
+
+fn normalize_feishu_allowed_users(
+    raw: &str,
+    scanned_open_id: Option<&str>,
+) -> Result<String, AppError> {
+    let mut result: Vec<String> = Vec::new();
+    for item in raw
+        .split([',', '，', '\n', '\r', '\t', ' '])
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let resolved =
+            resolve_feishu_scanned_open_id_token(item, scanned_open_id, "FEISHU_ALLOWED_USERS")?;
+        if !result.iter().any(|existing| existing == &resolved) {
+            result.push(resolved);
+        }
+    }
+    Ok(result.join(","))
 }
 
 async fn feishu_registration_post(domain: &str, body: &[(&str, &str)]) -> Result<Value, AppError> {
@@ -1095,6 +1135,7 @@ fn apply_patch_from_input(
     let mut patch = input.settings.clone();
     match input.platform {
         ImPlatform::Feishu => {
+            let mut scanned_open_id: Option<String> = None;
             let credential = if let Some(flow_id) = &input.flow_id {
                 let flows = FLOWS.lock()?;
                 match flows.get(flow_id) {
@@ -1105,6 +1146,7 @@ fn apply_patch_from_input(
                 None
             };
             if let Some(credential) = credential {
+                scanned_open_id = credential.open_id.clone();
                 patch.insert("FEISHU_APP_ID".to_string(), credential.app_id);
                 patch.insert("FEISHU_APP_SECRET".to_string(), credential.app_secret);
                 patch.insert("FEISHU_DOMAIN".to_string(), credential.domain);
@@ -1122,6 +1164,22 @@ fn apply_patch_from_input(
             patch
                 .entry("FEISHU_CONNECTION_MODE".to_string())
                 .or_insert_with(|| "websocket".to_string());
+            if let Some(allowed_users) = patch.get("FEISHU_ALLOWED_USERS").cloned() {
+                patch.insert(
+                    "FEISHU_ALLOWED_USERS".to_string(),
+                    normalize_feishu_allowed_users(&allowed_users, scanned_open_id.as_deref())?,
+                );
+            }
+            if let Some(home_channel) = patch.get("FEISHU_HOME_CHANNEL").cloned() {
+                patch.insert(
+                    "FEISHU_HOME_CHANNEL".to_string(),
+                    resolve_feishu_scanned_open_id_token(
+                        &home_channel,
+                        scanned_open_id.as_deref(),
+                        "FEISHU_HOME_CHANNEL",
+                    )?,
+                );
+            }
         }
         ImPlatform::Weixin => {
             let credential = if let Some(flow_id) = &input.flow_id {
@@ -1628,6 +1686,63 @@ mod tests {
         };
         let err = apply_patch_from_input(&input).unwrap_err();
         assert!(err.to_string().contains("WEIXIN_ACCOUNT_ID"));
+    }
+
+    #[test]
+    fn feishu_apply_expands_scanned_open_id_tokens() {
+        let flow_id = "feishu-test-allowlist-token".to_string();
+        {
+            let mut flows = FLOWS.lock().unwrap();
+            flows.insert(
+                flow_id.clone(),
+                FlowState::Feishu(FeishuFlow {
+                    device_code: "device-test".to_string(),
+                    domain: "feishu".to_string(),
+                    interval_seconds: 5,
+                    expires_at: Instant::now() + Duration::from_secs(60),
+                    expires_at_ms: now_ms() + 60_000,
+                    credential: Some(FeishuCredential {
+                        app_id: "cli_test".to_string(),
+                        app_secret: "secret-test".to_string(),
+                        domain: "feishu".to_string(),
+                        open_id: Some("ou_scanner_123456".to_string()),
+                        bot_name: None,
+                        bot_open_id: None,
+                    }),
+                }),
+            );
+        }
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Feishu,
+            flow_id: Some(flow_id.clone()),
+            manual_credentials: None,
+            settings: BTreeMap::from([
+                ("FEISHU_ALLOW_ALL_USERS".to_string(), "false".to_string()),
+                (
+                    "FEISHU_ALLOWED_USERS".to_string(),
+                    format!(
+                        "{FEISHU_SCANNED_OPEN_ID_TOKEN}, ou_extra_1, {FEISHU_SCANNED_OPEN_ID_TOKEN}"
+                    ),
+                ),
+                (
+                    "FEISHU_HOME_CHANNEL".to_string(),
+                    FEISHU_SCANNED_OPEN_ID_TOKEN.to_string(),
+                ),
+            ]),
+            restart_gateway: Some(false),
+        };
+
+        let patch = apply_patch_from_input(&input).unwrap();
+
+        assert_eq!(
+            patch.get("FEISHU_ALLOWED_USERS").map(String::as_str),
+            Some("ou_scanner_123456,ou_extra_1")
+        );
+        assert_eq!(
+            patch.get("FEISHU_HOME_CHANNEL").map(String::as_str),
+            Some("ou_scanner_123456")
+        );
+        FLOWS.lock().unwrap().remove(&flow_id);
     }
 
     #[test]

@@ -38,7 +38,6 @@ describe("im onboarding routing helpers", () => {
   it("documents Feishu chat readiness scopes in the onboarding flow", () => {
     expect(FEISHU_REQUIRED_SCOPES).toEqual([
       "im:message.p2p_msg:readonly",
-      "im:message.group_at_msg:readonly",
       "im:message:send_as_bot",
     ]);
     expect(FEISHU_RECOMMENDED_SCOPES).toContain("im:resource");
