@@ -635,14 +635,15 @@ fn spawn_external_terminal(
     args: &[&str],
     env_vars: &BTreeMap<String, String>,
 ) -> Result<String, String> {
-    let script = macos_terminal_script(cwd, env_vars, shim_path, args);
+    let script_path = write_macos_terminal_script(cwd, env_vars, shim_path, args)?;
+    let source_command = macos_terminal_source_command(&script_path);
     let output = StdCommand::new("osascript")
         .arg("-e")
         .arg("tell application \"Terminal\"")
         .arg("-e")
         .arg("activate")
         .arg("-e")
-        .arg(format!("do script {}", applescript_quote(&script)))
+        .arg(format!("do script {}", applescript_quote(&source_command)))
         .arg("-e")
         .arg("end tell")
         .output()
@@ -705,14 +706,75 @@ fn macos_terminal_script(
     shim_path: &Path,
     args: &[&str],
 ) -> String {
-    let mut parts = vec![format!("cd {}", shell_quote(&cwd.to_string_lossy()))];
+    let mut lines = vec![
+        "# Hermes Console external terminal bootstrap.".to_string(),
+        format!("cd {}", shell_quote(&cwd.to_string_lossy())),
+    ];
     for (key, value) in env_vars {
         if is_shell_env_key(key) {
-            parts.push(format!("export {key}={}", shell_quote(value)));
+            lines.push(format!("export {key}={}", shell_quote(value)));
         }
     }
-    parts.push(shell_invocation(shim_path, args));
-    parts.join("; ")
+    lines.push(shell_invocation(shim_path, args));
+    lines.join("\n")
+}
+
+#[cfg(target_os = "macos")]
+fn write_macos_terminal_script(
+    cwd: &Path,
+    env_vars: &BTreeMap<String, String>,
+    shim_path: &Path,
+    args: &[&str],
+) -> Result<PathBuf, String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = runtime::runtime_root().join("external-terminal");
+    fs::create_dir_all(&dir).map_err(|e| format!("无法创建外部终端启动目录：{e}"))?;
+    cleanup_old_macos_terminal_scripts(&dir);
+
+    let path = dir.join(format!("open-{}.zsh", new_terminal_id()));
+    let content = macos_terminal_script(cwd, env_vars, shim_path, args);
+    fs::write(&path, content).map_err(|e| format!("无法写入外部终端启动脚本：{e}"))?;
+    let mut perms = fs::metadata(&path)
+        .map_err(|e| format!("无法读取外部终端启动脚本权限：{e}"))?
+        .permissions();
+    perms.set_mode(0o600);
+    fs::set_permissions(&path, perms).map_err(|e| format!("无法设置外部终端启动脚本权限：{e}"))?;
+    Ok(path)
+}
+
+#[cfg(target_os = "macos")]
+fn cleanup_old_macos_terminal_scripts(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let cutoff = SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(24 * 60 * 60))
+        .unwrap_or(UNIX_EPOCH);
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.starts_with("open-term-") || !name.ends_with(".zsh") {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if metadata
+            .modified()
+            .map(|modified| modified < cutoff)
+            .unwrap_or(false)
+        {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_terminal_source_command(script_path: &Path) -> String {
+    format!(". {}", shell_quote(&script_path.to_string_lossy()))
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -986,6 +1048,14 @@ mod tests {
         assert!(script.contains("export HERMES_PROFILE='default'"));
         assert!(!script.contains("BAD-NAME"));
         assert!(script.contains("'/opt/Hermes Runtime/desktop-bin/hermes' 'gateway' 'setup'"));
+    }
+
+    #[test]
+    fn macos_terminal_source_command_stays_short() {
+        assert_eq!(
+            macos_terminal_source_command(Path::new("/Users/alice/Hermes Scripts/open.zsh")),
+            ". '/Users/alice/Hermes Scripts/open.zsh'"
+        );
     }
 
     #[test]

@@ -73,12 +73,12 @@ export function ConsoleRoute() {
   }, [location.search]);
 
   const statusText = useMemo(() => {
-    if (status === "ready") return session ? `已连接 · ${session.profile}` : "已连接";
+    if (status === "ready") return "已连接";
     if (status === "starting") return "正在打开终端…";
     if (status === "closed") return "终端已关闭";
     if (status === "unsupported") return "请在桌面端使用";
     return "终端不可用";
-  }, [session, status]);
+  }, [status]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -307,10 +307,6 @@ export function ConsoleRoute() {
               </p>
             </div>
             <div className={s.summaryStats}>
-              <div>
-                <span>当前档案</span>
-                <strong>{session?.profile ?? "—"}</strong>
-              </div>
               <div>
                 <span>Hermes 命令</span>
                 <strong>{session?.managedRuntime ? "已就绪" : "等待运行时"}</strong>
