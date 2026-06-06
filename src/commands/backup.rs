@@ -289,20 +289,23 @@ fn export_profile_backup_to_path(
         &mut warnings,
     )?;
 
-    let mut stats = BackupArchiveStats::default();
-    stats.warnings = warnings;
-    stats.file_count = planned
-        .iter()
-        .filter(|entry| entry.manifest_entry.kind == BackupEntryKind::File)
-        .count();
-    stats.total_bytes = planned
-        .iter()
-        .filter_map(|entry| entry.manifest_entry.size_bytes)
-        .fold(0u64, u64::saturating_add);
-    stats.entries = planned
+    let entries = planned
         .iter()
         .map(|entry| entry.manifest_entry.clone())
         .collect();
+    let stats = BackupArchiveStats {
+        warnings,
+        file_count: planned
+            .iter()
+            .filter(|entry| entry.manifest_entry.kind == BackupEntryKind::File)
+            .count(),
+        total_bytes: planned
+            .iter()
+            .filter_map(|entry| entry.manifest_entry.size_bytes)
+            .fold(0u64, u64::saturating_add),
+        entries,
+        ..Default::default()
+    };
 
     let manifest = BackupManifest {
         schema_version: BACKUP_SCHEMA_VERSION,
