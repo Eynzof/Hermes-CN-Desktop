@@ -21,6 +21,8 @@ export interface ProviderPreset {
   apiMode: ProviderApiMode;
   transport: ProviderTransport;
   apiKeyLabel: string;
+  /** Backward-compatible env names that should still be recognized as saved credentials. */
+  apiKeyAliases?: string[];
   docsUrl?: string;
   defaultModel: string;
   models: ProviderCatalogModel[];
@@ -370,7 +372,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       baseUrl: "https://api.xiaomimimo.com/v1",
       apiMode: "chat_completions",
       transport: "openai_chat",
-      apiKeyLabel: "MIMO_API_KEY",
+      apiKeyLabel: "XIAOMI_API_KEY",
+      apiKeyAliases: ["MIMO_API_KEY"],
       docsUrl: "https://platform.xiaomimimo.com/docs/en-US/api/chat/openai-api",
       defaultModel: "mimo-v2.5-pro",
       models: [
@@ -471,14 +474,23 @@ function envPreview(envVars: EnvVarPreviewMap | undefined, key: string | undefin
   return preview || undefined;
 }
 
+export function providerApiKeyLabels(provider: ProviderPreset): string[] {
+  const labels = [provider.apiKeyLabel, ...(provider.apiKeyAliases ?? [])]
+    .map((key) => key.trim())
+    .filter(Boolean);
+  return Array.from(new Set(labels));
+}
+
 export function getProviderCredentialPreview(
   config: Record<string, any> | undefined,
   envVars: EnvVarPreviewMap | undefined,
   provider: ProviderPreset,
 ): string | undefined {
   const entry = getProviderEntry(config, provider.id);
-  const previewFromProviderEnv = envPreview(envVars, provider.apiKeyLabel);
-  if (previewFromProviderEnv) return previewFromProviderEnv;
+  for (const key of providerApiKeyLabels(provider)) {
+    const previewFromProviderEnv = envPreview(envVars, key);
+    if (previewFromProviderEnv) return previewFromProviderEnv;
+  }
 
   const previewFromEntryEnv = envPreview(envVars, String(entry.key_env || ""));
   if (previewFromEntryEnv) return previewFromEntryEnv;
@@ -494,7 +506,7 @@ export function providerHasSavedCredentials(
   provider?: ProviderPreset,
 ): boolean {
   const entry = getProviderEntry(config, providerId);
-  if (provider?.apiKeyLabel && envVars?.[provider.apiKeyLabel]?.is_set) return true;
+  if (provider && providerApiKeyLabels(provider).some((key) => envVars?.[key]?.is_set)) return true;
   const keyEnv = typeof entry.key_env === "string" ? entry.key_env : "";
   if (keyEnv && envVars?.[keyEnv]?.is_set) return true;
   return Boolean(entry.api_key || entry.key_env);
@@ -595,6 +607,14 @@ function normalizeRemoteProvider(provider: Partial<ProviderPreset> | undefined):
   const models = Array.isArray(provider.models) && provider.models.length > 0
     ? provider.models.filter((model): model is ProviderCatalogModel => Boolean(model?.id))
     : [{ id: provider.defaultModel }];
+  const apiKeyAliases = Array.isArray(provider.apiKeyAliases)
+    ? Array.from(new Set(
+      provider.apiKeyAliases
+        .filter((key): key is string => typeof key === "string")
+        .map((key) => key.trim())
+        .filter(Boolean),
+    ))
+    : [];
 
   return {
     id: provider.id,
@@ -605,6 +625,7 @@ function normalizeRemoteProvider(provider: Partial<ProviderPreset> | undefined):
     apiMode,
     transport,
     apiKeyLabel: provider.apiKeyLabel || "API Key",
+    ...(apiKeyAliases.length > 0 ? { apiKeyAliases } : {}),
     docsUrl: provider.docsUrl,
     defaultModel: provider.defaultModel,
     models,

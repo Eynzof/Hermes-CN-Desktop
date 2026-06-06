@@ -12,6 +12,7 @@ import {
   buildProviderSettingsUpdate,
   getProviderCredentialPreview,
   getProviderEntry,
+  providerApiKeyLabels,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
   TOP5_PROVIDER_IDS,
@@ -560,6 +561,20 @@ function isLocalProviderBaseUrl(baseUrl: string): boolean {
   }
 }
 
+function isWritableProviderEnvKey(key: string): boolean {
+  return /^[A-Z_][A-Z0-9_]*$/u.test(key);
+}
+
+function getStoredProviderApiKey(config: Record<string, any>, providerId: string): string {
+  const entryKey = getProviderEntry(config, providerId).api_key;
+  if (typeof entryKey === "string" && entryKey.trim()) return entryKey.trim();
+
+  const model = asRecord(config.model);
+  if (String(model.provider || "") !== providerId) return "";
+  const modelKey = model.api_key;
+  return typeof modelKey === "string" ? modelKey.trim() : "";
+}
+
 export function ModelsSection() {
   const { data: envVars, isLoading } = useEnvVars();
   const { data: config, isLoading: configLoading } = useConfig();
@@ -963,25 +978,56 @@ export function ModelsSection() {
     void refreshCatalog();
   };
 
+  const syncProviderApiKeyToCanonicalEnv = async (
+    provider: ProviderPreset,
+    explicitApiKey: string,
+  ) => {
+    if (provider.id.startsWith("custom:")) return;
+
+    const canonicalKey = provider.apiKeyLabel.trim();
+    if (!isWritableProviderEnvKey(canonicalKey)) return;
+
+    const newApiKey = explicitApiKey.trim();
+    if (newApiKey) {
+      await setEnv.mutateAsync({ key: canonicalKey, value: newApiKey });
+      return;
+    }
+
+    if (envVars?.[canonicalKey]?.is_set) return;
+
+    const storedApiKey = config ? getStoredProviderApiKey(config, provider.id) : "";
+    if (storedApiKey) {
+      await setEnv.mutateAsync({ key: canonicalKey, value: storedApiKey });
+      return;
+    }
+
+    for (const aliasKey of providerApiKeyLabels(provider).slice(1)) {
+      if (!isWritableProviderEnvKey(aliasKey) || !envVars?.[aliasKey]?.is_set) continue;
+      const revealed = await revealEnv.mutateAsync(aliasKey);
+      const aliasValue = revealed.value.trim();
+      if (!aliasValue) continue;
+      await setEnv.mutateAsync({ key: canonicalKey, value: aliasValue });
+      return;
+    }
+  };
+
   const handleProviderSave = async () => {
     if (!config || !selectedProvider) return;
     const pendingStartedAt = performance.now();
     const newApiKey = providerForm.apiKey.trim();
-    const isCustomProvider = selectedProvider.id.startsWith("custom:");
     // Built-in providers (alibaba, deepseek, zai, kimi, ...): hermes-agent
     // only reads their API key from environment variables / ~/.hermes/.env,
-    // never from config.yaml's providers.<id>.api_key. Mirror the key into
-    // the named env var so chat requests actually find credentials. Custom
-    // providers are read inline from config.yaml, so they don't need this.
+    // never from config.yaml's providers.<id>.api_key. Mirror the key into the
+    // canonical env var so chat requests actually find credentials. Xiaomi used
+    // to be saved as MIMO_API_KEY in the desktop catalog; keep that alias
+    // readable and migrate it to XIAOMI_API_KEY when the user saves again.
     const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
     setProviderSavePending(true);
     setProviderSaveError("");
     try {
-      if (newApiKey && !isCustomProvider && selectedProvider.apiKeyLabel) {
-        await setEnv.mutateAsync({ key: selectedProvider.apiKeyLabel, value: newApiKey });
-      }
+      await syncProviderApiKeyToCanonicalEnv(selectedProvider, newApiKey);
       await saveConfig.mutateAsync(
         buildProviderSettingsUpdate(config, selectedProvider, providerForm),
       );
@@ -1011,13 +1057,10 @@ export function ModelsSection() {
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
     const providerName = selectedProvider.name;
-    const isCustomProvider = providerId.startsWith("custom:");
     setProviderSetCurrentPending(true);
     setProviderSaveError("");
     try {
-      if (newApiKey && !isCustomProvider && selectedProvider.apiKeyLabel) {
-        await setEnv.mutateAsync({ key: selectedProvider.apiKeyLabel, value: newApiKey });
-      }
+      await syncProviderApiKeyToCanonicalEnv(selectedProvider, newApiKey);
       // Persist both providers.<id> and model.* before asking the live gateway
       // to hot-switch. First-run setups otherwise have no current provider for
       // gateway _apply_model_switch() to resolve, so it can fail before it ever
