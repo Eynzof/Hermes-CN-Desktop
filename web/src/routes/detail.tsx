@@ -20,6 +20,7 @@ import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
 import { getUiTurnStats, type UiTurnStats } from "@/lib/ui-store";
+import { resolveSessionIdAliases } from "@/lib/session-map";
 import {
   buildComposerContextUsage,
   estimateRenderedContextTokens,
@@ -187,8 +188,16 @@ export function DetailRoute() {
     let cancelled = false;
     setTurnStats([]);
     if (!taskId) return;
-    void getUiTurnStats(taskId).then((stats) => {
-      if (!cancelled) setTurnStats(stats);
+    const aliases = resolveSessionIdAliases(taskId, { includeExpired: true });
+    void Promise.all(aliases.map((id) => getUiTurnStats(id))).then((results) => {
+      if (cancelled) return;
+      const deduped = new Map<string, UiTurnStats>();
+      results.flat().forEach((stat) => deduped.set(stat.id, stat));
+      setTurnStats(Array.from(deduped.values()).sort((a, b) =>
+        (a.completedAt ?? a.createdAt ?? 0) - (b.completedAt ?? b.createdAt ?? 0) ||
+        (a.createdAt ?? 0) - (b.createdAt ?? 0) ||
+        a.id.localeCompare(b.id)
+      ));
     });
     return () => {
       cancelled = true;

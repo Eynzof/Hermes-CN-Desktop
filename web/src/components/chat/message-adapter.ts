@@ -378,11 +378,9 @@ function mergeAssistantMessages(current: HermesUIMessage, incoming: HermesUIMess
     ...current,
     status: current.status === "error" || incoming.status === "error" ? "error" : current.status,
     parts: mergeParts(current.parts, incoming.parts),
-    metadata: {
-      ...current.metadata,
-      ...incoming.metadata,
+    metadata: mergeMessageMetadata(current.metadata, incoming.metadata, {
       persistedId: current.metadata?.persistedId ?? incoming.metadata?.persistedId,
-    },
+    }),
   };
 }
 
@@ -556,8 +554,7 @@ function statsHashFromMessage(message: HermesUIMessage): string | undefined {
 }
 
 function metadataFromTurnStats(stat: UiTurnStats): HermesMessageMetadata | undefined {
-  if (stat.metadata) return stat.metadata;
-  const metadata: HermesMessageMetadata = {};
+  const metadata: HermesMessageMetadata = { ...(stat.metadata ?? {}) };
   const usage: NonNullable<HermesMessageMetadata["usage"]> = {};
   const timing: NonNullable<HermesMessageMetadata["timing"]> = {};
 
@@ -576,13 +573,43 @@ function metadataFromTurnStats(stat: UiTurnStats): HermesMessageMetadata | undef
   if (typeof stat.ttftMs === "number") timing.ttftMs = stat.ttftMs;
   if (typeof stat.durationMs === "number") timing.durationMs = stat.durationMs;
 
-  if (Object.keys(usage).length > 0) metadata.usage = usage;
-  if (Object.keys(timing).length > 0) metadata.timing = timing;
-  if (stat.model) metadata.model = stat.model;
-  if (stat.finishReason) metadata.finishReason = stat.finishReason;
-  if (typeof stat.costUsd === "number") metadata.costUsd = stat.costUsd;
-  if (stat.costStatus) metadata.costStatus = stat.costStatus;
+  if (Object.keys(usage).length > 0) {
+    metadata.usage = { ...metadata.usage, ...usage };
+  }
+  if (Object.keys(timing).length > 0) {
+    metadata.timing = { ...metadata.timing, ...timing };
+  }
+  if (!metadata.model && stat.model) metadata.model = stat.model;
+  if (!metadata.finishReason && stat.finishReason) metadata.finishReason = stat.finishReason;
+  if (metadata.costUsd === undefined && typeof stat.costUsd === "number") metadata.costUsd = stat.costUsd;
+  if (!metadata.costStatus && stat.costStatus) metadata.costStatus = stat.costStatus;
 
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function mergeMessageMetadata(
+  base: HermesMessageMetadata | undefined,
+  override: HermesMessageMetadata | undefined,
+  forced?: Partial<HermesMessageMetadata>,
+): HermesMessageMetadata | undefined {
+  if (!base && !override && !forced) return undefined;
+  const metadata: HermesMessageMetadata = {
+    ...(base ?? {}),
+    ...(override ?? {}),
+    ...(forced ?? {}),
+  };
+  if (base?.usage || override?.usage) {
+    metadata.usage = {
+      ...(base?.usage ?? {}),
+      ...(override?.usage ?? {}),
+    };
+  }
+  if (base?.timing || override?.timing) {
+    metadata.timing = {
+      ...(base?.timing ?? {}),
+      ...(override?.timing ?? {}),
+    };
+  }
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
@@ -612,11 +639,9 @@ export function attachTurnStatsMetadata(
     used.add(statIndex);
     return {
       ...message,
-      metadata: {
-        ...message.metadata,
-        ...metadata,
+      metadata: mergeMessageMetadata(message.metadata, metadata, {
         persistedId: message.metadata?.persistedId ?? metadata.persistedId,
-      },
+      }),
     };
   });
 }
@@ -847,17 +872,31 @@ function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMess
         ...last,
         status: msg.status === "error" || last.status === "error" ? "error" : msg.status,
         parts: mergeParts(last.parts, msg.parts),
-        metadata: {
-          ...last.metadata,
-          ...msg.metadata,
+        metadata: mergeMessageMetadata(last.metadata, msg.metadata, {
           persistedId: last.metadata?.persistedId ?? msg.metadata?.persistedId,
-        },
+        }),
       };
     } else {
       result.push(msg);
     }
   }
   return result;
+}
+
+function mergeMatchedMessage(storedMessage: HermesUIMessage, liveMessage: HermesUIMessage): HermesUIMessage {
+  const liveWins = !(
+    storedMessage.role === "assistant" &&
+    storedMessage.status === "complete" &&
+    liveMessage.status === "streaming"
+  );
+  const selected = liveWins ? liveMessage : storedMessage;
+  const fallback = liveWins ? storedMessage : liveMessage;
+  return {
+    ...selected,
+    metadata: mergeMessageMetadata(fallback.metadata, selected.metadata, {
+      persistedId: selected.metadata?.persistedId ?? fallback.metadata?.persistedId,
+    }),
+  };
 }
 
 export function mergeHermesUIMessages(
@@ -885,13 +924,7 @@ export function mergeHermesUIMessages(
 
     usedLiveIndexes.add(liveIndex);
     const liveMessage = consolidatedLive[liveIndex]!;
-    merged.push(
-      storedMessage.role === "assistant" &&
-        storedMessage.status === "complete" &&
-        liveMessage.status === "streaming"
-        ? storedMessage
-        : liveMessage,
-    );
+    merged.push(mergeMatchedMessage(storedMessage, liveMessage));
   }
 
   consolidatedLive.forEach((liveMessage, index) => {
