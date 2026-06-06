@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info } from "lucide-react";
 import { showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
+import { MessageImage } from "./message-image";
 import { MessageText } from "./message-text";
 import { CopyButton } from "@/components/ui/copy-button";
 import s from "./message-timeline.module.css";
@@ -194,7 +195,8 @@ function ToolCard({ tool }: { tool: ChatToolItem }) {
         : undefined,
   );
   const body = tool.error ?? tool.summary ?? tool.preview;
-  const hasBody = Boolean(body || tool.arguments);
+  const hasImages = Boolean(tool.images?.length);
+  const hasBody = Boolean(body || tool.arguments || hasImages);
 
   return (
     <div className={s.toolCard} data-status={tool.status}>
@@ -216,6 +218,16 @@ function ToolCard({ tool }: { tool: ChatToolItem }) {
       </button>
       {open && hasBody ? (
         <div className={s.toolBody}>
+          {hasImages ? (
+            <div className={s.toolImages}>
+              {tool.images!.map((image, index) => (
+                <MessageImage
+                  key={`${image.url ?? image.name ?? image.alt ?? "image"}-${index}`}
+                  image={image}
+                />
+              ))}
+            </div>
+          ) : null}
           {tool.arguments ? (
             <pre>{JSON.stringify(tool.arguments, null, 2)}</pre>
           ) : null}
@@ -365,6 +377,15 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
       items.push(
         <div key={`text-${index}`} className={s.turnText}>
           <MessageText text={block.text} streaming={streaming && index === blocks.length - 1} />
+        </div>,
+      );
+      return;
+    }
+
+    if (block.type === "image") {
+      items.push(
+        <div key={`image-${index}`} className={s.imageBlock}>
+          <MessageImage image={block.image} />
         </div>,
       );
       return;
@@ -586,6 +607,16 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: 
           ) : (
             <>
               {message.text ? <MessageText text={message.text} streaming={streaming} /> : null}
+              {message.images?.length ? (
+                <div className={s.messageImages}>
+                  {message.images.map((image, index) => (
+                    <MessageImage
+                      key={`${image.url ?? image.name ?? image.alt ?? "image"}-${index}`}
+                      image={image}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {showReasoning && message.reasoning ? (
                 <ReasoningBlock text={message.reasoning} streaming={streaming && !message.text} />
               ) : null}
@@ -628,6 +659,7 @@ export function MessageTimeline({
         (message) =>
           message.text ||
           message.reasoning ||
+          message.images?.length ||
           message.tools?.length ||
           message.blocks?.length,
       ),

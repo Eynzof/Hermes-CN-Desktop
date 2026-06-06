@@ -1,6 +1,7 @@
 import ReactDOMServer from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { MarkdownText } from "./markdown-renderer";
 import { MessageTimeline } from "./message-timeline";
 import type { ChatMessage } from "./chat-types";
 
@@ -58,4 +59,31 @@ describe("MessageTimeline", () => {
     expect(html).not.toContain("1.0M tokens");
   });
 
+  it("renders Markdown image syntax as an image preview", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text="结果图：![趋势图](https://example.test/chart.png)" />,
+    );
+
+    expect(html).toContain("https://example.test/chart.png");
+    expect(html).toContain("alt=\"趋势图\"");
+  });
+
+  it("shows a readable fallback for unsupported local image URLs", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "user-image",
+        role: "user",
+        createdAt: 1,
+        images: [{ url: "/Users/enzo/Downloads/chart.png", alt: "chart.png", name: "chart.png" }],
+      },
+    ];
+
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MessageTimeline messages={messages} />,
+    );
+
+    expect(html).toContain("图片暂不能直接预览");
+    expect(html).toContain("chart.png");
+    expect(html).toContain("/Users/enzo/Downloads/chart.png");
+  });
 });

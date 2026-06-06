@@ -1,10 +1,13 @@
-import type { AssistantTurnBlock, ToolEntry } from "@/stores/chat";
+import type { AssistantTurnBlock, ImageEntry, ToolEntry } from "@/stores/chat";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
 export interface ChatToolItem extends ToolEntry {
   arguments?: Record<string, unknown>;
+  images?: ChatImageItem[];
 }
+
+export type ChatImageItem = ImageEntry;
 
 export interface AssistantMessageStats {
   ttftMs?: number;
@@ -28,6 +31,7 @@ export interface ChatMessage {
   createdAt: number;
   text?: string;
   reasoning?: string;
+  images?: ChatImageItem[];
   tools?: ChatToolItem[];
   blocks?: AssistantTurnBlock[];
   status?: "streaming" | "complete" | "error";
