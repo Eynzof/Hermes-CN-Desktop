@@ -1011,6 +1011,158 @@
   font-size: 11px;
 }
 
+.envCheckItem {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 10px;
+  background: var(--h-bg-pane);
+  color: var(--h-text-2);
+}
+
+.envCheckItem[data-status="ok"] {
+  border-color: color-mix(in srgb, var(--h-ok) 22%, var(--h-line-soft));
+}
+
+.envCheckHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.envCheckTitle {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 24px;
+  gap: 7px;
+  color: var(--h-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.envCheckIcon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+}
+
+.envCheckIcon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.envCheckIcon[data-status="ok"] {
+  color: var(--h-ok);
+}
+
+.envCheckIcon[data-status="warning"] {
+  color: var(--h-warn);
+}
+
+.envCheckIcon[data-status="error"] {
+  color: var(--h-err);
+}
+
+.envCheckLabel {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.envRequiredTag,
+.envStatusTag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 20px;
+  border-radius: var(--h-r-pill);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.envRequiredTag {
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 34%, var(--h-line));
+  color: var(--h-accent);
+  background: color-mix(in srgb, var(--h-accent-soft) 70%, transparent);
+}
+
+.envStatusTag {
+  flex: 0 0 auto;
+  min-width: 48px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+}
+
+.envStatusTag[data-status="ok"] {
+  color: var(--h-ok);
+  border-color: color-mix(in srgb, var(--h-ok) 28%, var(--h-line));
+  background: var(--h-ok-soft);
+}
+
+.envStatusTag[data-status="warning"] {
+  color: var(--h-warn);
+  border-color: color-mix(in srgb, var(--h-warn) 30%, var(--h-line));
+  background: var(--h-warn-soft);
+}
+
+.envStatusTag[data-status="error"] {
+  color: var(--h-err);
+  border-color: color-mix(in srgb, var(--h-err) 30%, var(--h-line));
+  background: color-mix(in srgb, var(--h-err) 10%, transparent);
+}
+
+.envStatusTag[data-status="unknown"] {
+  color: var(--h-text-3);
+  border-color: var(--h-line);
+  background: var(--h-bg-chip);
+}
+
+.envCheckSummary {
+  margin: -2px 0 0;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.envCheckSummary[data-status="error"] {
+  color: var(--h-err);
+}
+
+.envCheckSummary[data-status="warning"] {
+  color: var(--h-warn);
+}
+
+.envCheckDetails {
+  margin-top: 2px;
+  padding-top: 9px;
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.envOpenPathButton {
+  align-self: flex-end;
+  margin-top: 0;
+}
+
 .commitList {
   display: grid;
   gap: 8px;

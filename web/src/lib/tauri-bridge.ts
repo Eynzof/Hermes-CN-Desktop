@@ -14,6 +14,7 @@ import type {
   ConfigMigrationImportResult,
   ConfigMigrationScanInput,
   ConfigMigrationScanResult,
+  EnvironmentCheckResult,
   FilePickerResult,
   FileUploadInput,
   ImOnboardingApplyInput,
@@ -190,6 +191,10 @@ const tauriBridge = {
   async exportDebugBundle(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult> {
     const inv = await ensureInvoke();
     return inv("export_debug_bundle", { input: input ?? null });
+  },
+
+  async environmentCheck(): Promise<EnvironmentCheckResult> {
+    return invokeCommand("environment_check");
   },
 
   getRuntimeConfig() {
@@ -566,20 +571,36 @@ async function waitForBootstrap(
   readConfig: () => Promise<{ apiBaseUrl?: string }>,
   readRuntimeInfo: () => Promise<{ lastError?: string }>,
 ): Promise<{ failed: boolean; message: string }> {
-  const overlay = showBootstrapOverlay(initialMessage);
   const { listen } = await import("@tauri-apps/api/event");
 
   return new Promise((resolve) => {
+    let overlay: ReturnType<typeof showBootstrapOverlay> | null = null;
     let unlisten: (() => void) | null = null;
     let interval: number | null = null;
+    let showTimer: number | null = null;
     let settled = false;
+    let lastPhase = "starting";
+    let lastMessage = initialMessage;
+
+    const ensureOverlay = () => {
+      if (!overlay) {
+        overlay = showBootstrapOverlay(lastMessage || initialMessage);
+        overlay.update(lastPhase, lastMessage || initialMessage);
+      }
+      return overlay;
+    };
+
+    showTimer = window.setTimeout(() => {
+      if (!settled) ensureOverlay();
+    }, 1200);
 
     const finish = (result: { failed: boolean; message: string }) => {
       if (settled) return;
       settled = true;
       unlisten?.();
       if (interval !== null) window.clearInterval(interval);
-      if (!result.failed) overlay.dismiss();
+      if (showTimer !== null) window.clearTimeout(showTimer);
+      if (!result.failed) overlay?.dismiss();
       resolve(result);
     };
 
@@ -592,7 +613,9 @@ async function waitForBootstrap(
       void readRuntimeInfo()
         .then((info) => {
           if (info.lastError) {
-            overlay.update("error", info.lastError);
+            lastPhase = "error";
+            lastMessage = info.lastError;
+            ensureOverlay().update("error", info.lastError);
             finish({ failed: true, message: info.lastError });
           }
         })
@@ -601,14 +624,15 @@ async function waitForBootstrap(
 
     listen<{ phase: string; message: string }>("runtime-status", (event) => {
       const { phase, message } = event.payload;
-      overlay.update(phase, message);
+      lastPhase = phase;
+      if (message) lastMessage = message;
+      overlay?.update(phase, message);
       if (phase === "ready") {
         finish({ failed: false, message: "" });
       } else if (phase === "error") {
-        // Leave the overlay up so the user sees the error message; the
-        // process keeps running so they can read it. They'll need to
-        // close + relaunch (or fix the env / hit a "retry" button we
-        // add later).
+        // Error paths should be visible immediately even if the normal slow-start
+        // threshold has not elapsed yet.
+        ensureOverlay().update("error", message);
         finish({ failed: true, message });
       }
     }).then((fn) => {
