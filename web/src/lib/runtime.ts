@@ -133,6 +133,20 @@ export interface UiEventInput {
   appVersion?: string;
 }
 
+export interface ExportDebugBundleInput {
+  frontendDebug?: unknown;
+  rendererDiagnostics?: Record<string, unknown>;
+}
+
+export interface ExportDebugBundleResult {
+  ok: boolean;
+  zipPath: string;
+  directoryPath: string;
+  sizeBytes: number;
+  includedFiles: number;
+  warnings: string[];
+}
+
 export interface TerminalStartInput {
   purpose?: "shell" | "gatewaySetup" | "gatewayStatus";
   cwd?: string;
@@ -186,6 +200,7 @@ declare global {
       createWorkspaceProject?(): Promise<ElectronFilePickerResult>;
       openWorkspacePath?(input: { path: string }): Promise<ElectronApiRequestResult>;
       openExternalUrl?(input: { url: string }): Promise<ElectronSimpleResult>;
+      exportDebugBundle?(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult>;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
       refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;
       getRuntimeInfo?(): Promise<RuntimeInfo>;
