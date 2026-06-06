@@ -37,7 +37,9 @@ import type {
   SkillMarkdownResult,
   ExportDebugBundleInput,
   ExportDebugBundleResult,
+  ExternalTerminalResult,
   TerminalEventPayload,
+  TerminalOpenExternalInput,
   TerminalStartInput,
   TerminalStartResult,
   UiEventInput,
@@ -313,6 +315,10 @@ const tauriBridge = {
 
   async terminalStart(input: TerminalStartInput): Promise<TerminalStartResult> {
     return invokeCommand("terminal_start", { input });
+  },
+
+  async terminalOpenExternal(input: TerminalOpenExternalInput): Promise<ExternalTerminalResult> {
+    return invokeCommand("terminal_open_external", { input });
   },
 
   async terminalWrite(input: { terminalId: string; data: string }): Promise<boolean> {

@@ -157,6 +157,11 @@ export interface TerminalStartInput {
   initialInput?: string;
 }
 
+export interface TerminalOpenExternalInput {
+  purpose?: "shell" | "gatewaySetup" | "gatewayStatus";
+  cwd?: string;
+}
+
 export interface TerminalStartResult {
   terminalId: string;
   cwd: string;
@@ -168,6 +173,13 @@ export interface TerminalStartResult {
     executablePath: string;
     shimDir: string;
   } | null;
+}
+
+export interface ExternalTerminalResult {
+  ok: boolean;
+  terminal: string;
+  cwd: string;
+  command: string;
 }
 
 export interface TerminalEventPayload {
@@ -233,6 +245,7 @@ declare global {
       uiStoreGetTurnStats?(input: { sessionId: string }): Promise<UiTurnStats[]>;
       uiStoreRecordEvent?(input: UiEventInput): Promise<boolean>;
       terminalStart?(input: TerminalStartInput): Promise<TerminalStartResult>;
+      terminalOpenExternal?(input: TerminalOpenExternalInput): Promise<ExternalTerminalResult>;
       terminalWrite?(input: { terminalId: string; data: string }): Promise<boolean>;
       terminalResize?(input: { terminalId: string; cols: number; rows: number }): Promise<boolean>;
       terminalClose?(input: { terminalId: string }): Promise<boolean>;

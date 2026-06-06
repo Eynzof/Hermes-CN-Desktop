@@ -96,6 +96,16 @@ describe("isTauriDevMode", () => {
     });
   });
 
+  it("exposes external terminal opening through Tauri IPC", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.terminalOpenExternal?.({ purpose: "gatewaySetup" });
+
+    expect(mockInvoke).toHaveBeenCalledWith("terminal_open_external", {
+      input: { purpose: "gatewaySetup" },
+    });
+  });
+
   it("normalizes structured Tauri IPC errors while preserving code and kind", () => {
     const error = normalizeTauriInvokeError({
       code: "not_ready",
