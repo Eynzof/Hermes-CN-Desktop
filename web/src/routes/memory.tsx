@@ -288,7 +288,7 @@ export function MemoryRoute() {
                   className={s.profileTextarea}
                   value={userContent}
                   onChange={(event) => { setUserContent(event.target.value); setUserDirty(true); }}
-                  placeholder="例如：姓名小林。使用 macOS 和 zsh。偏好简洁但完整的中文回答。"
+                  placeholder="姓名小李，使用 macOS 和 zsh，偏好简洁的中文回答。"
                   rows={9}
                 />
                 <div className={`${s.formActions} ${s.profileFooter}`}>
