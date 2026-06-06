@@ -231,9 +231,16 @@ export function ConfigSection({ showHeading = true }: SettingsSectionProps) {
       </div>
 
       {!isSearching && (
-        <div className={s.configTabs}>
+        <div className={s.configTabs} role="tablist" aria-label="配置分类">
           {categories.map((cat) => (
-            <button key={cat} className={s.configTab} data-active={cat === activeCategory} onClick={() => setActiveCategory(cat)}>
+            <button
+              key={cat}
+              className={s.configTab}
+              data-active={cat === activeCategory}
+              role="tab"
+              aria-selected={cat === activeCategory}
+              onClick={() => setActiveCategory(cat)}
+            >
               {CATEGORY_CN[cat] ?? cat}
               <span className={s.configTabCount}>{categoryCounts[cat] || 0}</span>
             </button>
