@@ -1,0 +1,32 @@
+.richInline {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.toneMuted {
+  color: var(--h-text-3);
+}
+
+.toneSubtle {
+  color: var(--h-text-4);
+}
+
+.toneAccent {
+  color: var(--h-accent);
+}
+
+.sizeSmall {
+  font-size: 0.86em;
+}
+
+.sizeTiny {
+  font-size: 0.78em;
+}
+
+.mark {
+  border-radius: 4px;
+  background: var(--h-accent-soft);
+  color: var(--h-accent);
+  padding: 0 0.25em;
+}

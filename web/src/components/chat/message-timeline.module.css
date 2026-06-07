@@ -493,6 +493,42 @@
   margin: 0;
 }
 
+.messageText :global([data-streamdown="mermaid-block"]) {
+  overflow: hidden;
+  margin: 10px 0;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 10px;
+  background: var(--h-bg-code);
+}
+
+.messageText :global([data-streamdown="mermaid-block"] > div:first-child) {
+  border-bottom: 1px solid var(--h-line-soft);
+  padding: 6px 10px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.messageText :global([data-streamdown="mermaid-block"] > div:last-child) {
+  overflow-x: auto;
+  background: var(--h-bg-pane);
+  padding: 12px;
+}
+
+.messageText :global([data-streamdown="mermaid"]) {
+  min-width: max-content;
+}
+
+.messageText :global([data-streamdown="mermaid"] svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+:global([data-theme="dark"]) .messageText :global([data-streamdown="mermaid"] svg) {
+  color-scheme: light;
+}
+
 .codeBlock,
 .toolBody pre {
   overflow-x: auto;
