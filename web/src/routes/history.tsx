@@ -16,7 +16,7 @@ import {
 import type { SessionSummary } from "@hermes/protocol";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
-import { useArchiveSession, useDeleteSession, useSessions } from "@/hooks/use-sessions";
+import { useArchiveSession, useDeleteSessions, useSessions } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { isSessionRunning } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
@@ -29,8 +29,11 @@ import {
   timeOfDay,
 } from "@/lib/format";
 import {
+  readPinnedSessionIds,
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
+  togglePinnedSession,
+  unpinSessions,
 } from "@/lib/session-ui-state";
 import {
   normalizeWorkspacePath,
@@ -85,12 +88,15 @@ function classifySession(
 }
 
 interface RowMenuProps {
+  pinned: boolean;
+  disabled?: boolean;
+  onTogglePin: () => void;
   onRename: () => void;
   onArchive: () => void;
   onDelete: () => void;
 }
 
-function RowMenu({ onRename, onArchive, onDelete }: RowMenuProps) {
+function RowMenu({ pinned, disabled, onTogglePin, onRename, onArchive, onDelete }: RowMenuProps) {
   return (
     <Popover.Portal>
       <Popover.Content
@@ -102,17 +108,23 @@ function RowMenu({ onRename, onArchive, onDelete }: RowMenuProps) {
         onClick={(event) => event.stopPropagation()}
       >
         <Popover.Close asChild>
-          <button type="button" onClick={onRename} role="menuitem">
+          <button type="button" onClick={onTogglePin} role="menuitem" disabled={disabled}>
+            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            {pinned ? "取消置顶" : "置顶"}
+          </button>
+        </Popover.Close>
+        <Popover.Close asChild>
+          <button type="button" onClick={onRename} role="menuitem" disabled={disabled}>
             <Edit3 size={13} /> 重命名
           </button>
         </Popover.Close>
         <Popover.Close asChild>
-          <button type="button" onClick={onArchive} role="menuitem">
+          <button type="button" onClick={onArchive} role="menuitem" disabled={disabled}>
             <Archive size={13} /> 归档
           </button>
         </Popover.Close>
         <Popover.Close asChild>
-          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
+          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger" disabled={disabled}>
             <Trash2 size={13} /> 删除
           </button>
         </Popover.Close>
@@ -186,6 +198,62 @@ function RenameModal({ value, saving, error, onChange, onClose, onSubmit }: Rena
               </button>
             </div>
           </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+interface DeleteConfirmModalProps {
+  sessions: SessionSummary[];
+  deleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+function DeleteConfirmModal({ sessions, deleting, onClose, onConfirm }: DeleteConfirmModalProps) {
+  const count = sessions.length;
+  const preview = sessions.slice(0, 5);
+  return (
+    <Dialog.Root
+      open
+      onOpenChange={(open) => {
+        if (!open && !deleting) onClose();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className={s.modalBackdrop} />
+        <Dialog.Content
+          className={s.confirmModal}
+          aria-describedby="history-delete-confirm-desc"
+          onEscapeKeyDown={(event) => {
+            if (deleting) event.preventDefault();
+          }}
+        >
+          <Dialog.Title asChild>
+            <h2>{count === 1 ? "删除会话" : "批量删除会话"}</h2>
+          </Dialog.Title>
+          <Dialog.Description id="history-delete-confirm-desc" className={s.confirmText}>
+            将删除 {count} 个会话，此操作不可撤销。
+          </Dialog.Description>
+          <div className={s.confirmList}>
+            {preview.map((session) => (
+              <div key={session.id} className={s.confirmListItem}>
+                {sessionDisplayTitle(session)}
+              </div>
+            ))}
+            {count > preview.length ? (
+              <div className={s.confirmListMore}>另有 {count - preview.length} 个会话</div>
+            ) : null}
+          </div>
+          <div className={s.confirmActions}>
+            <button type="button" className={s.confirmCancel} onClick={onClose} disabled={deleting}>
+              取消
+            </button>
+            <button type="button" className={s.confirmDanger} onClick={onConfirm} disabled={deleting}>
+              {deleting ? "删除中…" : "确认删除"}
+            </button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -320,7 +388,7 @@ export function HistoryRoute() {
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
   const { data, isLoading, isError } = useSessions(PAGE_SIZE, 0);
   const archiveSession = useArchiveSession();
-  const deleteSession = useDeleteSession();
+  const deleteSessions = useDeleteSessions();
   const { setSessionTitle, resumeSession } = useGateway();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -332,16 +400,22 @@ export function HistoryRoute() {
   const [renameValue, setRenameValue] = useState("");
   const [renameError, setRenameError] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
+  const [bulkDeleteMode, setBulkDeleteMode] = useState(false);
+  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
+  const [deleteTargets, setDeleteTargets] = useState<SessionSummary[] | null>(null);
+  const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
 
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [workspaceMap, setWorkspaceMap] = useState(readSessionWorkspaceMap);
   const [pinnedSources, setPinnedSources] = useState<Set<string>>(readPinnedSources);
+  const [pinnedSessionIds, setPinnedSessionIds] = useState<Set<string>>(readPinnedSessionIds);
 
   useEffect(
     () =>
-      subscribeSessionUiStateChanges(() =>
-        setTitleOverrides(readSessionTitleOverrides()),
-      ),
+      subscribeSessionUiStateChanges(() => {
+        setTitleOverrides(readSessionTitleOverrides());
+        setPinnedSessionIds(readPinnedSessionIds());
+      }),
     [],
   );
   useEffect(
@@ -361,6 +435,13 @@ export function HistoryRoute() {
       }),
     [data?.sessions, titleOverrides],
   );
+
+  useEffect(() => {
+    if (!data || data.total > sessions.length || pinnedSessionIds.size === 0) return;
+    const liveIds = new Set(sessions.map((session) => session.id));
+    const staleIds = Array.from(pinnedSessionIds).filter((id) => !liveIds.has(id));
+    if (staleIds.length > 0) setPinnedSessionIds(unpinSessions(staleIds));
+  }, [data, pinnedSessionIds, sessions]);
 
   // status counts (across all sessions, ignoring source/search filters)
   const statusCounts = useMemo(() => {
@@ -446,20 +527,76 @@ export function HistoryRoute() {
     return Array.from(groups.values()).sort((a, b) => b.sortKey - a.sortKey);
   }, [filtered]);
 
+  const visibleSessionIds = useMemo(() => filtered.map((session) => session.id), [filtered]);
+  const visibleSessionIdSet = useMemo(() => new Set(visibleSessionIds), [visibleSessionIds]);
+  const selectedSessions = useMemo(
+    () => filtered.filter((session) => selectedSessionIds.has(session.id)),
+    [filtered, selectedSessionIds],
+  );
+  const allVisibleSelected = visibleSessionIds.length > 0 && visibleSessionIds.every((id) => selectedSessionIds.has(id));
+
+  useEffect(() => {
+    if (!bulkDeleteMode) return;
+    setSelectedSessionIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => visibleSessionIdSet.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [bulkDeleteMode, visibleSessionIdSet]);
+
   const onTogglePinSource = useCallback((key: string) => {
     setPinnedSources(togglePinnedSource(key));
   }, []);
 
+  const onTogglePinSession = useCallback((sessionId: string) => {
+    setPinnedSessionIds(togglePinnedSession(sessionId));
+  }, []);
+
+  const toggleSelectedSession = useCallback((sessionId: string, checked: boolean) => {
+    setSelectedSessionIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(sessionId);
+      else next.delete(sessionId);
+      return next;
+    });
+  }, []);
+
+  const clearSelectedSessions = useCallback(() => {
+    setSelectedSessionIds(new Set());
+  }, []);
+
+  const selectVisibleSessions = useCallback(() => {
+    setSelectedSessionIds(new Set(visibleSessionIds));
+  }, [visibleSessionIds]);
+
+  const startBulkDeleteMode = useCallback(() => {
+    setOpenMenuId(null);
+    setDeleteFeedback(null);
+    setSelectedSessionIds(new Set());
+    setBulkDeleteMode(true);
+  }, []);
+
+  const stopBulkDeleteMode = useCallback(() => {
+    if (deleteSessions.isPending) return;
+    setBulkDeleteMode(false);
+    setSelectedSessionIds(new Set());
+    setDeleteFeedback(null);
+  }, [deleteSessions.isPending]);
+
+  const activeSessionId = useAtomValue(activeSessionIdAtom);
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
   const goSession = useCallback(
     (session: SessionSummary) => {
+      if (bulkDeleteMode) {
+        toggleSelectedSession(session.id, !selectedSessionIds.has(session.id));
+        return;
+      }
       // Atom is the source of truth (#53). Set synchronously *before*
       // navigate so any async work that mounts as part of the detail
       // route reads the post-click value, not the previous one.
       setActiveSessionId(session.id);
       navigate(`/tasks/${session.id}`);
     },
-    [navigate, setActiveSessionId],
+    [bulkDeleteMode, navigate, selectedSessionIds, setActiveSessionId, toggleSelectedSession],
   );
 
   const startRename = useCallback((session: SessionSummary) => {
@@ -503,17 +640,44 @@ export function HistoryRoute() {
     [archiveSession],
   );
 
-  const handleDelete = useCallback(
-    (session: SessionSummary) => {
-      setOpenMenuId(null);
-      const confirmed = window.confirm(
-        `确认删除会话「${sessionDisplayTitle(session)}」？此操作不可撤销。`,
-      );
-      if (!confirmed) return;
-      deleteSession.mutate(session.id);
-    },
-    [deleteSession],
-  );
+  const openDeleteDialog = useCallback((targets: SessionSummary[]) => {
+    const uniqueTargets = Array.from(new Map(targets.map((session) => [session.id, session])).values());
+    if (uniqueTargets.length === 0) return;
+    setOpenMenuId(null);
+    setDeleteFeedback(null);
+    setDeleteTargets(uniqueTargets);
+  }, []);
+
+  const closeDeleteDialog = useCallback(() => {
+    if (!deleteSessions.isPending) setDeleteTargets(null);
+  }, [deleteSessions.isPending]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTargets?.length) return;
+    const targetIds = deleteTargets.map((session) => session.id);
+    const result = await deleteSessions.mutateAsync(targetIds);
+    if (result.succeededIds.length > 0) {
+      unpinSessions(result.succeededIds);
+      setPinnedSessionIds(readPinnedSessionIds());
+      setSelectedSessionIds((prev) => {
+        const next = new Set(prev);
+        for (const id of result.succeededIds) next.delete(id);
+        return next;
+      });
+      if (activeSessionId && result.succeededIds.includes(activeSessionId)) {
+        setActiveSessionId(null);
+      }
+    }
+    if (result.failureCount > 0) {
+      const sample = result.failed[0]?.error ? `：${result.failed[0].error}` : "";
+      setDeleteFeedback(`已删除 ${result.successCount} 个会话，${result.failureCount} 个删除失败${sample}`);
+    } else {
+      setDeleteFeedback(null);
+      setBulkDeleteMode(false);
+      setSelectedSessionIds(new Set());
+    }
+    setDeleteTargets(null);
+  }, [activeSessionId, deleteSessions, deleteTargets, setActiveSessionId]);
 
   const totalTokens = useMemo(
     () =>
@@ -543,6 +707,13 @@ export function HistoryRoute() {
             <span className={s.headerStat}>
               今日 <span className={s.headerStatValue}>{formatTokens(todayTokens)} tokens</span>
             </span>
+            <TopBarActionButton
+              onClick={startBulkDeleteMode}
+              disabled={bulkDeleteMode || deleteSessions.isPending || filtered.length === 0}
+            >
+              <Trash2 size={13} />
+              批量删除
+            </TopBarActionButton>
             <TopBarActionButton onClick={() => navigate("/")}>
               <Plus size={13} />
               新对话
@@ -636,6 +807,34 @@ export function HistoryRoute() {
         </div>
       </div>
 
+      {bulkDeleteMode ? (
+        <div className={s.bulkBar} data-active={selectedSessionIds.size > 0 ? "true" : undefined}>
+          {deleteFeedback ? <span className={s.bulkFeedback}>{deleteFeedback}</span> : null}
+          <span>
+            已选择 {selectedSessionIds.size} 个会话
+            {filtered.length > 0 ? ` · 当前筛选 ${filtered.length} 个` : ""}
+          </span>
+          <button type="button" onClick={selectVisibleSessions} disabled={visibleSessionIds.length === 0 || allVisibleSelected || deleteSessions.isPending}>
+            选择当前筛选结果
+          </button>
+          <button type="button" onClick={clearSelectedSessions} disabled={selectedSessionIds.size === 0 || deleteSessions.isPending}>
+            清空选择
+          </button>
+          <button
+            type="button"
+            className={s.bulkDanger}
+            onClick={() => openDeleteDialog(selectedSessions)}
+            disabled={selectedSessions.length === 0 || deleteSessions.isPending}
+          >
+            <Trash2 size={13} />
+            删除所选
+          </button>
+          <button type="button" onClick={stopBulkDeleteMode} disabled={deleteSessions.isPending}>
+            退出批量删除
+          </button>
+        </div>
+      ) : null}
+
       <div className={s.scroll}>
         {isError ? (
           <div className={s.errorState}>无法加载会话列表，请检查 Dashboard 服务。</div>
@@ -663,7 +862,8 @@ export function HistoryRoute() {
                 </div>
 
                 {groupIdx === 0 ? (
-                  <div className={s.colHead} aria-hidden="true">
+                  <div className={s.colHead} data-bulk={bulkDeleteMode ? "true" : undefined} aria-hidden="true">
+                    {bulkDeleteMode ? <span /> : null}
                     <span>ID</span>
                     <span>标题</span>
                     <span>来源</span>
@@ -678,6 +878,8 @@ export function HistoryRoute() {
                   const live = isSessionRunning(session, runtimeBySession);
                   const status = classifySession(session, live);
                   const meta = getSourceMeta(session.source);
+                  const selected = selectedSessionIds.has(session.id);
+                  const pinned = pinnedSessionIds.has(session.id);
                   const workspacePath = normalizeWorkspacePath(workspaceMap[session.id]);
                   const workspaceName = workspacePath
                     ? workspaceNameFromPath(workspacePath)
@@ -694,8 +896,22 @@ export function HistoryRoute() {
                       key={session.id}
                       className={s.convRow}
                       data-status={status.kind}
+                      data-selected={selected ? "true" : undefined}
+                      data-bulk={bulkDeleteMode ? "true" : undefined}
                       onClick={() => goSession(session)}
                     >
+                      {bulkDeleteMode ? (
+                        <span className={s.cellSelect}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            disabled={deleteSessions.isPending}
+                            aria-label={`选择会话 ${sessionDisplayTitle(session)}`}
+                            onChange={(event) => toggleSelectedSession(session.id, event.currentTarget.checked)}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </span>
+                      ) : null}
                       <span className={s.cellId}>{shortId(session.id)}</span>
                       <span className={s.cellTitle}>
                         {status.kind === "running" ? (
@@ -703,6 +919,7 @@ export function HistoryRoute() {
                         ) : status.kind === "failed" ? (
                           <span className={s.dotFail} aria-hidden />
                         ) : null}
+                        {pinned ? <Pin size={12} className={s.titlePin} aria-hidden /> : null}
                         <span className={s.titleText}>{sessionDisplayTitle(session)}</span>
                       </span>
                       <SourceBadge meta={meta} />
@@ -720,15 +937,19 @@ export function HistoryRoute() {
                             type="button"
                             className={s.cellMore}
                             aria-label="会话操作"
+                            disabled={deleteSessions.isPending}
                             onClick={(event) => event.stopPropagation()}
                           >
                             <MoreHorizontal size={14} />
                           </button>
                         </Popover.Trigger>
                         <RowMenu
+                          pinned={pinned}
+                          disabled={deleteSessions.isPending}
+                          onTogglePin={() => onTogglePinSession(session.id)}
                           onRename={() => startRename(session)}
                           onArchive={() => handleArchive(session)}
-                          onDelete={() => handleDelete(session)}
+                          onDelete={() => openDeleteDialog([session])}
                         />
                       </Popover.Root>
                     </div>
@@ -760,6 +981,15 @@ export function HistoryRoute() {
           }}
           onClose={closeRename}
           onSubmit={submitRename}
+        />
+      ) : null}
+
+      {deleteTargets ? (
+        <DeleteConfirmModal
+          sessions={deleteTargets}
+          deleting={deleteSessions.isPending}
+          onClose={closeDeleteDialog}
+          onConfirm={confirmDelete}
         />
       ) : null}
     </main>

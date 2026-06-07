@@ -1,32 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Folder, MessageSquare, Plus, Search } from "lucide-react";
+import { Folder, MessageSquare, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
 import { isSessionRunning } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
+  readPinnedSessionIds,
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
+  unpinSessions,
 } from "@/lib/session-ui-state";
+import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
 import {
+  readPinnedWorkspaceProjectPaths,
+  readSessionWorkspaceMap,
   readWorkspaceProjects,
   subscribeWorkspaceChanges,
+  unpinWorkspaceProjects,
+  workspaceNameFromPath,
   type WorkspaceProject,
 } from "@/lib/workspaces";
 import type { SessionSummary } from "@hermes/protocol";
 import s from "./workbench-sidebar.module.css";
-
-const PROJECT_QUICK_LIMIT = 6;
-const TODAY_LIMIT = 8;
-
-function todayStartSec() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime() / 1000;
-}
 
 function relTime(unixSec: number, now: Date) {
   const d = new Date(unixSec * 1000);
@@ -52,16 +50,22 @@ function modelShort(model: string | null | undefined) {
   return model.replace(/^claude-/, "").replace(/-\d{8}$/, "");
 }
 
+function sectionLabel(index: number, label: string): string {
+  return `§${index.toString().padStart(2, "0")} · ${label}`;
+}
+
 interface SessionRowProps {
   session: SessionSummary;
   state: "live" | "ok" | "err" | "idle";
   active: boolean;
   meta: string;
+  projectName?: string;
   onClick: () => void;
 }
 
-function SessionRow({ session, state, active, meta, onClick }: SessionRowProps) {
+function SessionRow({ session, state, active, meta, projectName, onClick }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
+  const dotState = state === "idle" ? undefined : state;
   return (
     <button
       type="button"
@@ -71,10 +75,17 @@ function SessionRow({ session, state, active, meta, onClick }: SessionRowProps) 
       title={title}
     >
       <div className={s.ttl}>
-        <span className={s.dot} data-state={state === "idle" ? undefined : state} />
+        <span className={s.dot} data-state={dotState} />
         <span className={s.ttlText}>{title}</span>
       </div>
-      <div className={s.meta}>{meta}</div>
+      <div className={s.meta}>
+        <span className={s.metaText}>{meta}</span>
+        {projectName ? (
+          <span className={s.metaProject} title={projectName}>
+            {projectName}
+          </span>
+        ) : null}
+      </div>
     </button>
   );
 }
@@ -86,10 +97,28 @@ export function WorkbenchSidebar() {
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
   const { data } = useSessions();
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
+  const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
+  const [pinnedProjectPaths, setPinnedProjectPaths] = useState(readPinnedWorkspaceProjectPaths);
+  const [sessionWorkspaceMap, setSessionWorkspaceMap] = useState(readSessionWorkspaceMap);
 
-  useEffect(() => subscribeSessionUiStateChanges(() => setTitleOverrides(readSessionTitleOverrides())), []);
-  useEffect(() => subscribeWorkspaceChanges(() => setProjects(readWorkspaceProjects())), []);
+  useEffect(
+    () =>
+      subscribeSessionUiStateChanges(() => {
+        setTitleOverrides(readSessionTitleOverrides());
+        setPinnedSessionIds(readPinnedSessionIds());
+      }),
+    [],
+  );
+  useEffect(
+    () =>
+      subscribeWorkspaceChanges(() => {
+        setProjects(readWorkspaceProjects());
+        setPinnedProjectPaths(readPinnedWorkspaceProjectPaths());
+        setSessionWorkspaceMap(readSessionWorkspaceMap());
+      }),
+    [],
+  );
 
   const sessions = useMemo(
     () =>
@@ -100,27 +129,52 @@ export function WorkbenchSidebar() {
     [data?.sessions, titleOverrides],
   );
 
+  useEffect(() => {
+    if (!data || data.total > sessions.length || pinnedSessionIds.size === 0) return;
+    const liveIds = new Set(sessions.map((session) => session.id));
+    const staleIds = Array.from(pinnedSessionIds).filter((id) => !liveIds.has(id));
+    if (staleIds.length > 0) setPinnedSessionIds(unpinSessions(staleIds));
+  }, [data, pinnedSessionIds, sessions]);
+
   const now = new Date();
-  const todayStart = todayStartSec();
 
-  const { active, today } = useMemo(() => {
-    const active: SessionSummary[] = [];
-    const today: SessionSummary[] = [];
-    for (const sess of sessions) {
-      if (isSessionRunning(sess, runtimeBySession)) {
-        active.push(sess);
-      } else if (sess.ended_at != null && sess.ended_at >= todayStart) {
-        today.push(sess);
-      }
-    }
-    today.sort((a, b) => (b.ended_at ?? 0) - (a.ended_at ?? 0));
-    return { active, today: today.slice(0, TODAY_LIMIT) };
-  }, [sessions, runtimeBySession, todayStart]);
-
-  const sortedProjects = useMemo(
-    () => [...projects].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, PROJECT_QUICK_LIMIT),
-    [projects],
+  const { active, pinned, recent } = useMemo(
+    () =>
+      deriveSidebarSessionLists(
+        sessions,
+        pinnedSessionIds,
+        (session) => isSessionRunning(session, runtimeBySession),
+      ),
+    [pinnedSessionIds, runtimeBySession, sessions],
   );
+
+  const pinnedProjects = useMemo(
+    () => {
+      const projectByPath = new Map(projects.map((project) => [project.path, project]));
+      return Array.from(pinnedProjectPaths).flatMap((path) => {
+        const project = projectByPath.get(path);
+        return project ? [project] : [];
+      });
+    },
+    [pinnedProjectPaths, projects],
+  );
+
+  const projectNameBySessionId = useMemo(() => {
+    const projectNameByPath = new Map(projects.map((project) => [project.path, project.name]));
+    return new Map(
+      Object.entries(sessionWorkspaceMap).flatMap(([sessionId, workspacePath]) => {
+        const projectName = projectNameByPath.get(workspacePath) ?? workspaceNameFromPath(workspacePath);
+        return projectName ? [[sessionId, projectName]] : [];
+      }),
+    );
+  }, [projects, sessionWorkspaceMap]);
+
+  useEffect(() => {
+    if (pinnedProjectPaths.size === 0) return;
+    const livePaths = new Set(projects.map((project) => project.path));
+    const stalePaths = Array.from(pinnedProjectPaths).filter((path) => !livePaths.has(path));
+    if (stalePaths.length > 0) setPinnedProjectPaths(unpinWorkspaceProjects(stalePaths));
+  }, [pinnedProjectPaths, projects]);
 
   const goSession = (sess: SessionSummary) => {
     setActiveId(sess.id);
@@ -130,58 +184,57 @@ export function WorkbenchSidebar() {
   const activeSessionId = location.pathname.startsWith("/tasks/")
     ? decodeURIComponent(location.pathname.slice("/tasks/".length))
     : null;
+  const showPinned = pinned.length > 0;
+  const pinnedProjectSectionIndex = showPinned ? 3 : 2;
+  const recentSectionIndex = pinnedProjectSectionIndex + 1;
+  const activeSectionLabel = sectionLabel(1, "进行中");
+  const pinnedSessionSectionLabel = sectionLabel(2, "置顶对话");
+  const pinnedProjectSectionLabel = sectionLabel(pinnedProjectSectionIndex, "置顶项目");
+  const recentSectionLabel = sectionLabel(recentSectionIndex, "最近对话");
 
   return (
     <aside className={s.sidebar}>
       <button type="button" className={s.newTask} onClick={() => navigate("/")}>
         <span className={s.newTaskLead}>
-          <Plus size={14} strokeWidth={2.2} />
-          <span>新建对话</span>
+          <span className={s.entryIcon}>
+            <Plus size={16} strokeWidth={2.2} />
+          </span>
+          <span className={s.entryLabel}>新建对话</span>
         </span>
         <span className={s.newTaskKbd}>⌘ N</span>
       </button>
 
-      <button type="button" className={s.searchRow} onClick={() => navigate("/history")}>
-        <span className={s.searchLead}>
-          <Search size={13} />
-          <span>搜索…</span>
-        </span>
-        <span className={s.searchKbd}>/</span>
-      </button>
+      <div className={s.quickNav}>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/history") ? "true" : undefined}
+          onClick={() => navigate("/history")}
+        >
+          <span className={s.entryIcon}>
+            <MessageSquare size={16} />
+          </span>
+          <span className={s.entryLabel}>对话历史</span>
+          <span className={s.entryCommand}>/history</span>
+        </button>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/projects") ? "true" : undefined}
+          onClick={() => navigate("/projects")}
+        >
+          <span className={s.entryIcon}>
+            <Folder size={16} />
+          </span>
+          <span className={s.entryLabel}>工作空间</span>
+          <span className={s.entryCommand}>/workspace</span>
+        </button>
+      </div>
 
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§01 · 工作台</span>
-            <span className={s.labelNum}>✕✕</span>
-          </div>
-          <button
-            type="button"
-            className={s.sideItem}
-            data-active={location.pathname.startsWith("/history") ? "true" : undefined}
-            onClick={() => navigate("/history")}
-          >
-            <span className={s.sideItemIcon}>
-              <MessageSquare size={14} />
-            </span>
-            <span className={s.sideItemLabel}>对话历史</span>
-          </button>
-          <button
-            type="button"
-            className={s.sideItem}
-            data-active={location.pathname.startsWith("/projects") ? "true" : undefined}
-            onClick={() => navigate("/projects")}
-          >
-            <span className={s.sideItemIcon}>
-              <Folder size={14} />
-            </span>
-            <span className={s.sideItemLabel}>工作空间</span>
-          </button>
-        </section>
-
-        <section className={s.section}>
-          <div className={s.label}>
-            <span>§02 · 进行中</span>
+            <span>{activeSectionLabel}</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
           {active.length === 0 ? (
@@ -194,44 +247,49 @@ export function WorkbenchSidebar() {
                 state="live"
                 active={sess.id === activeSessionId}
                 meta={`${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}`}
+                projectName={projectNameBySessionId.get(sess.id)}
                 onClick={() => goSession(sess)}
               />
             ))
           )}
         </section>
 
-        <section className={s.section}>
-          <div className={s.label}>
-            <span>§03 · 今日</span>
-            <span className={s.labelNum}>✕✕</span>
-          </div>
-          {today.length === 0 ? (
-            <div className={s.empty}>今日暂无完成</div>
-          ) : (
-            today.map((sess) => {
-              const state: "ok" | "err" =
-                sess.end_reason === "error" || sess.end_reason === "interrupted" ? "err" : "ok";
-              const meta = relTime(sess.ended_at ?? sess.started_at, now);
+        {showPinned ? (
+          <section className={s.section}>
+            <div className={s.label}>
+              <span>{pinnedSessionSectionLabel}</span>
+              <span className={s.labelNum}>✕✕</span>
+            </div>
+            {pinned.map((sess) => {
+              const running = isSessionRunning(sess, runtimeBySession);
+              const state: "live" | "ok" | "err" =
+                running
+                  ? "live"
+                  : sess.end_reason === "error" || sess.end_reason === "interrupted"
+                    ? "err"
+                    : "ok";
+              const ts = sess.ended_at ?? sess.started_at;
               return (
                 <SessionRow
                   key={sess.id}
                   session={sess}
                   state={state}
                   active={sess.id === activeSessionId}
-                  meta={meta}
+                  meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
+                  projectName={projectNameBySessionId.get(sess.id)}
                   onClick={() => goSession(sess)}
                 />
               );
-            })
-          )}
-        </section>
+            })}
+          </section>
+        ) : null}
 
         <section className={s.section}>
           <div className={s.label}>
-            <span>§04 · 项目快捷</span>
+            <span>{pinnedProjectSectionLabel}</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
-          {sortedProjects.length === 0 ? (
+          {pinnedProjects.length === 0 ? (
             <button
               type="button"
               className={s.sideItem}
@@ -240,10 +298,10 @@ export function WorkbenchSidebar() {
               <span className={s.sideItemIcon}>
                 <Folder size={14} />
               </span>
-              <span className={s.sideItemLabel}>暂无项目</span>
+              <span className={s.sideItemLabel}>暂无置顶项目</span>
             </button>
           ) : (
-            sortedProjects.map((proj) => {
+            pinnedProjects.map((proj) => {
               const target = `/projects/${encodeURIComponent(proj.path)}`;
               return (
                 <button
@@ -259,6 +317,33 @@ export function WorkbenchSidebar() {
                   </span>
                   <span className={s.sideItemLabel}>{proj.name}</span>
                 </button>
+              );
+            })
+          )}
+        </section>
+
+        <section className={s.section}>
+          <div className={s.label}>
+            <span>{recentSectionLabel}</span>
+            <span className={s.labelNum}>✕✕</span>
+          </div>
+          {recent.length === 0 ? (
+            <div className={s.empty}>暂无最近会话</div>
+          ) : (
+            recent.map((sess) => {
+              const state: "ok" | "err" =
+                sess.end_reason === "error" || sess.end_reason === "interrupted" ? "err" : "ok";
+              const meta = relTime(sess.ended_at ?? sess.started_at, now);
+              return (
+                <SessionRow
+                  key={sess.id}
+                  session={sess}
+                  state={state}
+                  active={sess.id === activeSessionId}
+                  meta={meta}
+                  projectName={projectNameBySessionId.get(sess.id)}
+                  onClick={() => goSession(sess)}
+                />
               );
             })
           )}

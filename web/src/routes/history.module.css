@@ -123,6 +123,57 @@
   color: var(--h-text-3);
 }
 
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-soft);
+  color: var(--h-text-3);
+  font-size: 11.5px;
+  font-family: var(--h-font-cn);
+}
+
+.bulkBar[data-active="true"] {
+  color: var(--h-text-2);
+}
+
+.bulkBar button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--h-line);
+  border-radius: 7px;
+  background: var(--h-bg-pane);
+  color: var(--h-text-2);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: var(--h-font-cn);
+}
+
+.bulkBar button:hover:not(:disabled) {
+  color: var(--h-text);
+  background: var(--h-bg-chip);
+}
+
+.bulkBar button:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
+.bulkDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--h-err) !important;
+  margin-left: auto;
+}
+
+.bulkFeedback {
+  color: var(--h-accent);
+}
+
 /* popover */
 .popover {
   width: 320px;
@@ -352,6 +403,19 @@
   align-items: center;
 }
 
+.colHead[data-bulk="true"],
+.convRow[data-bulk="true"] {
+  grid-template-columns:
+    28px       /* select */
+    64px       /* id */
+    minmax(0, 1fr) /* title */
+    80px       /* source chip */
+    140px      /* model */
+    minmax(0, 160px) /* workspace */
+    100px      /* updated */
+    32px;      /* more */
+}
+
 .colHead {
   padding: 8px 12px;
   font-size: 10.5px;
@@ -378,8 +442,26 @@
   border-color: var(--h-line);
 }
 
+.convRow[data-selected="true"] {
+  background: var(--h-bg-chip);
+  border-color: var(--h-line);
+}
+
 .convRow[data-status="failed"] .titleText {
   color: var(--h-err);
+}
+
+.cellSelect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cellSelect input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--h-accent);
+  cursor: pointer;
 }
 
 .cellId {
@@ -420,6 +502,11 @@
   flex-shrink: 0;
 }
 
+.titlePin {
+  color: var(--h-accent);
+  flex-shrink: 0;
+}
+
 .cellMono {
   font-family: var(--h-font-mono);
   font-size: 11.5px;
@@ -453,6 +540,11 @@
   color: var(--h-text);
 }
 
+.cellMore:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .rowMenu {
   min-width: 140px;
   padding: 4px;
@@ -479,6 +571,11 @@
 
 .rowMenu button:hover {
   background: var(--h-bg-soft);
+}
+
+.rowMenu button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .rowMenu button[data-tone="danger"] {
@@ -670,6 +767,103 @@
 
 .renameSubmit:disabled,
 .renameCancel:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.confirmModal {
+  width: min(420px, calc(100vw - 48px));
+  padding: 18px;
+  border: 1px solid var(--h-line);
+  border-radius: 12px;
+  background: var(--h-bg-input);
+  box-shadow: var(--h-shadow-l);
+  font-family: var(--h-font-cn);
+}
+
+.confirmModal h2 {
+  margin: 0 0 10px;
+  color: var(--h-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.confirmText {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.confirmList {
+  margin-top: 12px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: var(--h-bg-app);
+  overflow: hidden;
+}
+
+.confirmListItem,
+.confirmListMore {
+  padding: 8px 10px;
+  color: var(--h-text-2);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.confirmListItem + .confirmListItem,
+.confirmListMore {
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.confirmListMore {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.confirmCancel,
+.confirmDanger {
+  min-width: 72px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+}
+
+.confirmCancel {
+  border: 1px solid var(--h-line);
+  background: transparent;
+  color: var(--h-text-2);
+}
+
+.confirmDanger {
+  border: 1px solid var(--h-err);
+  background: var(--h-err);
+  color: white;
+}
+
+.confirmCancel:hover:not(:disabled) {
+  background: var(--h-line-soft);
+  color: var(--h-text);
+}
+
+.confirmDanger:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.confirmCancel:disabled,
+.confirmDanger:disabled {
   cursor: default;
   opacity: 0.55;
 }

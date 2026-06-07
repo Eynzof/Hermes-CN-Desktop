@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   normalizeWorkspacePath,
+  readPinnedWorkspaceProjectPaths,
   mirrorSessionWorkspaceMapping,
   readSessionWorkspaceMap,
   readWorkspaceProjects,
   rememberSessionWorkspace,
   rememberWorkspaceProject,
   removeWorkspaceProject,
+  togglePinnedWorkspaceProject,
+  unpinWorkspaceProjects,
+  writePinnedWorkspaceProjectPaths,
   workspaceNameFromPath,
 } from "./workspaces";
 import { rememberSessionMapping } from "./session-map";
@@ -64,6 +68,38 @@ describe("workspace persistence helpers", () => {
     ]);
   });
 
+  it("stores pinned workspace projects without duplicating equivalent paths", () => {
+    writePinnedWorkspaceProjectPaths([
+      "",
+      "/Users/claw/Project/",
+      "/Users/claw/Project",
+      "/Users/claw/Other",
+    ]);
+
+    expect(Array.from(readPinnedWorkspaceProjectPaths())).toEqual([
+      "/Users/claw/Project",
+      "/Users/claw/Other",
+    ]);
+  });
+
+  it("toggles and unpins workspace projects", () => {
+    expect(Array.from(togglePinnedWorkspaceProject(" /Users/claw/Project/ "))).toEqual([
+      "/Users/claw/Project",
+    ]);
+    expect(Array.from(togglePinnedWorkspaceProject("/Users/claw/Project"))).toEqual([]);
+
+    writePinnedWorkspaceProjectPaths([
+      "/Users/claw/Project",
+      "/Users/claw/Other",
+      "/Users/claw/Third",
+    ]);
+
+    expect(Array.from(unpinWorkspaceProjects(["/Users/claw/Other/"]))).toEqual([
+      "/Users/claw/Project",
+      "/Users/claw/Third",
+    ]);
+  });
+
   it("links sessions to workspaces and registers the project", () => {
     rememberSessionWorkspace("session-1", "/Users/claw/Project");
 
@@ -114,6 +150,7 @@ describe("workspace persistence helpers", () => {
   it("removes a workspace project and unlinks its sessions", () => {
     rememberSessionWorkspace("session-1", "/Users/claw/Project");
     rememberSessionWorkspace("session-2", "/Users/claw/Other");
+    writePinnedWorkspaceProjectPaths(["/Users/claw/Project", "/Users/claw/Other"]);
 
     removeWorkspaceProject("/Users/claw/Project/");
 
@@ -123,5 +160,6 @@ describe("workspace persistence helpers", () => {
     expect(readSessionWorkspaceMap()).toEqual({
       "session-2": "/Users/claw/Other",
     });
+    expect(Array.from(readPinnedWorkspaceProjectPaths())).toEqual(["/Users/claw/Other"]);
   });
 });

@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { AppTopBar } from "./app-top-bar";
 import { AppSidebar } from "./app-sidebar";
 import { AppStatusBar } from "./app-status-bar";
-import { SidebarVersionTag } from "./sidebar-version-tag";
 import { ModelOnboardingGuard } from "./model-onboarding-guard";
 import s from "./app-shell.module.css";
 
@@ -18,7 +17,6 @@ export function AppShell({ children }: AppShellProps) {
       </div>
       <div className={s.sidebarSlot}>
         <AppSidebar />
-        <SidebarVersionTag />
       </div>
       <div className={s.mainSlot}>{children}<ModelOnboardingGuard /></div>
       <div className={s.statusbarSlot}>
