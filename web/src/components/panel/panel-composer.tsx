@@ -41,7 +41,7 @@ export function PanelComposer() {
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
     () => readLastUsedModel(),
   );
-  const [prefilledText, setPrefilledText] = useState("");
+  const [prefilledDraft, setPrefilledDraft] = useState({ text: "", nonce: 0 });
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
   const composerSubmitShortcut = useAtomValue(composerSubmitShortcutAtom);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -60,7 +60,7 @@ export function PanelComposer() {
 
   useEffect(() => {
     if (!prefill) return;
-    setPrefilledText(prefill.text);
+    setPrefilledDraft(prefill);
     wrapperRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     // Consume the signal so re-renders don't replay it.
     setPrefill(null);
@@ -142,7 +142,8 @@ export function PanelComposer() {
       <GooseComposer
         key={initialWorkspacePath || "default-workspace"}
         onSend={onSend}
-        initial={prefilledText}
+        initial={prefilledDraft.text}
+        initialNonce={prefilledDraft.nonce}
         initialWorkspacePath={initialWorkspacePath}
         placeholder={`描述你想完成的任务，${submitShortcutHint}…`}
         variant="big"

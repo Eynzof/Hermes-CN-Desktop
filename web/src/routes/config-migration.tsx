@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
-import { AlertTriangle, CheckCircle2, FolderOpen, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, FolderOpen, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import type {
   ConfigMigrationCandidate,
   ConfigMigrationImportResult,
   ConfigMigrationScanResult,
 } from "@hermes/protocol";
 import { runtime } from "@/lib/runtime";
+import { buildConfigMigrationAssistantPrompt } from "@/lib/config-migration-assistant";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
 import { activeProfileAtom, profileSwitchingAtom } from "@/stores/ui";
+import { composerPrefillAtom } from "@/stores/panel";
 import { SectionShell } from "./section-shell";
 import settings from "./settings.module.css";
 import s from "./config-migration.module.css";
@@ -122,7 +125,7 @@ function MigrationPreview({
   );
 }
 
-export function ConfigMigrationRoute() {
+function LegacyConfigMigrationRoute() {
   const queryClient = useQueryClient();
   const setActiveProfile = useSetAtom(activeProfileAtom);
   const setSwitching = useSetAtom(profileSwitchingAtom);
@@ -266,4 +269,125 @@ export function ConfigMigrationRoute() {
       )}
     </SectionShell>
   );
+}
+
+async function buildPromptFromCurrentRuntime(): Promise<string> {
+  const runtimeConfig = window.hermesDesktop?.getRuntimeConfig?.() ?? window.__HERMES_RUNTIME__ ?? null;
+  const runtimeInfo = await window.hermesDesktop?.getRuntimeInfo?.().catch(() => null) ?? null;
+  return buildConfigMigrationAssistantPrompt({
+    runtimeConfig,
+    runtimeInfo,
+    collectedAt: new Date().toISOString(),
+  });
+}
+
+function ConfigMigrationAssistantRoute() {
+  const navigate = useNavigate();
+  const setPrefill = useSetAtom(composerPrefillAtom);
+  const [preparing, setPreparing] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const startMigrationGuide = useCallback(async () => {
+    if (preparing) return;
+    setPreparing(true);
+    setMessage("");
+    setError("");
+    try {
+      const prompt = await buildPromptFromCurrentRuntime();
+      setPrefill({ text: prompt, nonce: Date.now() });
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "无法准备迁移说明，请稍后重试");
+    } finally {
+      setPreparing(false);
+    }
+  }, [navigate, preparing, setPrefill]);
+
+  const copyPrompt = useCallback(async () => {
+    setCopying(true);
+    setMessage("");
+    setError("");
+    try {
+      const prompt = await buildPromptFromCurrentRuntime();
+      await navigator.clipboard.writeText(prompt);
+      setMessage("已复制迁移说明。你可以把它粘贴到任意 Hermes 对话中使用。");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "复制迁移说明失败");
+    } finally {
+      setCopying(false);
+    }
+  }, []);
+
+  return (
+    <SectionShell title="配置迁移" sub="把已有 Hermes 配置安全迁移到当前桌面端">
+      <div className={s.heroCard}>
+        <div className={s.heroIcon}><Sparkles size={22} /></div>
+        <div>
+          <h2 className={s.heroTitle}>让 Hermes 帮你迁移已有配置。</h2>
+          <p className={s.heroText}>
+            如果你以前在命令行版、其它档案或其它目录里配置过模型、密钥、MCP、技能或记忆，可以从这里开始迁移。系统会把一段迁移说明填入新任务输入框，你确认后再发送给 Hermes。
+          </p>
+        </div>
+      </div>
+
+      <div className={s.actions}>
+        <button type="button" className={settings.btnPrimary} onClick={startMigrationGuide} disabled={preparing}>
+          <Sparkles size={13} />
+          {preparing ? "正在准备…" : "开始迁移向导"}
+        </button>
+        <button type="button" className={settings.btn} onClick={copyPrompt} disabled={preparing || copying}>
+          <Copy size={13} />
+          {copying ? "正在复制…" : "复制迁移说明"}
+        </button>
+      </div>
+
+      {message && <div className={s.success}>{message}</div>}
+      {error && <div className={s.error}>{error}</div>}
+
+      <div className={s.assistantGrid}>
+        <section className={s.previewPanel}>
+          <h3 className={s.previewTitle}>适合迁移的内容</h3>
+          <div className={s.entryList}>
+            <div className={s.entryItem}>
+              <span>模型和密钥</span>
+              <span className={s.entryMeta}>服务商 / API Key / Base URL</span>
+            </div>
+            <div className={s.entryItem}>
+              <span>工具和扩展</span>
+              <span className={s.entryMeta}>MCP / skills / plugins / scripts</span>
+            </div>
+            <div className={s.entryItem}>
+              <span>个性化数据</span>
+              <span className={s.entryMeta}>记忆 / 灵魂 / 常用配置</span>
+            </div>
+          </div>
+        </section>
+
+        <section className={s.previewPanel}>
+          <h3 className={s.previewTitle}>迁移会怎样进行</h3>
+          <div className={s.stepList}>
+            <div><b>1. 先检查来源</b><span>Hermes 会帮你确认旧配置可能保存在哪里。</span></div>
+            <div><b>2. 再给迁移建议</b><span>哪些可以直接迁移，哪些需要你确认或手动调整。</span></div>
+            <div><b>3. 确认后再修改</b><span>没有你的确认，不会改文件、覆盖配置或重启服务。</span></div>
+            <div><b>4. 最后验证结果</b><span>检查模型、工具、技能和记忆是否能正常使用。</span></div>
+          </div>
+        </section>
+      </div>
+
+      <section className={s.promptPanel}>
+        <h3 className={s.previewTitle}>迁移前请注意</h3>
+        <p className={s.introText}>
+          迁移过程中可能会涉及 API Key、登录凭据和本地文件路径。Hermes 会优先使用只读检查，并在需要写入或覆盖文件前向你确认。
+        </p>
+      </section>
+    </SectionShell>
+  );
+}
+
+export function ConfigMigrationRoute() {
+  const [searchParams] = useSearchParams();
+  if (searchParams.get("legacy") === "1") return <LegacyConfigMigrationRoute />;
+  return <ConfigMigrationAssistantRoute />;
 }

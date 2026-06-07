@@ -147,6 +147,20 @@
 .statusItem[data-tone="ok"] { border-color: color-mix(in srgb, var(--h-ok) 32%, var(--h-line)); background: color-mix(in srgb, var(--h-ok) 6%, var(--h-bg-pane)); }
 .statusItem[data-tone="warn"] { border-color: color-mix(in srgb, var(--h-warn) 34%, var(--h-line)); background: color-mix(in srgb, var(--h-warn) 6%, var(--h-bg-pane)); }
 .testActions { display: flex; justify-content: flex-end; padding-top: 2px; }
+.diagnosticAssistant { display: grid; gap: 12px; border: 1px solid color-mix(in srgb, var(--h-accent) 28%, var(--h-line)); border-radius: var(--h-r-lg); background: color-mix(in srgb, var(--h-accent) 5%, var(--h-bg-pane)); padding: 14px; }
+.diagnosticHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.diagnosticHead h4 { margin: 5px 0 7px; color: var(--h-text); font-size: 15px; }
+.diagnosticHead p { margin: 0; color: var(--h-text-2); line-height: 1.7; font-size: 12px; }
+.diagnosticActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; flex: 0 0 auto; }
+.issueGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.issueCard { display: grid; gap: 6px; align-content: start; border: 1px solid var(--h-line-soft); border-radius: var(--h-r-md); background: var(--h-bg-soft); padding: 11px 12px; }
+.issueCard b { color: var(--h-text); font-size: 12px; }
+.issueCard span { color: var(--h-text-2); line-height: 1.55; font-size: 12px; }
+.issueCard em { color: var(--h-text-3); line-height: 1.55; font-style: normal; font-size: 11px; }
+.issueCard[data-tone="ok"] { border-color: color-mix(in srgb, var(--h-ok) 34%, var(--h-line)); background: color-mix(in srgb, var(--h-ok) 6%, var(--h-bg-soft)); }
+.issueCard[data-tone="warn"] { border-color: color-mix(in srgb, var(--h-warn) 38%, var(--h-line)); background: color-mix(in srgb, var(--h-warn) 6%, var(--h-bg-soft)); }
+.issueCard[data-tone="error"] { border-color: color-mix(in srgb, var(--h-err) 42%, var(--h-line)); background: color-mix(in srgb, var(--h-err) 6%, var(--h-bg-soft)); }
+.inlineError { display: inline-flex; align-items: center; gap: 7px; color: var(--h-err); font-size: 12px; line-height: 1.5; }
 .summaryLine { color: var(--h-text-2); background: var(--h-bg-soft); border: 1px solid var(--h-line); border-radius: var(--h-r-md); padding: 10px 12px; font-size: 12px; }
 .reviewTable { width: 100%; border-collapse: collapse; font-size: 12px; }
 .reviewTable th, .reviewTable td { text-align: left; border-bottom: 1px solid var(--h-line-soft); padding: 9px; color: var(--h-text-2); }
@@ -406,6 +420,8 @@
   .testGuide { grid-template-columns: 1fr; }
   .testIntro { border-right: 0; border-bottom: 1px solid var(--h-line-soft); padding: 0 0 12px; }
   .testActions { justify-content: flex-start; }
+  .diagnosticHead { flex-direction: column; }
+  .diagnosticActions { justify-content: flex-start; }
   .testCards { min-width: 0; width: 100%; }
   .field { grid-template-columns: 1fr; }
   .heroActions { align-items: flex-start; }
