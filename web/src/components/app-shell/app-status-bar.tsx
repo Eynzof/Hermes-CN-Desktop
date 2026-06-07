@@ -6,12 +6,14 @@ import { useModelInfo } from "@/hooks/use-config";
 import { useSessions } from "@/hooks/use-sessions";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { useGatewayRestartAction } from "@/hooks/use-gateway-restart";
+import { useRuntimeInfo } from "@/hooks/use-runtime-update";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-url";
 import { openExternalUrl } from "@/lib/external-links";
 import { isSessionRunning } from "@/lib/session-activity";
 import { formatTokens } from "@/lib/format";
 import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
+import { buildSidebarVersionRows } from "./sidebar-version-tag";
 import s from "./app-status-bar.module.css";
 
 function formatModelShort(model: string | null | undefined): string {
@@ -31,6 +33,7 @@ export function AppStatusBar() {
   const { data: modelInfo } = useModelInfo();
   const { data: sessions } = useSessions();
   const { data: analytics } = useAnalytics(1);
+  const { data: runtimeInfo } = useRuntimeInfo();
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
   const gatewayRestart = useGatewayRestartAction();
 
@@ -46,6 +49,7 @@ export function AppStatusBar() {
   const contextLabel = formatContext(
     modelInfo?.effective_context_length ?? modelInfo?.auto_context_length,
   );
+  const versionRows = buildSidebarVersionRows({ status, runtimeInfo });
 
   const runningCount = useMemo(() => {
     if (!sessions?.sessions) return status?.active_sessions ?? 0;
@@ -109,6 +113,18 @@ export function AppStatusBar() {
       <span className={s.stat}>
         <span className={s.lbl}>上下文</span>
         <span className={s.val}>{contextLabel}</span>
+      </span>
+      <span className={s.sep} />
+      <span className={s.stat} title={versionRows.kernel}>
+        <span className={s.lbl}>内核</span>
+        <span className={s.val}>{versionRows.kernelLine.version}</span>
+        <span className={s.val}>{versionRows.kernelLine.commit}</span>
+      </span>
+      <span className={s.sep} />
+      <span className={s.stat} title={versionRows.ui}>
+        <span className={s.lbl}>界面</span>
+        <span className={s.val}>{versionRows.uiLine.version}</span>
+        <span className={s.val}>{versionRows.uiLine.commit}</span>
       </span>
 
       <div className={s.right}>

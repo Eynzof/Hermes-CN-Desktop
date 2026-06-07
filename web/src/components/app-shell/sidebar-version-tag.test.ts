@@ -53,36 +53,35 @@ function runtimeInfo(overrides: Partial<RuntimeInfo> = {}): RuntimeInfo {
 }
 
 describe("buildSidebarVersionRows", () => {
-  it("shows kernel version, kernel commit and kernel commit date", () => {
+  it("shows kernel and UI versions with short commits only", () => {
     const rows = buildSidebarVersionRows({
       runtimeInfo: runtimeInfo(),
       status: { version: "0.14.0", release_date: "2026.5.29.2" },
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
-      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.kernel).toBe("内核 v0.15.2 · 8820 · 05.29");
-    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · 8015 · 06.03`);
-    expect(rows.title).toContain("内核 v0.15.2 · 8820 · 2026-05-29");
-    expect(rows.title).toContain(`界面 ${DESKTOP_VERSION_LABEL} · 8015 · 2026-06-03`);
+    expect(rows.kernel).toBe("内核 v0.15.2 · 8820");
+    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · 8015`);
+    expect(rows.title).toBe(`内核 v0.15.2 · 8820\n界面 ${DESKTOP_VERSION_LABEL} · 8015`);
     expect(rows.kernel).not.toContain("2026.5.29.2");
+    expect(rows.title.split("\n")).toHaveLength(2);
+    expect(rows.title).not.toContain("2026-");
   });
 
   it("falls back to status version and unknown kernel metadata without runtime bridge", () => {
     const rows = buildSidebarVersionRows({
       status: { version: "0.15.2", release_date: "2026.5.29.2" },
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
-      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.kernel).toBe("内核 v0.15.2 · — · 日期未知");
-    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · 8015 · 06.03`);
+    expect(rows.kernel).toBe("内核 v0.15.2 · —");
+    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · 8015`);
     expect(rows.kernel).not.toContain("2026.5.29.2");
   });
 
-  it("shows unknown commit date when the installed kernel commit is absent from recent commits", () => {
+  it("does not depend on recent commit dates", () => {
     const rows = buildSidebarVersionRows({
       runtimeInfo: runtimeInfo({
         source: {
@@ -94,31 +93,28 @@ describe("buildSidebarVersionRows", () => {
         },
       }),
       buildCommit: "80157e462c630803571eef1ba17c2a01edfe240f",
-      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.kernel).toBe("内核 v0.15.2 · 8820 · 日期未知");
+    expect(rows.kernel).toBe("内核 v0.15.2 · 8820");
   });
 
   it("shows a dash instead of a hard-coded kernel version when status is unavailable", () => {
     const rows = buildSidebarVersionRows({
       buildCommit: "unknown",
-      buildDate: "unknown",
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.kernel).toBe("内核 v— · — · 日期未知");
+    expect(rows.kernel).toBe("内核 v— · —");
   });
 
   it("shows a dash when the UI build commit is unknown", () => {
     const rows = buildSidebarVersionRows({
       runtimeInfo: runtimeInfo(),
       buildCommit: "unknown",
-      buildDate: "2026-06-03T16:00:00+08:00",
       desktopVersion: DESKTOP_VERSION,
     });
 
-    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · — · 06.03`);
+    expect(rows.ui).toBe(`界面 ${DESKTOP_VERSION_LABEL} · —`);
   });
 });
