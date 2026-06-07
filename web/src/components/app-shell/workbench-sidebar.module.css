@@ -114,30 +114,32 @@
 }
 
 .quickNav {
-  margin: 0 12px 10px;
+  margin: 0 0 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .quickNavButton {
-  height: 30px;
+  appearance: none;
+  box-sizing: border-box;
+  min-height: 34px;
   width: 100%;
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  column-gap: 8px;
-  padding: 0 11px;
-  border: 1px solid var(--h-line);
-  background: var(--h-bg-soft);
-  border-radius: 3px;
+  gap: 8px;
+  padding: 6px 16px;
+  border-left: 2px solid transparent;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  background: transparent;
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 400;
-  line-height: 1;
-  letter-spacing: 0.01em;
+  line-height: var(--h-lh);
   cursor: pointer;
+  position: relative;
   text-align: left;
 }
 
@@ -146,14 +148,42 @@
   background: var(--h-bg-chip);
 }
 
+.quickNavButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--h-accent) 45%, transparent);
+  outline-offset: -2px;
+}
+
 .quickNavButton[data-active="true"] {
   color: var(--h-text);
-  border-color: color-mix(in srgb, var(--h-accent) 48%, var(--h-line));
-  background: color-mix(in srgb, var(--h-accent) 12%, var(--h-bg-chip));
+  background: var(--h-bg-chip);
+  border-left-color: var(--h-accent);
 }
 
 .quickNavButton .entryIcon {
+  width: 14px;
+  height: 14px;
   color: var(--h-text-3);
+  flex-shrink: 0;
+}
+
+.quickNavButton .entryIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.quickNavButton .entryLabel {
+  flex: 1;
+  height: auto;
+  line-height: var(--h-lh);
+  transform: none;
+}
+
+.quickNavButton .entryCommand {
+  flex-shrink: 0;
+  height: auto;
+  font-size: 9.5px;
+  line-height: var(--h-lh);
+  transform: none;
 }
 
 .quickNavButton[data-active="true"] .entryIcon {
