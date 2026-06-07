@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 
 use futures_util::StreamExt;
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Listener, State};
 
 use crate::error::AppError;
@@ -17,6 +17,24 @@ static SSE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Clien
 pub struct ConnectGatewayInput {
     #[serde(default)]
     pub client_id: Option<String>,
+    #[serde(default)]
+    pub connection_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GatewaySseEventPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    connection_id: Option<String>,
+    data: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GatewaySseErrorPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    connection_id: Option<String>,
+    message: String,
 }
 
 /// Build the SSE endpoint URL with the session token and optional `client_id`.
@@ -147,9 +165,11 @@ pub async fn connect_gateway_sse(
 
     let app_clone = app.clone();
     let app_unlisten = app.clone();
+    let connection_id = input.connection_id.clone();
     tauri::async_runtime::spawn(async move {
         let mut stream = response.bytes_stream();
         let mut buffer: Vec<u8> = Vec::new();
+        let mut ended_by_error = false;
 
         while let Some(chunk_result) = stream.next().await {
             if stop.load(Ordering::Relaxed) {
@@ -160,19 +180,50 @@ pub async fn connect_gateway_sse(
                 Ok(c) => c,
                 Err(e) => {
                     log::error!("SSE stream read error: {}", e);
-                    let _ = app_clone.emit("gateway-sse-error", e.to_string());
+                    ended_by_error = true;
+                    if !stop.load(Ordering::Relaxed) {
+                        let _ = app_clone.emit(
+                            "gateway-sse-error",
+                            GatewaySseErrorPayload {
+                                connection_id: connection_id.clone(),
+                                message: e.to_string(),
+                            },
+                        );
+                    }
                     break;
                 }
             };
 
             for data in parse_sse_chunk(&mut buffer, &chunk) {
-                let _ = app_clone.emit("gateway-sse-event", data);
+                let _ = app_clone.emit(
+                    "gateway-sse-event",
+                    GatewaySseEventPayload {
+                        connection_id: connection_id.clone(),
+                        data,
+                    },
+                );
             }
         }
 
-        log::info!("SSE stream ended");
+        let stopped = stop.load(Ordering::Relaxed);
+        log::info!(
+            "SSE stream ended{}",
+            if stopped {
+                " after client disconnect"
+            } else {
+                ""
+            }
+        );
         app_unlisten.unlisten(unlisten_id);
-        let _ = app_clone.emit("gateway-sse-error", "SSE stream ended".to_string());
+        if !stopped && !ended_by_error {
+            let _ = app_clone.emit(
+                "gateway-sse-error",
+                GatewaySseErrorPayload {
+                    connection_id,
+                    message: "SSE stream ended".to_string(),
+                },
+            );
+        }
     });
 
     Ok(())
