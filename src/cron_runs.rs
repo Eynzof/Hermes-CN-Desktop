@@ -142,8 +142,7 @@ fn started_at_from_filename(filename: &str) -> String {
 
 fn normalized_line(value: &str) -> String {
     value
-        .replace('`', "")
-        .replace('*', "")
+        .replace(['`', '*'], "")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
