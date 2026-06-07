@@ -584,6 +584,33 @@ export type CronJob = z.infer<typeof CronJob>;
 export const CronJobsResponse = z.array(CronJob);
 export type CronJobsResponse = z.infer<typeof CronJobsResponse>;
 
+export const CronRunStatus = z.enum(["success", "error", "blocked", "silent", "unknown"]);
+export type CronRunStatus = z.infer<typeof CronRunStatus>;
+
+export const CronRun = z.object({
+  job_id: z.string(),
+  profile: z.string(),
+  filename: z.string(),
+  started_at: z.string(),
+  status: CronRunStatus,
+  summary: z.string(),
+  size_bytes: z.number(),
+}).passthrough();
+export type CronRun = z.infer<typeof CronRun>;
+
+export const CronRunsResponse = z.object({
+  job_id: z.string(),
+  profile: z.string(),
+  runs: z.array(CronRun),
+}).passthrough();
+export type CronRunsResponse = z.infer<typeof CronRunsResponse>;
+
+export const CronRunDetail = CronRun.extend({
+  content: z.string(),
+  truncated: z.boolean(),
+}).passthrough();
+export type CronRunDetail = z.infer<typeof CronRunDetail>;
+
 // ── Logs (/api/logs) ──────────────────────────────────────────────────
 
 export const LogsResponse = z.object({

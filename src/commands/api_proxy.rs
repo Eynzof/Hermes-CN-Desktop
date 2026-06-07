@@ -15,6 +15,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::cron_runs;
 use crate::error::AppError;
 use crate::process::dashboard::{build_gateway_url, fetch_session_token};
 use crate::session_archive;
@@ -360,6 +361,19 @@ pub async fn api_request_impl(
     session_token: Option<&str>,
     hermes_home: &str,
 ) -> Result<ApiRequestResult, AppError> {
+    api_request_impl_with_home_base(input, api_base_url, session_token, hermes_home, hermes_home)
+        .await
+}
+
+/// Core implementation variant used by the Tauri command so local desktop
+/// intercepts can read both the active profile home and the profile root.
+pub async fn api_request_impl_with_home_base(
+    input: ApiRequestInput,
+    api_base_url: &str,
+    session_token: Option<&str>,
+    hermes_home: &str,
+    hermes_home_base: &str,
+) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
     let path = &input.path;
     let url_p = url_path(path);
@@ -379,7 +393,15 @@ pub async fn api_request_impl(
         return Ok(json_result(status, status_text, body));
     }
 
-    // 3. Runtime update intercept
+    // 3. Cron run history intercept (desktop-local, read-only)
+    if let Some((status, body)) =
+        cron_runs::handle_cron_runs_request(path, method, hermes_home_base)
+    {
+        let status_text = if status == 200 { "OK" } else { "Error" };
+        return Ok(json_result(status, status_text, body));
+    }
+
+    // 4. Runtime update intercept
     if url_p == "/api/hermes/update" && method.to_uppercase() == "POST" {
         let result = crate::process::runtime::install_runtime_update(None).await;
         let status = if result.ok { 200 } else { 503 };
@@ -392,7 +414,7 @@ pub async fn api_request_impl(
         return Ok(json_result(status, status_text, body));
     }
 
-    // 4. Proxy to dashboard
+    // 5. Proxy to dashboard
     let full_url = if path.starts_with("http://") || path.starts_with("https://") {
         // Validate same origin
         let base = url::Url::parse(api_base_url)?;
@@ -447,7 +469,7 @@ pub async fn api_request_impl(
         .collect();
     let raw_body = res.text().await.unwrap_or_default();
 
-    // 5. Post-process: filter archived sessions
+    // 6. Post-process: filter archived sessions
     let body = session_archive::filter_archived_from_response(path, method, hermes_home, &raw_body);
 
     Ok(ApiRequestResult {
@@ -466,20 +488,22 @@ pub async fn api_request(
     input: ApiRequestInput,
     state: State<'_, AppState>,
 ) -> Result<ApiRequestResult, AppError> {
-    let (api_base_url, session_token, hermes_home) = {
+    let (api_base_url, session_token, hermes_home, hermes_home_base) = {
         let inner = state.inner.lock()?;
         (
             inner.api_base_url.clone(),
             inner.session_token.clone(),
             inner.hermes_home.clone(),
+            inner.hermes_home_base.clone(),
         )
     };
 
-    let first = api_request_impl(
+    let first = api_request_impl_with_home_base(
         input.clone(),
         &api_base_url,
         session_token.as_deref(),
         &hermes_home,
+        &hermes_home_base,
     )
     .await?;
     if first.status != 401 {
@@ -505,7 +529,14 @@ pub async fn api_request(
         inner.gateway_url = fresh_gateway_url;
     }
 
-    api_request_impl(input, &api_base_url, fresh_token.as_deref(), &hermes_home).await
+    api_request_impl_with_home_base(
+        input,
+        &api_base_url,
+        fresh_token.as_deref(),
+        &hermes_home,
+        &hermes_home_base,
+    )
+    .await
 }
 
 /// Proxy an HTTP request to an arbitrary external URL (15s timeout).

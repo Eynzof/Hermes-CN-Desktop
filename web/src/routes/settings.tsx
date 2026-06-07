@@ -23,9 +23,10 @@ import {
 import { Dialog, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
-import { useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
+import { cronJobProfile, useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
 import { useLogs } from "@/hooks/use-logs";
 import { useStatus } from "@/hooks/use-status";
+import { useActiveProfileName } from "@/hooks/use-profiles";
 import { useYoloMode, useSetYoloMode, isYoloModeSupported } from "@/hooks/use-yolo-mode";
 import { useGatewayRestartAction } from "@/hooks/use-gateway-restart";
 import {
@@ -404,6 +405,7 @@ type CronFeedback = {
 
 export function CronSection() {
   const { data: jobs, isLoading, isError, error, refetch } = useCronJobs();
+  const activeProfile = useActiveProfileName();
   const createJob = useCreateCronJob();
   const deleteJob = useDeleteCronJob();
   const cronAction = useCronAction();
@@ -431,7 +433,7 @@ export function CronSection() {
   const handleCreate = () => {
     if (!newSchedule || !newPrompt) return;
     createJob.mutate(
-      { name: newName || undefined, schedule: newSchedule, prompt: newPrompt },
+      { name: newName || undefined, schedule: newSchedule, prompt: newPrompt, profile: activeProfile || "default" },
       {
         onSuccess: (job) => {
           setShowNew(false);
@@ -447,7 +449,7 @@ export function CronSection() {
 
   const handleCronAction = (job: CronJob, action: "pause" | "resume" | "trigger") => {
     cronAction.mutate(
-      { id: job.id, action },
+      { id: job.id, profile: cronJobProfile(job), action },
       {
         onSuccess: (updated) => {
           if (action === "trigger") {
@@ -472,7 +474,7 @@ export function CronSection() {
   };
 
   const handleDelete = (job: CronJob) => {
-    deleteJob.mutate(job.id, {
+    deleteJob.mutate({ id: job.id, profile: cronJobProfile(job) }, {
       onSuccess: () => setFeedback({ tone: "ok", message: `已删除定时任务「${cronTitle(job)}」。` }),
       onError: (err) => setFeedback({ tone: "error", message: `删除定时任务失败：${cronActionError(err)}` }),
     });

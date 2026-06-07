@@ -8,7 +8,7 @@
 //   - Token injection: Bearer + X-Hermes-Session-Token are added on every request
 //   - Caller cannot override auth headers
 //   - Other caller headers are forwarded
-//   - Local intercepts (session log, session archive) do NOT hit the dashboard
+//   - Local intercepts (session log, session archive, cron runs) do NOT hit the dashboard
 //   - POST body is forwarded verbatim
 //   - Archive filter post-processing removes archived sessions
 //   - external_request: timeout → 408, unreachable → 0
@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use base64::Engine;
 use hermes_agent_cn::commands::api_proxy::{
-    api_request_impl, external_request, external_request_impl, upload_file_impl, ApiRequestInput,
-    UploadFileInput,
+    api_request_impl, api_request_impl_with_home_base, external_request, external_request_impl,
+    upload_file_impl, ApiRequestInput, UploadFileInput,
 };
 use hermes_agent_cn::error::AppError;
 use hermes_agent_cn::ui_store;
@@ -256,6 +256,46 @@ async fn post_body_is_forwarded_verbatim() {
 }
 
 // --- Local intercepts ------------------------------------------------------
+
+#[tokio::test]
+async fn cron_runs_intercept_reads_profile_output_without_hitting_dashboard() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let base = tempdir();
+    let output_dir = base
+        .path()
+        .join("profiles")
+        .join("alpha")
+        .join("cron")
+        .join("output")
+        .join("job1");
+    std::fs::create_dir_all(&output_dir).unwrap();
+    std::fs::write(
+        output_dir.join("2026-06-07_09-00-00.md"),
+        "# Cron Job: A\n\n## Response\n\nok",
+    )
+    .unwrap();
+
+    let result = api_request_impl_with_home_base(
+        input_get("/__hermes_cron_runs/alpha/job1?limit=30"),
+        &server.uri(),
+        None,
+        base.path().join("profiles").join("alpha").to_str().unwrap(),
+        base.path().to_str().unwrap(),
+    )
+    .await
+    .expect("cron local route should succeed");
+
+    assert_eq!(result.status, 200);
+    assert!(result.ok);
+    assert!(result.body.contains("2026-06-07_09-00-00.md"));
+    assert!(result.body.contains("success"));
+}
 
 #[tokio::test]
 async fn session_log_intercept_does_not_hit_dashboard() {
