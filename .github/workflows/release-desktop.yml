@@ -5,8 +5,8 @@
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
-#   4. Stages the bundled dashboard frontend, bundled skills, and bundled
-#      Hermes-CN-Core runtime payload + manifest for the target platform.
+#   4. Stages the bundled dashboard frontend, bundled skills, bundled plugins,
+#      and bundled Hermes-CN-Core runtime payload + manifest for the target platform.
 #      macOS keeps the upstream signed zip opaque and verifies nested Mach-O
 #      signatures before notarization.
 #   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
@@ -131,6 +131,9 @@ jobs:
       - name: Stage bundled skills
         run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
 
+      - name: Stage bundled plugins
+        run: node scripts/stage-bundled-plugins.mjs --source hermes-agent-cn-source
+
       - name: Stage bundled Hermes-CN-Core runtime
         shell: bash
         run: |
@@ -211,7 +214,7 @@ jobs:
             Hermes Agent CN Desktop，避免中文路径造成兼容性问题。
 
             安装包已内置来自 ${{ steps.runtime_manifest.outputs.source_repo }}
-            ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端和内置技能。
+            ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端、内置技能和内置插件。
 
             Windows 和 macOS 安装包同时内置 Hermes-CN-Core runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。

@@ -487,6 +487,12 @@ fn build_terminal_env(
             skills_dir.to_string_lossy().to_string(),
         );
     }
+    if let Some(plugins_dir) = runtime::current_bundled_plugins_dir() {
+        vars.insert(
+            "HERMES_BUNDLED_PLUGINS".to_string(),
+            plugins_dir.to_string_lossy().to_string(),
+        );
+    }
 
     if let Some(summary) = runtime_summary {
         let existing = env::var("PATH").unwrap_or_default();

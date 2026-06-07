@@ -706,6 +706,11 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     } else {
         log::warn!("Bundled skills are missing from the managed runtime");
     }
+    if let Some(plugins_dir) = crate::process::runtime::current_bundled_plugins_dir() {
+        cmd.env("HERMES_BUNDLED_PLUGINS", &plugins_dir);
+    } else {
+        log::warn!("Bundled plugins are missing from the managed runtime");
+    }
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir)
         .env("HERMES_DESKTOP_MANAGED", "1")
