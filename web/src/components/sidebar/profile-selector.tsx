@@ -9,7 +9,13 @@ import {
 } from "@/hooks/use-profiles";
 import s from "./profile-selector.module.css";
 
-export function ProfileSelector() {
+type ProfileSelectorVariant = "sidebar" | "topbar";
+
+interface ProfileSelectorProps {
+  variant?: ProfileSelectorVariant;
+}
+
+export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
   const navigate = useNavigate();
   const profilesQuery = useProfiles();
   const active = useActiveProfileName();
@@ -50,8 +56,10 @@ export function ProfileSelector() {
           <button
             type="button"
             className={s.trigger}
+            data-variant={variant}
             disabled={isError}
             data-state={open ? "open" : undefined}
+            data-no-drag={variant === "topbar" ? true : undefined}
             title={
               isError
                 ? "无法读取档案（dashboard 离线或没装 hermes-agent-cn fork）"
@@ -66,7 +74,12 @@ export function ProfileSelector() {
           </button>
         </Popover.Trigger>
         <Popover.Portal>
-          <Popover.Content className={s.menu} side="bottom" align="start">
+          <Popover.Content
+            className={s.menu}
+            side="bottom"
+            align={variant === "topbar" ? "end" : "start"}
+            data-variant={variant}
+          >
             <div className={s.menuTitle}>切换档案</div>
             {isLoading ? (
               <div className={s.menuEmpty}>加载中…</div>
@@ -106,7 +119,7 @@ export function ProfileSelector() {
         </Popover.Portal>
       </Popover.Root>
       {restartHint && (
-        <div className={s.restartHint}>
+        <div className={s.restartHint} data-variant={variant}>
           <div className={s.restartHintBody}>
             已切到 <strong>{restartHint}</strong>。
             重启 dashboard 后才会真正加载新档案的 config / sessions。

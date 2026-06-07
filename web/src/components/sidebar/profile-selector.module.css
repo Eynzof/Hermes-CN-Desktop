@@ -2,12 +2,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: calc(100% - 12px);
-  margin: 4px 6px 2px;
-  padding: 8px 10px;
-  border-radius: 8px;
   border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
   color: var(--h-text);
   font-family: var(--h-font-cn);
   font-size: 12.5px;
@@ -16,13 +11,49 @@
   transition: background 0.12s, border-color 0.12s;
 }
 
+.trigger[data-variant="sidebar"] {
+  width: calc(100% - 12px);
+  margin: 4px 6px 2px;
+  padding: 8px 10px;
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-pane);
+}
+
+.trigger[data-variant="topbar"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 132px;
+  max-width: 220px;
+  height: var(--h-topbar-control-h, 28px);
+  margin: 0;
+  padding: 0 10px;
+  border-color: var(--h-topbar-control-border, var(--h-line));
+  border-radius: var(--h-topbar-control-radius, var(--h-r-sm));
+  background: var(--h-topbar-control-bg, var(--h-bg-soft));
+  color: var(--h-topbar-control-color, var(--h-text-2));
+  font-size: 11px;
+  transition: var(--h-topbar-control-transition, background 0.12s, border-color 0.12s);
+}
+
 .trigger:hover {
   background: var(--h-bg-soft);
+}
+
+.trigger[data-variant="topbar"]:hover {
+  border-color: var(--h-topbar-control-hover-border, var(--h-line));
+  background: var(--h-topbar-control-hover-bg, var(--h-bg-soft));
+  color: var(--h-topbar-control-hover-color, var(--h-text));
 }
 
 .trigger[data-state="open"] {
   border-color: var(--h-text-3);
   background: var(--h-bg-soft);
+}
+
+.trigger[data-variant="topbar"][data-state="open"] {
+  border-color: var(--h-topbar-control-hover-border, var(--h-line));
+  background: var(--h-topbar-control-hover-bg, var(--h-bg-soft));
+  color: var(--h-topbar-control-hover-color, var(--h-text));
 }
 
 .trigger:disabled {
@@ -49,19 +80,41 @@
   white-space: nowrap;
 }
 
+.trigger[data-variant="topbar"] .triggerLabel {
+  color: var(--h-topbar-control-color, var(--h-text-2));
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.trigger[data-variant="topbar"] .triggerName {
+  font-size: 12px;
+}
+
 .triggerChevron {
   color: var(--h-text-3);
   flex-shrink: 0;
+}
+
+.trigger[data-variant="topbar"]:hover .triggerLabel,
+.trigger[data-variant="topbar"][data-state="open"] .triggerLabel,
+.trigger[data-variant="topbar"]:hover .triggerChevron,
+.trigger[data-variant="topbar"][data-state="open"] .triggerChevron {
+  color: var(--h-topbar-control-hover-color, var(--h-text));
 }
 
 .menu {
   width: 230px;
   padding: 4px;
   background: var(--h-bg-pane);
-  border-radius: 8px;
+  border-radius: var(--h-r-md);
   border: 1px solid var(--h-line);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--h-shadow-l);
   font-family: var(--h-font-cn);
+}
+
+.menu[data-variant="topbar"] {
+  width: 220px;
 }
 
 .menuTitle {
@@ -81,7 +134,7 @@
   padding: 7px 10px;
   border: none;
   background: transparent;
-  border-radius: 5px;
+  border-radius: var(--h-r-sm);
   text-align: left;
   font-family: var(--h-font-mono);
   font-size: 12px;
@@ -151,7 +204,7 @@
   padding: 6px 10px;
   background: var(--h-bg-soft);
   border: 1px solid var(--h-line);
-  border-radius: 6px;
+  border-radius: var(--h-r-sm);
   color: var(--h-text-2);
   font-size: 11px;
   font-family: var(--h-font-cn);
@@ -159,6 +212,16 @@
   display: flex;
   gap: 6px;
   align-items: flex-start;
+}
+
+.restartHint[data-variant="topbar"] {
+  position: absolute;
+  top: calc(var(--h-window-control-safe-top, 0px) + var(--h-topbar-h) - 4px);
+  right: 14px;
+  z-index: 55;
+  width: 280px;
+  margin: 0;
+  box-shadow: var(--h-shadow-l);
 }
 
 .restartHintBody {

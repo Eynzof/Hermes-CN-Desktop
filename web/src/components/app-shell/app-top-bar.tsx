@@ -84,7 +84,7 @@ export function AppTopBar() {
       </button>
 
       <div className={s.actions}>
-        <ProfileSelector />
+        <ProfileSelector variant="topbar" />
         <button
           type="button"
           className={s.iconBtn}
