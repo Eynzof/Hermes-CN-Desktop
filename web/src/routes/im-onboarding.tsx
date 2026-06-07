@@ -480,7 +480,18 @@ function MessagingTestGuide({
   const restartOk = Boolean(result?.restart.ok);
   const connected = platform?.state === "connected";
   const officialAvailable = platform !== null && platform !== undefined;
-  const testMessage = testResult?.message ?? textFromError(testError);
+  const canRunTest = restartOk || connected || Boolean(platform?.configured);
+  const testBlocked = !canRunTest;
+  const testMessage = testBlocked
+    ? `先完成保存并启动接收服务；未保存时${platformLabel}不会回复。`
+    : testResult?.message ?? textFromError(testError);
+  const platformStatus = platformLoading
+    ? "读取中…"
+    : testBlocked
+      ? "未保存"
+      : officialAvailable
+        ? platformStateText(platform?.state)
+        : "旧 runtime 未提供";
   return (
     <section className={`${s.section} ${s.testGuide}`} data-ready={restartOk || connected ? "true" : undefined}>
       <div className={s.testIntro}>
@@ -496,6 +507,8 @@ function MessagingTestGuide({
           <div><MessageSquareText size={15} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到回复或配对提示。</span></div>
           <div><Stethoscope size={15} /><b>官方检测</b><span>{platformLoading
             ? "正在读取官方消息平台状态。"
+            : testBlocked
+              ? `还没有把扫码结果保存到当前档案，${platformLabel}接收服务不会启动。`
             : officialAvailable
               ? `当前状态：${platformStateText(platform?.state)}${platform?.error_message ? `，${platform.error_message}` : ""}`
               : "当前 runtime 暂无官方消息平台检测接口，已使用接收服务状态兜底。"}</span></div>
@@ -503,13 +516,13 @@ function MessagingTestGuide({
 
         <div className={s.statusGrid}>
           <div className={s.statusItem} data-tone={restartOk ? "ok" : "warn"}><b>保存重启</b><span>{restartOk ? result?.restart.message || "已完成" : "还没有成功保存并重启"}</span></div>
-          <div className={s.statusItem} data-tone={connected ? "ok" : undefined}><b>平台状态</b><span>{platformLoading ? "读取中…" : officialAvailable ? platformStateText(platform?.state) : "旧 runtime 未提供"}</span></div>
-          <div className={s.statusItem} data-tone={testResult?.ok ? "ok" : testResult ? "warn" : undefined}><b>检测结果</b><span>{testPending ? "检测中…" : testMessage || "可点击检测缺口"}</span></div>
+          <div className={s.statusItem} data-tone={connected ? "ok" : testBlocked ? "warn" : undefined}><b>平台状态</b><span>{platformStatus}</span></div>
+          <div className={s.statusItem} data-tone={testResult?.ok ? "ok" : testResult || testBlocked ? "warn" : undefined}><b>检测结果</b><span>{testPending ? "检测中…" : testMessage || "可点击检测缺口"}</span></div>
         </div>
 
         <div className={s.testActions}>
-          <button className={s.btn} type="button" onClick={onTest} disabled={platformLoading || testPending}>
-            <RotateCw size={14} />{testPending ? "检测中…" : `检测${platformLabel}连接`}
+          <button className={s.btn} type="button" onClick={onTest} disabled={platformLoading || testPending || testBlocked}>
+            <RotateCw size={14} />{testPending ? "检测中…" : testBlocked ? "先保存再检测" : `检测${platformLabel}连接`}
           </button>
         </div>
       </div>
@@ -1023,7 +1036,7 @@ function WeixinRoute() {
   const messagingPlatformQuery = useMessagingPlatform("weixin");
   const testPlatform = useTestMessagingPlatform("weixin");
   const createAndSendSession = useCreateAndSendSession();
-  const [dmPolicy, setDmPolicy] = useState<DmPolicy>("allowlist");
+  const [dmPolicy, setDmPolicy] = useState<DmPolicy>("pairing");
   const [allowedUsers, setAllowedUsers] = useState("");
   const [homeChannel, setHomeChannel] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -1042,8 +1055,8 @@ function WeixinRoute() {
   const credential = pollResult?.credentialSummary;
   const scannedUserId = isSet(credential?.userId) ? credential.userId : null;
   const busy = begin.isPending || poll.isPending || apply.isPending;
-  const canApplyQr = credential && pollResult?.status === "confirmed";
-  const canApplyManual = accountId.trim() && token.trim();
+  const canApplyQr = Boolean(credential && pollResult?.status === "confirmed");
+  const canApplyManual = Boolean(accountId.trim() && token.trim());
   const jumpToQr = () => qrAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const start = () => {
@@ -1068,16 +1081,22 @@ function WeixinRoute() {
     const id = window.setInterval(pollOnce, 1500);
     return () => window.clearInterval(id);
   }, [flow?.flowId, pollResult?.status]);
+  useEffect(() => {
+    if (pollResult?.status === "confirmed" && scannedUserId && dmPolicy === "pairing") {
+      setDmPolicy("allowlist");
+    }
+  }, [pollResult?.status, scannedUserId?.fingerprint, dmPolicy]);
 
   const shouldAutoWeixinHomeChannel = Boolean(scannedUserId) && !homeChannel.trim();
   const useScannedUserId = Boolean(scannedUserId) && dmPolicy === "allowlist";
   const manualAllowedCount = splitAllowedUsers(allowedUsers).length;
-  const allowPolicyReady = dmPolicy === "open" || Boolean(useScannedUserId || manualAllowedCount > 0);
+  const allowPolicyReady = dmPolicy === "open" || dmPolicy === "pairing" || Boolean(useScannedUserId || manualAllowedCount > 0);
+  const dmPolicyValue = dmPolicy === "open" ? "open" : dmPolicy === "pairing" ? "pairing" : "allowlist";
   const settings = () => {
     const patch: Record<string, string> = {
       WEIXIN_BASE_URL: baseUrl.trim().replace(/\/$/, ""),
       WEIXIN_CDN_BASE_URL: cdnBaseUrl.trim().replace(/\/$/, ""),
-      WEIXIN_DM_POLICY: dmPolicy === "open" ? "open" : "allowlist",
+      WEIXIN_DM_POLICY: dmPolicyValue,
       WEIXIN_ALLOW_ALL_USERS: dmPolicy === "open" ? "true" : "false",
       WEIXIN_GROUP_POLICY: "disabled",
       WEIXIN_GROUP_ALLOWED_USERS: "",
@@ -1104,6 +1123,8 @@ function WeixinRoute() {
   }, { onSuccess: setResult });
   const allowedUsersReview = dmPolicy === "open"
     ? "未限制"
+    : dmPolicy === "pairing"
+      ? "走配对确认"
     : compactList([
       ...(useScannedUserId ? [`扫码用户 ${last(scannedUserId)}`] : []),
       ...(manualAllowedCount > 0 ? [`手动 ${manualAllowedCount} 个`] : []),
@@ -1112,8 +1133,8 @@ function WeixinRoute() {
   const rows: Array<[string, string, string]> = [
     ["账号 ID", `WEIXIN_ACCOUNT_ID=${credential?.accountId?.redactedValue ?? accountId}`, credential ? "扫码返回" : "手动"],
     ["认证 Token", `WEIXIN_TOKEN=${credential?.token?.redactedValue ?? (token ? "••••" : "")}`, "敏感"],
-    ["私聊策略", `WEIXIN_DM_POLICY=${dmPolicy === "open" ? "open" : "allowlist"}`, dmPolicy === "open" ? "试用开放" : "只允许白名单"],
-    ["允许用户", `WEIXIN_ALLOWED_USERS=${allowedUsersReview}`, allowPolicyReady ? "可保存" : "缺少用户 ID"],
+    ["私聊策略", `WEIXIN_DM_POLICY=${dmPolicyValue}`, dmPolicy === "open" ? "试用开放" : dmPolicy === "pairing" ? "需要确认" : "只允许白名单"],
+    ["允许用户", `WEIXIN_ALLOWED_USERS=${allowedUsersReview}`, dmPolicy === "pairing" ? "无需预填" : allowPolicyReady ? "可保存" : "缺少用户 ID"],
     ["允许所有用户", `WEIXIN_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, "安全默认"],
     ["默认通知会话", `WEIXIN_HOME_CHANNEL=${homeChannelReview}`, shouldAutoWeixinHomeChannel ? "自动设置" : homeChannel.trim() ? "已填写" : "不改动"],
   ];
@@ -1230,6 +1251,7 @@ function WeixinRoute() {
           <section className={s.section}>
             <div className={s.policyGrid}>
               <PolicyCard active={dmPolicy === "allowlist"} title="只允许扫码用户" desc={scannedUserId ? `默认加入本次扫码用户（${last(scannedUserId)}）。` : "扫码完成后会自动加入本次微信用户。"} onClick={() => setDmPolicy("allowlist")} />
+              <PolicyCard active={dmPolicy === "pairing"} title="需要确认再放行" desc="没有拿到用户 ID 时也能先保存；陌生用户发 hi 会收到配对提示。" onClick={() => setDmPolicy("pairing")} />
               <PolicyCard active={dmPolicy === "open"} warning title="所有私聊都可用" desc="方便试用，但不建议长期开放。" onClick={() => setDmPolicy("open")} />
             </div>
             {dmPolicy === "allowlist" && (

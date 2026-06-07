@@ -1380,9 +1380,12 @@ fn validate_required(
                 .get("WEIXIN_DM_POLICY")
                 .map(|v| v.trim().to_lowercase())
                 .unwrap_or_else(|| "open".to_string());
-            if !matches!(dm_policy.as_str(), "open" | "allowlist" | "disabled") {
+            if !matches!(
+                dm_policy.as_str(),
+                "open" | "allowlist" | "pairing" | "disabled"
+            ) {
                 return Err(AppError::InvalidRequest(
-                    "WEIXIN_DM_POLICY must be open, allowlist, or disabled".to_string(),
+                    "WEIXIN_DM_POLICY must be open, allowlist, pairing, or disabled".to_string(),
                 ));
             }
         }
@@ -2010,7 +2013,7 @@ mod tests {
     }
 
     #[test]
-    fn weixin_apply_rejects_unsupported_pairing_policy() {
+    fn weixin_apply_accepts_pairing_policy() {
         let input = ImOnboardingApplyInput {
             platform: ImPlatform::Weixin,
             flow_id: None,
@@ -2026,8 +2029,16 @@ mod tests {
             restart_gateway: Some(false),
         };
 
-        let err = apply_patch_from_input(&input).unwrap_err();
-        assert!(err.to_string().contains("WEIXIN_DM_POLICY"));
+        let patch = apply_patch_from_input(&input).unwrap();
+
+        assert_eq!(
+            patch.get("WEIXIN_DM_POLICY").map(String::as_str),
+            Some("pairing")
+        );
+        assert_eq!(
+            patch.get("WEIXIN_ACCOUNT_ID").map(String::as_str),
+            Some("wx_bot_123456")
+        );
     }
 
     #[test]
