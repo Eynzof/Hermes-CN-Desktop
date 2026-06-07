@@ -86,7 +86,6 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
       {showHeading && <h2 className={s.heading}>主题</h2>}
       <div className={s.appearancePanel}>
         <div className={s.appearanceHeader}>
-          <span className={s.appearanceIndex}>[ 01 ]</span>
           <div className={s.appearanceHeaderText}>
             <h3>外观</h3>
             <p>颜色、密度和对话阅读字号会立即应用到桌面端界面。</p>

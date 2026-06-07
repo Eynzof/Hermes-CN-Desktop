@@ -486,20 +486,11 @@
 
 .appearanceHeader {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: start;
   padding: 20px 24px;
   border-bottom: 1px solid var(--h-line-soft);
-}
-
-.appearanceIndex {
-  margin-top: 3px;
-  color: var(--h-accent);
-  font-family: var(--h-font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
 }
 
 .appearanceHeaderText {
@@ -579,9 +570,9 @@
 
 .skinPicker {
   display: grid;
-  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  grid-template-columns: repeat(2, minmax(200px, 1fr));
   gap: 8px;
-  width: min(100%, 660px);
+  width: min(100%, 560px);
 }
 
 .skinCard {
