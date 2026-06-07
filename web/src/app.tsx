@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { hydrateThemeAtom, usePlatform } from "@hermes/shared-ui";
+import { DEFAULT_THEME_CONFIG, hydrateThemeAtom, usePlatform, type ThemeConfig } from "@hermes/shared-ui";
 import { useEffect, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
@@ -50,7 +50,7 @@ export function App() {
   // 所以这里只需要做一次种子。
   useBootstrapActiveProfile();
   useEffect(() => {
-    hydrateTheme(readUiValue("hermes-theme", { theme: "dark", density: "comfortable" }));
+    hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
   }, [hydrateTheme]);
 
   return (

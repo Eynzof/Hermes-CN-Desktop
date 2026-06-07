@@ -1,7 +1,7 @@
 import type { MouseEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Moon, Palette, Search, Sun } from "lucide-react";
-import { useTheme, type ThemeConfig } from "@hermes/shared-ui";
+import { DEFAULT_THEME_CONFIG, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
@@ -24,7 +24,7 @@ export function AppTopBar() {
   const location = useLocation();
   const { config: themeConfig, update: updateTheme } = useTheme();
   const currentThemeIndex = THEME_SEQUENCE.indexOf(themeConfig.theme);
-  const nextTheme = THEME_SEQUENCE[(currentThemeIndex + 1) % THEME_SEQUENCE.length] ?? "dark";
+  const nextTheme = THEME_SEQUENCE[(currentThemeIndex + 1) % THEME_SEQUENCE.length] ?? DEFAULT_THEME_CONFIG.theme;
   const ThemeIcon =
     themeConfig.theme === "dark-modern" ? Sun : themeConfig.theme === "dark" || themeConfig.theme === "light" ? Palette : Moon;
   const themeToggleLabel = `切换到${THEME_LABELS[nextTheme]}`;

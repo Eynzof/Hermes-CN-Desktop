@@ -13,16 +13,16 @@ const MARK_COLORS = {
     face: "#0a0908",
     side: "#3a3633",
     top: "#2a2620",
-    bridgeSide: "#c95722",
-    bridge: "#ff7a3d",
+    bridgeSide: "#005FF9",
+    bridge: "#005FF9",
   },
   dark: {
     background: "#0a0908",
     face: "#f6f1e3",
     side: "#6e685f",
     top: "#3a3633",
-    bridgeSide: "#c95722",
-    bridge: "#ff7a3d",
+    bridgeSide: "#005FF9",
+    bridge: "#005FF9",
   },
 } as const;
 

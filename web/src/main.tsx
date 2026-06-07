@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, HashRouter } from "react-router-dom";
 import { Provider as JotaiProvider } from "jotai";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { applyPlatformToDOM, applyThemeToDOM } from "@hermes/shared-ui";
+import { DEFAULT_THEME_CONFIG, applyPlatformToDOM, applyThemeToDOM, normalizeThemeConfig, type ThemeConfig } from "@hermes/shared-ui";
 import { queryClient } from "./lib/query-client";
 import { applyHostOSToDOM, runtime } from "./lib/runtime";
 import { installDebugCapture } from "./lib/debug-install";
@@ -42,15 +42,8 @@ async function bootstrap() {
   installExternalLinkHandling();
   await initUiStore();
 
-  const initialTheme = readUiValue<{ theme?: string; density?: string }>("hermes-theme", {});
-  const initialThemeMode =
-    initialTheme.theme === "light" || initialTheme.theme === "light-modern" || initialTheme.theme === "dark-modern"
-      ? initialTheme.theme
-      : "dark";
-  applyThemeToDOM({
-    theme: initialThemeMode,
-    density: initialTheme.density === "compact" ? "compact" : "comfortable",
-  });
+  const initialTheme = readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG);
+  applyThemeToDOM(normalizeThemeConfig(initialTheme));
 
   await fetchDevToken();
   installDebugCapture();
