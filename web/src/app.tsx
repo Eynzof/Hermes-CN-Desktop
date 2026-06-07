@@ -7,6 +7,7 @@ import { readUiValue } from "@/lib/ui-store";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
+import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { PanelRoute } from "@/routes/panel";
 import { DetailRoute } from "@/routes/detail";
@@ -86,6 +87,7 @@ export function App() {
       </AppShell>
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
+      <DesktopUpdateNotifier />
     </div>
   );
 }
