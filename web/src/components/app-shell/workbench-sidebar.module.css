@@ -29,7 +29,7 @@
 }
 
 .newTask {
-  margin: 12px 12px 6px;
+  margin: 12px 12px 8px;
   height: 36px;
   background: var(--persimmon);
   color: #1a0c04;
@@ -39,7 +39,8 @@
   justify-content: space-between;
   padding: 0 12px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13.5px;
+  line-height: 1;
   letter-spacing: 0.01em;
   border: none;
   cursor: pointer;
@@ -51,9 +52,54 @@
 }
 
 .newTaskLead {
+  display: inline-grid;
+  grid-template-columns: 20px minmax(0, auto);
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.entryIcon {
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  line-height: 0;
+}
+
+.entryIcon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.entryLabel {
+  display: block;
+  min-width: 0;
+  height: 20px;
+  overflow: hidden;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  transform: translateY(1px);
+  white-space: nowrap;
+}
+
+.entryCommand {
+  display: block;
+  min-width: 0;
+  height: 20px;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 20px;
+  text-align: right;
+  text-overflow: ellipsis;
+  transform: translateY(1px);
+  white-space: nowrap;
 }
 
 .newTaskKbd {
@@ -67,45 +113,83 @@
   letter-spacing: 0.04em;
 }
 
-.searchRow {
-  margin: 0 12px 10px;
-  height: 28px;
-  background: var(--h-bg-soft);
-  border: 1px solid var(--h-line);
-  border-radius: 3px;
+.quickNav {
+  margin: 0 0 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--h-line-soft);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
-  color: var(--h-text-2);
-  font-family: var(--h-font-mono);
-  font-size: 11px;
-  cursor: pointer;
-  user-select: none;
+  flex-direction: column;
 }
 
-.searchRow:hover {
+.quickNavButton {
+  appearance: none;
+  box-sizing: border-box;
+  min-height: 34px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-left: 2px solid transparent;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  background: transparent;
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: var(--h-lh);
+  cursor: pointer;
+  position: relative;
+  text-align: left;
+}
+
+.quickNavButton:hover {
   color: var(--h-text);
   background: var(--h-bg-chip);
 }
 
-.searchLead {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
+.quickNavButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--h-accent) 45%, transparent);
+  outline-offset: -2px;
 }
 
-.searchKbd {
-  font-family: var(--h-font-mono);
-  font-size: 9.5px;
+.quickNavButton[data-active="true"] {
+  color: var(--h-text);
+  background: var(--h-bg-chip);
+  border-left-color: var(--h-accent);
+}
+
+.quickNavButton .entryIcon {
+  width: 14px;
+  height: 14px;
   color: var(--h-text-3);
-  border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-  padding: 1px 5px;
-  border-radius: 2px;
-  letter-spacing: 0.04em;
-  min-width: 14px;
-  text-align: center;
+  flex-shrink: 0;
+}
+
+.quickNavButton .entryIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.quickNavButton .entryLabel {
+  flex: 1;
+  height: auto;
+  line-height: var(--h-lh);
+  transform: none;
+}
+
+.quickNavButton .entryCommand {
+  flex-shrink: 0;
+  height: auto;
+  font-size: 9.5px;
+  line-height: var(--h-lh);
+  transform: none;
+}
+
+.quickNavButton[data-active="true"] .entryIcon {
+  color: var(--h-accent);
 }
 
 .scrollY {
@@ -188,16 +272,16 @@
   height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--h-text-3);
+  background: transparent;
 }
 
 .dot[data-state="live"] {
-  background: var(--h-accent);
-  box-shadow: 0 0 0 3px rgba(255, 122, 61, 0.18);
+  background: var(--h-ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-ok) 22%, transparent);
 }
 
 .dot[data-state="ok"] {
-  background: var(--moss);
+  background: var(--h-warn);
 }
 
 .dot[data-state="err"] {
@@ -209,9 +293,33 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
   font-family: var(--h-font-mono);
   font-size: 10px;
   color: var(--h-text-3);
+}
+
+.metaText {
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metaProject {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-family: var(--h-font-cn);
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sideItem {

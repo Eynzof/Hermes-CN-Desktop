@@ -21,7 +21,7 @@
 
 .turnRail {
   position: absolute;
-  right: max(12px, calc((100% - 780px) / 2 - 30px));
+  right: max(12px, calc((100% - var(--conversation-max-width, 780px)) / 2 - 30px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -70,7 +70,7 @@
 
 .messages {
   width: 100%;
-  max-width: 780px;
+  max-width: var(--conversation-max-width, 780px);
   margin: 0 auto;
   padding: 18px 28px 24px;
 }

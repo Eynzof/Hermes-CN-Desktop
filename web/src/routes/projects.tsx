@@ -5,6 +5,8 @@ import {
   ExternalLink,
   FolderPlus,
   MoreHorizontal,
+  Pin,
+  PinOff,
   Plus,
   Search,
   Trash2,
@@ -15,12 +17,13 @@ import { formatTokens, relativeTime } from "@/lib/format";
 import { shortenPath } from "@/lib/paths";
 import {
   normalizeWorkspacePath,
+  readPinnedWorkspaceProjectPaths,
   readSessionWorkspaceMap,
   readWorkspaceProjects,
   rememberWorkspaceProject,
   removeWorkspaceProject,
   subscribeWorkspaceChanges,
-  workspaceNameFromPath,
+  togglePinnedWorkspaceProject,
   type WorkspaceProject,
 } from "@/lib/workspaces";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
@@ -62,12 +65,14 @@ function pickTopModel(sessions: SessionSummary[]): string | null {
 }
 
 interface RowMenuProps {
+  pinned: boolean;
   desktopAvailable: boolean;
+  onTogglePin: () => void;
   onOpenInFinder: () => void;
   onDelete: () => void;
 }
 
-function RowMenu({ desktopAvailable, onOpenInFinder, onDelete }: RowMenuProps) {
+function RowMenu({ pinned, desktopAvailable, onTogglePin, onOpenInFinder, onDelete }: RowMenuProps) {
   return (
     <Popover.Portal>
       <Popover.Content
@@ -78,6 +83,12 @@ function RowMenu({ desktopAvailable, onOpenInFinder, onDelete }: RowMenuProps) {
         role="menu"
         onClick={(event) => event.stopPropagation()}
       >
+        <Popover.Close asChild>
+          <button type="button" onClick={onTogglePin} role="menuitem">
+            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            {pinned ? "取消置顶" : "置顶项目"}
+          </button>
+        </Popover.Close>
         {desktopAvailable ? (
           <Popover.Close asChild>
             <button type="button" onClick={onOpenInFinder} role="menuitem">
@@ -100,6 +111,7 @@ export function ProjectsRoute() {
   const { data, isLoading } = useSessions(200, 0);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
   const [sessionWorkspaceMap, setSessionWorkspaceMap] = useState(readSessionWorkspaceMap);
+  const [pinnedProjectPaths, setPinnedProjectPaths] = useState(readPinnedWorkspaceProjectPaths);
   const [searchQuery, setSearchQuery] = useState("");
   const [openMenuPath, setOpenMenuPath] = useState<string | null>(null);
 
@@ -107,6 +119,7 @@ export function ProjectsRoute() {
     return subscribeWorkspaceChanges(() => {
       setProjects(readWorkspaceProjects());
       setSessionWorkspaceMap(readSessionWorkspaceMap());
+      setPinnedProjectPaths(readPinnedWorkspaceProjectPaths());
     });
   }, []);
 
@@ -194,6 +207,11 @@ export function ProjectsRoute() {
     }
   }, []);
 
+  const handleTogglePin = useCallback((project: WorkspaceProject) => {
+    setOpenMenuPath(null);
+    setPinnedProjectPaths(togglePinnedWorkspaceProject(project.path));
+  }, []);
+
   const handleDelete = useCallback((project: WorkspaceProject) => {
     setOpenMenuPath(null);
     const confirmed = window.confirm(
@@ -202,6 +220,7 @@ export function ProjectsRoute() {
     if (!confirmed) return;
     removeWorkspaceProject(project.path);
     setProjects(readWorkspaceProjects());
+    setPinnedProjectPaths(readPinnedWorkspaceProjectPaths());
   }, []);
 
   const goProject = useCallback(
@@ -279,6 +298,7 @@ export function ProjectsRoute() {
               <tbody>
                 {filtered.map((item) => {
                   const { project } = item;
+                  const pinned = pinnedProjectPaths.has(project.path);
                   return (
                     <tr
                       key={project.path}
@@ -289,7 +309,10 @@ export function ProjectsRoute() {
                         <span className={s.colorDot} aria-hidden />
                       </td>
                       <td className={s.projectCell} title={`${project.name}\n${project.path}`}>
-                        <span className={s.nameCell}>{project.name}</span>
+                        <span className={s.nameLine}>
+                          <span className={s.nameCell}>{project.name}</span>
+                          {pinned ? <Pin size={12} className={s.titlePin} aria-hidden /> : null}
+                        </span>
                         <span className={s.pathCell}>{shortenPath(project.path)}</span>
                       </td>
                       <td className={s.metricCell}>{item.sessions.length}</td>
@@ -317,7 +340,9 @@ export function ProjectsRoute() {
                             </button>
                           </Popover.Trigger>
                           <RowMenu
+                            pinned={pinned}
                             desktopAvailable={desktopAvailable}
+                            onTogglePin={() => handleTogglePin(project)}
                             onOpenInFinder={() => handleOpenInFinder(project)}
                             onDelete={() => handleDelete(project)}
                           />

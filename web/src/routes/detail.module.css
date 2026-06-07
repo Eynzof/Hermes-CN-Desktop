@@ -1,4 +1,5 @@
 .page {
+  --conversation-max-width: 780px;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -10,7 +11,7 @@
 .composerArea {
   position: relative;
   width: 100%;
-  max-width: 780px;
+  max-width: var(--conversation-max-width, 780px);
   margin: 0 auto;
   padding: 10px 28px 18px;
 }

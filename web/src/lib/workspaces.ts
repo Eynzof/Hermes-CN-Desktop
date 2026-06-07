@@ -11,6 +11,7 @@ export const WORKSPACE_STORAGE_KEY = "hermes-cn-ui.workspacePath";
 
 const WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.workspaceProjects";
 const SESSION_WORKSPACE_STORAGE_KEY = "hermes-cn-ui.sessionWorkspaces";
+const PINNED_WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.pinnedWorkspaceProjects";
 const WORKSPACE_CHANGED_EVENT = "hermes-cn-ui.workspaces.changed";
 
 export function normalizeWorkspacePath(path: unknown): string {
@@ -39,6 +40,17 @@ function writeJSON(key: string, value: unknown): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeWorkspacePathList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    const path = normalizeWorkspacePath(item);
+    if (!path || seen.has(path)) return [];
+    seen.add(path);
+    return [path];
+  });
 }
 
 export function readWorkspacePath(): string {
@@ -105,6 +117,42 @@ export function rememberWorkspaceProject(path: string, name?: string): Workspace
   return nextProject;
 }
 
+export function readPinnedWorkspaceProjectPaths(): Set<string> {
+  return new Set(
+    normalizeWorkspacePathList(readJSON<unknown>(PINNED_WORKSPACE_PROJECTS_STORAGE_KEY, [])),
+  );
+}
+
+export function writePinnedWorkspaceProjectPaths(paths: Iterable<string>): Set<string> {
+  const cleanPaths = normalizeWorkspacePathList(Array.from(paths));
+  writeJSON(PINNED_WORKSPACE_PROJECTS_STORAGE_KEY, cleanPaths);
+  return new Set(cleanPaths);
+}
+
+export function isWorkspaceProjectPinned(path: string): boolean {
+  const normalized = normalizeWorkspacePath(path);
+  return normalized ? readPinnedWorkspaceProjectPaths().has(normalized) : false;
+}
+
+export function togglePinnedWorkspaceProject(path: string): Set<string> {
+  const normalized = normalizeWorkspacePath(path);
+  const paths = readPinnedWorkspaceProjectPaths();
+  if (!normalized) return paths;
+  if (paths.has(normalized)) paths.delete(normalized);
+  else paths.add(normalized);
+  return writePinnedWorkspaceProjectPaths(paths);
+}
+
+export function unpinWorkspaceProjects(pathsToUnpin: Iterable<string>): Set<string> {
+  const paths = readPinnedWorkspaceProjectPaths();
+  let changed = false;
+  for (const path of pathsToUnpin) {
+    const normalized = normalizeWorkspacePath(path);
+    if (normalized && paths.delete(normalized)) changed = true;
+  }
+  return changed ? writePinnedWorkspaceProjectPaths(paths) : paths;
+}
+
 function readRawSessionWorkspaceMap(): Record<string, string> {
   const raw = readJSON<unknown>(SESSION_WORKSPACE_STORAGE_KEY, {});
   if (!isRecord(raw)) return {};
@@ -145,6 +193,8 @@ export function removeWorkspaceProject(path: string): void {
   if (readWorkspacePath() === normalized) {
     writeWorkspacePath("");
   }
+
+  unpinWorkspaceProjects([normalized]);
 }
 
 export function readSessionWorkspaceMap(): Record<string, string> {

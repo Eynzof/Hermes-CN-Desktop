@@ -19,13 +19,14 @@ interface CapabilityItem {
   label: string;
   path: string;
   icon: LucideIcon;
+  shortcut?: string;
   title?: string;
 }
 
 export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "模型", path: "/models", icon: Cpu },
   { label: "备份恢复", path: "/backup", icon: Archive },
-  { label: "配置迁移", path: "/config-migration", icon: Sparkles },
+  { label: "配置迁移", path: "/config-migration", icon: Sparkles, shortcut: "/migration" },
   {
     label: "档案",
     path: "/profiles",
@@ -86,7 +87,7 @@ export function CapabilitySidebar() {
                     <Icon size={14} />
                   </span>
                   <span className={s.itemLabel}>{item.label}</span>
-                  <span className={s.itemPath}>{item.path}</span>
+                  <span className={s.itemPath}>{item.shortcut ?? item.path}</span>
                 </Link>
               );
             })}
