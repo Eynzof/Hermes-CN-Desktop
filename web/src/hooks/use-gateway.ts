@@ -148,6 +148,7 @@ async function rememberPersistentSessionKey(gatewaySessionId: string) {
 
 interface CreateSessionOptions {
   activate?: boolean;
+  cwd?: string;
 }
 
 export function useGateway() {
@@ -185,7 +186,9 @@ export function useGateway() {
     ensureSubscribed();
     const result = parseGatewayResult(
       SessionCreateResult,
-      await getGatewayClient().request("session.create", {}),
+      await getGatewayClient().request("session.create",
+        options?.cwd?.trim() ? { cwd: options.cwd.trim() } : {},
+      ),
       "session.create",
     );
     if (options?.activate !== false) {
