@@ -123,6 +123,19 @@ function findCatalog(slug: string): ProviderPreset | undefined {
   return CATALOG_BY_ID.get(slug) ?? CATALOG_BY_ID.get(SLUG_ALIASES[slug] ?? "");
 }
 
+function mergeModelIds(...lists: Array<readonly string[] | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const list of lists) {
+    for (const id of list ?? []) {
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
 function findModelCaps(preset: ProviderPreset | undefined, modelId: string): ProviderCatalogModel | null {
   return preset?.models.find((m) => m.id === modelId) ?? null;
 }
@@ -133,7 +146,7 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function buildCandidates(
+export function buildCandidates(
   modelOptions: ModelOptionsResult | null,
   usageEntries: ModelUsageEntry[],
 ): { all: Candidate[]; recent: Candidate[]; configured: Candidate[]; recommended: Candidate[]; more: Candidate[] } {
@@ -149,12 +162,18 @@ function buildCandidates(
     const authenticated = Boolean(extras.authenticated);
     const keyEnv = typeof extras.key_env === "string" ? extras.key_env : undefined;
     const warning = typeof extras.warning === "string" ? extras.warning : undefined;
-    const models = provider.models ?? [];
-    if (models.length === 0 && !authenticated) {
-      // Unconfigured provider with no advertised models — still emit one
-      // placeholder so the CTA card surfaces.
-      const placeholder = preset?.defaultModel ?? "";
-      if (placeholder) {
+    const catalogModelIds = preset?.models.map((model) => model.id) ?? [];
+    const advertisedModels = provider.models ?? [];
+    if (advertisedModels.length === 0 && !authenticated) {
+      // Unconfigured provider with no advertised models — still emit catalog
+      // candidates so the default model can surface in 推荐预设 while newer
+      // non-default models remain searchable in 更多.
+      const placeholders = catalogModelIds.length > 0
+        ? catalogModelIds
+        : preset?.defaultModel
+          ? [preset.defaultModel]
+          : [];
+      for (const placeholder of placeholders) {
         const key = `${provider.slug}:${placeholder}`;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
@@ -174,6 +193,7 @@ function buildCandidates(
       }
       continue;
     }
+    const models = mergeModelIds(catalogModelIds, advertisedModels);
     for (const modelId of models) {
       const key = `${provider.slug}:${modelId}`;
       if (seenKeys.has(key)) continue;
@@ -193,9 +213,10 @@ function buildCandidates(
     }
   }
 
-  // 2. From catalog Top 5: ensure they have at least their default model as
-  // a candidate even if the gateway never returned them. This guarantees the
-  // 推荐预设 group is populated for users with zero configured providers.
+  // 2. From catalog Top 5: ensure they have catalog candidates even if the
+  // gateway never returned them. This guarantees the 推荐预设 group is
+  // populated for users with zero configured providers, while non-default
+  // variants remain searchable in 更多.
   for (const topId of TOP5_PROVIDER_IDS) {
     if (gatewayProviderSlugs.has(topId)) continue;
     const preset = CATALOG_BY_ID.get(topId);

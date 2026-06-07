@@ -46,4 +46,11 @@ describe("resolveModelContextWindow", () => {
       model: "deepseek-ai/DeepSeek-V3.2",
     })).toBe(128_000);
   });
+
+  it("falls back to the built-in MiniMax-M3 catalog context", () => {
+    expect(resolveModelContextWindow(undefined, {
+      provider: "minimax-cn",
+      model: "MiniMax-M3",
+    })).toBe(1_000_000);
+  });
 });

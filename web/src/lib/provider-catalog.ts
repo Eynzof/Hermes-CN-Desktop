@@ -205,7 +205,7 @@ export interface ProviderConfigInput {
   model: string;
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.07";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.07.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -445,12 +445,16 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       transport: "anthropic_messages",
       apiKeyLabel: "MINIMAX_CN_API_KEY",
       docsUrl: "https://platform.minimaxi.com/document",
-      defaultModel: "MiniMax-M2.7",
+      defaultModel: "MiniMax-M3",
       models: [
-        { id: "MiniMax-M2.7", supportsTools: true, supportsReasoning: true },
-        { id: "MiniMax-M2.5", supportsTools: true },
-        { id: "MiniMax-M2.1", supportsTools: true },
-        { id: "MiniMax-M2", supportsTools: true },
+        { id: "MiniMax-M3", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true },
+        { id: "MiniMax-M2.7", contextWindow: 204_800, supportsTools: true, supportsReasoning: true },
+        { id: "MiniMax-M2.7-highspeed", contextWindow: 204_800, supportsTools: true, supportsReasoning: true },
+        { id: "MiniMax-M2.5", contextWindow: 204_800, supportsTools: true },
+        { id: "MiniMax-M2.5-highspeed", contextWindow: 204_800, supportsTools: true },
+        { id: "MiniMax-M2.1", contextWindow: 204_800, supportsTools: true },
+        { id: "MiniMax-M2.1-highspeed", contextWindow: 204_800, supportsTools: true },
+        { id: "MiniMax-M2", contextWindow: 204_800, supportsTools: true },
       ],
       supportsModelListing: false,
     },

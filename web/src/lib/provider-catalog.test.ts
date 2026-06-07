@@ -242,7 +242,37 @@ describe("provider catalog config updates", () => {
       baseUrl: "https://api.minimaxi.com/anthropic",
       apiMode: "anthropic_messages",
       transport: "anthropic_messages",
+      defaultModel: "MiniMax-M3",
       supportsModelListing: false,
+    });
+  });
+
+  it("ships MiniMax-M3 in the Token Plan preset with a 1M context window", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "minimax-cn");
+    expect(preset).toBeTruthy();
+
+    const m3 = preset!.models.find((model) => model.id === "MiniMax-M3");
+    expect(m3).toMatchObject({
+      contextWindow: 1_000_000,
+      supportsTools: true,
+      supportsReasoning: true,
+    });
+    expect(preset!.models[0]?.id).toBe("MiniMax-M3");
+
+    const config = buildProviderSettingsUpdate(
+      {},
+      preset!,
+      {
+        apiKey: "minimax-key",
+        baseUrl: "",
+        model: "MiniMax-M3",
+      },
+    );
+
+    expect(config.providers["minimax-cn"].models["MiniMax-M3"]).toMatchObject({
+      context_length: 1_000_000,
+      supports_tools: true,
+      supports_reasoning: true,
     });
   });
 
