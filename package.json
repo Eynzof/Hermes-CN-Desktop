@@ -28,8 +28,9 @@
     "runtime:stage-bundled-macos": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch arm64",
     "dashboard:stage-web-dist": "node scripts/stage-dashboard-web-dist.mjs",
     "skills:stage-bundled": "node scripts/stage-bundled-skills.mjs",
-    "bundle:stage-windows": "pnpm run runtime:stage-bundled-windows && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled",
-    "bundle:stage-macos": "pnpm run runtime:stage-bundled-macos && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled",
+    "plugins:stage-bundled": "node scripts/stage-bundled-plugins.mjs",
+    "bundle:stage-windows": "pnpm run runtime:stage-bundled-windows && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
+    "bundle:stage-macos": "pnpm run runtime:stage-bundled-macos && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
     "tauri:build:bundled-windows": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-windows && pnpm exec tauri build --bundles nsis",
     "tauri:build:bundled-macos": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos && pnpm exec tauri build --bundles dmg"
   },

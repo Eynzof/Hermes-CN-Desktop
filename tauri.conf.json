@@ -48,7 +48,8 @@
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",
       "static/dashboard/": "dashboard/",
-      "static/bundled-skills/": "bundled-skills/"
+      "static/bundled-skills/": "bundled-skills/",
+      "static/bundled-plugins/": "bundled-plugins/"
     },
     "windows": {
       "nsis": {
