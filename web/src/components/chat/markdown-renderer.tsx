@@ -1,6 +1,6 @@
 import { cjk } from "@streamdown/cjk";
 import { createMathPlugin } from "@streamdown/math";
-import type { CSSProperties, ComponentProps } from "react";
+import type { CSSProperties, ComponentProps, MouseEvent } from "react";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
 import { harden } from "rehype-harden";
@@ -96,6 +96,50 @@ function isExternalHref(value: string): boolean {
   }
 }
 
+function decodeHashId(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function footnoteTargetCandidates(id: string): string[] {
+  const decoded = decodeHashId(id);
+  const candidates = new Set([id, decoded]);
+
+  for (const candidate of Array.from(candidates)) {
+    if (candidate.startsWith("user-content-")) {
+      candidates.add(`user-content-${candidate}`);
+    } else {
+      candidates.add(`user-content-${candidate}`);
+    }
+  }
+
+  return Array.from(candidates).filter(Boolean);
+}
+
+function scrollToHashTarget(hash: string): boolean {
+  if (typeof document === "undefined" || !hash.startsWith("#")) return false;
+  const id = hash.slice(1);
+  if (!id) return false;
+
+  for (const candidate of footnoteTargetCandidates(id)) {
+    const target = document.getElementById(candidate);
+    if (!target) continue;
+    target.scrollIntoView({ block: "start", behavior: "smooth" });
+    return true;
+  }
+
+  return false;
+}
+
+function handleHashAnchorClick(event: MouseEvent<HTMLAnchorElement>, href: string) {
+  if (event.defaultPrevented || event.button !== 0) return;
+  event.preventDefault();
+  scrollToHashTarget(href);
+}
+
 function MarkdownAnchor({
   href,
   children,
@@ -105,10 +149,12 @@ function MarkdownAnchor({
   const safe = safeHref(href);
   if (!safe) return <span>{children}</span>;
   const external = isExternalHref(safe);
+  const isHashAnchor = safe.startsWith("#");
   return (
     <a
       {...props}
       href={safe}
+      onClick={isHashAnchor ? (event) => handleHashAnchorClick(event, safe) : props.onClick}
       rel={external ? "noreferrer" : undefined}
       target={external && /^https?:\/\//i.test(safe) ? "_blank" : undefined}
     >

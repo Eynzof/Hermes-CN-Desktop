@@ -71,6 +71,18 @@ describe("MessageTimeline", () => {
   });
 
 
+
+  it("renders footnote anchors as in-page links", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={"正文引用[^1]\n\n[^1]: 这里是脚注内容"} />,
+    );
+
+    expect(html).toContain('href="#user-content-fn-1"');
+    expect(html).toContain('href="#user-content-fnref-1"');
+    expect(html).toContain("这里是脚注内容");
+    expect(html).not.toContain('target="_blank"');
+  });
+
   it("keeps safe relative Markdown links renderable", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
       <MarkdownText text="[内部帮助](/advanced/about)" />,
