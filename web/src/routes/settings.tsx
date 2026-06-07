@@ -97,7 +97,6 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
         <AppearanceRow
           label="主题"
           sub="选择桌面端皮肤。现代主题采用更克制的工作台配色和蓝色主操作。"
-          meta="applied immediately"
           right={
             <ThemeSkinPicker
               value={config.theme}
@@ -108,7 +107,6 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
         <AppearanceRow
           label="密度"
           sub="调整行与卡片的垂直留白。舒适匹配当前默认布局。"
-          meta="无需重启"
           right={
             <RadioGroup value={config.density} options={[{ value: "compact", label: "紧凑" }, { value: "comfortable", label: "舒适" }]} onChange={(v) => update({ density: v as ThemeConfig["density"] })} />
           }
@@ -116,7 +114,6 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
         <AppearanceRow
           label="对话字号"
           sub="只影响会话详情里的对话正文；代码块、工具日志和输入框保持原字号。"
-          meta="conversation only"
           right={
             <RadioGroup
               value={conversationFontSize}
