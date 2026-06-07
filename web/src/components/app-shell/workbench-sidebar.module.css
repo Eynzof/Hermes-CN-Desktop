@@ -238,6 +238,7 @@
 }
 
 .metaText {
+  flex: 0 0 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -245,7 +246,7 @@
 }
 
 .metaProject {
-  flex: 0 1 48%;
+  flex: 1 1 auto;
   min-width: 0;
   margin-left: auto;
   overflow: hidden;
