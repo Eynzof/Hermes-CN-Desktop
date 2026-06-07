@@ -110,7 +110,7 @@
 
 .primary {
   border: 1px solid color-mix(in srgb, var(--h-accent) 75%, var(--h-line));
-  color: #1a0c04;
+  color: #ffffff;
   background: var(--h-accent);
 }
 

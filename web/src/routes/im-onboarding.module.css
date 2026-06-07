@@ -17,10 +17,10 @@
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--h-accent) 45%, transparent); outline-offset: 2px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
-.primary { color: var(--ink-050); background: var(--h-accent); border-color: var(--h-accent); font-weight: 700; box-shadow: 0 0 0 1px color-mix(in srgb, var(--h-accent) 20%, transparent); }
-.primary:hover:not(:disabled) { color: var(--ink-050); background: color-mix(in srgb, var(--h-accent) 86%, var(--bone-100)); border-color: color-mix(in srgb, var(--h-accent) 92%, var(--bone-100)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--h-accent) 42%, transparent), 0 6px 18px color-mix(in srgb, var(--h-accent) 22%, transparent); }
-.primary:active:not(:disabled) { color: var(--ink-050); background: color-mix(in srgb, var(--h-accent) 78%, var(--ink-000)); border-color: var(--h-accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--h-accent) 34%, transparent); }
-.primary:disabled { color: color-mix(in srgb, var(--ink-050) 78%, transparent); background: color-mix(in srgb, var(--h-accent) 58%, var(--h-bg-soft)); border-color: color-mix(in srgb, var(--h-accent) 46%, var(--h-line)); opacity: .72; }
+.primary { color: #ffffff; background: var(--h-accent); border-color: var(--h-accent); font-weight: 700; box-shadow: 0 0 0 1px color-mix(in srgb, var(--h-accent) 20%, transparent); }
+.primary:hover:not(:disabled) { color: #ffffff; background: color-mix(in srgb, var(--h-accent) 86%, var(--bone-100)); border-color: color-mix(in srgb, var(--h-accent) 92%, var(--bone-100)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--h-accent) 42%, transparent), 0 6px 18px color-mix(in srgb, var(--h-accent) 22%, transparent); }
+.primary:active:not(:disabled) { color: #ffffff; background: color-mix(in srgb, var(--h-accent) 78%, var(--ink-000)); border-color: var(--h-accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--h-accent) 34%, transparent); }
+.primary:disabled { color: color-mix(in srgb, #ffffff 78%, transparent); background: color-mix(in srgb, var(--h-accent) 58%, var(--h-bg-soft)); border-color: color-mix(in srgb, var(--h-accent) 46%, var(--h-line)); opacity: .72; }
 .actionFeedback { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--h-line); border-radius: var(--h-r-md); background: var(--h-bg-pane); padding: 10px 12px; color: var(--h-text-2); }
 .actionFeedback b { display: block; color: var(--h-text); font-size: 13px; }
 .actionFeedback span { display: block; margin-top: 3px; font-size: 12px; line-height: 1.55; }

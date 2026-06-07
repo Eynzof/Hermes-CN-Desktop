@@ -40,7 +40,7 @@
 
 .headerPrimary,
 .primaryButton {
-  color: var(--h-bg-pane);
+  color: #ffffff;
   border-color: var(--h-accent);
   background: var(--h-accent);
   font-weight: 700;
