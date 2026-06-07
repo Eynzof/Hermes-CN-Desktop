@@ -23,7 +23,7 @@ export function useCronJobs() {
   const profile = useActiveProfileName();
   return useQuery<CronJob[]>({
     queryKey: ["cron-jobs", profile],
-    queryFn: () => fetchJSON("/api/cron/jobs?profile=all", undefined, CronJobsResponse),
+    queryFn: ({ signal }) => fetchJSON("/api/cron/jobs?profile=all", { signal }, CronJobsResponse),
     retry: 1,
     staleTime: 30_000,
   });
@@ -82,10 +82,10 @@ export function useCronRuns(job: CronJob | null | undefined, limit = 30) {
   return useQuery<CronRun[]>({
     queryKey: ["cron-runs", profile, id, limit],
     enabled: Boolean(job?.id),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const result = await fetchJSON(
         `/__hermes_cron_runs/${encodePart(profile)}/${encodePart(id)}?limit=${limit}`,
-        undefined,
+        { signal },
         CronRunsResponse,
       );
       return result.runs;
@@ -102,9 +102,9 @@ export function useCronRunDetail(run: CronRun | null | undefined) {
   return useQuery({
     queryKey: ["cron-run-detail", profile, jobId, filename],
     enabled: Boolean(run?.job_id && run?.filename),
-    queryFn: () => fetchJSON(
+    queryFn: ({ signal }) => fetchJSON(
       `/__hermes_cron_runs/${encodePart(profile)}/${encodePart(jobId)}/${encodePart(filename)}`,
-      undefined,
+      { signal },
       CronRunDetail,
     ),
     retry: 1,

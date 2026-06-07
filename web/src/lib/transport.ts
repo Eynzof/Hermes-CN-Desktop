@@ -45,6 +45,36 @@ function authOnlyHeaders(extra?: Record<string, string>): Record<string, string>
   return h;
 }
 
+
+function abortError(): DOMException | Error {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException("The operation was aborted.", "AbortError");
+  }
+  const error = new Error("The operation was aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal | null): void {
+  if (signal?.aborted) {
+    throw abortError();
+  }
+}
+
+function abortPromise(signal?: AbortSignal | null): Promise<never> | null {
+  if (!signal) return null;
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((_, reject) => {
+    signal.addEventListener("abort", () => reject(abortError()), { once: true });
+  });
+}
+
+export async function raceAbort<T>(work: Promise<T>, signal?: AbortSignal | null): Promise<T> {
+  const aborted = abortPromise(signal);
+  if (!aborted) return work;
+  return Promise.race([work, aborted]);
+}
+
 function shouldUseNativeIpc(path: string): boolean {
   const isLocalDesktopRoute =
     path.startsWith("/__hermes_session_log/") || path.startsWith("/__hermes_cron_runs/");
@@ -75,12 +105,17 @@ async function fetchViaElectron<T>(
   init?: RequestInit,
   parser?: Parser<T>,
 ): Promise<T> {
-  const result = await window.hermesDesktop!.request({
+  const signal = init?.signal ?? null;
+  throwIfAborted(signal);
+
+  const result = await raceAbort(window.hermesDesktop!.request({
     path,
     method: init?.method,
     headers: authHeaders(init?.headers as Record<string, string>),
     body: typeof init?.body === "string" ? init.body : null,
-  });
+  }), signal);
+
+  throwIfAborted(signal);
 
   if (!result.ok) {
     reportRestFailure(init?.method ?? "GET", path, result.status, result.body);

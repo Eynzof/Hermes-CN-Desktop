@@ -31,7 +31,7 @@ function formatContext(ctx: number | null | undefined): string {
 export function AppStatusBar() {
   const { data: status, isError: statusError } = useStatus();
   const { data: modelInfo } = useModelInfo();
-  const { data: sessions } = useSessions();
+  const { data: sessions } = useSessions(20);
   const { data: analytics } = useAnalytics(1);
   const { data: runtimeInfo } = useRuntimeInfo();
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);

@@ -4,6 +4,7 @@ use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
 use tauri::State;
+use tokio::task;
 
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
@@ -176,18 +177,28 @@ fn read_memory_from_home(home: &Path) -> MemoryInfo {
     }
 }
 
-#[tauri::command]
-pub fn read_memory(state: State<'_, AppState>) -> AppResult<MemoryInfo> {
-    let home = active_hermes_home(&state)?;
-    Ok(read_memory_from_home(&home))
+async fn run_memory_io<T, F>(work: F) -> AppResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> AppResult<T> + Send + 'static,
+{
+    task::spawn_blocking(work)
+        .await
+        .map_err(|err| AppError::Internal(format!("memory task failed: {}", err)))?
 }
 
 #[tauri::command]
-pub fn add_memory_entry(
+pub async fn read_memory(state: State<'_, AppState>) -> AppResult<MemoryInfo> {
+    let home = active_hermes_home(&state)?;
+    run_memory_io(move || Ok(read_memory_from_home(&home))).await
+}
+
+#[tauri::command]
+pub async fn add_memory_entry(
     content: String,
     state: State<'_, AppState>,
 ) -> AppResult<MemoryMutationResult> {
-    let trimmed = content.trim();
+    let trimmed = content.trim().to_string();
     if trimmed.is_empty() {
         return Ok(MemoryMutationResult {
             success: false,
@@ -196,88 +207,98 @@ pub fn add_memory_entry(
     }
 
     let home = active_hermes_home(&state)?;
-    let path = memory_path(&home);
-    let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
-    let mut entries = parse_memory_entries(&existing.content);
-    entries.push(MemoryEntry {
-        index: entries.len(),
-        content: trimmed.to_string(),
-    });
-    let next = serialize_entries(&entries);
-    if char_count(&next) > MEMORY_CHAR_LIMIT {
-        return Ok(MemoryMutationResult {
-            success: false,
-            error: Some(format!(
-                "超过记忆上限（{} / {} 字符）",
-                char_count(&next),
-                MEMORY_CHAR_LIMIT
-            )),
+    run_memory_io(move || {
+        let path = memory_path(&home);
+        let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
+        let mut entries = parse_memory_entries(&existing.content);
+        entries.push(MemoryEntry {
+            index: entries.len(),
+            content: trimmed,
         });
-    }
+        let next = serialize_entries(&entries);
+        if char_count(&next) > MEMORY_CHAR_LIMIT {
+            return Ok(MemoryMutationResult {
+                success: false,
+                error: Some(format!(
+                    "超过记忆上限（{} / {} 字符）",
+                    char_count(&next),
+                    MEMORY_CHAR_LIMIT
+                )),
+            });
+        }
 
-    write_file_safe(&path, &next)?;
-    Ok(MemoryMutationResult {
-        success: true,
-        error: None,
+        write_file_safe(&path, &next)?;
+        Ok(MemoryMutationResult {
+            success: true,
+            error: None,
+        })
     })
+    .await
 }
 
 #[tauri::command]
-pub fn update_memory_entry(
+pub async fn update_memory_entry(
     index: usize,
     content: String,
     state: State<'_, AppState>,
 ) -> AppResult<MemoryMutationResult> {
+    let next_content = content.trim().to_string();
     let home = active_hermes_home(&state)?;
-    let path = memory_path(&home);
-    let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
-    let mut entries = parse_memory_entries(&existing.content);
+    run_memory_io(move || {
+        let path = memory_path(&home);
+        let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
+        let mut entries = parse_memory_entries(&existing.content);
 
-    if index >= entries.len() {
-        return Ok(MemoryMutationResult {
-            success: false,
-            error: Some("没有找到这条记忆".to_string()),
-        });
-    }
+        if index >= entries.len() {
+            return Ok(MemoryMutationResult {
+                success: false,
+                error: Some("没有找到这条记忆".to_string()),
+            });
+        }
 
-    entries[index].content = content.trim().to_string();
-    let next = serialize_entries(&entries);
-    if char_count(&next) > MEMORY_CHAR_LIMIT {
-        return Ok(MemoryMutationResult {
-            success: false,
-            error: Some(format!(
-                "超过记忆上限（{} / {} 字符）",
-                char_count(&next),
-                MEMORY_CHAR_LIMIT
-            )),
-        });
-    }
+        entries[index].content = next_content;
+        let next = serialize_entries(&entries);
+        if char_count(&next) > MEMORY_CHAR_LIMIT {
+            return Ok(MemoryMutationResult {
+                success: false,
+                error: Some(format!(
+                    "超过记忆上限（{} / {} 字符）",
+                    char_count(&next),
+                    MEMORY_CHAR_LIMIT
+                )),
+            });
+        }
 
-    write_file_safe(&path, &next)?;
-    Ok(MemoryMutationResult {
-        success: true,
-        error: None,
+        write_file_safe(&path, &next)?;
+        Ok(MemoryMutationResult {
+            success: true,
+            error: None,
+        })
     })
+    .await
 }
 
 #[tauri::command]
-pub fn remove_memory_entry(index: usize, state: State<'_, AppState>) -> AppResult<bool> {
+pub async fn remove_memory_entry(index: usize, state: State<'_, AppState>) -> AppResult<bool> {
     let home = active_hermes_home(&state)?;
-    let path = memory_path(&home);
-    let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
-    let mut entries = parse_memory_entries(&existing.content);
+    run_memory_io(move || {
+        let path = memory_path(&home);
+        let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
+        let mut entries = parse_memory_entries(&existing.content);
 
-    if index >= entries.len() {
-        return Ok(false);
-    }
+        if index >= entries.len() {
+            return Ok(false);
+        }
 
-    entries.remove(index);
-    write_file_safe(&path, &serialize_entries(&entries))?;
-    Ok(true)
+        entries.remove(index);
+        write_file_safe(&path, &serialize_entries(&entries))?;
+        Ok(true)
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn write_user_profile(
+pub async fn write_user_profile(
     content: String,
     state: State<'_, AppState>,
 ) -> AppResult<MemoryMutationResult> {
@@ -293,11 +314,14 @@ pub fn write_user_profile(
     }
 
     let home = active_hermes_home(&state)?;
-    write_file_safe(&user_path(&home), &content)?;
-    Ok(MemoryMutationResult {
-        success: true,
-        error: None,
+    run_memory_io(move || {
+        write_file_safe(&user_path(&home), &content)?;
+        Ok(MemoryMutationResult {
+            success: true,
+            error: None,
+        })
     })
+    .await
 }
 
 #[cfg(test)]

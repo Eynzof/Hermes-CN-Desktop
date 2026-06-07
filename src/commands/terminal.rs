@@ -120,7 +120,7 @@ struct TerminalContext {
 }
 
 #[tauri::command]
-pub fn terminal_start(
+pub async fn terminal_start(
     app: AppHandle,
     state: State<'_, AppState>,
     input: TerminalStartInput,
@@ -135,6 +135,16 @@ pub fn terminal_start(
         }
     };
 
+    tauri::async_runtime::spawn_blocking(move || terminal_start_impl(app, context, input))
+        .await
+        .map_err(|e| format!("终端启动任务失败：{e}"))?
+}
+
+fn terminal_start_impl(
+    app: AppHandle,
+    context: TerminalContext,
+    input: TerminalStartInput,
+) -> Result<TerminalStartResult, String> {
     let cols = normalize_size(input.cols, DEFAULT_COLS, MAX_COLS);
     let rows = normalize_size(input.rows, DEFAULT_ROWS, MAX_ROWS);
     let cwd = resolve_cwd(input.cwd.as_deref(), &context)?;

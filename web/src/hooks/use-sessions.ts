@@ -30,34 +30,39 @@ function hasAnyMessages(result: MessagesResponse): boolean {
   return result.ui_messages ? result.ui_messages.length > 0 : result.messages.length > 0;
 }
 
-async function fetchSessionLogMessages(id: string): Promise<MessagesResponse | null> {
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+async function fetchSessionLogMessages(id: string, signal?: AbortSignal): Promise<MessagesResponse | null> {
   try {
     const result = await fetchJSON(
       `/__hermes_session_log/${encodeURIComponent(id)}`,
-      undefined,
+      { signal },
       MessagesResponse,
     );
     return hasAnyMessages(result) ? result : null;
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) throw error;
     return null;
   }
 }
 
-async function fetchSessionMessages(id: string): Promise<MessagesResponse> {
+async function fetchSessionMessages(id: string, signal?: AbortSignal): Promise<MessagesResponse> {
   const result = await fetchJSON(
     `/api/sessions/${id}/messages`,
-    undefined,
+    { signal },
     MessagesResponse,
   );
   if (hasAnyMessages(result)) return result;
-  return await fetchSessionLogMessages(id) ?? result;
+  return await fetchSessionLogMessages(id, signal) ?? result;
 }
 
 export function useSessions(limit = 50, offset = 0) {
   const profile = useActiveProfileName();
   return useQuery<SessionsResponse>({
     queryKey: ["sessions", profile, limit, offset],
-    queryFn: () => fetchJSON(`/api/sessions?limit=${limit}&offset=${offset}`, undefined, SessionsResponse),
+    queryFn: ({ signal }) => fetchJSON(`/api/sessions?limit=${limit}&offset=${offset}`, { signal }, SessionsResponse),
   });
 }
 
@@ -65,7 +70,7 @@ export function useSession(id: string | undefined) {
   const profile = useActiveProfileName();
   return useQuery<SessionDetail>({
     queryKey: ["session", profile, id],
-    queryFn: () => fetchJSON(`/api/sessions/${id}`, undefined, SessionDetail),
+    queryFn: ({ signal }) => fetchJSON(`/api/sessions/${id}`, { signal }, SessionDetail),
     enabled: !!id,
   });
 }
@@ -74,7 +79,7 @@ export function useSessionMessages(id: string | undefined) {
   const profile = useActiveProfileName();
   return useQuery<MessagesResponse>({
     queryKey: ["session-messages", profile, id],
-    queryFn: () => fetchSessionMessages(id!),
+    queryFn: ({ signal }) => fetchSessionMessages(id!, signal),
     enabled: !!id,
   });
 }
@@ -83,7 +88,7 @@ export function useSessionSearch(q: string) {
   const profile = useActiveProfileName();
   return useQuery<{ results: SearchResult[] }>({
     queryKey: ["sessions-search", profile, q],
-    queryFn: () => fetchJSON(`/api/sessions/search?q=${encodeURIComponent(q)}&limit=20`, undefined, SearchResponse),
+    queryFn: ({ signal }) => fetchJSON(`/api/sessions/search?q=${encodeURIComponent(q)}&limit=20`, { signal }, SearchResponse),
     enabled: q.length >= 2,
     staleTime: 10_000,
   });

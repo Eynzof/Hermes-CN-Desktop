@@ -7,7 +7,7 @@ export function useMcpServers() {
   const profile = useActiveProfileName();
   return useQuery<McpServersResponse>({
     queryKey: ["mcp-servers", profile],
-    queryFn: () => fetchJSON("/api/mcp-servers", undefined, McpServersResponse),
+    queryFn: ({ signal }) => fetchJSON("/api/mcp-servers", { signal }, McpServersResponse),
     staleTime: 60_000,
   });
 }

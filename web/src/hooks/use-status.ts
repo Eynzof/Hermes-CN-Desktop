@@ -7,7 +7,7 @@ export function useStatus() {
   const profile = useActiveProfileName();
   return useQuery<StatusResponse>({
     queryKey: ["status", profile],
-    queryFn: () => fetchJSON("/api/status", undefined, StatusResponse),
+    queryFn: ({ signal }) => fetchJSON("/api/status", { signal }, StatusResponse),
     refetchInterval: 15_000,
     staleTime: 10_000,
   });

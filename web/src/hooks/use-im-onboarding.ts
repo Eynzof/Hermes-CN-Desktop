@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useActiveProfileName } from "@/hooks/use-profiles";
-import { fetchJSON, postJSON } from "@/lib/transport";
+import { fetchJSON, postJSON, raceAbort } from "@/lib/transport";
 import type {
   ImOnboardingApplyInput,
   ImOnboardingApplyResult,
@@ -30,7 +30,7 @@ export function useImOnboardingState(platform: ImPlatform) {
   const profile = useActiveProfileName();
   return useQuery<ImOnboardingStateResult>({
     queryKey: ["im-onboarding", platform, profile],
-    queryFn: () => requireDesktop().imOnboardingState!({ platform }),
+    queryFn: ({ signal }) => raceAbort(requireDesktop().imOnboardingState!({ platform }), signal),
     enabled: typeof window !== "undefined" && Boolean(window.hermesDesktop?.imOnboardingState),
     staleTime: 10_000,
   });
@@ -70,9 +70,9 @@ export function useMessagingPlatform(platform: ImPlatform) {
   const profile = useActiveProfileName();
   return useQuery<MessagingPlatformInfo | null>({
     queryKey: ["messaging-platform", platform, profile],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       try {
-        const result = await fetchJSON("/api/messaging/platforms", undefined, MessagingPlatformsResponse);
+        const result = await fetchJSON("/api/messaging/platforms", { signal }, MessagingPlatformsResponse);
         return result.platforms.find((item) => item.id === platform) ?? null;
       } catch {
         // 旧版 runtime 可能还没有官方消息平台接口。接入向导仍然可以用

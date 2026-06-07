@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import { runtime } from "@/lib/runtime";
+import { raceAbort } from "@/lib/transport";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
 import { profileSwitchingAtom } from "@/stores/ui";
@@ -17,10 +18,7 @@ export function useYoloMode() {
   return useQuery<YoloModeStatus>({
     queryKey: ["yolo-mode"],
     enabled: isYoloModeSupported(),
-    queryFn: async () => {
-      const status = await window.hermesDesktop!.getYoloMode!();
-      return status;
-    },
+    queryFn: ({ signal }) => raceAbort(window.hermesDesktop!.getYoloMode!(), signal),
     staleTime: 30_000,
   });
 }

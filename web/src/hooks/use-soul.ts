@@ -28,10 +28,10 @@ export function useSoul() {
   const profile = useActiveProfileName();
   return useQuery<ProfileSoulResponse>({
     queryKey: ["soul", profile],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchJSON(
         `/api/profiles/${encodeURIComponent(profile)}/soul`,
-        undefined,
+        { signal },
         ProfileSoulResponse,
       ),
   });

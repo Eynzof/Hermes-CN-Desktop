@@ -11,9 +11,10 @@ use crate::process::dashboard;
 use crate::process::runtime;
 use crate::state::AppState;
 use std::sync::atomic::Ordering;
+use tokio::task;
 
 #[tauri::command]
-pub fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, AppError> {
+pub async fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, AppError> {
     let (last_error, process) = {
         let inner = state.inner.lock()?;
         let dashboard = inner.dashboard_handle.as_ref();
@@ -54,7 +55,10 @@ pub fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, 
         });
         (inner.last_runtime_error.clone(), process)
     };
-    let mut info = runtime::get_runtime_info(last_error);
+
+    let mut info = task::spawn_blocking(move || runtime::get_runtime_info(last_error))
+        .await
+        .map_err(|err| AppError::Internal(format!("runtime info task failed: {}", err)))?;
     info.process = process;
     Ok(info)
 }

@@ -12,8 +12,8 @@ import {
 export function useOAuthProviders() {
   return useQuery<OAuthProvider[]>({
     queryKey: ["oauth-providers"],
-    queryFn: async () => {
-      const res = await fetchJSON("/api/providers/oauth", undefined, OAuthProvidersResponse);
+    queryFn: async ({ signal }) => {
+      const res = await fetchJSON("/api/providers/oauth", { signal }, OAuthProvidersResponse);
       return res.providers;
     },
   });
@@ -63,10 +63,10 @@ export function usePollOAuthSession(
 ) {
   return useQuery({
     queryKey: ["oauth-poll", providerId, sessionId],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       fetchJSON(
         `/api/providers/oauth/${encodeURIComponent(providerId!)}/poll/${encodeURIComponent(sessionId!)}`,
-        undefined,
+        { signal },
         OAuthPollResponse,
       ),
     enabled: enabled && !!providerId && !!sessionId,

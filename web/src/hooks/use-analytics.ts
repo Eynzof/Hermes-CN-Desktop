@@ -7,7 +7,7 @@ export function useAnalytics(days = 30) {
   const profile = useActiveProfileName();
   return useQuery<AnalyticsResponse>({
     queryKey: ["analytics", profile, days],
-    queryFn: () => fetchJSON(`/api/analytics/usage?days=${days}`, undefined, AnalyticsResponse),
+    queryFn: ({ signal }) => fetchJSON(`/api/analytics/usage?days=${days}`, { signal }, AnalyticsResponse),
     staleTime: 60_000,
   });
 }

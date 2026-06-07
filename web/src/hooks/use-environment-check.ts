@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { EnvironmentCheckResult } from "@hermes/protocol";
 import { runtime } from "@/lib/runtime";
+import { raceAbort } from "@/lib/transport";
 
 const ENVIRONMENT_CHECK_KEY = ["desktop-environment-check"] as const;
 
@@ -13,7 +14,7 @@ function hasEnvironmentBridge(): boolean {
 export function useEnvironmentCheck() {
   return useQuery<EnvironmentCheckResult>({
     queryKey: ENVIRONMENT_CHECK_KEY,
-    queryFn: () => window.hermesDesktop!.environmentCheck!(),
+    queryFn: ({ signal }) => raceAbort(window.hermesDesktop!.environmentCheck!(), signal),
     enabled: hasEnvironmentBridge(),
     staleTime: 10_000,
     refetchInterval: 60_000,

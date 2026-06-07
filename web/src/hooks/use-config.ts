@@ -18,7 +18,7 @@ export function useConfig() {
   const profile = useActiveProfileName();
   return useQuery<Record<string, any>>({
     queryKey: ["config", profile],
-    queryFn: () => fetchJSON("/api/config", undefined, ConfigResponse),
+    queryFn: ({ signal }) => fetchJSON("/api/config", { signal }, ConfigResponse),
   });
 }
 
@@ -26,7 +26,7 @@ export function useConfigSchema() {
   // schema 是上游 hermes-agent 代码里的 dataclass，与具体 profile 无关
   return useQuery<ConfigSchemaResponse>({
     queryKey: ["config-schema"],
-    queryFn: () => fetchJSON("/api/config/schema", undefined, ConfigSchemaResponse),
+    queryFn: ({ signal }) => fetchJSON("/api/config/schema", { signal }, ConfigSchemaResponse),
     staleTime: 5 * 60_000,
   });
 }
@@ -35,7 +35,7 @@ export function useModelInfo() {
   const profile = useActiveProfileName();
   return useQuery<ModelInfo>({
     queryKey: ["model-info", profile],
-    queryFn: () => fetchJSON("/api/model/info", undefined, ModelInfo),
+    queryFn: ({ signal }) => fetchJSON("/api/model/info", { signal }, ModelInfo),
   });
 }
 

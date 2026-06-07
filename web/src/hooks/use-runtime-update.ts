@@ -6,6 +6,7 @@ import type {
   RuntimeUpdateCheckResult,
 } from "@hermes/protocol";
 import { runtime } from "@/lib/runtime";
+import { raceAbort } from "@/lib/transport";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { runtimeUpdatingAtom } from "@/stores/ui";
 
@@ -27,7 +28,7 @@ async function refreshDesktopGateway(): Promise<void> {
 export function useRuntimeInfo() {
   return useQuery<RuntimeInfo>({
     queryKey: RUNTIME_INFO_KEY,
-    queryFn: () => window.hermesDesktop!.getRuntimeInfo!(),
+    queryFn: ({ signal }) => raceAbort(window.hermesDesktop!.getRuntimeInfo!(), signal),
     enabled: hasRuntimeBridge(),
     refetchInterval: 30_000,
     staleTime: 10_000,

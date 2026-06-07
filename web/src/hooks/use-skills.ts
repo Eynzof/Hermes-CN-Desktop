@@ -7,7 +7,7 @@ export function useSkills() {
   const profile = useActiveProfileName();
   return useQuery<SkillInfo[]>({
     queryKey: ["skills", profile],
-    queryFn: () => fetchJSON("/api/skills", undefined, SkillsResponse),
+    queryFn: ({ signal }) => fetchJSON("/api/skills", { signal }, SkillsResponse),
     staleTime: 0,
     refetchOnMount: "always",
   });

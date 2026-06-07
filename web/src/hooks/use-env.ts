@@ -12,7 +12,7 @@ export function useEnvVars() {
   const profile = useActiveProfileName();
   return useQuery<Record<string, EnvVarInfo>>({
     queryKey: ["env", profile],
-    queryFn: () => fetchJSON("/api/env", undefined, EnvVarsResponse),
+    queryFn: ({ signal }) => fetchJSON("/api/env", { signal }, EnvVarsResponse),
   });
 }
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchJSON, putJSON } from "@/lib/transport";
+import { fetchJSON, putJSON, raceAbort } from "@/lib/transport";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import type { MemoryInfo, MemoryMutationResult } from "@/lib/runtime";
 import { MutationOkResponse } from "@hermes/protocol";
@@ -33,7 +33,7 @@ export function useMemory() {
   const profile = useActiveProfileName();
   return useQuery<MemoryInfo>({
     queryKey: ["memory", profile],
-    queryFn: () => ensureMemoryBridge().readMemory!(),
+    queryFn: ({ signal }) => raceAbort(ensureMemoryBridge().readMemory!(), signal),
   });
 }
 
@@ -85,8 +85,8 @@ export function useMemoryProviders(options: { enabled?: boolean } = {}) {
   const profile = useActiveProfileName();
   return useQuery<MemoryProvidersState>({
     queryKey: ["memory-providers", profile],
-    queryFn: async () => {
-      const data = await fetchJSON<DashboardPluginsResponse>("/api/dashboard/plugins");
+    queryFn: async ({ signal }) => {
+      const data = await fetchJSON<DashboardPluginsResponse>("/api/dashboard/plugins", { signal });
       const providers = data.providers ?? {};
       return {
         active: providers.memory_provider ?? "",

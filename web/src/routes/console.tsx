@@ -61,6 +61,12 @@ export function ConsoleRoute() {
   const [lastCommand, setLastCommand] = useState<string | null>(null);
   const [externalOpening, setExternalOpening] = useState(false);
   const [externalOpened, setExternalOpened] = useState<string | null>(null);
+  const [armed, setArmed] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setArmed(true), 250);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const isDesktopTerminalAvailable = Boolean(window.hermesDesktop?.terminalStart);
   const isExternalTerminalAvailable = Boolean(window.hermesDesktop?.terminalOpenExternal);
@@ -81,7 +87,7 @@ export function ConsoleRoute() {
   }, [status]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!armed || !containerRef.current) return;
 
     if (!isDesktopTerminalAvailable) {
       setStatus("unsupported");
@@ -231,7 +237,7 @@ export function ConsoleRoute() {
       terminalRef.current = null;
       fitRef.current = null;
     };
-  }, [autoPurpose, isDesktopTerminalAvailable]);
+  }, [armed, autoPurpose, isDesktopTerminalAvailable]);
 
   const runCommand = (command: string) => {
     const id = terminalIdRef.current;

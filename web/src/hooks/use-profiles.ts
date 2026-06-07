@@ -17,8 +17,8 @@ import {
 export function useProfiles() {
   return useQuery<ProfileSummary[]>({
     queryKey: ["profiles"],
-    queryFn: async () => {
-      const r = await fetchJSON("/api/profiles", undefined, ProfilesListResponse);
+    queryFn: async ({ signal }) => {
+      const r = await fetchJSON("/api/profiles", { signal }, ProfilesListResponse);
       return r.profiles;
     },
     // Profile list 不会经常变（用户主动 create/delete 后我们 invalidate），
@@ -30,10 +30,10 @@ export function useProfiles() {
 export function useActiveProfile() {
   return useQuery<string>({
     queryKey: ["profile-active"],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const r = await fetchJSON(
         "/api/profiles/active",
-        undefined,
+        { signal },
         ActiveProfileResponse,
       );
       return r.name;
