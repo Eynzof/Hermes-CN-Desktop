@@ -2,6 +2,16 @@
    Inspired by prototypes/.topbar */
 
 .topbar {
+  --h-topbar-control-h: 28px;
+  --h-topbar-control-radius: var(--h-r-sm);
+  --h-topbar-control-bg: var(--h-bg-soft);
+  --h-topbar-control-hover-bg: var(--h-bg-chip);
+  --h-topbar-control-border: var(--h-line);
+  --h-topbar-control-hover-border: var(--h-line);
+  --h-topbar-control-color: var(--h-text-2);
+  --h-topbar-control-hover-color: var(--h-text);
+  --h-topbar-control-transition: color 0.12s, background 0.12s, border-color 0.12s;
+
   height: calc(var(--h-topbar-h) + var(--h-window-control-safe-top, 0px));
   display: flex;
   align-items: center;
@@ -172,19 +182,27 @@
   width: clamp(220px, 28vw, 360px);
   max-width: 360px;
   margin-left: auto;
-  height: 28px;
-  background: var(--h-bg-soft);
-  border: 1px solid var(--h-line);
-  border-radius: 3px;
+  height: var(--h-topbar-control-h);
+  background: var(--h-topbar-control-bg);
+  border: 1px solid var(--h-topbar-control-border);
+  border-radius: var(--h-topbar-control-radius);
   display: flex;
   align-items: center;
   padding: 0 10px;
   gap: 8px;
-  color: var(--h-text-2);
+  color: var(--h-topbar-control-color);
   font-family: var(--h-font-mono);
   font-size: 11px;
+  cursor: pointer;
   -webkit-app-region: no-drag;
   user-select: none;
+  transition: var(--h-topbar-control-transition);
+}
+
+.search:hover {
+  color: var(--h-topbar-control-hover-color);
+  background: var(--h-topbar-control-hover-bg);
+  border-color: var(--h-topbar-control-hover-border);
 }
 
 .searchKbd {
@@ -195,7 +213,7 @@
   border: 1px solid var(--h-line);
   background: var(--h-bg-pane);
   padding: 1px 4px;
-  border-radius: 2px;
+  border-radius: var(--h-r-sm);
   letter-spacing: 0.04em;
 }
 
@@ -208,28 +226,29 @@
 }
 
 .iconBtn {
-  width: 28px;
-  height: 28px;
+  width: var(--h-topbar-control-h);
+  height: var(--h-topbar-control-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
-  color: var(--h-text-2);
-  border: 1px solid transparent;
-  background: transparent;
+  border-radius: var(--h-topbar-control-radius);
+  color: var(--h-topbar-control-color);
+  border: 1px solid var(--h-topbar-control-border);
+  background: var(--h-topbar-control-bg);
   cursor: pointer;
+  transition: var(--h-topbar-control-transition);
 }
 
 .iconBtn:hover {
-  color: var(--h-text);
-  background: var(--h-bg-soft);
-  border-color: var(--h-line);
+  color: var(--h-topbar-control-hover-color);
+  background: var(--h-topbar-control-hover-bg);
+  border-color: var(--h-topbar-control-hover-border);
 }
 
 .iconBtn[data-active="true"] {
-  color: var(--h-text);
-  background: var(--h-bg-soft);
-  border-color: var(--h-line);
+  color: var(--h-topbar-control-hover-color);
+  background: var(--h-topbar-control-hover-bg);
+  border-color: var(--h-topbar-control-hover-border);
 }
 
 .iconBtn[data-theme-mode="dark"] {
