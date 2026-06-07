@@ -1169,8 +1169,16 @@ fn state_snapshot(
     })
 }
 
+#[cfg(test)]
 fn apply_patch_from_input(
     input: &ImOnboardingApplyInput,
+) -> Result<BTreeMap<String, String>, AppError> {
+    apply_patch_from_input_with_existing(input, None)
+}
+
+fn apply_patch_from_input_with_existing(
+    input: &ImOnboardingApplyInput,
+    existing_env: Option<&BTreeMap<String, String>>,
 ) -> Result<BTreeMap<String, String>, AppError> {
     let mut patch = input.settings.clone();
     match input.platform {
@@ -1313,8 +1321,34 @@ fn apply_patch_from_input(
             }
         }
     }
+    merge_existing_platform_values(input.platform, &mut patch, existing_env);
     validate_required(input.platform, &patch)?;
     Ok(patch)
+}
+
+fn merge_existing_platform_values(
+    platform: ImPlatform,
+    patch: &mut BTreeMap<String, String>,
+    existing_env: Option<&BTreeMap<String, String>>,
+) {
+    let Some(existing_env) = existing_env else {
+        return;
+    };
+    for key in platform.allowed_keys() {
+        let patch_is_missing = patch
+            .get(*key)
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true);
+        if !patch_is_missing {
+            continue;
+        }
+        if let Some(value) = existing_env
+            .get(*key)
+            .filter(|value| !value.trim().is_empty())
+        {
+            patch.insert((*key).to_string(), value.clone());
+        }
+    }
 }
 
 fn validate_required(
@@ -1687,8 +1721,9 @@ pub async fn im_onboarding_apply(
         let inner = state.inner.lock()?;
         (inner.hermes_home.clone(), inner.current_profile.clone())
     };
-    let patch = apply_patch_from_input(&input)?;
     let path = env_path(&hermes_home);
+    let existing_env = parse_env(&path)?;
+    let patch = apply_patch_from_input_with_existing(&input, Some(&existing_env))?;
     let backup = write_env_patch(&path, input.platform, &patch)?;
     if input.platform == ImPlatform::Weixin {
         write_weixin_account_store(&hermes_home, &patch)?;
@@ -2038,6 +2073,38 @@ mod tests {
         assert_eq!(
             patch.get("WEIXIN_ACCOUNT_ID").map(String::as_str),
             Some("wx_bot_123456")
+        );
+    }
+
+    #[test]
+    fn weixin_apply_can_reuse_existing_saved_credentials() {
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Weixin,
+            flow_id: None,
+            manual_credentials: None,
+            settings: BTreeMap::new(),
+            restart_gateway: Some(false),
+        };
+        let existing = BTreeMap::from([
+            ("WEIXIN_ACCOUNT_ID".to_string(), "wx_bot_saved".to_string()),
+            ("WEIXIN_TOKEN".to_string(), "token-saved".to_string()),
+            ("WEIXIN_DM_POLICY".to_string(), "open".to_string()),
+            ("WEIXIN_ALLOW_ALL_USERS".to_string(), "true".to_string()),
+        ]);
+
+        let patch = apply_patch_from_input_with_existing(&input, Some(&existing)).unwrap();
+
+        assert_eq!(
+            patch.get("WEIXIN_ACCOUNT_ID").map(String::as_str),
+            Some("wx_bot_saved")
+        );
+        assert_eq!(
+            patch.get("WEIXIN_TOKEN").map(String::as_str),
+            Some("token-saved")
+        );
+        assert_eq!(
+            patch.get("WEIXIN_DM_POLICY").map(String::as_str),
+            Some("open")
         );
     }
 

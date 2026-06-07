@@ -1057,6 +1057,7 @@ function WeixinRoute() {
   const busy = begin.isPending || poll.isPending || apply.isPending;
   const canApplyQr = Boolean(credential && pollResult?.status === "confirmed");
   const canApplyManual = Boolean(accountId.trim() && token.trim());
+  const canApplySaved = Boolean(configured.WEIXIN_ACCOUNT_ID?.isSet && configured.WEIXIN_TOKEN?.isSet);
   const jumpToQr = () => qrAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const start = () => {
@@ -1114,13 +1115,16 @@ function WeixinRoute() {
     }
     return patch;
   };
-  const save = () => apply.mutate({
-    platform: "weixin",
-    flowId: flow?.flowId,
-    manualCredentials: canApplyQr ? undefined : { accountId, token, baseUrl },
-    settings: settings(),
-    restartGateway: true,
-  }, { onSuccess: setResult });
+  const save = () => {
+    const useSavedCredentials = !canApplyQr && !canApplyManual && canApplySaved;
+    apply.mutate({
+      platform: "weixin",
+      flowId: flow?.flowId,
+      manualCredentials: canApplyQr || useSavedCredentials ? undefined : { accountId, token, baseUrl },
+      settings: useSavedCredentials ? {} : settings(),
+      restartGateway: true,
+    }, { onSuccess: setResult });
+  };
   const allowedUsersReview = dmPolicy === "open"
     ? "未限制"
     : dmPolicy === "pairing"
@@ -1269,7 +1273,7 @@ function WeixinRoute() {
           </section>
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="口令会自动打码" />
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual) || !allowPolicyReady}><Save size={14} />保存并启动接收服务</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual || canApplySaved) || !allowPolicyReady}><Save size={14} />{canApplyQr || canApplyManual ? "保存并启动接收服务" : "重新启动接收服务"}</button></div>
           <ApplyResult result={result} />
           <SectionTitle num="[ STEP 05 ]" title="发一条消息试试" meta="私聊微信机器人，确认真的能回复" />
           <MessagingTestGuide
