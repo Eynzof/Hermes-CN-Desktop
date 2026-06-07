@@ -27,7 +27,7 @@ import { HealthRoute } from "@/routes/health";
 import { LogsRoute } from "@/routes/logs";
 import { DebugRoute } from "@/routes/debug";
 import { AnalyticsRoute } from "@/routes/analytics";
-import { AdvancedRoute } from "@/routes/advanced";
+import { AdvancedRoute, ThemeRoute } from "@/routes/advanced";
 import { ImOnboardingRoute } from "@/routes/im-onboarding";
 
 function NewTaskRedirect() {
@@ -78,6 +78,7 @@ export function App() {
           <Route path="/analytics" element={withBoundary(<AnalyticsRoute />)} />
           <Route path="/logs" element={withBoundary(<LogsRoute />)} />
           <Route path="/debug" element={withBoundary(<DebugRoute />)} />
+          <Route path="/theme" element={withBoundary(<ThemeRoute />)} />
           <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/settings" element={<Navigate to="/advanced" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

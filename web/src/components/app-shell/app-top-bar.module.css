@@ -150,12 +150,14 @@
   background: var(--h-bg-soft);
 }
 
-:global([data-theme="light"]) .navLink:hover {
+:global([data-theme="light"]) .navLink:hover,
+:global([data-theme="light-modern"]) .navLink:hover {
   color: var(--h-text);
   background: color-mix(in srgb, var(--h-accent) 10%, var(--h-bg-chip));
 }
 
-:global([data-theme="light"]) .navLink[data-active="true"] {
+:global([data-theme="light"]) .navLink[data-active="true"],
+:global([data-theme="light-modern"]) .navLink[data-active="true"] {
   color: var(--h-text);
   background: color-mix(in srgb, var(--h-accent) 14%, var(--h-bg-chip));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h-accent) 28%, transparent);
@@ -174,6 +176,11 @@
 
 :global([data-theme="light"]) .navLink[data-active="true"] .navNum {
   color: var(--persimmon-dim);
+  font-weight: 700;
+}
+
+:global([data-theme="light-modern"]) .navLink[data-active="true"] .navNum {
+  color: var(--h-accent);
   font-weight: 700;
 }
 
@@ -255,6 +262,14 @@
   color: var(--amber);
 }
 
+.iconBtn[data-theme-mode="dark-modern"] {
+  color: var(--h-accent);
+}
+
 .iconBtn[data-theme-mode="light"] {
   color: var(--sky);
+}
+
+.iconBtn[data-theme-mode="light-modern"] {
+  color: var(--h-accent);
 }
