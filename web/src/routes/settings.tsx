@@ -16,6 +16,7 @@ import {
   Info,
   MessageCircle,
   RefreshCw,
+  Download,
   RotateCcw,
   Server,
   ShieldCheck,
@@ -45,6 +46,8 @@ import {
   type ConversationFontSizeMode,
 } from "@/stores/ui";
 import { openExternalUrl } from "@/lib/external-links";
+import { checkDesktopUpdate, DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
+import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import {
   approvalModeConfigValue,
   approvalModeLabel,
@@ -56,7 +59,7 @@ import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update"
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
 import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
-import type { ConfigSchemaField, CronJob, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
+import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import s from "./settings.module.css";
@@ -1246,6 +1249,23 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
 /* ── About ───────────────────────────────────────────────────────────── */
 
 export function AboutSection({ showHeading = true }: SettingsSectionProps) {
+  const [desktopUpdateResult, setDesktopUpdateResult] = useState<DesktopUpdateCheckResult | null>(null);
+  const [desktopUpdateChecking, setDesktopUpdateChecking] = useState(false);
+  const hasDesktopUpdateBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.checkDesktopUpdate);
+
+  const handleCheckDesktopUpdate = async () => {
+    setDesktopUpdateChecking(true);
+    try {
+      setDesktopUpdateResult(await checkDesktopUpdate());
+    } finally {
+      setDesktopUpdateChecking(false);
+    }
+  };
+
+  const handleOpenDesktopDownload = () => {
+    void openExternalUrl(desktopUpdateResult?.downloadUrl ?? DESKTOP_UPDATE_DOWNLOAD_URL);
+  };
+
   return (
     <div>
       {showHeading && <h2 className={s.heading}>关于</h2>}
@@ -1261,6 +1281,50 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
       </div>
 
       <div className={s.aboutDebugGrid}>
+        <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
+          <div className={s.runtimeGrid}>
+            <RuntimeField label="当前版本" value={versionLabel(DESKTOP_VERSION)} />
+            <RuntimeField
+              label="最新版本"
+              value={desktopUpdateResult?.latestVersion ? versionLabel(desktopUpdateResult.latestVersion) : "—"}
+            />
+            <RuntimeField
+              label="检查时间"
+              value={formatDesktopUpdateCheckedAt(desktopUpdateResult?.checkedAtMs)}
+            />
+            <RuntimeField
+              label="清单地址"
+              value={desktopUpdateResult?.manifestUrl ?? "https://desktop.hermesagent.org.cn/latest.json"}
+              mono
+              wide
+            />
+          </div>
+          <div
+            className={s.runtimeMessage}
+            data-tone={desktopUpdateResult && !desktopUpdateResult.ok ? "error" : "normal"}
+          >
+            {formatDesktopUpdateMessage(desktopUpdateResult, desktopUpdateChecking, hasDesktopUpdateBridge)}
+          </div>
+          <div className={s.providerActions}>
+            <button
+              className={s.btn}
+              type="button"
+              onClick={() => void handleCheckDesktopUpdate()}
+              disabled={!hasDesktopUpdateBridge || desktopUpdateChecking}
+            >
+              <RefreshCw size={13} />
+              {desktopUpdateChecking ? "检查中" : "检查更新"}
+            </button>
+            <button className={s.btnPrimary} type="button" onClick={handleOpenDesktopDownload}>
+              <ExternalLinkIcon size={13} />
+              去官网下载
+            </button>
+          </div>
+          <p className={s.desc}>
+            这里提醒的是桌面壳版本。下载新版安装包后，请按系统提示覆盖安装；应用不会自动下载安装包或替换正在运行的程序。
+          </p>
+        </DebugCard>
+
         <DebugCard icon={<Info size={15} />} title="致谢" sub="感谢支持和贡献" wide>
           <div className={s.thanksText}>
             <p>
@@ -1430,6 +1494,29 @@ function ExternalTextLink({ href, children }: { href: string; children: React.Re
       <ExternalLinkIcon size={11} aria-hidden="true" />
     </a>
   );
+}
+
+
+function formatDesktopUpdateCheckedAt(value: number | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function formatDesktopUpdateMessage(
+  result: DesktopUpdateCheckResult | null,
+  checking: boolean,
+  hasBridge: boolean,
+): string {
+  if (!hasBridge) return "当前环境没有桌面端更新检查能力；请直接前往官网查看最新版本。";
+  if (checking) return "正在从官网读取最新桌面端版本…";
+  if (!result) return "点击“检查更新”可手动读取官网最新版本。";
+  if (!result.ok) return result.error ?? "桌面端更新检查失败。";
+  if (result.updateAvailable) {
+    return `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载新版安装包覆盖安装。`;
+  }
+  return `当前已是最新版本 ${versionLabel(result.currentVersion)}。`;
 }
 
 function runtimeModeLabel(mode: RuntimeInfo["mode"] | undefined): string {
