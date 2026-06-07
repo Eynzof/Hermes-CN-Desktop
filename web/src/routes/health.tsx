@@ -8,7 +8,7 @@ export function HealthRoute() {
   const sub = formatHealthSubtitle(status, isError);
   return (
     <SectionShell title="健康检查" sub={sub}>
-      <HealthGrid />
+      <HealthGrid variant="page" />
     </SectionShell>
   );
 }
