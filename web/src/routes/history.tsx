@@ -666,7 +666,6 @@ export function HistoryRoute() {
       });
       if (activeSessionId && result.succeededIds.includes(activeSessionId)) {
         setActiveSessionId(null);
-        navigate("/");
       }
     }
     if (result.failureCount > 0) {
@@ -678,7 +677,7 @@ export function HistoryRoute() {
       setSelectedSessionIds(new Set());
     }
     setDeleteTargets(null);
-  }, [activeSessionId, deleteSessions, deleteTargets, navigate, setActiveSessionId]);
+  }, [activeSessionId, deleteSessions, deleteTargets, setActiveSessionId]);
 
   const totalTokens = useMemo(
     () =>
