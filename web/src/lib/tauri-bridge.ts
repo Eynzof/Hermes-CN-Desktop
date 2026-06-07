@@ -320,6 +320,10 @@ const tauriBridge = {
     return invokeCommand("ui_store_get_turn_stats", { input });
   },
 
+  async uiStoreGetTurnStatsWindow(input: { sinceMs?: number; limit?: number }): Promise<UiTurnStats[]> {
+    return invokeCommand("ui_store_get_turn_stats_window", { input });
+  },
+
   async uiStoreRecordEvent(input: UiEventInput): Promise<boolean> {
     return invokeCommand("ui_store_record_event", { input });
   },

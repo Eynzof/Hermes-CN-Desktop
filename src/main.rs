@@ -516,6 +516,7 @@ fn main() {
             commands::ui_store::ui_store_remove_kv,
             commands::ui_store::ui_store_record_turn_stats,
             commands::ui_store::ui_store_get_turn_stats,
+            commands::ui_store::ui_store_get_turn_stats_window,
             commands::ui_store::ui_store_record_event,
             commands::terminal::terminal_start,
             commands::terminal::terminal_open_external,
