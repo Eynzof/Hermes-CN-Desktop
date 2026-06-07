@@ -3,15 +3,19 @@ import { fetchExternalJSON } from "./transport";
 import {
   BUILTIN_PROVIDER_CATALOG,
   buildCurrentModelConfigUpdate,
+  buildCustomProviderDeleteUpdate,
   buildProviderConfigUpdate,
+  buildProviderOrderUpdate,
   buildProviderSettingsUpdate,
   fetchRemoteProviderCatalog,
   getProviderCredentialPreview,
   getProviderEntry,
+  getProviderOrder,
   maskSecretPreview,
   providerApiKeyLabels,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
+  sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
 } from "./provider-catalog";
@@ -273,6 +277,120 @@ describe("provider catalog config updates", () => {
     expect(sorted.find((p) => p.id === custom.id)).toBeTruthy();
   });
 
+  it("applies user provider order before appending new catalog providers", () => {
+    const custom: ProviderPreset = {
+      id: "custom:local",
+      name: "Local",
+      vendor: "本地部署",
+      region: "cn",
+      baseUrl: "http://127.0.0.1:1234/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "API Key",
+      defaultModel: "local-model",
+      models: [{ id: "local-model" }],
+      isCustom: true,
+    };
+    const config = {
+      desktop: {
+        models: {
+          provider_order: ["custom:local", "deepseek", "missing", "deepseek"],
+        },
+      },
+    };
+
+    const sorted = sortProvidersForModelsPage([...BUILTIN_PROVIDER_CATALOG.providers, custom], config);
+
+    expect(getProviderOrder(config)).toEqual(["custom:local", "deepseek", "missing"]);
+    expect(sorted.slice(0, 2).map((provider) => provider.id)).toEqual(["custom:local", "deepseek"]);
+    expect(sorted.some((provider) => provider.id === "missing")).toBe(false);
+  });
+
+  it("writes provider order under desktop model preferences", () => {
+    const next = buildProviderOrderUpdate(
+      {
+        desktop: {
+          models: {
+            provider_order: ["old"],
+            density: "compact",
+          },
+          yoloMode: false,
+        },
+      },
+      ["deepseek", "deepseek", "custom:local", ""],
+    );
+
+    expect(next.desktop.models).toMatchObject({
+      density: "compact",
+      provider_order: ["deepseek", "custom:local"],
+    });
+    expect(next.desktop.yoloMode).toBe(false);
+  });
+
+  it("deletes custom providers and resets auxiliary slots that reference them", () => {
+    const config = {
+      model: {
+        provider: "deepseek",
+        default: "deepseek-v4-flash",
+      },
+      providers: {
+        deepseek: { model: "deepseek-v4-flash" },
+        "custom:local": {
+          name: "Local",
+          base_url: "http://127.0.0.1:1234/v1",
+          model: "local-model",
+          api_key: "local-key",
+        },
+      },
+      desktop: {
+        models: {
+          provider_order: ["custom:local", "deepseek"],
+        },
+      },
+      auxiliary: {
+        vision: {
+          provider: "custom:local",
+          model: "local-vl",
+          base_url: "http://127.0.0.1:1234/v1",
+          api_key: "aux-key",
+          timeout: 120,
+          download_timeout: 30,
+        },
+        compression: {
+          provider: "deepseek",
+          model: "deepseek-v4-flash",
+        },
+      },
+    };
+
+    const next = buildCustomProviderDeleteUpdate(config, "custom:local");
+
+    expect(next.providers).not.toHaveProperty("custom:local");
+    expect(next.desktop.models.provider_order).toEqual(["deepseek"]);
+    expect(next.auxiliary.vision).toMatchObject({
+      provider: "auto",
+      model: "",
+      base_url: "",
+      extra_body: {},
+      timeout: 120,
+      download_timeout: 30,
+    });
+    expect(next.auxiliary.vision).not.toHaveProperty("api_key");
+    expect(next.auxiliary.compression).toEqual(config.auxiliary.compression);
+  });
+
+  it("blocks deleting non-custom or current custom providers", () => {
+    expect(() => buildCustomProviderDeleteUpdate({ providers: { deepseek: {} } }, "deepseek"))
+      .toThrow(/自定义服务商/);
+    expect(() => buildCustomProviderDeleteUpdate(
+      {
+        model: { provider: "custom:local" },
+        providers: { "custom:local": {} },
+      },
+      "custom:local",
+    )).toThrow(/当前主模型/);
+  });
+
   it("preserves an existing provider key when saving metadata only", () => {
     const preset = BUILTIN_PROVIDER_CATALOG.providers[0]!;
     const config = buildProviderConfigUpdate(
@@ -358,6 +476,36 @@ describe("provider catalog config updates", () => {
         },
       },
       preset!,
+    )).toBe(true);
+  });
+
+  it("treats local custom providers as configured even when API key is empty", () => {
+    const provider: ProviderPreset = {
+      id: "custom:lm-studio",
+      name: "LM Studio",
+      vendor: "本地部署",
+      region: "cn",
+      baseUrl: "http://127.0.0.1:1234/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "API Key",
+      defaultModel: "local-model",
+      models: [{ id: "local-model" }],
+      isCustom: true,
+    };
+
+    expect(providerHasSavedCredentials(
+      {
+        providers: {
+          "custom:lm-studio": {
+            base_url: "http://127.0.0.1:1234/v1",
+            model: "local-model",
+          },
+        },
+      },
+      "custom:lm-studio",
+      undefined,
+      provider,
     )).toBe(true);
   });
 
