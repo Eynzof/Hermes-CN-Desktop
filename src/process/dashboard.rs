@@ -707,7 +707,9 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         log::warn!("Bundled skills are missing from the managed runtime");
     }
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
-        .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir);
+        .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir)
+        .env("HERMES_DESKTOP_MANAGED", "1")
+        .env("HERMES_GATEWAY_DETACHED", "1");
 
     // YOLO mode: the backend freezes HERMES_YOLO_MODE at import time, so it can
     // only be toggled by (re)launching the runtime. Drive it from the persisted
