@@ -1391,7 +1391,7 @@
 }
 
 .sendButton {
-  --composer-send-accent: var(--persimmon);
+  --composer-send-accent: var(--h-accent);
 
   min-width: 88px;
   height: var(--composer-action-height);
@@ -1399,7 +1399,7 @@
   border: 1px solid var(--composer-send-accent);
   border-radius: var(--h-r-md);
   background: var(--composer-send-accent);
-  color: #fff;
+  color: var(--h-accent-contrast, #fff);
   box-shadow: none;
   font-size: 13px;
   font-weight: 600;
@@ -1429,7 +1429,7 @@
   min-width: 44px;
   border-color: var(--composer-send-accent);
   background: var(--composer-send-accent);
-  color: #fff;
+  color: var(--h-accent-contrast, #fff);
   padding: 0 12px;
 }
 
