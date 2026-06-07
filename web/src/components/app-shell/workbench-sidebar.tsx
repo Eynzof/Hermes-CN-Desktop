@@ -8,9 +8,12 @@ import { useSessions } from "@/hooks/use-sessions";
 import { isSessionRunning } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
+  readPinnedSessionIds,
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
+  unpinSessions,
 } from "@/lib/session-ui-state";
+import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
 import {
   readWorkspaceProjects,
   subscribeWorkspaceChanges,
@@ -20,13 +23,6 @@ import type { SessionSummary } from "@hermes/protocol";
 import s from "./workbench-sidebar.module.css";
 
 const PROJECT_QUICK_LIMIT = 6;
-const TODAY_LIMIT = 8;
-
-function todayStartSec() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime() / 1000;
-}
 
 function relTime(unixSec: number, now: Date) {
   const d = new Date(unixSec * 1000);
@@ -86,9 +82,17 @@ export function WorkbenchSidebar() {
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
   const { data } = useSessions();
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
+  const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
 
-  useEffect(() => subscribeSessionUiStateChanges(() => setTitleOverrides(readSessionTitleOverrides())), []);
+  useEffect(
+    () =>
+      subscribeSessionUiStateChanges(() => {
+        setTitleOverrides(readSessionTitleOverrides());
+        setPinnedSessionIds(readPinnedSessionIds());
+      }),
+    [],
+  );
   useEffect(() => subscribeWorkspaceChanges(() => setProjects(readWorkspaceProjects())), []);
 
   const sessions = useMemo(
@@ -100,22 +104,24 @@ export function WorkbenchSidebar() {
     [data?.sessions, titleOverrides],
   );
 
-  const now = new Date();
-  const todayStart = todayStartSec();
+  useEffect(() => {
+    if (!data || data.total > sessions.length || pinnedSessionIds.size === 0) return;
+    const liveIds = new Set(sessions.map((session) => session.id));
+    const staleIds = Array.from(pinnedSessionIds).filter((id) => !liveIds.has(id));
+    if (staleIds.length > 0) setPinnedSessionIds(unpinSessions(staleIds));
+  }, [data, pinnedSessionIds, sessions]);
 
-  const { active, today } = useMemo(() => {
-    const active: SessionSummary[] = [];
-    const today: SessionSummary[] = [];
-    for (const sess of sessions) {
-      if (isSessionRunning(sess, runtimeBySession)) {
-        active.push(sess);
-      } else if (sess.ended_at != null && sess.ended_at >= todayStart) {
-        today.push(sess);
-      }
-    }
-    today.sort((a, b) => (b.ended_at ?? 0) - (a.ended_at ?? 0));
-    return { active, today: today.slice(0, TODAY_LIMIT) };
-  }, [sessions, runtimeBySession, todayStart]);
+  const now = new Date();
+
+  const { active, pinned, recent } = useMemo(
+    () =>
+      deriveSidebarSessionLists(
+        sessions,
+        pinnedSessionIds,
+        (session) => isSessionRunning(session, runtimeBySession),
+      ),
+    [pinnedSessionIds, runtimeBySession, sessions],
+  );
 
   const sortedProjects = useMemo(
     () => [...projects].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, PROJECT_QUICK_LIMIT),
@@ -130,6 +136,9 @@ export function WorkbenchSidebar() {
   const activeSessionId = location.pathname.startsWith("/tasks/")
     ? decodeURIComponent(location.pathname.slice("/tasks/".length))
     : null;
+  const showPinned = pinned.length > 0;
+  const recentSectionLabel = showPinned ? "§04 · 最近对话" : "§03 · 最近对话";
+  const projectSectionLabel = showPinned ? "§05 · 项目快捷" : "§04 · 项目快捷";
 
   return (
     <aside className={s.sidebar}>
@@ -200,15 +209,44 @@ export function WorkbenchSidebar() {
           )}
         </section>
 
+        {showPinned ? (
+          <section className={s.section}>
+            <div className={s.label}>
+              <span>§03 · 置顶对话</span>
+              <span className={s.labelNum}>✕✕</span>
+            </div>
+            {pinned.map((sess) => {
+              const running = isSessionRunning(sess, runtimeBySession);
+              const state: "live" | "ok" | "err" =
+                running
+                  ? "live"
+                  : sess.end_reason === "error" || sess.end_reason === "interrupted"
+                    ? "err"
+                    : "ok";
+              const ts = sess.ended_at ?? sess.started_at;
+              return (
+                <SessionRow
+                  key={sess.id}
+                  session={sess}
+                  state={state}
+                  active={sess.id === activeSessionId}
+                  meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
+                  onClick={() => goSession(sess)}
+                />
+              );
+            })}
+          </section>
+        ) : null}
+
         <section className={s.section}>
           <div className={s.label}>
-            <span>§03 · 今日</span>
+            <span>{recentSectionLabel}</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
-          {today.length === 0 ? (
-            <div className={s.empty}>今日暂无完成</div>
+          {recent.length === 0 ? (
+            <div className={s.empty}>暂无最近会话</div>
           ) : (
-            today.map((sess) => {
+            recent.map((sess) => {
               const state: "ok" | "err" =
                 sess.end_reason === "error" || sess.end_reason === "interrupted" ? "err" : "ok";
               const meta = relTime(sess.ended_at ?? sess.started_at, now);
@@ -228,7 +266,7 @@ export function WorkbenchSidebar() {
 
         <section className={s.section}>
           <div className={s.label}>
-            <span>§04 · 项目快捷</span>
+            <span>{projectSectionLabel}</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
           {sortedProjects.length === 0 ? (
