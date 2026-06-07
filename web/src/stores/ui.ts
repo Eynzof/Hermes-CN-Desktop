@@ -5,6 +5,41 @@ import { readUiValue, writeUiValue } from "@/lib/ui-store";
 export const activeSessionIdAtom = atom<string | null>(null);
 export const sidebarSearchAtom = atom("");
 
+export const CONVERSATION_WIDTH_OPTIONS = [
+  { value: "small", label: "小", title: "小宽度", maxWidth: "640px" },
+  { value: "medium", label: "中", title: "中等宽度", maxWidth: "780px" },
+  { value: "large", label: "大", title: "大宽度", maxWidth: "960px" },
+  { value: "full", label: "满", title: "铺满宽度", maxWidth: "100%" },
+] as const;
+
+export type ConversationWidthMode = typeof CONVERSATION_WIDTH_OPTIONS[number]["value"];
+
+const DEFAULT_CONVERSATION_WIDTH_MODE: ConversationWidthMode = "medium";
+const CONVERSATION_WIDTH_KEY = "hermes.conversation-width";
+const CONVERSATION_WIDTH_VALUES = CONVERSATION_WIDTH_OPTIONS.map((option) => option.value);
+
+export function normalizeConversationWidthMode(value: unknown): ConversationWidthMode {
+  return CONVERSATION_WIDTH_VALUES.includes(value as ConversationWidthMode)
+    ? (value as ConversationWidthMode)
+    : DEFAULT_CONVERSATION_WIDTH_MODE;
+}
+
+export function conversationWidthMaxWidth(mode: ConversationWidthMode): string {
+  return CONVERSATION_WIDTH_OPTIONS.find((option) => option.value === mode)?.maxWidth ?? "780px";
+}
+
+const conversationWidthModeBaseAtom = atom<ConversationWidthMode>(
+  normalizeConversationWidthMode(readUiValue(CONVERSATION_WIDTH_KEY, DEFAULT_CONVERSATION_WIDTH_MODE)),
+);
+export const conversationWidthModeAtom = atom(
+  (get) => get(conversationWidthModeBaseAtom),
+  (_get, set, next: ConversationWidthMode) => {
+    const value = normalizeConversationWidthMode(next);
+    set(conversationWidthModeBaseAtom, value);
+    writeUiValue(CONVERSATION_WIDTH_KEY, value);
+  },
+);
+
 // Active profile name. Persisted in the UI SQLite store so refresh keeps
 // the user's choice. "default" is the upstream's reserved name for the root
 // HERMES_HOME (~/.hermes), so we use it both as the literal default profile

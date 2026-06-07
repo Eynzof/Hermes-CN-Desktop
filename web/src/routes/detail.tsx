@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useCallback, useRef, useState } from "react";
+import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useSetAtom } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Copy } from "lucide-react";
-import { activeSessionIdAtom } from "@/stores/ui";
+import {
+  activeSessionIdAtom,
+  conversationWidthMaxWidth,
+  conversationWidthModeAtom,
+} from "@/stores/ui";
 import {
   recoverCompletedTurnFromStoredMessagesAtom,
   removeApprovalAtom,
@@ -41,6 +45,7 @@ import type {
   ComposerSubmitPayload,
 } from "@/components/chat/composer-types";
 import { MessageTimeline } from "@/components/chat/message-timeline";
+import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
   hermesUIMessagesToChatMessages,
   attachTurnStatsMetadata,
@@ -58,6 +63,7 @@ export function DetailRoute() {
   const { taskId: urlTaskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
+  const [conversationWidthMode, setConversationWidthMode] = useAtom(conversationWidthModeAtom);
   const taskId = activeSessionId ?? urlTaskId;
   const [turnStats, setTurnStats] = useState<UiTurnStats[]>([]);
 
@@ -347,14 +353,24 @@ export function DetailRoute() {
     selectedContextMax,
     estimatedUsed: estimatedContextUsed,
   });
+  const pageStyle = useMemo(
+    () => ({
+      "--conversation-max-width": conversationWidthMaxWidth(conversationWidthMode),
+    }) as CSSProperties,
+    [conversationWidthMode],
+  );
 
   return (
-    <div className={s.page}>
+    <div className={s.page} data-conversation-width={conversationWidthMode} style={pageStyle}>
       <TopBar
         title={title}
         sub={model ? `本会话 ${model}` : undefined}
         right={
           <>
+            <ConversationWidthControl
+              value={conversationWidthMode}
+              onChange={setConversationWidthMode}
+            />
             {copyableSessionId ? (
               <TopBarActionButton
                 onClick={copySessionId}
