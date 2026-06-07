@@ -79,6 +79,7 @@
   min-width: 0;
   height: 20px;
   line-height: 20px;
+  transform: translateY(1px);
   white-space: nowrap;
 }
 
