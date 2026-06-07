@@ -424,8 +424,33 @@ pub fn terminate_owned_dashboard_tree(
     }
 }
 
-/// Check if a dashboard is reachable at the given base URL.
-/// Returns true if /api/status responds with 2xx or 401.
+fn probe_dashboard_port(api_base_url: &str) -> bool {
+    let parsed = match url::Url::parse(api_base_url) {
+        Ok(url) => url,
+        Err(err) => {
+            log::debug!("Invalid dashboard probe URL {}: {}", api_base_url, err);
+            return false;
+        }
+    };
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return false;
+    }
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    let Some(addr) = (host, port)
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut addrs| addrs.next())
+    else {
+        return false;
+    };
+    TcpStream::connect_timeout(&addr, PROBE_TIMEOUT).is_ok()
+}
+
+/// Check if a compatible dashboard status endpoint is reachable at the given
+/// base URL. Returns true if /api/status responds with 2xx or 401.
 pub async fn probe_dashboard(api_base_url: &str) -> bool {
     let url = format!("{}/api/status", api_base_url);
 
@@ -438,6 +463,47 @@ pub async fn probe_dashboard(api_base_url: &str) -> bool {
         Ok(res) => res.status().is_success() || res.status().as_u16() == 401,
         Err(_) => false,
     }
+}
+
+async fn probe_dashboard_openapi(api_base_url: &str) -> bool {
+    let url = format!("{}/openapi.json", api_base_url);
+
+    matches!(
+        PROBE_HTTP_CLIENT
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await,
+        Ok(res) if res.status().is_success()
+    )
+}
+
+/// Check whether a newly spawned dashboard is far enough along to be adopted.
+///
+/// The full `/api/status` route does config, gateway, and SQLite work. On a
+/// cold Windows first-run it can exceed the short probe timeout even after
+/// uvicorn has already mounted the app, which makes the desktop kill a usable
+/// runtime with "Not ready ... within 120s". For the child we just spawned,
+/// `/openapi.json` is a lighter proof that FastAPI is serving the dashboard.
+async fn probe_spawned_dashboard_ready(api_base_url: &str) -> bool {
+    if probe_dashboard(api_base_url).await {
+        return true;
+    }
+    if probe_dashboard_openapi(api_base_url).await {
+        log::debug!(
+            "Dashboard OpenAPI is reachable at {}, but /api/status did not answer within {:?}; treating spawned dashboard as ready",
+            api_base_url,
+            PROBE_TIMEOUT
+        );
+        return true;
+    }
+    if probe_dashboard_port(api_base_url) {
+        log::debug!(
+            "Dashboard port is listening at {}, but HTTP readiness probes are not passing yet",
+            api_base_url
+        );
+    }
+    false
 }
 
 /// Check if the dashboard at the given URL supports the /api/upload endpoint
@@ -692,6 +758,19 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         .env(
             "HERMES_DASHBOARD_TUI",
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
+        )
+        // Packaged managed runtimes are frozen app bundles, not writable Python
+        // virtualenvs. If a dashboard import tries Hermes's lazy dependency
+        // installer, `sys.executable -m pip ...` recursively launches the
+        // frozen runtime executable on Windows and can stall first boot. The
+        // installer already bundles the required dashboard dependencies, so
+        // fail missing optional deps explicitly instead of attempting pip.
+        .env("HERMES_DISABLE_LAZY_INSTALLS", "1")
+        // Keep the first-run critical path focused on binding the dashboard.
+        // Heavy agent imports can still happen on demand after the UI is ready.
+        .env(
+            "HERMES_DASHBOARD_PREWARM_AGENT",
+            std::env::var("HERMES_DASHBOARD_PREWARM_AGENT").unwrap_or_else(|_| "0".to_string()),
         );
     if let Some(token) = session_token.as_deref() {
         cmd.env("HERMES_DASHBOARD_SESSION_TOKEN", token);
@@ -839,11 +918,12 @@ where
         });
 }
 
-/// Wait until the dashboard is ready (responds to /api/status) or timeout.
+/// Wait until the dashboard is ready enough to accept browser/API traffic or
+/// timeout.
 async fn wait_for_dashboard(api_base_url: &str, child: &mut Option<std::process::Child>) -> bool {
     let start = Instant::now();
     while start.elapsed() < DASHBOARD_READY_TIMEOUT {
-        if probe_dashboard(api_base_url).await {
+        if probe_spawned_dashboard_ready(api_base_url).await {
             return true;
         }
         // If the child has exited, bail early
@@ -870,7 +950,7 @@ pub async fn ensure_hermes_dashboard(
     // is serving the same isolated runtime HERMES_HOME and supports the
     // desktop-required routes. This keeps hot reload / second launch usable
     // without falling back to a user-installed ~/.hermes or PATH runtime.
-    let mut primary_occupied = probe_dashboard(&api_base_url).await;
+    let mut primary_occupied = probe_dashboard_port(&api_base_url);
     let ownership_marker = read_ownership_marker();
     let primary_marker_state = marker_owner_state(
         ownership_marker.as_ref(),
@@ -938,7 +1018,7 @@ pub async fn ensure_hermes_dashboard(
             );
             remove_ownership_marker_path(None);
             tokio::time::sleep(Duration::from_millis(350)).await;
-            primary_occupied = probe_dashboard(&api_base_url).await;
+            primary_occupied = probe_dashboard_port(&api_base_url);
             if primary_occupied {
                 let stale_kind = if stale_dashboard_compatible {
                     "stale desktop-owned dashboard"
@@ -1017,7 +1097,7 @@ pub async fn ensure_hermes_dashboard(
         let mut found = false;
         for candidate_port in fallback_ports(options.port) {
             let candidate_url = dashboard_base_url(&options.host, candidate_port);
-            if probe_dashboard(&candidate_url).await {
+            if probe_dashboard_port(&candidate_url) {
                 if options.allow_external_agent
                     && dashboard_is_compatible(&candidate_url, &options.hermes_home).await
                 {
