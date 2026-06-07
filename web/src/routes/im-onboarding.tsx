@@ -480,18 +480,12 @@ function MessagingTestGuide({
   const restartOk = Boolean(result?.restart.ok);
   const connected = platform?.state === "connected";
   const officialAvailable = platform !== null && platform !== undefined;
-  const canRunTest = restartOk || connected || Boolean(platform?.configured);
-  const testBlocked = !canRunTest;
-  const testMessage = testBlocked
-    ? `先完成保存并启动接收服务；未保存时${platformLabel}不会回复。`
-    : testResult?.message ?? textFromError(testError);
+  const testMessage = testResult?.message ?? textFromError(testError);
   const platformStatus = platformLoading
     ? "读取中…"
-    : testBlocked
-      ? "未保存"
-      : officialAvailable
-        ? platformStateText(platform?.state)
-        : "旧 runtime 未提供";
+    : officialAvailable
+      ? platformStateText(platform?.state)
+      : "旧 runtime 未提供";
   return (
     <section className={`${s.section} ${s.testGuide}`} data-ready={restartOk || connected ? "true" : undefined}>
       <div className={s.testIntro}>
@@ -507,8 +501,6 @@ function MessagingTestGuide({
           <div><MessageSquareText size={15} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到回复或配对提示。</span></div>
           <div><Stethoscope size={15} /><b>官方检测</b><span>{platformLoading
             ? "正在读取官方消息平台状态。"
-            : testBlocked
-              ? `还没有把扫码结果保存到当前档案，${platformLabel}接收服务不会启动。`
             : officialAvailable
               ? `当前状态：${platformStateText(platform?.state)}${platform?.error_message ? `，${platform.error_message}` : ""}`
               : "当前 runtime 暂无官方消息平台检测接口，已使用接收服务状态兜底。"}</span></div>
@@ -516,13 +508,13 @@ function MessagingTestGuide({
 
         <div className={s.statusGrid}>
           <div className={s.statusItem} data-tone={restartOk ? "ok" : "warn"}><b>保存重启</b><span>{restartOk ? result?.restart.message || "已完成" : "还没有成功保存并重启"}</span></div>
-          <div className={s.statusItem} data-tone={connected ? "ok" : testBlocked ? "warn" : undefined}><b>平台状态</b><span>{platformStatus}</span></div>
-          <div className={s.statusItem} data-tone={testResult?.ok ? "ok" : testResult || testBlocked ? "warn" : undefined}><b>检测结果</b><span>{testPending ? "检测中…" : testMessage || "可点击检测缺口"}</span></div>
+          <div className={s.statusItem} data-tone={connected ? "ok" : undefined}><b>平台状态</b><span>{platformStatus}</span></div>
+          <div className={s.statusItem} data-tone={testResult?.ok ? "ok" : testResult ? "warn" : undefined}><b>检测结果</b><span>{testPending ? "检测中…" : testMessage || "可点击检测缺口"}</span></div>
         </div>
 
         <div className={s.testActions}>
-          <button className={s.btn} type="button" onClick={onTest} disabled={platformLoading || testPending || testBlocked}>
-            <RotateCw size={14} />{testPending ? "检测中…" : testBlocked ? "先保存再检测" : `检测${platformLabel}连接`}
+          <button className={s.btn} type="button" onClick={onTest} disabled={platformLoading || testPending}>
+            <RotateCw size={14} />{testPending ? "检测中…" : `检测${platformLabel}连接`}
           </button>
         </div>
       </div>
