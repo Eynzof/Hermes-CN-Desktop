@@ -59,6 +59,7 @@ export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
 }
 
 const BASE64_CHUNK_SIZE = 0x8000;
+const BOOTSTRAP_LOGO_BLUE_RGB = "0,95,249";
 
 interface BootstrapVersionLine {
   label: "界面";
@@ -382,7 +383,7 @@ function showBootstrapOverlay(initialMessage: string): {
   root.setAttribute(
     "style",
     "position:fixed;inset:0;background:" +
-      "radial-gradient(circle at 50% 40%,rgba(201,107,58,0.30) 0%,rgba(201,107,58,0.18) 22%,rgba(201,107,58,0.08) 42%,transparent 62%),#0a0a0a;" +
+      `radial-gradient(circle at 50% 40%,rgba(${BOOTSTRAP_LOGO_BLUE_RGB},0.30) 0%,rgba(${BOOTSTRAP_LOGO_BLUE_RGB},0.18) 22%,rgba(${BOOTSTRAP_LOGO_BLUE_RGB},0.08) 42%,transparent 62%),#0a0a0a;` +
       "color:#fbfaf6;display:flex;align-items:center;justify-content:center;" +
       "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
       "z-index:2147483647;padding:48px;box-sizing:border-box;overflow:auto;",
@@ -402,7 +403,7 @@ function showBootstrapOverlay(initialMessage: string): {
   mark.setAttribute(
     "style",
     "width:104px;height:104px;border-radius:24px;display:block;" +
-      "box-shadow:0 24px 60px rgba(0,0,0,0.45),0 0 80px rgba(201,107,58,0.42),0 0 0 1px rgba(255,255,255,0.08);",
+      `box-shadow:0 24px 60px rgba(0,0,0,0.45),0 0 80px rgba(${BOOTSTRAP_LOGO_BLUE_RGB},0.42),0 0 0 1px rgba(255,255,255,0.08);`,
   );
   panel.appendChild(mark);
 
