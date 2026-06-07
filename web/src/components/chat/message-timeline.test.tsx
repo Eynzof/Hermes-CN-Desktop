@@ -139,7 +139,31 @@ describe("MessageTimeline", () => {
     );
 
     expect(html).toContain("katex");
+    expect(html).toContain('class="katex"');
+    expect(html).toContain("style=\"height:");
+    expect(html).not.toContain("_richInline");
     expect(html).not.toContain("$\\boldsymbol");
+  });
+
+  it("renders TeX parenthesis and bracket math delimiters", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText
+        text={String.raw`两个球体 \(S_1(c_1,r_1)\) 和 \(S_2(c_2,r_2)\) 的条件：\[\|\mathbf{c}_1-\mathbf{c}_2\|\le r_1+r_2\]`}
+      />,
+    );
+
+    expect(html).toContain("katex");
+    expect(html).toContain("katex-display");
+    expect(html).not.toContain("\\(");
+    expect(html).not.toContain("\\[");
+  });
+
+  it("does not normalize TeX delimiters inside code", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={"代码 `\\(x_1\\)` 保持字面量。"} />,
+    );
+
+    expect(html).toContain("\\(x_1\\)");
   });
 
   it("shows a readable fallback for unsupported local image URLs", () => {

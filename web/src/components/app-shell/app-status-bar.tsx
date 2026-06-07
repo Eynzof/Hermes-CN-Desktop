@@ -10,7 +10,7 @@ import { useRuntimeInfo } from "@/hooks/use-runtime-update";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-url";
 import { openExternalUrl } from "@/lib/external-links";
-import { isSessionRunning } from "@/lib/session-activity";
+import { isSessionRunning, mergeLiveRuntimeSessions } from "@/lib/session-activity";
 import { formatTokens } from "@/lib/format";
 import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
 import { buildSidebarVersionRows } from "./sidebar-version-tag";
@@ -52,8 +52,10 @@ export function AppStatusBar() {
   const versionRows = buildSidebarVersionRows({ status, runtimeInfo });
 
   const runningCount = useMemo(() => {
-    if (!sessions?.sessions) return status?.active_sessions ?? 0;
-    return sessions.sessions.filter((sess) => isSessionRunning(sess, runtimeBySession)).length;
+    const merged = mergeLiveRuntimeSessions(sessions?.sessions ?? [], runtimeBySession);
+    const localCount = merged.filter((sess) => isSessionRunning(sess, runtimeBySession)).length;
+    if (sessions?.sessions) return localCount;
+    return Math.max(localCount, status?.active_sessions ?? 0);
   }, [sessions, runtimeBySession, status?.active_sessions]);
 
   const errorsLast24h = useMemo(() => {

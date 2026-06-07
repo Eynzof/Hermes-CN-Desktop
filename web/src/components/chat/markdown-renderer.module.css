@@ -1,3 +1,34 @@
+.markdownRoot {
+  max-width: 100%;
+}
+
+.markdownRoot :global(.katex),
+.markdownRoot :global(.katex *) {
+  overflow-wrap: normal;
+  word-break: normal;
+  line-break: auto;
+  text-autospace: no-autospace;
+  text-spacing-trim: normal;
+  text-wrap: nowrap;
+  hanging-punctuation: none;
+}
+
+.markdownRoot :global(.katex) {
+  white-space: nowrap;
+}
+
+.markdownRoot :global(.katex-display) {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  margin: 12px 0;
+  padding: 4px 0 10px;
+}
+
+.markdownRoot :global(.katex-display > .katex) {
+  padding: 1px 4px 3px;
+}
+
 .richInline {
   color: inherit;
   font-size: inherit;
