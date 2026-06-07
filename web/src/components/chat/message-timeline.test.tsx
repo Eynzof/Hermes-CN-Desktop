@@ -2,10 +2,24 @@ import ReactDOMServer from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { MarkdownText } from "./markdown-renderer";
-import { MessageTimeline } from "./message-timeline";
+import { MessageTimeline, resolveBottomFollowState } from "./message-timeline";
 import type { ChatMessage } from "./chat-types";
 
 describe("MessageTimeline", () => {
+  it("keeps bottom auto-follow disabled after an explicit upward scroll", () => {
+    expect(resolveBottomFollowState(40, true)).toEqual({
+      nearBottom: false,
+      userDetachedFromBottom: true,
+    });
+  });
+
+  it("reattaches bottom auto-follow only after returning to the bottom", () => {
+    expect(resolveBottomFollowState(8, true)).toEqual({
+      nearBottom: true,
+      userDetachedFromBottom: false,
+    });
+  });
+
   it("uses the optimistic progress model instead of stale session usage", () => {
     const messages: ChatMessage[] = [
       {
