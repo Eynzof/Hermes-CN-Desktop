@@ -137,6 +137,14 @@ export async function getUiTurnStats(sessionId: string | undefined): Promise<UiT
   }
 }
 
+export async function getUiTurnStatsWindow(input: { sinceMs?: number; limit?: number } = {}): Promise<UiTurnStats[]> {
+  try {
+    return await bridge()?.uiStoreGetTurnStatsWindow?.(input) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function recordUiEvent(
   input: Omit<UiEventInput, "id" | "ts"> & Partial<Pick<UiEventInput, "id" | "ts">>,
 ): void {
