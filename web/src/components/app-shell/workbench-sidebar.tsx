@@ -16,9 +16,11 @@ import {
 import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
 import {
   readPinnedWorkspaceProjectPaths,
+  readSessionWorkspaceMap,
   readWorkspaceProjects,
   subscribeWorkspaceChanges,
   unpinWorkspaceProjects,
+  workspaceNameFromPath,
   type WorkspaceProject,
 } from "@/lib/workspaces";
 import type { SessionSummary } from "@hermes/protocol";
@@ -57,10 +59,11 @@ interface SessionRowProps {
   state: "live" | "ok" | "err" | "idle";
   active: boolean;
   meta: string;
+  projectName?: string;
   onClick: () => void;
 }
 
-function SessionRow({ session, state, active, meta, onClick }: SessionRowProps) {
+function SessionRow({ session, state, active, meta, projectName, onClick }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
   return (
     <button
@@ -74,7 +77,14 @@ function SessionRow({ session, state, active, meta, onClick }: SessionRowProps) 
         <span className={s.dot} data-state={state === "idle" ? undefined : state} />
         <span className={s.ttlText}>{title}</span>
       </div>
-      <div className={s.meta}>{meta}</div>
+      <div className={s.meta}>
+        <span className={s.metaText}>{meta}</span>
+        {projectName ? (
+          <span className={s.metaProject} title={projectName}>
+            {projectName}
+          </span>
+        ) : null}
+      </div>
     </button>
   );
 }
@@ -89,6 +99,7 @@ export function WorkbenchSidebar() {
   const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
   const [pinnedProjectPaths, setPinnedProjectPaths] = useState(readPinnedWorkspaceProjectPaths);
+  const [sessionWorkspaceMap, setSessionWorkspaceMap] = useState(readSessionWorkspaceMap);
 
   useEffect(
     () =>
@@ -103,6 +114,7 @@ export function WorkbenchSidebar() {
       subscribeWorkspaceChanges(() => {
         setProjects(readWorkspaceProjects());
         setPinnedProjectPaths(readPinnedWorkspaceProjectPaths());
+        setSessionWorkspaceMap(readSessionWorkspaceMap());
       }),
     [],
   );
@@ -145,6 +157,16 @@ export function WorkbenchSidebar() {
     },
     [pinnedProjectPaths, projects],
   );
+
+  const projectNameBySessionId = useMemo(() => {
+    const projectNameByPath = new Map(projects.map((project) => [project.path, project.name]));
+    return new Map(
+      Object.entries(sessionWorkspaceMap).flatMap(([sessionId, workspacePath]) => {
+        const projectName = projectNameByPath.get(workspacePath) ?? workspaceNameFromPath(workspacePath);
+        return projectName ? [[sessionId, projectName]] : [];
+      }),
+    );
+  }, [projects, sessionWorkspaceMap]);
 
   useEffect(() => {
     if (pinnedProjectPaths.size === 0) return;
@@ -216,6 +238,7 @@ export function WorkbenchSidebar() {
                 state="live"
                 active={sess.id === activeSessionId}
                 meta={`${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}`}
+                projectName={projectNameBySessionId.get(sess.id)}
                 onClick={() => goSession(sess)}
               />
             ))
@@ -244,6 +267,7 @@ export function WorkbenchSidebar() {
                   state={state}
                   active={sess.id === activeSessionId}
                   meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
+                  projectName={projectNameBySessionId.get(sess.id)}
                   onClick={() => goSession(sess)}
                 />
               );
@@ -308,6 +332,7 @@ export function WorkbenchSidebar() {
                   state={state}
                   active={sess.id === activeSessionId}
                   meta={meta}
+                  projectName={projectNameBySessionId.get(sess.id)}
                   onClick={() => goSession(sess)}
                 />
               );
