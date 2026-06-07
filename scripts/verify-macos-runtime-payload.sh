@@ -3,6 +3,7 @@ set -euo pipefail
 
 payload="${1:-static/bundled-runtime/hermes-agent-cn-runtime-darwin-arm64.zip}"
 tmp_dir=""
+runtime_root_name="${2:-}"
 
 cleanup() {
   if [[ -n "$tmp_dir" ]]; then
@@ -14,7 +15,16 @@ trap cleanup EXIT
 if [[ -f "$payload" ]]; then
   tmp_dir="$(mktemp -d)"
   unzip -q "$payload" -d "$tmp_dir"
-  runtime_dir="$tmp_dir/hermes-agent-cn-runtime-darwin-arm64"
+  if [[ -z "$runtime_root_name" ]]; then
+    runtime_root_name="$(basename "$payload" .zip)"
+  fi
+  runtime_dir="$tmp_dir/$runtime_root_name"
+  if [[ ! -d "$runtime_dir" ]]; then
+    mapfile -t runtime_dirs < <(find "$tmp_dir" -mindepth 1 -maxdepth 1 -type d -name 'hermes-agent-cn-runtime-darwin-*' -print)
+    if [[ "${#runtime_dirs[@]}" -eq 1 ]]; then
+      runtime_dir="${runtime_dirs[0]}"
+    fi
+  fi
 elif [[ -d "$payload" ]]; then
   runtime_dir="$payload"
 else

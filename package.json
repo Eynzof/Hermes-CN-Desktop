@@ -1,6 +1,6 @@
 {
   "name": "hermes-agent-cn-desktop",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "author": "Hermes Agent CN Contributors",
   "homepage": "https://hermesagent.org.cn",
@@ -30,9 +30,15 @@
     "skills:stage-bundled": "node scripts/stage-bundled-skills.mjs",
     "plugins:stage-bundled": "node scripts/stage-bundled-plugins.mjs",
     "bundle:stage-windows": "pnpm run runtime:stage-bundled-windows && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
-    "bundle:stage-macos": "pnpm run runtime:stage-bundled-macos && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
+    "bundle:stage-macos": "pnpm run runtime:stage-bundled-macos-arm64 && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
     "tauri:build:bundled-windows": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-windows && pnpm exec tauri build --bundles nsis",
-    "tauri:build:bundled-macos": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos && pnpm exec tauri build --bundles dmg"
+    "tauri:build:bundled-macos": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-arm64 && pnpm exec tauri build --bundles dmg --target aarch64-apple-darwin",
+    "runtime:stage-bundled-macos-arm64": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch arm64",
+    "runtime:stage-bundled-macos-intel": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch x64",
+    "bundle:stage-macos-arm64": "pnpm run runtime:stage-bundled-macos-arm64 && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
+    "bundle:stage-macos-intel": "pnpm run runtime:stage-bundled-macos-intel && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
+    "tauri:build:bundled-macos-arm64": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-arm64 && pnpm exec tauri build --bundles dmg --target aarch64-apple-darwin",
+    "tauri:build:bundled-macos-intel": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-intel && pnpm exec tauri build --bundles dmg --target x86_64-apple-darwin"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"

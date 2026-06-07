@@ -96,6 +96,10 @@ function syncReadme(text, currentVersionLabelPattern) {
     `$1${desktopVersion}$2`,
   );
   next = next.replace(
+    /(Hermes\.Agent\.CN\.Desktop_)[^_]+(_x64\.dmg)/g,
+    `$1${desktopVersion}$2`,
+  );
+  next = next.replace(
     /(Hermes\.Agent\.CN\.Desktop_)[^_]+(_x64-setup\.exe)/g,
     `$1${desktopVersion}$2`,
   );

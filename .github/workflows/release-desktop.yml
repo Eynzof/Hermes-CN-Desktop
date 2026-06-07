@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.3.0`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.3.1`).
 #
 # Desktop release build runs in parallel for Windows and macOS. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -26,11 +26,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.3.0)"
+        description: "Tag name to associate the build with (e.g. v0.3.1)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.16.0-cn.5"
+        default: "runtime-v0.16.0-cn.6"
         required: false
 
 permissions:
@@ -50,6 +50,10 @@ jobs:
             target: aarch64-apple-darwin
             runtime_platform: darwin
             runtime_arch: arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            runtime_platform: darwin
+            runtime_arch: x64
 
     runs-on: ${{ matrix.runner }}
 
@@ -82,7 +86,7 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.5' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.6' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -140,14 +144,14 @@ jobs:
           args=(
             scripts/stage-bundled-runtime.mjs
             --repo "Eynzof/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.5' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.6' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
           node "${args[@]}"
 
       - name: Prepare macOS signing credentials
-        if: matrix.runner == 'macos-14'
+        if: matrix.runtime_platform == 'darwin'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -190,9 +194,9 @@ jobs:
           security find-identity -v -p codesigning "$signing_keychain"
 
       - name: Verify bundled macOS runtime payload signatures
-        if: matrix.runner == 'macos-14'
+        if: matrix.runtime_platform == 'darwin'
         shell: bash
-        run: scripts/verify-macos-runtime-payload.sh
+        run: scripts/verify-macos-runtime-payload.sh "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"
 
       - name: Build + upload installers
         uses: tauri-apps/tauri-action@v0
@@ -226,7 +230,7 @@ jobs:
           args: --target ${{ matrix.target }}
 
       - name: Notarize, staple, verify, and reupload macOS DMG
-        if: matrix.runner == 'macos-14'
+        if: matrix.runtime_platform == 'darwin'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
