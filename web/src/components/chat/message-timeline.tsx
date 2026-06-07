@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info } from "lucide-react";
 import { showReasoningAtom } from "@/stores/ui";
@@ -20,6 +20,8 @@ import {
 import type { SessionUsageResult } from "@hermes/protocol";
 
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+const BOTTOM_FOLLOW_THRESHOLD_PX = 120;
+const BOTTOM_REATTACH_THRESHOLD_PX = 8;
 
 interface MessageTimelineProps {
   messages: ChatMessage[];
@@ -35,6 +37,28 @@ interface TurnAnchor {
   id: string;
   index: number;
   title: string;
+}
+
+export function resolveBottomFollowState(
+  bottomDistance: number,
+  userDetachedFromBottom: boolean,
+): { nearBottom: boolean; userDetachedFromBottom: boolean } {
+  const distance = Math.max(0, bottomDistance);
+  if (userDetachedFromBottom) {
+    const reattached = distance <= BOTTOM_REATTACH_THRESHOLD_PX;
+    return {
+      nearBottom: reattached,
+      userDetachedFromBottom: !reattached,
+    };
+  }
+  return {
+    nearBottom: distance < BOTTOM_FOLLOW_THRESHOLD_PX,
+    userDetachedFromBottom: false,
+  };
+}
+
+function distanceFromBottom(element: HTMLElement): number {
+  return Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight);
 }
 
 function formatDay(timestamp: number): string {
@@ -669,8 +693,10 @@ export function MessageTimeline({
   const messagesRef = useRef<HTMLDivElement>(null);
   const turnAnchorRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const nearBottomRef = useRef(true);
+  const userDetachedFromBottomRef = useRef(false);
   const autoAnchorRef = useRef(false);
   const autoAnchorTimerRef = useRef<number | null>(null);
+  const lastScrollTopRef = useRef(0);
   const messageCountRef = useRef(0);
   const firstMessageIdRef = useRef<string | undefined>(undefined);
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
@@ -746,19 +772,48 @@ export function MessageTimeline({
     const containerRect = container.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const top = container.scrollTop + nodeRect.top - containerRect.top - 12;
-    nearBottomRef.current = container.scrollHeight - top - container.clientHeight < 120;
+    nearBottomRef.current = container.scrollHeight - top - container.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
+    userDetachedFromBottomRef.current = !nearBottomRef.current;
     container.scrollTo({ top, behavior: "smooth" });
+    lastScrollTopRef.current = container.scrollTop;
     setActiveTurnId(id);
   }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const container = containerRef.current;
     if (!container) return;
+    if (userDetachedFromBottomRef.current) return;
+    userDetachedFromBottomRef.current = false;
     container.scrollTo({
       top: container.scrollHeight,
       behavior,
     });
+    if (behavior === "auto") {
+      lastScrollTopRef.current = container.scrollTop;
+    }
   }, []);
+
+  const clearAutoAnchor = useCallback(() => {
+    if (autoAnchorTimerRef.current !== null) {
+      window.clearTimeout(autoAnchorTimerRef.current);
+      autoAnchorTimerRef.current = null;
+    }
+    autoAnchorRef.current = false;
+  }, []);
+
+  const detachFromBottomAutoFollow = useCallback(() => {
+    const container = containerRef.current;
+    clearAutoAnchor();
+    userDetachedFromBottomRef.current = true;
+    nearBottomRef.current = false;
+    if (container) {
+      // Cancel any in-flight smooth/initial auto scroll so an explicit user
+      // upward gesture cannot be pulled back to the bottom by a later layout
+      // settle, ResizeObserver tick, or timeout from the initial history render.
+      container.scrollTo({ top: container.scrollTop, behavior: "auto" });
+      lastScrollTopRef.current = container.scrollTop;
+    }
+  }, [clearAutoAnchor]);
 
   useEffect(() => {
     const knownIds = new Set(turnAnchors.map((turn) => turn.id));
@@ -794,11 +849,15 @@ export function MessageTimeline({
 
     if (visibleMessages.length === 0) {
       nearBottomRef.current = true;
+      userDetachedFromBottomRef.current = false;
+      lastScrollTopRef.current = 0;
       return;
     }
 
     if (sessionChanged) {
       nearBottomRef.current = true;
+      userDetachedFromBottomRef.current = false;
+      lastScrollTopRef.current = 0;
     }
 
     const container = containerRef.current;
@@ -810,22 +869,26 @@ export function MessageTimeline({
     // 初次进入历史会话时不要依赖一次平滑滚动，否则 WebKit/Tauri 里可能先滚到
     // 一个尚未稳定的中间位置，用户看到空白，手动滚动后才触发重绘。
     if (initialHistoryRender) {
+      clearAutoAnchor();
       autoAnchorRef.current = true;
-      if (autoAnchorTimerRef.current !== null) {
-        window.clearTimeout(autoAnchorTimerRef.current);
-      }
       window.requestAnimationFrame(() => {
         scrollToBottom("auto");
         window.requestAnimationFrame(() => scrollToBottom("auto"));
       });
       autoAnchorTimerRef.current = window.setTimeout(() => {
+        if (userDetachedFromBottomRef.current) {
+          autoAnchorRef.current = false;
+          autoAnchorTimerRef.current = null;
+          return;
+        }
         scrollToBottom("auto");
         nearBottomRef.current = true;
+        userDetachedFromBottomRef.current = false;
         autoAnchorRef.current = false;
         autoAnchorTimerRef.current = null;
       }, 650);
     }
-  }, [pendingApproval, scrollToBottom, statusMessage, visibleMessages]);
+  }, [clearAutoAnchor, pendingApproval, scrollToBottom, statusMessage, visibleMessages]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -834,8 +897,10 @@ export function MessageTimeline({
 
     let frame = 0;
     const anchorToBottom = () => {
+      if (userDetachedFromBottomRef.current) return;
       if (!nearBottomRef.current && !autoAnchorRef.current) return;
       container.scrollTop = container.scrollHeight;
+      lastScrollTopRef.current = container.scrollTop;
     };
     const observer = new ResizeObserver(() => {
       window.cancelAnimationFrame(frame);
@@ -856,15 +921,31 @@ export function MessageTimeline({
     };
   }, []);
 
+  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY < 0) {
+      detachFromBottomAutoFollow();
+    }
+  };
+
   const handleScroll = () => {
     const container = containerRef.current;
     if (!container) return;
-    if (autoAnchorRef.current) {
+    const bottomDistance = distanceFromBottom(container);
+    const scrollingUp = container.scrollTop < lastScrollTopRef.current - 1;
+
+    if (scrollingUp) {
+      detachFromBottomAutoFollow();
+    } else if (autoAnchorRef.current && !userDetachedFromBottomRef.current) {
       nearBottomRef.current = true;
-      return;
+    } else {
+      const next = resolveBottomFollowState(
+        bottomDistance,
+        userDetachedFromBottomRef.current,
+      );
+      nearBottomRef.current = next.nearBottom;
+      userDetachedFromBottomRef.current = next.userDetachedFromBottom;
     }
-    nearBottomRef.current =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+    lastScrollTopRef.current = container.scrollTop;
     updateActiveTurnFromScroll();
   };
 
@@ -872,6 +953,7 @@ export function MessageTimeline({
     <div
       ref={containerRef}
       className={s.scroll}
+      onWheel={handleWheel}
       onScroll={handleScroll}
       role="log"
       aria-live="polite"
