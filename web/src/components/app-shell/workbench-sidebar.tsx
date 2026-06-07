@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Folder, MessageSquare, Plus, Search } from "lucide-react";
+import { Folder, MessageSquare, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
@@ -162,9 +162,10 @@ export function WorkbenchSidebar() {
     ? decodeURIComponent(location.pathname.slice("/tasks/".length))
     : null;
   const showPinned = pinned.length > 0;
-  const pinnedProjectSectionIndex = showPinned ? 4 : 3;
+  const pinnedProjectSectionIndex = showPinned ? 3 : 2;
   const recentSectionIndex = pinnedProjectSectionIndex + 1;
-  const pinnedSessionSectionLabel = sectionLabel(3, "置顶对话");
+  const activeSectionLabel = sectionLabel(1, "进行中");
+  const pinnedSessionSectionLabel = sectionLabel(2, "置顶对话");
   const pinnedProjectSectionLabel = sectionLabel(pinnedProjectSectionIndex, "置顶项目");
   const recentSectionLabel = sectionLabel(recentSectionIndex, "最近对话");
 
@@ -178,47 +179,31 @@ export function WorkbenchSidebar() {
         <span className={s.newTaskKbd}>⌘ N</span>
       </button>
 
-      <button type="button" className={s.searchRow} onClick={() => navigate("/history")}>
-        <span className={s.searchLead}>
-          <Search size={13} />
-          <span>搜索…</span>
-        </span>
-        <span className={s.searchKbd}>/</span>
-      </button>
+      <div className={s.quickNav}>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/history") ? "true" : undefined}
+          onClick={() => navigate("/history")}
+        >
+          <MessageSquare size={14} />
+          <span>对话历史</span>
+        </button>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/projects") ? "true" : undefined}
+          onClick={() => navigate("/projects")}
+        >
+          <Folder size={14} />
+          <span>工作空间</span>
+        </button>
+      </div>
 
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§01 · 工作台</span>
-            <span className={s.labelNum}>✕✕</span>
-          </div>
-          <button
-            type="button"
-            className={s.sideItem}
-            data-active={location.pathname.startsWith("/history") ? "true" : undefined}
-            onClick={() => navigate("/history")}
-          >
-            <span className={s.sideItemIcon}>
-              <MessageSquare size={14} />
-            </span>
-            <span className={s.sideItemLabel}>对话历史</span>
-          </button>
-          <button
-            type="button"
-            className={s.sideItem}
-            data-active={location.pathname.startsWith("/projects") ? "true" : undefined}
-            onClick={() => navigate("/projects")}
-          >
-            <span className={s.sideItemIcon}>
-              <Folder size={14} />
-            </span>
-            <span className={s.sideItemLabel}>工作空间</span>
-          </button>
-        </section>
-
-        <section className={s.section}>
-          <div className={s.label}>
-            <span>§02 · 进行中</span>
+            <span>{activeSectionLabel}</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
           {active.length === 0 ? (
