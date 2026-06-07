@@ -6,12 +6,21 @@
 [![rust-test](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/rust-test.yml)
 [![release-desktop](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/release-desktop.yml/badge.svg?event=push)](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/release-desktop.yml)
 [![License: PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-orange.svg)](./LICENSE)
+[![Hermes Agent 中文社区](https://img.shields.io/badge/Hermes%20Agent-%E4%B8%AD%E6%96%87%E7%A4%BE%E5%8C%BA-7c3aed)](https://hermesagent.org.cn)
 
 Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese community, with native support for Windows and macOS. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and includes the Chinese community-modified Hermes Agent core from [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core).
 
-Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn).
+Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn). The desktop app is part of the [Hermes Agent Chinese Community](https://hermesagent.org.cn) ecosystem, where the main site links to Chinese docs, practice guides, community entry points, and more ecosystem projects.
 
 > Current release: `v0.3.0`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
+
+## Hermes Agent Chinese Community
+
+Hermes Agent CN Desktop is maintained by the Hermes Agent Chinese Community. Visit the [community homepage](https://hermesagent.org.cn) for project updates, read the [Chinese docs](https://hermesagent.org.cn/docs), explore [practice guides](https://hermesagent.org.cn/practice-guides), or use the [community hub](https://hermesagent.org.cn/community) to find more discussion channels.
+
+Scan the QR code below to join the Hermes Agent Chinese Community WeChat group. If the QR code expires, open the [latest WeChat group entry](https://hermesagent.org.cn/qr-entrance).
+
+[<img src="./docs/assets/community/wechat-qr.png" alt="Hermes Agent Chinese Community WeChat group QR code" width="260">](https://hermesagent.org.cn/qr-entrance)
 
 ## Demo
 
@@ -77,7 +86,7 @@ This repository is the desktop shell. The agent runtime and Dashboard source liv
 - **Lightweight and cross-platform**: Tauri uses the system WebView instead of bundling Chromium, keeping the installer small while supporting Windows and macOS.
 - **Built-in independent Hermes Agent core**: the desktop app can install, update, verify, health-check, and roll back the local Hermes Agent core.
 - **Agent-first UI**: chat, streaming responses, attachments, MCP tools, skills, memory, profiles, scheduled tasks, LaTeX/Mermaid rendering, and runtime health panels.
-- **Chinese model and platform ecosystem**: support for major cloud model providers plus local deployments such as Ollama, vLLM, LM Studio, and llama.cpp, including Feishu integration setup.
+- **Chinese model and platform ecosystem**: support for major cloud model providers plus local deployments such as Ollama, vLLM, LM Studio, and llama.cpp, including Feishu integration setup; see the [Hermes Agent Chinese Community](https://hermesagent.org.cn) for more Chinese ecosystem content.
 - **Production transport bridge**: Rust commands proxy REST requests, uploads, and SSE streams to avoid WebView CORS limitations and centralize auth handling.
 
 ## Download
@@ -216,7 +225,7 @@ Use the chart below to track this repository's GitHub Star growth over time.
 
 ## Contributing
 
-Issues and pull requests are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before contributing.
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before contributing. To learn more about the Chinese community, docs, and practice guides first, visit the [Hermes Agent Chinese Community](https://hermesagent.org.cn), [Chinese docs](https://hermesagent.org.cn/docs), and [practice guides](https://hermesagent.org.cn/practice-guides).
 
 For security-sensitive reports, please follow [SECURITY.md](./SECURITY.md) instead of opening a public issue.
 
