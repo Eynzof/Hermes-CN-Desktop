@@ -71,8 +71,8 @@ Hermes-CN-Core/              ← 实际 agent（fork of NousResearch/hermes-agen
 
 Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`。
 `kernelVersion` 对应 Hermes-CN-Core 的 `[project].version`，`runtimeRevision` 是同一
-内核版本下中文 runtime 打包修订号，例如 `runtime-v0.16.0-cn.3`、
-`runtime-v0.16.0-cn.4`。完整规范见 `Hermes-CN-Core/docs/RUNTIME_VERSIONING.md`。
+内核版本下中文 runtime 打包修订号，例如 `runtime-v0.16.0-cn.4`、
+`runtime-v0.16.0-cn.5`。完整规范见 `Hermes-CN-Core/docs/RUNTIME_VERSIONING.md`。
 
 ## 四、首次启动时序（桌面端 PROD 模式）
 
@@ -252,7 +252,7 @@ pnpm tauri:dev:external
 ## 五、Runtime 升级
 
 ```
-fork main 收到 P-009 之后的新代码 → 你 git tag runtime-v0.16.0-cn.4; git push origin runtime-v0.16.0-cn.4
+fork main 收到 P-009 之后的新代码 → 你 git tag runtime-v0.16.0-cn.5; git push origin runtime-v0.16.0-cn.5
   ↓
 fork CI release-runtime.yml 触发：
   matrix: win32-x64 / darwin-arm64 / linux-x64
@@ -266,25 +266,25 @@ fork CI release-runtime.yml 触发：
        签 manifest JSON （stable-platform-arch.json）
   release job:
     softprops/action-gh-release → 把 3 zip + 3 manifest 发到
-    releases/runtime-v0.16.0-cn.4
+    releases/runtime-v0.16.0-cn.5
   ↓
 现在 https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download/
-指向 runtime-v0.16.0-cn.4 这个 Release
+指向 runtime-v0.16.0-cn.5 这个 Release
   ↓
 任何已装桌面端下次启动时：
-  1. 看到 current.json 里是 0.16.0-cn.3
+  1. 看到 current.json 里是 0.16.0-cn.4
   2. 用户在 UI 里点 "Check for update"，或者首次启动逻辑就会
-     check_runtime_update() → 拿到 0.16.0-cn.4 manifest → update_available
+     check_runtime_update() → 拿到 0.16.0-cn.5 manifest → update_available
   3. 用户确认升级 → runtime_install_update → 走 first-run 那条
      install 路径
-  4. current.json 改指 0.16.0-cn.4，previous_runtime_version=0.16.0-cn.3
-  5. 出问题可以 runtime_rollback 回 0.16.0-cn.3
+  4. current.json 改指 0.16.0-cn.5，previous_runtime_version=0.16.0-cn.4
+  5. 出问题可以 runtime_rollback 回 0.16.0-cn.4
 ```
 
 ## 六、桌面端升级
 
 ```
-你 git tag v0.2.3; git push origin v0.2.3
+你 git tag v0.3.0; git push origin v0.3.0
   ↓
 desktop CI release-desktop.yml 触发：
   matrix: windows-latest / macos-14 (arm64)
@@ -297,7 +297,7 @@ desktop CI release-desktop.yml 触发：
     5. tauri-apps/tauri-action@v0 → 打 .exe / .dmg
        runtime URL + 公钥仍是 baked-in 兜底，不需要 env wire 进 CI
   ↓
-新装包发到 releases/v0.2.3 → 用户下载装新版
+新装包发到 releases/v0.3.0 → 用户下载装新版
   ↓
 新版起来后，看到 current.json 已经有 runtime → 不下载 → 直接用。
 全新安装则先使用安装包内置 runtime；除非内置资源缺失或用户主动升级，

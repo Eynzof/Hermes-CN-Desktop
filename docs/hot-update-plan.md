@@ -131,8 +131,8 @@ check(拉 manifest JSON)
 
 ## 六、版本与兼容
 
-- 两套版本号**完全解耦**:外壳 `0.2.3`(SemVer / `v*` 标签),内核 `0.16.0`(`runtime-v0.16.0-cn.4` 标签);`scripts/sync-desktop-version.mjs` 只同步桌面侧,不碰内核。
-- 它们**不是**靠 `bundled_runtime_tag` 在运行时软耦合——`bundled_runtime_tag` 只是 `release-desktop.yml` 的**构建期** `workflow_dispatch` 输入(默认 `latest`),决定打包时内嵌哪个 runtime;运行期自动更新走的是另一套(默认 channel = `stable`)。
+- 两套版本号**完全解耦**:外壳 `0.3.0`(SemVer / `v*` 标签),内核 `0.16.0`(`runtime-v0.16.0-cn.5` 标签);`scripts/sync-desktop-version.mjs` 只同步桌面侧,不碰内核。
+- 它们**不是**靠 `bundled_runtime_tag` 在运行时软耦合——`bundled_runtime_tag` 只是 `release-desktop.yml` 的**构建期** `workflow_dispatch` 输入(默认锁定到当前发布 runtime),决定打包时内嵌哪个 runtime;运行期自动更新走的是另一套(默认 channel = `stable`)。
 - **建议**:① 发布时把 `bundled_runtime_tag` 锁成**明确版本**而非 `latest`,保证可复现;② 维护一张「desktop 版本 ↔ 兼容 runtime 区间」表纳入发布 checklist;③ 用 §2.1 的 `minAppVersion` 闸门兜住「新 runtime 依赖新外壳能力」的不兼容。
 
 ---
