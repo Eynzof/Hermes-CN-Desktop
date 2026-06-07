@@ -12,12 +12,16 @@ describe("external-links", () => {
     );
     expect(normalizeExternalUrl("http://example.com")).toBe("http://example.com/");
     expect(normalizeExternalUrl("mailto:hello@example.com")).toBe("mailto:hello@example.com");
+    expect(normalizeExternalUrl("obsidian://open?vault=Hermes&file=Twitter%20%E6%97%B6%E9%97%B4%E7%BA%BF")).toBe(
+      "obsidian://open?vault=Hermes&file=Twitter%20%E6%97%B6%E9%97%B4%E7%BA%BF",
+    );
   });
 
   it("rejects non-browser schemes", () => {
     expect(normalizeExternalUrl("file:///etc/passwd")).toBeNull();
     expect(normalizeExternalUrl("javascript:alert(1)")).toBeNull();
     expect(normalizeExternalUrl("tauri://localhost")).toBeNull();
+    expect(normalizeExternalUrl("obsidian:open")).toBeNull();
     expect(normalizeExternalUrl("/advanced/about")).toBeNull();
   });
 
