@@ -59,6 +59,49 @@ describe("MessageTimeline", () => {
     expect(html).not.toContain("1.0M tokens");
   });
 
+
+  it("renders Obsidian deep links without the blocked indicator", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text="[Twitter 时间线](obsidian://open?vault=Hermes&file=Twitter%20%E6%97%B6%E9%97%B4%E7%BA%BF)" />,
+    );
+
+    expect(html).toContain("href=\"obsidian://open?vault=Hermes&amp;file=Twitter%20%E6%97%B6%E9%97%B4%E7%BA%BF\"");
+    expect(html).toContain("Twitter 时间线");
+    expect(html).not.toContain("[blocked]");
+  });
+
+
+  it("keeps safe relative Markdown links renderable", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text="[内部帮助](/advanced/about)" />,
+    );
+
+    expect(html).toContain("href=\"/advanced/about\"");
+    expect(html).toContain("内部帮助");
+  });
+
+  it("renders controlled rich inline Markdown formatting", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={'<small style="font-size: 12px; color: #999">06 月 07 日 05:30</small> · <span data-tone="muted" data-size="small">浏览 152</span>'} />,
+    );
+
+    expect(html).toContain("06 月 07 日 05:30");
+    expect(html).toContain("浏览 152");
+    expect(html).toContain("font-size:12px");
+    expect(html).toContain("color:#999");
+  });
+
+  it("drops unsafe inline styles from rich formatting tags", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={'<span style="background-image: url(javascript:alert(1)); font-size: 200px">日期</span>'} />,
+    );
+
+    expect(html).toContain("日期");
+    expect(html).not.toContain("javascript");
+    expect(html).not.toContain("background-image");
+    expect(html).not.toContain("200px");
+  });
+
   it("renders Markdown image syntax as an image preview", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
       <MarkdownText text="结果图：![趋势图](https://example.test/chart.png)" />,

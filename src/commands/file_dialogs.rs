@@ -188,6 +188,13 @@ fn validate_external_url(raw: &str) -> AppResult<String> {
                 ));
             }
         }
+        "obsidian" => {
+            if parsed.host_str().is_none() {
+                return Err(AppError::InvalidRequest(
+                    "obsidian URL must include an action".to_string(),
+                ));
+            }
+        }
         scheme => {
             return Err(AppError::InvalidRequest(format!(
                 "Refusing to open unsupported URL scheme: {scheme}"
@@ -284,6 +291,13 @@ mod tests {
             validate_external_url("mailto:hello@example.com").unwrap(),
             "mailto:hello@example.com"
         );
+        assert_eq!(
+            validate_external_url(
+                "obsidian://open?vault=Hermes&file=Twitter%20%E6%97%B6%E9%97%B4%E7%BA%BF"
+            )
+            .unwrap(),
+            "obsidian://open?vault=Hermes&file=Twitter%20%E6%97%B6%E9%97%B4%E7%BA%BF"
+        );
     }
 
     #[test]
@@ -296,6 +310,7 @@ mod tests {
             "tauri://localhost",
             "ftp://example.com/file",
             "mailto:",
+            "obsidian:open",
         ] {
             assert!(
                 matches!(validate_external_url(raw), Err(AppError::InvalidRequest(_))),
