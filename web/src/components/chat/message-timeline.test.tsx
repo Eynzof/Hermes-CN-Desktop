@@ -68,6 +68,15 @@ describe("MessageTimeline", () => {
     expect(html).toContain("alt=\"趋势图\"");
   });
 
+  it("renders single-dollar inline LaTeX formulas", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={String.raw`设 $\boldsymbol{v}_i \in \mathbb{R}^n$ 且 $A\boldsymbol{v}_i = \boldsymbol{0}$。`} />,
+    );
+
+    expect(html).toContain("katex");
+    expect(html).not.toContain("$\\boldsymbol");
+  });
+
   it("shows a readable fallback for unsupported local image URLs", () => {
     const messages: ChatMessage[] = [
       {

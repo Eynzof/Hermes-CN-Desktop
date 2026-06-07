@@ -1,5 +1,5 @@
 import { cjk } from "@streamdown/cjk";
-import { math } from "@streamdown/math";
+import { createMathPlugin } from "@streamdown/math";
 import type { ComponentProps } from "react";
 import { Streamdown } from "streamdown";
 import { MessageImage } from "./message-image";
@@ -9,7 +9,10 @@ interface MarkdownTextProps {
   streaming?: boolean;
 }
 
-const streamdownPlugins = { cjk, math };
+const streamdownPlugins = {
+  cjk,
+  math: createMathPlugin({ singleDollarTextMath: true }),
+};
 
 const streamdownLinkSafety: ComponentProps<typeof Streamdown>["linkSafety"] = {
   enabled: false,
