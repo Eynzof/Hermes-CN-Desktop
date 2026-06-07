@@ -18,7 +18,7 @@ import {
 } from "@/lib/workspaces";
 
 interface CreateAndSendOptions {
-  createSession?: () => Promise<string>;
+  createSession?: (options?: { cwd?: string }) => Promise<string>;
 }
 
 export function useCreateAndSendSession() {
@@ -42,7 +42,8 @@ export function useCreateAndSendSession() {
     options?: CreateAndSendOptions,
   ) => {
     const submittedAt = Date.now();
-    const sessionId = await (options?.createSession ?? createSession)();
+    const workspacePath = payload.workspacePath?.trim() || undefined;
+    const sessionId = await (options?.createSession ?? createSession)({ cwd: workspacePath });
     const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
     const optimisticDisplayText = buildComposerDisplayText(payload);
     const optimisticDisplayImages = payload.attachments
@@ -60,9 +61,9 @@ export function useCreateAndSendSession() {
     if (payload.modelSelection?.model) {
       rememberSessionModelOverride(sessionId, payload.modelSelection);
     }
-    if (payload.workspacePath) {
-      rememberWorkspaceProject(payload.workspacePath);
-      rememberSessionWorkspace(sessionId, payload.workspacePath);
+    if (workspacePath) {
+      rememberWorkspaceProject(workspacePath);
+      rememberSessionWorkspace(sessionId, workspacePath);
     }
 
     beginPrompt(sessionId, optimisticDisplayText, submittedAt, optimisticDisplayImages);
