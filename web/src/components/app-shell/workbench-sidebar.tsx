@@ -214,6 +214,7 @@ export function WorkbenchSidebar() {
             <MessageSquare size={16} />
           </span>
           <span className={s.entryLabel}>对话历史</span>
+          <span className={s.entryCommand}>/history</span>
         </button>
         <button
           type="button"
@@ -225,6 +226,7 @@ export function WorkbenchSidebar() {
             <Folder size={16} />
           </span>
           <span className={s.entryLabel}>工作空间</span>
+          <span className={s.entryCommand}>/workspace</span>
         </button>
       </div>
 
