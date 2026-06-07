@@ -20,8 +20,8 @@
   background: linear-gradient(
     180deg,
     transparent,
-    rgba(255, 122, 61, 0.25) 30%,
-    rgba(255, 122, 61, 0.25) 70%,
+    color-mix(in srgb, var(--h-accent) 25%, transparent) 30%,
+    color-mix(in srgb, var(--h-accent) 25%, transparent) 70%,
     transparent
   );
   opacity: 0.4;
@@ -31,8 +31,8 @@
 .newTask {
   margin: 12px 12px 8px;
   height: 36px;
-  background: var(--persimmon);
-  color: #1a0c04;
+  background: var(--h-accent);
+  color: var(--h-accent-contrast, #fff);
   border-radius: 3px;
   display: flex;
   align-items: center;
@@ -48,7 +48,7 @@
 }
 
 .newTask:hover {
-  background: #ff8a52;
+  background: color-mix(in srgb, var(--h-accent) 84%, var(--h-text));
 }
 
 .newTaskLead {

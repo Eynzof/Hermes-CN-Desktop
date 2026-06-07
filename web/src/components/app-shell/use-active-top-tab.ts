@@ -54,6 +54,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/analytics") ||
       path.startsWith("/logs") ||
       path.startsWith("/debug") ||
+      path.startsWith("/theme") ||
       path.startsWith("/advanced") ||
       path.startsWith("/settings"),
   },

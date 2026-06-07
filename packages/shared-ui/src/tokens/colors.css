@@ -58,8 +58,44 @@
   --h-shadow-l: 0 4px 16px rgba(0, 0, 0, 0.06);
   --h-sidebar-stripe: #fbfaf7;
   --h-accent: #ff7a3d;
+  --h-accent-contrast: #1a0c04;
   --h-accent-soft: #f4dfd0;
   --h-accent-border: #e8b896;
+}
+
+[data-theme="light-modern"] {
+  /* Modern light: a clean editor-style palette with white content surfaces,
+     subtle workbench chrome, quiet separators, and a blue command accent. */
+  --h-bg-app: #f3f3f3;
+  --h-bg-pane: #ffffff;
+  --h-bg-soft: #f8f8f8;
+  --h-bg-input: #ffffff;
+  --h-bg-chip: #f0f0f0;
+  --h-bg-code: #f6f8fa;
+  --h-line: #d7d7d7;
+  --h-line-soft: #e5e5e5;
+  --h-text: #1f1f1f;
+  --h-text-2: #3f3f46;
+  --h-text-3: #6e6e6e;
+  --h-text-4: #a6a6a6;
+  --h-ok: #16825d;
+  --h-ok-soft: rgba(22, 130, 93, 0.1);
+  --h-warn: #9d6b00;
+  --h-warn-soft: rgba(157, 107, 0, 0.1);
+  --h-err: #d13438;
+  --h-danger: #d13438;
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --h-shadow-l: 0 12px 32px rgba(0, 0, 0, 0.08);
+  --h-sidebar-stripe: #f8f8f8;
+  --h-accent: #0078d4;
+  --h-accent-contrast: #ffffff;
+  --h-accent-soft: rgba(0, 120, 212, 0.1);
+  --h-accent-border: rgba(0, 120, 212, 0.36);
+  --sky: #0078d4;
+  --plum: #8e44ad;
+  --amber: #9d6b00;
+  --moss: #16825d;
+  --rust: #d13438;
 }
 
 [data-theme="dark"] {
@@ -87,6 +123,42 @@
   --h-shadow-l: 0 12px 40px rgba(0, 0, 0, 0.6);
   --h-sidebar-stripe: var(--ink-100);
   --h-accent: var(--persimmon);
+  --h-accent-contrast: #1a0c04;
   --h-accent-soft: rgba(255, 122, 61, 0.08);
   --h-accent-border: rgba(255, 122, 61, 0.3);
+}
+
+[data-theme="dark-modern"] {
+  /* Modern dark: a neutral blue-black desktop palette inspired by current
+     code-editor surfaces, tuned to keep Hermes chrome quiet and readable. */
+  --h-bg-app: #181818;
+  --h-bg-pane: #1f1f1f;
+  --h-bg-soft: #252526;
+  --h-bg-input: #2d2d30;
+  --h-bg-chip: #2a2d2e;
+  --h-bg-code: #1e1e1e;
+  --h-line: #3c3c3c;
+  --h-line-soft: #2b2b2b;
+  --h-text: #d4d4d4;
+  --h-text-2: #c5c5c5;
+  --h-text-3: #9d9d9d;
+  --h-text-4: #6f6f6f;
+  --h-ok: #89d185;
+  --h-ok-soft: rgba(137, 209, 133, 0.1);
+  --h-warn: #cca700;
+  --h-warn-soft: rgba(204, 167, 0, 0.12);
+  --h-err: #f48771;
+  --h-danger: #f48771;
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.62);
+  --h-sidebar-stripe: #1f1f1f;
+  --h-accent: #0078d4;
+  --h-accent-contrast: #ffffff;
+  --h-accent-soft: rgba(0, 120, 212, 0.16);
+  --h-accent-border: rgba(0, 120, 212, 0.42);
+  --sky: #4fc1ff;
+  --plum: #c586c0;
+  --amber: #dcdcaa;
+  --moss: #89d185;
+  --rust: #f48771;
 }

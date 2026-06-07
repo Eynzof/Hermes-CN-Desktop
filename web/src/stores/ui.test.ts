@@ -137,6 +137,44 @@ describe("conversationWidthModeAtom (persisted)", () => {
   });
 });
 
+describe("conversationFontSizeAtom (persisted)", () => {
+  it("defaults to standard when nothing is stored", async () => {
+    const { conversationFontSizeAtom } = await loadUi();
+    const store = createStore();
+    expect(store.get(conversationFontSizeAtom)).toBe("standard");
+  });
+
+  it("restores a supported font size from the UI store", async () => {
+    const { conversationFontSizeAtom } = await loadUi({
+      "hermes.conversation-font-size": "large",
+    });
+    const store = createStore();
+    expect(store.get(conversationFontSizeAtom)).toBe("large");
+  });
+
+  it("persists font size changes and normalizes unsupported values", async () => {
+    const { conversationFontSizeAtom, uiStore } = await loadUi({
+      "hermes.conversation-font-size": "tiny",
+    });
+    const store = createStore();
+    expect(store.get(conversationFontSizeAtom)).toBe("standard");
+
+    store.set(conversationFontSizeAtom, "small");
+    expect(uiStore.readUiValue("hermes.conversation-font-size", "")).toBe("small");
+
+    store.set(conversationFontSizeAtom, "huge" as never);
+    expect(store.get(conversationFontSizeAtom)).toBe("standard");
+    expect(uiStore.readUiValue("hermes.conversation-font-size", "")).toBe("standard");
+  });
+
+  it("maps the three font size modes to concrete CSS variables", async () => {
+    const { conversationFontSizeVars } = await loadUi();
+    expect(conversationFontSizeVars("small")).toEqual({ fontSize: "13px", lineHeight: "1.72" });
+    expect(conversationFontSizeVars("standard")).toEqual({ fontSize: "14px", lineHeight: "1.78" });
+    expect(conversationFontSizeVars("large")).toEqual({ fontSize: "15.5px", lineHeight: "1.82" });
+  });
+});
+
 describe("profileSwitchingAtom", () => {
   it("defaults to { active: false }", async () => {
     const { profileSwitchingAtom } = await loadUi();

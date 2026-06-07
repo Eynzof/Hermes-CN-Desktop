@@ -8,6 +8,7 @@ import {
   HeartPulse,
   Info,
   MonitorCog,
+  Palette,
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +29,7 @@ const OBSERVABILITY_ITEMS: readonly AdvancedItem[] = [
 
 const ADVANCED_ITEMS: readonly AdvancedItem[] = [
   { label: "常规", path: "/advanced", icon: SlidersHorizontal },
+  { label: "主题", path: "/theme", icon: Palette },
   { label: "配置", path: "/advanced/config", icon: FileCog },
   { label: "内核", path: "/advanced/kernel", icon: Cpu },
   { label: "环境", path: "/advanced/env", icon: MonitorCog },
