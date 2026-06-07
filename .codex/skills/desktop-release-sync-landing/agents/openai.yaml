@@ -1,0 +1,4 @@
+interface:
+  display_name: "桌面端发版同步 Landing"
+  short_description: "桌面端发版时同步 landing 官网版本和 latest.json 清单。"
+  default_prompt: "协助完成 Hermes Agent CN 桌面端发版，并同步更新 landing 仓库的官网版本与 latest.json 清单。"
