@@ -65,6 +65,7 @@ interface SessionRowProps {
 
 function SessionRow({ session, state, active, meta, projectName, onClick }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
+  const dotState = state === "idle" ? undefined : state;
   return (
     <button
       type="button"
@@ -74,7 +75,7 @@ function SessionRow({ session, state, active, meta, projectName, onClick }: Sess
       title={title}
     >
       <div className={s.ttl}>
-        <span className={s.dot} data-state={state === "idle" ? undefined : state} />
+        <span className={s.dot} data-state={dotState} />
         <span className={s.ttlText}>{title}</span>
       </div>
       <div className={s.meta}>

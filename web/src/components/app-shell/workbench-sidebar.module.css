@@ -270,16 +270,16 @@
   height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--h-text-3);
+  background: transparent;
 }
 
 .dot[data-state="live"] {
-  background: var(--h-accent);
-  box-shadow: 0 0 0 3px rgba(255, 122, 61, 0.18);
+  background: var(--h-ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-ok) 22%, transparent);
 }
 
 .dot[data-state="ok"] {
-  background: var(--moss);
+  background: var(--h-warn);
 }
 
 .dot[data-state="err"] {
