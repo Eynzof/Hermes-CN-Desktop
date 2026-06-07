@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import QRCode from "qrcode";
 import {
@@ -21,7 +21,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type {
-  ImCredentialSummary,
   ImOnboardingApplyResult,
   ImOnboardingBeginResult,
   ImOnboardingPollResult,
@@ -31,6 +30,7 @@ import type {
   MessagingPlatformTestResponse,
 } from "@hermes/protocol";
 import { useStatus } from "@/hooks/use-status";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   useApplyImOnboarding,
   useBeginImOnboarding,
@@ -39,7 +39,13 @@ import {
   usePollImOnboarding,
   useTestMessagingPlatform,
 } from "@/hooks/use-im-onboarding";
+import { useCreateAndSendSession } from "@/hooks/use-create-and-send-session";
 import { openExternalUrl } from "@/lib/external-links";
+import {
+  buildImDiagnosticBundle,
+  buildImDiagnosticPrompt,
+  type ImDiagnosticBundle,
+} from "@/lib/im-onboarding-diagnostics";
 import { SectionShell } from "./section-shell";
 import s from "./im-onboarding.module.css";
 
@@ -48,6 +54,7 @@ type DmPolicy = "scanned" | "pairing" | "allowlist" | "open" | "disabled";
 
 const FEISHU_DEVELOPER_URL = "https://open.feishu.cn/app";
 const FEISHU_SCANNED_OPEN_ID_TOKEN = "__HERMES_SCANNED_FEISHU_OPEN_ID__";
+const WEIXIN_SCANNED_USER_ID_TOKEN = "__HERMES_SCANNED_WEIXIN_USER_ID__";
 export const FEISHU_REQUIRED_SCOPES = [
   "im:message.p2p_msg:readonly",
   "im:message:send_as_bot",
@@ -400,7 +407,54 @@ function platformStateText(state?: string | null): string {
   }
 }
 
-function FeishuTestGuide({
+
+function DiagnosticAssistant({
+  bundle,
+  onAskHermes,
+  asking,
+  askError,
+}: {
+  bundle: ImDiagnosticBundle;
+  onAskHermes: () => void;
+  asking: boolean;
+  askError?: string | null;
+}) {
+  const shownIssues = bundle.issues.slice(0, 3);
+  return (
+    <div className={s.diagnosticAssistant}>
+      <div className={s.diagnosticHead}>
+        <div>
+          <div className={s.miniEyebrow}>HERMES CHECK</div>
+          <h4>接入失败时，让 Hermes 帮你排查</h4>
+          <p>这里会打包当前配置状态、接收服务状态、官方检测结果和最近一次扫码/保存结果，不包含密钥明文。</p>
+        </div>
+        <div className={s.diagnosticActions}>
+          <CopyButton className={s.btn} text={() => JSON.stringify(bundle, null, 2)}>
+            <ClipboardList size={14} />复制诊断包
+          </CopyButton>
+          <CopyButton className={s.btn} text={() => buildImDiagnosticPrompt(bundle)}>
+            <ClipboardList size={14} />复制排查提示
+          </CopyButton>
+          <button className={`${s.btn} ${s.primary}`} type="button" onClick={onAskHermes} disabled={asking}>
+            <MessageSquareText size={14} />{asking ? "正在打开…" : "让 Hermes 排查"}
+          </button>
+        </div>
+      </div>
+      <div className={s.issueGrid}>
+        {shownIssues.map((issue) => (
+          <div className={s.issueCard} data-tone={issue.level} key={`${issue.level}-${issue.title}`}>
+            <b>{issue.title}</b>
+            <span>{issue.detail}</span>
+            <em>{issue.nextStep}</em>
+          </div>
+        ))}
+      </div>
+      {askError ? <div className={s.inlineError}><XCircle size={14} />{askError}</div> : null}
+    </div>
+  );
+}
+
+function MessagingTestGuide({
   result,
   platform,
   platformLoading,
@@ -408,6 +462,9 @@ function FeishuTestGuide({
   testError,
   testPending,
   onTest,
+  platformLabel,
+  readyCopy,
+  notReadyCopy,
 }: {
   result: ImOnboardingApplyResult | null;
   platform?: MessagingPlatformInfo | null;
@@ -416,6 +473,9 @@ function FeishuTestGuide({
   testError?: unknown;
   testPending: boolean;
   onTest: () => void;
+  platformLabel: string;
+  readyCopy?: string;
+  notReadyCopy?: string;
 }) {
   const restartOk = Boolean(result?.restart.ok);
   const connected = platform?.state === "connected";
@@ -427,8 +487,8 @@ function FeishuTestGuide({
         <div className={s.miniEyebrow}>LIVE TEST</div>
         <h3>最后发消息试一下</h3>
         <p>{restartOk
-          ? "接收服务已经按当前档案重启。先点一次检测确认链路，再去飞书里私聊机器人发送 hi。"
-          : "先保存、完成飞书后台设置并发布，再回来私聊机器人验证。"}</p>
+          ? readyCopy ?? `接收服务已经按当前档案重启。先点一次检测确认链路，再去${platformLabel}里私聊机器人发送 hi。`
+          : notReadyCopy ?? `先保存、完成${platformLabel}后台设置，再回来私聊机器人验证。`}</p>
       </div>
 
       <div className={s.testPanel}>
@@ -449,7 +509,7 @@ function FeishuTestGuide({
 
         <div className={s.testActions}>
           <button className={s.btn} type="button" onClick={onTest} disabled={platformLoading || testPending}>
-            <RotateCw size={14} />{testPending ? "检测中…" : "检测飞书连接"}
+            <RotateCw size={14} />{testPending ? "检测中…" : `检测${platformLabel}连接`}
           </button>
         </div>
       </div>
@@ -687,6 +747,7 @@ function FeishuRoute() {
   const apply = useApplyImOnboarding("feishu");
   const messagingPlatformQuery = useMessagingPlatform("feishu");
   const testPlatform = useTestMessagingPlatform("feishu");
+  const createAndSendSession = useCreateAndSendSession();
   const domain = "feishu";
   const connectionMode = "websocket";
   const [dmPolicy, setDmPolicy] = useState<DmPolicy>("pairing");
@@ -698,6 +759,8 @@ function FeishuRoute() {
   const [flow, setFlow] = useState<ImOnboardingBeginResult | null>(null);
   const [pollResult, setPollResult] = useState<ImOnboardingPollResult | null>(null);
   const [result, setResult] = useState<ImOnboardingApplyResult | null>(null);
+  const [diagnosticPending, setDiagnosticPending] = useState(false);
+  const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
   const qrAnchorRef = useRef<HTMLDivElement>(null);
 
   const configured = stateQuery.data?.configured ?? {};
@@ -797,6 +860,57 @@ function FeishuRoute() {
     ["群聊入口", `FEISHU_GROUP_POLICY=${groupEnabled ? "open" : "disabled"}`, groupEnabled ? "高级：仅 @ 响应" : "默认关闭"],
     ["默认通知会话", `FEISHU_HOME_CHANNEL=${homeChannelReview}`, homeChannelStatus],
   ];
+  const diagnosticBundle = useMemo(() => buildImDiagnosticBundle({
+    platform: "feishu",
+    currentProfile: stateQuery.data?.currentProfile,
+    hermesHome: stateQuery.data?.hermesHome,
+    envPath: stateQuery.data?.envPath,
+    configured,
+    statusData: statusQuery.data,
+    platformInfo: messagingPlatformQuery.data,
+    testResult: testPlatform.data,
+    testError: testPlatform.error,
+    applyResult: result,
+    beginError: begin.error,
+    pollError: poll.error,
+    applyError: apply.error,
+    stateError: stateQuery.error,
+    qrStatus: status,
+    qrMessage: pollResult?.message ?? flow?.message,
+    credential,
+  }), [
+    apply.error,
+    begin.error,
+    configured,
+    credential,
+    flow?.message,
+    messagingPlatformQuery.data,
+    poll.error,
+    pollResult?.message,
+    result,
+    stateQuery.data?.currentProfile,
+    stateQuery.data?.envPath,
+    stateQuery.data?.hermesHome,
+    stateQuery.error,
+    status,
+    statusQuery.data,
+    testPlatform.data,
+    testPlatform.error,
+  ]);
+  const askHermesToDiagnose = async () => {
+    setDiagnosticError(null);
+    setDiagnosticPending(true);
+    try {
+      await createAndSendSession({
+        text: buildImDiagnosticPrompt(diagnosticBundle),
+        attachments: [],
+      }, { updateAttachment: () => undefined });
+    } catch (error) {
+      setDiagnosticError(textFromError(error) ?? "无法打开 Hermes 排查会话");
+    } finally {
+      setDiagnosticPending(false);
+    }
+  };
 
   return (
     <SectionShell title="消息平台接入 · 飞书" sub="02 配置 / 023 消息平台接入" rail={<Rail platform="feishu" />} railLabel="飞书接入诊断边栏">
@@ -875,7 +989,7 @@ function FeishuRoute() {
           <SectionTitle num="[ STEP 03 ]" title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
           <FeishuBackendChecklist groupEnabled={groupEnabled} />
           <SectionTitle num="[ STEP 04 ]" title="发一条消息试试" meta="私聊机器人，确认真的能回复" />
-          <FeishuTestGuide
+          <MessagingTestGuide
             result={result}
             platform={messagingPlatformQuery.data}
             platformLoading={messagingPlatformQuery.isLoading}
@@ -883,6 +997,15 @@ function FeishuRoute() {
             testError={testPlatform.error}
             testPending={testPlatform.isPending}
             onTest={() => testPlatform.mutate()}
+            platformLabel="飞书"
+            readyCopy="接收服务已经按当前档案重启。先点一次检测确认链路，再去飞书里私聊机器人发送 hi。"
+            notReadyCopy="先保存、完成飞书后台设置并发布，再回来私聊机器人验证。"
+          />
+          <DiagnosticAssistant
+            bundle={diagnosticBundle}
+            onAskHermes={askHermesToDiagnose}
+            asking={diagnosticPending}
+            askError={diagnosticError}
           />
           {(begin.error || poll.error || apply.error || stateQuery.error) && <div className={s.errorBox}><XCircle size={16} />{textFromError(begin.error || poll.error || apply.error || stateQuery.error)}</div>}
         </main>
@@ -897,9 +1020,13 @@ function WeixinRoute() {
   const begin = useBeginImOnboarding();
   const poll = usePollImOnboarding();
   const apply = useApplyImOnboarding("weixin");
-  const [dmPolicy, setDmPolicy] = useState<DmPolicy>("pairing");
+  const messagingPlatformQuery = useMessagingPlatform("weixin");
+  const testPlatform = useTestMessagingPlatform("weixin");
+  const createAndSendSession = useCreateAndSendSession();
+  const [dmPolicy, setDmPolicy] = useState<DmPolicy>("allowlist");
   const [allowedUsers, setAllowedUsers] = useState("");
   const [homeChannel, setHomeChannel] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [accountId, setAccountId] = useState("");
   const [token, setToken] = useState("");
   const [baseUrl, setBaseUrl] = useState("https://ilinkai.weixin.qq.com");
@@ -907,10 +1034,13 @@ function WeixinRoute() {
   const [flow, setFlow] = useState<ImOnboardingBeginResult | null>(null);
   const [pollResult, setPollResult] = useState<ImOnboardingPollResult | null>(null);
   const [result, setResult] = useState<ImOnboardingApplyResult | null>(null);
+  const [diagnosticPending, setDiagnosticPending] = useState(false);
+  const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
   const qrAnchorRef = useRef<HTMLDivElement>(null);
   const configured = stateQuery.data?.configured ?? {};
   const status = pollResult?.status ?? flow?.status;
   const credential = pollResult?.credentialSummary;
+  const scannedUserId = isSet(credential?.userId) ? credential.userId : null;
   const busy = begin.isPending || poll.isPending || apply.isPending;
   const canApplyQr = credential && pollResult?.status === "confirmed";
   const canApplyManual = accountId.trim() && token.trim();
@@ -919,6 +1049,7 @@ function WeixinRoute() {
   const start = () => {
     begin.reset();
     poll.reset();
+    testPlatform.reset();
     begin.mutate({ platform: "weixin" }, {
       onSuccess: (next) => {
         setFlow(next);
@@ -938,16 +1069,32 @@ function WeixinRoute() {
     return () => window.clearInterval(id);
   }, [flow?.flowId, pollResult?.status]);
 
-  const settings = () => ({
-    WEIXIN_BASE_URL: baseUrl.trim().replace(/\/$/, ""),
-    WEIXIN_CDN_BASE_URL: cdnBaseUrl.trim().replace(/\/$/, ""),
-    WEIXIN_DM_POLICY: dmPolicy,
-    WEIXIN_ALLOW_ALL_USERS: dmPolicy === "open" ? "true" : "false",
-    WEIXIN_ALLOWED_USERS: dmPolicy === "allowlist" ? allowedUsers.replaceAll(" ", "") : "",
-    WEIXIN_GROUP_POLICY: "disabled",
-    WEIXIN_GROUP_ALLOWED_USERS: "",
-    WEIXIN_HOME_CHANNEL: homeChannel.trim(),
-  });
+  const shouldAutoWeixinHomeChannel = Boolean(scannedUserId) && !homeChannel.trim();
+  const useScannedUserId = Boolean(scannedUserId) && dmPolicy === "allowlist";
+  const manualAllowedCount = splitAllowedUsers(allowedUsers).length;
+  const allowPolicyReady = dmPolicy === "open" || Boolean(useScannedUserId || manualAllowedCount > 0);
+  const settings = () => {
+    const patch: Record<string, string> = {
+      WEIXIN_BASE_URL: baseUrl.trim().replace(/\/$/, ""),
+      WEIXIN_CDN_BASE_URL: cdnBaseUrl.trim().replace(/\/$/, ""),
+      WEIXIN_DM_POLICY: dmPolicy === "open" ? "open" : "allowlist",
+      WEIXIN_ALLOW_ALL_USERS: dmPolicy === "open" ? "true" : "false",
+      WEIXIN_GROUP_POLICY: "disabled",
+      WEIXIN_GROUP_ALLOWED_USERS: "",
+    };
+    if (dmPolicy === "allowlist") {
+      patch.WEIXIN_ALLOWED_USERS = compactList([
+        ...(useScannedUserId ? [WEIXIN_SCANNED_USER_ID_TOKEN] : []),
+        ...splitAllowedUsers(allowedUsers),
+      ]);
+    } else {
+      patch.WEIXIN_ALLOWED_USERS = "";
+    }
+    if (shouldAutoWeixinHomeChannel || homeChannel.trim()) {
+      patch.WEIXIN_HOME_CHANNEL = shouldAutoWeixinHomeChannel ? WEIXIN_SCANNED_USER_ID_TOKEN : homeChannel.trim();
+    }
+    return patch;
+  };
   const save = () => apply.mutate({
     platform: "weixin",
     flowId: flow?.flowId,
@@ -955,12 +1102,72 @@ function WeixinRoute() {
     settings: settings(),
     restartGateway: true,
   }, { onSuccess: setResult });
+  const allowedUsersReview = dmPolicy === "open"
+    ? "未限制"
+    : compactList([
+      ...(useScannedUserId ? [`扫码用户 ${last(scannedUserId)}`] : []),
+      ...(manualAllowedCount > 0 ? [`手动 ${manualAllowedCount} 个`] : []),
+    ]) || "缺少用户 ID";
+  const homeChannelReview = shouldAutoWeixinHomeChannel ? `扫码用户 ${last(scannedUserId)}` : homeChannel.trim() || "保持原配置";
   const rows: Array<[string, string, string]> = [
     ["账号 ID", `WEIXIN_ACCOUNT_ID=${credential?.accountId?.redactedValue ?? accountId}`, credential ? "扫码返回" : "手动"],
     ["认证 Token", `WEIXIN_TOKEN=${credential?.token?.redactedValue ?? (token ? "••••" : "")}`, "敏感"],
-    ["私聊策略", `WEIXIN_DM_POLICY=${dmPolicy}`, dmPolicy === "pairing" ? "推荐：先确认" : dmPolicy],
+    ["私聊策略", `WEIXIN_DM_POLICY=${dmPolicy === "open" ? "open" : "allowlist"}`, dmPolicy === "open" ? "试用开放" : "只允许白名单"],
+    ["允许用户", `WEIXIN_ALLOWED_USERS=${allowedUsersReview}`, allowPolicyReady ? "可保存" : "缺少用户 ID"],
     ["允许所有用户", `WEIXIN_ALLOW_ALL_USERS=${dmPolicy === "open" ? "true" : "false"}`, "安全默认"],
+    ["默认通知会话", `WEIXIN_HOME_CHANNEL=${homeChannelReview}`, shouldAutoWeixinHomeChannel ? "自动设置" : homeChannel.trim() ? "已填写" : "不改动"],
   ];
+  const diagnosticBundle = useMemo(() => buildImDiagnosticBundle({
+    platform: "weixin",
+    currentProfile: stateQuery.data?.currentProfile,
+    hermesHome: stateQuery.data?.hermesHome,
+    envPath: stateQuery.data?.envPath,
+    configured,
+    statusData: statusQuery.data,
+    platformInfo: messagingPlatformQuery.data,
+    testResult: testPlatform.data,
+    testError: testPlatform.error,
+    applyResult: result,
+    beginError: begin.error,
+    pollError: poll.error,
+    applyError: apply.error,
+    stateError: stateQuery.error,
+    qrStatus: status,
+    qrMessage: pollResult?.message ?? flow?.message,
+    credential,
+  }), [
+    apply.error,
+    begin.error,
+    configured,
+    credential,
+    flow?.message,
+    messagingPlatformQuery.data,
+    poll.error,
+    pollResult?.message,
+    result,
+    stateQuery.data?.currentProfile,
+    stateQuery.data?.envPath,
+    stateQuery.data?.hermesHome,
+    stateQuery.error,
+    status,
+    statusQuery.data,
+    testPlatform.data,
+    testPlatform.error,
+  ]);
+  const askHermesToDiagnose = async () => {
+    setDiagnosticError(null);
+    setDiagnosticPending(true);
+    try {
+      await createAndSendSession({
+        text: buildImDiagnosticPrompt(diagnosticBundle),
+        attachments: [],
+      }, { updateAttachment: () => undefined });
+    } catch (error) {
+      setDiagnosticError(textFromError(error) ?? "无法打开 Hermes 排查会话");
+    } finally {
+      setDiagnosticPending(false);
+    }
+  };
 
   return (
     <SectionShell title="消息平台接入 · 微信" sub="02 配置 / 023 消息平台接入" rail={<Rail platform="weixin" />} railLabel="微信接入诊断边栏">
@@ -988,27 +1195,79 @@ function WeixinRoute() {
             />
           </div>
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RotateCw size={14} />立即检查</button></div>
-          <SectionTitle num="[ STEP 03 ]" title="账号信息和连接地址" meta="新手不用手填，扫码成功后会自动保存" />
+          <SectionTitle num="[ STEP 03 ]" title="确认扫码结果" meta="新手不用手填账号、口令或接口地址" />
           <section className={s.section}>
-            <Field label="微信接入账号" desc="扫码成功后自动带出；恢复旧配置时才需要手动填。" meta="WEIXIN_ACCOUNT_ID"><input value={accountId} onChange={(e) => setAccountId(e.target.value)} placeholder={last(credential?.accountId)} /></Field>
-            <Field label="微信接入口令" desc="敏感信息，只保存在当前配置档案。" meta="WEIXIN_TOKEN"><input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={last(credential?.token)} /></Field>
-            <Field label="消息接口地址" desc="默认值即可，不知道就不要改。" meta="WEIXIN_BASE_URL"><input value={credential?.baseUrl ?? baseUrl} onChange={(e) => setBaseUrl(e.target.value)} /></Field>
-            <Field label="媒体接口地址" desc="用于图片、文件等媒体内容，默认即可。" meta="WEIXIN_CDN_BASE_URL"><input value={cdnBaseUrl} onChange={(e) => setCdnBaseUrl(e.target.value)} /></Field>
+            {credential ? (
+              <div className={s.identityNote}>
+                <b>已拿到微信扫码凭据</b>
+                <span>账号 <code>{last(credential.accountId)}</code> 和口令会自动保存；如果扫码返回了用户 ID，桌面端会自动写入 <code>WEIXIN_ALLOWED_USERS</code> 和 <code>WEIXIN_HOME_CHANNEL</code>。</span>
+              </div>
+            ) : (
+              <div className={s.identityNote}>
+                <b>等待微信扫码</b>
+                <span>推荐直接扫码完成绑定。只有恢复旧配置，或者 iLink 默认地址不可用时，才需要展开下面的高级设置手动填写。</span>
+              </div>
+            )}
+            <div className={s.advancedPanel} data-open={showAdvanced ? "true" : undefined}>
+              <button className={s.advancedHeader} type="button" onClick={() => setShowAdvanced((value) => !value)} aria-expanded={showAdvanced}>
+                <span>
+                  <b>高级设置 / 恢复旧配置</b>
+                  <small>默认不用动；这里主要给已有账号、Token 或自定义 iLink 地址的用户使用。</small>
+                </span>
+                <em>{showAdvanced ? "收起" : "展开"}</em>
+              </button>
+              {showAdvanced ? (
+                <div className={s.advancedBody}>
+                  <Field label="微信接入账号" desc="扫码成功后自动带出；恢复旧配置时才需要手动填。" meta="WEIXIN_ACCOUNT_ID"><input value={accountId} onChange={(e) => setAccountId(e.target.value)} placeholder={last(credential?.accountId)} /></Field>
+                  <Field label="微信接入口令" desc="敏感信息，只保存在当前配置档案。" meta="WEIXIN_TOKEN"><input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={last(credential?.token)} /></Field>
+                  <Field label="消息接口地址" desc="默认值即可，不知道就不要改。" meta="WEIXIN_BASE_URL"><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} /></Field>
+                  <Field label="媒体接口地址" desc="用于图片、文件等媒体内容，默认即可。" meta="WEIXIN_CDN_BASE_URL"><input value={cdnBaseUrl} onChange={(e) => setCdnBaseUrl(e.target.value)} /></Field>
+                </div>
+              ) : null}
+            </div>
           </section>
-          <SectionTitle num="[ STEP 04 ]" title="设置谁可以使用" meta="默认需要先确认，避免陌生用户直接使用" />
+          <SectionTitle num="[ STEP 04 ]" title="设置谁可以使用" meta="默认只允许扫码用户，避免陌生用户直接使用" />
           <section className={s.section}>
             <div className={s.policyGrid}>
-              <PolicyCard active={dmPolicy === "pairing"} title="需要确认再放行" desc="陌生用户私聊时先生成确认码。" onClick={() => setDmPolicy("pairing")} />
-              <PolicyCard active={dmPolicy === "allowlist"} title="只允许指定用户" desc="只有列表里的微信用户 ID 可用。" onClick={() => setDmPolicy("allowlist")} />
+              <PolicyCard active={dmPolicy === "allowlist"} title="只允许扫码用户" desc={scannedUserId ? `默认加入本次扫码用户（${last(scannedUserId)}）。` : "扫码完成后会自动加入本次微信用户。"} onClick={() => setDmPolicy("allowlist")} />
               <PolicyCard active={dmPolicy === "open"} warning title="所有私聊都可用" desc="方便试用，但不建议长期开放。" onClick={() => setDmPolicy("open")} />
             </div>
-            {dmPolicy === "allowlist" && <Field label="允许用户" desc="多个用户 ID 用英文逗号分隔；不确定可先跳过。" meta="WEIXIN_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} /></Field>}
-            <Field label="默认通知会话" desc="用于定时任务和通知；可以先留空。" meta="WEIXIN_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder="wxid_xxx / filehelper / user_id" /></Field>
+            {dmPolicy === "allowlist" && (
+              <>
+                {scannedUserId ? (
+                  <div className={s.identityNote}>
+                    <b>已自动选择扫码用户</b>
+                    <span>保存时会把完整用户 ID 写入允许列表，界面只展示打码值 <code>{last(scannedUserId)}</code>。</span>
+                  </div>
+                ) : null}
+                <Field label="额外允许用户" desc="可选。多个微信用户 ID 用英文逗号分隔；不确定就留空。" meta="WEIXIN_ALLOWED_USERS"><input value={allowedUsers} onChange={(e) => setAllowedUsers(e.target.value)} placeholder="wxid_xxx,wxid_yyy" /></Field>
+              </>
+            )}
+            <Field label="默认通知会话" desc={scannedUserId ? "留空会自动使用本次扫码用户；也可以手动指定 filehelper 或微信 user_id。" : "用于定时任务和通知；扫码成功后可自动填，也可以手动填。"} meta="WEIXIN_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder={scannedUserId ? "留空自动使用扫码用户" : "wxid_xxx / filehelper / user_id"} /></Field>
           </section>
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="口令会自动打码" />
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual)}><Save size={14} />保存并启动接收服务</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual) || !allowPolicyReady}><Save size={14} />保存并启动接收服务</button></div>
           <ApplyResult result={result} />
+          <SectionTitle num="[ STEP 05 ]" title="发一条消息试试" meta="私聊微信机器人，确认真的能回复" />
+          <MessagingTestGuide
+            result={result}
+            platform={messagingPlatformQuery.data}
+            platformLoading={messagingPlatformQuery.isLoading}
+            testResult={testPlatform.data}
+            testError={testPlatform.error}
+            testPending={testPlatform.isPending}
+            onTest={() => testPlatform.mutate()}
+            platformLabel="微信"
+            readyCopy="接收服务已经按当前档案重启。先点一次检测确认链路，再去微信里私聊机器人发送 hi。"
+            notReadyCopy="先扫码保存并启动接收服务，再回来私聊机器人验证。"
+          />
+          <DiagnosticAssistant
+            bundle={diagnosticBundle}
+            onAskHermes={askHermesToDiagnose}
+            asking={diagnosticPending}
+            askError={diagnosticError}
+          />
           {(begin.error || poll.error || apply.error || stateQuery.error) && <div className={s.errorBox}><XCircle size={16} />{textFromError(begin.error || poll.error || apply.error || stateQuery.error)}</div>}
         </main>
       </div>
