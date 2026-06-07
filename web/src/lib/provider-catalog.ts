@@ -75,6 +75,130 @@ export function sortProvidersForCnEdition(providers: ProviderPreset[]): Provider
   });
 }
 
+export function getProviderOrder(config: Record<string, any> | undefined): string[] {
+  const desktop = asRecord(config?.desktop);
+  const models = asRecord(desktop.models);
+  const raw = models.provider_order;
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const id = item.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    order.push(id);
+  }
+  return order;
+}
+
+export function sortProvidersForModelsPage(
+  providers: ProviderPreset[],
+  config: Record<string, any> | undefined,
+): ProviderPreset[] {
+  const fallback = sortProvidersForCnEdition(providers);
+  const byId = new Map(fallback.map((provider) => [provider.id, provider]));
+  const seen = new Set<string>();
+  const ordered: ProviderPreset[] = [];
+
+  for (const id of getProviderOrder(config)) {
+    const provider = byId.get(id);
+    if (!provider || seen.has(id)) continue;
+    seen.add(id);
+    ordered.push(provider);
+  }
+
+  for (const provider of fallback) {
+    if (seen.has(provider.id)) continue;
+    ordered.push(provider);
+  }
+
+  return ordered;
+}
+
+export function buildProviderOrderUpdate(
+  config: Record<string, any>,
+  providerIds: string[],
+): Record<string, any> {
+  const desktop = asRecord(config.desktop);
+  const models = asRecord(desktop.models);
+  const seen = new Set<string>();
+  const providerOrder = providerIds
+    .map((id) => id.trim())
+    .filter((id) => {
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+  return {
+    ...config,
+    desktop: {
+      ...desktop,
+      models: {
+        ...models,
+        provider_order: providerOrder,
+      },
+    },
+  };
+}
+
+export function buildCustomProviderDeleteUpdate(
+  config: Record<string, any>,
+  providerId: string,
+): Record<string, any> {
+  if (!providerId.startsWith("custom:")) {
+    throw new Error("只能删除用户添加的自定义服务商。");
+  }
+
+  const model = asRecord(config.model);
+  if (String(model.provider || "") === providerId) {
+    throw new Error("当前主模型正在使用此服务商，请先切换到其他模型后再删除。");
+  }
+
+  const providers = asRecord(config.providers);
+  const nextProviders = { ...providers };
+  delete nextProviders[providerId];
+
+  let nextConfig = buildProviderOrderUpdate(
+    {
+      ...config,
+      providers: nextProviders,
+    },
+    getProviderOrder(config).filter((id) => id !== providerId),
+  );
+
+  const auxiliary = asRecord(nextConfig.auxiliary);
+  let auxiliaryChanged = false;
+  const nextAuxiliary: Record<string, any> = {};
+  for (const [task, rawSlot] of Object.entries(auxiliary)) {
+    const slot = asRecord(rawSlot);
+    if (String(slot.provider || "") !== providerId) {
+      nextAuxiliary[task] = rawSlot;
+      continue;
+    }
+    const nextSlot: Record<string, any> = {
+      ...slot,
+      provider: "auto",
+      model: "",
+      base_url: "",
+      extra_body: {},
+    };
+    delete nextSlot.api_key;
+    nextAuxiliary[task] = nextSlot;
+    auxiliaryChanged = true;
+  }
+
+  if (auxiliaryChanged) {
+    nextConfig = {
+      ...nextConfig,
+      auxiliary: nextAuxiliary,
+    };
+  }
+
+  return nextConfig;
+}
+
 export interface ProviderConfigInput {
   apiKey: string;
   baseUrl: string;
@@ -474,6 +598,20 @@ function envPreview(envVars: EnvVarPreviewMap | undefined, key: string | undefin
   return preview || undefined;
 }
 
+function isLocalProviderBaseUrl(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host.endsWith(".local");
+  } catch {
+    return false;
+  }
+}
+
 export function providerApiKeyLabels(provider: ProviderPreset): string[] {
   const labels = [provider.apiKeyLabel, ...(provider.apiKeyAliases ?? [])]
     .map((key) => key.trim())
@@ -509,6 +647,9 @@ export function providerHasSavedCredentials(
   if (provider && providerApiKeyLabels(provider).some((key) => envVars?.[key]?.is_set)) return true;
   const keyEnv = typeof entry.key_env === "string" ? entry.key_env : "";
   if (keyEnv && envVars?.[keyEnv]?.is_set) return true;
+  const baseUrl = typeof entry.base_url === "string" ? entry.base_url : provider?.baseUrl ?? "";
+  const model = typeof entry.model === "string" ? entry.model : provider?.defaultModel ?? "";
+  if (provider?.isCustom && baseUrl && model && isLocalProviderBaseUrl(baseUrl)) return true;
   return Boolean(entry.api_key || entry.key_env);
 }
 

@@ -99,6 +99,15 @@ pub struct UiTurnStatsQuery {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UiTurnStatsWindowQuery {
+    #[serde(default)]
+    pub since_ms: Option<i64>,
+    #[serde(default)]
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UiEventInput {
     pub id: String,
     pub ts: i64,
@@ -461,6 +470,49 @@ pub fn get_turn_stats(hermes_home: &str, session_id: &str) -> AppResult<Vec<UiTu
     Ok(out)
 }
 
+pub fn get_turn_stats_window(
+    hermes_home: &str,
+    since_ms: Option<i64>,
+    limit: Option<i64>,
+) -> AppResult<Vec<UiTurnStats>> {
+    let conn = connect(hermes_home)?;
+    let limit = limit.unwrap_or(5_000).clamp(1, 20_000);
+    let mut out = Vec::new();
+
+    if let Some(since_ms) = since_ms {
+        let mut stmt = conn
+            .prepare(
+                "SELECT * FROM turn_stats
+                 WHERE COALESCE(completed_at, created_at) >= ?
+                 ORDER BY COALESCE(completed_at, created_at) DESC, created_at DESC, id DESC
+                 LIMIT ?",
+            )
+            .map_err(sqlite_err)?;
+        let rows = stmt
+            .query_map(params![since_ms, limit], row_to_turn_stats)
+            .map_err(sqlite_err)?;
+        for row in rows {
+            out.push(row.map_err(sqlite_err)?);
+        }
+    } else {
+        let mut stmt = conn
+            .prepare(
+                "SELECT * FROM turn_stats
+                 ORDER BY COALESCE(completed_at, created_at) DESC, created_at DESC, id DESC
+                 LIMIT ?",
+            )
+            .map_err(sqlite_err)?;
+        let rows = stmt
+            .query_map(params![limit], row_to_turn_stats)
+            .map_err(sqlite_err)?;
+        for row in rows {
+            out.push(row.map_err(sqlite_err)?);
+        }
+    }
+
+    Ok(out)
+}
+
 pub fn record_event(hermes_home: &str, input: UiEventInput) -> AppResult<()> {
     if input.id.trim().is_empty() || input.event_name.trim().is_empty() {
         return Err(AppError::InvalidRequest("UI event id/name is empty".into()));
@@ -642,5 +694,39 @@ mod tests {
             stats[0].metadata.as_ref().unwrap()["usage"]["tokensTotal"],
             12
         );
+    }
+
+    #[test]
+    fn turn_stats_window_filters_by_completion_time() {
+        let dir = TempDir::new().unwrap();
+        let home = dir.path().to_str().unwrap();
+        record_turn_stats(
+            home,
+            UiTurnStats {
+                id: "old".into(),
+                session_id: "s1".into(),
+                completed_at: Some(1_000),
+                tokens_total: Some(1),
+                created_at: Some(1_000),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        record_turn_stats(
+            home,
+            UiTurnStats {
+                id: "new".into(),
+                session_id: "s2".into(),
+                completed_at: Some(2_000),
+                tokens_total: Some(2),
+                created_at: Some(2_000),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let stats = get_turn_stats_window(home, Some(1_500), Some(10)).unwrap();
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats[0].id, "new");
     }
 }

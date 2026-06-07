@@ -4,7 +4,7 @@ use crate::error::AppResult;
 use crate::state::AppState;
 use crate::ui_store::{
     self, UiEventInput, UiStoreRemoveKvInput, UiStoreSetKvInput, UiStoreSnapshot, UiTurnStats,
-    UiTurnStatsQuery,
+    UiTurnStatsQuery, UiTurnStatsWindowQuery,
 };
 
 fn hermes_home(state: &State<'_, AppState>) -> AppResult<String> {
@@ -47,6 +47,14 @@ pub fn ui_store_get_turn_stats(
     input: UiTurnStatsQuery,
 ) -> AppResult<Vec<UiTurnStats>> {
     ui_store::get_turn_stats(&hermes_home(&state)?, &input.session_id)
+}
+
+#[tauri::command]
+pub fn ui_store_get_turn_stats_window(
+    state: State<'_, AppState>,
+    input: UiTurnStatsWindowQuery,
+) -> AppResult<Vec<UiTurnStats>> {
+    ui_store::get_turn_stats_window(&hermes_home(&state)?, input.since_ms, input.limit)
 }
 
 #[tauri::command]

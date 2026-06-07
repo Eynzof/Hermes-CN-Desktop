@@ -1,6 +1,6 @@
 type NativeWindowOpen = typeof window.open;
 
-const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
+const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "obsidian:"]);
 let nativeWindowOpen: NativeWindowOpen | null = null;
 let installed = false;
 
@@ -19,6 +19,7 @@ export function normalizeExternalUrl(raw: string | URL | null | undefined): stri
     if (!SAFE_EXTERNAL_PROTOCOLS.has(url.protocol)) return null;
     if ((url.protocol === "http:" || url.protocol === "https:") && !url.hostname) return null;
     if (url.protocol === "mailto:" && !url.pathname.trim()) return null;
+    if (url.protocol === "obsidian:" && !url.hostname) return null;
     return url.href;
   } catch {
     return null;

@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use base64::Engine;
 use hermes_agent_cn::commands::api_proxy::{
-    api_request_impl, api_request_impl_with_home_base, external_request_impl, upload_file_impl,
-    ApiRequestInput, UploadFileInput,
+    api_request_impl, api_request_impl_with_home_base, external_request, external_request_impl,
+    upload_file_impl, ApiRequestInput, UploadFileInput,
 };
 use hermes_agent_cn::error::AppError;
 use hermes_agent_cn::ui_store;
@@ -459,6 +459,29 @@ async fn external_request_succeeds_against_mock_server() {
     .expect("ok");
     assert_eq!(result.status, 200);
     assert_eq!(result.body, "hello");
+    assert!(result.ok);
+}
+
+#[tokio::test]
+async fn external_request_command_allows_loopback_http() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/models"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(r#"{"data":[{"id":"local"}]}"#))
+        .mount(&server)
+        .await;
+
+    let result = external_request(ApiRequestInput {
+        path: format!("{}/v1/models", server.uri()),
+        method: Some("GET".to_string()),
+        headers: None,
+        body: None,
+    })
+    .await
+    .expect("loopback HTTP should be valid for local model providers");
+
+    assert_eq!(result.status, 200);
+    assert_eq!(result.body, r#"{"data":[{"id":"local"}]}"#);
     assert!(result.ok);
 }
 

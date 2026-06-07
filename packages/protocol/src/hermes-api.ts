@@ -460,35 +460,86 @@ export type McpServersResponse = z.infer<typeof McpServersResponse>;
 
 // ── Analytics (/api/analytics/usage) ──────────────────────────────────
 
+export const AnalyticsTotals = z.object({
+  total_input: z.number(),
+  total_output: z.number(),
+  total_tokens: z.number(),
+  total_cache_read: z.number(),
+  total_cache_write: z.number(),
+  total_reasoning: z.number(),
+  total_sessions: z.number(),
+  total_api_calls: z.number(),
+  avg_tokens_per_session: z.number(),
+}).passthrough();
+export type AnalyticsTotals = z.infer<typeof AnalyticsTotals>;
+
 export const AnalyticsDay = z.object({
   day: z.string(),
   input_tokens: z.number(),
   output_tokens: z.number(),
-  cache_read_tokens: z.number().optional(),
-  reasoning_tokens: z.number().optional(),
-  estimated_cost: z.number(),
-  actual_cost: z.number().optional(),
+  cache_read_tokens: z.number(),
+  cache_write_tokens: z.number(),
+  reasoning_tokens: z.number(),
   sessions: z.number(),
-  api_calls: z.number().optional(),
-});
+  api_calls: z.number(),
+}).passthrough();
 export type AnalyticsDay = z.infer<typeof AnalyticsDay>;
 
 export const AnalyticsModelBreakdown = z.object({
   model: z.string(),
+  provider: z.string(),
   input_tokens: z.number(),
   output_tokens: z.number(),
-  estimated_cost: z.number().optional(),
-  sessions: z.number().optional(),
-});
+  cache_read_tokens: z.number(),
+  cache_write_tokens: z.number(),
+  reasoning_tokens: z.number(),
+  sessions: z.number(),
+  api_calls: z.number(),
+}).passthrough();
 export type AnalyticsModelBreakdown = z.infer<typeof AnalyticsModelBreakdown>;
+
+export const AnalyticsTopSession = z.object({
+  session_id: z.string(),
+  title: z.string().nullable(),
+  model: z.string().nullable(),
+  provider: z.string(),
+  started_at: z.number(),
+  ended_at: z.number().nullable(),
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cache_read_tokens: z.number(),
+  cache_write_tokens: z.number(),
+  reasoning_tokens: z.number(),
+  api_calls: z.number(),
+}).passthrough();
+export type AnalyticsTopSession = z.infer<typeof AnalyticsTopSession>;
 
 export const AnalyticsResponse = z.object({
   daily: z.array(AnalyticsDay),
   by_model: z.array(AnalyticsModelBreakdown),
-  totals: z.any(),
+  top_sessions: z.array(AnalyticsTopSession),
+  totals: AnalyticsTotals,
+  comparison: z.object({
+    previous_totals: AnalyticsTotals,
+  }).passthrough(),
   period_days: z.number(),
-  skills: z.any().optional(),
-});
+  skills: z.object({
+    summary: z.object({
+      total_skill_loads: z.number(),
+      total_skill_edits: z.number(),
+      total_skill_actions: z.number(),
+      distinct_skills_used: z.number(),
+    }).passthrough(),
+    top_skills: z.array(z.object({
+      skill: z.string(),
+      view_count: z.number(),
+      manage_count: z.number(),
+      total_count: z.number(),
+      percentage: z.number(),
+      last_used_at: z.number().nullable(),
+    }).passthrough()),
+  }).passthrough(),
+}).passthrough();
 export type AnalyticsResponse = z.infer<typeof AnalyticsResponse>;
 
 // ── Cron (/api/cron/jobs) ─────────────────────────────────────────────

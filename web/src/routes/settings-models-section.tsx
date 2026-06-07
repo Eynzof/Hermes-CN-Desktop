@@ -1,6 +1,23 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from "react";
 import { createPortal } from "react-dom";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useDeleteEnv, useEnvVars, useRevealEnv, useSetEnv } from "@/hooks/use-env";
 import { useGateway } from "@/hooks/use-gateway";
@@ -8,13 +25,15 @@ import { useProviderModels } from "@/hooks/use-provider-models";
 import type { ModelInfo, ProviderProbeResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
+  buildCustomProviderDeleteUpdate,
   buildProviderConfigUpdate,
+  buildProviderOrderUpdate,
   buildProviderSettingsUpdate,
   getProviderCredentialPreview,
   getProviderEntry,
   providerApiKeyLabels,
   providerHasSavedCredentials,
-  sortProvidersForCnEdition,
+  sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
 } from "@/lib/provider-catalog";
@@ -54,6 +73,7 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
 
 const PROVIDER_ACTION_LOADING_MIN_MS = 450;
 const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
+const PROVIDER_ORDER_SAVE_DEBOUNCE_MS = 320;
 
 type ModelSettingsTab = "main" | "auxiliary";
 type CustomProviderMode = "custom" | "local";
@@ -126,17 +146,6 @@ async function probeChatCompletionsProvider(input: {
   const apiKey = input.apiKey.trim();
   const baseUrl = input.baseUrl.trim();
   const model = input.model.trim();
-  if (!apiKey) {
-    return {
-      ok: false,
-      latency_ms: 0,
-      model_count: 0,
-      sample_models: [],
-      status_code: null,
-      error: "no API key (param empty, env vars unset)",
-      error_kind: "auth",
-    };
-  }
   if (!baseUrl || !model) {
     return {
       ok: false,
@@ -154,9 +163,9 @@ async function probeChatCompletionsProvider(input: {
     await fetchExternalJSON<unknown>(buildChatCompletionsUrl(baseUrl), {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "Accept": "application/json",
+        ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
         model,
@@ -561,6 +570,19 @@ function isLocalProviderBaseUrl(baseUrl: string): boolean {
   }
 }
 
+function isValidProviderBaseUrl(baseUrl: string): boolean {
+  try {
+    const url = new URL(baseUrl);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeProviderBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, "").toLowerCase();
+}
+
 function isWritableProviderEnvKey(key: string): boolean {
   return /^[A-Z_][A-Z0-9_]*$/u.test(key);
 }
@@ -614,7 +636,11 @@ export function ModelsSection() {
   const [savedFlashFor, setSavedFlashFor] = useState<string | null>(null);
   const [providerSavePending, setProviderSavePending] = useState(false);
   const [providerSetCurrentPending, setProviderSetCurrentPending] = useState(false);
+  const [providerDeletePending, setProviderDeletePending] = useState(false);
   const [providerSaveError, setProviderSaveError] = useState("");
+  const [providerOrderOverride, setProviderOrderOverride] = useState<string[] | null>(null);
+  const providerOrderSaveTimerRef = useRef<number | null>(null);
+  const providerOrderSaveSeqRef = useRef(0);
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editVal, setEditVal] = useState("");
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
@@ -745,10 +771,17 @@ export function ModelsSection() {
     () => allProviders.find((provider) => provider.id === selectedProviderId) ?? allProviders[0],
     [allProviders, selectedProviderId],
   );
-  const orderedProviders = useMemo(
-    () => sortProvidersForCnEdition(allProviders),
-    [allProviders],
+  const providerOrderConfig = useMemo(
+    () => providerOrderOverride && config
+      ? buildProviderOrderUpdate(config, providerOrderOverride)
+      : config,
+    [config, providerOrderOverride],
   );
+  const orderedProviders = useMemo(
+    () => sortProvidersForModelsPage(allProviders, providerOrderConfig),
+    [allProviders, providerOrderConfig],
+  );
+  const canReorderProviders = providerSearch.trim().length === 0;
   const filteredProviders = useMemo(() => {
     const query = providerSearch.trim().toLowerCase();
     if (!query) return orderedProviders;
@@ -775,6 +808,13 @@ export function ModelsSection() {
   const selectedProviderCanOmitApiKey = selectedProvider
     ? isLocalProviderBaseUrl(providerForm.baseUrl || selectedProvider.baseUrl)
     : false;
+  const customBaseUrl = customForm.baseUrl.trim();
+  const customBaseUrlValid = !customBaseUrl || isValidProviderBaseUrl(customBaseUrl);
+  const duplicateBaseUrlProvider = useMemo(() => {
+    const normalized = normalizeProviderBaseUrl(customBaseUrl);
+    if (!normalized) return undefined;
+    return allProviders.find((provider) => normalizeProviderBaseUrl(provider.baseUrl) === normalized);
+  }, [allProviders, customBaseUrl]);
   const currentProviderId = modelInfo?.provider ||
     (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
       ? String((config.model as Record<string, unknown>).provider ?? "")
@@ -978,6 +1018,63 @@ export function ModelsSection() {
     void refreshCatalog();
   };
 
+  useEffect(() => () => {
+    if (providerOrderSaveTimerRef.current != null) {
+      window.clearTimeout(providerOrderSaveTimerRef.current);
+    }
+  }, []);
+
+  const saveProviderOrder = useCallback((providerIds: string[]) => {
+    if (!config) return;
+    const saveSeq = providerOrderSaveSeqRef.current + 1;
+    providerOrderSaveSeqRef.current = saveSeq;
+    setProviderOrderOverride(providerIds);
+    setProviderSaveError("");
+
+    if (providerOrderSaveTimerRef.current != null) {
+      window.clearTimeout(providerOrderSaveTimerRef.current);
+    }
+
+    providerOrderSaveTimerRef.current = window.setTimeout(() => {
+      providerOrderSaveTimerRef.current = null;
+      void saveConfig.mutateAsync(buildProviderOrderUpdate(config, providerIds))
+        .catch((error) => {
+          if (providerOrderSaveSeqRef.current !== saveSeq) return;
+          setProviderOrderOverride(null);
+          setProviderSaveError(error instanceof Error ? error.message : String(error || "排序保存失败"));
+        });
+    }, PROVIDER_ORDER_SAVE_DEBOUNCE_MS);
+  }, [config, saveConfig]);
+
+  const providerDndSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 6,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const handleProviderDragEnd = useCallback((event: DragEndEvent) => {
+    if (!canReorderProviders || !config) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = orderedProviders.map((provider) => provider.id);
+    const sourceIndex = ids.indexOf(String(active.id));
+    const targetIndex = ids.indexOf(String(over.id));
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    void saveProviderOrder(arrayMove(ids, sourceIndex, targetIndex));
+  }, [canReorderProviders, config, orderedProviders, saveProviderOrder]);
+
+  const handleProviderRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, providerId: string) => {
+    if ((event.target as HTMLElement | null)?.closest("[data-provider-drag-handle='true']")) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    selectProvider(providerId);
+  };
+
   const syncProviderApiKeyToCanonicalEnv = async (
     provider: ProviderPreset,
     explicitApiKey: string,
@@ -1105,7 +1202,11 @@ export function ModelsSection() {
     const model = customForm.model.trim();
     const apiKey = customForm.apiKey.trim();
     if (!name || !baseUrl || !model) return;
-    const host = baseUrl.match(/https?:\/\/([^/]+)/)?.[1] ?? "endpoint";
+    if (!isValidProviderBaseUrl(baseUrl)) {
+      setProviderSaveError("Base URL 必须是 http 或 https 地址");
+      return;
+    }
+    const host = new URL(baseUrl).host || "endpoint";
     const slug = host.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/(^-|-$)/g, "");
     const existingIds = new Set(allProviders.map((p) => p.id));
     let candidate = `custom:${slug || "endpoint"}`;
@@ -1126,8 +1227,12 @@ export function ModelsSection() {
       models: [{ id: model, supportsTools: true }],
       isCustom: true,
     };
-    saveConfig.mutate(
+    const nextConfig = buildProviderOrderUpdate(
       buildProviderConfigUpdate(config, preset, { apiKey, baseUrl, model }),
+      [candidate, ...orderedProviders.map((provider) => provider.id)],
+    );
+    saveConfig.mutate(
+      nextConfig,
       {
         onSuccess: () => {
           selectProvider(candidate);
@@ -1136,6 +1241,34 @@ export function ModelsSection() {
         },
       },
     );
+  };
+
+  const handleDeleteSelectedProvider = async () => {
+    if (!config || !selectedProvider?.isCustom) return;
+    const providerId = selectedProvider.id;
+    if (currentProviderId === providerId) {
+      setProviderSaveError("当前主模型正在使用此服务商，请先切换到其他模型后再删除。");
+      return;
+    }
+    const referencedTasks = AUXILIARY_TASKS
+      .filter((task) => String(getAuxiliarySlot(config, task.id).provider || "") === providerId)
+      .map((task) => task.name);
+    const confirmMessage = referencedTasks.length > 0
+      ? `确定删除「${selectedProvider.name}」吗？引用它的辅助模型（${referencedTasks.join("、")}）会自动恢复为 Auto。`
+      : `确定删除「${selectedProvider.name}」吗？此操作会移除该自定义服务商的 Base URL、模型和密钥配置。`;
+    if (!window.confirm(confirmMessage)) return;
+
+    const nextSelectedProviderId = orderedProviders.find((provider) => provider.id !== providerId)?.id ?? "";
+    setProviderDeletePending(true);
+    setProviderSaveError("");
+    try {
+      await saveConfig.mutateAsync(buildCustomProviderDeleteUpdate(config, providerId));
+      if (nextSelectedProviderId) selectProvider(nextSelectedProviderId);
+    } catch (error) {
+      setProviderSaveError(error instanceof Error ? error.message : String(error || "删除失败"));
+    } finally {
+      setProviderDeletePending(false);
+    }
   };
 
   const handleSaveAuxiliaryTask = async () => {
@@ -1281,7 +1414,7 @@ export function ModelsSection() {
               <p className={s.desc}>
                 管理国内模型服务商预设和 API Key。
                 {modelInfo && <> 当前模型: <b>{modelInfo.model}</b> ({modelInfo.provider})</>}
-                {" · "}{configuredCount}/{catalog.providers.length} 个预设已配置
+                {" · "}已配置 {configuredCount} 个，自定义 {customProviders.length} 个
               </p>
             </div>
             <div className={s.catalogMeta}>
@@ -1316,31 +1449,38 @@ export function ModelsSection() {
                   </button>
                   <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
                 </div>
+                <div className={s.providerListHint}>
+                  {providerSearch.trim()
+                    ? "正在搜索结果中浏览；清空搜索后可拖拽排序。"
+                    : "拖拽左侧把手可调整常用服务商顺序，排序保存到当前 Profile。"}
+                </div>
               </div>
               <div className={s.providerPresetList}>
-                {filteredProviders.map((provider) => {
-                  const configured = providerHasSavedCredentials(config, provider.id, envVars, provider);
-                  const current = currentProviderId === provider.id;
-                  return (
-                    <button
-                      key={provider.id}
-                      id={`provider-${provider.id}`}
-                      className={s.providerPresetItem}
-                      data-active={selectedProvider?.id === provider.id}
-                      onClick={() => selectProvider(provider.id)}
+                {filteredProviders.length > 0 ? (
+                  <DndContext
+                    sensors={providerDndSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleProviderDragEnd}
+                  >
+                    <SortableContext
+                      items={filteredProviders.map((provider) => provider.id)}
+                      strategy={verticalListSortingStrategy}
                     >
-                      <span className={s.providerPresetName}>{provider.name}</span>
-                      <span className={s.providerPresetVendor}>{provider.vendor}</span>
-                      <span className={s.providerPresetBadges}>
-                        {current && <span className={s.statusBadge} data-on="true">当前</span>}
-                        <span className={s.statusBadge} data-on={configured}>
-                          {configured ? "已设置" : "未设置"}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-                {filteredProviders.length === 0 && (
+                      {filteredProviders.map((provider) => (
+                        <SortableProviderPresetItem
+                          key={provider.id}
+                          provider={provider}
+                          active={selectedProvider?.id === provider.id}
+                          configured={providerHasSavedCredentials(config, provider.id, envVars, provider)}
+                          current={currentProviderId === provider.id}
+                          canReorder={canReorderProviders}
+                          onSelect={selectProvider}
+                          onKeyDown={handleProviderRowKeyDown}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                ) : (
                   <div className={s.providerPresetEmpty}>没有匹配的模型平台</div>
                 )}
               </div>
@@ -1360,9 +1500,26 @@ export function ModelsSection() {
                           {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
                         </div>
                       </div>
-                      <span className={s.statusBadge} data-on={selectedHasCredentials}>
-                        {selectedHasCredentials ? "已保存密钥" : "未设置"}
-                      </span>
+                      <div className={s.providerHeaderActions}>
+                        <span className={s.statusBadge} data-on={selectedHasCredentials}>
+                          {selectedHasCredentials ? "已保存密钥" : "未设置"}
+                        </span>
+                        {selectedProvider.isCustom && (
+                          <button
+                            type="button"
+                            className={s.btnDanger}
+                            disabled={providerDeletePending || providerSavePending || providerSetCurrentPending}
+                            onClick={() => void handleDeleteSelectedProvider()}
+                            title={
+                              currentProviderId === selectedProvider.id
+                                ? "当前主模型正在使用此服务商，请先切换后删除"
+                                : "删除此自定义服务商"
+                            }
+                          >
+                            {providerDeletePending ? "删除中…" : "删除服务商"}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className={s.providerFormGrid}>
@@ -1441,6 +1598,7 @@ export function ModelsSection() {
                         disabled={
                           providerSavePending ||
                           providerSetCurrentPending ||
+                          providerDeletePending ||
                           !isFormDirty ||
                           (!selectedHasCredentials && !providerForm.apiKey.trim() && !selectedProviderCanOmitApiKey)
                         }
@@ -1463,6 +1621,7 @@ export function ModelsSection() {
                           selectedProviderIsCurrent ||
                           providerSavePending ||
                           providerSetCurrentPending ||
+                          providerDeletePending ||
                           !selectedProviderModel ||
                           (!selectedHasCredentials && !selectedProviderCanOmitApiKey)
                         }
@@ -1490,7 +1649,8 @@ export function ModelsSection() {
                         className={s.btn}
                         disabled={
                           probeForSelected?.status === "pending" ||
-                          (!selectedHasCredentials && !providerForm.apiKey.trim())
+                          providerDeletePending ||
+                          (!selectedHasCredentials && !providerForm.apiKey.trim() && !selectedProviderCanOmitApiKey)
                         }
                         onClick={() => void handleProbe()}
                         title={
@@ -1627,6 +1787,14 @@ export function ModelsSection() {
                   onChange={(e) => setCustomForm((p) => ({ ...p, baseUrl: e.target.value }))}
                 />
               </label>
+              {!customBaseUrlValid && (
+                <div className={s.modelPickerError}>Base URL 必须是 http 或 https 地址。</div>
+              )}
+              {customBaseUrlValid && duplicateBaseUrlProvider && (
+                <div className={s.modelPickerHint}>
+                  已存在同 Base URL：{duplicateBaseUrlProvider.name}。如果只是换模型，可以直接编辑现有服务商。
+                </div>
+              )}
               <label className={s.fieldRow}>
                 <div className={s.fieldLabel}>默认模型</div>
                 <input
@@ -1658,6 +1826,7 @@ export function ModelsSection() {
                   saveConfig.isPending ||
                   !customForm.name.trim() ||
                   !customForm.baseUrl.trim() ||
+                  !customBaseUrlValid ||
                   !customForm.model.trim()
                 }
                 onClick={handleAddCustom}
@@ -1669,6 +1838,77 @@ export function ModelsSection() {
         </div>,
         document.body,
       )}
+    </div>
+  );
+}
+
+function SortableProviderPresetItem({
+  provider,
+  active,
+  configured,
+  current,
+  canReorder,
+  onSelect,
+  onKeyDown,
+}: {
+  provider: ProviderPreset;
+  active: boolean;
+  configured: boolean;
+  current: boolean;
+  canReorder: boolean;
+  onSelect: (providerId: string) => void;
+  onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>, providerId: string) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: provider.id,
+    disabled: !canReorder,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      id={`provider-${provider.id}`}
+      className={s.providerPresetItem}
+      data-active={active}
+      data-dragging={isDragging ? "true" : undefined}
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect(provider.id)}
+      onKeyDown={(event) => onKeyDown(event, provider.id)}
+    >
+      <span
+        ref={setActivatorNodeRef}
+        className={s.providerDragHandle}
+        data-provider-drag-handle="true"
+        title={canReorder ? "拖拽排序" : "清空搜索后可拖拽排序"}
+        onClick={(event) => event.stopPropagation()}
+        {...(canReorder ? attributes : {})}
+        {...(canReorder ? listeners : {})}
+      >
+        ⋮⋮
+      </span>
+      <span className={s.providerPresetName}>{provider.name}</span>
+      <span className={s.providerPresetVendor}>{provider.vendor}</span>
+      <span className={s.providerPresetBadges}>
+        {current && <span className={s.statusBadge} data-on="true">当前</span>}
+        {provider.isCustom && <span className={s.statusBadge} data-tone="custom">{provider.vendor}</span>}
+        <span className={s.statusBadge} data-on={configured}>
+          {configured ? "已设置" : "未设置"}
+        </span>
+      </span>
     </div>
   );
 }

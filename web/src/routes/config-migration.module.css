@@ -174,3 +174,81 @@
   font-size: 12px;
   line-height: 1.65;
 }
+
+.heroCard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  border: 1px solid var(--h-line);
+  border-radius: 18px;
+  background: var(--h-bg-pane);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.heroIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: var(--h-accent);
+  background: var(--h-bg-chip);
+}
+
+.heroTitle {
+  margin: 0 0 8px;
+  color: var(--h-text);
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 760;
+}
+
+.heroText {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.assistantGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.stepList {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.stepList > div {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 12px;
+  background: var(--h-bg-pane);
+  padding: 10px 12px;
+}
+
+.stepList b {
+  color: var(--h-text);
+  font-size: 12.5px;
+}
+
+.stepList span {
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.promptPanel {
+  border: 1px solid var(--h-line);
+  border-radius: 16px;
+  background: var(--h-bg-app);
+  padding: 16px;
+  margin-top: 16px;
+}
