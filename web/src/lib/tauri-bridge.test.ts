@@ -114,6 +114,14 @@ describe("isTauriDevMode", () => {
     });
   });
 
+  it("exposes desktop update checks through Tauri IPC", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.checkDesktopUpdate?.();
+
+    expect(mockInvoke).toHaveBeenCalledWith("desktop_check_update", undefined);
+  });
+
   it("exposes external terminal opening through Tauri IPC", async () => {
     await installTauriBridge();
 

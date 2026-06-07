@@ -1,0 +1,89 @@
+.dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 20px 22px 18px;
+  gap: 14px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: var(--h-text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.titleIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-accent);
+  background: var(--h-accent-soft);
+  flex-shrink: 0;
+}
+
+.body {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.versionPanel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 12px;
+  background: var(--h-bg-app);
+  padding: 12px;
+}
+
+.versionPanel span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--h-text-3);
+  font-size: 10.5px;
+}
+
+.versionPanel b {
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn,
+.btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+}
+
+.btn {
+  border: 1px solid var(--h-line);
+  background: transparent;
+  color: var(--h-text);
+}
+
+.btnPrimary {
+  border: 1px solid var(--h-accent);
+  background: var(--h-accent);
+  color: var(--h-accent-contrast);
+}

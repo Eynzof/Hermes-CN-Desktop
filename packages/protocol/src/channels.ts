@@ -15,6 +15,7 @@ export const Channels = {
   runtimeCheckUpdate: ch("runtime-check-update"),
   runtimeInstallUpdate: ch("runtime-install-update"),
   runtimeRollback: ch("runtime-rollback"),
+  desktopCheckUpdate: ch("desktop-check-update"),
   switchProfile: ch("switch-profile"),
   configMigrationScan: ch("config-migration-scan"),
   configMigrationImport: ch("config-migration-import"),
@@ -177,6 +178,48 @@ export interface EnvironmentCheckResult {
   hermesHome: string;
   currentProfile: string;
   items: EnvironmentCheckItem[];
+}
+
+
+export interface DesktopUpdateAsset {
+  label?: string;
+  platform?: string;
+  fileName?: string;
+  size?: number;
+  sha256?: string;
+  url?: string;
+  versionedUrl?: string;
+  sourceUrl?: string;
+  baiduPanUrl?: string;
+  baiduPanCode?: string;
+  quarkPanUrl?: string;
+  quarkPanCode?: string;
+}
+
+export interface DesktopUpdateManifest {
+  repository?: string;
+  version?: string;
+  semver?: string;
+  publishedAt?: string;
+  sourceUrl?: string;
+  updatedAt?: string;
+  assets?: Record<string, DesktopUpdateAsset>;
+}
+
+export interface DesktopUpdateManifestFetchResult {
+  ok: boolean;
+  manifestUrl: string;
+  manifest?: DesktopUpdateManifest;
+  error?: string;
+  checkedAtMs: number;
+}
+
+export interface DesktopUpdateCheckResult extends DesktopUpdateManifestFetchResult {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  downloadUrl: string;
+  sourceUrl?: string;
 }
 
 export interface RuntimeUpdateManifest {
