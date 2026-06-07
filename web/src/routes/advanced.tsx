@@ -1,17 +1,25 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { SectionShell } from "./section-shell";
-import { AboutSection, ConfigSection, GeneralSection, KernelSection } from "./settings";
+import { AboutSection, ConfigSection, GeneralSection, KernelSection, ThemeSection } from "./settings";
 import { EnvironmentSection } from "./environment";
 
 type AdvancedSection = "general" | "config" | "kernel" | "env" | "about";
 
 const SECTION_META: Record<AdvancedSection, { title: string; sub: string }> = {
-  general: { title: "常规", sub: "调整主题、密度和对话显示偏好。" },
+  general: { title: "常规", sub: "调整会话显示与输入偏好。" },
   config: { title: "配置", sub: "编辑 Hermes config.yaml 中的高级配置项。" },
   kernel: { title: "内核", sub: "查看运行时、版本和本地路径信息。" },
   env: { title: "环境", sub: "检查 managed runtime 与本机可选工具能力。" },
   about: { title: "关于", sub: "联系方式、社区入口和致谢信息。" },
 };
+
+export function ThemeRoute() {
+  return (
+    <SectionShell title="主题" sub="选择皮肤、信息密度和对话字号。">
+      <ThemeSection showHeading={false} />
+    </SectionShell>
+  );
+}
 
 function sectionFromPath(pathname: string): AdvancedSection | null {
   if (pathname === "/advanced" || pathname === "/advanced/") return "general";

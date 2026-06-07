@@ -60,14 +60,30 @@ interface SettingsSectionProps {
 }
 
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
-  const { config, update } = useTheme();
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
-  const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
   const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
 
   return (
     <div>
       {showHeading && <h2 className={s.heading}>常规</h2>}
+      <Row label="显示推理过程" sub="在会话中展示模型的思考和推理内容" right={
+        <RadioGroup value={showReasoning ? "on" : "off"} options={[{ value: "off", label: "隐藏" }, { value: "on", label: "显示" }]} onChange={(v) => setShowReasoning(v === "on")} />
+      } />
+      <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
+        <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
+      } />
+      {isYoloModeSupported() && <YoloDangerZone />}
+    </div>
+  );
+}
+
+export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
+  const { config, update } = useTheme();
+  const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
+
+  return (
+    <div>
+      {showHeading && <h2 className={s.heading}>主题</h2>}
       <div className={s.appearancePanel}>
         <div className={s.appearanceHeader}>
           <span className={s.appearanceIndex}>[ 01 ]</span>
@@ -110,13 +126,6 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
           }
         />
       </div>
-      <Row label="显示推理过程" sub="在会话中展示模型的思考和推理内容" right={
-        <RadioGroup value={showReasoning ? "on" : "off"} options={[{ value: "off", label: "隐藏" }, { value: "on", label: "显示" }]} onChange={(v) => setShowReasoning(v === "on")} />
-      } />
-      <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
-        <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
-      } />
-      {isYoloModeSupported() && <YoloDangerZone />}
     </div>
   );
 }
