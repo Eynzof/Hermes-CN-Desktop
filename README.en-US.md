@@ -2,14 +2,16 @@
 
 [简体中文](./README.md) · English
 
-[![web-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/web-test.yml)
-[![rust-test](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/rust-test.yml)
-[![release-desktop](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml)
+[![web-test](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/web-test.yml)
+[![rust-test](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/rust-test.yml)
+[![release-desktop](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/release-desktop.yml/badge.svg?event=push)](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/release-desktop.yml)
 [![License: PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-orange.svg)](./LICENSE)
 
 Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese community, with native support for Windows and macOS. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and includes the Chinese community-modified Hermes Agent core from [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core).
 
-> Current release: `v0.3.0`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
+Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn).
+
+> Current release: `v0.3.0`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
 
 ## Demo
 
@@ -25,31 +27,43 @@ Click the preview image below, or open the [MP4 demo](./docs/assets/demo/hermes-
 
 ### Screenshots
 
-These screenshots show the main workspace, light and dark themes, configuration, built-in Skills, model provider setup, memory, runtime diagnostics, logs, chat history, chat responses, and project review workflows.
+These screenshots are synced from the landing repository and cover the workbench, archives, chat, LaTeX/Markdown rendering, task console, Feishu integration, usage stats, health, Skills, Memory, model provider setup, runtime diagnostics, and logs.
 
-| Workbench, light theme | Workbench, dark theme |
+| Workbench, dark theme | Workbench, light theme |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent CN Desktop workspace in light theme" width="100%"> | <img src="./docs/assets/demo/screenshots/workbench-dark.png" alt="Hermes Agent CN Desktop workspace in dark theme" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/workbench-dark.png" alt="Hermes Agent CN Desktop workspace in dark theme" width="100%"> | <img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent CN Desktop workspace in light theme" width="100%"> |
 
-| Configuration | Built-in Skills |
+| Archive workbench, dark theme | Archive workbench, light theme |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/config.png" alt="Configuration overview page" width="100%"> | <img src="./docs/assets/demo/screenshots/skills-library.png" alt="Built-in Skills management page" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/dark-archive.png" alt="Archive workbench in dark theme" width="100%"> | <img src="./docs/assets/demo/screenshots/light-archive.png" alt="Archive workbench in light theme" width="100%"> |
 
-| Model provider setup | Memory management |
+| Chat response workflow | Conversation history |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="Model provider setup page" width="100%"> | <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="Memory management page" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/chat-response.png" alt="Chat response workflow" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-history.png" alt="Conversation history page" width="100%"> |
 
-| Runtime diagnostics | Logs |
+| LaTeX and Markdown rendering | Task console output |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/runtime.png" alt="Runtime diagnostics page" width="100%"> | <img src="./docs/assets/demo/screenshots/log.png" alt="Log viewer page" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/latex.png" alt="LaTeX and Markdown rendering" width="100%"> | <img src="./docs/assets/demo/screenshots/console.png" alt="Task console output page" width="100%"> |
 
-| Chat history | Chat response |
+| Feishu platform integration | Usage statistics and charts |
 | --- | --- |
-| <img src="./docs/assets/demo/screenshots/chat-history.png" alt="Chat history page" width="100%"> | <img src="./docs/assets/demo/screenshots/chat-response.png" alt="Chat response workflow" width="100%"> |
+| <img src="./docs/assets/demo/screenshots/feishu.png" alt="Feishu platform integration setup" width="100%"> | <img src="./docs/assets/demo/screenshots/stats.png" alt="Usage statistics and charts" width="100%"> |
 
-| Project review workflow |
-| --- |
-| <img src="./docs/assets/demo/screenshots/project-review.png" alt="Project review chat workflow" width="100%"> |
+| System health status | Built-in Skills |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/health.png" alt="System health status panel" width="100%"> | <img src="./docs/assets/demo/screenshots/skills-library.png" alt="Built-in Skills management page" width="100%"> |
+
+| Memory management | Model provider setup |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/memory-panel.png" alt="Memory management page" width="100%"> | <img src="./docs/assets/demo/screenshots/model-provider-setup.png" alt="Model provider setup page" width="100%"> |
+
+| Configuration | Runtime diagnostics |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/config.png" alt="Configuration overview page" width="100%"> | <img src="./docs/assets/demo/screenshots/runtime.png" alt="Runtime diagnostics page" width="100%"> |
+
+| Logs | Project review workflow |
+| --- | --- |
+| <img src="./docs/assets/demo/screenshots/log.png" alt="Log viewer page" width="100%"> | <img src="./docs/assets/demo/screenshots/project-review.png" alt="Project review chat workflow" width="100%"> |
 
 ## Why this project exists
 
@@ -59,17 +73,18 @@ This repository is the desktop shell. The agent runtime and Dashboard source liv
 
 ## Highlights
 
-- **One-click installation with a very low setup barrier**: adapted for Windows users, so you can install the app and start using it after configuring an API key.
+- **One-click installation with a very low setup barrier**: adapted for Windows and macOS users, so you can install the app and start using it after configuring an API key or local model endpoint.
 - **Lightweight and cross-platform**: Tauri uses the system WebView instead of bundling Chromium, keeping the installer small while supporting Windows and macOS.
 - **Built-in independent Hermes Agent core**: the desktop app can install, update, verify, health-check, and roll back the local Hermes Agent core.
-- **Agent-first UI**: chat, streaming responses, attachments, MCP tools, skills, memory, profiles, scheduled tasks, and runtime health panels.
+- **Agent-first UI**: chat, streaming responses, attachments, MCP tools, skills, memory, profiles, scheduled tasks, LaTeX/Mermaid rendering, and runtime health panels.
+- **Chinese model and platform ecosystem**: support for major cloud model providers plus local deployments such as Ollama, vLLM, LM Studio, and llama.cpp, including Feishu integration setup.
 - **Production transport bridge**: Rust commands proxy REST requests, uploads, and SSE streams to avoid WebView CORS limitations and centralize auth handling.
 
 ## Download
 
-Pre-release builds are published on the [GitHub Releases](https://github.com/Eynzof/hermes-agent-cn-desktop/releases) page.
+Installers are available from the [desktop website](https://desktop.hermesagent.org.cn) and are also published on the [GitHub Releases](https://github.com/Eynzof/Hermes-CN-Desktop/releases) page.
 
-The current alpha release includes:
+The current release includes:
 
 - macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.3.0_aarch64.dmg`
 - Windows x64 installer: `Hermes.Agent.CN.Desktop_0.3.0_x64-setup.exe`
@@ -197,7 +212,7 @@ The short-term roadmap is focused on:
 
 Use the chart below to track this repository's GitHub Star growth over time.
 
-[![Hermes Agent CN Desktop Star History Chart](https://api.star-history.com/svg?repos=Eynzof/hermes-agent-cn-desktop&type=Date)](https://www.star-history.com/#Eynzof/hermes-agent-cn-desktop&Date)
+[![Hermes Agent CN Desktop Star History Chart](https://api.star-history.com/svg?repos=Eynzof/Hermes-CN-Desktop&type=Date)](https://www.star-history.com/#Eynzof/Hermes-CN-Desktop&Date)
 
 ## Contributing
 
