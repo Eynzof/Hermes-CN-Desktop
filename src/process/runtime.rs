@@ -25,6 +25,8 @@ const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
 const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
 const BUNDLED_SKILLS_RESOURCE_DIR: &str = "bundled-skills";
 const BUNDLED_SKILLS_DIR: &str = "skills";
+const BUNDLED_PLUGINS_RESOURCE_DIR: &str = "bundled-plugins";
+const BUNDLED_PLUGINS_DIR: &str = "plugins";
 const RUNTIME_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -650,6 +652,17 @@ fn bundled_skills_dir(resource_dir: Option<&Path>) -> Option<PathBuf> {
     resource_dir.map(|dir| dir.join(BUNDLED_SKILLS_RESOURCE_DIR))
 }
 
+fn bundled_plugins_dir(resource_dir: Option<&Path>) -> Option<PathBuf> {
+    if let Ok(override_path) = std::env::var("HERMES_DESKTOP_BUNDLED_PLUGINS_DIR") {
+        let trimmed = override_path.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+
+    resource_dir.map(|dir| dir.join(BUNDLED_PLUGINS_RESOURCE_DIR))
+}
+
 fn runtime_dashboard_web_dist_dir(runtime_dir: &Path) -> PathBuf {
     runtime_dir
         .join("_internal")
@@ -659,6 +672,10 @@ fn runtime_dashboard_web_dist_dir(runtime_dir: &Path) -> PathBuf {
 
 fn runtime_bundled_skills_dir(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join("_internal").join(BUNDLED_SKILLS_DIR)
+}
+
+fn runtime_bundled_plugins_dir(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("_internal").join(BUNDLED_PLUGINS_DIR)
 }
 
 pub fn current_dashboard_web_dist_dir() -> Option<PathBuf> {
@@ -675,6 +692,7 @@ pub fn current_dashboard_web_dist_dir() -> Option<PathBuf> {
 pub struct RuntimeResourceSyncResult {
     pub dashboard_web_dist: Option<PathBuf>,
     pub bundled_skills: Option<PathBuf>,
+    pub bundled_plugins: Option<PathBuf>,
 }
 
 pub fn sync_runtime_resources_if_available(
@@ -691,6 +709,16 @@ pub fn current_bundled_skills_dir() -> Option<PathBuf> {
     let current = read_current_record()?;
     let dir = runtime_bundled_skills_dir(Path::new(&current.path));
     if contains_skill_markdown(&dir) {
+        Some(dir)
+    } else {
+        None
+    }
+}
+
+pub fn current_bundled_plugins_dir() -> Option<PathBuf> {
+    let current = read_current_record()?;
+    let dir = runtime_bundled_plugins_dir(Path::new(&current.path));
+    if validate_bundled_plugins_tree(&dir).is_ok() {
         Some(dir)
     } else {
         None
@@ -740,12 +768,33 @@ fn sync_bundled_skills_from_resource(
     Ok(Some(target))
 }
 
+fn sync_bundled_plugins_from_resource(
+    resource_dir: Option<&Path>,
+    runtime_dir: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let source = bundled_plugins_dir(resource_dir)
+        .ok_or_else(|| "Bundled plugins resource directory is unavailable".to_string())?;
+    validate_bundled_plugins_tree(&source)?;
+
+    let target = runtime_bundled_plugins_dir(runtime_dir);
+    if target.exists() {
+        fs::remove_dir_all(&target).map_err(|e| e.to_string())?;
+    }
+    copy_dir_all(&source, &target)?;
+    Ok(Some(target))
+}
+
 fn sync_runtime_resources_from_resource(
     resource_dir: Option<&Path>,
     runtime_dir: &Path,
 ) -> Result<(), String> {
     sync_dashboard_web_dist_from_resource(resource_dir, runtime_dir)?;
     sync_bundled_skills_from_resource(resource_dir, runtime_dir)?;
+    if let Some(source) = bundled_plugins_dir(resource_dir) {
+        if contains_plugin_manifest(&source) {
+            sync_bundled_plugins_from_resource(resource_dir, runtime_dir)?;
+        }
+    }
     Ok(())
 }
 
@@ -765,6 +814,12 @@ fn sync_available_runtime_resources_from_resource(
     if let Some(source) = bundled_skills_dir(resource_dir) {
         if contains_skill_markdown(&source) {
             result.bundled_skills = sync_bundled_skills_from_resource(resource_dir, runtime_dir)?;
+        }
+    }
+
+    if let Some(source) = bundled_plugins_dir(resource_dir) {
+        if contains_plugin_manifest(&source) {
+            result.bundled_plugins = sync_bundled_plugins_from_resource(resource_dir, runtime_dir)?;
         }
     }
 
@@ -1828,6 +1883,147 @@ fn contains_skill_markdown(dir: &Path) -> bool {
     false
 }
 
+fn contains_plugin_manifest(dir: &Path) -> bool {
+    if !dir.is_dir() {
+        return false;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if contains_plugin_manifest(&path) {
+                return true;
+            }
+        } else if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                name.eq_ignore_ascii_case("plugin.yaml") || name.eq_ignore_ascii_case("plugin.yml")
+            })
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn collect_missing_plugin_inits(dir: &Path, missing: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_missing_plugin_inits(&path, missing);
+            continue;
+        }
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                name.eq_ignore_ascii_case("plugin.yaml") || name.eq_ignore_ascii_case("plugin.yml")
+            })
+        {
+            let Some(plugin_dir) = path.parent() else {
+                continue;
+            };
+            if !plugin_dir.join("__init__.py").is_file() {
+                missing.push(plugin_dir.to_path_buf());
+            }
+        }
+    }
+}
+
+fn collect_missing_dashboard_plugin_apis(dir: &Path, missing: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_missing_dashboard_plugin_apis(&path, missing);
+            continue;
+        }
+        if !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.eq_ignore_ascii_case("manifest.json"))
+        {
+            continue;
+        }
+        if path
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| name != "dashboard")
+        {
+            continue;
+        }
+        let Some(manifest) = read_json_file::<serde_json::Value>(&path) else {
+            continue;
+        };
+        let Some(api_file) = manifest.get("api").and_then(|value| value.as_str()) else {
+            continue;
+        };
+        let api_file = api_file.trim();
+        if api_file.is_empty() {
+            continue;
+        }
+        let Some(dashboard_dir) = path.parent() else {
+            continue;
+        };
+        if !dashboard_dir.join(api_file).is_file() {
+            missing.push(dashboard_dir.join(api_file));
+        }
+    }
+}
+
+fn format_sample_paths(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .take(5)
+        .map(|path| path.to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn validate_bundled_plugins_tree(dir: &Path) -> Result<(), String> {
+    if !dir.is_dir() {
+        return Err(format!(
+            "Bundled plugins resource directory is missing: {}",
+            dir.display()
+        ));
+    }
+    if !contains_plugin_manifest(dir) {
+        return Err(format!(
+            "Bundled plugins resource is missing plugin.yaml files at {}",
+            dir.display()
+        ));
+    }
+
+    let mut missing_inits = Vec::new();
+    collect_missing_plugin_inits(dir, &mut missing_inits);
+    if !missing_inits.is_empty() {
+        return Err(format!(
+            "Bundled plugins resource has plugin manifests without __init__.py: {}",
+            format_sample_paths(&missing_inits)
+        ));
+    }
+
+    let mut missing_apis = Vec::new();
+    collect_missing_dashboard_plugin_apis(dir, &mut missing_apis);
+    if !missing_apis.is_empty() {
+        return Err(format!(
+            "Bundled dashboard plugins declare missing api files: {}",
+            format_sample_paths(&missing_apis)
+        ));
+    }
+
+    Ok(())
+}
+
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
     fs::create_dir_all(dst).map_err(|e| e.to_string())?;
     for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
@@ -2493,6 +2689,99 @@ mod tests {
     }
 
     #[test]
+    fn sync_bundled_plugins_from_resource_copies_complete_tree() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let plugins = resource.join(BUNDLED_PLUGINS_RESOURCE_DIR);
+        let backend = plugins.join("web").join("ddgs");
+        let dashboard = plugins.join("kanban").join("dashboard");
+        let runtime = dir.path().join("runtime");
+        std::fs::create_dir_all(&backend).unwrap();
+        std::fs::write(
+            backend.join("plugin.yaml"),
+            b"name: web-ddgs\nkind: backend\n",
+        )
+        .unwrap();
+        std::fs::write(backend.join("__init__.py"), b"def register(ctx): pass\n").unwrap();
+        std::fs::create_dir_all(&dashboard).unwrap();
+        std::fs::write(
+            dashboard.join("manifest.json"),
+            br#"{"name":"kanban","api":"plugin_api.py"}"#,
+        )
+        .unwrap();
+        std::fs::write(dashboard.join("plugin_api.py"), b"router = None\n").unwrap();
+
+        let target = sync_bundled_plugins_from_resource(Some(&resource), &runtime)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(target, runtime.join("_internal").join("plugins"));
+        assert!(target
+            .join("web")
+            .join("ddgs")
+            .join("__init__.py")
+            .is_file());
+        assert!(target
+            .join("kanban")
+            .join("dashboard")
+            .join("plugin_api.py")
+            .is_file());
+    }
+
+    #[test]
+    fn sync_bundled_plugins_from_resource_rejects_missing_init() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let plugin = resource
+            .join(BUNDLED_PLUGINS_RESOURCE_DIR)
+            .join("web")
+            .join("ddgs");
+        let runtime = dir.path().join("runtime");
+        std::fs::create_dir_all(&plugin).unwrap();
+        std::fs::write(
+            plugin.join("plugin.yaml"),
+            b"name: web-ddgs\nkind: backend\n",
+        )
+        .unwrap();
+
+        let err = sync_bundled_plugins_from_resource(Some(&resource), &runtime).unwrap_err();
+
+        assert!(
+            err.contains("without __init__.py"),
+            "unexpected error: {err}"
+        );
+        assert!(!runtime.join("_internal").join("plugins").exists());
+    }
+
+    #[test]
+    fn sync_bundled_plugins_from_resource_rejects_missing_dashboard_api() {
+        let dir = TempDir::new().unwrap();
+        let resource = dir.path().join("resources");
+        let plugins = resource.join(BUNDLED_PLUGINS_RESOURCE_DIR);
+        let backend = plugins.join("web").join("ddgs");
+        let dashboard = plugins.join("kanban").join("dashboard");
+        let runtime = dir.path().join("runtime");
+        std::fs::create_dir_all(&backend).unwrap();
+        std::fs::write(
+            backend.join("plugin.yaml"),
+            b"name: web-ddgs\nkind: backend\n",
+        )
+        .unwrap();
+        std::fs::write(backend.join("__init__.py"), b"def register(ctx): pass\n").unwrap();
+        std::fs::create_dir_all(&dashboard).unwrap();
+        std::fs::write(
+            dashboard.join("manifest.json"),
+            br#"{"name":"kanban","api":"plugin_api.py"}"#,
+        )
+        .unwrap();
+
+        let err = sync_bundled_plugins_from_resource(Some(&resource), &runtime).unwrap_err();
+
+        assert!(err.contains("missing api files"), "unexpected error: {err}");
+        assert!(!runtime.join("_internal").join("plugins").exists());
+    }
+
+    #[test]
     fn sync_available_runtime_resources_from_resource_copies_present_assets() {
         let dir = TempDir::new().unwrap();
         let resource = dir.path().join("resources");
@@ -2503,12 +2792,23 @@ mod tests {
             .join(BUNDLED_SKILLS_RESOURCE_DIR)
             .join("creative")
             .join("demo");
+        let plugin = resource
+            .join(BUNDLED_PLUGINS_RESOURCE_DIR)
+            .join("web")
+            .join("ddgs");
         let runtime = dir.path().join("runtime");
         std::fs::create_dir_all(web_dist.join("assets")).unwrap();
         std::fs::write(web_dist.join("index.html"), b"<html></html>").unwrap();
         std::fs::write(web_dist.join("assets").join("app.js"), b"console.log(1)").unwrap();
         std::fs::create_dir_all(&skills).unwrap();
         std::fs::write(skills.join("SKILL.md"), b"---\nname: demo\n---\n").unwrap();
+        std::fs::create_dir_all(&plugin).unwrap();
+        std::fs::write(
+            plugin.join("plugin.yaml"),
+            b"name: web-ddgs\nkind: backend\n",
+        )
+        .unwrap();
+        std::fs::write(plugin.join("__init__.py"), b"def register(ctx): pass\n").unwrap();
 
         let synced = sync_available_runtime_resources_from_resource(Some(&resource), &runtime)
             .expect("sync should succeed");
@@ -2518,14 +2818,21 @@ mod tests {
             .join("hermes_cli")
             .join(DASHBOARD_WEB_DIST_DIR);
         let expected_skills = runtime.join("_internal").join(BUNDLED_SKILLS_DIR);
+        let expected_plugins = runtime.join("_internal").join(BUNDLED_PLUGINS_DIR);
         assert_eq!(synced.dashboard_web_dist, Some(expected_web_dist.clone()));
         assert_eq!(synced.bundled_skills, Some(expected_skills.clone()));
+        assert_eq!(synced.bundled_plugins, Some(expected_plugins.clone()));
         assert!(expected_web_dist.join("index.html").is_file());
         assert!(expected_web_dist.join("assets").join("app.js").is_file());
         assert!(expected_skills
             .join("creative")
             .join("demo")
             .join("SKILL.md")
+            .is_file());
+        assert!(expected_plugins
+            .join("web")
+            .join("ddgs")
+            .join("__init__.py")
             .is_file());
     }
 
@@ -2541,6 +2848,7 @@ mod tests {
 
         assert!(synced.dashboard_web_dist.is_none());
         assert!(synced.bundled_skills.is_none());
+        assert!(synced.bundled_plugins.is_none());
         assert!(!runtime.join("_internal").exists());
     }
 
