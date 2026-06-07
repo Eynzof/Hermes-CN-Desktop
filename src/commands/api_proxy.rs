@@ -136,34 +136,58 @@ fn is_blocked_external_ip(ip: IpAddr) -> bool {
     }
 }
 
+fn is_allowed_local_external_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_loopback() || v4.is_unspecified(),
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| v4.is_loopback() || v4.is_unspecified())
+        }
+    }
+}
+
+fn is_allowed_local_external_domain(host: &str) -> bool {
+    let lower_host = host.trim_end_matches('.').to_ascii_lowercase();
+    lower_host == "localhost" || lower_host.ends_with(".localhost")
+}
+
+fn is_allowed_local_external_url(url: &url::Url) -> bool {
+    match url.host() {
+        Some(url::Host::Domain(host)) => is_allowed_local_external_domain(host),
+        Some(url::Host::Ipv4(ip)) => is_allowed_local_external_ip(IpAddr::V4(ip)),
+        Some(url::Host::Ipv6(ip)) => is_allowed_local_external_ip(IpAddr::V6(ip)),
+        None => false,
+    }
+}
+
 fn validate_external_url_shape(raw: &str) -> Result<url::Url, AppError> {
     let url = url::Url::parse(raw)?;
-    if url.scheme() != "https" {
+    let is_local_url = is_allowed_local_external_url(&url);
+    if url.scheme() != "https" && !(url.scheme() == "http" && is_local_url) {
         return Err(AppError::InvalidRequest(
-            "external_request only allows https URLs".to_string(),
+            "external_request only allows https URLs; http is only allowed for local URLs"
+                .to_string(),
         ));
     }
 
     match url.host().ok_or_else(|| {
         AppError::InvalidRequest("external_request URL must include a host".to_string())
     })? {
-        url::Host::Domain(host) => {
-            let lower_host = host.to_ascii_lowercase();
-            if lower_host == "localhost" || lower_host.ends_with(".localhost") {
-                return Err(AppError::InvalidRequest(
-                    "external_request refuses localhost targets".to_string(),
-                ));
-            }
-        }
+        url::Host::Domain(_) => {}
         url::Host::Ipv4(ip) => {
-            if is_blocked_external_ip(IpAddr::V4(ip)) {
+            let ip = IpAddr::V4(ip);
+            if !is_allowed_local_external_ip(ip) && is_blocked_external_ip(ip) {
                 return Err(AppError::InvalidRequest(
                     "external_request refuses private or local IP targets".to_string(),
                 ));
             }
         }
         url::Host::Ipv6(ip) => {
-            if is_blocked_external_ip(IpAddr::V6(ip)) {
+            let ip = IpAddr::V6(ip);
+            if !is_allowed_local_external_ip(ip) && is_blocked_external_ip(ip) {
                 return Err(AppError::InvalidRequest(
                     "external_request refuses private or local IP targets".to_string(),
                 ));
@@ -178,6 +202,9 @@ async fn validate_external_url(raw: &str) -> Result<url::Url, AppError> {
     let url = validate_external_url_shape(raw)?;
 
     if let Some(url::Host::Domain(host)) = url.host() {
+        if is_allowed_local_external_domain(host) {
+            return Ok(url);
+        }
         let port = url.port_or_known_default().ok_or_else(|| {
             AppError::InvalidRequest("external_request URL must include a port".to_string())
         })?;
@@ -276,20 +303,34 @@ mod tests {
     }
 
     #[test]
-    fn external_url_shape_rejects_localhost() {
-        let err = validate_external_url_shape("https://service.localhost/path").unwrap_err();
-        assert!(err.to_string().contains("localhost"));
+    fn external_url_shape_accepts_local_http_targets() {
+        for raw in [
+            "http://localhost:1234/v1/models",
+            "http://service.localhost:1234/v1/models",
+            "http://127.0.0.1:1234/v1/models",
+            "http://0.0.0.0:1234/v1/models",
+            "http://[::1]:1234/v1/models",
+        ] {
+            let url = validate_external_url_shape(raw).unwrap();
+            assert_eq!(url.scheme(), "http");
+        }
+    }
+
+    #[tokio::test]
+    async fn external_url_allows_localhost_without_dns_rejection() {
+        let url = validate_external_url("http://localhost:1234/v1/models")
+            .await
+            .unwrap();
+        assert_eq!(url.host_str(), Some("localhost"));
     }
 
     #[test]
     fn external_url_shape_rejects_private_ip_literals() {
         for raw in [
-            "https://127.0.0.1/status",
             "https://10.0.0.1/status",
             "https://172.16.0.1/status",
             "https://192.168.1.1/status",
             "https://169.254.169.254/latest/meta-data",
-            "https://[::1]/status",
             "https://[fc00::1]/status",
             "https://[fe80::1]/status",
         ] {
