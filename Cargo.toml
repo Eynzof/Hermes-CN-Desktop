@@ -34,6 +34,7 @@ url = "2"
 urlencoding = "2"
 open = "5"
 futures-util = "0.3"
+fs2 = "0.4"
 thiserror = "2"
 portable-pty = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }
