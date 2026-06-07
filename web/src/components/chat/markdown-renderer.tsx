@@ -1,5 +1,6 @@
 import { cjk } from "@streamdown/cjk";
 import { createMathPlugin } from "@streamdown/math";
+import { mermaid } from "@streamdown/mermaid";
 import type { CSSProperties, ComponentProps, MouseEvent } from "react";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
@@ -29,6 +30,7 @@ const BLOCKED_EXTERNAL_PROTOCOLS = /^(?:javascript|data|file|vbscript|tauri):/i;
 const streamdownPlugins = {
   cjk,
   math: createMathPlugin({ singleDollarTextMath: true }),
+  mermaid,
 };
 
 const streamdownLinkSafety: ComponentProps<typeof Streamdown>["linkSafety"] = {

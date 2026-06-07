@@ -114,6 +114,16 @@ describe("MessageTimeline", () => {
     expect(html).not.toContain("200px");
   });
 
+
+  it("routes Mermaid fences away from the plain code block renderer", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={"```mermaid\ngraph TD\n  A[开始] --> B{条件判断}\n  B -->|是| C[处理]\n```"} />,
+    );
+
+    expect(html).not.toContain('data-language="mermaid"');
+    expect(html).not.toContain('data-streamdown="code-block"');
+  });
+
   it("renders Markdown image syntax as an image preview", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
       <MarkdownText text="结果图：![趋势图](https://example.test/chart.png)" />,
