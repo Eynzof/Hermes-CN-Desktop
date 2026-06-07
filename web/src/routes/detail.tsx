@@ -113,6 +113,7 @@ export function DetailRoute() {
     if (urlTaskId && urlTaskId !== activeSessionId) setActiveId(urlTaskId);
   }, [urlTaskId, activeSessionId, setActiveId]);
 
+
   // Reset the user-selected model whenever the route changes to a different
   // session — otherwise the composer chip would carry over the previous
   // session's choice (or the global last-used model) instead of reflecting

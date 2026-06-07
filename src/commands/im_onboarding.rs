@@ -36,6 +36,7 @@ const WEIXIN_CDN_BASE_URL: &str = "https://novac2c.cdn.weixin.qq.com/c2c";
 const WEIXIN_CLIENT_VERSION: &str = "131584";
 const WEIXIN_QR_REFRESH_LIMIT: u8 = 3;
 const FEISHU_SCANNED_OPEN_ID_TOKEN: &str = "__HERMES_SCANNED_FEISHU_OPEN_ID__";
+const WEIXIN_SCANNED_USER_ID_TOKEN: &str = "__HERMES_SCANNED_WEIXIN_USER_ID__";
 
 const FEISHU_SECRET_KEYS: &[&str] = &[
     "FEISHU_APP_SECRET",
@@ -590,6 +591,45 @@ fn normalize_feishu_allowed_users(
     Ok(result.join(","))
 }
 
+fn resolve_weixin_scanned_user_id_token(
+    raw: &str,
+    scanned_user_id: Option<&str>,
+    key: &str,
+) -> Result<String, AppError> {
+    let trimmed = raw.trim();
+    if trimmed != WEIXIN_SCANNED_USER_ID_TOKEN {
+        return Ok(trimmed.to_string());
+    }
+    scanned_user_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            AppError::InvalidRequest(format!(
+                "Scanned Weixin user_id is not available; enter {key} manually"
+            ))
+        })
+}
+
+fn normalize_weixin_allowed_users(
+    raw: &str,
+    scanned_user_id: Option<&str>,
+) -> Result<String, AppError> {
+    let mut result: Vec<String> = Vec::new();
+    for item in raw
+        .split([',', '，', '\n', '\r', '\t', ' '])
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let resolved =
+            resolve_weixin_scanned_user_id_token(item, scanned_user_id, "WEIXIN_ALLOWED_USERS")?;
+        if !result.iter().any(|existing| existing == &resolved) {
+            result.push(resolved);
+        }
+    }
+    Ok(result.join(","))
+}
+
 async fn feishu_registration_post(domain: &str, body: &[(&str, &str)]) -> Result<Value, AppError> {
     let url = format!(
         "{}{}",
@@ -1129,8 +1169,16 @@ fn state_snapshot(
     })
 }
 
+#[cfg(test)]
 fn apply_patch_from_input(
     input: &ImOnboardingApplyInput,
+) -> Result<BTreeMap<String, String>, AppError> {
+    apply_patch_from_input_with_existing(input, None)
+}
+
+fn apply_patch_from_input_with_existing(
+    input: &ImOnboardingApplyInput,
+    existing_env: Option<&BTreeMap<String, String>>,
 ) -> Result<BTreeMap<String, String>, AppError> {
     let mut patch = input.settings.clone();
     match input.platform {
@@ -1188,6 +1236,7 @@ fn apply_patch_from_input(
             }
         }
         ImPlatform::Weixin => {
+            let mut scanned_user_id: Option<String> = None;
             let credential = if let Some(flow_id) = &input.flow_id {
                 let flows = FLOWS.lock()?;
                 match flows.get(flow_id) {
@@ -1198,13 +1247,18 @@ fn apply_patch_from_input(
                 None
             };
             if let Some(credential) = credential {
+                scanned_user_id = credential.user_id.clone();
                 patch.insert("WEIXIN_ACCOUNT_ID".to_string(), credential.account_id);
                 patch.insert("WEIXIN_TOKEN".to_string(), credential.token);
                 patch.insert("WEIXIN_BASE_URL".to_string(), credential.base_url);
                 if let Some(user_id) = credential.user_id {
-                    patch
-                        .entry("WEIXIN_HOME_CHANNEL".to_string())
-                        .or_insert(user_id);
+                    if patch
+                        .get("WEIXIN_HOME_CHANNEL")
+                        .map(|value| value.trim().is_empty())
+                        .unwrap_or(true)
+                    {
+                        patch.insert("WEIXIN_HOME_CHANNEL".to_string(), user_id);
+                    }
                 }
             } else if let Some(manual) = &input.manual_credentials {
                 if let Some(account_id) =
@@ -1225,9 +1279,16 @@ fn apply_patch_from_input(
                     );
                 }
                 if let Some(user_id) = manual.user_id.as_ref().filter(|v| !v.trim().is_empty()) {
-                    patch
-                        .entry("WEIXIN_HOME_CHANNEL".to_string())
-                        .or_insert(user_id.trim().to_string());
+                    if patch
+                        .get("WEIXIN_HOME_CHANNEL")
+                        .map(|value| value.trim().is_empty())
+                        .unwrap_or(true)
+                    {
+                        patch.insert(
+                            "WEIXIN_HOME_CHANNEL".to_string(),
+                            user_id.trim().to_string(),
+                        );
+                    }
                 }
             }
             patch
@@ -1236,10 +1297,58 @@ fn apply_patch_from_input(
             patch
                 .entry("WEIXIN_CDN_BASE_URL".to_string())
                 .or_insert_with(|| WEIXIN_CDN_BASE_URL.to_string());
+            if let Some(dm_policy) = patch.get("WEIXIN_DM_POLICY").cloned() {
+                patch.insert(
+                    "WEIXIN_DM_POLICY".to_string(),
+                    dm_policy.trim().to_lowercase(),
+                );
+            }
+            if let Some(allowed_users) = patch.get("WEIXIN_ALLOWED_USERS").cloned() {
+                patch.insert(
+                    "WEIXIN_ALLOWED_USERS".to_string(),
+                    normalize_weixin_allowed_users(&allowed_users, scanned_user_id.as_deref())?,
+                );
+            }
+            if let Some(home_channel) = patch.get("WEIXIN_HOME_CHANNEL").cloned() {
+                patch.insert(
+                    "WEIXIN_HOME_CHANNEL".to_string(),
+                    resolve_weixin_scanned_user_id_token(
+                        &home_channel,
+                        scanned_user_id.as_deref(),
+                        "WEIXIN_HOME_CHANNEL",
+                    )?,
+                );
+            }
         }
     }
+    merge_existing_platform_values(input.platform, &mut patch, existing_env);
     validate_required(input.platform, &patch)?;
     Ok(patch)
+}
+
+fn merge_existing_platform_values(
+    platform: ImPlatform,
+    patch: &mut BTreeMap<String, String>,
+    existing_env: Option<&BTreeMap<String, String>>,
+) {
+    let Some(existing_env) = existing_env else {
+        return;
+    };
+    for key in platform.allowed_keys() {
+        let patch_is_missing = patch
+            .get(*key)
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true);
+        if !patch_is_missing {
+            continue;
+        }
+        if let Some(value) = existing_env
+            .get(*key)
+            .filter(|value| !value.trim().is_empty())
+        {
+            patch.insert((*key).to_string(), value.clone());
+        }
+    }
 }
 
 fn validate_required(
@@ -1299,6 +1408,18 @@ fn validate_required(
             {
                 return Err(AppError::InvalidRequest(
                     "WEIXIN_ACCOUNT_ID and WEIXIN_TOKEN are required".to_string(),
+                ));
+            }
+            let dm_policy = patch
+                .get("WEIXIN_DM_POLICY")
+                .map(|v| v.trim().to_lowercase())
+                .unwrap_or_else(|| "open".to_string());
+            if !matches!(
+                dm_policy.as_str(),
+                "open" | "allowlist" | "pairing" | "disabled"
+            ) {
+                return Err(AppError::InvalidRequest(
+                    "WEIXIN_DM_POLICY must be open, allowlist, pairing, or disabled".to_string(),
                 ));
             }
         }
@@ -1600,8 +1721,9 @@ pub async fn im_onboarding_apply(
         let inner = state.inner.lock()?;
         (inner.hermes_home.clone(), inner.current_profile.clone())
     };
-    let patch = apply_patch_from_input(&input)?;
     let path = env_path(&hermes_home);
+    let existing_env = parse_env(&path)?;
+    let patch = apply_patch_from_input_with_existing(&input, Some(&existing_env))?;
     let backup = write_env_patch(&path, input.platform, &patch)?;
     if input.platform == ImPlatform::Weixin {
         write_weixin_account_store(&hermes_home, &patch)?;
@@ -1865,6 +1987,124 @@ mod tests {
         assert_eq!(
             patch.get("FEISHU_CONNECTION_MODE").map(String::as_str),
             Some("webhook")
+        );
+    }
+
+    #[test]
+    fn weixin_apply_expands_scanned_user_tokens() {
+        let flow_id = "weixin-test-allowlist-token".to_string();
+        {
+            let mut flows = FLOWS.lock().unwrap();
+            flows.insert(
+                flow_id.clone(),
+                FlowState::Weixin(WeixinFlow {
+                    qrcode_value: "qr-test".to_string(),
+                    qrcode_url: Some("https://example.test/qr.png".to_string()),
+                    current_base_url: WEIXIN_BASE_URL.to_string(),
+                    refresh_count: 0,
+                    interval_seconds: 1,
+                    expires_at: Instant::now() + Duration::from_secs(60),
+                    expires_at_ms: now_ms() + 60_000,
+                    credential: Some(WeixinCredential {
+                        account_id: "wx_bot_123456".to_string(),
+                        token: "token-test".to_string(),
+                        base_url: "https://mock.weixin.test".to_string(),
+                        user_id: Some("wxid_scanner_123456".to_string()),
+                    }),
+                }),
+            );
+        }
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Weixin,
+            flow_id: Some(flow_id.clone()),
+            manual_credentials: None,
+            settings: BTreeMap::from([
+                ("WEIXIN_DM_POLICY".to_string(), "allowlist".to_string()),
+                (
+                    "WEIXIN_ALLOWED_USERS".to_string(),
+                    format!(
+                        "{WEIXIN_SCANNED_USER_ID_TOKEN}, wxid_extra_1, {WEIXIN_SCANNED_USER_ID_TOKEN}"
+                    ),
+                ),
+                (
+                    "WEIXIN_HOME_CHANNEL".to_string(),
+                    WEIXIN_SCANNED_USER_ID_TOKEN.to_string(),
+                ),
+            ]),
+            restart_gateway: Some(false),
+        };
+
+        let patch = apply_patch_from_input(&input).unwrap();
+
+        assert_eq!(
+            patch.get("WEIXIN_ALLOWED_USERS").map(String::as_str),
+            Some("wxid_scanner_123456,wxid_extra_1")
+        );
+        assert_eq!(
+            patch.get("WEIXIN_HOME_CHANNEL").map(String::as_str),
+            Some("wxid_scanner_123456")
+        );
+        FLOWS.lock().unwrap().remove(&flow_id);
+    }
+
+    #[test]
+    fn weixin_apply_accepts_pairing_policy() {
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Weixin,
+            flow_id: None,
+            manual_credentials: Some(ImManualCredentials {
+                app_id: None,
+                app_secret: None,
+                account_id: Some("wx_bot_123456".to_string()),
+                token: Some("token-test".to_string()),
+                base_url: Some(WEIXIN_BASE_URL.to_string()),
+                user_id: None,
+            }),
+            settings: BTreeMap::from([("WEIXIN_DM_POLICY".to_string(), "pairing".to_string())]),
+            restart_gateway: Some(false),
+        };
+
+        let patch = apply_patch_from_input(&input).unwrap();
+
+        assert_eq!(
+            patch.get("WEIXIN_DM_POLICY").map(String::as_str),
+            Some("pairing")
+        );
+        assert_eq!(
+            patch.get("WEIXIN_ACCOUNT_ID").map(String::as_str),
+            Some("wx_bot_123456")
+        );
+    }
+
+    #[test]
+    fn weixin_apply_can_reuse_existing_saved_credentials() {
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Weixin,
+            flow_id: None,
+            manual_credentials: None,
+            settings: BTreeMap::new(),
+            restart_gateway: Some(false),
+        };
+        let existing = BTreeMap::from([
+            ("WEIXIN_ACCOUNT_ID".to_string(), "wx_bot_saved".to_string()),
+            ("WEIXIN_TOKEN".to_string(), "token-saved".to_string()),
+            ("WEIXIN_DM_POLICY".to_string(), "open".to_string()),
+            ("WEIXIN_ALLOW_ALL_USERS".to_string(), "true".to_string()),
+        ]);
+
+        let patch = apply_patch_from_input_with_existing(&input, Some(&existing)).unwrap();
+
+        assert_eq!(
+            patch.get("WEIXIN_ACCOUNT_ID").map(String::as_str),
+            Some("wx_bot_saved")
+        );
+        assert_eq!(
+            patch.get("WEIXIN_TOKEN").map(String::as_str),
+            Some("token-saved")
+        );
+        assert_eq!(
+            patch.get("WEIXIN_DM_POLICY").map(String::as_str),
+            Some("open")
         );
     }
 
