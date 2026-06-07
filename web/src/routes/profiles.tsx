@@ -96,7 +96,7 @@ export function ProfilesRoute() {
         <div className={s.warning}>
           <strong>切换会自动重启 dashboard 子进程。</strong>
           <span>
-            桌面端 own 着 dashboard 进程，切换档案会自动 stop + 用新 HERMES_HOME 重新 spawn（约 2-3 秒）。期间会话和 gateway 短暂断开，重启完成后自动连回新档案的数据。
+            桌面端 own 着 dashboard 进程，切换档案会自动 stop + 用新 HERMES_HOME 重新 spawn（约 20-30 秒）。期间会话和 gateway 短暂断开，重启完成后自动连回新档案的数据。
           </span>
         </div>
       ) : (
