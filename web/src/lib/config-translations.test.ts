@@ -28,7 +28,10 @@ describe("translateConfigField", () => {
 
 describe("translateConfigOption", () => {
   it("translates descriptive enum values", () => {
-    expect(translateConfigOption("approvals.mode", "yolo")).toBe("全部放行");
+    expect(translateConfigOption("approvals.mode", "manual")).toBe("默认手动审批");
+    expect(translateConfigOption("approvals.mode", "smart")).toBe("Smart 智能审批");
+    expect(translateConfigOption("approvals.mode", "yolo")).toBe("YOLO 全部放行");
+    expect(translateConfigOption("approvals.mode", "off")).toBe("YOLO 全部放行");
     expect(translateConfigOption("delegation.reasoning_effort", "high")).toBe("高");
   });
 

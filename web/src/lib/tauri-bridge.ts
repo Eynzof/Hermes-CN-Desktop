@@ -653,7 +653,10 @@ export async function installTauriBridge(): Promise<void> {
   // Don't set apiBaseUrl/gatewayUrl — let the browser use relative URLs that
   // go through Vite's proxy, just like web mode. This avoids cross-origin
   // issues with SSE EventSource and WebSocket (browser-native APIs that can't
-  // go through the Tauri IPC bridge).
+  // go through the Tauri IPC bridge). Still inject sessionToken in dev: managed
+  // runtime builds may not have dashboard web_dist, so Vite cannot reliably
+  // scrape the token from Dashboard /; authenticated REST calls still need the
+  // token header while using the relative proxy URL.
   // Production Tauri v2 can also load bundled assets from an
   // `http://*.localhost` origin on Windows, so URL protocol is not a
   // reliable dev/prod signal. Use Vite's explicit build mode instead.
@@ -690,7 +693,7 @@ export async function installTauriBridge(): Promise<void> {
     apiBaseUrl: isDevMode ? undefined : config.apiBaseUrl,
     dashboardApiBaseUrl: config.apiBaseUrl,
     gatewayUrl: isDevMode ? undefined : config.gatewayUrl,
-    sessionToken: isDevMode ? undefined : config.sessionToken,
+    sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
     transport,
   };

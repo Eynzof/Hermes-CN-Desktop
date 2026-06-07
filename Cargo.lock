@@ -1624,6 +1624,7 @@ dependencies = [
  "ed25519-dalek",
  "env_logger",
  "futures-util",
+ "getrandom 0.3.4",
  "libc",
  "log",
  "objc2",

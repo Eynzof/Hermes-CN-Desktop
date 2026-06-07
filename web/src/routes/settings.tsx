@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { useAtom, useAtomValue } from "jotai";
+import { useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
@@ -44,6 +45,13 @@ import {
   type ConversationFontSizeMode,
 } from "@/stores/ui";
 import { openExternalUrl } from "@/lib/external-links";
+import {
+  approvalModeConfigValue,
+  approvalModeLabel,
+  isApprovalModeAvailable,
+  normalizeApprovalMode,
+  type ApprovalMode,
+} from "@/lib/approval-mode";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
 import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
@@ -72,7 +80,7 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
-      {isYoloModeSupported() && <YoloDangerZone />}
+      <ApprovalModeSection />
     </div>
   );
 }
@@ -250,61 +258,173 @@ function ThemeSkinPicker({
   );
 }
 
-/* ── Danger zone: YOLO mode ──────────────────────────────────────────── */
+/* ── Approval mode ───────────────────────────────────────────────────── */
 
-const YOLO_DESC =
-  "自动批准所有危险命令（等同后端 --yolo / HERMES_YOLO_MODE）。开启后 Agent 执行 shell、删除文件等高危操作时不再二次确认，切换会重启内核。请仅在受信任的工作区使用。";
+const APPROVAL_MODE_DESC: Record<ApprovalMode, string> = {
+  default: "匹配危险模式的命令会要求你手动确认，适合大多数工作区的默认安全策略。",
+  smart: "使用智能审批辅助模型先判断风险，低风险自动放行，高风险自动拒绝，不确定时再提示你手动决定。",
+  yolo: "自动批准所有危险命令（等同后端 --yolo / HERMES_YOLO_MODE）。请仅在受信任或隔离的工作区使用。",
+};
 
-function YoloDangerZone() {
+function ApprovalModeSection() {
+  const navigate = useNavigate();
+  const { data: config } = useConfig();
+  const { data: schema } = useConfigSchema();
+  const saveConfig = useSaveConfig();
   const { data: yolo } = useYoloMode();
   const setYolo = useSetYoloMode();
-  // A profile switch and a YOLO toggle both restart the dashboard and share
-  // this overlay; block the controls while either restart is in flight so we
-  // don't kick off a second restart (or tear the overlay down early).
   const restartInFlight = useAtomValue(profileSwitchingAtom).active;
+  const sectionRef = useRef<HTMLDivElement | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [pendingMode, setPendingMode] = useState<ApprovalMode | null>(null);
+  const [error, setError] = useState("");
 
-  const enabled = !!yolo?.enabled;
-  const pending = yolo != null && yolo.enabled !== yolo.effective;
-  const busy = setYolo.isPending || restartInFlight;
+  const approvalOptions = schema?.fields["approvals.mode"]?.options ?? [];
+  const rawConfigMode = getNestedValue(config, "approvals.mode");
+  const yoloEnabled = !!yolo?.enabled;
+  const yoloEffective = !!yolo?.effective;
+  const currentMode: ApprovalMode = yoloEnabled || yoloEffective ? "yolo" : normalizeApprovalMode(rawConfigMode);
+  const yoloPending = yolo != null && yolo.enabled !== yolo.effective;
+  const busy = saveConfig.isPending || setYolo.isPending || restartInFlight || pendingMode !== null;
+  const smartAvailable = isApprovalModeAvailable("smart", approvalOptions, schema?.fields);
+  const yoloAvailable = isYoloModeSupported() || isApprovalModeAvailable("yolo", approvalOptions);
 
-  const openConfirm = () => {
-    if (busy) return;
-    setAcknowledged(false);
-    setConfirmOpen(true);
+  useEffect(() => {
+    const focusFromHash = () => {
+      if (window.location.hash !== "#approval-mode") return;
+      window.requestAnimationFrame(() => {
+        const el = sectionRef.current;
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.focus({ preventScroll: true });
+      });
+    };
+    focusFromHash();
+    window.addEventListener("hashchange", focusFromHash);
+    return () => window.removeEventListener("hashchange", focusFromHash);
+  }, []);
+
+  const saveApprovalMode = async (mode: ApprovalMode) => {
+    if (!config) throw new Error("配置尚未加载完成，请稍后再试");
+    const nextValue = approvalModeConfigValue(mode, approvalOptions);
+    const nextConfig = mergeConfigUpdate(config, buildNestedConfigUpdate("approvals.mode", nextValue));
+    await saveConfig.mutateAsync(nextConfig);
   };
-  const confirmEnable = () => {
+
+  const applyMode = async (mode: ApprovalMode) => {
+    if (busy) return;
+    if (mode === "smart" && !smartAvailable) {
+      setError("当前 runtime 的配置 schema 尚未声明 smart 审批模式，请先更新 Hermes Agent runtime。");
+      return;
+    }
+    if (mode === "yolo") {
+      if (!yoloAvailable) {
+        setError("当前环境不支持 YOLO 模式。");
+        return;
+      }
+      setAcknowledged(false);
+      setConfirmOpen(true);
+      return;
+    }
+
+    setPendingMode(mode);
+    setError("");
+    try {
+      await saveApprovalMode(mode);
+      if ((yoloEnabled || yoloEffective) && isYoloModeSupported()) {
+        await setYolo.mutateAsync(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err || "审批模式保存失败"));
+    } finally {
+      setPendingMode(null);
+    }
+  };
+
+  const confirmEnableYolo = async () => {
+    if (busy || !acknowledged) return;
     setConfirmOpen(false);
-    setYolo.mutate(true);
+    setPendingMode("yolo");
+    setError("");
+    try {
+      await saveApprovalMode("yolo");
+      if (isYoloModeSupported()) {
+        await setYolo.mutateAsync(true);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err || "YOLO 模式开启失败"));
+    } finally {
+      setPendingMode(null);
+    }
+  };
+
+  const openSmartModelConfig = () => {
+    navigate("/models#auxiliary-approval");
   };
 
   return (
-    <div className={s.dangerZone}>
-      <div className={s.dangerZoneHead}>
-        <AlertTriangle size={14} aria-hidden="true" />
-        高风险操作
+    <section
+      id="approval-mode"
+      ref={sectionRef}
+      className={s.approvalModePanel}
+      tabIndex={-1}
+      aria-labelledby="approval-mode-title"
+    >
+      <div className={s.approvalModeHead}>
+        <ShieldCheck size={14} aria-hidden="true" />
+        <div>
+          <h3 id="approval-mode-title">危险命令审批模式</h3>
+          <p>统一管理危险 shell 命令的确认策略。新设置只影响后续命令，已经弹出的审批请求仍需单独处理。</p>
+        </div>
       </div>
-      <Row
-        label="YOLO 模式"
-        sub={YOLO_DESC + (pending ? "（已保存，重启桌面端后生效）" : "")}
-        right={
-          enabled ? (
-            <div className={s.dangerActions}>
-              <span className={pending ? s.dangerBadgePending : s.dangerBadge}>
-                {pending ? "待生效" : "已开启"}
+
+      <div className={s.approvalModeOptions} role="radiogroup" aria-label="危险命令审批模式">
+        {(["default", "smart", "yolo"] as const).map((mode) => {
+          const isCurrent = currentMode === mode;
+          const isSaving = pendingMode === mode || (mode === "yolo" && setYolo.isPending);
+          const disabled = busy ||
+            (mode === "smart" && !smartAvailable) ||
+            (mode === "yolo" && !yoloAvailable);
+          return (
+            <button
+              key={mode}
+              type="button"
+              className={s.approvalModeOption}
+              data-active={isCurrent ? "true" : undefined}
+              data-danger={mode === "yolo" ? "true" : undefined}
+              role="radio"
+              aria-checked={isCurrent}
+              disabled={disabled}
+              onClick={() => void applyMode(mode)}
+            >
+              <span className={s.approvalModeOptionTitle}>
+                {approvalModeLabel(mode)}
+                {isCurrent && <span className={s.approvalModeBadge}>当前</span>}
+                {isSaving && <span className={s.approvalModeBadge}>保存中…</span>}
               </span>
-              <button className={s.btn} disabled={busy} onClick={() => !busy && setYolo.mutate(false)}>
-                关闭
-              </button>
-            </div>
-          ) : (
-            <button className={s.btnDanger} disabled={busy} onClick={openConfirm}>
-              开启
+              <span className={s.approvalModeOptionDesc}>{APPROVAL_MODE_DESC[mode]}</span>
+              {mode === "smart" && !smartAvailable && (
+                <span className={s.approvalModeWarning}>当前 runtime 暂未声明 smart 选项，请先更新 runtime。</span>
+              )}
+              {mode === "yolo" && yoloPending && (
+                <span className={s.approvalModeWarning}>YOLO 启动开关已保存，重启桌面端后生效。</span>
+              )}
             </button>
-          )
-        }
-      />
+          );
+        })}
+      </div>
+
+      <div className={s.approvalModeFooter}>
+        <button type="button" className={s.btn} onClick={openSmartModelConfig}>
+          配置智能审批辅助模型
+        </button>
+        <span>
+          Smart 模式会使用 <code>auxiliary.approval</code> 槽位。未指定时由后端自动选择可用辅助模型。
+        </span>
+      </div>
+
+      {error && <div className={s.approvalModeError}>保存失败：{error}</div>}
 
       <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
         <Dialog.Portal>
@@ -330,16 +450,17 @@ function YoloDangerZone() {
               <Dialog.Close asChild>
                 <button className={s.btn}>取消</button>
               </Dialog.Close>
-              <button className={s.btnDanger} disabled={!acknowledged} onClick={confirmEnable}>
+              <button className={s.btnDanger} disabled={!acknowledged || busy} onClick={() => void confirmEnableYolo()}>
                 确认开启
               </button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </div>
+    </section>
   );
 }
+
 
 /* ── Config (Full Config Editor — maps to /api/config) ──────────────── */
 

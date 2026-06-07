@@ -66,6 +66,7 @@ async fn install_bundled_runtime_for_bootstrap(
 fn external_dev_handle(api_base_url: String) -> DashboardHandle {
     DashboardHandle {
         api_base_url,
+        session_token: None,
         owns_process: false,
         command_program: None,
         command_args: vec![],
@@ -179,10 +180,15 @@ async fn finalize_bootstrap(
         );
     }
 
-    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-    let session_token = match env_token {
-        Some(t) => Some(t),
-        None => dashboard::fetch_session_token(&handle.api_base_url).await,
+    let session_token = match handle.session_token.clone() {
+        Some(token) => Some(token),
+        None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
+            .ok()
+            .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
+        {
+            Some(token) => Some(token),
+            None => dashboard::fetch_session_token(&handle.api_base_url).await,
+        },
     };
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
 

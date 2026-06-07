@@ -15,6 +15,7 @@ use std::{
     thread,
 };
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -553,6 +554,7 @@ pub struct EnsureDashboardOptions {
 
 struct SpawnedDashboard {
     child: Child,
+    session_token: Option<String>,
     command_program: String,
     command_args: Vec<String>,
     gateway_runtime_dir: String,
@@ -566,6 +568,40 @@ fn env_flag(name: &str) -> bool {
         .ok()
         .map(|value| crate::util::str_is_truthy(&value))
         .unwrap_or(false)
+}
+
+fn configured_session_token() -> Option<String> {
+    [
+        "HERMES_DESKTOP_SESSION_TOKEN",
+        "HERMES_DASHBOARD_SESSION_TOKEN",
+    ]
+    .iter()
+    .find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    })
+}
+
+fn generate_session_token() -> Option<String> {
+    let mut bytes = [0_u8; 32];
+    if let Err(err) = getrandom::fill(&mut bytes) {
+        log::warn!("Failed to generate dashboard session token: {}", err);
+        return None;
+    }
+    Some(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn session_token_for_spawn() -> Option<String> {
+    configured_session_token().or_else(generate_session_token)
+}
+
+async fn known_session_token_for_existing(api_base_url: &str) -> Option<String> {
+    match configured_session_token() {
+        Some(token) => Some(token),
+        None => fetch_session_token(api_base_url).await,
+    }
 }
 
 /// Whether YOLO mode should be active for a managed dashboard bound to
@@ -646,6 +682,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    let session_token = session_token_for_spawn();
     let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
     let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
     let _ = std::fs::create_dir_all(&gateway_lock_dir);
@@ -656,6 +693,9 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
             "HERMES_DASHBOARD_TUI",
             std::env::var("HERMES_DASHBOARD_TUI").unwrap_or_else(|_| "1".to_string()),
         );
+    if let Some(token) = session_token.as_deref() {
+        cmd.env("HERMES_DASHBOARD_SESSION_TOKEN", token);
+    }
     if let Some(web_dist) = crate::process::runtime::current_dashboard_web_dist_dir() {
         cmd.env("HERMES_WEB_DIST", &web_dist);
     } else {
@@ -746,6 +786,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     drain_dashboard_output(&mut child);
     Ok(SpawnedDashboard {
         child,
+        session_token,
         command_program: program,
         command_args: prefix_args,
         gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
@@ -831,44 +872,57 @@ pub async fn ensure_hermes_dashboard(
     );
     if primary_occupied && primary_marker_state == MarkerOwnerState::StaleDesktopOwner {
         if let Some(marker) = ownership_marker.as_ref() {
-            if dashboard_is_compatible(&api_base_url, &options.hermes_home).await {
+            let stale_dashboard_compatible =
+                dashboard_is_compatible(&api_base_url, &options.hermes_home).await;
+            if stale_dashboard_compatible {
+                if let Some(session_token) = known_session_token_for_existing(&api_base_url).await {
+                    log::warn!(
+                        "Adopting compatible stale desktop-owned dashboard at {} (orphan pid {})",
+                        api_base_url,
+                        marker.dashboard_pid
+                    );
+                    let adopted_marker = match rewrite_ownership_marker_for_current_desktop(marker)
+                    {
+                        Ok(next) => next,
+                        Err(err) => {
+                            log::warn!("Failed to refresh dashboard ownership marker: {}", err);
+                            marker.clone()
+                        }
+                    };
+                    let gateway_runtime_dir = adopted_marker.gateway_runtime_dir.clone();
+                    let gateway_lock_dir = PathBuf::from(&gateway_runtime_dir)
+                        .join("token-locks")
+                        .to_string_lossy()
+                        .to_string();
+                    return Ok(DashboardHandle {
+                        api_base_url,
+                        session_token: Some(session_token),
+                        owns_process: true,
+                        command_program: None,
+                        command_args: vec![],
+                        gateway_runtime_dir: Some(gateway_runtime_dir),
+                        gateway_lock_dir: Some(gateway_lock_dir),
+                        ownership_marker_path: Some(ownership_marker_path_display()),
+                        ownership_state: Some("attached-stale-compatible".to_string()),
+                        job_handle: None,
+                        attached_pid: Some(adopted_marker.dashboard_pid),
+                        child: None,
+                    });
+                }
+
                 log::warn!(
-                    "Adopting compatible stale desktop-owned dashboard at {} (orphan pid {})",
+                    "Found compatible stale desktop-owned dashboard at {} (orphan pid {}) but no session token is recoverable; cleaning it so the desktop can spawn a token-owned runtime",
                     api_base_url,
                     marker.dashboard_pid
                 );
-                let adopted_marker = match rewrite_ownership_marker_for_current_desktop(marker) {
-                    Ok(next) => next,
-                    Err(err) => {
-                        log::warn!("Failed to refresh dashboard ownership marker: {}", err);
-                        marker.clone()
-                    }
-                };
-                let gateway_runtime_dir = adopted_marker.gateway_runtime_dir.clone();
-                let gateway_lock_dir = PathBuf::from(&gateway_runtime_dir)
-                    .join("token-locks")
-                    .to_string_lossy()
-                    .to_string();
-                return Ok(DashboardHandle {
+            } else {
+                log::warn!(
+                    "Found stale but incompatible desktop-owned dashboard marker for {}; cleaning orphan pid {}",
                     api_base_url,
-                    owns_process: true,
-                    command_program: None,
-                    command_args: vec![],
-                    gateway_runtime_dir: Some(gateway_runtime_dir),
-                    gateway_lock_dir: Some(gateway_lock_dir),
-                    ownership_marker_path: Some(ownership_marker_path_display()),
-                    ownership_state: Some("attached-stale-compatible".to_string()),
-                    job_handle: None,
-                    attached_pid: Some(adopted_marker.dashboard_pid),
-                    child: None,
-                });
+                    marker.dashboard_pid
+                );
             }
 
-            log::warn!(
-                "Found stale but incompatible desktop-owned dashboard marker for {}; cleaning orphan pid {}",
-                api_base_url,
-                marker.dashboard_pid
-            );
             terminate_owned_dashboard_tree(
                 &marker.api_base_url,
                 None,
@@ -879,18 +933,33 @@ pub async fn ensure_hermes_dashboard(
             tokio::time::sleep(Duration::from_millis(350)).await;
             primary_occupied = probe_dashboard(&api_base_url).await;
             if primary_occupied {
+                let stale_kind = if stale_dashboard_compatible {
+                    "stale desktop-owned dashboard"
+                } else {
+                    "incompatible dashboard"
+                };
                 return Err(AppError::DashboardStartup(format!(
-                    "{} is still occupied by an incompatible dashboard after cleaning a stale desktop-owned runtime. Stop the remaining process on port {} and retry.",
-                    api_base_url, options.port
+                    "{} is still occupied by a {} after cleanup. Stop the remaining process on port {} and retry.",
+                    api_base_url, stale_kind, options.port
                 )));
             }
         }
     }
+
     let can_reuse_existing = true;
     if primary_occupied
         && can_reuse_existing
         && dashboard_is_compatible(&api_base_url, &options.hermes_home).await
     {
+        let session_token = match known_session_token_for_existing(&api_base_url).await {
+            Some(token) => token,
+            None => {
+                return Err(AppError::DashboardStartup(format!(
+                    "{} is occupied by a compatible dashboard, but its session token cannot be recovered. Stop the process on port {} and retry.",
+                    api_base_url, options.port
+                )));
+            }
+        };
         let ownership_state = match primary_marker_state {
             MarkerOwnerState::LiveDesktopOwner => "attached-live-desktop-owner",
             MarkerOwnerState::Missing => "attached-compatible-unmarked",
@@ -904,6 +973,7 @@ pub async fn ensure_hermes_dashboard(
         );
         return Ok(DashboardHandle {
             api_base_url,
+            session_token: Some(session_token),
             owns_process: false,
             command_program: None,
             command_args: vec![],
@@ -944,8 +1014,10 @@ pub async fn ensure_hermes_dashboard(
                 if options.allow_external_agent
                     && dashboard_is_compatible(&candidate_url, &options.hermes_home).await
                 {
+                    let session_token = known_session_token_for_existing(&candidate_url).await;
                     return Ok(DashboardHandle {
                         api_base_url: candidate_url,
+                        session_token,
                         owns_process: false,
                         command_program: None,
                         command_args: vec![],
@@ -994,6 +1066,7 @@ pub async fn ensure_hermes_dashboard(
     log::info!("Dashboard started at {}", child_url);
     Ok(DashboardHandle {
         api_base_url: child_url,
+        session_token: spawned.session_token,
         owns_process: true,
         command_program: Some(spawned.command_program),
         command_args: spawned.command_args,
@@ -1148,6 +1221,14 @@ mod tests {
         include_required_routes: bool,
     ) {
         Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"<script>window.__HERMES_SESSION_TOKEN__="test-session-token"</script>"#,
+            ))
+            .mount(server)
+            .await;
+
+        Mock::given(method("GET"))
             .and(path("/api/status"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "hermes_home": hermes_home,
@@ -1255,6 +1336,7 @@ mod tests {
         .expect("compatible stale dashboard should be adopted");
 
         assert_eq!(handle.api_base_url, api_base_url);
+        assert_eq!(handle.session_token.as_deref(), Some("test-session-token"));
         assert!(handle.owns_process);
         assert_eq!(handle.attached_pid, Some(0));
         assert_eq!(

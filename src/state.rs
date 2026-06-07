@@ -51,6 +51,8 @@ impl Drop for DashboardJobHandle {
 pub struct DashboardHandle {
     /// Base URL of the dashboard API (e.g. "http://127.0.0.1:9120").
     pub api_base_url: String,
+    /// Session token known by this desktop process for the dashboard.
+    pub session_token: Option<String>,
     /// Whether we spawned this process (true) or attached to an existing one (false).
     pub owns_process: bool,
     /// Program used to spawn the dashboard when `owns_process` is true.

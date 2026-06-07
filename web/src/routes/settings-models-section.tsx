@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import {
   closestCenter,
   DndContext,
@@ -74,6 +75,7 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
 const PROVIDER_ACTION_LOADING_MIN_MS = 450;
 const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 const PROVIDER_ORDER_SAVE_DEBOUNCE_MS = 320;
+const EMPTY_ENV_VARS: Record<string, EnvVarInfo> = {};
 
 type ModelSettingsTab = "main" | "auxiliary";
 type CustomProviderMode = "custom" | "local";
@@ -598,15 +600,29 @@ function getStoredProviderApiKey(config: Record<string, any>, providerId: string
 }
 
 export function ModelsSection() {
-  const { data: envVars, isLoading } = useEnvVars();
-  const { data: config, isLoading: configLoading } = useConfig();
+  const {
+    data: envVars,
+    isLoading: envLoading,
+    isError: envIsError,
+    error: envError,
+    refetch: refetchEnvVars,
+  } = useEnvVars();
+  const {
+    data: config,
+    isLoading: configLoading,
+    isError: configIsError,
+    error: configError,
+    refetch: refetchConfig,
+  } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const saveConfig = useSaveConfig();
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const revealEnv = useRevealEnv();
   const { probeProvider, setRuntimeModel } = useGateway();
+  const navigate = useNavigate();
   const { catalog, message: catalogMessage, refresh: refreshCatalog } = useProviderCatalog();
+  const resolvedEnvVars = envVars ?? EMPTY_ENV_VARS;
   const [activeModelTab, setActiveModelTab] = useState<ModelSettingsTab>("main");
   const [probeState, setProbeState] = useState<{
     providerId: string;
@@ -800,10 +816,10 @@ export function ModelsSection() {
     ? getProviderEntry(config, selectedProvider.id)
     : {};
   const selectedHasCredentials = selectedProvider
-    ? providerHasSavedCredentials(config, selectedProvider.id, envVars, selectedProvider)
+    ? providerHasSavedCredentials(config, selectedProvider.id, resolvedEnvVars, selectedProvider)
     : false;
   const selectedProviderCredentialPreview = selectedProvider
-    ? getProviderCredentialPreview(config, envVars, selectedProvider)
+    ? getProviderCredentialPreview(config, resolvedEnvVars, selectedProvider)
     : undefined;
   const selectedProviderCanOmitApiKey = selectedProvider
     ? isLocalProviderBaseUrl(providerForm.baseUrl || selectedProvider.baseUrl)
@@ -828,25 +844,24 @@ export function ModelsSection() {
   );
   const configuredCount = useMemo(
     () => allProviders.filter((provider) =>
-      providerHasSavedCredentials(config, provider.id, envVars, provider)).length,
-    [allProviders, config, envVars],
+      providerHasSavedCredentials(config, provider.id, resolvedEnvVars, provider)).length,
+    [allProviders, config, resolvedEnvVars],
   );
   const providerEnvEntries = useMemo(
-    () => Object.entries(envVars ?? {})
+    () => Object.entries(resolvedEnvVars)
       .filter(([, v]) => v.category === "provider")
       .sort(([aKey], [bKey]) => getProviderPriority(getProviderGroup(aKey)) - getProviderPriority(getProviderGroup(bKey))),
-    [envVars],
+    [resolvedEnvVars],
   );
   const nonProviderGroups = useMemo(() => {
-    if (!envVars) return [];
     return ["tool", "messaging", "setting", "service"]
       .map((cat) => ({
         category: cat,
         label: translateEnvCategory(cat),
-        entries: Object.entries(envVars).filter(([, v]) => v.category === cat && !v.advanced),
+        entries: Object.entries(resolvedEnvVars).filter(([, v]) => v.category === cat && !v.advanced),
       }))
       .filter((g) => g.entries.length > 0);
-  }, [envVars]);
+  }, [resolvedEnvVars]);
 
   const liveApiKey = providerForm.apiKey.trim() ||
     (typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
@@ -995,6 +1010,31 @@ export function ModelsSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allProviders.length]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let rafHandle: number | null = null;
+    const openApprovalAuxiliaryTask = () => {
+      if (window.location.hash !== "#auxiliary-approval") return;
+      setActiveModelTab("auxiliary");
+      setSelectedAuxTask("approval");
+      if (rafHandle != null) window.cancelAnimationFrame(rafHandle);
+      rafHandle = window.requestAnimationFrame(() => {
+        const el = document.getElementById("auxiliary-approval");
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.focus({ preventScroll: true });
+        rafHandle = null;
+      });
+    };
+    openApprovalAuxiliaryTask();
+    const onHashChange = () => openApprovalAuxiliaryTask();
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      if (rafHandle != null) window.cancelAnimationFrame(rafHandle);
+      window.removeEventListener("hashchange", onHashChange);
+    };
+  }, [configLoading, envLoading]);
+
   const handleReveal = async (key: string) => {
     if (revealedValues[key]) {
       setRevealedValues((prev) => {
@@ -1090,7 +1130,7 @@ export function ModelsSection() {
       return;
     }
 
-    if (envVars?.[canonicalKey]?.is_set) return;
+    if (resolvedEnvVars?.[canonicalKey]?.is_set) return;
 
     const storedApiKey = config ? getStoredProviderApiKey(config, provider.id) : "";
     if (storedApiKey) {
@@ -1099,7 +1139,7 @@ export function ModelsSection() {
     }
 
     for (const aliasKey of providerApiKeyLabels(provider).slice(1)) {
-      if (!isWritableProviderEnvKey(aliasKey) || !envVars?.[aliasKey]?.is_set) continue;
+      if (!isWritableProviderEnvKey(aliasKey) || !resolvedEnvVars?.[aliasKey]?.is_set) continue;
       const revealed = await revealEnv.mutateAsync(aliasKey);
       const aliasValue = revealed.value.trim();
       if (!aliasValue) continue;
@@ -1346,9 +1386,19 @@ export function ModelsSection() {
     onDelete: () => deleteEnv.mutate(key),
   });
 
-  if (isLoading || configLoading) return <div className={s.desc}>加载中…</div>;
-  if (!envVars || !config) return null;
+  if (configLoading || (envLoading && !envVars)) return <div className={s.desc}>加载中…</div>;
+  if (configIsError || !config) {
+    const message = configError instanceof Error ? configError.message : "配置加载失败";
+    return (
+      <div className={s.modelsLoadError}>
+        <strong>模型配置加载失败</strong>
+        <p>{message}</p>
+        <button type="button" className={s.btn} onClick={() => void refetchConfig()}>重试</button>
+      </div>
+    );
+  }
 
+  const envLoadWarning = envIsError ? (envError instanceof Error ? envError.message : "环境变量加载失败") : "";
   const needsInitialModelSetup = !modelInfo?.model?.trim() || !modelInfo?.provider?.trim() || configuredCount === 0;
   const customProviderIsLocal = customProviderMode === "local";
   const customProviderTitle = customProviderIsLocal ? "添加本地部署服务商" : "添加自定义服务商";
@@ -1380,6 +1430,17 @@ export function ModelsSection() {
             </p>
           </div>
           <span>推荐从 DeepSeek 开始 · <a href="https://platform.deepseek.com/" target="_blank" rel="noreferrer" className={s.link}>DeepSeek 开放平台 ↗</a></span>
+        </div>
+      )}
+      {envLoadWarning && (
+        <div className={s.modelsLoadWarning}>
+          <div>
+            <strong>环境变量状态加载失败</strong>
+            <p>{envLoadWarning}。模型页已用空环境变量状态继续渲染，已配置状态可能暂时不准确。</p>
+          </div>
+          <button type="button" className={s.btn} onClick={() => void refetchEnvVars()}>
+            重试
+          </button>
         </div>
       )}
       <div className={s.modelTopTabs} role="tablist" aria-label="模型配置类型">
@@ -1471,7 +1532,7 @@ export function ModelsSection() {
                           key={provider.id}
                           provider={provider}
                           active={selectedProvider?.id === provider.id}
-                          configured={providerHasSavedCredentials(config, provider.id, envVars, provider)}
+                          configured={providerHasSavedCredentials(config, provider.id, resolvedEnvVars, provider)}
                           current={currentProviderId === provider.id}
                           canReorder={canReorderProviders}
                           onSelect={selectProvider}
@@ -1722,6 +1783,7 @@ export function ModelsSection() {
           onSaveTask={() => void handleSaveAuxiliaryTask()}
           onResetTask={(task) => void handleResetAuxiliaryTask(task)}
           onResetAll={() => void handleResetAllAuxiliary()}
+          onConfigureApprovalMode={() => navigate("/advanced#approval-mode")}
           imageInputMode={getImageInputMode(config)}
           onImageInputModeChange={(mode) => void handleImageInputModeChange(mode)}
         />
@@ -1930,6 +1992,7 @@ function AuxiliaryModelsPanel({
   onSaveTask,
   onResetTask,
   onResetAll,
+  onConfigureApprovalMode,
   imageInputMode,
   onImageInputModeChange,
 }: {
@@ -1949,6 +2012,7 @@ function AuxiliaryModelsPanel({
   onSaveTask: () => void;
   onResetTask: (task: AuxiliaryTaskId) => void;
   onResetAll: () => void;
+  onConfigureApprovalMode: () => void;
   imageInputMode: "auto" | "native" | "text";
   onImageInputModeChange: (mode: "auto" | "native" | "text") => void;
 }) {
@@ -2180,6 +2244,15 @@ function AuxiliaryModelsPanel({
             >
               恢复为自动
             </button>
+            {selectedTask === "approval" && (
+              <button
+                type="button"
+                className={s.btn}
+                onClick={onConfigureApprovalMode}
+              >
+                选择审批模式
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2210,6 +2283,7 @@ function AuxiliaryTaskGroup({
           <button
             type="button"
             key={task.id}
+            id={task.id === "approval" ? "auxiliary-approval" : undefined}
             className={s.auxTaskItem}
             data-active={selectedTask === task.id}
             onClick={() => onSelectTask(task.id)}

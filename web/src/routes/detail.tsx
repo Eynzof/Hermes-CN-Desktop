@@ -443,6 +443,7 @@ export function DetailRoute() {
 /* ── Approval Dialog ──────────────────────────────────────────────────── */
 
 function ApprovalDialog({ approval }: { approval: { requestId: string; sessionId: string; command: string; reason?: string } }) {
+  const navigate = useNavigate();
   const removeApproval = useSetAtom(removeApprovalAtom);
   const [responding, setResponding] = useState<"approve" | "deny" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -479,6 +480,9 @@ function ApprovalDialog({ approval }: { approval: { requestId: string; sessionId
         </button>
         <button className={s.approvalDeny} onClick={() => respond("deny")} disabled={responding !== null}>
           {responding === "deny" ? "发送中..." : "拒绝"}
+        </button>
+        <button className={s.approvalSettings} onClick={() => navigate("/advanced#approval-mode")} disabled={responding !== null}>
+          调整审批模式
         </button>
       </div>
     </div>

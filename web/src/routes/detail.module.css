@@ -82,11 +82,13 @@
 
 .approvalActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .approvalApprove,
-.approvalDeny {
+.approvalDeny,
+.approvalSettings {
   border-radius: 8px;
   cursor: pointer;
   font-family: var(--h-font-cn);
@@ -95,7 +97,8 @@
 }
 
 .approvalApprove:disabled,
-.approvalDeny:disabled {
+.approvalDeny:disabled,
+.approvalSettings:disabled {
   cursor: wait;
   opacity: 0.65;
 }
@@ -110,6 +113,17 @@
   border: 1px solid var(--h-line);
   background: transparent;
   color: var(--h-text);
+}
+
+.approvalSettings {
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-chip);
+  color: var(--h-text-2);
+}
+
+.approvalSettings:hover:not(:disabled) {
+  color: var(--h-text);
+  border-color: var(--h-accent-border);
 }
 
 @media (max-width: 720px) {

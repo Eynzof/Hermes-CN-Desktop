@@ -514,7 +514,10 @@ pub async fn api_request(
     // while the Tauri process remains alive, the cached token becomes stale and
     // every proxied request fails with 401. Refresh from the dashboard HTML and
     // retry once so ordinary UI reads recover without requiring an app restart.
-    let fresh_token = match std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok() {
+    let fresh_token = match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
+        .ok()
+        .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
+    {
         Some(token) => Some(token),
         None => fetch_session_token(&api_base_url).await,
     };

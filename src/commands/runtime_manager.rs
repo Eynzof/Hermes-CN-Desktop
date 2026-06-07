@@ -182,10 +182,15 @@ pub(crate) async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(),
     })
     .await?;
 
-    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
-    let token = match env_token {
-        Some(t) => Some(t),
-        None => dashboard::fetch_session_token(&handle.api_base_url).await,
+    let token = match handle.session_token.clone() {
+        Some(token) => Some(token),
+        None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
+            .ok()
+            .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
+        {
+            Some(token) => Some(token),
+            None => dashboard::fetch_session_token(&handle.api_base_url).await,
+        },
     };
 
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());

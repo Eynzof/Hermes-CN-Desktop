@@ -44,7 +44,9 @@ pub async fn refresh_gateway_url(
         (inner.api_base_url.clone(), inner.session_token.clone())
     };
 
-    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
+    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
+        .ok()
+        .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok());
     // Dashboard session tokens are process-local and rotate on every restart.
     // A refresh that races the dashboard coming back up (e.g. right after a
     // runtime update) sees `fetch_session_token` fail and return None. Treat
