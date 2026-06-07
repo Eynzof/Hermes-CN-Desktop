@@ -75,6 +75,7 @@ interface GooseComposerProps {
   onStop?: () => void | Promise<void>;
   placeholder?: string;
   initial?: string;
+  initialNonce?: number;
   autoFocus?: boolean;
   disabled?: boolean;
   loading?: boolean;
@@ -105,6 +106,7 @@ export function GooseComposer({
   onStop,
   placeholder,
   initial = "",
+  initialNonce = 0,
   autoFocus = false,
   disabled = false,
   loading = false,
@@ -202,7 +204,7 @@ export function GooseComposer({
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial]);
+  }, [initial, initialNonce]);
 
   useEffect(() => {
     if (autoFocus) {
