@@ -499,6 +499,7 @@ fn main() {
             commands::file_dialogs::open_external_url,
             commands::log_export::export_log_snapshot,
             commands::debug_bundle::export_debug_bundle,
+            commands::desktop_update::desktop_check_update,
             commands::environment::environment_check,
             commands::api_proxy::api_request,
             commands::api_proxy::external_request,
