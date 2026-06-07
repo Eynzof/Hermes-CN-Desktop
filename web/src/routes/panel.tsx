@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
-import { isSessionRunning } from "@/lib/session-activity";
+import { isSessionRunning, mergeLiveRuntimeSessions } from "@/lib/session-activity";
 import {
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
@@ -64,11 +64,15 @@ export function PanelRoute() {
   }, []);
 
   const sessions = useMemo(
-    () => (data?.sessions ?? []).flatMap((session) => {
-      const title = sessionTitleOverrides[session.id];
-      return title ? [{ ...session, title }] : [session];
-    }),
-    [data?.sessions, sessionTitleOverrides],
+    () =>
+      mergeLiveRuntimeSessions(
+        (data?.sessions ?? []).flatMap((session) => {
+          const title = sessionTitleOverrides[session.id];
+          return title ? [{ ...session, title }] : [session];
+        }),
+        runtimeBySession,
+      ),
+    [data?.sessions, runtimeBySession, sessionTitleOverrides],
   );
 
   const { active, recent } = useMemo(() => {
