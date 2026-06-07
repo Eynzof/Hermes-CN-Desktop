@@ -52,24 +52,34 @@
 }
 
 .newTaskLead {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: 20px minmax(0, auto);
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
   min-width: 0;
 }
 
-.newTaskLead svg,
-.quickNavButton svg {
+.entryIcon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.entryIcon svg {
   display: block;
   width: 16px;
   height: 16px;
-  flex: 0 0 16px;
 }
 
-.newTaskLead span,
-.quickNavButton span {
+.entryLabel {
   display: block;
-  line-height: 16px;
+  min-width: 0;
+  height: 20px;
+  line-height: 20px;
+  white-space: nowrap;
 }
 
 .newTaskKbd {
@@ -93,9 +103,10 @@
 .quickNavButton {
   height: 32px;
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
   padding: 0 11px;
   border: 1px solid var(--h-line);
   background: var(--h-bg-soft);
@@ -121,11 +132,11 @@
   background: color-mix(in srgb, var(--h-accent) 12%, var(--h-bg-chip));
 }
 
-.quickNavButton svg {
+.quickNavButton .entryIcon {
   color: var(--h-text-3);
 }
 
-.quickNavButton[data-active="true"] svg {
+.quickNavButton[data-active="true"] .entryIcon {
   color: var(--h-accent);
 }
 

@@ -195,8 +195,10 @@ export function WorkbenchSidebar() {
     <aside className={s.sidebar}>
       <button type="button" className={s.newTask} onClick={() => navigate("/")}>
         <span className={s.newTaskLead}>
-          <Plus size={14} strokeWidth={2.2} />
-          <span>新建对话</span>
+          <span className={s.entryIcon}>
+            <Plus size={16} strokeWidth={2.2} />
+          </span>
+          <span className={s.entryLabel}>新建对话</span>
         </span>
         <span className={s.newTaskKbd}>⌘ N</span>
       </button>
@@ -208,8 +210,10 @@ export function WorkbenchSidebar() {
           data-active={location.pathname.startsWith("/history") ? "true" : undefined}
           onClick={() => navigate("/history")}
         >
-          <MessageSquare size={14} />
-          <span>对话历史</span>
+          <span className={s.entryIcon}>
+            <MessageSquare size={16} />
+          </span>
+          <span className={s.entryLabel}>对话历史</span>
         </button>
         <button
           type="button"
@@ -217,8 +221,10 @@ export function WorkbenchSidebar() {
           data-active={location.pathname.startsWith("/projects") ? "true" : undefined}
           onClick={() => navigate("/projects")}
         >
-          <Folder size={14} />
-          <span>工作空间</span>
+          <span className={s.entryIcon}>
+            <Folder size={16} />
+          </span>
+          <span className={s.entryLabel}>工作空间</span>
         </button>
       </div>
 
