@@ -478,6 +478,7 @@ const FINISH_REASON_LABEL: Record<string, string> = {
   tool_use: "调用工具",
   tool_calls: "调用工具",
   error: "错误",
+  interrupted: "中断",
   content_filter: "内容过滤",
 };
 

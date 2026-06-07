@@ -400,6 +400,26 @@ describe("chat runtime reducer", () => {
     });
   });
 
+  it("records interrupted completions as finishReason metadata", () => {
+    let rt = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      { type: "message.delta", session_id: "s1", payload: { text: "处理中" } },
+      100,
+    );
+    rt = reduceGatewayEvent(rt, {
+      type: "message.complete",
+      session_id: "s1",
+      payload: {
+        status: "interrupted",
+        text: "Operation interrupted: waiting for model response (1.7s elapsed).",
+      },
+    }, 1_100);
+
+    expect(assistantMessage(rt).status).toBe("complete");
+    expect(assistantMessage(rt).metadata?.finishReason).toBe("interrupted");
+    expect(rt.streamStatus).toBe("complete");
+  });
+
   it("warning and error completion generate notice messages without replacing assistant content", () => {
     let rt = reduceGatewayEvent(
       createEmptyChatRuntime(1),

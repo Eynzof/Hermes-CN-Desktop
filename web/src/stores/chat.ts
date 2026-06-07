@@ -479,7 +479,9 @@ function completionMetadata(
       ? usage.finish_reason
       : typeof payload.finish_reason === "string"
         ? payload.finish_reason
-        : undefined;
+        : typeof payload.status === "string" && payload.status !== "complete"
+          ? payload.status
+          : undefined;
   if (finishReason) metadata.finishReason = finishReason;
   if (typeof usage?.cost_usd === "number" || usage?.cost_usd === null) {
     metadata.costUsd = usage.cost_usd;

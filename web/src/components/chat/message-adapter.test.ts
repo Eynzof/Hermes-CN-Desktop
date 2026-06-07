@@ -537,6 +537,57 @@ describe("message adapter", () => {
     expect(merged[0]?.id).toBe("live-assistant-10");
   });
 
+  it("dedups an interrupted live assistant against the stored tool transcript", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-interrupted-turn",
+        parts: [
+          { type: "text", text: "好，先装 MCP SDK，然后写一个 context7 工具集。" },
+          {
+            type: "tool",
+            toolCallId: "call-install",
+            name: "terminal",
+            state: "done",
+            output: "ERROR: No matching distribution found for mcp",
+            startedAt: 1_000,
+            completedAt: 2_000,
+          },
+        ],
+        metadata: { persistedId: 417 },
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-interrupted-turn",
+        parts: [
+          { type: "text", text: "好，先装 MCP SDK，然后写一个 context7 工具集。" },
+          {
+            type: "tool",
+            toolCallId: "call-install",
+            name: "terminal",
+            state: "done",
+            startedAt: 1_000,
+            completedAt: 2_000,
+          },
+          { type: "text", text: "Operation interrupted: waiting for model response (1.7s elapsed)." },
+        ],
+        metadata: {
+          finishReason: "interrupted",
+          timing: { startedAt: 100, firstTokenAt: 200, completedAt: 1_700 },
+        },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("live-interrupted-turn");
+    expect(chat).toHaveLength(1);
+    expect(chat[0]?.text).toContain("Operation interrupted");
+    expect(chat[0]?.stats?.finishReason).toBe("interrupted");
+  });
+
   it("keeps persisted stats when a matching live message has no metadata", () => {
     const stored = [
       uiMessage({
