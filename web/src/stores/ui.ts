@@ -14,9 +14,20 @@ export const CONVERSATION_WIDTH_OPTIONS = [
 
 export type ConversationWidthMode = typeof CONVERSATION_WIDTH_OPTIONS[number]["value"];
 
+export const CONVERSATION_FONT_SIZE_OPTIONS = [
+  { value: "small", label: "小", title: "小字号", fontSize: "13px", lineHeight: "1.72" },
+  { value: "standard", label: "标准", title: "标准字号", fontSize: "14px", lineHeight: "1.78" },
+  { value: "large", label: "大", title: "大字号", fontSize: "15.5px", lineHeight: "1.82" },
+] as const;
+
+export type ConversationFontSizeMode = typeof CONVERSATION_FONT_SIZE_OPTIONS[number]["value"];
+
 const DEFAULT_CONVERSATION_WIDTH_MODE: ConversationWidthMode = "medium";
 const CONVERSATION_WIDTH_KEY = "hermes.conversation-width";
 const CONVERSATION_WIDTH_VALUES = CONVERSATION_WIDTH_OPTIONS.map((option) => option.value);
+const DEFAULT_CONVERSATION_FONT_SIZE_MODE: ConversationFontSizeMode = "standard";
+const CONVERSATION_FONT_SIZE_KEY = "hermes.conversation-font-size";
+const CONVERSATION_FONT_SIZE_VALUES = CONVERSATION_FONT_SIZE_OPTIONS.map((option) => option.value);
 
 export function normalizeConversationWidthMode(value: unknown): ConversationWidthMode {
   return CONVERSATION_WIDTH_VALUES.includes(value as ConversationWidthMode)
@@ -28,6 +39,18 @@ export function conversationWidthMaxWidth(mode: ConversationWidthMode): string {
   return CONVERSATION_WIDTH_OPTIONS.find((option) => option.value === mode)?.maxWidth ?? "780px";
 }
 
+export function normalizeConversationFontSizeMode(value: unknown): ConversationFontSizeMode {
+  return CONVERSATION_FONT_SIZE_VALUES.includes(value as ConversationFontSizeMode)
+    ? (value as ConversationFontSizeMode)
+    : DEFAULT_CONVERSATION_FONT_SIZE_MODE;
+}
+
+export function conversationFontSizeVars(mode: ConversationFontSizeMode): { fontSize: string; lineHeight: string } {
+  const option = CONVERSATION_FONT_SIZE_OPTIONS.find((item) => item.value === mode)
+    ?? CONVERSATION_FONT_SIZE_OPTIONS[1];
+  return { fontSize: option.fontSize, lineHeight: option.lineHeight };
+}
+
 const conversationWidthModeBaseAtom = atom<ConversationWidthMode>(
   normalizeConversationWidthMode(readUiValue(CONVERSATION_WIDTH_KEY, DEFAULT_CONVERSATION_WIDTH_MODE)),
 );
@@ -37,6 +60,18 @@ export const conversationWidthModeAtom = atom(
     const value = normalizeConversationWidthMode(next);
     set(conversationWidthModeBaseAtom, value);
     writeUiValue(CONVERSATION_WIDTH_KEY, value);
+  },
+);
+
+const conversationFontSizeBaseAtom = atom<ConversationFontSizeMode>(
+  normalizeConversationFontSizeMode(readUiValue(CONVERSATION_FONT_SIZE_KEY, DEFAULT_CONVERSATION_FONT_SIZE_MODE)),
+);
+export const conversationFontSizeAtom = atom(
+  (get) => get(conversationFontSizeBaseAtom),
+  (_get, set, next: ConversationFontSizeMode) => {
+    const value = normalizeConversationFontSizeMode(next);
+    set(conversationFontSizeBaseAtom, value);
+    writeUiValue(CONVERSATION_FONT_SIZE_KEY, value);
   },
 );
 

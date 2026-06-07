@@ -255,6 +255,10 @@
   color: var(--amber);
 }
 
+.iconBtn[data-theme-mode="dark-modern"] {
+  color: var(--h-accent);
+}
+
 .iconBtn[data-theme-mode="light"] {
   color: var(--sky);
 }

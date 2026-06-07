@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Copy } from "lucide-react";
 import {
   activeSessionIdAtom,
+  conversationFontSizeAtom,
+  conversationFontSizeVars,
   conversationWidthMaxWidth,
   conversationWidthModeAtom,
 } from "@/stores/ui";
@@ -64,6 +66,7 @@ export function DetailRoute() {
   const navigate = useNavigate();
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
   const [conversationWidthMode, setConversationWidthMode] = useAtom(conversationWidthModeAtom);
+  const conversationFontSizeMode = useAtomValue(conversationFontSizeAtom);
   const taskId = activeSessionId ?? urlTaskId;
   const [turnStats, setTurnStats] = useState<UiTurnStats[]>([]);
 
@@ -355,10 +358,15 @@ export function DetailRoute() {
     estimatedUsed: estimatedContextUsed,
   });
   const pageStyle = useMemo(
-    () => ({
-      "--conversation-max-width": conversationWidthMaxWidth(conversationWidthMode),
-    }) as CSSProperties,
-    [conversationWidthMode],
+    () => {
+      const font = conversationFontSizeVars(conversationFontSizeMode);
+      return {
+        "--conversation-max-width": conversationWidthMaxWidth(conversationWidthMode),
+        "--conversation-font-size": font.fontSize,
+        "--conversation-line-height": font.lineHeight,
+      } as CSSProperties;
+    },
+    [conversationFontSizeMode, conversationWidthMode],
   );
 
   return (

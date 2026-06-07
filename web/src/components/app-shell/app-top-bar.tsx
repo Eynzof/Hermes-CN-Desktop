@@ -1,7 +1,7 @@
 import type { MouseEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Moon, Search, Sun } from "lucide-react";
-import { useTheme } from "@hermes/shared-ui";
+import { Moon, Palette, Search, Sun } from "lucide-react";
+import { useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
@@ -11,14 +11,21 @@ import s from "./app-top-bar.module.css";
 
 const DESKTOP_VERSION_PARAM = versionLabel(DESKTOP_VERSION);
 const BRAND_URL = `https://hermesagent.org.cn?source=cn_desktop&version=${encodeURIComponent(DESKTOP_VERSION_PARAM)}`;
+const THEME_SEQUENCE: ThemeConfig["theme"][] = ["light", "dark", "dark-modern"];
+const THEME_LABELS: Record<ThemeConfig["theme"], string> = {
+  light: "浅色模式",
+  dark: "经典深色模式",
+  "dark-modern": "现代深色模式",
+};
 
 export function AppTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { config: themeConfig, update: updateTheme } = useTheme();
-  const nextTheme = themeConfig.theme === "dark" ? "light" : "dark";
-  const ThemeIcon = themeConfig.theme === "dark" ? Sun : Moon;
-  const themeToggleLabel = themeConfig.theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
+  const currentThemeIndex = THEME_SEQUENCE.indexOf(themeConfig.theme);
+  const nextTheme = THEME_SEQUENCE[(currentThemeIndex + 1) % THEME_SEQUENCE.length] ?? "dark";
+  const ThemeIcon = themeConfig.theme === "light" ? Moon : themeConfig.theme === "dark-modern" ? Sun : Palette;
+  const themeToggleLabel = `切换到${THEME_LABELS[nextTheme]}`;
   const openBrandSite = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     void openExternalUrl(BRAND_URL);

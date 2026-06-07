@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import {
   Activity,
@@ -35,7 +35,14 @@ import {
   useRollbackRuntime,
   useRuntimeInfo,
 } from "@/hooks/use-runtime-update";
-import { composerSubmitShortcutAtom, showReasoningAtom, profileSwitchingAtom } from "@/stores/ui";
+import {
+  CONVERSATION_FONT_SIZE_OPTIONS,
+  composerSubmitShortcutAtom,
+  conversationFontSizeAtom,
+  profileSwitchingAtom,
+  showReasoningAtom,
+  type ConversationFontSizeMode,
+} from "@/stores/ui";
 import { openExternalUrl } from "@/lib/external-links";
 import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update";
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
@@ -55,17 +62,54 @@ interface SettingsSectionProps {
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
+  const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
   const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
 
   return (
     <div>
       {showHeading && <h2 className={s.heading}>常规</h2>}
-      <Row label="主题" right={
-        <RadioGroup value={config.theme} options={[{ value: "light", label: "浅色" }, { value: "dark", label: "深色" }]} onChange={(v) => update({ theme: v as ThemeConfig["theme"] })} />
-      } />
-      <Row label="信息密度" right={
-        <RadioGroup value={config.density} options={[{ value: "compact", label: "紧凑" }, { value: "comfortable", label: "舒适" }]} onChange={(v) => update({ density: v as ThemeConfig["density"] })} />
-      } />
+      <div className={s.appearancePanel}>
+        <div className={s.appearanceHeader}>
+          <span className={s.appearanceIndex}>[ 01 ]</span>
+          <div className={s.appearanceHeaderText}>
+            <h3>外观</h3>
+            <p>颜色、密度和对话阅读字号会立即应用到桌面端界面。</p>
+          </div>
+          <span className={s.appearanceMeta}>颜色 · 密度 · 字号</span>
+        </div>
+
+        <AppearanceRow
+          label="主题"
+          sub="选择桌面端皮肤。现代深色采用更克制的蓝黑工作台配色。"
+          meta="applied immediately"
+          right={
+            <ThemeSkinPicker
+              value={config.theme}
+              onChange={(theme) => update({ theme })}
+            />
+          }
+        />
+        <AppearanceRow
+          label="密度"
+          sub="调整行与卡片的垂直留白。舒适匹配当前默认布局。"
+          meta="无需重启"
+          right={
+            <RadioGroup value={config.density} options={[{ value: "compact", label: "紧凑" }, { value: "comfortable", label: "舒适" }]} onChange={(v) => update({ density: v as ThemeConfig["density"] })} />
+          }
+        />
+        <AppearanceRow
+          label="对话字号"
+          sub="只影响会话详情里的对话正文；代码块、工具日志和输入框保持原字号。"
+          meta="conversation only"
+          right={
+            <RadioGroup
+              value={conversationFontSize}
+              options={CONVERSATION_FONT_SIZE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+              onChange={(v) => setConversationFontSize(v as ConversationFontSizeMode)}
+            />
+          }
+        />
+      </div>
       <Row label="显示推理过程" sub="在会话中展示模型的思考和推理内容" right={
         <RadioGroup value={showReasoning ? "on" : "off"} options={[{ value: "off", label: "隐藏" }, { value: "on", label: "显示" }]} onChange={(v) => setShowReasoning(v === "on")} />
       } />
@@ -73,6 +117,120 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
       {isYoloModeSupported() && <YoloDangerZone />}
+    </div>
+  );
+}
+
+const THEME_SKINS: Array<{
+  value: ThemeConfig["theme"];
+  label: string;
+  sub: string;
+  bg: string;
+  pane: string;
+  soft: string;
+  text: string;
+  accent: string;
+}> = [
+  {
+    value: "light",
+    label: "浅色",
+    sub: "明亮柔和",
+    bg: "#fbfaf7",
+    pane: "#ffffff",
+    soft: "#f5f2ec",
+    text: "#232120",
+    accent: "#ff7a3d",
+  },
+  {
+    value: "dark",
+    label: "经典深色",
+    sub: "暖墨颗粒",
+    bg: "#0a0908",
+    pane: "#11100e",
+    soft: "#232120",
+    text: "#faf7f0",
+    accent: "#ff7a3d",
+  },
+  {
+    value: "dark-modern",
+    label: "现代深色",
+    sub: "蓝黑工作台",
+    bg: "#181818",
+    pane: "#1f1f1f",
+    soft: "#252526",
+    text: "#d4d4d4",
+    accent: "#0078d4",
+  },
+];
+
+function AppearanceRow({
+  label,
+  sub,
+  right,
+  meta,
+}: {
+  label: string;
+  sub: string;
+  right: React.ReactNode;
+  meta?: string;
+}) {
+  return (
+    <div className={s.appearanceRow}>
+      <div className={s.appearanceRowText}>
+        <div className={s.appearanceRowLabel}>{label}</div>
+        <div className={s.appearanceRowSub}>{sub}</div>
+      </div>
+      <div className={s.appearanceRowControl}>{right}</div>
+      {meta ? <div className={s.appearanceRowMeta}>{meta}</div> : null}
+    </div>
+  );
+}
+
+function ThemeSkinPicker({
+  value,
+  onChange,
+}: {
+  value: ThemeConfig["theme"];
+  onChange: (theme: ThemeConfig["theme"]) => void;
+}) {
+  return (
+    <div className={s.skinPicker} role="radiogroup" aria-label="主题皮肤">
+      {THEME_SKINS.map((skin) => {
+        const active = skin.value === value;
+        const style = {
+          "--skin-bg": skin.bg,
+          "--skin-pane": skin.pane,
+          "--skin-soft": skin.soft,
+          "--skin-text": skin.text,
+          "--skin-accent": skin.accent,
+        } as CSSProperties;
+        return (
+          <button
+            key={skin.value}
+            type="button"
+            className={s.skinCard}
+            style={style}
+            role="radio"
+            aria-checked={active}
+            data-active={active ? "true" : undefined}
+            onClick={() => onChange(skin.value)}
+          >
+            <span className={s.skinPreview} aria-hidden="true">
+              <span className={s.skinPreviewTop} />
+              <span className={s.skinPreviewBody}>
+                <span />
+                <span />
+                <span />
+              </span>
+              <span className={s.skinPreviewAccent} />
+            </span>
+            <span className={s.skinCopy}>
+              <span className={s.skinTitle}>{skin.label}</span>
+              <span className={s.skinSub}>{skin.sub}</span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
