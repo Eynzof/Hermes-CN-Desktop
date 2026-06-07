@@ -46,13 +46,17 @@ function authOnlyHeaders(extra?: Record<string, string>): Record<string, string>
 }
 
 function shouldUseNativeIpc(path: string): boolean {
+  const isLocalDesktopRoute =
+    path.startsWith("/__hermes_session_log/") || path.startsWith("/__hermes_cron_runs/");
+
   if (runtime.platform === "tauri") {
+    if (isLocalDesktopRoute && window.hermesDesktop?.request) return true;
     if (!window.__HERMES_RUNTIME__?.apiBaseUrl) return false;
     return true;
   }
   if (runtime.platform !== "electron") return false;
   if (!window.hermesDesktop?.request) return false;
-  if (path.startsWith("/__hermes_session_log/")) return true;
+  if (isLocalDesktopRoute) return true;
   if (!window.__HERMES_RUNTIME__?.apiBaseUrl) return false;
   return !path.startsWith("/__hermes_");
 }

@@ -108,6 +108,33 @@ describe("transport · debug-bus integration", () => {
     expect(restPushes.length).toBeGreaterThan(0);
   });
 
+  it("fetchJSON routes local cron history through desktop request on Tauri without apiBaseUrl", async () => {
+    const request = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      body: JSON.stringify({ job_id: "job1", profile: "default", runs: [] }),
+    }));
+    globalThis.fetch = vi.fn(async () => makeResponse(500, "should not fetch")) as unknown as typeof globalThis.fetch;
+    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request,
+    };
+
+    const out = await fetchJSON<{ runs: unknown[] }>("/__hermes_cron_runs/default/job1?limit=30");
+
+    expect(out).toEqual({ job_id: "job1", profile: "default", runs: [] });
+    expect(request).toHaveBeenCalledWith({
+      path: "/__hermes_cron_runs/default/job1?limit=30",
+      method: undefined,
+      headers: { "Content-Type": "application/json" },
+      body: null,
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("fetchExternalJSON uses desktop externalRequest capability on Tauri", async () => {
     const externalRequest = vi.fn(async () => ({
       ok: true,
