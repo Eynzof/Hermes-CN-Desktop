@@ -16,16 +16,17 @@
  * detection, sleep/wake handling, and a pending-RPC map that has to stay
  * coherent across forced reconnects. SSE+POST sheds all of that:
  *
- * - **Reconnect**: native EventSource handles it. No backoff machinery here.
+ * - **Reconnect**: native EventSource handles browser-side retries; the
+ *   Tauri proxy path adds explicit backoff, wake recovery, and a short grace
+ *   window so transient stream drops do not immediately fail an active turn.
  * - **Heartbeat**: server emits SSE `: ping` comments; browser holds the
  *   connection open transparently. No timer in client code.
  * - **Half-open TCP after sleep**: each POST is a fresh fetch — failure
  *   shows up immediately on the next call rather than 40 s later via
  *   missed heartbeat. EventSource also notices the drop and reconnects.
- * - **Pending RPCs across reconnect**: there are no long-lived pending
- *   RPCs. POST resolves on the response or rejects on transport error.
- *   A reconnect mid-call simply causes the in-flight fetch to reject
- *   and the caller can retry.
+ * - **Pending RPCs across reconnect**: async RPC responses still arrive over
+ *   SSE. A brief proxy drop keeps them pending through a short reconnect
+ *   grace window; a sustained outage rejects them so the UI can fail clearly.
  */
 
 import { parseGatewayEvent, type GatewayEvent } from "@hermes/protocol";
@@ -44,6 +45,13 @@ export type ConnectionState = "idle" | "connecting" | "open" | "closed" | "error
 
 const DEFAULT_RPC_TIMEOUT_MS = 120_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
+
+const RECONNECT_BASE_DELAY_MS = 1_000;
+const RECONNECT_MAX_DELAY_MS = 30_000;
+const DISCONNECT_GRACE_MS = 12_000;
+
+const WAKE_WATCHDOG_INTERVAL_MS = 2_000;
+const WAKE_GAP_THRESHOLD_MS = 15_000;
 
 // EventSource gives us back-pressure in the form of `readyState`. We layer a
 // small client_id rendezvous on top: connect() resolves only after the server
@@ -70,6 +78,16 @@ interface PendingRpcResponse {
   timer: number;
 }
 
+interface TauriSseDataPayload {
+  connectionId?: string;
+  data: string;
+}
+
+interface TauriSseErrorPayload {
+  connectionId?: string;
+  message: string;
+}
+
 function isAsyncAck(result: unknown): result is RpcAsyncAck {
   return (
     typeof result === "object" &&
@@ -77,6 +95,67 @@ function isAsyncAck(result: unknown): result is RpcAsyncAck {
     (result as RpcAsyncAck).accepted === true &&
     (result as RpcAsyncAck).async === true
   );
+}
+
+function createTauriConnectionId(): string {
+  return `sse-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffffff).toString(16)}`;
+}
+
+function unwrapTauriSseDataPayload(payload: unknown): TauriSseDataPayload | null {
+  if (typeof payload === "string") {
+    try {
+      const parsed = JSON.parse(payload);
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        typeof parsed.data === "string"
+      ) {
+        return {
+          connectionId:
+            typeof parsed.connectionId === "string" ? parsed.connectionId : undefined,
+          data: parsed.data,
+        };
+      }
+    } catch {}
+    return { data: payload };
+  }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    typeof (payload as { data?: unknown }).data === "string"
+  ) {
+    const typed = payload as { connectionId?: unknown; data: string };
+    return {
+      connectionId: typeof typed.connectionId === "string" ? typed.connectionId : undefined,
+      data: typed.data,
+    };
+  }
+  return null;
+}
+
+function unwrapTauriSseErrorPayload(payload: unknown): TauriSseErrorPayload {
+  if (typeof payload === "string") {
+    try {
+      const parsed = JSON.parse(payload);
+      if (parsed && typeof parsed === "object") {
+        return {
+          connectionId:
+            typeof parsed.connectionId === "string" ? parsed.connectionId : undefined,
+          message:
+            typeof parsed.message === "string" ? parsed.message : String(payload),
+        };
+      }
+    } catch {}
+    return { message: payload };
+  }
+  if (payload && typeof payload === "object") {
+    const typed = payload as { connectionId?: unknown; message?: unknown };
+    return {
+      connectionId: typeof typed.connectionId === "string" ? typed.connectionId : undefined,
+      message: typeof typed.message === "string" ? typed.message : String(typed.message ?? ""),
+    };
+  }
+  return { message: String(payload ?? "") };
 }
 
 const MAX_EARLY_RPC_RESPONSES = 100;
@@ -93,6 +172,16 @@ export class GatewaySseClient implements GatewayClientLike {
   private autoReconnect = false;
   private intentionalClose = false;
   private tauriProxyConnected = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private disconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
+  private wakeWatchdogTimer: ReturnType<typeof setInterval> | null = null;
+  private lastWakeTickAt = 0;
+  private boundOnlineHandler: (() => void) | null = null;
+  private boundVisibilityHandler: (() => void) | null = null;
+  private unsubscribeSystemResume: (() => void) | null = null;
+  private wakeListenersInstalled = false;
+  private activeTauriConnectionId: string | null = null;
   private pendingRpcResponses = new Map<string, PendingRpcResponse>();
   private earlyRpcResponses = new Map<string, any>();
 
@@ -136,6 +225,7 @@ export class GatewaySseClient implements GatewayClientLike {
 
     this.setState("connecting");
 
+    let syncConnectFailed = false;
     const promise = new Promise<void>((resolve, reject) => {
       let settled = false;
 
@@ -152,9 +242,12 @@ export class GatewaySseClient implements GatewayClientLike {
       try {
         es = new EventSource(url, { withCredentials: false });
       } catch (err) {
+        syncConnectFailed = true;
         this.setState("error");
         this.connectPromise = null;
-        reject(err instanceof Error ? err : new Error(String(err)));
+        const error = err instanceof Error ? err : new Error(String(err));
+        reject(error);
+        this.scheduleReconnect("eventsource-constructor");
         return;
       }
       this.eventSource = es;
@@ -169,6 +262,7 @@ export class GatewaySseClient implements GatewayClientLike {
         this.setState("error");
         this.connectPromise = null;
         reject(new Error("SSE connect timeout (no client_id)"));
+        this.scheduleReconnect("connect-timeout");
       }, connectTimeoutMs);
 
       const finishConnect = () => {
@@ -176,6 +270,8 @@ export class GatewaySseClient implements GatewayClientLike {
         settled = true;
         window.clearTimeout(timer);
         this.connectPromise = null;
+        this.clearDisconnectGrace();
+        this.reconnectAttempts = 0;
         this.setState("open");
         resolve();
       };
@@ -223,22 +319,10 @@ export class GatewaySseClient implements GatewayClientLike {
             this.connectPromise = null;
             this.setState("error");
             reject(new Error("SSE closed during connect"));
+            this.scheduleReconnect("closed-during-connect");
             return;
           }
-          this.eventSource = null;
-          this.clientId = null;
-          this.rejectPendingRpcResponses("SSE connection closed");
-          this.emitDisconnect();
-          this.setState("closed");
-          // Browser native reconnect already gave up. If autoReconnect is on,
-          // open a new EventSource so we don't sit in "closed" forever.
-          if (this.autoReconnect && !this.intentionalClose) {
-            // Small delay to avoid busy loop on a hard outage.
-            window.setTimeout(() => {
-              if (this.intentionalClose || this.eventSource) return;
-              this.connect().catch(() => {});
-            }, 1_000);
-          }
+          this.handleStreamClosed("SSE connection closed");
           return;
         }
         // Transient — browser is reconnecting on its own.
@@ -246,13 +330,15 @@ export class GatewaySseClient implements GatewayClientLike {
       };
     });
 
-    this.connectPromise = promise;
+    if (!syncConnectFailed) this.connectPromise = promise;
     return promise;
   }
 
   forceReconnect(_reason?: string): void {
     if (this.intentionalClose) return;
-    this.tearDownEventSource();
+    this.cancelReconnect();
+    this.reconnectAttempts = 0;
+    this.tearDownEventSource({ preserveClientId: true });
     this.setState("closed");
     this.emitDisconnect();
     if (this.autoReconnect) {
@@ -262,33 +348,49 @@ export class GatewaySseClient implements GatewayClientLike {
 
   enableAutoReconnect(): void {
     this.autoReconnect = true;
+    this.installWakeListeners();
   }
 
   disableAutoReconnect(): void {
     this.autoReconnect = false;
+    this.cancelReconnect();
+    this.clearDisconnectGrace();
+    this.removeWakeListeners();
   }
 
   close(): void {
     this.intentionalClose = true;
+    this.cancelReconnect();
+    this.clearDisconnectGrace();
+    this.removeWakeListeners();
     this.tearDownEventSource();
     this.setState("idle");
   }
 
-  private tearDownEventSource(): void {
+  private tearDownEventSource(options?: {
+    preserveClientId?: boolean;
+    rejectPending?: boolean;
+    notifyProxy?: boolean;
+  }): void {
+    const preserveClientId = options?.preserveClientId === true;
+    const rejectPending = options?.rejectPending !== false;
+    const notifyProxy = options?.notifyProxy !== false;
     const es = this.eventSource;
     const tauriUnlisten = this.tauriUnlisten;
     const tauriErrorUnlisten = this.tauriErrorUnlisten;
     this.eventSource = null;
-    this.clientId = null;
+    this.connectPromise = null;
+    if (!preserveClientId) this.clientId = null;
     this.tauriProxyConnected = false;
     this.tauriUnlisten = null;
     this.tauriErrorUnlisten = null;
+    this.activeTauriConnectionId = null;
     if (es) {
       try {
         es.close();
       } catch {}
     }
-    if (tauriUnlisten || tauriErrorUnlisten) {
+    if (notifyProxy && (tauriUnlisten || tauriErrorUnlisten)) {
       import("@tauri-apps/api/event")
         .then(({ emit }) => emit("gateway-sse-disconnect"))
         .catch(() => {});
@@ -299,7 +401,164 @@ export class GatewaySseClient implements GatewayClientLike {
     try {
       tauriErrorUnlisten?.();
     } catch {}
-    this.rejectPendingRpcResponses("SSE connection closed");
+    if (rejectPending) this.rejectPendingRpcResponses("SSE connection closed");
+  }
+
+  private handleStreamClosed(message: string): void {
+    if (this.intentionalClose) return;
+
+    this.tearDownEventSource({
+      preserveClientId: true,
+      rejectPending: false,
+      notifyProxy: false,
+    });
+
+    if (!this.autoReconnect) {
+      this.rejectPendingRpcResponses(message);
+      this.emitDisconnect();
+      this.setState("closed");
+      return;
+    }
+
+    // Do not immediately turn the visible assistant message into
+    // "连接已断开". The Tauri proxy can briefly drop during sleep/wake,
+    // dashboard restart, or old-stream teardown. Keep pending async RPCs alive
+    // for a short grace window; if we reconnect with the same client_id, the
+    // final JSON-RPC response can still arrive on the new SSE stream.
+    this.setState("connecting");
+    this.startDisconnectGrace(message);
+    this.scheduleReconnect("stream-closed", { immediate: true });
+  }
+
+  private startDisconnectGrace(message: string): void {
+    if (this.disconnectGraceTimer) return;
+    this.disconnectGraceTimer = setTimeout(() => {
+      this.disconnectGraceTimer = null;
+      if (this._state === "open" || this.intentionalClose) return;
+      this.rejectPendingRpcResponses(message);
+      this.emitDisconnect();
+      this.setState("closed");
+    }, DISCONNECT_GRACE_MS);
+  }
+
+  private clearDisconnectGrace(): void {
+    if (!this.disconnectGraceTimer) return;
+    clearTimeout(this.disconnectGraceTimer);
+    this.disconnectGraceTimer = null;
+  }
+
+  private scheduleReconnect(
+    _reason: string,
+    options?: { immediate?: boolean },
+  ): void {
+    if (!this.autoReconnect || this.intentionalClose) return;
+    if (this.reconnectTimer) return;
+    if (this._state === "open" && this.hasOpenAsyncRpcStream()) return;
+
+    const delay = options?.immediate
+      ? 0
+      : Math.min(
+          RECONNECT_BASE_DELAY_MS * Math.pow(2, this.reconnectAttempts),
+          RECONNECT_MAX_DELAY_MS,
+        );
+    const jitter = options?.immediate ? 0 : delay * 0.2 * Math.random();
+    if (!options?.immediate) this.reconnectAttempts += 1;
+
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      if (this.intentionalClose || this._state === "open") return;
+      try {
+        await runtime.refreshGatewayUrl();
+      } catch {}
+      this.connect().catch(() => {});
+    }, delay + jitter);
+  }
+
+  private cancelReconnect(): void {
+    if (!this.reconnectTimer) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+  }
+
+  private installWakeListeners(): void {
+    if (this.wakeListenersInstalled) return;
+    this.wakeListenersInstalled = true;
+
+    // Tauri currently exposes onSystemResume for compatibility, but older
+    // builds did not emit the event. Keep a conservative JS watchdog for SSE;
+    // the higher threshold avoids treating ordinary markdown/render stalls as
+    // sleep/wake while still recovering half-open proxy streams after resume.
+    this.lastWakeTickAt = Date.now();
+    this.wakeWatchdogTimer = setInterval(() => {
+      const now = Date.now();
+      const gap = now - this.lastWakeTickAt;
+      this.lastWakeTickAt = now;
+      if (gap > WAKE_GAP_THRESHOLD_MS) {
+        this.handleWake(`clock-skew ${gap}ms`, true);
+      }
+    }, WAKE_WATCHDOG_INTERVAL_MS);
+
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      this.boundOnlineHandler = () => this.handleWake("online", false);
+      window.addEventListener("online", this.boundOnlineHandler);
+    }
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      this.boundVisibilityHandler = () => {
+        if (document.visibilityState === "visible") this.handleWake("visible", false);
+      };
+      document.addEventListener("visibilitychange", this.boundVisibilityHandler);
+    }
+
+    const desktop = typeof window !== "undefined" ? window.hermesDesktop : undefined;
+    if (desktop?.onSystemResume) {
+      this.unsubscribeSystemResume = desktop.onSystemResume(() =>
+        this.handleWake("system-resume", true),
+      );
+    }
+  }
+
+  private removeWakeListeners(): void {
+    if (!this.wakeListenersInstalled) return;
+    this.wakeListenersInstalled = false;
+    if (this.wakeWatchdogTimer) {
+      clearInterval(this.wakeWatchdogTimer);
+      this.wakeWatchdogTimer = null;
+    }
+    if (this.boundOnlineHandler && typeof window !== "undefined") {
+      window.removeEventListener("online", this.boundOnlineHandler);
+      this.boundOnlineHandler = null;
+    }
+    if (this.boundVisibilityHandler && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.boundVisibilityHandler);
+      this.boundVisibilityHandler = null;
+    }
+    if (this.unsubscribeSystemResume) {
+      this.unsubscribeSystemResume();
+      this.unsubscribeSystemResume = null;
+    }
+  }
+
+  private handleWake(_reason: string, forceful: boolean): void {
+    if (!this.autoReconnect || this.intentionalClose) return;
+    if (!forceful && this.hasOpenAsyncRpcStream()) return;
+
+    this.cancelReconnect();
+    this.reconnectAttempts = 0;
+
+    const hadConnection =
+      this.eventSource !== null ||
+      this.tauriProxyConnected ||
+      this.connectPromise !== null ||
+      this.tauriUnlisten !== null ||
+      this.tauriErrorUnlisten !== null;
+
+    if (hadConnection) {
+      this.tearDownEventSource({ preserveClientId: true, rejectPending: false });
+      this.setState("connecting");
+      this.startDisconnectGrace("SSE connection closed");
+    }
+
+    this.connect().catch(() => {});
   }
 
   // --- events ---
@@ -447,6 +706,7 @@ export class GatewaySseClient implements GatewayClientLike {
 
   private hasOpenAsyncRpcStream(): boolean {
     if (!this.clientId) return false;
+    if (this.disconnectGraceTimer) return true;
     if (isTauriProduction()) return this.tauriProxyConnected;
     return !!this.eventSource && this.eventSource.readyState !== EventSource.CLOSED;
   }
@@ -551,30 +811,63 @@ export class GatewaySseClient implements GatewayClientLike {
     reject: (err: Error) => void,
   ): void {
     let settled = false;
+    const connectionId = createTauriConnectionId();
+    this.activeTauriConnectionId = connectionId;
+    const isCurrentConnection = () => this.activeTauriConnectionId === connectionId;
     const timer = window.setTimeout(() => {
       if (settled) return;
       settled = true;
+      if (!isCurrentConnection()) {
+        reject(new Error("Tauri SSE proxy connection superseded"));
+        return;
+      }
       this.connectPromise = null;
-      this.clientId = null;
+      if (!this.disconnectGraceTimer) this.clientId = null;
       this.tauriProxyConnected = false;
+      this.activeTauriConnectionId = null;
+      try {
+        this.tauriUnlisten?.();
+      } catch {}
+      try {
+        this.tauriErrorUnlisten?.();
+      } catch {}
+      this.tauriUnlisten = null;
+      this.tauriErrorUnlisten = null;
       this.setState("error");
       reject(new Error("Tauri SSE proxy connect timeout"));
+      this.scheduleReconnect("tauri-connect-timeout");
     }, timeoutMs);
 
     const settle = (ok: boolean, err?: Error) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timer);
+      if (!isCurrentConnection()) {
+        reject(new Error("Tauri SSE proxy connection superseded"));
+        return;
+      }
       this.connectPromise = null;
       this.tauriProxyConnected = ok;
       if (ok) {
+        this.clearDisconnectGrace();
+        this.reconnectAttempts = 0;
         this.setState("open");
         resolve();
       } else {
-        this.clientId = null;
+        if (!this.disconnectGraceTimer) this.clientId = null;
         this.tauriProxyConnected = false;
+        this.activeTauriConnectionId = null;
+        try {
+          this.tauriUnlisten?.();
+        } catch {}
+        try {
+          this.tauriErrorUnlisten?.();
+        } catch {}
+        this.tauriUnlisten = null;
+        this.tauriErrorUnlisten = null;
         this.setState("error");
         reject(err ?? new Error("SSE proxy failed"));
+        this.scheduleReconnect("tauri-connect-failed");
       }
     };
 
@@ -583,9 +876,13 @@ export class GatewaySseClient implements GatewayClientLike {
       import("@tauri-apps/api/event"),
     ]).then(async ([{ invoke }, { listen }]) => {
       // Listen for SSE events forwarded by the Rust proxy
-      this.tauriUnlisten = await listen<string>("gateway-sse-event", (event) => {
+      const unlistenData = await listen<unknown>("gateway-sse-event", (event) => {
+        const payload = unwrapTauriSseDataPayload(event.payload);
+        if (!payload) return;
+        if (payload.connectionId && payload.connectionId !== connectionId) return;
+        if (this.activeTauriConnectionId && this.activeTauriConnectionId !== connectionId) return;
         try {
-          const parsed = JSON.parse(event.payload);
+          const parsed = JSON.parse(payload.data);
           if (parsed.client_id) {
             this.clientId = parsed.client_id;
             const waiters = this.clientIdResolvers;
@@ -597,36 +894,42 @@ export class GatewaySseClient implements GatewayClientLike {
           this.handleFrame(parsed);
         } catch {}
       });
+      if (settled || this.intentionalClose || this.activeTauriConnectionId !== connectionId) {
+        try {
+          unlistenData();
+        } catch {}
+        return;
+      }
+      this.tauriUnlisten = unlistenData;
 
-      this.tauriErrorUnlisten = await listen<string>("gateway-sse-error", (event) => {
+      const unlistenError = await listen<unknown>("gateway-sse-error", (event) => {
+        const payload = unwrapTauriSseErrorPayload(event.payload);
+        if (payload.connectionId && payload.connectionId !== connectionId) return;
+        if (this.activeTauriConnectionId && this.activeTauriConnectionId !== connectionId) return;
+        const message = payload.message || "SSE stream ended";
         if (!settled) {
-          settle(false, new Error(event.payload));
+          settle(false, new Error(message));
         } else {
-          this.tauriProxyConnected = false;
-          this.clientId = null;
-          this.rejectPendingRpcResponses("SSE connection closed");
-          try {
-            this.tauriUnlisten?.();
-          } catch {}
-          try {
-            this.tauriErrorUnlisten?.();
-          } catch {}
-          this.tauriUnlisten = null;
-          this.tauriErrorUnlisten = null;
-          this.setState("closed");
-          this.emitDisconnect();
-          if (this.autoReconnect && !this.intentionalClose) {
-            window.setTimeout(() => this.connect().catch(() => {}), 1000);
-          }
+          this.handleStreamClosed("SSE connection closed");
         }
       });
+      if (settled || this.intentionalClose || this.activeTauriConnectionId !== connectionId) {
+        try {
+          unlistenError();
+        } catch {}
+        try {
+          unlistenData();
+        } catch {}
+        return;
+      }
+      this.tauriErrorUnlisten = unlistenError;
 
       await runtime.refreshGatewayUrl();
-      if (settled || this.intentionalClose) return;
+      if (settled || this.intentionalClose || this.activeTauriConnectionId !== connectionId) return;
 
       // Start the Rust SSE proxy (returns immediately, streams in background)
       invoke("connect_gateway_sse", {
-        input: { clientId: this.clientId },
+        input: { clientId: this.clientId, connectionId },
       }).catch((err) => {
         settle(false, new Error(String(err)));
       });

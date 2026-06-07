@@ -423,6 +423,115 @@ describe("GatewaySseClient", () => {
     expect(observed).toBe("rejected:SSE connection closed");
   });
 
+  it("keeps an async RPC pending across a brief Tauri SSE reconnect", async () => {
+    const listeners = new Map<string, (event: { payload: unknown }) => void>();
+    const refreshGatewayUrl = vi.fn(async () => ({
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=fresh-token",
+      sessionToken: "fresh-token",
+    }));
+    let posted: any = null;
+    const requestProxy = vi.fn(async (input: { body?: string | null }) => {
+      posted = JSON.parse(String(input.body));
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: posted.id,
+          result: { accepted: true, async: true },
+        }),
+      };
+    });
+
+    (window as any).__TAURI_INTERNALS__ = {};
+    window.__HERMES_RUNTIME__ = {
+      platform: "tauri",
+      apiBaseUrl: "http://127.0.0.1:9119",
+      gatewayUrl: "ws://127.0.0.1:9119/api/ws?token=stale-token",
+      sessionToken: "stale-token",
+      transport: "sse",
+    };
+    window.__HERMES_SESSION_TOKEN__ = "stale-token";
+    window.hermesDesktop = {
+      windowType: "tauri",
+      refreshGatewayUrl,
+      request: requestProxy,
+    };
+
+    tauriMocks.listen.mockImplementation(
+      async (eventName: string, cb: (event: { payload: unknown }) => void) => {
+        listeners.set(eventName, cb);
+        return vi.fn();
+      },
+    );
+    tauriMocks.invoke.mockResolvedValue(undefined);
+
+    const client = new GatewaySseClient();
+    client.enableAutoReconnect();
+    const disconnects: any[] = [];
+    client.on("gateway.disconnected", (ev) => disconnects.push(ev));
+
+    const connectP = client.connect({ timeoutMs: 5_000 });
+    await vi.waitFor(() => expect(tauriMocks.invoke).toHaveBeenCalledTimes(1));
+    const firstInput = (tauriMocks.invoke.mock.calls[0]?.[1] as any).input;
+    listeners.get("gateway-sse-event")?.({
+      payload: {
+        connectionId: firstInput.connectionId,
+        data: JSON.stringify({ client_id: "cid-keep" }),
+      },
+    });
+    await connectP;
+
+    const request = client.request("session.resume", { session_id: "persist-keep" });
+    await vi.waitFor(() => expect(requestProxy).toHaveBeenCalledOnce());
+
+    listeners.get("gateway-sse-error")?.({
+      payload: {
+        connectionId: firstInput.connectionId,
+        message: "SSE stream ended",
+      },
+    });
+    await flushMicrotasks();
+
+    expect(disconnects).toHaveLength(0);
+    expect(client.state).toBe("connecting");
+
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.waitFor(() => expect(tauriMocks.invoke).toHaveBeenCalledTimes(2));
+    const secondInput = (tauriMocks.invoke.mock.calls[1]?.[1] as any).input;
+    expect(secondInput.clientId).toBe("cid-keep");
+
+    listeners.get("gateway-sse-event")?.({
+      payload: {
+        connectionId: secondInput.connectionId,
+        data: JSON.stringify({ client_id: "cid-keep" }),
+      },
+    });
+    await flushMicrotasks();
+
+    listeners.get("gateway-sse-event")?.({
+      payload: {
+        connectionId: secondInput.connectionId,
+        data: JSON.stringify({
+          jsonrpc: "2.0",
+          id: posted.id,
+          result: { session_id: "gw-keep", resumed: "persist-keep" },
+        }),
+      },
+    });
+
+    await expect(request).resolves.toEqual({
+      session_id: "gw-keep",
+      resumed: "persist-keep",
+    });
+    expect(disconnects).toHaveLength(0);
+    expect(client.state).toBe("open");
+
+    client.close();
+  });
+
   it("uses one Tauri SSE proxy connection across repeated RPC requests", async () => {
     vi.useRealTimers();
     const listeners = new Map<string, (event: { payload: string }) => void>();
@@ -518,7 +627,10 @@ describe("GatewaySseClient", () => {
     await vi.waitFor(() => expect(tauriMocks.invoke).toHaveBeenCalledOnce());
 
     expect(tauriMocks.invoke.mock.calls[0]?.[1]).toEqual({
-      input: { clientId: "cid-reused" },
+      input: {
+        clientId: "cid-reused",
+        connectionId: expect.any(String),
+      },
     });
 
     listeners.get("gateway-sse-event")?.({
@@ -595,6 +707,10 @@ describe("GatewaySseClient", () => {
     client.on("gateway.disconnected", (ev) => events.push(ev));
 
     es.emitError(); // CLOSED
+    expect(events).toHaveLength(0);
+    expect(client.state).toBe("connecting");
+
+    await vi.advanceTimersByTimeAsync(12_001);
     expect(events).toHaveLength(1);
     expect(client.state).toBe("closed");
   });
