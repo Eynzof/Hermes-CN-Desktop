@@ -816,6 +816,37 @@ function canonicalToolComparable(message: HermesUIMessage): string {
     .join("|");
 }
 
+function canonicalToolIdentityComparable(message: HermesUIMessage): string {
+  return message.parts
+    .filter((part): part is HermesToolPart => part.type === "tool")
+    .map((tool) => [tool.toolCallId, tool.name].join(":"))
+    .join("|");
+}
+
+function hasInterruptedCompletion(message: HermesUIMessage, canonicalMessageText: string): boolean {
+  if (message.metadata?.finishReason === "interrupted") return true;
+  return canonicalMessageText.toLowerCase().includes("operationinterrupted:");
+}
+
+function isInterruptedLiveSuperset(
+  stored: HermesUIMessage,
+  live: HermesUIMessage,
+  storedText: string,
+  liveText: string,
+  storedImages: string,
+  liveImages: string,
+): boolean {
+  if (!hasInterruptedCompletion(live, liveText)) return false;
+  if ((storedImages || liveImages) && storedImages !== liveImages) return false;
+
+  const storedTools = canonicalToolIdentityComparable(stored);
+  const liveTools = canonicalToolIdentityComparable(live);
+  if (!storedTools || storedTools !== liveTools) return false;
+
+  if (!storedText) return true;
+  return liveText.startsWith(storedText) && liveText.length > storedText.length;
+}
+
 function hasSamePersistedId(stored: HermesUIMessage, live: HermesUIMessage): boolean {
   const storedPersisted = stored.metadata?.persistedId;
   const livePersisted = live.metadata?.persistedId;
@@ -840,6 +871,10 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
       const storedLooseText = looseComparableText(storedText);
       const liveLooseText = looseComparableText(liveText);
       if (storedLooseText && liveLooseText && storedLooseText === liveLooseText) {
+        return true;
+      }
+
+      if (isInterruptedLiveSuperset(stored, live, storedText, liveText, storedImages, liveImages)) {
         return true;
       }
 
