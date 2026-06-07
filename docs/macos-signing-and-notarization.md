@@ -64,7 +64,7 @@ APPLE_API_PRIVATE_KEY       AuthKey_<KEY_ID>.p8 的完整文本内容
 
 发版入口是 `.github/workflows/release-desktop.yml`。它在推送 `v*` tag 时运行，也支持手动 `workflow_dispatch` 指定 tag。macOS job 运行在 `macos-14`，目标架构是 `aarch64-apple-darwin`。
 
-流程大致是：先安装 Node、pnpm、Rust 和 Tauri 依赖，再拉取 `hermes-agent-cn` 对应 runtime manifest 的 Dashboard 前端、内置技能以及 macOS arm64 runtime manifest，并把 runtime zip 原样放进 `Contents/Resources/bundled-runtime/`。这里不能把 runtime 目录展开后交给 Tauri resource 复制，因为 Tauri 会把 `Python.framework` 里的 symlink 复制成普通文件，直接破坏 framework 签名。macOS runtime 必须在 `hermes-agent-cn` 上游 release 阶段就完成处理：先把 PyInstaller 复制出来的 `Python.framework` 规范化成标准 framework symlink 布局，再对 framework、主程序和所有 Mach-O payload 做 Developer ID 签名，并用保留 symlink 的 zip 方式发布。桌面端 release workflow 只解压校验包内 runtime zip 的签名，不再重签、不再把 `.framework` 临时改名，最后只对生成的 `.dmg` 做公证、staple 和验证。
+流程大致是：先安装 Node、pnpm、Rust 和 Tauri 依赖，再拉取 `Hermes-CN-Core` 对应 runtime manifest 的 Dashboard 前端、内置技能以及 macOS arm64 runtime manifest，并把 runtime zip 原样放进 `Contents/Resources/bundled-runtime/`。这里不能把 runtime 目录展开后交给 Tauri resource 复制，因为 Tauri 会把 `Python.framework` 里的 symlink 复制成普通文件，直接破坏 framework 签名。macOS runtime 必须在 `Hermes-CN-Core` 上游 release 阶段就完成处理：先把 PyInstaller 复制出来的 `Python.framework` 规范化成标准 framework symlink 布局，再对 framework、主程序和所有 Mach-O payload 做 Developer ID 签名，并用保留 symlink 的 zip 方式发布。桌面端 release workflow 只解压校验包内 runtime zip 的签名，不再重签、不再把 `.framework` 临时改名，最后只对生成的 `.dmg` 做公证、staple 和验证。
 
 Tauri 构建结束后，workflow 会对最终 `.dmg` 做一次显式公证、staple 和验证：
 
@@ -117,7 +117,7 @@ target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 如果需要手动公证和 staple，可以对最终 DMG 执行：
 
 ```bash
-DMG="target/aarch64-apple-darwin/release/bundle/dmg/Hermes Agent CN Desktop_0.2.2_aarch64.dmg"
+DMG="target/aarch64-apple-darwin/release/bundle/dmg/Hermes Agent CN Desktop_0.2.3_aarch64.dmg"
 
 xcrun notarytool submit "$DMG" \
   --key "$APPLE_API_KEY_PATH" \

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { cpSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -7,13 +7,13 @@ import { spawnSync } from "node:child_process";
 function usage() {
   console.log(`Usage: node scripts/stage-bundled-skills.mjs [options]
 
-Copies hermes-agent-cn bundled skills into static/bundled-skills so Tauri
+Copies Hermes-CN-Core bundled skills into static/bundled-skills so Tauri
 bundles them into the desktop installer. The desktop then syncs these files
 into the managed runtime and exposes them to hermes dashboard via
 HERMES_BUNDLED_SKILLS.
 
 Options:
-  --source <dir>      hermes-agent-cn checkout (default: ../hermes-agent-cn)
+  --source <dir>      Hermes-CN-Core checkout (default: ../Hermes-CN-Core, fallback: ../hermes-agent-cn)
   --skills <dir>      Existing skills directory to copy
   --out <dir>         Output dir (default: static/bundled-skills)
 `);
@@ -39,9 +39,15 @@ if (hasFlag("--help") || hasFlag("-h")) {
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function defaultSourceRoot() {
+  const preferred = resolve(repoRoot, "../Hermes-CN-Core");
+  if (existsSync(preferred)) return preferred;
+  return resolve(repoRoot, "../hermes-agent-cn");
+}
+
 const sourceRoot = resolve(
   repoRoot,
-  argValue("--source", process.env.HERMES_AGENT_CN_SOURCE ?? "../hermes-agent-cn"),
+  argValue("--source", process.env.HERMES_AGENT_CN_SOURCE ?? defaultSourceRoot()),
 );
 const sourceSkills = resolve(
   repoRoot,

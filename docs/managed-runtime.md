@@ -1,7 +1,7 @@
 # Managed Runtime — 端到端流程文档
 
 桌面端 (`hermes-agent-cn-desktop`) 是一个 Tauri 壳子，自己不带 agent
-逻辑。所有 RPC / 事件流的另一端是 `hermes-agent-cn`（[fork] of
+逻辑。所有 RPC / 事件流的另一端是 `Hermes-CN-Core`（[fork] of
 NousResearch/hermes-agent）的 dashboard 子进程。
 
 本文档讲：那个 dashboard 子进程是**怎么进到用户机器上**的，桌面端
@@ -14,7 +14,7 @@ NousResearch/hermes-agent）的 dashboard 子进程。
 - 知道一次"桌面端升级"具体在做什么
 - 知道有人攻击这条链路时，哪一处会挡住他
 
-[fork]: https://github.com/Eynzof/hermes-agent-cn
+[fork]: https://github.com/Eynzof/Hermes-CN-Core
 
 ## 一、关键问题：桌面端怎么找到 agent
 
@@ -23,18 +23,18 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
 来起后端。两个隐患：
 
 1. **版本错配**：用户全局装的是上游 NousResearch 版本，桌面端依赖
-   的是 fork 的 P-009 patch（`/api/v2/events` 和 `/api/v2/rpc`
+   的是 Hermes-CN-Core 的 P-009 patch（`/api/v2/events` 和 `/api/v2/rpc`
    两条 SSE+POST 路由）。结果"你好"一发出 → SSE 401 → 桌面端报
    "SSE closed during connect" → 用户一脸懵。
 2. **零安装体验差**：用户必须自己 `pip install hermes-agent-cn`，
-   还要装对 Python 版本（3.11+）、装对 fork 而不是上游。不是面向
+   还要装对 Python 版本（3.11+）、装对 Hermes-CN-Core 而不是上游。不是面向
    终端用户的产品形态。
 
 解决方向：**桌面端自带 runtime**。Windows 与 macOS 的正式安装包都应
-预置目标平台的 `hermes-agent-cn` runtime payload + manifest，首次启动优先从
+预置目标平台的 `Hermes-CN-Core` runtime payload + manifest，首次启动优先从
 包内资源安装；云端下载只作为包内 runtime 缺失、运行时升级或兜底修复路径。
 Windows 与 macOS 都直接预置 runtime zip。macOS runtime 本身由
-`hermes-agent-cn` 的 release workflow 产出，在上游打包阶段已经把 PyInstaller
+`Hermes-CN-Core` 的 release workflow 产出，在上游打包阶段已经把 PyInstaller
 复制出来的 `Python.framework` 规范化成标准 framework symlink 布局，并完成
 Developer ID 签名；桌面端只验证这份签名友好的 zip，避免 Tauri resource
 复制展开目录时破坏 framework symlink，不再重签、不再临时改名 `.framework`。
@@ -52,9 +52,9 @@ hermes-agent-cn-desktop/        ← 桌面壳子
 │   └── runtime_manager.rs       4 个 Tauri command (info/check/install/rollback)
 ├── web/src/lib/tauri-bridge.ts  前端等 ready 事件 + 显示覆盖层
 └── .github/workflows/
-    └── release-desktop.yml      tag v* → 跨平台打 .msi/.dmg/.AppImage
+    └── release-desktop.yml      tag v* → 跨平台打 .exe/.dmg
 
-hermes-agent-cn/             ← 实际 agent（fork of NousResearch/hermes-agent）
+Hermes-CN-Core/              ← 实际 agent（fork of NousResearch/hermes-agent）
 ├── tui_gateway/
 │   ├── ws.py                    /api/ws WebSocket transport（旧）
 │   └── sse.py                   /api/v2/events SSE transport（P-009 新增）
@@ -70,9 +70,9 @@ hermes-agent-cn/             ← 实际 agent（fork of NousResearch/hermes-agen
 ## 三、Runtime 版本号
 
 Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`。
-`kernelVersion` 对应 hermes-agent-cn 的 `[project].version`，`runtimeRevision` 是同一
-内核版本下中文 runtime 打包修订号，例如 `runtime-v0.14.0-cn.1`、
-`runtime-v0.14.0-cn.2`。完整规范见 `hermes-agent-cn/docs/RUNTIME_VERSIONING.md`。
+`kernelVersion` 对应 Hermes-CN-Core 的 `[project].version`，`runtimeRevision` 是同一
+内核版本下中文 runtime 打包修订号，例如 `runtime-v0.16.0-cn.3`、
+`runtime-v0.16.0-cn.4`。完整规范见 `Hermes-CN-Core/docs/RUNTIME_VERSIONING.md`。
 
 ## 四、首次启动时序（桌面端 PROD 模式）
 
@@ -111,7 +111,7 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
 8. emit runtime-status "installing"
    如果包内 runtime 不存在或不可用，runtime::install_runtime_update(None) 开始：
    a. configured_manifest_url() →
-      https://github.com/Eynzof/hermes-agent-cn/releases/latest/download/stable-win32-x64.json
+      https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download/stable-win32-x64.json
    b. reqwest GET → 拿到 manifest JSON
    c. configured_public_key() → baked-in PEM
    d. verify_signature(manifest) → Ed25519 验证 schemaVersion/channel/
@@ -124,14 +124,14 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
    h. find_executable_in(staging) 找 hermes-agent-cn-runtime-<plat>-<arch>.exe
    i. smoke_check_runtime(exe) 跑 `dashboard --help`，返回码 0
    j. fs::rename(staging, target) 装到
-      %APPDATA%/cn.hermes.agent.desktop/runtime/versions/0.14.0-cn.1/
+      %APPDATA%/cn.hermes.agent.desktop/runtime/versions/0.16.0-cn.4/
    k. write current.json 指向这个版本
    包内 runtime 路径同样会写 current.json，区别只是 source="bundled"
   ↓
 9. emit runtime-status "starting-dashboard"
    dashboard::ensure_hermes_dashboard():
    a. dashboard.rs::resolve_hermes_command() →
-      runtime::read_current_record() 命中 → 返回 versions/0.14.0-cn.1/exe path
+      runtime::read_current_record() 命中 → 返回 versions/0.16.0-cn.4/exe path
    b. spawn 子进程，传 HERMES_HOME 等 env
    c. wait_for_dashboard 轮询 /api/status 直到 2xx 或 401
   ↓
@@ -211,7 +211,7 @@ setup() → runtime::read_current_record() 返回 Some(record)
 PATH 里的 `hermes`。脚本会先把相邻 checkout：
 
 ```
-../hermes-agent-cn
+../Hermes-CN-Core
 ```
 
 安装进桌面端 runtime 目录里的独立 venv，然后写入 `current.json`：
@@ -224,7 +224,7 @@ PATH 里的 `hermes`。脚本会先把相邻 checkout：
 
 这个 venv 是普通 wheel 安装，不是 editable install；dashboard 进程从
 `current.json.executablePath` 启动，所以代码和依赖都收束在 runtime
-目录里。开发时如果刚改过 `hermes-agent-cn`，重新运行：
+目录里。开发时如果刚改过 `Hermes-CN-Core`，重新运行：
 
 ```
 pnpm runtime:install-local -- --force
@@ -252,7 +252,7 @@ pnpm tauri:dev:external
 ## 五、Runtime 升级
 
 ```
-fork main 收到 P-009 之后的新代码 → 你 git tag runtime-v0.14.0-cn.2; git push origin runtime-v0.14.0-cn.2
+fork main 收到 P-009 之后的新代码 → 你 git tag runtime-v0.16.0-cn.4; git push origin runtime-v0.16.0-cn.4
   ↓
 fork CI release-runtime.yml 触发：
   matrix: win32-x64 / darwin-arm64 / linux-x64
@@ -266,38 +266,38 @@ fork CI release-runtime.yml 触发：
        签 manifest JSON （stable-platform-arch.json）
   release job:
     softprops/action-gh-release → 把 3 zip + 3 manifest 发到
-    releases/runtime-v0.14.0-cn.2
+    releases/runtime-v0.16.0-cn.4
   ↓
-现在 https://github.com/Eynzof/hermes-agent-cn/releases/latest/download/
-指向 runtime-v0.14.0-cn.2 这个 Release
+现在 https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download/
+指向 runtime-v0.16.0-cn.4 这个 Release
   ↓
 任何已装桌面端下次启动时：
-  1. 看到 current.json 里是 0.14.0-cn.1
+  1. 看到 current.json 里是 0.16.0-cn.3
   2. 用户在 UI 里点 "Check for update"，或者首次启动逻辑就会
-     check_runtime_update() → 拿到 0.14.0-cn.2 manifest → update_available
+     check_runtime_update() → 拿到 0.16.0-cn.4 manifest → update_available
   3. 用户确认升级 → runtime_install_update → 走 first-run 那条
      install 路径
-  4. current.json 改指 0.14.0-cn.2，previous_runtime_version=0.14.0-cn.1
-  5. 出问题可以 runtime_rollback 回 0.14.0-cn.1
+  4. current.json 改指 0.16.0-cn.4，previous_runtime_version=0.16.0-cn.3
+  5. 出问题可以 runtime_rollback 回 0.16.0-cn.3
 ```
 
 ## 六、桌面端升级
 
 ```
-你 git tag v0.2.2; git push origin v0.2.2
+你 git tag v0.2.3; git push origin v0.2.3
   ↓
 desktop CI release-desktop.yml 触发：
-  matrix: windows-latest / macos-14 (arm64) / ubuntu-latest
+  matrix: windows-latest / macos-14 (arm64)
   per job:
     1. setup-node + pnpm + rust toolchain
     2. pnpm install
-    3. 解析 runtime manifest 的 sourceCommit，checkout 对应 hermes-agent-cn
+    3. 解析 runtime manifest 的 sourceRepo/sourceCommit，checkout 对应 runtime 源码仓库
     4. stage Dashboard web_dist、bundled skills、目标平台 runtime payload + manifest
-       Windows 使用 zip；macOS 使用已展开目录、Developer ID 重签名，并把非标准 Python.framework 临时改成 .payload
-    5. tauri-apps/tauri-action@v0 → 打 .msi / .dmg
+       Windows 与 macOS 都使用上游签好的 runtime zip；macOS 额外校验包内 framework 与 Mach-O 签名
+    5. tauri-apps/tauri-action@v0 → 打 .exe / .dmg
        runtime URL + 公钥仍是 baked-in 兜底，不需要 env wire 进 CI
   ↓
-新装包发到 releases/v0.2.2 → 用户下载装新版
+新装包发到 releases/v0.2.3 → 用户下载装新版
   ↓
 新版起来后，看到 current.json 已经有 runtime → 不下载 → 直接用。
 全新安装则先使用安装包内置 runtime；除非内置资源缺失或用户主动升级，
@@ -306,7 +306,7 @@ desktop CI release-desktop.yml 触发：
 
 ## 七、信任链 / 攻击面
 
-谁要伪造一个 hermes-agent-cn runtime 让所有桌面端装上它？得同时
+谁要伪造一个 Hermes-CN-Core runtime 让所有桌面端装上它？得同时
 做到：
 
 1. **替换 GitHub Release 的 zip**：需要 push 权限到
@@ -337,7 +337,7 @@ Ed25519 验签会失败、SHA-256 校验会失败、桌面端拒绝安装。
 1. 本地生成新 Ed25519 keypair（参考 fork 的 `docs/RUNTIME_RELEASES.md`）
 2. 私钥 → 用 `gh secret set RUNTIME_SIGN_PRIVATE_KEY_PEM` 替换
 3. 公钥 → 改 `src/process/runtime.rs::FALLBACK_PUBLIC_KEY_PEM`
-   常量 + 同步到 `hermes-agent-cn/docs/RUNTIME_RELEASES.md`
+   常量 + 同步到 `Hermes-CN-Core/docs/RUNTIME_RELEASES.md`
 4. 桌面端 tag 一个新 v（让所有用户拿到新公钥的 binary）
 5. fork 端 tag 一个新 runtime-v（用新私钥重签）
 
@@ -360,5 +360,5 @@ keypair 同时签的过渡期（这个我们的代码现在不支持，要的话
 ## 十、Issue 链接
 
 * 本文档 — desktop/runtime 边界和 managed runtime 全链路说明
-* `hermes-agent-cn` PR #4 — P-009 server-side patch + 发布管线
+* `Hermes-CN-Core` PR #4 — P-009 server-side patch + 发布管线
 * fork 的 `docs/RUNTIME_RELEASES.md` — 签名密钥、发布操作细节

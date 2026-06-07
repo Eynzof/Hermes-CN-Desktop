@@ -14,11 +14,11 @@ import { fileURLToPath } from "node:url";
 function usage() {
   console.log(`Usage: node scripts/stage-dashboard-web-dist.mjs [options]
 
-Builds or copies the hermes-agent-cn dashboard frontend and stages it under
+Builds or copies the Hermes-CN-Core dashboard frontend and stages it under
 static/dashboard/web_dist so Tauri bundles it into the desktop installer.
 
 Options:
-  --source <dir>          hermes-agent-cn checkout (default: ../hermes-agent-cn)
+  --source <dir>          Hermes-CN-Core checkout (default: ../Hermes-CN-Core, fallback: ../hermes-agent-cn)
   --web-dist <dir>        Existing built web_dist directory to copy
   --out <dir>             Output dir (default: static/dashboard/web_dist)
   --skip-build            Fail if web_dist is missing instead of running npm build
@@ -45,9 +45,15 @@ if (hasFlag("--help") || hasFlag("-h")) {
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+function defaultSourceRoot() {
+  const preferred = resolve(repoRoot, "../Hermes-CN-Core");
+  if (existsSync(preferred)) return preferred;
+  return resolve(repoRoot, "../hermes-agent-cn");
+}
+
 const sourceRoot = resolve(
   repoRoot,
-  argValue("--source", process.env.HERMES_AGENT_CN_SOURCE ?? "../hermes-agent-cn"),
+  argValue("--source", process.env.HERMES_AGENT_CN_SOURCE ?? defaultSourceRoot()),
 );
 const explicitWebDist = argValue("--web-dist", process.env.HERMES_DASHBOARD_WEB_DIST ?? null);
 const outDir = resolve(repoRoot, argValue("--out", "static/dashboard/web_dist"));
@@ -110,7 +116,7 @@ function ensureDashboardDist() {
 
   const webDir = join(sourceRoot, "web");
   if (!existsSync(join(webDir, "package.json"))) {
-    throw new Error(`hermes-agent-cn web package not found: ${webDir}`);
+    throw new Error(`Hermes-CN-Core web package not found: ${webDir}`);
   }
 
   const npm = npmCommand();

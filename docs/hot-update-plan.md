@@ -1,6 +1,6 @@
 # 热更新落地方案(Tauri 外壳 + Python 内核)
 
-> 状态:提案(2026-06-06) · 范围:`hermes-agent-cn-desktop`(外壳)+ `hermes-agent-cn`(内核 runtime)
+> 状态:提案(2026-06-06) · 范围:`hermes-agent-cn-desktop`(外壳)+ `Hermes-CN-Core`(内核 runtime)
 > 相关文档:[`managed-runtime.md`](./managed-runtime.md)、[`macos-signing-and-notarization.md`](./macos-signing-and-notarization.md)
 
 本方案回答三个核心问题:**(1) 用户侧热更新如何实现、(2) 是否需要后端、(3) 是否需要下载服务器**。
@@ -92,7 +92,7 @@ check(拉 manifest JSON)
 
 ## 四、需要下载服务器吗?—— 不需要自建,需要补大陆镜像
 
-**现状**:runtime 更新 + zip、安装包下载,全部硬编码兜底到 `github.com/Eynzof/hermes-agent-cn/releases/...`。官网本体已在 Cloudflare Pages(`desktop.hermesagent.org.cn`,免备案、大陆可达),**但点下载仍跳 github.com**;页脚 `res1.hermesagent.org.cn`「国内镜像」目前只是占位链接,无产物。github.com 在大陆超时 / 限速 / 偶发 DNS 污染,首次下数百 MB 的 runtime 体验很差。
+**现状**:runtime 更新 + zip、安装包下载,全部硬编码兜底到 `github.com/Eynzof/Hermes-CN-Core/releases/...`。官网本体已在 Cloudflare Pages(`desktop.hermesagent.org.cn`,免备案、大陆可达),**但点下载仍跳 github.com**;页脚 `res1.hermesagent.org.cn`「国内镜像」目前只是占位链接,无产物。github.com 在大陆超时 / 限速 / 偶发 DNS 污染,首次下数百 MB 的 runtime 体验很差。
 
 **托管选型(都是无状态静态文件,别自建服务器)**:
 
@@ -131,7 +131,7 @@ check(拉 manifest JSON)
 
 ## 六、版本与兼容
 
-- 两套版本号**完全解耦**:外壳 `0.2.1`(SemVer / `v*` 标签),内核 `0.16.0`(`runtime-v0.16.0-cn.1` 标签);`scripts/sync-desktop-version.mjs` 只同步桌面侧,不碰内核。
+- 两套版本号**完全解耦**:外壳 `0.2.3`(SemVer / `v*` 标签),内核 `0.16.0`(`runtime-v0.16.0-cn.4` 标签);`scripts/sync-desktop-version.mjs` 只同步桌面侧,不碰内核。
 - 它们**不是**靠 `bundled_runtime_tag` 在运行时软耦合——`bundled_runtime_tag` 只是 `release-desktop.yml` 的**构建期** `workflow_dispatch` 输入(默认 `latest`),决定打包时内嵌哪个 runtime;运行期自动更新走的是另一套(默认 channel = `stable`)。
 - **建议**:① 发布时把 `bundled_runtime_tag` 锁成**明确版本**而非 `latest`,保证可复现;② 维护一张「desktop 版本 ↔ 兼容 runtime 区间」表纳入发布 checklist;③ 用 §2.1 的 `minAppVersion` 闸门兜住「新 runtime 依赖新外壳能力」的不兼容。
 

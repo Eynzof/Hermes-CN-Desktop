@@ -7,9 +7,9 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const skipInstall = process.env.HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL === "1";
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
-  console.log(`Usage: pnpm tauri:dev[:managed] [--source ../hermes-agent-cn] [--force]
+  console.log(`Usage: pnpm tauri:dev[:managed] [--source ../Hermes-CN-Core] [--force]
 
-Installs hermes-agent-cn into the desktop managed runtime folder, then starts
+Installs Hermes-CN-Core into the desktop managed runtime folder, then starts
 Tauri dev with external PATH hermes fallback disabled.`);
   process.exit(0);
 }

@@ -7,9 +7,9 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
 function usage() {
-  console.log(`Usage: node scripts/install-local-runtime.mjs [--source ../hermes-agent-cn] [--force]
+  console.log(`Usage: node scripts/install-local-runtime.mjs [--source ../Hermes-CN-Core] [--force]
 
-Installs a local hermes-agent-cn checkout into the desktop managed runtime
+Installs a local Hermes-CN-Core checkout into the desktop managed runtime
 folder as an isolated Python venv, then writes runtime/current.json.
 The installed kernel is copied into the venv; it does not run from PATH hermes
 or from an editable source checkout.`);
@@ -31,7 +31,13 @@ if (hasFlag("--help") || hasFlag("-h")) {
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sourceArg = argValue("--source") ?? process.env.HERMES_AGENT_CN_SOURCE ?? "../hermes-agent-cn";
+function defaultSourceRoot() {
+  const preferred = resolve(repoRoot, "../Hermes-CN-Core");
+  if (existsSync(preferred)) return preferred;
+  return resolve(repoRoot, "../hermes-agent-cn");
+}
+
+const sourceArg = argValue("--source") ?? process.env.HERMES_AGENT_CN_SOURCE ?? defaultSourceRoot();
 const sourceRoot = resolve(repoRoot, sourceArg);
 const force = hasFlag("--force") || process.env.HERMES_DESKTOP_LOCAL_RUNTIME_FORCE === "1";
 
@@ -135,7 +141,7 @@ function readCurrent(currentPath) {
 }
 
 if (!existsSync(join(sourceRoot, "pyproject.toml"))) {
-  throw new Error(`hermes-agent-cn source checkout not found: ${sourceRoot}`);
+  throw new Error(`Hermes-CN-Core source checkout not found: ${sourceRoot}`);
 }
 
 const root = runtimeRoot();
@@ -233,7 +239,7 @@ mkdirSync(target, { recursive: true });
 const python = findPython();
 const venv = join(target, "venv");
 
-console.log(`Installing local hermes-agent-cn runtime`);
+console.log(`Installing local Hermes-CN-Core runtime`);
 console.log(`source:  ${sourceRoot}`);
 console.log(`target:  ${target}`);
 console.log(`python:  ${python}`);

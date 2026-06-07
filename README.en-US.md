@@ -7,9 +7,9 @@
 [![release-desktop](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-agent-cn-desktop/actions/workflows/release-desktop.yml)
 [![License: PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-orange.svg)](./LICENSE)
 
-Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese community, with native support for Windows and macOS. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and includes the Chinese community-modified Hermes Agent core from [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn).
+Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese community, with native support for Windows and macOS. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and includes the Chinese community-modified Hermes Agent core from [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core).
 
-> Current release: `v0.2.2`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
+> Current release: `v0.2.3`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
 
 ## Demo
 
@@ -55,7 +55,7 @@ These screenshots show the main workspace, light and dark themes, configuration,
 
 Hermes Agent already provides a local Dashboard. This repository focuses on the desktop experience around that Dashboard: native windows, local process management, file dialogs, managed runtime installation, runtime diagnostics, and a safer production transport layer for REST and SSE traffic.
 
-This repository is the desktop shell. The agent runtime and Dashboard source live in [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn).
+This repository is the desktop shell. The agent runtime and Dashboard source live in [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core).
 
 ## Highlights
 
@@ -71,17 +71,17 @@ Pre-release builds are published on the [GitHub Releases](https://github.com/Eyn
 
 The current alpha release includes:
 
-- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.2.2_aarch64.dmg`
-- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.2.2_x64-setup.exe`
+- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.2.3_aarch64.dmg`
+- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.2.3_x64-setup.exe`
 
-The Windows installer currently stages a bundled `hermes-agent-cn` runtime. The macOS build uses the managed runtime download/update flow on first launch.
+Both the Windows and macOS installers include a bundled `Hermes-CN-Core` runtime. On first launch, the app initializes the local core from the bundled runtime first; managed runtime download/update is only used for upgrades or fallback repair.
 
 ## Requirements for development
 
 - [Rust](https://rustup.rs/) stable
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 9+
-- [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) or an installed Hermes CLI for local Dashboard development
+- [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core) or an installed Hermes CLI for local Dashboard development
 
 macOS also needs Xcode Command Line Tools:
 

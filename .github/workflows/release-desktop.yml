@@ -1,14 +1,14 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.2.2`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.2.3`).
 #
 # Desktop release build runs in parallel for Windows and macOS. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
 #   4. Stages the bundled dashboard frontend, bundled skills, and bundled
-#      hermes-agent-cn runtime payload + manifest for the target platform.
-#      macOS stages an expanded runtime tree so app signing can cover nested
-#      Mach-O files before notarization.
+#      Hermes-CN-Core runtime payload + manifest for the target platform.
+#      macOS keeps the upstream signed zip opaque and verifies nested Mach-O
+#      signatures before notarization.
 #   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
 #      env vars are NOT set here; src/process/runtime.rs ships hardcoded
 #      production fallbacks. Set them only if you fork the project and
@@ -26,11 +26,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.2.2)"
+        description: "Tag name to associate the build with (e.g. v0.2.3)"
         required: true
       bundled_runtime_tag:
-        description: "hermes-agent-cn runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.16.0-cn.1"
+        description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
+        default: "runtime-v0.16.0-cn.4"
         required: false
 
 permissions:
@@ -81,17 +81,19 @@ jobs:
         id: runtime_manifest
         shell: bash
         env:
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.1' }}
+          BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.4' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
           node - <<'NODE'
           const fs = require("node:fs");
           (async () => {
+            const repo = process.env.BUNDLED_RUNTIME_REPO || "Eynzof/Hermes-CN-Core";
             const tag = process.env.BUNDLED_RUNTIME_TAG || "latest";
             const baseUrl = tag === "latest"
-              ? "https://github.com/Eynzof/hermes-agent-cn/releases/latest/download"
-              : `https://github.com/Eynzof/hermes-agent-cn/releases/download/${encodeURIComponent(tag)}`;
+              ? `https://github.com/${repo}/releases/latest/download`
+              : `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}`;
             const platform = process.env.RUNTIME_PLATFORM;
             const arch = process.env.RUNTIME_ARCH;
             const response = await fetch(`${baseUrl}/stable-${platform}-${arch}.json`, {
@@ -104,6 +106,10 @@ jobs:
             if (!manifest.sourceCommit) {
               throw new Error("runtime manifest missing sourceCommit");
             }
+            if (!manifest.sourceRepo) {
+              throw new Error("runtime manifest missing sourceRepo");
+            }
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_repo=${manifest.sourceRepo}\n`);
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_commit=${manifest.sourceCommit}\n`);
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `runtime_version=${manifest.runtimeVersion}\n`);
           })().catch((err) => {
@@ -112,10 +118,10 @@ jobs:
           });
           NODE
 
-      - name: Checkout hermes-agent-cn source for dashboard assets
+      - name: Checkout runtime source for dashboard assets
         uses: actions/checkout@v4
         with:
-          repository: Eynzof/hermes-agent-cn
+          repository: ${{ steps.runtime_manifest.outputs.source_repo }}
           ref: ${{ steps.runtime_manifest.outputs.source_commit }}
           path: hermes-agent-cn-source
 
@@ -125,12 +131,13 @@ jobs:
       - name: Stage bundled skills
         run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
 
-      - name: Stage bundled hermes-agent-cn runtime
+      - name: Stage bundled Hermes-CN-Core runtime
         shell: bash
         run: |
           args=(
             scripts/stage-bundled-runtime.mjs
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.1' }}"
+            --repo "Eynzof/Hermes-CN-Core"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.4' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
@@ -203,10 +210,10 @@ jobs:
             Windows 系统安装名称、安装目录和卸载注册表项使用英文名
             Hermes Agent CN Desktop，避免中文路径造成兼容性问题。
 
-            安装包已内置来自 hermes-agent-cn
+            安装包已内置来自 ${{ steps.runtime_manifest.outputs.source_repo }}
             ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端和内置技能。
 
-            Windows 和 macOS 安装包同时内置 hermes-agent-cn runtime
+            Windows 和 macOS 安装包同时内置 Hermes-CN-Core runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。
 
             如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
