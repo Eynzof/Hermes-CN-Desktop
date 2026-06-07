@@ -98,11 +98,11 @@
   margin: 0 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .quickNavButton {
-  height: 32px;
+  height: 30px;
   width: 100%;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
