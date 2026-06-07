@@ -98,6 +98,45 @@ describe("composerSubmitShortcutAtom (persisted)", () => {
   });
 });
 
+describe("conversationWidthModeAtom (persisted)", () => {
+  it("defaults to medium when nothing is stored", async () => {
+    const { conversationWidthModeAtom } = await loadUi();
+    const store = createStore();
+    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+  });
+
+  it("restores a supported width from the UI store", async () => {
+    const { conversationWidthModeAtom } = await loadUi({
+      "hermes.conversation-width": "large",
+    });
+    const store = createStore();
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
+  });
+
+  it("normalizes unsupported stored and written values back to medium", async () => {
+    const { conversationWidthModeAtom, uiStore } = await loadUi({
+      "hermes.conversation-width": "wide",
+    });
+    const store = createStore();
+    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+
+    store.set(conversationWidthModeAtom, "full");
+    expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("full");
+
+    store.set(conversationWidthModeAtom, "tiny" as never);
+    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+    expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("medium");
+  });
+
+  it("maps the four width modes to concrete CSS max-width values", async () => {
+    const { conversationWidthMaxWidth } = await loadUi();
+    expect(conversationWidthMaxWidth("small")).toBe("640px");
+    expect(conversationWidthMaxWidth("medium")).toBe("780px");
+    expect(conversationWidthMaxWidth("large")).toBe("960px");
+    expect(conversationWidthMaxWidth("full")).toBe("100%");
+  });
+});
+
 describe("profileSwitchingAtom", () => {
   it("defaults to { active: false }", async () => {
     const { profileSwitchingAtom } = await loadUi();
