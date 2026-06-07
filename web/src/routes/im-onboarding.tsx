@@ -420,13 +420,14 @@ function DiagnosticAssistant({
   askError?: string | null;
 }) {
   const shownIssues = bundle.issues.slice(0, 3);
+  const hasIssue = bundle.issues.some((issue) => issue.level !== "ok");
   return (
     <div className={s.diagnosticAssistant}>
       <div className={s.diagnosticHead}>
         <div>
           <div className={s.miniEyebrow}>HERMES CHECK</div>
-          <h4>接入失败时，让 Hermes 帮你排查</h4>
-          <p>这里会打包当前配置状态、接收服务状态、官方检测结果和最近一次扫码/保存结果，不包含密钥明文。</p>
+          <h4>{hasIssue ? "接入失败时，让 Hermes 帮你排查" : "接入已就绪，可按需继续检查"}</h4>
+          <p>{hasIssue ? "这里会打包当前配置状态、接收服务状态、官方检测结果和最近一次扫码/保存结果，不包含密钥明文。" : "当前可见状态没有明显阻断点；如果后续收不到回复，也可以复制诊断信息继续排查。"}</p>
         </div>
         <div className={s.diagnosticActions}>
           <CopyButton className={s.btn} text={() => JSON.stringify(bundle, null, 2)}>

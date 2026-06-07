@@ -104,4 +104,64 @@ describe("im onboarding routing helpers", () => {
     expect(prompt).not.toContain("raw-token-that-should-not-leak");
     expect(JSON.stringify(bundle)).toContain("已设置（已隐藏）");
   });
+
+  it("does not classify a successful WeChat Official Account check as an account failure", () => {
+    const bundle = buildImDiagnosticBundle({
+      platform: "weixin",
+      currentProfile: "default",
+      configured: {
+        WEIXIN_ACCOUNT_ID: { isSet: true, redactedValue: "9c5fd2…im.bot" },
+        WEIXIN_TOKEN: { isSet: true, redactedValue: "••••6a21" },
+        WEIXIN_DM_POLICY: { isSet: true, redactedValue: "open" },
+        WEIXIN_ALLOW_ALL_USERS: { isSet: true, redactedValue: "true" },
+      },
+      statusData: {
+        version: "dev",
+        release_date: "today",
+        gateway_running: true,
+        gateway_pid: 123,
+        gateway_health_url: null,
+        gateway_state: "running",
+        gateway_platforms: {
+          weixin: {
+            state: "connected",
+            error_code: null,
+            error_message: null,
+            updated_at: "today",
+          },
+        },
+        gateway_exit_reason: null,
+        gateway_updated_at: "today",
+        active_sessions: 0,
+      },
+      platformInfo: {
+        id: "weixin",
+        name: "WeChat (Official Account)",
+        description: "Connect WeChat.",
+        docs_url: "",
+        enabled: true,
+        configured: true,
+        gateway_running: true,
+        state: "connected",
+        error_code: null,
+        error_message: "stale token warning should be ignored once connected",
+        updated_at: "today",
+        home_channel: null,
+        env_vars: [],
+      },
+      testResult: {
+        ok: true,
+        state: "connected",
+        message: "WeChat (Official Account) is connected.",
+      },
+    });
+
+    expect(bundle.issues).toEqual([
+      expect.objectContaining({
+        level: "ok",
+        title: "暂未发现明显阻断点",
+      }),
+    ]);
+    expect(JSON.stringify(bundle.issues)).not.toContain("微信账号或口令不可用");
+  });
 });

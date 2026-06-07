@@ -265,13 +265,16 @@ export function buildImDiagnosticBundle(input: BuildImDiagnosticInput): ImDiagno
   const configured = input.configured ?? {};
   const statusPlatform = input.statusData?.gateway_platforms?.[input.platform];
   const testMessage = input.testResult?.message ?? textFromUnknownError(input.testError);
+  const testFailureMessage = input.testResult?.ok === false
+    ? input.testResult.message
+    : textFromUnknownError(input.testError);
   const errorMessages = [
     textFromUnknownError(input.beginError),
     textFromUnknownError(input.pollError),
     textFromUnknownError(input.applyError),
     textFromUnknownError(input.stateError),
-    input.platformInfo?.error_message ?? null,
-    testMessage,
+    input.platformInfo?.state === "connected" ? null : input.platformInfo?.error_message ?? null,
+    testFailureMessage,
   ].filter(Boolean) as string[];
   const issues: ImDiagnosticIssue[] = [];
 
