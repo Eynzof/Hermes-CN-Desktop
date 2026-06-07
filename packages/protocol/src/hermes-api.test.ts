@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AnalyticsResponse, CronJobsResponse } from "./hermes-api";
+import { AnalyticsResponse, CronJob, CronJobsResponse, CronRunDetail, CronRunsResponse } from "./hermes-api";
 
 describe("CronJobsResponse", () => {
   it("parses current dashboard cron jobs with structured schedules", () => {
@@ -39,6 +39,82 @@ describe("CronJobsResponse", () => {
   });
 });
 
+
+
+describe("Cron run history schemas", () => {
+  it("parses desktop cron run list responses", () => {
+    const response = CronRunsResponse.parse({
+      job_id: "job1",
+      profile: "default",
+      runs: [
+        {
+          job_id: "job1",
+          profile: "default",
+          filename: "2026-06-07_09-00-00.md",
+          started_at: "2026-06-07T09:00:00",
+          status: "success",
+          summary: "完成",
+          size_bytes: 123,
+        },
+      ],
+    });
+
+    expect(response.runs[0]?.status).toBe("success");
+    expect(response.runs[0]?.filename).toBe("2026-06-07_09-00-00.md");
+  });
+
+  it("parses run detail responses with content and truncation state", () => {
+    const detail = CronRunDetail.parse({
+      job_id: "job1",
+      profile: "alpha",
+      filename: "2026-06-07_09-00-00.md",
+      started_at: "2026-06-07T09:00:00",
+      status: "blocked",
+      summary: "执行被阻断",
+      size_bytes: 2048,
+      content: "# Cron Job",
+      truncated: true,
+    });
+
+    expect(detail.profile).toBe("alpha");
+    expect(detail.status).toBe("blocked");
+    expect(detail.truncated).toBe(true);
+  });
+
+  it("rejects unexpected cron run statuses", () => {
+    expect(() =>
+      CronRunsResponse.parse({
+        job_id: "job1",
+        profile: "default",
+        runs: [
+          {
+            job_id: "job1",
+            profile: "default",
+            filename: "2026-06-07_09-00-00.md",
+            started_at: "2026-06-07T09:00:00",
+            status: "running",
+            summary: "still running",
+            size_bytes: 1,
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it("keeps accepting passthrough fields on cron jobs", () => {
+    const job = CronJob.parse({
+      id: "job1",
+      schedule: "0 9 * * *",
+      enabled: true,
+      last_run_at: null,
+      next_run_at: null,
+      custom_field: "kept",
+    });
+
+    expect((job as any).custom_field).toBe("kept");
+  });
+});
+
 describe("AnalyticsResponse", () => {
   const totals = {
     total_input: 10,
@@ -54,41 +130,47 @@ describe("AnalyticsResponse", () => {
 
   it("parses the enhanced analytics contract", () => {
     const parsed = AnalyticsResponse.parse({
-      daily: [{
-        day: "2026-06-07",
-        input_tokens: 10,
-        output_tokens: 5,
-        cache_read_tokens: 1,
-        cache_write_tokens: 0,
-        reasoning_tokens: 2,
-        sessions: 1,
-        api_calls: 3,
-      }],
-      by_model: [{
-        model: "model-a",
-        provider: "provider-a",
-        input_tokens: 10,
-        output_tokens: 5,
-        cache_read_tokens: 1,
-        cache_write_tokens: 0,
-        reasoning_tokens: 2,
-        sessions: 1,
-        api_calls: 3,
-      }],
-      top_sessions: [{
-        session_id: "s1",
-        title: "Session",
-        model: "model-a",
-        provider: "provider-a",
-        started_at: 1,
-        ended_at: null,
-        input_tokens: 10,
-        output_tokens: 5,
-        cache_read_tokens: 1,
-        cache_write_tokens: 0,
-        reasoning_tokens: 2,
-        api_calls: 3,
-      }],
+      daily: [
+        {
+          day: "2026-06-07",
+          input_tokens: 10,
+          output_tokens: 5,
+          cache_read_tokens: 1,
+          cache_write_tokens: 0,
+          reasoning_tokens: 2,
+          sessions: 1,
+          api_calls: 3,
+        },
+      ],
+      by_model: [
+        {
+          model: "model-a",
+          provider: "provider-a",
+          input_tokens: 10,
+          output_tokens: 5,
+          cache_read_tokens: 1,
+          cache_write_tokens: 0,
+          reasoning_tokens: 2,
+          sessions: 1,
+          api_calls: 3,
+        },
+      ],
+      top_sessions: [
+        {
+          session_id: "s1",
+          title: "Session",
+          model: "model-a",
+          provider: "provider-a",
+          started_at: 1,
+          ended_at: null,
+          input_tokens: 10,
+          output_tokens: 5,
+          cache_read_tokens: 1,
+          cache_write_tokens: 0,
+          reasoning_tokens: 2,
+          api_calls: 3,
+        },
+      ],
       totals,
       comparison: { previous_totals: { ...totals, total_tokens: 5 } },
       period_days: 7,
@@ -108,20 +190,22 @@ describe("AnalyticsResponse", () => {
   });
 
   it("rejects the old analytics contract without top_sessions and comparison", () => {
-    expect(() => AnalyticsResponse.parse({
-      daily: [],
-      by_model: [],
-      totals: {},
-      period_days: 7,
-      skills: {
-        summary: {
-          total_skill_loads: 0,
-          total_skill_edits: 0,
-          total_skill_actions: 0,
-          distinct_skills_used: 0,
+    expect(() =>
+      AnalyticsResponse.parse({
+        daily: [],
+        by_model: [],
+        totals: {},
+        period_days: 7,
+        skills: {
+          summary: {
+            total_skill_loads: 0,
+            total_skill_edits: 0,
+            total_skill_actions: 0,
+            distinct_skills_used: 0,
+          },
+          top_skills: [],
         },
-        top_skills: [],
-      },
-    })).toThrow();
+      }),
+    ).toThrow();
   });
 });
