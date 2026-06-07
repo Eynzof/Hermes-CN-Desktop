@@ -1,6 +1,6 @@
 import { atom, useAtom } from "jotai";
 
-type ThemeVariant = "light" | "dark" | "dark-modern";
+type ThemeVariant = "light" | "light-modern" | "dark" | "dark-modern";
 type DensityVariant = "comfortable" | "compact";
 
 export interface ThemeConfig {
@@ -14,7 +14,10 @@ const DEFAULT_THEME: ThemeConfig = {
 };
 
 function normalizeTheme(value: Partial<ThemeConfig> | undefined): ThemeConfig {
-  const theme = value?.theme === "light" || value?.theme === "dark-modern" ? value.theme : "dark";
+  const theme =
+    value?.theme === "light" || value?.theme === "light-modern" || value?.theme === "dark-modern"
+      ? value.theme
+      : "dark";
   return {
     theme,
     density: value?.density === "compact" ? "compact" : "comfortable",

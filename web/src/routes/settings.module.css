@@ -579,9 +579,9 @@
 
 .skinPicker {
   display: grid;
-  grid-template-columns: repeat(3, minmax(116px, 1fr));
+  grid-template-columns: repeat(4, minmax(118px, 1fr));
   gap: 8px;
-  width: min(100%, 520px);
+  width: min(100%, 660px);
 }
 
 .skinCard {

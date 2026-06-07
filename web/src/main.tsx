@@ -44,7 +44,7 @@ async function bootstrap() {
 
   const initialTheme = readUiValue<{ theme?: string; density?: string }>("hermes-theme", {});
   const initialThemeMode =
-    initialTheme.theme === "light" || initialTheme.theme === "dark-modern"
+    initialTheme.theme === "light" || initialTheme.theme === "light-modern" || initialTheme.theme === "dark-modern"
       ? initialTheme.theme
       : "dark";
   applyThemeToDOM({

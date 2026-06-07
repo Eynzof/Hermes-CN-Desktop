@@ -11,9 +11,10 @@ import s from "./app-top-bar.module.css";
 
 const DESKTOP_VERSION_PARAM = versionLabel(DESKTOP_VERSION);
 const BRAND_URL = `https://hermesagent.org.cn?source=cn_desktop&version=${encodeURIComponent(DESKTOP_VERSION_PARAM)}`;
-const THEME_SEQUENCE: ThemeConfig["theme"][] = ["light", "dark", "dark-modern"];
+const THEME_SEQUENCE: ThemeConfig["theme"][] = ["light", "light-modern", "dark", "dark-modern"];
 const THEME_LABELS: Record<ThemeConfig["theme"], string> = {
   light: "浅色模式",
+  "light-modern": "现代浅色模式",
   dark: "经典深色模式",
   "dark-modern": "现代深色模式",
 };
@@ -24,7 +25,8 @@ export function AppTopBar() {
   const { config: themeConfig, update: updateTheme } = useTheme();
   const currentThemeIndex = THEME_SEQUENCE.indexOf(themeConfig.theme);
   const nextTheme = THEME_SEQUENCE[(currentThemeIndex + 1) % THEME_SEQUENCE.length] ?? "dark";
-  const ThemeIcon = themeConfig.theme === "light" ? Moon : themeConfig.theme === "dark-modern" ? Sun : Palette;
+  const ThemeIcon =
+    themeConfig.theme === "dark-modern" ? Sun : themeConfig.theme === "dark" || themeConfig.theme === "light" ? Palette : Moon;
   const themeToggleLabel = `切换到${THEME_LABELS[nextTheme]}`;
   const openBrandSite = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -46,7 +48,7 @@ export function AppTopBar() {
         <HermesLogoMark
           className={s.brandMark}
           size={30}
-          tone={themeConfig.theme === "light" ? "dark" : "light"}
+          tone={themeConfig.theme === "light" || themeConfig.theme === "light-modern" ? "dark" : "light"}
         />
         <span className={s.brandText}>
           <span className={s.wordmark}>

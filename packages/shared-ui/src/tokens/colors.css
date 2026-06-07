@@ -63,6 +63,41 @@
   --h-accent-border: #e8b896;
 }
 
+[data-theme="light-modern"] {
+  /* Modern light: a clean editor-style palette with white content surfaces,
+     subtle workbench chrome, quiet separators, and a blue command accent. */
+  --h-bg-app: #f3f3f3;
+  --h-bg-pane: #ffffff;
+  --h-bg-soft: #f8f8f8;
+  --h-bg-input: #ffffff;
+  --h-bg-chip: #f0f0f0;
+  --h-bg-code: #f6f8fa;
+  --h-line: #d7d7d7;
+  --h-line-soft: #e5e5e5;
+  --h-text: #1f1f1f;
+  --h-text-2: #3f3f46;
+  --h-text-3: #6e6e6e;
+  --h-text-4: #a6a6a6;
+  --h-ok: #16825d;
+  --h-ok-soft: rgba(22, 130, 93, 0.1);
+  --h-warn: #9d6b00;
+  --h-warn-soft: rgba(157, 107, 0, 0.1);
+  --h-err: #d13438;
+  --h-danger: #d13438;
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --h-shadow-l: 0 12px 32px rgba(0, 0, 0, 0.08);
+  --h-sidebar-stripe: #f8f8f8;
+  --h-accent: #0078d4;
+  --h-accent-contrast: #ffffff;
+  --h-accent-soft: rgba(0, 120, 212, 0.1);
+  --h-accent-border: rgba(0, 120, 212, 0.36);
+  --sky: #0078d4;
+  --plum: #8e44ad;
+  --amber: #9d6b00;
+  --moss: #16825d;
+  --rust: #d13438;
+}
+
 [data-theme="dark"] {
   /* Dark theme remapped onto the ink/bone palette so existing components
      adopt the prototype's deeper, cooler palette without per-component

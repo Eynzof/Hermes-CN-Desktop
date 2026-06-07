@@ -80,7 +80,7 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
 
         <AppearanceRow
           label="主题"
-          sub="选择桌面端皮肤。现代深色采用更克制的蓝黑工作台配色。"
+          sub="选择桌面端皮肤。现代主题采用更克制的工作台配色和蓝色主操作。"
           meta="applied immediately"
           right={
             <ThemeSkinPicker
@@ -140,6 +140,16 @@ const THEME_SKINS: Array<{
     soft: "#f5f2ec",
     text: "#232120",
     accent: "#ff7a3d",
+  },
+  {
+    value: "light-modern",
+    label: "现代浅色",
+    sub: "白色工作台",
+    bg: "#f3f3f3",
+    pane: "#ffffff",
+    soft: "#f0f0f0",
+    text: "#1f1f1f",
+    accent: "#0078d4",
   },
   {
     value: "dark",
