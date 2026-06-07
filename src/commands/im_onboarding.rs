@@ -1567,6 +1567,9 @@ fn spawn_managed_gateway_process(hermes_home: &str) -> Result<(u32, PathBuf), St
     if let Some(skills_dir) = crate::process::runtime::current_bundled_skills_dir() {
         cmd.env("HERMES_BUNDLED_SKILLS", skills_dir);
     }
+    if let Some(plugins_dir) = crate::process::runtime::current_bundled_plugins_dir() {
+        cmd.env("HERMES_BUNDLED_PLUGINS", plugins_dir);
+    }
     if let Some(web_dist) = crate::process::runtime::current_dashboard_web_dist_dir() {
         cmd.env("HERMES_WEB_DIST", web_dist);
     }
