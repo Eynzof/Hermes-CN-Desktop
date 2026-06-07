@@ -114,7 +114,9 @@
 }
 
 .quickNav {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--h-line-soft);
   display: flex;
   flex-direction: column;
 }
