@@ -4,10 +4,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Check, Copy } from "lucide-react";
 import { activeSessionIdAtom } from "@/stores/ui";
 import {
-  consumeSessionComposerDraftAtom,
-  type ComposerDraftSignal,
-} from "@/stores/panel";
-import {
   recoverCompletedTurnFromStoredMessagesAtom,
   removeApprovalAtom,
 } from "@/stores/chat";
@@ -64,8 +60,6 @@ export function DetailRoute() {
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
   const taskId = activeSessionId ?? urlTaskId;
   const [turnStats, setTurnStats] = useState<UiTurnStats[]>([]);
-  const [composerInitialDraft, setComposerInitialDraft] = useState<ComposerDraftSignal | null>(null);
-  const consumedComposerDraftSessionRef = useRef<string | null>(null);
 
   const {
     resumeSession,
@@ -85,7 +79,6 @@ export function DetailRoute() {
   const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
   const sessionIdCopyTimer = useRef<number | null>(null);
   const recoverCompletedTurnFromStoredMessages = useSetAtom(recoverCompletedTurnFromStoredMessagesAtom);
-  const consumeSessionComposerDraft = useSetAtom(consumeSessionComposerDraftAtom);
 
   const {
     restSessionId,
@@ -120,19 +113,6 @@ export function DetailRoute() {
     if (urlTaskId && urlTaskId !== activeSessionId) setActiveId(urlTaskId);
   }, [urlTaskId, activeSessionId, setActiveId]);
 
-  useEffect(() => {
-    if (!taskId) {
-      consumedComposerDraftSessionRef.current = null;
-      setComposerInitialDraft(null);
-      return;
-    }
-    // React StrictMode replays effects in dev. Guard by session id so the
-    // second replay does not consume "nothing" and immediately clear the
-    // one-shot draft we just injected.
-    if (consumedComposerDraftSessionRef.current === taskId) return;
-    consumedComposerDraftSessionRef.current = taskId;
-    setComposerInitialDraft(consumeSessionComposerDraft(taskId));
-  }, [consumeSessionComposerDraft, taskId]);
 
   // Reset the user-selected model whenever the route changes to a different
   // session — otherwise the composer chip would carry over the previous
@@ -416,8 +396,6 @@ export function DetailRoute() {
       <div className={s.composerArea}>
         <GooseComposer
           onSend={onSend}
-          initial={composerInitialDraft?.text ?? ""}
-          initialNonce={composerInitialDraft?.nonce ?? 0}
           loadingPlaceholder={composerLoadingPlaceholder}
           showMeta={false}
           loading={runtimeIsBusy}

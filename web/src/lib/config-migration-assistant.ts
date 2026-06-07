@@ -1,7 +1,5 @@
 import type { RuntimeInfo } from "@hermes/protocol";
 
-export const CONFIG_MIGRATION_ASSISTANT_TITLE = "配置迁移助手";
-
 export interface ConfigMigrationRuntimeConfig {
   platform?: string;
   apiBaseUrl?: string;
@@ -48,12 +46,12 @@ export function summarizeConfigMigrationRuntimeContext(
 
   return [
     `- 当前桌面端 profile：${currentProfile}`,
-    `- 桌面端当前 HERMES_HOME：${display(process?.hermesHome)}`,
-    `- 桌面端 HERMES_HOME base：${display(process?.hermesHomeBase)}`,
+    `- 当前配置目录：${display(process?.hermesHome)}`,
+    `- 桌面端配置根目录：${display(process?.hermesHomeBase)}`,
     `- Dashboard API：${dashboardUrl}`,
     `- Gateway URL：${display(runtimeConfig?.gatewayUrl ?? process?.gatewayUrl)}`,
-    `- Runtime 模式：${display(context.runtimeInfo?.mode)}`,
-    `- Runtime 可执行文件：${display(context.runtimeInfo?.current?.executablePath)}`,
+    `- 运行模式：${display(context.runtimeInfo?.mode)}`,
+    `- Hermes 程序路径：${display(context.runtimeInfo?.current?.executablePath)}`,
     `- 采集时间：${display(context.collectedAt, "未记录")}`,
   ].join("\n");
 }
@@ -63,7 +61,7 @@ export function buildConfigMigrationAssistantPrompt(
 ): string {
   const contextSummary = summarizeConfigMigrationRuntimeContext(context);
 
-  return `你是 Hermes Agent 的配置迁移助手。请帮我把已有 Hermes / hermes-agent 配置迁移到桌面端 managed runtime，但必须先诊断、再给计划、等我明确确认后才能做任何写入或覆盖性操作。
+  return `你是 Hermes Agent 的配置迁移助手。请帮我把已有 Hermes / hermes-agent 配置迁移到当前桌面端环境，但必须先诊断、再给计划、等我明确确认后才能做任何写入或覆盖性操作。
 
 当前桌面端运行信息如下：
 ${contextSummary}

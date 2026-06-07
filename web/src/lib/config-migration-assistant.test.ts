@@ -40,7 +40,7 @@ describe("config migration assistant prompt", () => {
   it("summarizes runtime context without requiring a native migration scan", () => {
     const summary = summarizeConfigMigrationRuntimeContext(context);
     expect(summary).toContain("当前桌面端 profile：default");
-    expect(summary).toContain("桌面端当前 HERMES_HOME：/Users/alice/Library/Application Support/Hermes/default");
+    expect(summary).toContain("当前配置目录：/Users/alice/Library/Application Support/Hermes/default");
     expect(summary).toContain("Dashboard API：http://127.0.0.1:9120");
   });
 
