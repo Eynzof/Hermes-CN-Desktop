@@ -1953,11 +1953,11 @@ fn collect_missing_dashboard_plugin_apis(dir: &Path, missing: &mut Vec<PathBuf>)
         {
             continue;
         }
-        if !path
+        if path
             .parent()
             .and_then(|parent| parent.file_name())
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name == "dashboard")
+            .is_none_or(|name| name != "dashboard")
         {
             continue;
         }
