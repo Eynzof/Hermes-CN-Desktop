@@ -157,12 +157,25 @@
   overflow: hidden;
 }
 
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .nameCell {
   display: block;
+  min-width: 0;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.titlePin {
+  flex-shrink: 0;
+  color: var(--h-accent);
 }
 
 .pathCell {

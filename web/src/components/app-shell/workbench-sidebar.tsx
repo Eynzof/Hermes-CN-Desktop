@@ -15,14 +15,14 @@ import {
 } from "@/lib/session-ui-state";
 import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
 import {
+  readPinnedWorkspaceProjectPaths,
   readWorkspaceProjects,
   subscribeWorkspaceChanges,
+  unpinWorkspaceProjects,
   type WorkspaceProject,
 } from "@/lib/workspaces";
 import type { SessionSummary } from "@hermes/protocol";
 import s from "./workbench-sidebar.module.css";
-
-const PROJECT_QUICK_LIMIT = 6;
 
 function relTime(unixSec: number, now: Date) {
   const d = new Date(unixSec * 1000);
@@ -46,6 +46,10 @@ function elapsed(unixSec: number, now: Date) {
 function modelShort(model: string | null | undefined) {
   if (!model) return "—";
   return model.replace(/^claude-/, "").replace(/-\d{8}$/, "");
+}
+
+function sectionLabel(index: number, label: string): string {
+  return `§${index.toString().padStart(2, "0")} · ${label}`;
 }
 
 interface SessionRowProps {
@@ -84,6 +88,7 @@ export function WorkbenchSidebar() {
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
+  const [pinnedProjectPaths, setPinnedProjectPaths] = useState(readPinnedWorkspaceProjectPaths);
 
   useEffect(
     () =>
@@ -93,7 +98,14 @@ export function WorkbenchSidebar() {
       }),
     [],
   );
-  useEffect(() => subscribeWorkspaceChanges(() => setProjects(readWorkspaceProjects())), []);
+  useEffect(
+    () =>
+      subscribeWorkspaceChanges(() => {
+        setProjects(readWorkspaceProjects());
+        setPinnedProjectPaths(readPinnedWorkspaceProjectPaths());
+      }),
+    [],
+  );
 
   const sessions = useMemo(
     () =>
@@ -123,10 +135,23 @@ export function WorkbenchSidebar() {
     [pinnedSessionIds, runtimeBySession, sessions],
   );
 
-  const sortedProjects = useMemo(
-    () => [...projects].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, PROJECT_QUICK_LIMIT),
-    [projects],
+  const pinnedProjects = useMemo(
+    () => {
+      const projectByPath = new Map(projects.map((project) => [project.path, project]));
+      return Array.from(pinnedProjectPaths).flatMap((path) => {
+        const project = projectByPath.get(path);
+        return project ? [project] : [];
+      });
+    },
+    [pinnedProjectPaths, projects],
   );
+
+  useEffect(() => {
+    if (pinnedProjectPaths.size === 0) return;
+    const livePaths = new Set(projects.map((project) => project.path));
+    const stalePaths = Array.from(pinnedProjectPaths).filter((path) => !livePaths.has(path));
+    if (stalePaths.length > 0) setPinnedProjectPaths(unpinWorkspaceProjects(stalePaths));
+  }, [pinnedProjectPaths, projects]);
 
   const goSession = (sess: SessionSummary) => {
     setActiveId(sess.id);
@@ -137,8 +162,11 @@ export function WorkbenchSidebar() {
     ? decodeURIComponent(location.pathname.slice("/tasks/".length))
     : null;
   const showPinned = pinned.length > 0;
-  const recentSectionLabel = showPinned ? "§04 · 最近对话" : "§03 · 最近对话";
-  const projectSectionLabel = showPinned ? "§05 · 项目快捷" : "§04 · 项目快捷";
+  const pinnedProjectSectionIndex = showPinned ? 4 : 3;
+  const recentSectionIndex = pinnedProjectSectionIndex + 1;
+  const pinnedSessionSectionLabel = sectionLabel(3, "置顶对话");
+  const pinnedProjectSectionLabel = sectionLabel(pinnedProjectSectionIndex, "置顶项目");
+  const recentSectionLabel = sectionLabel(recentSectionIndex, "最近对话");
 
   return (
     <aside className={s.sidebar}>
@@ -212,7 +240,7 @@ export function WorkbenchSidebar() {
         {showPinned ? (
           <section className={s.section}>
             <div className={s.label}>
-              <span>§03 · 置顶对话</span>
+              <span>{pinnedSessionSectionLabel}</span>
               <span className={s.labelNum}>✕✕</span>
             </div>
             {pinned.map((sess) => {
@@ -240,6 +268,44 @@ export function WorkbenchSidebar() {
 
         <section className={s.section}>
           <div className={s.label}>
+            <span>{pinnedProjectSectionLabel}</span>
+            <span className={s.labelNum}>✕✕</span>
+          </div>
+          {pinnedProjects.length === 0 ? (
+            <button
+              type="button"
+              className={s.sideItem}
+              onClick={() => navigate("/projects")}
+            >
+              <span className={s.sideItemIcon}>
+                <Folder size={14} />
+              </span>
+              <span className={s.sideItemLabel}>暂无置顶项目</span>
+            </button>
+          ) : (
+            pinnedProjects.map((proj) => {
+              const target = `/projects/${encodeURIComponent(proj.path)}`;
+              return (
+                <button
+                  type="button"
+                  key={proj.path}
+                  className={s.sideItem}
+                  data-active={location.pathname === target ? "true" : undefined}
+                  onClick={() => navigate(target)}
+                  title={proj.path}
+                >
+                  <span className={s.sideItemIcon}>
+                    <Folder size={14} />
+                  </span>
+                  <span className={s.sideItemLabel}>{proj.name}</span>
+                </button>
+              );
+            })
+          )}
+        </section>
+
+        <section className={s.section}>
+          <div className={s.label}>
             <span>{recentSectionLabel}</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
@@ -259,44 +325,6 @@ export function WorkbenchSidebar() {
                   meta={meta}
                   onClick={() => goSession(sess)}
                 />
-              );
-            })
-          )}
-        </section>
-
-        <section className={s.section}>
-          <div className={s.label}>
-            <span>{projectSectionLabel}</span>
-            <span className={s.labelNum}>✕✕</span>
-          </div>
-          {sortedProjects.length === 0 ? (
-            <button
-              type="button"
-              className={s.sideItem}
-              onClick={() => navigate("/projects")}
-            >
-              <span className={s.sideItemIcon}>
-                <Folder size={14} />
-              </span>
-              <span className={s.sideItemLabel}>暂无项目</span>
-            </button>
-          ) : (
-            sortedProjects.map((proj) => {
-              const target = `/projects/${encodeURIComponent(proj.path)}`;
-              return (
-                <button
-                  type="button"
-                  key={proj.path}
-                  className={s.sideItem}
-                  data-active={location.pathname === target ? "true" : undefined}
-                  onClick={() => navigate(target)}
-                  title={proj.path}
-                >
-                  <span className={s.sideItemIcon}>
-                    <Folder size={14} />
-                  </span>
-                  <span className={s.sideItemLabel}>{proj.name}</span>
-                </button>
               );
             })
           )}
