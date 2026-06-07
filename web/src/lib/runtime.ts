@@ -248,6 +248,7 @@ declare global {
       uiStoreRemoveKv?(input: { key: string }): Promise<boolean>;
       uiStoreRecordTurnStats?(input: UiTurnStats): Promise<boolean>;
       uiStoreGetTurnStats?(input: { sessionId: string }): Promise<UiTurnStats[]>;
+      uiStoreGetTurnStatsWindow?(input: { sinceMs?: number; limit?: number }): Promise<UiTurnStats[]>;
       uiStoreRecordEvent?(input: UiEventInput): Promise<boolean>;
       terminalStart?(input: TerminalStartInput): Promise<TerminalStartResult>;
       terminalOpenExternal?(input: TerminalOpenExternalInput): Promise<ExternalTerminalResult>;
