@@ -1,5 +1,4 @@
 import { lazy, Suspense } from "react";
-import "katex/dist/katex.min.css";
 import s from "./message-timeline.module.css";
 
 interface MessageTextProps {

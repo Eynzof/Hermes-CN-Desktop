@@ -1,11 +1,19 @@
 import { cjk } from "@streamdown/cjk";
 import { createMathPlugin } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
-import type { CSSProperties, ComponentProps, MouseEvent } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  type CSSProperties,
+  type ComponentProps,
+  type MouseEvent,
+} from "react";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
 import { harden } from "rehype-harden";
 import { Streamdown } from "streamdown";
+import "katex/dist/katex.min.css";
 import { MessageImage } from "./message-image";
 import s from "./markdown-renderer.module.css";
 
@@ -26,6 +34,7 @@ type RichInlineProps<T extends "span" | "small" | "time" | "mark"> = Omit<
 const ALLOWED_LINK_PROTOCOLS = ["http", "https", "irc", "ircs", "mailto", "xmpp", "tel", "obsidian"];
 const ALLOWED_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:", "obsidian:"]);
 const BLOCKED_EXTERNAL_PROTOCOLS = /^(?:javascript|data|file|vbscript|tauri):/i;
+const KatexSpanContext = createContext(false);
 
 const streamdownPlugins = {
   cjk,
@@ -67,6 +76,111 @@ const streamdownRehypePlugins: ComponentProps<typeof Streamdown>["rehypePlugins"
     },
   ],
 ];
+
+function isEscaped(text: string, index: number): boolean {
+  let slashCount = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor -= 1) {
+    slashCount += 1;
+  }
+  return slashCount % 2 === 1;
+}
+
+function linePrefix(text: string, index: number): string {
+  const lineStart = text.lastIndexOf("\n", index - 1) + 1;
+  return text.slice(lineStart, index);
+}
+
+function fenceAt(text: string, index: number): { marker: "`" | "~"; length: number } | null {
+  const prefix = linePrefix(text, index);
+  if (!/^[ \t]{0,3}$/.test(prefix)) return null;
+  const match = text.slice(index).match(/^(`{3,}|~{3,})/);
+  if (!match) return null;
+  const marker = match[1][0] as "`" | "~";
+  return { marker, length: match[1].length };
+}
+
+function closingFenceAt(text: string, index: number, fence: { marker: "`" | "~"; length: number }): boolean {
+  const found = fenceAt(text, index);
+  return Boolean(found && found.marker === fence.marker && found.length >= fence.length);
+}
+
+function tickRunLength(text: string, index: number): number {
+  let length = 0;
+  while (text[index + length] === "`") length += 1;
+  return length;
+}
+
+function findUnescaped(text: string, needle: string, from: number): number {
+  let index = from;
+  while (index < text.length) {
+    const found = text.indexOf(needle, index);
+    if (found === -1) return -1;
+    if (!isEscaped(text, found)) return found;
+    index = found + needle.length;
+  }
+  return -1;
+}
+
+function normalizeTexMathDelimiters(text: string): string {
+  let result = "";
+  let index = 0;
+  let fence: { marker: "`" | "~"; length: number } | null = null;
+  let inlineTicks = 0;
+
+  while (index < text.length) {
+    if (inlineTicks === 0) {
+      const currentFence = fenceAt(text, index);
+      if (currentFence) {
+        if (fence && closingFenceAt(text, index, fence)) {
+          fence = null;
+        } else if (!fence) {
+          fence = currentFence;
+        }
+        const length = currentFence.length;
+        result += text.slice(index, index + length);
+        index += length;
+        continue;
+      }
+    }
+
+    if (!fence && text[index] === "`") {
+      const length = tickRunLength(text, index);
+      if (inlineTicks === 0) {
+        inlineTicks = length;
+      } else if (length === inlineTicks) {
+        inlineTicks = 0;
+      }
+      result += text.slice(index, index + length);
+      index += length;
+      continue;
+    }
+
+    if (!fence && inlineTicks === 0 && !isEscaped(text, index)) {
+      if (text.startsWith("\\(", index)) {
+        const close = findUnescaped(text, "\\)", index + 2);
+        if (close !== -1) {
+          result += `$${text.slice(index + 2, close)}$`;
+          index = close + 2;
+          continue;
+        }
+      }
+
+      if (text.startsWith("\\[", index)) {
+        const close = findUnescaped(text, "\\]", index + 2);
+        if (close !== -1) {
+          result += `\n\n$$\n${text.slice(index + 2, close).trim()}\n$$\n\n`;
+          index = close + 2;
+          continue;
+        }
+      }
+    }
+
+    result += text[index];
+    index += 1;
+  }
+
+  return result;
+}
 
 function safeHref(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -340,11 +454,42 @@ function richInlineClassName(
   );
 }
 
+function hasRichInlineData(props: Record<string, unknown>): boolean {
+  return Boolean(
+    dataValue(props, "data-tone", "dataTone") ||
+      dataValue(props, "data-size", "dataSize") ||
+      props.style ||
+      props.title,
+  );
+}
+
 function MarkdownSpan({ children, className, node: _node, style, ...props }: RichInlineProps<"span">) {
+  const insideKatex = useContext(KatexSpanContext);
+  const isKatexRoot = typeof className === "string" && /\bkatex\b/.test(className);
+
+  if (insideKatex || isKatexRoot) {
+    const span = (
+      <span {...props} className={className} style={style as CSSProperties | undefined}>
+        {children}
+      </span>
+    );
+
+    return isKatexRoot ? <KatexSpanContext.Provider value>{span}</KatexSpanContext.Provider> : span;
+  }
+
+  const record = props as Record<string, unknown>;
+  if (className && !hasRichInlineData(record)) {
+    return (
+      <span {...props} className={className} style={style as CSSProperties | undefined}>
+        {children}
+      </span>
+    );
+  }
+
   return (
     <span
       {...props}
-      className={richInlineClassName(props as Record<string, unknown>, className)}
+      className={richInlineClassName(record, className)}
       style={sanitizeInlineStyle(style)}
     >
       {children}
@@ -398,8 +543,11 @@ const streamdownComponents = {
 };
 
 export function MarkdownText({ text, streaming = false }: MarkdownTextProps) {
+  const normalizedText = useMemo(() => normalizeTexMathDelimiters(text), [text]);
+
   return (
     <Streamdown
+      className={s.markdownRoot}
       components={streamdownComponents}
       controls={false}
       dir="auto"
@@ -410,7 +558,7 @@ export function MarkdownText({ text, streaming = false }: MarkdownTextProps) {
       plugins={streamdownPlugins}
       rehypePlugins={streamdownRehypePlugins}
     >
-      {text}
+      {normalizedText}
     </Streamdown>
   );
 }

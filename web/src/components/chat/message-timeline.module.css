@@ -394,9 +394,9 @@
 .messageText :global(.katex-display) {
   max-width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
-  margin: 10px 0;
-  padding-bottom: 2px;
+  overflow-y: visible;
+  margin: 12px 0;
+  padding: 4px 0 10px;
 }
 
 .turnText + .turnText,
