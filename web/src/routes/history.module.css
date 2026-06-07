@@ -392,7 +392,6 @@
 .convRow {
   display: grid;
   grid-template-columns:
-    28px       /* select */
     64px       /* id */
     minmax(0, 1fr) /* title */
     80px       /* source chip */
@@ -402,6 +401,19 @@
     32px;      /* more */
   gap: 12px;
   align-items: center;
+}
+
+.colHead[data-bulk="true"],
+.convRow[data-bulk="true"] {
+  grid-template-columns:
+    28px       /* select */
+    64px       /* id */
+    minmax(0, 1fr) /* title */
+    80px       /* source chip */
+    140px      /* model */
+    minmax(0, 160px) /* workspace */
+    100px      /* updated */
+    32px;      /* more */
 }
 
 .colHead {

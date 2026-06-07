@@ -400,6 +400,7 @@ export function HistoryRoute() {
   const [renameValue, setRenameValue] = useState("");
   const [renameError, setRenameError] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
+  const [bulkDeleteMode, setBulkDeleteMode] = useState(false);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
   const [deleteTargets, setDeleteTargets] = useState<SessionSummary[] | null>(null);
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
@@ -535,11 +536,12 @@ export function HistoryRoute() {
   const allVisibleSelected = visibleSessionIds.length > 0 && visibleSessionIds.every((id) => selectedSessionIds.has(id));
 
   useEffect(() => {
+    if (!bulkDeleteMode) return;
     setSelectedSessionIds((prev) => {
       const next = new Set(Array.from(prev).filter((id) => visibleSessionIdSet.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [visibleSessionIdSet]);
+  }, [bulkDeleteMode, visibleSessionIdSet]);
 
   const onTogglePinSource = useCallback((key: string) => {
     setPinnedSources(togglePinnedSource(key));
@@ -566,17 +568,35 @@ export function HistoryRoute() {
     setSelectedSessionIds(new Set(visibleSessionIds));
   }, [visibleSessionIds]);
 
+  const startBulkDeleteMode = useCallback(() => {
+    setOpenMenuId(null);
+    setDeleteFeedback(null);
+    setSelectedSessionIds(new Set());
+    setBulkDeleteMode(true);
+  }, []);
+
+  const stopBulkDeleteMode = useCallback(() => {
+    if (deleteSessions.isPending) return;
+    setBulkDeleteMode(false);
+    setSelectedSessionIds(new Set());
+    setDeleteFeedback(null);
+  }, [deleteSessions.isPending]);
+
   const activeSessionId = useAtomValue(activeSessionIdAtom);
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
   const goSession = useCallback(
     (session: SessionSummary) => {
+      if (bulkDeleteMode) {
+        toggleSelectedSession(session.id, !selectedSessionIds.has(session.id));
+        return;
+      }
       // Atom is the source of truth (#53). Set synchronously *before*
       // navigate so any async work that mounts as part of the detail
       // route reads the post-click value, not the previous one.
       setActiveSessionId(session.id);
       navigate(`/tasks/${session.id}`);
     },
-    [navigate, setActiveSessionId],
+    [bulkDeleteMode, navigate, selectedSessionIds, setActiveSessionId, toggleSelectedSession],
   );
 
   const startRename = useCallback((session: SessionSummary) => {
@@ -653,7 +673,9 @@ export function HistoryRoute() {
       const sample = result.failed[0]?.error ? `：${result.failed[0].error}` : "";
       setDeleteFeedback(`已删除 ${result.successCount} 个会话，${result.failureCount} 个删除失败${sample}`);
     } else {
-      setDeleteFeedback(result.successCount > 0 ? `已删除 ${result.successCount} 个会话` : null);
+      setDeleteFeedback(null);
+      setBulkDeleteMode(false);
+      setSelectedSessionIds(new Set());
     }
     setDeleteTargets(null);
   }, [activeSessionId, deleteSessions, deleteTargets, navigate, setActiveSessionId]);
@@ -686,6 +708,13 @@ export function HistoryRoute() {
             <span className={s.headerStat}>
               今日 <span className={s.headerStatValue}>{formatTokens(todayTokens)} tokens</span>
             </span>
+            <TopBarActionButton
+              onClick={startBulkDeleteMode}
+              disabled={bulkDeleteMode || deleteSessions.isPending || filtered.length === 0}
+            >
+              <Trash2 size={13} />
+              批量删除
+            </TopBarActionButton>
             <TopBarActionButton onClick={() => navigate("/")}>
               <Plus size={13} />
               新对话
@@ -779,28 +808,33 @@ export function HistoryRoute() {
         </div>
       </div>
 
-      <div className={s.bulkBar} data-active={selectedSessionIds.size > 0 ? "true" : undefined}>
-        {deleteFeedback ? <span className={s.bulkFeedback}>{deleteFeedback}</span> : null}
-        <span>
-          已选择 {selectedSessionIds.size} 个会话
-          {filtered.length > 0 ? ` · 当前筛选 ${filtered.length} 个` : ""}
-        </span>
-        <button type="button" onClick={selectVisibleSessions} disabled={visibleSessionIds.length === 0 || allVisibleSelected || deleteSessions.isPending}>
-          选择当前筛选结果
-        </button>
-        <button type="button" onClick={clearSelectedSessions} disabled={selectedSessionIds.size === 0 || deleteSessions.isPending}>
-          清空选择
-        </button>
-        <button
-          type="button"
-          className={s.bulkDanger}
-          onClick={() => openDeleteDialog(selectedSessions)}
-          disabled={selectedSessions.length === 0 || deleteSessions.isPending}
-        >
-          <Trash2 size={13} />
-          删除所选
-        </button>
-      </div>
+      {bulkDeleteMode ? (
+        <div className={s.bulkBar} data-active={selectedSessionIds.size > 0 ? "true" : undefined}>
+          {deleteFeedback ? <span className={s.bulkFeedback}>{deleteFeedback}</span> : null}
+          <span>
+            已选择 {selectedSessionIds.size} 个会话
+            {filtered.length > 0 ? ` · 当前筛选 ${filtered.length} 个` : ""}
+          </span>
+          <button type="button" onClick={selectVisibleSessions} disabled={visibleSessionIds.length === 0 || allVisibleSelected || deleteSessions.isPending}>
+            选择当前筛选结果
+          </button>
+          <button type="button" onClick={clearSelectedSessions} disabled={selectedSessionIds.size === 0 || deleteSessions.isPending}>
+            清空选择
+          </button>
+          <button
+            type="button"
+            className={s.bulkDanger}
+            onClick={() => openDeleteDialog(selectedSessions)}
+            disabled={selectedSessions.length === 0 || deleteSessions.isPending}
+          >
+            <Trash2 size={13} />
+            删除所选
+          </button>
+          <button type="button" onClick={stopBulkDeleteMode} disabled={deleteSessions.isPending}>
+            退出批量删除
+          </button>
+        </div>
+      ) : null}
 
       <div className={s.scroll}>
         {isError ? (
@@ -829,8 +863,8 @@ export function HistoryRoute() {
                 </div>
 
                 {groupIdx === 0 ? (
-                  <div className={s.colHead} aria-hidden="true">
-                    <span />
+                  <div className={s.colHead} data-bulk={bulkDeleteMode ? "true" : undefined} aria-hidden="true">
+                    {bulkDeleteMode ? <span /> : null}
                     <span>ID</span>
                     <span>标题</span>
                     <span>来源</span>
@@ -864,18 +898,21 @@ export function HistoryRoute() {
                       className={s.convRow}
                       data-status={status.kind}
                       data-selected={selected ? "true" : undefined}
+                      data-bulk={bulkDeleteMode ? "true" : undefined}
                       onClick={() => goSession(session)}
                     >
-                      <span className={s.cellSelect}>
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          disabled={deleteSessions.isPending}
-                          aria-label={`选择会话 ${sessionDisplayTitle(session)}`}
-                          onChange={(event) => toggleSelectedSession(session.id, event.currentTarget.checked)}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </span>
+                      {bulkDeleteMode ? (
+                        <span className={s.cellSelect}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            disabled={deleteSessions.isPending}
+                            aria-label={`选择会话 ${sessionDisplayTitle(session)}`}
+                            onChange={(event) => toggleSelectedSession(session.id, event.currentTarget.checked)}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </span>
+                      ) : null}
                       <span className={s.cellId}>{shortId(session.id)}</span>
                       <span className={s.cellTitle}>
                         {status.kind === "running" ? (
