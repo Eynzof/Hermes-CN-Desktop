@@ -5,7 +5,11 @@ import { Folder, MessageSquare, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
-import { isSessionRunning } from "@/lib/session-activity";
+import {
+  isSessionRunning,
+  mergeLiveRuntimeSessions,
+  sessionIdMatches,
+} from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
   readPinnedSessionIds,
@@ -122,11 +126,14 @@ export function WorkbenchSidebar() {
 
   const sessions = useMemo(
     () =>
-      (data?.sessions ?? []).map((sess) => {
-        const override = titleOverrides[sess.id];
-        return override ? { ...sess, title: override } : sess;
-      }),
-    [data?.sessions, titleOverrides],
+      mergeLiveRuntimeSessions(
+        (data?.sessions ?? []).map((sess) => {
+          const override = titleOverrides[sess.id];
+          return override ? { ...sess, title: override } : sess;
+        }),
+        runtimeBySession,
+      ),
+    [data?.sessions, runtimeBySession, titleOverrides],
   );
 
   useEffect(() => {
@@ -245,7 +252,7 @@ export function WorkbenchSidebar() {
                 key={sess.id}
                 session={sess}
                 state="live"
-                active={sess.id === activeSessionId}
+                active={sessionIdMatches(sess.id, activeSessionId)}
                 meta={`${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}`}
                 projectName={projectNameBySessionId.get(sess.id)}
                 onClick={() => goSession(sess)}
@@ -274,7 +281,7 @@ export function WorkbenchSidebar() {
                   key={sess.id}
                   session={sess}
                   state={state}
-                  active={sess.id === activeSessionId}
+                  active={sessionIdMatches(sess.id, activeSessionId)}
                   meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
                   projectName={projectNameBySessionId.get(sess.id)}
                   onClick={() => goSession(sess)}
@@ -339,7 +346,7 @@ export function WorkbenchSidebar() {
                   key={sess.id}
                   session={sess}
                   state={state}
-                  active={sess.id === activeSessionId}
+                  active={sessionIdMatches(sess.id, activeSessionId)}
                   meta={meta}
                   projectName={projectNameBySessionId.get(sess.id)}
                   onClick={() => goSession(sess)}
