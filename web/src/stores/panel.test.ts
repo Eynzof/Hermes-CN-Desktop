@@ -1,7 +1,14 @@
 import { createStore } from "jotai/vanilla";
 import { describe, expect, it } from "vitest";
 
-import { composerPrefillAtom } from "./panel";
+import {
+  composerPrefillAtom,
+  consumeSessionComposerDraftAtom,
+  sessionComposerDraftsAtom,
+  setSessionComposerDraftAtom,
+  withSessionComposerDraft,
+  withoutSessionComposerDraft,
+} from "./panel";
 
 describe("composerPrefillAtom", () => {
   it("starts as null", () => {
@@ -49,5 +56,37 @@ describe("composerPrefillAtom", () => {
     expect(seen).toHaveLength(2);
     expect(seen[0]?.nonce).toBe(1);
     expect(seen[1]?.nonce).toBe(2);
+  });
+});
+
+describe("session composer draft bridge", () => {
+  it("stores drafts by session id", () => {
+    const drafts = withSessionComposerDraft({}, "s1", "migration prompt", 11);
+    expect(drafts).toEqual({ s1: { text: "migration prompt", nonce: 11 } });
+  });
+
+  it("ignores empty session ids", () => {
+    const drafts = withSessionComposerDraft({}, "   ", "migration prompt", 11);
+    expect(drafts).toEqual({});
+  });
+
+  it("removes a single draft without touching others", () => {
+    const drafts = {
+      s1: { text: "one", nonce: 1 },
+      s2: { text: "two", nonce: 2 },
+    };
+    expect(withoutSessionComposerDraft(drafts, "s1")).toEqual({
+      s2: { text: "two", nonce: 2 },
+    });
+  });
+
+  it("consumes a session draft once", () => {
+    const store = createStore();
+    store.set(setSessionComposerDraftAtom, { sessionId: "s1", text: "draft", nonce: 7 });
+    expect(store.get(sessionComposerDraftsAtom)).toEqual({ s1: { text: "draft", nonce: 7 } });
+
+    expect(store.set(consumeSessionComposerDraftAtom, "s1")).toEqual({ text: "draft", nonce: 7 });
+    expect(store.get(sessionComposerDraftsAtom)).toEqual({});
+    expect(store.set(consumeSessionComposerDraftAtom, "s1")).toBeNull();
   });
 });
