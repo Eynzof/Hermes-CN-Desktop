@@ -138,8 +138,14 @@ function LegacyConfigMigrationRoute() {
   const [lastImport, setLastImport] = useState<ConfigMigrationImportResult | null>(null);
   const mountedRef = useRef(true);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    // StrictMode（dev）会模拟 mount→unmount→remount，卸载时已把 mountedRef 置 false，
+    // 必须在重新挂载时复位为 true，否则后续 scan 完成时会被 `!mountedRef.current` 拦掉，
+    // 页面永远停在“扫描中”。
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const candidates = scanResult?.candidates ?? [];

@@ -72,6 +72,9 @@ function abortPromise(signal?: AbortSignal | null): Promise<never> | null {
 export async function raceAbort<T>(work: Promise<T>, signal?: AbortSignal | null): Promise<T> {
   const aborted = abortPromise(signal);
   if (!aborted) return work;
+  // abort 胜出后底层（原生 IPC）的 work 仍在后台跑，若它随后 reject 会变成
+  // unhandled rejection——在“快速切换”这一高频场景里尤其刷屏。兜底吞掉它。
+  work.catch(() => {});
   return Promise.race([work, aborted]);
 }
 
