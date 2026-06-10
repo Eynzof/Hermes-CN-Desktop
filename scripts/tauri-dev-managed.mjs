@@ -1,10 +1,24 @@
 #!/usr/bin/env node
 import { spawnSync, spawn } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const skipInstall = process.env.HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL === "1";
+
+function devRuntimeRoot() {
+  if (process.env.HERMES_DESKTOP_RUNTIME_ROOT) {
+    return resolve(process.env.HERMES_DESKTOP_RUNTIME_ROOT);
+  }
+  const base =
+    process.platform === "darwin"
+      ? join(homedir(), "Library", "Application Support")
+      : process.platform === "win32"
+        ? process.env.APPDATA ?? join(homedir(), "AppData", "Roaming")
+        : process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share");
+  return join(base, "cn.org.hermesagent.desktop", "dev-runtime");
+}
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: pnpm tauri:dev[:managed] [--source ../Hermes-CN-Core] [--force]
@@ -34,6 +48,12 @@ const child = spawn(pnpm, ["exec", "tauri", "dev"], {
   stdio: "inherit",
   env: {
     ...process.env,
+    // Dev kernels live under dev-runtime/ so they never overwrite the packaged
+    // app's production runtime/current.json.
+    HERMES_DESKTOP_RUNTIME_ROOT:
+      process.env.HERMES_DESKTOP_RUNTIME_ROOT ?? devRuntimeRoot(),
+    HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME:
+      process.env.HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME ?? "1",
     // Default dev mode now exercises the same managed runtime path as the
     // packaged app. Use HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1 only when you
     // deliberately want to attach to a separately started dashboard.

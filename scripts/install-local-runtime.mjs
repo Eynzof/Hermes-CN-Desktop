@@ -98,7 +98,7 @@ function dataDir() {
 function runtimeRoot() {
   return process.env.HERMES_DESKTOP_RUNTIME_ROOT
     ? resolve(process.env.HERMES_DESKTOP_RUNTIME_ROOT)
-    : join(dataDir(), "cn.org.hermesagent.desktop", "runtime");
+    : join(dataDir(), "cn.org.hermesagent.desktop", "dev-runtime");
 }
 
 function platformName() {

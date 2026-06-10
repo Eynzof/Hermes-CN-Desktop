@@ -1,0 +1,4 @@
+interface:
+  display_name: "双仓库启动与测试"
+  short_description: "用 Hermes-CN-Desktop 与 Hermes-CN-Core 最新分支正确启动 dev 或打包态补验。"
+  default_prompt: "按双仓库测试技能，同步 Hermes-CN-Desktop 与 Hermes-CN-Core 最新分支，执行路线 A dev 或路线 B 打包态验证并填写回报表。"
