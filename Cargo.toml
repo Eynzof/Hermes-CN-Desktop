@@ -43,6 +43,9 @@ portable-pty = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }
 libc = "0.2"
 getrandom = "0.3"
+# Parse $HERMES_HOME/.env for per-spawn child env injection (src/env_file.rs).
+# Only from_path_iter is used — the desktop process env is never mutated.
+dotenvy = "0.15"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [

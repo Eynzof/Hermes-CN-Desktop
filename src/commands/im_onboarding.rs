@@ -1566,6 +1566,11 @@ fn spawn_managed_gateway_process(hermes_home: &str) -> Result<(u32, PathBuf), St
     let stderr = Stdio::from(log);
 
     let mut cmd = Command::new(&record.executable_path);
+    // User .env first; the explicit desktop wiring below must win. The IM
+    // gateway reads the credentials this onboarding flow just wrote into
+    // $HERMES_HOME/.env, so inject them at spawn instead of relying solely
+    // on the runtime's own dotenv load. See #197.
+    crate::env_file::inject_env_file(&mut cmd, hermes_home, "IM gateway");
     cmd.args(["gateway", "run", "--replace"])
         .current_dir(&record.path)
         .env("HERMES_HOME", hermes_home)

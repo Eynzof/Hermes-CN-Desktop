@@ -755,6 +755,11 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    // User-configured $HERMES_HOME/.env goes in first so every explicit
+    // .env(...) below — and the env_remove for HERMES_YOLO_MODE — wins
+    // over file contents. Re-read on every respawn so profile switches and
+    // .env edits take effect without restarting the desktop. See #197.
+    crate::env_file::inject_env_file(&mut cmd, &options.hermes_home, "dashboard");
     let session_token = session_token_for_spawn();
     let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
     let gateway_lock_dir = gateway_runtime_dir.join("token-locks");

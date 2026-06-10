@@ -320,6 +320,8 @@ fn apply_managed_gateway_env(
     gateway_runtime_dir: &Path,
     gateway_lock_dir: &Path,
 ) {
+    // User .env first; the explicit desktop wiring below must win.
+    crate::env_file::inject_env_file(cmd, hermes_home, "gateway helper");
     cmd.env("HERMES_HOME", hermes_home)
         .env("HERMES_GATEWAY_RUNTIME_DIR", gateway_runtime_dir)
         .env("HERMES_GATEWAY_LOCK_DIR", gateway_lock_dir)
