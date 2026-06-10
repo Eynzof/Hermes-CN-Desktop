@@ -10,6 +10,22 @@ use std::process::Child;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio::sync::Notify;
+
+/// Handle to the live Rust→runtime `/api/ws` relay (see commands/ws_proxy.rs).
+/// Holds only std/tokio types so this module stays decoupled from the WS crate.
+pub struct GatewayWsHandle {
+    /// Per-connection id; relay events are tagged with it so a stale relay from
+    /// a prior connection can't deliver into a freshly-opened socket's shim.
+    pub connection_id: String,
+    /// Outbound text frames pushed by `gateway_ws_send` → the writer task.
+    pub tx: mpsc::UnboundedSender<String>,
+    /// Set to stop the reader/writer tasks (checked at each loop iteration).
+    pub abort: Arc<AtomicBool>,
+    /// Wakes the reader/writer tasks so they observe `abort` promptly.
+    pub notify: Arc<Notify>,
+}
 
 /// Windows Job Object handle used to bind the dashboard process tree to the
 /// desktop lifecycle. On non-Windows this is a zero-sized placeholder so the
@@ -128,7 +144,10 @@ pub struct AppStateInner {
     pub session_token: Option<String>,
     pub current_profile: String,
     pub dashboard_handle: Option<DashboardHandle>,
-    pub gateway_sse_stop: Option<Arc<AtomicBool>>,
+    /// The live Rust→runtime `/api/ws` relay connection, when the webview is
+    /// on the relay socket path. `None` on webview-direct WS or before the
+    /// first relay connect.
+    pub gateway_ws: Option<GatewayWsHandle>,
     /// Set while a managed-dashboard restart is in progress (profile switch or
     /// YOLO toggle). Guards against two restarts racing on `dashboard_handle`.
     pub dashboard_restart_in_flight: bool,
@@ -156,7 +175,7 @@ impl AppState {
                 session_token: None,
                 current_profile: "default".to_string(),
                 dashboard_handle: None,
-                gateway_sse_stop: None,
+                gateway_ws: None,
                 dashboard_restart_in_flight: false,
                 last_runtime_error: None,
                 yolo_mode: false,

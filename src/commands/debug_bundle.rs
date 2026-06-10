@@ -103,7 +103,7 @@ struct RuntimeProcessSnapshot {
     ownership_marker_path: Option<String>,
     ownership_state: Option<String>,
     session_token_present: bool,
-    gateway_sse_proxy_active: bool,
+    gateway_ws_relay_active: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -169,10 +169,10 @@ fn capture_debug_state(state: &State<'_, AppState>) -> AppResult<DebugStateSnaps
             ownership_marker_path: handle.ownership_marker_path.clone(),
             ownership_state: handle.ownership_state.clone(),
             session_token_present: inner.session_token.is_some(),
-            gateway_sse_proxy_active: inner
-                .gateway_sse_stop
+            gateway_ws_relay_active: inner
+                .gateway_ws
                 .as_ref()
-                .map(|stop| !stop.load(std::sync::atomic::Ordering::Relaxed))
+                .map(|relay| !relay.abort.load(std::sync::atomic::Ordering::Relaxed))
                 .unwrap_or(false),
         });
 
@@ -202,7 +202,7 @@ fn capture_debug_state(state: &State<'_, AppState>) -> AppResult<DebugStateSnaps
                 "gatewayLockDir": p.gateway_lock_dir,
                 "ownershipMarkerPath": p.ownership_marker_path,
                 "ownershipState": p.ownership_state,
-                "gatewaySseProxyActive": p.gateway_sse_proxy_active,
+                "gatewayWsRelayActive": p.gateway_ws_relay_active,
             })),
         });
 
@@ -227,7 +227,7 @@ fn capture_debug_state(state: &State<'_, AppState>) -> AppResult<DebugStateSnaps
             ownership_marker_path: process.ownership_marker_path,
             ownership_state: process.ownership_state,
             session_token_present: process.session_token_present,
-            gateway_sse_proxy_active: process.gateway_sse_proxy_active,
+            gateway_ws_relay_active: process.gateway_ws_relay_active,
         });
     }
 

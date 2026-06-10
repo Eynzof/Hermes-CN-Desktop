@@ -19,12 +19,9 @@ pub enum AppError {
     #[error("Dashboard probe failed: {0}")]
     DashboardProbe(String),
 
-    // --- Gateway / SSE ---
-    #[error("SSE connection failed: {0}")]
-    SseConnect(String),
-
-    #[error("SSE stream error: {0}")]
-    SseStream(String),
+    // --- Gateway ---
+    #[error("Gateway WebSocket error: {0}")]
+    GatewayWs(String),
 
     // --- Runtime management ---
     #[error("Runtime update manifest not configured")]
@@ -115,8 +112,7 @@ impl AppError {
             AppError::DashboardStartup(_) => "dashboard_startup",
             AppError::DashboardUnreachable(_) => "dashboard_unreachable",
             AppError::DashboardProbe(_) => "dashboard_probe",
-            AppError::SseConnect(_) => "sse_connect",
-            AppError::SseStream(_) => "sse_stream",
+            AppError::GatewayWs(_) => "gateway_ws",
             AppError::RuntimeManifestNotConfigured => "runtime_manifest_not_configured",
             AppError::RuntimeCheckFailed(_) => "runtime_check_failed",
             AppError::RuntimeDownloadFailed(_) => "runtime_download_failed",
@@ -147,7 +143,7 @@ impl AppError {
             AppError::DashboardStartup(_)
             | AppError::DashboardUnreachable(_)
             | AppError::DashboardProbe(_) => "dashboard",
-            AppError::SseConnect(_) | AppError::SseStream(_) => "sse",
+            AppError::GatewayWs(_) => "gateway_ws",
             AppError::RuntimeManifestNotConfigured
             | AppError::RuntimeCheckFailed(_)
             | AppError::RuntimeDownloadFailed(_)

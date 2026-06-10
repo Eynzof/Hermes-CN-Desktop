@@ -1,10 +1,7 @@
 /**
  * Friendly parsing for gateway RPC results.
  *
- * Background (#58): the SSE+POST transport returns an async ack
- * (`{accepted:true,async:true}`) and the real result arrives later over the
- * SSE stream. `gateway-sse-client` already waits for that final frame, but if
- * the final result is shaped unexpectedly (runtime version skew, error frame,
+ * If an RPC result is shaped unexpectedly (runtime version skew, error frame,
  * missing field) the call sites in `use-gateway.ts` used to do a bare
  * `Schema.parse(...)` and the raw `ZodError` — e.g. the infamous
  * `[{"path":["session_id"],"message":"Required"}]` — leaked straight into the
@@ -107,7 +104,7 @@ export function humanizeGatewayError(error: unknown): string {
   if (
     lower.includes("connection closed") ||
     lower.includes("connection lost") ||
-    lower.includes("sse closed") ||
+    lower.includes("websocket closed") ||
     lower.includes("disconnect")
   ) {
     return "与运行时的连接已断开，请重试。";

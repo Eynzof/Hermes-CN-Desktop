@@ -12,19 +12,16 @@ pub struct RuntimeConfig {
     pub gateway_url: String,
     pub session_token: Option<String>,
     pub current_profile: String,
-    pub transport: String,
 }
 
 #[tauri::command]
 pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, AppError> {
     let inner = state.inner.lock()?;
-    let transport = std::env::var("HERMES_DESKTOP_TRANSPORT").unwrap_or_else(|_| "sse".to_string());
     Ok(RuntimeConfig {
         api_base_url: inner.api_base_url.clone(),
         gateway_url: inner.gateway_url.clone(),
         session_token: inner.session_token.clone(),
         current_profile: inner.current_profile.clone(),
-        transport,
     })
 }
 

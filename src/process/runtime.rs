@@ -188,7 +188,8 @@ pub struct RuntimeProcessInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ownership_state: Option<String>,
     pub session_token_present: bool,
-    pub gateway_sse_proxy_active: bool,
+    /// True while the Rust /api/ws relay (fallback socket path) is connected.
+    pub gateway_ws_relay_active: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

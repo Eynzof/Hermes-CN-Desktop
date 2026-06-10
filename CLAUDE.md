@@ -21,7 +21,7 @@ hermes-agent-cn-desktop/
 │   ├── update_stage.rs / util.rs / ui_store.rs
 │   ├── commands/             ~49 个 #[tauri::command]（约 20 个文件，列表见 main.rs 的 generate_handler!）
 │   │   ├── api_proxy.rs         HTTP 代理（api_request / external_request / upload_file）
-│   │   ├── sse_proxy.rs         SSE 事件流代理（绕过 CORS）
+│   │   ├── ws_proxy.rs          /api/ws WebSocket 中继（webview 原生 WS 被拦时的兜底）
 │   │   ├── gateway.rs           runtime config + gateway URL 刷新
 │   │   ├── runtime_manager.rs   managed runtime 下载/更新/回滚
 │   │   ├── desktop_update.rs    桌面端自更新
@@ -39,7 +39,8 @@ hermes-agent-cn-desktop/
 │   │   ├── lib/tauri-bridge.ts    Tauri invoke 包装 + hermesDesktop shim
 │   │   ├── lib/runtime.ts         平台检测（web / electron / tauri）
 │   │   ├── lib/transport.ts       HTTP 路由（native IPC vs fetch）
-│   │   └── lib/gateway-sse-client.ts  SSE 客户端（含 Tauri 代理模式）
+│   │   ├── lib/gateway-client.ts  网关 WS 客户端（JSON-RPC over /api/ws，心跳/退避/唤醒重连）
+│   │   └── lib/gateway-socket-path.ts  原生 WS vs Rust 中继的 socket 路径选择与自动回退
 │   └── vite.config.ts
 ├── packages/
 │   ├── protocol/              Zod schemas、IPC 类型、会话日志解析
@@ -116,7 +117,7 @@ pnpm tauri:build:bundled-macos-intel     # dmg (x86_64)
 |--|---------|---------|
 | WebView 加载 | `http://localhost:9545`（Vite） | 打包的 `web/dist/` |
 | REST API | Vite proxy → dashboard（同源） | Rust IPC 代理（`api_request` command） |
-| SSE 事件流 | EventSource → Vite proxy | Rust SSE 代理（`sse_proxy.rs`） |
+| 网关 WebSocket | `ws://localhost:9545/api/ws` → Vite proxy（`ws: true`） | webview 直连 `ws://127.0.0.1:<port>/api/ws`；被拦则 Rust 中继（`ws_proxy.rs`） |
 | Session token | Vite `/__hermes_token` 端点 | Rust `get_runtime_config` command |
 | `apiBaseUrl` | 不设置（走相对路径） | 设置为 dashboard URL |
 
@@ -138,8 +139,13 @@ pnpm tauri:build:bundled-macos-intel     # dmg (x86_64)
 
 ### Gateway transport
 
-默认 SSE（`gateway-sse-client.ts`），因为 Dashboard WebSocket 可能被 P-003 闸门阻断。
-生产模式下 SSE 通过 Rust 代理（`sse_proxy.rs`）绕过 CORS。
+唯一传输是 **JSON-RPC over WebSocket（官方 `/api/ws`）**，与官方桌面端（Core `apps/desktop`）
+架构一致；SSE+POST 旧路径（P-009）已删除。`gateway-client.ts` 是协议层 + 重连编排
+（30s/10s 心跳、1→15s 指数退避、唤醒/online/visibility 触发、重连后 `session.resume`）。
+socket 载体由 `gateway-socket-path.ts` 选择：默认 webview 原生 WebSocket 直连；打包态
+webview 拦 `ws://` 时自动回退到 Rust 中继（`ws_proxy.rs`，线协议不变），结果粘性记忆在
+`HERMES_WS_PATH_LEARNED`，QA 可用 `?wspath=native|relay` 强制覆盖。
+详见 `docs/gateway-connection-overhaul.md`。
 
 ## 不要做的事
 

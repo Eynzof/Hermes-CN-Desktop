@@ -206,7 +206,6 @@ declare global {
       gatewayUrl?: string;
       sessionToken?: string;
       currentProfile?: string;
-      transport?: "ws" | "sse";
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
@@ -350,7 +349,7 @@ export const runtime = {
 
   // After set_yolo_mode restarts the managed runtime, the session token rotated
   // and the gateway URL/port may have shifted. Adopt the new values so the next
-  // transport call and SSE reconnect use the live dashboard.
+  // transport call and WebSocket reconnect use the live dashboard.
   applyYoloRestartResult(result: SetYoloModeResult): void {
     if (!result.ok || !result.restarted || !window.__HERMES_RUNTIME__) return;
     if (result.apiBaseUrl) {

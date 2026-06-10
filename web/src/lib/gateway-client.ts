@@ -1,14 +1,17 @@
 import { parseGatewayEvent, type GatewayEvent } from "@hermes/protocol";
 import { runtime } from "./runtime";
-import { readUiValue } from "./ui-store";
 
 export type ConnectionState = "idle" | "connecting" | "open" | "closed" | "error";
 
 const DEFAULT_RPC_TIMEOUT_MS = 120_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
 
+// 对齐官方桌面端(apps/desktop use-gateway-boot.ts):min(15s, 1s·2^min(n,4))。
+// 上限压在 15s 还有一个服务端原因:WS 断开后空闲会话只有 20s 回收宽限
+// (_WS_ORPHAN_REAP_GRACE_S),首批重试必须落在宽限内。
 const RECONNECT_BASE_DELAY_MS = 1_000;
-const RECONNECT_MAX_DELAY_MS = 30_000;
+const RECONNECT_MAX_DELAY_MS = 15_000;
+const RECONNECT_EXP_CAP = 4;
 const RECONNECT_MAX_ATTEMPTS = Infinity;
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -34,7 +37,18 @@ export interface GatewayConnectOptions {
   timeoutMs?: number;
 }
 
+// 与原生 WebSocket 构造签名一致的工厂。默认直接 new WebSocket;打包态 webview
+// 开不了 ws://127.0.0.1 时换成 Rust 中继 socket(gateway-relay-socket.ts),
+// 两条路径线协议完全相同,客户端其余逻辑无感。
+export type GatewaySocketFactory = (url: string) => WebSocket;
+
 export class GatewayClient {
+  private readonly socketFactory: GatewaySocketFactory;
+
+  constructor(socketFactory?: GatewaySocketFactory) {
+    this.socketFactory = socketFactory ?? ((url) => new WebSocket(url));
+  }
+
   private ws: WebSocket | null = null;
   private connectPromise: Promise<void> | null = null;
   private _state: ConnectionState = "idle";
@@ -141,7 +155,7 @@ export class GatewayClient {
       this.setState("connecting");
 
       try {
-        ws = new WebSocket(runtime.getGatewayUrl());
+        ws = this.socketFactory(runtime.getGatewayUrl());
       } catch (e) {
         syncConnectFailed = true;
         this.connectPromise = null;
@@ -233,7 +247,7 @@ export class GatewayClient {
     if (this.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) return;
 
     const delay = Math.min(
-      RECONNECT_BASE_DELAY_MS * Math.pow(2, this.reconnectAttempts),
+      RECONNECT_BASE_DELAY_MS * Math.pow(2, Math.min(this.reconnectAttempts, RECONNECT_EXP_CAP)),
       RECONNECT_MAX_DELAY_MS,
     );
     const jitter = delay * 0.2 * Math.random();
@@ -267,6 +281,9 @@ export class GatewayClient {
       }
 
       try {
+        // 服务端没有注册 "ping" 方法——这一帧会换回一个 unknown-method 错误
+        // 响应。这正是我们要的:onmessage 把任意入站帧都当 pong(lastPongAt),
+        // 所以错误回显足以证明链路活着。别给这帧加 id,否则会进 pending 表。
         this.ws.send(JSON.stringify({ jsonrpc: "2.0", method: "ping" }));
       } catch {
         this.handleHeartbeatFailure();
@@ -532,10 +549,11 @@ export class GatewayClient {
   }
 }
 
-// Public client interface — both the WebSocket impl (this file) and the
-// SSE+POST impl (gateway-sse-client.ts) satisfy it. Call sites in
-// use-gateway.ts / detail.tsx / debug-install.ts hit only the methods
-// listed here, so the union is type-safe.
+// Public client surface used by call sites (use-gateway.ts / detail.tsx /
+// debug-install.ts) and by test doubles. The transport is always JSON-RPC
+// over WebSocket against the official /api/ws endpoint — only the socket
+// implementation may differ (native WebSocket vs Rust relay), behind
+// GatewaySocketFactory.
 export interface GatewayClientLike {
   state: ConnectionState;
   connect(options?: GatewayConnectOptions | number): Promise<void>;
@@ -549,62 +567,19 @@ export interface GatewayClientLike {
   close(): void;
 }
 
-export type GatewayTransport = "ws" | "sse";
+let instance: GatewayClient | null = null;
 
-// Pick the transport once per page load. Precedence (highest first):
-//   1. URL query: ?transport=sse|ws  — for ad-hoc QA without rebuilding
-//   2. UI store HERMES_TRANSPORT  — sticky per-profile
-//   3. window.__HERMES_RUNTIME__.transport — Electron preload injection
-//      (apps/desktop/src/preload/preload.ts), so the desktop bundle can
-//      default to SSE without forcing every web user to opt in
-//   4. Vite build env VITE_HERMES_TRANSPORT  — build-time default
-//   5. default "ws" (preserve existing behavior on un-flagged installs)
-function pickTransport(): GatewayTransport {
-  try {
-    if (typeof window !== "undefined") {
-      const fromQuery = new URLSearchParams(window.location.search).get("transport");
-      if (fromQuery === "ws" || fromQuery === "sse") return fromQuery;
-      const fromStorage = readUiValue<string | undefined>("HERMES_TRANSPORT", undefined);
-      if (fromStorage === "ws" || fromStorage === "sse") return fromStorage;
-      const fromRuntime = window.__HERMES_RUNTIME__?.transport;
-      if (fromRuntime === "ws" || fromRuntime === "sse") return fromRuntime;
-      // Tauri: default to SSE even if __HERMES_RUNTIME__.transport wasn't set
-      // (dashboard WebSocket may be blocked by the P-003 gate)
-      if (window.__TAURI_INTERNALS__) return "sse";
-    }
-  } catch {
-    // UI store / URL access can throw in restricted contexts
-  }
-  const fromEnv = (import.meta as any)?.env?.VITE_HERMES_TRANSPORT as string | undefined;
-  if (fromEnv === "ws" || fromEnv === "sse") return fromEnv;
-  return "ws";
-}
-
-let instance: GatewayClientLike | null = null;
-let activeTransport: GatewayTransport | null = null;
-
-// Static import: both implementations live in the bundle but only one is
-// instantiated per session. Cost is ~5 KB gzipped; keeps the factory
-// synchronous so `getGatewayClient()` can be called from constructors /
-// module init that don't accept Promises.
-import { getGatewaySseClient } from "./gateway-sse-client";
+// The socket factory picks native webview WebSocket vs Rust relay (and flips
+// automatically when a packaged webview blocks ws:// from tauri://); the
+// protocol layer above is identical either way. See gateway-socket-path.ts.
+import { createGatewaySocket } from "./gateway-socket-path";
 
 export function getGatewayClient(): GatewayClientLike {
   if (instance) return instance;
-  const transport = pickTransport();
-  activeTransport = transport;
-  if (transport === "sse") {
-    instance = getGatewaySseClient();
-  } else {
-    instance = new GatewayClient();
-  }
+  instance = new GatewayClient(createGatewaySocket);
   return instance;
 }
 
 export function forceExistingGatewayReconnect(reason = "runtime-restart"): void {
   instance?.forceReconnect(reason);
-}
-
-export function getActiveTransport(): GatewayTransport | null {
-  return activeTransport;
 }

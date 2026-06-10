@@ -121,7 +121,8 @@ export interface RuntimeProcessInfo {
   ownershipMarkerPath?: string;
   ownershipState?: string;
   sessionTokenPresent: boolean;
-  gatewaySseProxyActive: boolean;
+  /** True while the Rust /api/ws relay (fallback socket path) is connected. */
+  gatewayWsRelayActive: boolean;
 }
 
 export interface RuntimeInfo {

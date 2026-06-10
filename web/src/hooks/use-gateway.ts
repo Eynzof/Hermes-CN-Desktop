@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAtomValue, useSetAtom } from "jotai";
+import { getDefaultStore, useAtomValue, useSetAtom } from "jotai";
 import {
   ConfigSetResult,
   CommandDispatchResult,
@@ -18,12 +18,17 @@ import {
 } from "@hermes/protocol";
 import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
 import { getGatewayClient } from "@/lib/gateway-client";
+import { reattachAfterReconnect } from "@/lib/gateway-reconnect";
 import {
   getCachedModelOptions,
   invalidateModelOptionsCache,
 } from "@/lib/model-options-cache";
 import { buildGatewayModelConfigValue } from "@/lib/provider-id";
-import { rememberSessionMapping, resolveGatewaySessionId } from "@/lib/session-map";
+import {
+  rememberSessionMapping,
+  resolveGatewaySessionId,
+  resolvePersistentSessionId,
+} from "@/lib/session-map";
 import { mirrorSessionWorkspaceMapping } from "@/lib/workspaces";
 import { humanizeGatewayError, parseGatewayResult } from "@/lib/gateway-result";
 import {
@@ -32,6 +37,7 @@ import {
   ensureChatSessionAtom,
   gwConnectionAtom,
   gwSessionIdAtom,
+  markStreamsReconnectingAtom,
   resetChatSessionAtom,
   resetStreamStateAtom,
   setSessionErrorAtom,
@@ -70,6 +76,48 @@ function forEachSubscriber(
   }
 }
 
+let reattachInFlight = false;
+
+// On a transport reconnect, re-pin the active session's live backend turn by
+// re-issuing session.resume (the gateway has no socket-level replay). Runs
+// against the default jotai store so it stays single-owner regardless of how
+// many components call useGateway(); guarded so overlapping reconnects don't
+// fire concurrent resumes. See docs/gateway-connection-overhaul.md (C2).
+async function reattachActiveSessionAfterReconnect(): Promise<void> {
+  if (reattachInFlight) return;
+  reattachInFlight = true;
+  const store = getDefaultStore();
+  try {
+    await reattachAfterReconnect({
+      getActiveSessionId: () => store.get(gwSessionIdAtom),
+      resolvePersistentId: (id) => resolvePersistentSessionId(id) ?? id,
+      resume: async (persistentId) =>
+        SessionResumeResult.parse(
+          // Resuming can rebuild the agent server-side (minutes-scale, runs in
+          // the gateway's long-handler pool) — give it far more than the
+          // default request timeout; the UI already shows a transient
+          // "reconnecting" state while this is pending.
+          await getGatewayClient().request(
+            "session.resume",
+            { session_id: persistentId },
+            { timeoutMs: 300_000 },
+          ),
+        ),
+      onResumed: (gatewaySessionId, persistentId) => {
+        store.set(gwSessionIdAtom, gatewaySessionId);
+        rememberSessionMapping(gatewaySessionId, persistentId);
+      },
+      onResumeFailed: () => {
+        // The backend session is genuinely gone (reaped / crashed) — escalate
+        // the transient "reconnecting" turns to a real error so the UI is honest.
+        store.set(terminateAllStreamsAtom);
+      },
+    });
+  } finally {
+    reattachInFlight = false;
+  }
+}
+
 function ensureGatewayBridge(): GatewaySubscriptionBridge {
   if (gatewayBridge) return gatewayBridge;
 
@@ -82,13 +130,32 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
   const client = getGatewayClient();
   client.enableAutoReconnect();
 
-  bridge.unsubscribeState = client.onState((state) =>
-    forEachSubscriber(bridge, (sub) => sub.setConnectionState(state)));
+  // Re-issue session.resume only after a disconnect, never on the very first
+  // connect (there is no in-flight state to re-pin yet). `gateway.disconnected`
+  // is synthesized by GatewayClient on every unintentional socket close, so
+  // arming here and consuming on the next `open` covers exactly the reconnect
+  // case. The server re-pins events to the new socket only via session.resume —
+  // without it the remaining deltas of an in-flight turn are silently dropped.
+  // See docs/gateway-connection-overhaul.md (C2).
+  let needsResumeOnReopen = false;
+
+  bridge.unsubscribeState = client.onState((state) => {
+    forEachSubscriber(bridge, (sub) => sub.setConnectionState(state));
+    if (state === "open" && needsResumeOnReopen) {
+      needsResumeOnReopen = false;
+      void reattachActiveSessionAfterReconnect();
+    }
+  });
   bridge.unsubscribeAny = client.onAny((event) => {
     primarySubscriber(bridge)?.applyGatewayEvent(event);
   });
-  bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () =>
-    forEachSubscriber(bridge, (sub) => sub.terminateAllStreams()));
+  bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () => {
+    // A disconnect that the transport could not silently recover. Keep the
+    // in-flight turn alive (don't freeze it as an error) and arm a one-shot
+    // session.resume for when the connection comes back.
+    needsResumeOnReopen = true;
+    getDefaultStore().set(markStreamsReconnectingAtom);
+  });
   gatewayBridge = bridge;
   return bridge;
 }

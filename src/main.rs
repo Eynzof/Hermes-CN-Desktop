@@ -153,9 +153,9 @@ async fn acquire_managed_dashboard(
         .map_err(|e| record_bootstrap_error(app, format!("dashboard 启动失败: {}", e)))
 }
 
-/// Finish bootstrap once a dashboard handle is available: warn if SSE is
-/// unsupported, fetch the session token, build the gateway URL, populate
-/// AppState, and emit the "ready" event the frontend waits on.
+/// Finish bootstrap once a dashboard handle is available: fetch the session
+/// token, build the gateway URL, populate AppState, and emit the "ready"
+/// event the frontend waits on.
 async fn finalize_bootstrap(
     app: &tauri::AppHandle,
     handle: DashboardHandle,
@@ -164,21 +164,6 @@ async fn finalize_bootstrap(
     profile: String,
 ) {
     use tauri::Manager;
-
-    // The desktop's default transport is SSE; if the dashboard lacks
-    // `/api/v2/events` the UI hits "SSE closed during connect" the moment it
-    // sends a message. Surface a clear warning so bug reports name the root
-    // cause rather than chasing the opaque error.
-    if !dashboard::dashboard_supports_sse(&handle.api_base_url).await {
-        log::error!(
-            "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
-             SSE transport will fail; set HERMES_TRANSPORT=ws in the UI store \
-             as a workaround, or upgrade the agent to a hermes-agent-cn build \
-             with the P-009 patch applied. See \
-             https://github.com/Eynzof/hermes-agent-cn-desktop/blob/main/docs/managed-runtime.md",
-            handle.api_base_url
-        );
-    }
 
     let session_token = match handle.session_token.clone() {
         Some(token) => Some(token),
@@ -213,9 +198,9 @@ fn shutdown_owned_runtime(app: &tauri::AppHandle, reason: &str) {
     use tauri::Manager;
 
     let state = app.state::<AppState>();
-    let (sse_stop, mut dashboard_handle, session_token) = match state.inner.lock() {
+    let (gateway_ws, mut dashboard_handle, session_token) = match state.inner.lock() {
         Ok(mut inner) => (
-            inner.gateway_sse_stop.take(),
+            inner.gateway_ws.take(),
             inner.dashboard_handle.take(),
             inner.session_token.clone(),
         ),
@@ -229,8 +214,9 @@ fn shutdown_owned_runtime(app: &tauri::AppHandle, reason: &str) {
         }
     };
 
-    if let Some(stop) = sse_stop {
-        stop.store(true, Ordering::Relaxed);
+    if let Some(relay) = gateway_ws {
+        relay.abort.store(true, Ordering::Relaxed);
+        relay.notify.notify_waiters();
     }
 
     if let Some(ref mut handle) = dashboard_handle {
@@ -517,7 +503,9 @@ fn main() {
             commands::memory::update_memory_entry,
             commands::memory::remove_memory_entry,
             commands::memory::write_user_profile,
-            commands::sse_proxy::connect_gateway_sse,
+            commands::ws_proxy::gateway_ws_open,
+            commands::ws_proxy::gateway_ws_send,
+            commands::ws_proxy::gateway_ws_close,
             commands::ui_store::ui_store_snapshot,
             commands::ui_store::ui_store_set_kv,
             commands::ui_store::ui_store_remove_kv,

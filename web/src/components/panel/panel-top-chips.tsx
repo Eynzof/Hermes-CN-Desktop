@@ -27,8 +27,8 @@ export function PanelTopChips() {
   const queryClient = useQueryClient();
   const profile = useActiveProfileName();
 
-  // SSE/WS 连接 open 即视为健康；status?.gateway_running 是 PTY
-  // daemon 字段，与 v2 transport 无关（见 health-grid.tsx 注释）。
+  // 网关 WebSocket 连接 open 即视为健康；status?.gateway_running 是 PTY
+  // daemon 字段，与桌面端聊天链路无关（见 health-grid.tsx 注释）。
   const gatewayOk = connectionState === "open";
   const gatewayTone = gatewayOk ? "ok" : connectionState === "connecting" ? "warn" : "err";
   const gatewayPort = portFromHealthUrl(status?.gateway_health_url);

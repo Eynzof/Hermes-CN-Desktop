@@ -30,7 +30,7 @@ const context = {
       ownsProcess: true,
       commandArgs: [],
       sessionTokenPresent: true,
-      gatewaySseProxyActive: true,
+      gatewayWsRelayActive: true,
     },
   },
   collectedAt: "2026-06-07T05:00:00.000Z",

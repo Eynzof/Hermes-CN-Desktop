@@ -273,7 +273,7 @@ export function DetailRoute() {
   // Capability discovery is server-global — don't piggy-back on
   // ensureGatewaySession here. That helper can trigger session.resume, which
   // the backend categorises as a slow handler (tui_gateway/server.py:139,
-  // "可达几分钟"). When the underlying agent has crashed or SSE is
+  // "可达几分钟"). When the underlying agent has crashed or the gateway is
   // mid-reconnect, the resume call hangs and the picker spinner hangs with
   // it. The session_id was only used by the backend to highlight "current
   // model" — useModelInfo gives us that without needing a live session.

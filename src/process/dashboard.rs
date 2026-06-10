@@ -512,13 +512,20 @@ async fn dashboard_supports_uploads(api_base_url: &str) -> bool {
     has_openapi_path(api_base_url, "/api/upload").await
 }
 
-/// Check whether the dashboard has the P-009 SSE/POST routes
-/// (`/api/v2/events` + `/api/v2/rpc`). Managed runtime mode treats this as a
-/// compatibility requirement so the desktop does not reuse an older external
-/// dashboard by accident.
-pub async fn dashboard_supports_sse(api_base_url: &str) -> bool {
-    has_openapi_path(api_base_url, "/api/v2/events").await
-        && has_openapi_path(api_base_url, "/api/v2/rpc").await
+/// Probe the upstream-native `/api/ws` gateway by actually completing a
+/// WebSocket handshake (the route is a WS upgrade, so it never appears in
+/// openapi.json — an HTTP GET can't verify it). The connection is dropped
+/// immediately after the handshake; the server reaps the orphan transport.
+pub async fn dashboard_supports_ws(api_base_url: &str, token: Option<&str>) -> bool {
+    let url = build_gateway_url(api_base_url, token);
+    matches!(
+        tokio::time::timeout(
+            std::time::Duration::from_secs(4),
+            tokio_tungstenite::connect_async(url),
+        )
+        .await,
+        Ok(Ok(_))
+    )
 }
 
 async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
@@ -883,9 +890,12 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
 }
 
 async fn dashboard_is_compatible(api_base_url: &str, hermes_home: &str) -> bool {
+    // `/api/ws` is upstream-native — every runtime this desktop can manage
+    // serves it, so compatibility only needs the fork's upload route and a
+    // matching HERMES_HOME. (The old `/api/v2/*` SSE probe is gone with the
+    // SSE transport.)
     probe_dashboard(api_base_url).await
         && dashboard_supports_uploads(api_base_url).await
-        && dashboard_supports_sse(api_base_url).await
         && dashboard_matches_hermes_home(api_base_url, hermes_home).await
 }
 
@@ -1323,16 +1333,17 @@ mod tests {
             .mount(server)
             .await;
 
+        // Compatibility now hinges on the fork's `/api/upload` route alone —
+        // `/api/ws` is upstream-native and never appears in openapi.json. An
+        // "incompatible" dashboard is one missing the fork route (e.g. a stock
+        // upstream build adopted by accident).
         let paths = if include_required_routes {
             serde_json::json!({
                 "/api/upload": {},
-                "/api/v2/events": {},
-                "/api/v2/rpc": {},
             })
         } else {
             serde_json::json!({
-                "/api/upload": {},
-                "/api/v2/events": {},
+                "/api/status": {},
             })
         };
         Mock::given(method("GET"))

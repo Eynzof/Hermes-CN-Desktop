@@ -313,10 +313,10 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
               : "Dashboard 就绪 · in-process dispatch"
             : "正在连接",
         detail: dashboardReachable
-          ? "聊天传输在桌面端优先走 SSE+POST 的进程内 dispatch；gateway_state=stopped 不再等同于不可用。"
+          ? "聊天传输走 dashboard 的 /api/ws WebSocket（进程内 dispatch）；gateway_state=stopped 不等同于不可用。"
           : "如果长时间停留在连接中，请确认 managed runtime 已启动，或在状态栏执行 Gateway 重启。",
         mono: true,
-        title: `dashboardReachable=${dashboardReachable}; gateway_state=${gatewayState}. P-009 后 SSE+POST 走进程内 dispatch，gateway_state=stopped 是预期值。`,
+        title: `dashboardReachable=${dashboardReachable}; gateway_state=${gatewayState}. /api/ws 在 dashboard 进程内 dispatch，gateway_state=stopped 是预期值。`,
       },
       {
         id: "home",

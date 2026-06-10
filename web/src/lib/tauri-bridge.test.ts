@@ -21,7 +21,6 @@ beforeEach(() => {
         gatewayUrl: "ws://127.0.0.1:9120/api/ws",
         sessionToken: "token",
         currentProfile: "default",
-        transport: "sse",
       });
     }
     return Promise.resolve({ command, args });

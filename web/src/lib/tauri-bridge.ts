@@ -652,13 +652,12 @@ export async function installTauriBridge(): Promise<void> {
     gatewayUrl: string;
     sessionToken?: string;
     currentProfile: string;
-    transport?: string;
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
   // Don't set apiBaseUrl/gatewayUrl — let the browser use relative URLs that
   // go through Vite's proxy, just like web mode. This avoids cross-origin
-  // issues with SSE EventSource and WebSocket (browser-native APIs that can't
+  // issues with the gateway WebSocket (a browser-native API that can't
   // go through the Tauri IPC bridge). Still inject sessionToken in dev: managed
   // runtime builds may not have dashboard web_dist, so Vite cannot reliably
   // scrape the token from Dashboard /; authenticated REST calls still need the
@@ -690,10 +689,6 @@ export async function installTauriBridge(): Promise<void> {
     config = await invokeCommand("get_runtime_config");
   }
 
-  const transport = (config.transport === "ws" || config.transport === "sse")
-    ? config.transport
-    : "sse";
-
   window.__HERMES_RUNTIME__ = {
     platform: "tauri" as const,
     apiBaseUrl: isDevMode ? undefined : config.apiBaseUrl,
@@ -701,7 +696,6 @@ export async function installTauriBridge(): Promise<void> {
     gatewayUrl: isDevMode ? undefined : config.gatewayUrl,
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
-    transport,
   };
 
   (window as any).hermesDesktop = tauriBridge;

@@ -90,8 +90,9 @@ pub async fn respawn_managed_dashboard(
     // 1. Stop the running dashboard.
     {
         let mut inner = state.inner.lock()?;
-        if let Some(stop) = inner.gateway_sse_stop.take() {
-            stop.store(true, Ordering::Relaxed);
+        if let Some(relay) = inner.gateway_ws.take() {
+            relay.abort.store(true, Ordering::Relaxed);
+            relay.notify.notify_waiters();
         }
         let session_token = inner.session_token.clone();
         if let Some(ref mut handle) = inner.dashboard_handle {

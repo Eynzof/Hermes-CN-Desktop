@@ -139,7 +139,7 @@ export const profileSwitchingAtom = atom<{
 
 // Set to true while the desktop main process is installing a runtime update or
 // rolling back. Like a profile switch, this stops + respawns the dashboard
-// subprocess, during which every REST/SSE/WS call would otherwise hit a stale
+// subprocess, during which every REST/WS call would otherwise hit a stale
 // session token and surface a 401. The window-level RuntimeUpdateOverlay reads
 // this and blocks UI interaction (and the polling queries behind it) until the
 // new dashboard is ready and the token has been refreshed.

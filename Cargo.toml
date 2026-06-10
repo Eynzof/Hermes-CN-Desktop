@@ -34,6 +34,9 @@ url = "2"
 urlencoding = "2"
 open = "5"
 futures-util = "0.3"
+# WebSocket relay to the runtime's native /api/ws (commands/ws_proxy.rs).
+# Loopback is always ws:// so no TLS backend feature is needed.
+tokio-tungstenite = "0.29"
 fs2 = "0.4"
 thiserror = "2"
 portable-pty = "0.9"

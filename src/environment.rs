@@ -338,43 +338,46 @@ pub async fn collect_environment_check(input: EnvironmentCheckInput) -> Environm
             )),
         );
         items.push(EnvironmentCheckItem::new(
-            "dashboard-sse",
+            "dashboard-ws",
             EnvironmentCheckCategory::Runtime,
-            "SSE 事件路由",
+            "网关 WebSocket",
             EnvironmentCheckStatus::Unknown,
             true,
-            "Dashboard 尚未启动，无法检查 /api/v2/events",
+            "Dashboard 尚未启动，无法检查 /api/ws",
         ));
     } else {
         items.push(
             check_dashboard_status(&input.api_base_url, input.session_token.as_deref()).await,
         );
-        let supports_sse = dashboard::dashboard_supports_sse(&input.api_base_url).await;
+        // Real WS handshake probe (the route is a WS upgrade and never shows
+        // up in openapi.json, so this is the only trustworthy signal).
+        let supports_ws =
+            dashboard::dashboard_supports_ws(&input.api_base_url, input.session_token.as_deref())
+                .await;
         items.push(
             EnvironmentCheckItem::new(
-                "dashboard-sse",
+                "dashboard-ws",
                 EnvironmentCheckCategory::Runtime,
-                "SSE 事件路由",
-                if supports_sse {
+                "网关 WebSocket",
+                if supports_ws {
                     EnvironmentCheckStatus::Ok
                 } else {
                     EnvironmentCheckStatus::Error
                 },
                 true,
-                if supports_sse {
-                    "Dashboard 支持 /api/v2/events 与桌面端默认 SSE transport"
+                if supports_ws {
+                    "/api/ws 握手成功，桌面端聊天链路可用"
                 } else {
-                    "Dashboard 缺少 /api/v2/events，默认 SSE transport 会失败"
+                    "/api/ws 握手失败，聊天链路不可用"
                 },
             )
             .path(Some(format!(
-                "{}/api/v2/events",
+                "{}/api/ws",
                 input.api_base_url.trim_end_matches('/')
             )))
-            .recommendation(
-                (!supports_sse)
-                    .then_some("升级 hermes-agent-cn runtime，或临时切换到 WebSocket transport"),
-            ),
+            .recommendation((!supports_ws).then_some(
+                "确认 managed runtime 已启动且 session token 有效；必要时在状态栏重启内核",
+            )),
         );
     }
 

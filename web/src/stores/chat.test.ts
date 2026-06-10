@@ -5,6 +5,7 @@ import {
   chatRuntimeBySessionAtom,
   createEmptyChatRuntime,
   drainLiveMessagesAtom,
+  markStreamsReconnectingAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
   reduceGatewayEvent,
   startPromptAtom,
@@ -693,6 +694,56 @@ describe("full conversation lifecycle", () => {
     expect(systemMessage(rt).parts).toEqual([
       { type: "notice", level: "error", text: "rate limit exceeded" },
     ]);
+  });
+});
+
+describe("markStreamsReconnectingAtom", () => {
+  it("keeps the in-flight turn alive (transient) instead of erroring it", () => {
+    const store = createStore();
+    store.set(startPromptAtom, { sessionId: "s1", text: "hi", now: 5 });
+
+    store.set(markStreamsReconnectingAtom);
+
+    const runtime = store.get(chatRuntimeBySessionAtom).s1;
+    // status is transient, not terminal
+    expect(runtime.streamStatus).toBe("connecting");
+    expect(runtime.statusMessage).toBe("连接中断，正在重连…");
+    expect(runtime.statusKind).toBe("info");
+    // the in-flight message + activeAssistantId survive (not cleared / not error)
+    expect(runtime.activeAssistantId).toBe("live-assistant-5");
+    expect(assistantMessage(runtime).status).not.toBe("error");
+  });
+
+  it("lets a post-reconnect delta resume onto the SAME assistant message", () => {
+    const store = createStore();
+    store.set(startPromptAtom, { sessionId: "s1", text: "hi", now: 5 });
+    store.set(markStreamsReconnectingAtom);
+
+    store.set(chatRuntimeBySessionAtom, (state) => ({
+      ...state,
+      s1: reduceGatewayEvent(
+        state.s1,
+        { type: "message.delta", session_id: "s1", payload: { text: "world" } },
+        10,
+      ),
+    }));
+
+    const runtime = store.get(chatRuntimeBySessionAtom).s1;
+    expect(runtime.activeAssistantId).toBe("live-assistant-5");
+    expect(runtime.streamStatus).toBe("streaming");
+    expect(textFromParts(assistantMessage(runtime).parts)).toContain("world");
+  });
+
+  it("does not touch sessions that are not actively streaming", () => {
+    const store = createStore();
+    store.set(chatRuntimeBySessionAtom, (state) => ({
+      ...state,
+      done: { ...createEmptyChatRuntime(), streamStatus: "complete" },
+    }));
+
+    store.set(markStreamsReconnectingAtom);
+
+    expect(store.get(chatRuntimeBySessionAtom).done.streamStatus).toBe("complete");
   });
 });
 

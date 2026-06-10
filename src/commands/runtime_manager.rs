@@ -46,10 +46,10 @@ pub async fn runtime_info(state: State<'_, AppState>) -> Result<runtime::Runtime
                 ownership_marker_path: handle.ownership_marker_path.clone(),
                 ownership_state: handle.ownership_state.clone(),
                 session_token_present: inner.session_token.is_some(),
-                gateway_sse_proxy_active: inner
-                    .gateway_sse_stop
+                gateway_ws_relay_active: inner
+                    .gateway_ws
                     .as_ref()
-                    .map(|stop| !stop.load(Ordering::Relaxed))
+                    .map(|relay| !relay.abort.load(Ordering::Relaxed))
                     .unwrap_or(false),
             }
         });
@@ -152,9 +152,10 @@ pub async fn runtime_rollback(
 pub(crate) async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> {
     let (host, port, hermes_home) = {
         let mut inner = state.inner.lock()?;
-        // Stop existing dashboard and any long-lived SSE proxy before swapping runtime.
-        if let Some(stop) = inner.gateway_sse_stop.take() {
-            stop.store(true, Ordering::Relaxed);
+        // Stop existing dashboard and any live WS relay before swapping runtime.
+        if let Some(relay) = inner.gateway_ws.take() {
+            relay.abort.store(true, Ordering::Relaxed);
+            relay.notify.notify_waiters();
         }
         let session_token = inner.session_token.clone();
         if let Some(ref mut handle) = inner.dashboard_handle {

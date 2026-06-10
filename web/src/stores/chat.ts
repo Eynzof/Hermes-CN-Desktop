@@ -1183,6 +1183,42 @@ export const terminateAllStreamsAtom = atom(null, (_get, set) => {
   });
 });
 
+// Transient counterpart to terminateAllStreamsAtom for a *recoverable* gateway
+// drop (sleep/wake, dashboard restart). The backend session survives the socket
+// drop, so we must NOT freeze the in-flight turn as a terminal error or clear
+// activeAssistantId — otherwise post-reconnect deltas would start a brand-new
+// assistant message and the original reply looks lost. Instead we keep the
+// message + activeAssistantId intact and show a transient "reconnecting" status;
+// once the socket reconnects, session.resume re-pins the live turn and the
+// remaining deltas flow onto the SAME message (message.delta flips the status
+// back to "streaming"). If the reconnect ultimately fails, the gateway bridge
+// calls terminateAllStreams() to surface a real error. See
+// docs/gateway-connection-overhaul.md (P0-2).
+export const markStreamsReconnectingAtom = atom(null, (_get, set) => {
+  const now = Date.now();
+  set(chatRuntimeBySessionAtom, (state) => {
+    let changed = false;
+    const next: ChatRuntimeBySession = {};
+    for (const [sessionId, rt] of Object.entries(state)) {
+      if (rt.streamStatus === "streaming") {
+        changed = true;
+        next[sessionId] = {
+          ...rt,
+          // keep messages + activeAssistantId untouched so the turn can resume
+          streamStatus: "connecting",
+          statusMessage: "连接中断，正在重连…",
+          statusKind: "info",
+          statusUpdatedAt: now,
+          updatedAt: now,
+        };
+      } else {
+        next[sessionId] = rt;
+      }
+    }
+    return changed ? next : state;
+  });
+});
+
 export const removeApprovalAtom = atom(
   null,
   (_get, set, params: { sessionId: string; requestId: string }) => {

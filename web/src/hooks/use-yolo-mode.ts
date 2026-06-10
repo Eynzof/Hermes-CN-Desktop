@@ -31,7 +31,7 @@ export function useSetYoloMode() {
       if (!window.hermesDesktop?.setYoloMode) {
         throw new Error("当前环境不支持 YOLO 模式");
       }
-      // Restarting the dashboard drops every in-flight REST/SSE request. Reuse
+      // Restarting the dashboard drops every in-flight REST/WS request. Reuse
       // the profile-switch overlay so the user sees a clean "重启中" state
       // instead of a burst of 401/network errors.
       setSwitching({

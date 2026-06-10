@@ -768,7 +768,7 @@ function comparableText(value: string | undefined): string {
   // comparison. The two paths that produce assistant message text have
   // subtly different separators: `legacySessionMessagesToHermesUIMessages`
   // builds text parts that are non-adjacent (tools between turns) and
-  // `textFromParts` joins them with `""`; the live SSE path can leave
+  // `textFromParts` joins them with `""`; the live streaming path can leave
   // adjacent text parts that `mergeParts` folds with `\n\n`. After
   // collapsing `\s+ -> " "` you still have a one-space gap on the live
   // side but a no-space seam on the stored side — `===` fails and the

@@ -79,7 +79,8 @@ describe("humanizeGatewayError", () => {
   });
 
   it("localizes connection-closed errors", () => {
-    expect(humanizeGatewayError(new Error("SSE connection closed"))).toContain("连接已断开");
+    expect(humanizeGatewayError(new Error("WebSocket closed"))).toContain("连接已断开");
+    expect(humanizeGatewayError(new Error("WebSocket connection lost"))).toContain("连接已断开");
   });
 
   it("passes through meaningful backend error messages unchanged", () => {

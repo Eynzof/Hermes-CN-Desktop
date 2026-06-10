@@ -309,7 +309,7 @@ describe("GatewayClient", () => {
       client.close();
     });
 
-    it("caps backoff delay at 30s", async () => {
+    it("caps backoff delay at 15s (official desktop parity)", async () => {
       vi.useFakeTimers();
       vi.spyOn(Math, "random").mockReturnValue(0);
       const client = new GatewayClient();
@@ -319,20 +319,21 @@ describe("GatewayClient", () => {
       MockWebSocket.instances[0].open();
       await connected;
 
+      // 1s, 2s, 4s, 8s, then capped: min(1s·2^min(n,4), 15s) = 15s
       for (let i = 0; i < 5; i++) {
         MockWebSocket.instances[i].close();
-        await vi.advanceTimersByTimeAsync(Math.min(1000 * Math.pow(2, i), 30_000));
+        await vi.advanceTimersByTimeAsync(Math.min(1000 * Math.pow(2, Math.min(i, 4)), 15_000));
       }
       expect(MockWebSocket.instances).toHaveLength(6);
 
       MockWebSocket.instances[5].close();
-      await vi.advanceTimersByTimeAsync(29_999);
+      await vi.advanceTimersByTimeAsync(14_999);
       expect(MockWebSocket.instances).toHaveLength(6);
       await vi.advanceTimersByTimeAsync(1);
       expect(MockWebSocket.instances).toHaveLength(7);
 
       MockWebSocket.instances[6].close();
-      await vi.advanceTimersByTimeAsync(29_999);
+      await vi.advanceTimersByTimeAsync(14_999);
       expect(MockWebSocket.instances).toHaveLength(7);
       await vi.advanceTimersByTimeAsync(1);
       expect(MockWebSocket.instances).toHaveLength(8);
@@ -803,7 +804,7 @@ describe("GatewayClient", () => {
       client.close();
     });
 
-    it("wake resets reconnect backoff so retries don't sit in the 30s ceiling", async () => {
+    it("wake resets reconnect backoff so retries don't sit in the 15s ceiling", async () => {
       vi.useFakeTimers();
       vi.spyOn(Math, "random").mockReturnValue(0);
       const baseTime = new Date("2026-05-10T12:00:00Z").getTime();

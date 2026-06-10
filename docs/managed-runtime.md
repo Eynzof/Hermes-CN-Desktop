@@ -5,8 +5,8 @@
 NousResearch/hermes-agent）的 dashboard 子进程。
 
 本文档讲：那个 dashboard 子进程是**怎么进到用户机器上**的，桌面端
-怎么找到它、用它、更新它，以及"你好"那一刻 SSE 帧是如何穿过整条
-链路的。读完应该能够：
+怎么找到它、用它、更新它，以及"你好"那一刻 WebSocket 帧是如何穿过
+整条链路的。读完应该能够：
 
 - 知道每个组件的职责和它们存放在哪个 repo 里
 - 知道一次"首次启动"具体在做什么（按时间顺序）
@@ -23,9 +23,9 @@ hermes-agent），调用 `subprocess.spawn("hermes", "dashboard")`
 来起后端。两个隐患：
 
 1. **版本错配**：用户全局装的是上游 NousResearch 版本，桌面端依赖
-   的是 Hermes-CN-Core 的 P-009 patch（`/api/v2/events` 和 `/api/v2/rpc`
-   两条 SSE+POST 路由）。结果"你好"一发出 → SSE 401 → 桌面端报
-   "SSE closed during connect" → 用户一脸懵。
+   的是 Hermes-CN-Core 的若干 fork patch（如 P-002 `/api/upload`）。
+   版本不对时功能静默缺失或报错，用户一脸懵。（历史上还包括 P-009
+   的 SSE 路由——桌面端 ≥0.4 已改用上游原生 `/api/ws`，该依赖消失。）
 2. **零安装体验差**：用户必须自己 `pip install hermes-agent-cn`，
    还要装对 Python 版本（3.11+）、装对 Hermes-CN-Core 而不是上游。不是面向
    终端用户的产品形态。
@@ -56,10 +56,10 @@ hermes-agent-cn-desktop/        ← 桌面壳子
 
 Hermes-CN-Core/              ← 实际 agent（fork of NousResearch/hermes-agent）
 ├── tui_gateway/
-│   ├── ws.py                    /api/ws WebSocket transport（旧）
-│   └── sse.py                   /api/v2/events SSE transport（P-009 新增）
+│   ├── ws.py                    /api/ws WebSocket transport（官方，桌面端 ≥0.4 使用）
+│   └── sse.py                   /api/v2/events SSE transport（P-009，已弃用，留给旧外壳）
 ├── hermes_cli/
-│   └── web_server.py            FastAPI 入口，路由 /api/v2/{events,rpc}
+│   └── web_server.py            FastAPI 入口，路由 /api/ws 与 /api/v2/{events,rpc}
 ├── scripts/
 │   └── sign_runtime_manifest.py Ed25519 签 manifest
 ├── docs/RUNTIME_RELEASES.md     fork 侧发布流程
@@ -135,8 +135,8 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
    b. spawn 子进程，传 HERMES_HOME 等 env
    c. wait_for_dashboard 轮询 /api/status 直到 2xx 或 401
   ↓
-10. probe dashboard_supports_sse → openapi.json 里有 /api/v2/events
-    → 不报错
+10. probe dashboard_is_compatible → /api/upload 在 openapi.json 里
+    （/api/ws 是上游原生路由，无需探测）
   ↓
 11. fetch_session_token 从 dashboard 的 HTML 里 regex 出
     __HERMES_SESSION_TOKEN__
@@ -155,39 +155,31 @@ Runtime 版本采用 schema v2：`runtime-v<kernelVersion>-cn.<runtimeRevision>`
   ↓
 16. main.tsx createRoot.render(<App />) → React mount
   ↓
-17. App 内部 gateway-sse-client.ts::connect() →
-    new EventSource("/api/v2/events?token=...")
+17. App 内部 gateway-client.ts::connect() →
+    socketFactory(ws://127.0.0.1:<port>/api/ws?token=...)
+    （gateway-socket-path.ts 选择：webview 原生 WebSocket 直连，
+    被拦则自动切 Rust 中继 ws_proxy.rs——线协议完全相同）
   ↓
-18. 服务端 hermes_cli/web_server.py::gateway_events:
-    - token query 验签（auth 中间件已放行 _PUBLIC_API_PATHS）
-    - 生成 client_id (uuid hex)
-    - 发 SSETransport 进 SSE_CLIENTS 注册表
-    - emit "event: client_id\ndata: {client_id}\n\n"
-    - emit gateway.ready 事件
-    - 每 15s emit ": ping\n\n"
+18. 服务端 hermes_cli/web_server.py @app.websocket("/api/ws") →
+    tui_gateway/ws.py::handle_ws:
+    - token query 验签
+    - accept 后立即 emit gateway.ready 事件帧
   ↓
-19. 前端 gateway-sse-client.ts 收到 client_id 帧 → finishConnect()
+19. 前端 gateway-client.ts 收到 open + gateway.ready
     → 用户可以发"你好"了
   ↓
 20. 用户发"你好"
   ↓
-21. gateway-sse-client.ts::request():
-    POST /api/v2/rpc
-    headers: Authorization: Bearer <token>, X-Hermes-Client-Id: <id>
-    body: {"jsonrpc": "2.0", "id": "...", "method": "prompt.submit", ...}
+21. gateway-client.ts::request():
+    同一条 WS 上发 {"jsonrpc": "2.0", "id": "w1", "method": "prompt.submit", ...}
   ↓
-22. web_server.py::gateway_rpc:
-    - auth 中间件验 Bearer token
-    - 从 X-Hermes-Client-Id 查 SSE_CLIENTS 拿 transport
-    - asyncio.to_thread(tui_gateway.server.dispatch, body, transport)
-    - 短 handler → 立即返回 response
-    - 长 handler → 返回 {"accepted": true, "async": true}，
-      pool worker 通过 transport.write() 推到 SSE 流
+22. tui_gateway/server.py::dispatch:
+    - 短 handler → 同 socket 回一帧 JSON-RPC response
+    - 长 handler → 线程池跑完后同 socket 回帧（无异步 ack 拆分）
   ↓
 23. agent 真的开始处理 → emit message.delta / tool.start / ...
-    → 都通过同一个 transport 进 SSE_CLIENTS[client_id] 的队列
-    → SSE 流 yield data: {...}\n\n
-    → 前端 gateway-sse-client.ts::handleFrame 派发到 typed listeners
+    → 同一条 WS 推帧
+    → 前端 gateway-client.ts::handleFrame 派发到 typed listeners
     → React 组件更新
 ```
 
@@ -353,7 +345,7 @@ keypair 同时签的过渡期（这个我们的代码现在不支持，要的话
 | 桌面端窗口卡在 "正在下载 runtime" 不动 | 包内 runtime 缺失且 manifest URL 404 / 网络不通 | 先检查安装包内 `Contents/Resources/bundled-runtime/` 是否有当前平台 manifest，以及 Windows 的 zip 或 macOS 的展开目录，再看 GET stable-<platform>-<arch>.json |
 | 显示 "runtime 安装失败：SHA-256 mismatch" | artifact 被劫持 / CDN 缓存了旧版 | 强制刷新 GitHub Release 缓存，或重发布 |
 | 显示 "runtime 安装失败：Signature verification failed" | 公私钥不匹配 / fork 重签了 manifest | 对照桌面端二进制里的公钥 vs `RUNTIME_SIGN_PRIVATE_KEY_PEM` |
-| dashboard 起来但 UI 报 "SSE closed during connect" | dashboard 缺 P-009 路由 | `curl http://localhost:9120/openapi.json | jq '.paths | keys' | grep v2`，应该看到 events + rpc |
+| dashboard 起来但聊天报 "与运行时的连接已断开" | /api/ws 握手失败（token 失效 / 进程半死） | 看环境诊断的「网关 WebSocket」项；`?wspath=relay` 试中继路径；必要时状态栏重启内核 |
 | 升级后启动闪退 | 新 runtime 跑不起来 | 删 `%APPDATA%\cn.hermes.agent.desktop\runtime\current.json` 让桌面端重新走 first-run |
 | 升级想回滚 | runtime 出 bug | UI 调 `runtime_rollback` 或手动改 current.json 指 versions/旧版本/ |
 
