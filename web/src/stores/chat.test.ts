@@ -2,12 +2,15 @@ import { createStore } from "jotai/vanilla";
 import { describe, expect, it } from "vitest";
 import type { HermesMessagePart, HermesUIMessage } from "@hermes/protocol";
 import {
+  applyGatewayEventAtom,
   chatRuntimeBySessionAtom,
   createEmptyChatRuntime,
   drainLiveMessagesAtom,
+  markSessionInterruptedAtom,
   markStreamsReconnectingAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
   reduceGatewayEvent,
+  resetStreamStateAtom,
   startPromptAtom,
   terminateAllStreamsAtom,
 } from "./chat";
@@ -953,5 +956,120 @@ describe("drainLiveMessagesAtom", () => {
     const remaining = store.get(chatRuntimeBySessionAtom).s1.messages;
     expect(remaining).toHaveLength(1);
     expect(remaining[0]).toMatchObject({ role: "system", status: "error" });
+  });
+});
+
+describe("manual interrupt (markSessionInterruptedAtom)", () => {
+  function storeWithStreamingTurn() {
+    const store = createStore();
+    store.set(startPromptAtom, { sessionId: "s1", text: "你好", now: 1_000 });
+    store.set(applyGatewayEventAtom, { type: "message.start", session_id: "s1", payload: {} });
+    store.set(applyGatewayEventAtom, {
+      type: "message.delta",
+      session_id: "s1",
+      payload: { text: "部分回复" },
+    });
+    return store;
+  }
+
+  function runtimeOf(store: ReturnType<typeof createStore>) {
+    return store.get(chatRuntimeBySessionAtom).s1;
+  }
+
+  it("marks the session idle so the composer can send again", () => {
+    const store = storeWithStreamingTurn();
+
+    store.set(markSessionInterruptedAtom, "s1");
+
+    const runtime = runtimeOf(store);
+    expect(runtime.streamStatus).toBe("idle");
+    expect(runtime.interrupted).toBe(true);
+    expect(runtime.activeAssistantId).toBeDefined();
+  });
+
+  it("drops late stream events from the interrupted turn", () => {
+    const store = storeWithStreamingTurn();
+    store.set(markSessionInterruptedAtom, "s1");
+
+    store.set(applyGatewayEventAtom, {
+      type: "message.delta",
+      session_id: "s1",
+      payload: { text: "迟到的输出" },
+    });
+    store.set(applyGatewayEventAtom, {
+      type: "tool.start",
+      session_id: "s1",
+      payload: { id: "t1", name: "shell" },
+    });
+    store.set(applyGatewayEventAtom, {
+      type: "status.update",
+      session_id: "s1",
+      payload: { text: "处理中" },
+    });
+
+    const runtime = runtimeOf(store);
+    expect(runtime.streamStatus).toBe("idle");
+    expect(runtime.statusMessage).toBe("");
+    expect(textFromParts(assistantMessage(runtime).parts)).not.toContain("迟到的输出");
+    expect(assistantMessage(runtime).parts.some((part) => part.type === "tool")).toBe(false);
+  });
+
+  it("still finalizes the interrupted turn on message.complete", () => {
+    const store = storeWithStreamingTurn();
+    store.set(markSessionInterruptedAtom, "s1");
+
+    store.set(applyGatewayEventAtom, {
+      type: "message.complete",
+      session_id: "s1",
+      payload: { status: "interrupted", text: "部分回复" },
+    });
+
+    const runtime = runtimeOf(store);
+    expect(assistantMessage(runtime).status).toBe("complete");
+    expect(assistantMessage(runtime).metadata?.finishReason).toBe("interrupted");
+    expect(runtime.interrupted).toBeUndefined();
+  });
+
+  it("resumes rendering when the next turn starts without a local prompt", () => {
+    const store = storeWithStreamingTurn();
+    store.set(markSessionInterruptedAtom, "s1");
+
+    store.set(applyGatewayEventAtom, { type: "message.start", session_id: "s1", payload: {} });
+    store.set(applyGatewayEventAtom, {
+      type: "message.delta",
+      session_id: "s1",
+      payload: { text: "新回合" },
+    });
+
+    const runtime = runtimeOf(store);
+    expect(runtime.interrupted).toBeUndefined();
+    expect(runtime.streamStatus).toBe("streaming");
+  });
+
+  it("clears the interrupt gate when the user sends the next prompt", () => {
+    const store = storeWithStreamingTurn();
+    store.set(markSessionInterruptedAtom, "s1");
+
+    store.set(startPromptAtom, { sessionId: "s1", text: "再来", now: 2_000 });
+
+    expect(runtimeOf(store).interrupted).toBeUndefined();
+  });
+
+  it("keeps resetStreamStateAtom free of interrupt semantics (sendPrompt busy-retry path)", () => {
+    const store = createStore();
+    store.set(startPromptAtom, { sessionId: "s1", text: "你好", now: 1_000 });
+
+    store.set(resetStreamStateAtom, "s1");
+    store.set(applyGatewayEventAtom, { type: "message.start", session_id: "s1", payload: {} });
+    store.set(applyGatewayEventAtom, {
+      type: "message.delta",
+      session_id: "s1",
+      payload: { text: "重试回合" },
+    });
+
+    const runtime = runtimeOf(store);
+    expect(runtime.streamStatus).toBe("streaming");
+    const assistants = runtime.messages.filter((message) => message.role === "assistant");
+    expect(textFromParts(assistants[assistants.length - 1].parts)).toContain("重试回合");
   });
 });

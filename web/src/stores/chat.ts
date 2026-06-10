@@ -65,6 +65,7 @@ export interface ChatSessionRuntime {
   turnStartedAt?: number;
   turnFirstTokenAt?: number;
   activeAssistantId?: string;
+  interrupted?: boolean;
 }
 
 export type ChatRuntimeBySession = Record<string, ChatSessionRuntime>;
@@ -518,6 +519,17 @@ export function reduceGatewayEvent(
   const payload = payloadOf(event);
   const sessionId = sessionIdFor(runtime, event);
 
+  if (runtime.interrupted) {
+    if (event.type === "message.start") {
+      // 新回合开始即解除屏蔽，远程发起的回合和 busy 重试都依赖这里恢复渲染
+      return reduceGatewayEvent({ ...runtime, interrupted: undefined }, event, now);
+    }
+    if (event.type !== "message.complete" && event.type !== "error") {
+      // 丢弃被中断回合迟到的流式事件；终态事件放行，让半截消息正常收尾
+      return runtime;
+    }
+  }
+
   switch (event.type) {
     case "message.start": {
       const id =
@@ -689,6 +701,7 @@ export function reduceGatewayEvent(
         turnStartedAt: undefined,
         turnFirstTokenAt: undefined,
         activeAssistantId: undefined,
+        interrupted: undefined,
         updatedAt: now,
       };
     }
@@ -812,6 +825,7 @@ export function reduceGatewayEvent(
         statusKind: "error",
         statusUpdatedAt: now,
         activeAssistantId: undefined,
+        interrupted: undefined,
         updatedAt: now,
       };
     }
@@ -873,6 +887,23 @@ export const resetStreamStateAtom = atom(null, (_get, set, sessionId: string) =>
     updateSessionRuntime(state, sessionId, (runtime) => ({
       ...resetStream(runtime, now),
       streamStatus: "idle",
+    })),
+  );
+});
+
+// 手动终止：立即把会话标记为非运行态，并屏蔽旧回合迟到的流式事件。
+// 故意保留 activeAssistantId / turnStartedAt，迟到的 message.complete 才能收尾正确的消息。
+export const markSessionInterruptedAtom = atom(null, (_get, set, sessionId: string) => {
+  const now = Date.now();
+  set(chatRuntimeBySessionAtom, (state) =>
+    updateSessionRuntime(state, sessionId, (runtime) => ({
+      ...runtime,
+      interrupted: true,
+      streamStatus: "idle",
+      statusMessage: "",
+      statusKind: undefined,
+      statusUpdatedAt: undefined,
+      updatedAt: now,
     })),
   );
 });
@@ -974,6 +1005,7 @@ export const startPromptAtom = atom(
     set(chatRuntimeBySessionAtom, (state) =>
       updateSessionRuntime(state, params.sessionId, (runtime) => ({
         ...resetStream(runtime, now),
+        interrupted: undefined,
         messages: [
           ...runtime.messages,
           {

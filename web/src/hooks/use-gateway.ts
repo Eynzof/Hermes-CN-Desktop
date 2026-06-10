@@ -37,6 +37,7 @@ import {
   ensureChatSessionAtom,
   gwConnectionAtom,
   gwSessionIdAtom,
+  markSessionInterruptedAtom,
   markStreamsReconnectingAtom,
   resetChatSessionAtom,
   resetStreamStateAtom,
@@ -229,6 +230,7 @@ export function useGateway() {
   const ensureChatSession = useSetAtom(ensureChatSessionAtom);
   const resetChatSession = useSetAtom(resetChatSessionAtom);
   const resetStreamState = useSetAtom(resetStreamStateAtom);
+  const markSessionInterrupted = useSetAtom(markSessionInterruptedAtom);
   const startPrompt = useSetAtom(startPromptAtom);
   const setSessionError = useSetAtom(setSessionErrorAtom);
   const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);
@@ -539,8 +541,10 @@ export function useGateway() {
         setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
         throw error;
       }
+
+      markSessionInterrupted(gatewaySessionId);
     },
-    [ensureSubscribed, setSessionError],
+    [ensureSubscribed, markSessionInterrupted, setSessionError],
   );
 
   const setSessionTitle = useCallback(
