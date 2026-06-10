@@ -36,13 +36,20 @@ interface Feedback {
   message: string;
 }
 
+// 仅展示桌面端实际可接入的投递渠道（IM 接入当前支持飞书/微信，见
+// src/commands/im_onboarding.rs）。后端合法平台列表见
+// Hermes-CN-Core cron/scheduler.py 的 _KNOWN_DELIVERY_PLATFORMS。
 const DELIVERY_OPTIONS = [
   { value: "local", label: "本地" },
-  { value: "telegram", label: "Telegram" },
-  { value: "discord", label: "Discord" },
-  { value: "slack", label: "Slack" },
+  { value: "feishu", label: "飞书" },
+  { value: "weixin", label: "微信" },
   { value: "email", label: "Email" },
 ];
+
+function deliveryLabel(value: string): string {
+  if (!value) return "本地";
+  return DELIVERY_OPTIONS.find((item) => item.value === value)?.label ?? value;
+}
 
 const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "全部" },
@@ -636,7 +643,7 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
         </div>
         <div className={s.detailItem}>
           <span>投递目标</span>
-          <strong>{text(job.deliver) || "local"}</strong>
+          <strong>{deliveryLabel(text(job.deliver))}</strong>
         </div>
         <div className={s.detailItem}>
           <span>任务 ID</span>
