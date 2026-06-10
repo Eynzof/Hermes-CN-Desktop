@@ -47,6 +47,18 @@ const streamdownLinkSafety: ComponentProps<typeof Streamdown>["linkSafety"] = {
   enabled: false,
 };
 
+// controls 传对象时，省略的键默认为开启，table/mermaid 必须显式关闭
+// 才能保持原 controls={false} 的行为。
+const streamdownControls: ComponentProps<typeof Streamdown>["controls"] = {
+  code: { copy: true, download: false },
+  table: false,
+  mermaid: false,
+};
+
+const streamdownTranslations: ComponentProps<typeof Streamdown>["translations"] = {
+  copyCode: "复制代码",
+};
+
 const markdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   protocols: {
@@ -555,7 +567,7 @@ export const MarkdownText = memo(function MarkdownText({
     <Streamdown
       className={s.markdownRoot}
       components={streamdownComponents}
-      controls={false}
+      controls={streamdownControls}
       dir="auto"
       isAnimating={streaming}
       lineNumbers={false}
@@ -563,6 +575,7 @@ export const MarkdownText = memo(function MarkdownText({
       mode="streaming"
       plugins={streamdownPlugins}
       rehypePlugins={streamdownRehypePlugins}
+      translations={streamdownTranslations}
     >
       {normalizedText}
     </Streamdown>

@@ -129,6 +129,23 @@ describe("MessageTimeline", () => {
   });
 
 
+  it("renders a copy button on fenced code blocks", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={"```ts\nconst value = 1;\n```"} />,
+    );
+
+    expect(html).toContain('data-streamdown="code-block-copy-button"');
+    expect(html).toContain('title="复制代码"');
+  });
+
+  it("does not render code block controls for inline code", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText text={"行内 `code` 不需要复制按钮"} />,
+    );
+
+    expect(html).not.toContain('data-streamdown="code-block-copy-button"');
+  });
+
   it("routes Mermaid fences away from the plain code block renderer", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
       <MarkdownText text={"```mermaid\ngraph TD\n  A[开始] --> B{条件判断}\n  B -->|是| C[处理]\n```"} />,
