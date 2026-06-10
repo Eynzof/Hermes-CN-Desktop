@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronRight, Info } from "lucide-react";
 import { showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { MessageImage } from "./message-image";
+import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
 import { CopyButton } from "@/components/ui/copy-button";
 import s from "./message-timeline.module.css";
@@ -981,7 +982,7 @@ export function MessageTimeline({
         </div>
       ) : null}
       <div ref={messagesRef} className={s.messages}>
-        {loading ? <div className={s.empty}>加载对话中...</div> : null}
+        {loading ? <MessageSkeleton /> : null}
         {!loading && visibleMessages.length === 0 && !statusMessage && !pendingApproval ? (
           <div className={s.empty}>
             <div className={s.emptyTitle}>暂无对话记录</div>

@@ -1,0 +1,60 @@
+/* 会话切换加载骨架。容器延迟 ~120ms 淡入：hover 预取命中时数据通常更早
+   返回（骨架还没出现就被卸载），只有真正的慢加载才会看到它。 */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 4px;
+  opacity: 0;
+  animation: skeleton-appear 0.18s ease-out 0.12s forwards;
+}
+
+.user {
+  align-self: flex-end;
+  height: 34px;
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-chip);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-self: stretch;
+}
+
+.line {
+  height: 14px;
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-chip);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-appear {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation-delay: 0s;
+    animation-duration: 0.01s;
+  }
+
+  .user,
+  .line {
+    animation: none;
+  }
+}
