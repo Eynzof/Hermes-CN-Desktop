@@ -75,12 +75,33 @@ export function useSession(id: string | undefined) {
   });
 }
 
+// 消息列表是切会话时详情页首屏的关键路径：30s 内重访直接渲染缓存（后台仍
+// refetch 校准），不再每次切换都回退到「加载对话中…」占位。运行中会话的实时
+// 内容走 Jotai runtime bucket，不依赖这里的新鲜度。
+export const SESSION_MESSAGES_STALE_TIME_MS = 30_000;
+
 export function useSessionMessages(id: string | undefined) {
   const profile = useActiveProfileName();
   return useQuery<MessagesResponse>({
     queryKey: ["session-messages", profile, id],
     queryFn: ({ signal }) => fetchSessionMessages(id!, signal),
     enabled: !!id,
+    staleTime: SESSION_MESSAGES_STALE_TIME_MS,
+  });
+}
+
+// 侧边栏 / 历史列表 hover 时预取，点击进入详情页时数据已在缓存或在途。
+// prefetchQuery 对未过期数据是 no-op，hover 抖动不会放大后端压力。
+export function prefetchSessionMessages(
+  qc: QueryClient,
+  profile: string,
+  id: string | undefined,
+): void {
+  if (!id) return;
+  void qc.prefetchQuery({
+    queryKey: ["session-messages", profile, id],
+    queryFn: ({ signal }) => fetchSessionMessages(id, signal),
+    staleTime: SESSION_MESSAGES_STALE_TIME_MS,
   });
 }
 

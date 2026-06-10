@@ -3,6 +3,7 @@ import { createMathPlugin } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import {
   createContext,
+  memo,
   useContext,
   useMemo,
   type CSSProperties,
@@ -542,7 +543,12 @@ const streamdownComponents = {
   time: MarkdownTime,
 };
 
-export function MarkdownText({ text, streaming = false }: MarkdownTextProps) {
+// memo：Markdown 解析（streamdown + KaTeX + mermaid）是重量级渲染，父组件
+// 与正文无关的 state 变化（编辑器字符计数、保存状态等）不应触发整篇重解析。
+export const MarkdownText = memo(function MarkdownText({
+  text,
+  streaming = false,
+}: MarkdownTextProps) {
   const normalizedText = useMemo(() => normalizeTexMathDelimiters(text), [text]);
 
   return (
@@ -561,4 +567,4 @@ export function MarkdownText({ text, streaming = false }: MarkdownTextProps) {
       {normalizedText}
     </Streamdown>
   );
-}
+});

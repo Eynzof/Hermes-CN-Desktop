@@ -278,6 +278,12 @@ function parseToolCalls(value: unknown, startedAt: number): HermesToolPart[] {
   });
 }
 
+// 服务端会话历史（SessionMessage）只持久化 token_count / finish_reason，
+// 没有任何 timing 字段（startedAt / firstTokenAt / model 都没有）——所以
+// 纯历史回放的消息最多只能在统计栏显示 tokens，TTFT/耗时只能靠本机
+// ui-store 的回合统计补回（attachTurnStatsMetadata）。非本机流式过的会话
+// （IM 通道、其他设备、旧版本产生的）这些数据不存在，也无从推算；彻底
+// 解决需要 Core 侧把 timing 元数据写进会话历史（候选新 P-NNN 补丁）。
 function legacyMetadata(msg: SessionMessage): HermesMessageMetadata | undefined {
   const metadata: HermesMessageMetadata = {
     persistedId: msg.id,
@@ -619,24 +625,47 @@ export function attachTurnStatsMetadata(
 ): HermesUIMessage[] {
   if (stats.length === 0) return messages;
 
+  // 两遍匹配：第一遍让所有 contentHash 精确命中先占住统计，第二遍才用
+  // turnIndex 给未命中的消息兜底。单遍"逐条 hash→index 回退"会让靠前消息
+  // 的 index 兜底抢走本属于靠后消息的 hash 精确命中——历史合并重排后统计
+  // 就贴错了消息（用户看到的"TTFT 时有时无"成因之一）。
   const used = new Set<number>();
+  const statByMessage = new Map<number, number>();
+  const ordinalByMessage = new Map<number, number>();
+
   let assistantIndex = 0;
-  return messages.map((message) => {
-    if (message.role !== "assistant") return message;
+  messages.forEach((message, messageIndex) => {
+    if (message.role !== "assistant") return;
     assistantIndex += 1;
+    ordinalByMessage.set(messageIndex, assistantIndex);
     const hash = statsHashFromMessage(message);
-    let statIndex = stats.findIndex((stat, index) =>
-      !used.has(index) && Boolean(hash) && stat.contentHash === hash,
+    if (!hash) return;
+    const statIndex = stats.findIndex(
+      (stat, index) => !used.has(index) && stat.contentHash === hash,
     );
-    if (statIndex === -1) {
-      statIndex = stats.findIndex((stat, index) =>
-        !used.has(index) && stat.turnIndex === assistantIndex,
-      );
+    if (statIndex !== -1) {
+      used.add(statIndex);
+      statByMessage.set(messageIndex, statIndex);
     }
-    if (statIndex === -1) return message;
+  });
+
+  messages.forEach((message, messageIndex) => {
+    if (message.role !== "assistant" || statByMessage.has(messageIndex)) return;
+    const ordinal = ordinalByMessage.get(messageIndex);
+    const statIndex = stats.findIndex(
+      (stat, index) => !used.has(index) && stat.turnIndex === ordinal,
+    );
+    if (statIndex !== -1) {
+      used.add(statIndex);
+      statByMessage.set(messageIndex, statIndex);
+    }
+  });
+
+  return messages.map((message, messageIndex) => {
+    const statIndex = statByMessage.get(messageIndex);
+    if (statIndex === undefined) return message;
     const metadata = metadataFromTurnStats(stats[statIndex]!);
     if (!metadata) return message;
-    used.add(statIndex);
     return {
       ...message,
       metadata: mergeMessageMetadata(message.metadata, metadata, {

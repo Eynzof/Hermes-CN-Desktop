@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Dialog, Popover } from "@hermes/shared-ui";
 import {
@@ -16,7 +17,13 @@ import {
 import type { SessionSummary } from "@hermes/protocol";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
-import { useArchiveSession, useDeleteSessions, useSessions } from "@/hooks/use-sessions";
+import { useActiveProfileName } from "@/hooks/use-profiles";
+import {
+  prefetchSessionMessages,
+  useArchiveSession,
+  useDeleteSessions,
+  useSessions,
+} from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { isSessionRunning } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
@@ -584,6 +591,14 @@ export function HistoryRoute() {
 
   const activeSessionId = useAtomValue(activeSessionIdAtom);
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
+  const queryClient = useQueryClient();
+  const activeProfile = useActiveProfileName();
+  const hoverSession = useCallback(
+    (session: SessionSummary) => {
+      prefetchSessionMessages(queryClient, activeProfile, session.id);
+    },
+    [activeProfile, queryClient],
+  );
   const goSession = useCallback(
     (session: SessionSummary) => {
       if (bulkDeleteMode) {
@@ -899,6 +914,7 @@ export function HistoryRoute() {
                       data-selected={selected ? "true" : undefined}
                       data-bulk={bulkDeleteMode ? "true" : undefined}
                       onClick={() => goSession(session)}
+                      onMouseEnter={() => hoverSession(session)}
                     >
                       {bulkDeleteMode ? (
                         <span className={s.cellSelect}>

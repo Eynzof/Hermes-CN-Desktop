@@ -964,6 +964,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const info = runtimeInfo.data;
   const process = info?.process;
   const source = info?.source;
+  const kernelRuntimeTag = kernelRuntimeTagLabel(info?.current);
   const rendererRuntime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
   const hermesHomePath = status?.hermes_home;
   const runtimeRootPath = info?.runtimeRoot;
@@ -1028,6 +1029,11 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                 ? "当前固定端口上已有兼容 Dashboard，桌面端已连接它；runtime 指针和可执行路径仍位于桌面 managed runtime 目录内。"
               : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"}
           </p>
+          {kernelRuntimeTag && (
+            <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
+              {kernelRuntimeTag}
+            </code>
+          )}
         </div>
         <span className={s.statusBadge} data-on={isolationOk}>
           {info ? runtimeModeLabel(info.mode) : "读取中"}
@@ -1540,6 +1546,23 @@ function runtimeModeLabel(mode: RuntimeInfo["mode"] | undefined): string {
     case "missing": return "未找到";
     default: return mode ?? "未知";
   }
+}
+
+// 内核 hero 上显著展示当前 runtime 的发行版本。确定性发行版（内置/更新通道
+// 安装，版本来自 Core release manifest）显示完整 release tag；本地源码 /
+// 临时分支构建没有确定性发行号，显示 dev-local + 提交短哈希而不是伪 tag。
+function kernelRuntimeTagLabel(
+  current:
+    | { runtimeVersion: string; source: string; sourceCommit?: string }
+    | null
+    | undefined,
+): string | null {
+  if (!current) return null;
+  if (current.source === "local-source" || current.runtimeVersion.startsWith("dev-local-")) {
+    const commit = shortCommit(current.sourceCommit);
+    return commit ? `dev-local · ${commit}` : "dev-local";
+  }
+  return `runtime-v${current.runtimeVersion}`;
 }
 
 function runtimeSourceLabel(source: string | undefined): string {

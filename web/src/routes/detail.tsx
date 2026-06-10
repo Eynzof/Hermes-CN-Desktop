@@ -25,8 +25,7 @@ import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
-import { getUiTurnStats, type UiTurnStats } from "@/lib/ui-store";
-import { resolveSessionIdAliases } from "@/lib/session-map";
+import { useSessionTurnStats } from "@/hooks/use-session-turn-stats";
 import {
   buildComposerContextUsage,
   estimateRenderedContextTokens,
@@ -68,7 +67,7 @@ export function DetailRoute() {
   const [conversationWidthMode, setConversationWidthMode] = useAtom(conversationWidthModeAtom);
   const conversationFontSizeMode = useAtomValue(conversationFontSizeAtom);
   const taskId = activeSessionId ?? urlTaskId;
-  const [turnStats, setTurnStats] = useState<UiTurnStats[]>([]);
+  const turnStats = useSessionTurnStats(taskId);
 
   const {
     resumeSession,
@@ -193,26 +192,6 @@ export function DetailRoute() {
     }
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setTurnStats([]);
-    if (!taskId) return;
-    const aliases = resolveSessionIdAliases(taskId, { includeExpired: true });
-    void Promise.all(aliases.map((id) => getUiTurnStats(id))).then((results) => {
-      if (cancelled) return;
-      const deduped = new Map<string, UiTurnStats>();
-      results.flat().forEach((stat) => deduped.set(stat.id, stat));
-      setTurnStats(Array.from(deduped.values()).sort((a, b) =>
-        (a.completedAt ?? a.createdAt ?? 0) - (b.completedAt ?? b.createdAt ?? 0) ||
-        (a.createdAt ?? 0) - (b.createdAt ?? 0) ||
-        a.id.localeCompare(b.id)
-      ));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [taskId]);
 
   const storedMessages = useMemo(
     () => attachTurnStatsMetadata(messagesResponseToHermesUIMessages(messagesData), turnStats),
@@ -404,7 +383,11 @@ export function DetailRoute() {
           </>
         }
       />
+      {/* key={taskId}：切会话强制重挂载时间线。layout effect 在首帧绘制前就
+          把滚动定位到底部，避免新会话内容先以上一个会话的滚动位置绘制、再
+          在 650ms 的滚动校正窗口里反复跳动（用户感知为"闪烁两下"）。 */}
       <MessageTimeline
+        key={taskId}
         messages={chatMessages}
         loading={isLoading && runtime.messages.length === 0}
         statusMessage={timelineStatus}

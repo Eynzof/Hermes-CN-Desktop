@@ -16,6 +16,7 @@ import {
   storedMessageToChatMessage,
   storedMessagesToChatMessages,
 } from "./message-adapter";
+import { stableTextHash } from "@/lib/ui-store";
 
 function sessionMessage(overrides: Partial<SessionMessage>): SessionMessage {
   return {
@@ -649,6 +650,55 @@ describe("message adapter", () => {
       model: "deepseek-v4-flash",
       finishReason: "stop",
     });
+  });
+
+  it("prefers content-hash match over turn-index fallback", () => {
+    const messages = [
+      uiMessage({ id: "a-1", parts: [{ type: "text", text: "第一回合" }] }),
+      uiMessage({ id: "a-2", parts: [{ type: "text", text: "第二回合" }] }),
+    ];
+
+    // turnIndex 故意指向第 1 条，contentHash 指向第 2 条——hash 必须赢，
+    // 否则历史合并重排后统计会贴错消息。
+    const enriched = attachTurnStatsMetadata(messages, [
+      {
+        id: "stat-2",
+        sessionId: "s1",
+        turnIndex: 1,
+        contentHash: stableTextHash("第二回合"),
+        ttftMs: 500,
+      },
+    ]);
+    const chat = hermesUIMessagesToChatMessages(enriched);
+
+    expect(chat[0]?.stats?.ttftMs).toBeUndefined();
+    expect(chat[1]?.stats?.ttftMs).toBe(500);
+  });
+
+  it("keeps scalar history stats when no local turn stats match", () => {
+    // 非本机流式过的历史会话没有 ui-store 回合统计——服务端历史只有
+    // token_count，统计栏应降级为只显示 tokens 而不是整体消失。
+    const messages = [
+      uiMessage({
+        id: "a-1",
+        parts: [{ type: "text", text: "无本地统计的历史回合" }],
+        metadata: { usage: { tokensTotal: 42 } },
+      }),
+    ];
+
+    const enriched = attachTurnStatsMetadata(messages, [
+      {
+        id: "stat-x",
+        sessionId: "s1",
+        turnIndex: 9,
+        contentHash: stableTextHash("别的回合"),
+        ttftMs: 123,
+      },
+    ]);
+    const chat = hermesUIMessagesToChatMessages(enriched);
+
+    expect(chat[0]?.stats?.ttftMs).toBeUndefined();
+    expect(chat[0]?.stats?.tokensTotal).toBe(42);
   });
 
   it("prefers stored complete assistant over a stale streaming partial", () => {

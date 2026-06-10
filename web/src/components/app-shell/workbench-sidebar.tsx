@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Folder, MessageSquare, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
-import { useSessions } from "@/hooks/use-sessions";
+import { useActiveProfileName } from "@/hooks/use-profiles";
+import { prefetchSessionMessages, useSessions } from "@/hooks/use-sessions";
 import {
   isSessionRunning,
   mergeLiveRuntimeSessions,
@@ -65,9 +67,10 @@ interface SessionRowProps {
   meta: string;
   projectName?: string;
   onClick: () => void;
+  onHover?: () => void;
 }
 
-function SessionRow({ session, state, active, meta, projectName, onClick }: SessionRowProps) {
+function SessionRow({ session, state, active, meta, projectName, onClick, onHover }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
   const dotState = state === "idle" ? undefined : state;
   return (
@@ -76,6 +79,8 @@ function SessionRow({ session, state, active, meta, projectName, onClick }: Sess
       className={s.sessionRow}
       data-active={active ? "true" : undefined}
       onClick={onClick}
+      onMouseEnter={onHover}
+      onFocus={onHover}
       title={title}
     >
       <div className={s.ttl}>
@@ -99,6 +104,8 @@ export function WorkbenchSidebar() {
   const location = useLocation();
   const setActiveId = useSetAtom(activeSessionIdAtom);
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
+  const queryClient = useQueryClient();
+  const profile = useActiveProfileName();
   const { data } = useSessions();
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
@@ -188,6 +195,10 @@ export function WorkbenchSidebar() {
     navigate(`/tasks/${sess.id}`);
   };
 
+  const hoverSession = (sess: SessionSummary) => {
+    prefetchSessionMessages(queryClient, profile, sess.id);
+  };
+
   const activeSessionId = location.pathname.startsWith("/tasks/")
     ? decodeURIComponent(location.pathname.slice("/tasks/".length))
     : null;
@@ -256,6 +267,7 @@ export function WorkbenchSidebar() {
                 meta={`${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}`}
                 projectName={projectNameBySessionId.get(sess.id)}
                 onClick={() => goSession(sess)}
+                onHover={() => hoverSession(sess)}
               />
             ))
           )}
@@ -285,6 +297,7 @@ export function WorkbenchSidebar() {
                   meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
                   projectName={projectNameBySessionId.get(sess.id)}
                   onClick={() => goSession(sess)}
+                  onHover={() => hoverSession(sess)}
                 />
               );
             })}
@@ -350,6 +363,7 @@ export function WorkbenchSidebar() {
                   meta={meta}
                   projectName={projectNameBySessionId.get(sess.id)}
                   onClick={() => goSession(sess)}
+                  onHover={() => hoverSession(sess)}
                 />
               );
             })

@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   Archive,
   Boxes,
@@ -13,6 +14,8 @@ import {
   TerminalSquare,
   type LucideIcon,
 } from "lucide-react";
+import { useActiveProfileName } from "@/hooks/use-profiles";
+import { prefetchSoul } from "@/hooks/use-soul";
 import s from "./debug-sidebar.module.css";
 
 interface CapabilityItem {
@@ -21,6 +24,8 @@ interface CapabilityItem {
   icon: LucideIcon;
   shortcut?: string;
   title?: string;
+  // hover/聚焦时预取页面数据，点进去时已在缓存或在途
+  prefetch?: (qc: QueryClient, profile: string) => void;
 }
 
 export const CONFIG_ITEMS: readonly CapabilityItem[] = [
@@ -37,7 +42,13 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "MCP", path: "/mcp", icon: Puzzle },
   { label: "终端", path: "/console", icon: TerminalSquare, title: "Hermes Console：直接运行 Hermes 命令" },
   { label: "记忆", path: "/memory", icon: Brain },
-  { label: "灵魂", path: "/soul", icon: Ghost, title: "SOUL.md：智能体的核心人格（系统提示词第一身份）" },
+  {
+    label: "灵魂",
+    path: "/soul",
+    icon: Ghost,
+    title: "SOUL.md：智能体的核心人格（系统提示词第一身份）",
+    prefetch: prefetchSoul,
+  },
 ];
 
 const AUTOMATION_ITEMS: readonly CapabilityItem[] = [
@@ -60,6 +71,8 @@ export const CAPABILITY_SECTIONS: readonly {
 
 export function CapabilitySidebar() {
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const profile = useActiveProfileName();
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/");
@@ -75,6 +88,9 @@ export function CapabilitySidebar() {
             </div>
             {section.items.map((item) => {
               const Icon = item.icon;
+              const onPrefetch = item.prefetch
+                ? () => item.prefetch!(queryClient, profile)
+                : undefined;
               return (
                 <Link
                   key={item.path}
@@ -82,6 +98,8 @@ export function CapabilitySidebar() {
                   className={s.item}
                   data-active={isActive(item.path) ? "true" : undefined}
                   title={item.title ?? item.path}
+                  onMouseEnter={onPrefetch}
+                  onFocus={onPrefetch}
                 >
                   <span className={s.itemIcon}>
                     <Icon size={14} />

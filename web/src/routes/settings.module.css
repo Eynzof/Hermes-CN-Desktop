@@ -908,6 +908,17 @@
   line-height: 1.65;
 }
 
+.aboutRuntimeTag {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
 .debugActionBar {
   display: flex;
   flex-wrap: wrap;
