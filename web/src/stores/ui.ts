@@ -121,6 +121,54 @@ export const composerSubmitShortcutAtom = atom(
   },
 );
 
+// 桌面通知设置（issue #194）。触发链路（stores/chat.ts → lib/notifications.ts）
+// 不在 React 上下文里，直接通过 readNotificationSettings() 同步读 kv 缓存；
+// atoms 写入时 writeUiValue 同步写穿同一缓存，两边天然一致。
+const NOTIFY_SYSTEM_KEY = "hermes.notify-system";
+const NOTIFY_SOUND_KEY = "hermes.notify-sound";
+const NOTIFY_ON_COMPLETE_KEY = "hermes.notify-on-complete";
+const NOTIFY_ON_APPROVAL_KEY = "hermes.notify-on-approval";
+const NOTIFY_ONLY_BACKGROUND_KEY = "hermes.notify-only-background";
+
+function readNotifyFlag(key: string): boolean {
+  return readUiValue<unknown>(key, true) !== false;
+}
+
+function makeNotifyFlagAtom(key: string) {
+  const baseAtom = atom<boolean>(readNotifyFlag(key));
+  return atom(
+    (get) => get(baseAtom),
+    (_get, set, next: boolean) => {
+      set(baseAtom, next === true);
+      writeUiValue(key, next === true);
+    },
+  );
+}
+
+export const notifySystemAtom = makeNotifyFlagAtom(NOTIFY_SYSTEM_KEY);
+export const notifySoundAtom = makeNotifyFlagAtom(NOTIFY_SOUND_KEY);
+export const notifyOnCompleteAtom = makeNotifyFlagAtom(NOTIFY_ON_COMPLETE_KEY);
+export const notifyOnApprovalAtom = makeNotifyFlagAtom(NOTIFY_ON_APPROVAL_KEY);
+export const notifyOnlyBackgroundAtom = makeNotifyFlagAtom(NOTIFY_ONLY_BACKGROUND_KEY);
+
+export interface NotificationSettings {
+  system: boolean;
+  sound: boolean;
+  onComplete: boolean;
+  onApproval: boolean;
+  onlyBackground: boolean;
+}
+
+export function readNotificationSettings(): NotificationSettings {
+  return {
+    system: readNotifyFlag(NOTIFY_SYSTEM_KEY),
+    sound: readNotifyFlag(NOTIFY_SOUND_KEY),
+    onComplete: readNotifyFlag(NOTIFY_ON_COMPLETE_KEY),
+    onApproval: readNotifyFlag(NOTIFY_ON_APPROVAL_KEY),
+    onlyBackground: readNotifyFlag(NOTIFY_ONLY_BACKGROUND_KEY),
+  };
+}
+
 // Set to true while the desktop main process is restarting the dashboard
 // subprocess for a profile switch. The window-level overlay in ProfileSwitcherOverlay
 // reads this and blocks UI interaction until the new dashboard is ready.

@@ -175,6 +175,60 @@ describe("conversationFontSizeAtom (persisted)", () => {
   });
 });
 
+describe("notification settings atoms (persisted)", () => {
+  const atomKeyPairs = [
+    ["notifySystemAtom", "hermes.notify-system"],
+    ["notifySoundAtom", "hermes.notify-sound"],
+    ["notifyOnCompleteAtom", "hermes.notify-on-complete"],
+    ["notifyOnApprovalAtom", "hermes.notify-on-approval"],
+    ["notifyOnlyBackgroundAtom", "hermes.notify-only-background"],
+  ] as const;
+
+  it("all five toggles default to enabled", async () => {
+    const ui = await loadUi();
+    const store = createStore();
+    for (const [atomName] of atomKeyPairs) {
+      expect(store.get(ui[atomName])).toBe(true);
+    }
+  });
+
+  it("persists toggles under their hermes.notify-* keys", async () => {
+    const ui = await loadUi();
+    const store = createStore();
+    for (const [atomName, key] of atomKeyPairs) {
+      store.set(ui[atomName], false);
+      expect(ui.uiStore.readUiValue(key, true)).toBe(false);
+      store.set(ui[atomName], true);
+      expect(ui.uiStore.readUiValue(key, false)).toBe(true);
+    }
+  });
+
+  it("restores stored false values and treats non-boolean junk as enabled", async () => {
+    const ui = await loadUi({
+      "hermes.notify-system": false,
+      "hermes.notify-sound": "yes",
+    });
+    const store = createStore();
+    expect(store.get(ui.notifySystemAtom)).toBe(false);
+    expect(store.get(ui.notifySoundAtom)).toBe(true);
+  });
+
+  it("readNotificationSettings mirrors the persisted kv values", async () => {
+    const ui = await loadUi({ "hermes.notify-on-complete": false });
+    expect(ui.readNotificationSettings()).toEqual({
+      system: true,
+      sound: true,
+      onComplete: false,
+      onApproval: true,
+      onlyBackground: true,
+    });
+
+    const store = createStore();
+    store.set(ui.notifyOnlyBackgroundAtom, false);
+    expect(ui.readNotificationSettings().onlyBackground).toBe(false);
+  });
+});
+
 describe("profileSwitchingAtom", () => {
   it("defaults to { active: false }", async () => {
     const { profileSwitchingAtom } = await loadUi();

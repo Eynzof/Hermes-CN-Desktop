@@ -268,6 +268,7 @@ fn main() {
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(app_state)
         .setup(move |app| {
             use tauri::Manager;
@@ -503,6 +504,7 @@ fn main() {
             commands::memory::update_memory_entry,
             commands::memory::remove_memory_entry,
             commands::memory::write_user_profile,
+            commands::notify::desktop_notify,
             commands::ws_proxy::gateway_ws_open,
             commands::ws_proxy::gateway_ws_send,
             commands::ws_proxy::gateway_ws_close,

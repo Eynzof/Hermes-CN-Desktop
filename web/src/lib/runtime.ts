@@ -153,6 +153,29 @@ export interface ExportDebugBundleResult {
   warnings: string[];
 }
 
+export interface DesktopNotifyInput {
+  kind: "approval" | "complete" | "error" | "test";
+  title: string;
+  body: string;
+  /** 设置「系统通知」开关；false 时仅做焦点判定与注意力请求。 */
+  showSystemNotification: boolean;
+  /** 系统通知自带的原生提示音。 */
+  withSound: boolean;
+  /** 「仅窗口在后台时通知」；测试按钮传 false。 */
+  respectFocus: boolean;
+  requestAttention: boolean;
+}
+
+export interface DesktopNotifyResult {
+  /** 系统通知已实际发出。 */
+  delivered: boolean;
+  /** 调用时主窗口是否在前台。 */
+  focused: boolean;
+  attentionRequested: boolean;
+  /** 系统通知发送失败原因（非致命）。 */
+  error?: string;
+}
+
 export interface TerminalStartInput {
   purpose?: "shell" | "gatewaySetup" | "gatewayStatus";
   cwd?: string;
@@ -251,6 +274,7 @@ declare global {
       uiStoreGetTurnStats?(input: { sessionId: string }): Promise<UiTurnStats[]>;
       uiStoreGetTurnStatsWindow?(input: { sinceMs?: number; limit?: number }): Promise<UiTurnStats[]>;
       uiStoreRecordEvent?(input: UiEventInput): Promise<boolean>;
+      desktopNotify?(input: DesktopNotifyInput): Promise<DesktopNotifyResult>;
       terminalStart?(input: TerminalStartInput): Promise<TerminalStartResult>;
       terminalOpenExternal?(input: TerminalOpenExternalInput): Promise<ExternalTerminalResult>;
       terminalWrite?(input: { terminalId: string; data: string }): Promise<boolean>;

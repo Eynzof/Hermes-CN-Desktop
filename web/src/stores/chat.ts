@@ -15,6 +15,7 @@ import {
   dedupeImageParts,
   imagePartFromSource,
 } from "@/lib/message-images";
+import { notifyFromGatewayEvent } from "@/lib/notifications";
 import { resolvePersistentSessionId } from "@/lib/session-map";
 import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
 
@@ -1116,6 +1117,11 @@ export const applyGatewayEventAtom = atom(null, (_get, set, event: GatewayEvent)
   if (!event.session_id) return;
   set(chatRuntimeBySessionAtom, (state) =>
     updateSessionRuntime(state, event.session_id!, (runtime) => {
+      // 通知决策需要 reduce 前的快照（pendingApprovals / activeAssistantId
+      // 是防重放依据），副作用本身 fire-and-forget，绝不影响 reducer。
+      try {
+        notifyFromGatewayEvent(event, runtime);
+      } catch {}
       const next = reduceGatewayEvent(runtime, event);
       persistCompletedTurnStats(next, event);
       return next;

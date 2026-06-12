@@ -38,6 +38,8 @@ import type {
   YoloModeStatus,
 } from "@hermes/protocol";
 import type {
+  DesktopNotifyInput,
+  DesktopNotifyResult,
   SkillMarkdownResult,
   ExportDebugBundleInput,
   ExportDebugBundleResult,
@@ -320,6 +322,10 @@ const tauriBridge = {
 
   async uiStoreRecordEvent(input: UiEventInput): Promise<boolean> {
     return invokeCommand("ui_store_record_event", { input });
+  },
+
+  async desktopNotify(input: DesktopNotifyInput): Promise<DesktopNotifyResult> {
+    return invokeCommand("desktop_notify", { input });
   },
 
   async terminalStart(input: TerminalStartInput): Promise<TerminalStartResult> {

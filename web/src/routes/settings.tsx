@@ -41,10 +41,16 @@ import {
   CONVERSATION_FONT_SIZE_OPTIONS,
   composerSubmitShortcutAtom,
   conversationFontSizeAtom,
+  notifyOnApprovalAtom,
+  notifyOnCompleteAtom,
+  notifyOnlyBackgroundAtom,
+  notifySoundAtom,
+  notifySystemAtom,
   profileSwitchingAtom,
   showReasoningAtom,
   type ConversationFontSizeMode,
 } from "@/stores/ui";
+import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
 import { openExternalUrl } from "@/lib/external-links";
 import { checkDesktopUpdate, DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
@@ -84,6 +90,111 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
       <ApprovalModeSection />
+    </div>
+  );
+}
+
+/* ── Notifications ───────────────────────────────────────────────────── */
+
+type NotifyTestState =
+  | { phase: "idle" }
+  | { phase: "sending" }
+  | { phase: "ok"; message: string }
+  | { phase: "error"; message: string };
+
+export function NotificationSection({ showHeading = true }: SettingsSectionProps) {
+  const [notifySystem, setNotifySystem] = useAtom(notifySystemAtom);
+  const [notifySound, setNotifySound] = useAtom(notifySoundAtom);
+  const [notifyOnComplete, setNotifyOnComplete] = useAtom(notifyOnCompleteAtom);
+  const [notifyOnApproval, setNotifyOnApproval] = useAtom(notifyOnApprovalAtom);
+  const [notifyOnlyBackground, setNotifyOnlyBackground] = useAtom(notifyOnlyBackgroundAtom);
+  const [testState, setTestState] = useState<NotifyTestState>({ phase: "idle" });
+
+  const allChannelsOff = !notifySystem && !notifySound;
+  const toggleOptions = [{ value: "off", label: "关闭" }, { value: "on", label: "开启" }];
+
+  const handleTestNotification = async () => {
+    const bridge = window.hermesDesktop;
+    if (typeof bridge?.desktopNotify !== "function") {
+      setTestState({ phase: "error", message: "当前为 Web 模式，系统通知仅桌面端支持" });
+      return;
+    }
+    setTestState({ phase: "sending" });
+    try {
+      const result = await bridge.desktopNotify({
+        kind: "test",
+        title: "Hermes 通知测试",
+        body: "看到这条系统通知说明配置正常（macOS 首次会请求授权）。",
+        showSystemNotification: notifySystem,
+        withSound: notifySound,
+        respectFocus: false,
+        requestAttention: false,
+      });
+      // 复用真实链路的兜底判定，让用户能预听系统通知关闭时的提示音。
+      const previewSettings = {
+        system: notifySystem,
+        sound: notifySound,
+        onComplete: true,
+        onApproval: true,
+        onlyBackground: false,
+      };
+      if (shouldPlayFallbackSound(previewSettings, result)) playChime();
+      if (result.error) {
+        setTestState({
+          phase: "error",
+          message: `系统通知发送失败：${result.error}（请检查系统设置中的通知权限）`,
+        });
+      } else if (notifySystem && result.delivered) {
+        setTestState({ phase: "ok", message: "已发送，请查看系统通知" });
+      } else if (notifySound) {
+        setTestState({ phase: "ok", message: "已播放提示音（系统通知未开启）" });
+      } else {
+        setTestState({ phase: "ok", message: "系统通知与提示音均未开启，本次测试没有任何提醒" });
+      }
+    } catch (err) {
+      setTestState({
+        phase: "error",
+        message: `测试失败：${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  };
+
+  const testSub =
+    testState.phase === "ok" || testState.phase === "error"
+      ? testState.message
+      : "验证系统通知权限是否已授予（窗口在前台也会发送）";
+
+  return (
+    <div>
+      {showHeading && <h2 className={s.heading}>通知</h2>}
+      <Row label="系统通知" sub="任务需要关注时通过 macOS 通知中心 / Windows 通知横幅提醒" right={
+        <RadioGroup value={notifySystem ? "on" : "off"} options={toggleOptions} onChange={(v) => setNotifySystem(v === "on")} />
+      } />
+      <Row label="提示音" sub="提醒时播放声音；系统通知开启时使用系统原生提示音" right={
+        <RadioGroup value={notifySound ? "on" : "off"} options={toggleOptions} onChange={(v) => setNotifySound(v === "on")} />
+      } />
+      <Row label="任务完成时通知" sub="回合结束（含任务出错）时提醒" right={
+        <RadioGroup value={notifyOnComplete ? "on" : "off"} options={toggleOptions} onChange={(v) => setNotifyOnComplete(v === "on")} />
+      } />
+      <Row label="需要权限确认时通知" sub="任务等待你批准命令时提醒，并请求任务栏 / Dock 注意" right={
+        <RadioGroup value={notifyOnApproval ? "on" : "off"} options={toggleOptions} onChange={(v) => setNotifyOnApproval(v === "on")} />
+      } />
+      <Row label="仅窗口在后台时通知" sub="窗口在前台时不打扰；关闭后前台也会提醒" right={
+        <RadioGroup value={notifyOnlyBackground ? "on" : "off"} options={toggleOptions} onChange={(v) => setNotifyOnlyBackground(v === "on")} />
+      } />
+      {allChannelsOff && (
+        <p className={s.desc}>系统通知与提示音均已关闭，上方事件开关暂不生效。</p>
+      )}
+      <Row label="发送测试通知" sub={testSub} right={
+        <button
+          type="button"
+          className={s.btn}
+          disabled={testState.phase === "sending"}
+          onClick={() => void handleTestNotification()}
+        >
+          {testState.phase === "sending" ? "发送中…" : "测试"}
+        </button>
+      } />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
+  Bell,
   Bug,
   Cpu,
   FileCog,
@@ -29,6 +30,7 @@ const OBSERVABILITY_ITEMS: readonly AdvancedItem[] = [
 
 const ADVANCED_ITEMS: readonly AdvancedItem[] = [
   { label: "常规", path: "/advanced", icon: SlidersHorizontal },
+  { label: "通知", path: "/advanced/notifications", icon: Bell },
   { label: "主题", path: "/theme", icon: Palette },
   { label: "配置", path: "/advanced/config", icon: FileCog },
   { label: "内核", path: "/advanced/kernel", icon: Cpu },
