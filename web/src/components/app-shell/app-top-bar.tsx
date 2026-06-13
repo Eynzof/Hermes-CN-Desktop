@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Moon, Palette, Search, Sun } from "lucide-react";
 import { DEFAULT_THEME_CONFIG, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
+import { useCommandPalette } from "@/components/command-palette";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import { openExternalUrl } from "@/lib/external-links";
@@ -23,6 +24,7 @@ export function AppTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { config: themeConfig, update: updateTheme } = useTheme();
+  const { openCommandPalette } = useCommandPalette();
   const currentThemeIndex = THEME_SEQUENCE.indexOf(themeConfig.theme);
   const nextTheme = THEME_SEQUENCE[(currentThemeIndex + 1) % THEME_SEQUENCE.length] ?? DEFAULT_THEME_CONFIG.theme;
   const ThemeIcon =
@@ -83,12 +85,12 @@ export function AppTopBar() {
       <button
         type="button"
         className={s.search}
-        onClick={() => navigate("/history")}
-        title="搜索会话 / 文件"
+        onClick={openCommandPalette}
+        title="搜索命令 / 会话 / 文件"
         data-no-drag
       >
         <Search size={12} />
-        <span>搜索会话 / 文件…</span>
+        <span>搜索命令 / 会话 / 文件…</span>
         <span className={s.searchKbd}>⌘ K</span>
       </button>
 

@@ -4,6 +4,7 @@ import { readUiValue, writeUiValue } from "@/lib/ui-store";
 
 export const activeSessionIdAtom = atom<string | null>(null);
 export const sidebarSearchAtom = atom("");
+export const commandPaletteOpenAtom = atom(false);
 
 export const CONVERSATION_WIDTH_OPTIONS = [
   { value: "small", label: "小", title: "小宽度", maxWidth: "640px" },

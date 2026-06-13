@@ -9,6 +9,7 @@ import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
 import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
 import { AppShell } from "@/components/app-shell/app-shell";
+import { CommandPalette } from "@/components/command-palette";
 import { PanelRoute } from "@/routes/panel";
 import { DetailRoute } from "@/routes/detail";
 import { HistoryRoute } from "@/routes/history";
@@ -97,6 +98,7 @@ export function App() {
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
       <DesktopUpdateNotifier />
+      <CommandPalette />
     </div>
   );
 }

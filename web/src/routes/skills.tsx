@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Copy,
   ExternalLink,
@@ -96,6 +97,7 @@ function markdownWithoutFrontmatter(content: string): string {
 }
 
 export function SkillsRoute() {
+  const [searchParams] = useSearchParams();
   const { data: skills, isLoading, isFetching, isError, error, refetch } = useSkills();
   const toggleSkill = useToggleSkill();
   const [tab, setTab] = useState<Tab>("builtin");
@@ -103,6 +105,7 @@ export function SkillsRoute() {
   const [search, setSearch] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>("zh");
+  const selectedFromQuery = searchParams.get("skill");
 
   const { builtin, user } = useMemo(() => {
     const all = skills ?? [];
@@ -114,6 +117,16 @@ export function SkillsRoute() {
 
   const currentList = tab === "builtin" ? builtin : tab === "user" ? user : [];
   const enabledCount = (skills ?? []).filter((sk) => sk.enabled).length;
+
+  useEffect(() => {
+    if (!selectedFromQuery || !skills?.length) return;
+    const target = skills.find((sk) => sk.name === selectedFromQuery);
+    if (!target) return;
+    setTab(isUserSkill(target) ? "user" : "builtin");
+    setFilter("all");
+    setSearch("");
+    setSelectedName(target.name);
+  }, [selectedFromQuery, skills]);
 
   // 过滤 + 搜索
   const filtered = useMemo(() => {
