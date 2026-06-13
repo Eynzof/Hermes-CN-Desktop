@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  filterBuiltinCommands,
+  filterComposerCommands,
   isBuiltinComposerCommandToken,
   parseBuiltinComposerCommand,
 } from "./builtin-commands";
@@ -50,25 +50,40 @@ describe("isBuiltinComposerCommandToken", () => {
     expect(isBuiltinComposerCommandToken("/comp")).toBe(false);
     expect(isBuiltinComposerCommandToken("/status")).toBe(false);
   });
+
+  it("does not treat the /skill namespace opener as a built-in command", () => {
+    // else the palette would close when "/skill" is fully typed.
+    expect(isBuiltinComposerCommandToken("/skill")).toBe(false);
+    expect(isBuiltinComposerCommandToken("skill")).toBe(false);
+  });
 });
 
-describe("filterBuiltinCommands", () => {
-  it("lists every built-in command for an empty query", () => {
-    const all = filterBuiltinCommands("");
-    expect(all.map((c) => c.command)).toEqual(["/compress"]);
+describe("filterComposerCommands", () => {
+  it("lists /compress only when no skill picker is available", () => {
+    expect(filterComposerCommands("").map((c) => c.command)).toEqual(["/compress"]);
+  });
+
+  it("includes the /skill namespace command when skills are available", () => {
+    const all = filterComposerCommands("", { skillsAvailable: true });
+    expect(all.map((c) => c.command)).toEqual(["/skill", "/compress"]);
+    expect(all.find((c) => c.command === "/skill")).toMatchObject({
+      token: "skill",
+      kind: "namespace",
+    });
   });
 
   it("matches a partial prefix of the command name", () => {
-    expect(filterBuiltinCommands("comp").map((c) => c.name)).toEqual(["compress"]);
-    expect(filterBuiltinCommands("compa").map((c) => c.name)).toEqual(["compress"]);
+    expect(filterComposerCommands("comp").map((c) => c.token)).toEqual(["compress"]);
+    expect(filterComposerCommands("sk", { skillsAvailable: true }).map((c) => c.token)).toEqual([
+      "skill",
+    ]);
   });
 
-  it("matches via an alias prefix", () => {
-    // "compact" is an alias of compress
-    expect(filterBuiltinCommands("compact").map((c) => c.name)).toEqual(["compress"]);
+  it("matches /compress via the /compact alias prefix", () => {
+    expect(filterComposerCommands("compact").map((c) => c.token)).toEqual(["compress"]);
   });
 
   it("returns nothing for an unrelated query", () => {
-    expect(filterBuiltinCommands("deploy")).toEqual([]);
+    expect(filterComposerCommands("deploy", { skillsAvailable: true })).toEqual([]);
   });
 });

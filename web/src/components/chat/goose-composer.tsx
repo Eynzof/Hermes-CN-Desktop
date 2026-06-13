@@ -11,7 +11,21 @@ import {
 } from "react";
 import { useAtomValue } from "jotai";
 import { useNavigate } from "react-router-dom";
-import { Cpu, Folder, Loader2, Mic, Plus, Sparkles, Square, X } from "lucide-react";
+import {
+  AtSign,
+  Cpu,
+  FileText,
+  GitBranch,
+  Globe,
+  Folder,
+  Loader2,
+  MessageSquare,
+  Mic,
+  Plus,
+  Sparkles,
+  Square,
+  X,
+} from "lucide-react";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { fileNameFromPath } from "@/lib/composer-prompt";
 import {
@@ -19,14 +33,22 @@ import {
   extractBodyAfterLeadingSlashToken,
   filterComposerSkills,
   getLeadingSlashToken,
+  getSkillNamespaceToken,
   replaceLeadingSlashToken,
   type ComposerSkillCandidate,
 } from "@/lib/composer-skills";
 import {
-  filterBuiltinCommands,
+  filterComposerCommands,
   isBuiltinComposerCommandToken,
   type ComposerCommandCandidate,
 } from "@/lib/builtin-commands";
+import {
+  buildMentionReplacement,
+  getActiveMentionToken,
+  getMentionCandidates,
+  type MentionCandidate,
+  type MentionKind,
+} from "@/lib/composer-mentions";
 import { contextUsageRisk } from "@/lib/context-usage";
 import {
   composerSubmitShortcutHint,
@@ -52,6 +74,7 @@ import {
   ComposerAttachmentError,
   type ComposerAttachment,
   type ComposerContextUsage,
+  type ComposerMentionPickerProps,
   type ComposerModelPickerProps,
   type ComposerModelSelection,
   type ComposerReasoningPickerProps,
@@ -76,6 +99,8 @@ import {
   modelButtonText,
 } from "./goose-composer-model-picker";
 import { WorkspacePickerModal } from "@/components/composer/workspace-picker";
+import { UrlDialog } from "@/components/composer/url-dialog";
+import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
 import s from "./goose-composer.module.css";
 
@@ -111,6 +136,7 @@ interface GooseComposerProps {
   modelPicker?: ComposerModelPickerProps;
   reasoningPicker?: ComposerReasoningPickerProps;
   skillPicker?: ComposerSkillPickerProps;
+  mentionPicker?: ComposerMentionPickerProps;
   contextUsage?: ComposerContextUsage | null;
   initialWorkspacePath?: string;
   voiceConfig?: Record<string, unknown> | null;
@@ -118,6 +144,23 @@ interface GooseComposerProps {
 
 function messageFromError(error: unknown): string {
   return error instanceof Error ? error.message : String(error || "发送失败");
+}
+
+function MentionIcon({ kind }: { kind: MentionKind }) {
+  switch (kind) {
+    case "folder":
+      return <Folder aria-hidden="true" />;
+    case "url":
+      return <Globe aria-hidden="true" />;
+    case "git":
+      return <GitBranch aria-hidden="true" />;
+    case "session":
+      return <MessageSquare aria-hidden="true" />;
+    case "file":
+      return <FileText aria-hidden="true" />;
+    default:
+      return <AtSign aria-hidden="true" />;
+  }
 }
 
 function formatVoiceElapsed(seconds: number): string {
@@ -166,6 +209,7 @@ export function GooseComposer({
   modelPicker,
   reasoningPicker,
   skillPicker,
+  mentionPicker,
   contextUsage,
   initialWorkspacePath = "",
   voiceConfig = null,
@@ -195,7 +239,13 @@ export function GooseComposer({
   const [selectedSkill, setSelectedSkill] = useState<ComposerSkillCandidate | null>(null);
   const [skillActiveIndex, setSkillActiveIndex] = useState(0);
   const [dismissedSlashToken, setDismissedSlashToken] = useState("");
+  const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [dismissedMentionToken, setDismissedMentionToken] = useState("");
+  const [urlDialog, setUrlDialog] = useState<{ url: string; start: number; end: number } | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const mentionReqIdRef = useRef(0);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "recording" | "transcribing">("idle");
   const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0);
   const { handle: micRecorder, level: voiceLevel } = useMicRecorder();
@@ -225,38 +275,68 @@ export function GooseComposer({
     (submitText.length > 0 || attachments.length > 0) &&
     !controlsDisabled &&
     !hasProcessingAttachment;
+  // Two-tier slash palette: typing "/" lists top-level commands (/skill,
+  // /compress) via slashToken (command mode); typing "/skill <name>" lists the
+  // skill catalog via skillToken (skill mode). The two tokens are disjoint by
+  // caret position, so at most one is active at a time.
   const slashToken = useMemo(
     () => selectedSkill ? null : getLeadingSlashToken(value, selectionStart, selectionEnd),
     [selectionEnd, selectionStart, selectedSkill, value],
   );
+  const skillToken = useMemo(
+    () => selectedSkill ? null : getSkillNamespaceToken(value, selectionStart, selectionEnd),
+    [selectionEnd, selectionStart, selectedSkill, value],
+  );
+  const activeToken = skillToken ?? slashToken;
   // A built-in slash command (e.g. /compress) is handled client-side on submit,
-  // so keep the skill picker out of its way — otherwise Enter could select a
-  // fuzzy skill match instead of running the command.
+  // so keep the picker out of its way — otherwise Enter could select a fuzzy
+  // match instead of running the command.
   const builtinSlash = useMemo(
     () => Boolean(slashToken && isBuiltinComposerCommandToken(slashToken.token)),
     [slashToken],
   );
+  const skillsAvailable = Boolean(skillPicker && !skillPicker.disabled);
   const skillCandidates = useMemo(
-    () => slashToken && skillPicker && !builtinSlash
-      ? filterComposerSkills(skillPicker.skills, slashToken.query)
+    () => skillToken && skillPicker
+      ? filterComposerSkills(skillPicker.skills, skillToken.query)
       : [],
-    [builtinSlash, skillPicker, slashToken],
+    [skillPicker, skillToken],
   );
-  // Built-in commands (e.g. /compress) share the suggestion panel with skills.
-  // They surface for partial input ("/comp"); a fully-typed "/compress" sets
-  // builtinSlash, the panel closes, and Enter runs the command immediately.
+  // Command mode only: rank top-level commands (skill namespace shown only where
+  // a skill picker is wired). A fully-typed "/compress" sets builtinSlash, the
+  // panel closes, and Enter runs the command immediately.
   const commandCandidates = useMemo(
-    () => slashToken && !builtinSlash ? filterBuiltinCommands(slashToken.query) : [],
-    [builtinSlash, slashToken],
+    () => !skillToken && slashToken && !builtinSlash
+      ? filterComposerCommands(slashToken.query, { skillsAvailable })
+      : [],
+    [builtinSlash, skillsAvailable, skillToken, slashToken],
   );
   const totalCandidates = commandCandidates.length + skillCandidates.length;
   const skillPanelOpen = Boolean(
-    slashToken &&
+    activeToken &&
     !builtinSlash &&
     !controlsDisabled &&
-    dismissedSlashToken !== slashToken.token &&
-    (commandCandidates.length > 0 || (skillPicker && !skillPicker.disabled)),
+    dismissedSlashToken !== activeToken.token &&
+    (commandCandidates.length > 0 || (skillToken && skillsAvailable)),
   );
+
+  // `@` inline references (files / folders / url / past sessions). The token may
+  // appear mid-text, so it is tracked independently of the leading slash command
+  // and stays available even while a skill chip is selected.
+  const mentionToken = useMemo(
+    () => mentionPicker && !mentionPicker.disabled && selectionStart === selectionEnd
+      ? getActiveMentionToken(value, selectionStart)
+      : null,
+    [mentionPicker, selectionEnd, selectionStart, value],
+  );
+  const mentionTokenKey = mentionToken ? `${mentionToken.start}:${mentionToken.query}` : "";
+  const mentionPanelOpen = Boolean(
+    mentionToken &&
+    !controlsDisabled &&
+    dismissedMentionToken !== mentionTokenKey &&
+    (mentionCandidates.length > 0 || mentionLoading),
+  );
+
   const resolvedPlaceholder = selectedSkill
     ? `继续描述给 ${selectedSkill.displayName} 的任务…`
     : placeholder ?? `发送消息，${submitHint}…`;
@@ -441,13 +521,50 @@ export function GooseComposer({
     setWorkspacePickerOpen(false);
     setModelOpen(false);
     setDismissedSlashToken("");
+    setDismissedMentionToken("");
     setDragActive(false);
     dragDepthRef.current = 0;
   }, [controlsDisabled]);
 
   useEffect(() => {
     setSkillActiveIndex(0);
-  }, [slashToken?.token, commandCandidates.length, skillCandidates.length]);
+  }, [activeToken?.token, commandCandidates.length, skillCandidates.length]);
+
+  // Keep the latest mentionPicker in a ref so the fetch effect can depend only
+  // on the token (the parent recreates the picker object every render).
+  const mentionPickerRef = useRef(mentionPicker);
+  useEffect(() => {
+    mentionPickerRef.current = mentionPicker;
+  });
+
+  // Fetch `@` completion candidates for the active token (debounced; stale
+  // responses dropped via a monotonically increasing request id).
+  useEffect(() => {
+    setMentionActiveIndex(0);
+    const picker = mentionPickerRef.current;
+    if (!mentionTokenKey || !picker || picker.disabled) {
+      setMentionCandidates([]);
+      setMentionLoading(false);
+      return;
+    }
+    const reqId = (mentionReqIdRef.current += 1);
+    setMentionLoading(true);
+    // mentionTokenKey is `${start}:${query}`; the query may itself contain ":".
+    const query = mentionTokenKey.slice(mentionTokenKey.indexOf(":") + 1);
+    const source = {
+      completePath: picker.completePath,
+      sessions: picker.sessions,
+      profile: picker.profile,
+    };
+    const timer = setTimeout(() => {
+      void getMentionCandidates(query, source).then((candidates) => {
+        if (mentionReqIdRef.current !== reqId) return;
+        setMentionCandidates(candidates);
+        setMentionLoading(false);
+      });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [mentionTokenKey]);
 
   // Picker now groups candidates internally (recent / configured /
   // recommended / more) from the catalog + usage log. Composer just hands it
@@ -599,8 +716,8 @@ export function GooseComposer({
   };
 
   const commitSkillSelection = (candidate: ComposerSkillCandidate) => {
-    if (!slashToken) return;
-    const next = extractBodyAfterLeadingSlashToken(value, slashToken);
+    if (!activeToken) return;
+    const next = extractBodyAfterLeadingSlashToken(value, activeToken);
     setSelectedSkill(candidate);
     setValue(next.text);
     setSelectionStart(next.cursor);
@@ -616,11 +733,29 @@ export function GooseComposer({
     });
   };
 
+  const commitMentionSelection = (candidate: MentionCandidate) => {
+    if (!mentionToken) return;
+    const next = buildMentionReplacement(value, mentionToken, candidate);
+    setValue(next.text);
+    setSelectionStart(next.cursor);
+    setSelectionEnd(next.cursor);
+    setDismissedMentionToken("");
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(next.cursor, next.cursor);
+      setSelectionStart(next.cursor);
+      setSelectionEnd(next.cursor);
+    });
+  };
+
   const commitCommandSelection = (candidate: ComposerCommandCandidate) => {
     if (!slashToken) return;
-    // Fill "/compress " so the user can optionally append a focus topic; a
-    // following Enter runs it via the detail-route built-in interception.
-    const next = replaceLeadingSlashToken(value, slashToken, candidate.name);
+    // Fill "/skill " (then the skill sub-picker opens) or "/compress " (then the
+    // user can append a focus topic; a following Enter runs it via the
+    // detail-route built-in interception).
+    const next = replaceLeadingSlashToken(value, slashToken, candidate.token);
     setValue(next.text);
     setSelectionStart(next.cursor);
     setSelectionEnd(next.cursor);
@@ -687,10 +822,39 @@ export function GooseComposer({
       return;
     }
 
+    if (mentionPanelOpen && !event.nativeEvent.isComposing) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDismissedMentionToken(mentionTokenKey);
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setMentionActiveIndex((current) =>
+          mentionCandidates.length ? (current + 1) % mentionCandidates.length : 0);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setMentionActiveIndex((current) =>
+          mentionCandidates.length
+            ? (current - 1 + mentionCandidates.length) % mentionCandidates.length
+            : 0);
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && mentionCandidates.length > 0) {
+        event.preventDefault();
+        commitMentionSelection(
+          mentionCandidates[Math.min(mentionActiveIndex, mentionCandidates.length - 1)]!,
+        );
+        return;
+      }
+    }
+
     if (skillPanelOpen && !event.nativeEvent.isComposing) {
       if (event.key === "Escape") {
         event.preventDefault();
-        setDismissedSlashToken(slashToken?.token ?? "");
+        setDismissedSlashToken(activeToken?.token ?? "");
         return;
       }
       if (event.key === "ArrowDown") {
@@ -736,9 +900,40 @@ export function GooseComposer({
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (controlsDisabled) return;
     const files = Array.from(event.clipboardData.files);
-    if (!files.length) return;
-    event.preventDefault();
-    addBrowserFiles(files);
+    if (files.length) {
+      event.preventDefault();
+      addBrowserFiles(files);
+      return;
+    }
+    // A bare-URL paste offers to attach it as an `@url:` reference (only where
+    // backend ref expansion is wired, i.e. a mention source is present).
+    if (mentionPicker && !mentionPicker.disabled) {
+      const text = event.clipboardData.getData("text/plain");
+      if (text && isSingleUrl(text)) {
+        event.preventDefault();
+        setUrlDialog({ url: text.trim(), start: selectionStart, end: selectionEnd });
+      }
+    }
+  };
+
+  const applyUrlInsertion = (insertText: string) => {
+    if (!urlDialog) return;
+    const before = value.slice(0, urlDialog.start);
+    const after = value.slice(urlDialog.end);
+    const insertion = after && !/^\s/.test(after) ? `${insertText} ` : insertText;
+    const cursor = before.length + insertion.length;
+    setValue(`${before}${insertion}${after}`);
+    setSelectionStart(cursor);
+    setSelectionEnd(cursor);
+    setUrlDialog(null);
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+      setSelectionStart(cursor);
+      setSelectionEnd(cursor);
+    });
   };
 
   const hasDroppableData = (event: DragEvent<HTMLDivElement>): boolean => {
@@ -987,6 +1182,7 @@ export function GooseComposer({
             setSelectionStart(event.target.selectionStart);
             setSelectionEnd(event.target.selectionEnd);
             setDismissedSlashToken("");
+            setDismissedMentionToken("");
           }}
           onKeyDown={handleKeyDown}
           onKeyUp={syncTextareaSelection}
@@ -1001,11 +1197,11 @@ export function GooseComposer({
         />
 
         {skillPanelOpen ? (
-          <div className={s.skillPanel} role="listbox" aria-label="命令与 Skill">
+          <div className={s.skillPanel} role="listbox" aria-label={skillToken ? "选择 Skill" : "斜杠命令"}>
             <div className={s.skillPanelHead}>
               <span>
                 <Sparkles aria-hidden="true" />
-                命令与 Skill
+                {skillToken ? "选择 Skill" : "斜杠命令"}
               </span>
               <small>Enter / Tab 选择，Esc 关闭</small>
             </div>
@@ -1013,7 +1209,7 @@ export function GooseComposer({
               <div className={s.skillList}>
                 {commandCandidates.map((candidate, index) => (
                   <button
-                    key={`cmd-${candidate.name}`}
+                    key={`cmd-${candidate.token}`}
                     type="button"
                     className={s.skillOption}
                     data-active={index === skillActiveIndex}
@@ -1029,18 +1225,20 @@ export function GooseComposer({
                       <span className={s.skillName}>{candidate.displayName}</span>
                       <span className={s.skillDesc}>{candidate.description}</span>
                     </span>
-                    <span className={s.skillMeta}>内置命令</span>
+                    <span className={s.skillMeta}>
+                      {candidate.kind === "namespace" ? "命令组" : "内置命令"}
+                    </span>
                   </button>
                 ))}
               </div>
             ) : null}
-            {skillPicker?.loading && totalCandidates === 0 ? (
+            {skillToken && skillPicker?.loading && totalCandidates === 0 ? (
               <div className={s.skillPanelState}>正在读取已启用 Skill…</div>
-            ) : skillPicker?.error && totalCandidates === 0 ? (
+            ) : skillToken && skillPicker?.error && totalCandidates === 0 ? (
               <div className={s.skillPanelState} data-tone="error">
                 {skillPicker.error}
               </div>
-            ) : totalCandidates === 0 ? (
+            ) : skillToken && totalCandidates === 0 ? (
               <div className={s.skillPanelState}>没有匹配的 Skill</div>
             ) : skillCandidates.length > 0 ? (
               <div className={s.skillList}>
@@ -1071,6 +1269,50 @@ export function GooseComposer({
                 })}
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {mentionPanelOpen ? (
+          <div className={s.skillPanel} role="listbox" aria-label="插入引用">
+            <div className={s.skillPanelHead}>
+              <span>
+                <AtSign aria-hidden="true" />
+                插入引用
+              </span>
+              <small>Enter / Tab 选择，Esc 关闭</small>
+            </div>
+            {mentionLoading && mentionCandidates.length === 0 ? (
+              <div className={s.skillPanelState}>正在检索…</div>
+            ) : mentionCandidates.length === 0 ? (
+              <div className={s.skillPanelState}>没有匹配的引用</div>
+            ) : (
+              <div className={s.skillList}>
+                {mentionCandidates.map((candidate, index) => (
+                  <button
+                    key={`${candidate.kind}-${candidate.insertText}-${index}`}
+                    type="button"
+                    className={s.skillOption}
+                    data-active={index === mentionActiveIndex}
+                    data-kind="mention"
+                    role="option"
+                    aria-selected={index === mentionActiveIndex}
+                    onMouseEnter={() => setMentionActiveIndex(index)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => commitMentionSelection(candidate)}
+                  >
+                    <span className={s.skillCommand}>
+                      <MentionIcon kind={candidate.kind} />
+                    </span>
+                    <span className={s.skillMain}>
+                      <span className={s.skillName}>{candidate.display}</span>
+                      {candidate.meta ? (
+                        <span className={s.skillDesc}>{candidate.meta}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -1250,6 +1492,13 @@ export function GooseComposer({
           }}
         />
       ) : null}
+      <UrlDialog
+        open={Boolean(urlDialog)}
+        url={urlDialog?.url ?? ""}
+        onInsertReference={() => applyUrlInsertion(urlReferenceText(urlDialog?.url ?? ""))}
+        onInsertPlain={() => applyUrlInsertion(urlDialog?.url ?? "")}
+        onCancel={() => setUrlDialog(null)}
+      />
     </div>
   );
 }

@@ -1,6 +1,14 @@
 import type { SkillInfo } from "@hermes/protocol";
 import { translateCategory, translateSkill } from "@/lib/skill-translations";
 
+/**
+ * Skills are invoked through a dedicated `/skill <name>` namespace command
+ * rather than a bare `/<name>` — this keeps the slash palette organised
+ * (top-level commands like `/skill` and `/compress` first, the skill list one
+ * level deeper) and stops arbitrary skill names from shadowing built-ins.
+ */
+export const SKILL_NAMESPACE = "skill";
+
 export interface LeadingSlashToken {
   start: number;
   end: number;
@@ -95,9 +103,62 @@ export function extractBodyAfterLeadingSlashToken(
   };
 }
 
+/**
+ * Detect the skill-name sub-token while the caret is inside the `/skill <name>`
+ * region (i.e. the leading command is exactly `/skill`, a space follows, and
+ * the caret sits within the name word — not yet in the free-form body).
+ *
+ * Returns a {@link LeadingSlashToken} whose `start` is the `/`, `end` is the end
+ * of the name word, and `query` is the name word typed so far — so the existing
+ * `extractBodyAfterLeadingSlashToken` / chip-commit flow can consume it as-is.
+ * Returns null when the text isn't `/skill …`, or the caret has moved past the
+ * name word into the body (so command-mode / no-popover takes over).
+ */
+export function getSkillNamespaceToken(
+  text: string,
+  selectionStart: number,
+  selectionEnd = selectionStart,
+): LeadingSlashToken | null {
+  if (selectionStart !== selectionEnd) return null;
+  const leadingWhitespace = text.match(/^\s*/)?.[0].length ?? 0;
+  if (text[leadingWhitespace] !== "/") return null;
+
+  let firstEnd = text.length;
+  for (let i = leadingWhitespace; i < text.length; i += 1) {
+    if (/\s/.test(text[i] ?? "")) {
+      firstEnd = i;
+      break;
+    }
+  }
+  // First word must be exactly "/skill" and be followed by whitespace.
+  const firstToken = text.slice(leadingWhitespace, firstEnd).toLowerCase();
+  if (firstToken !== `/${SKILL_NAMESPACE}` || firstEnd >= text.length) return null;
+
+  let nameStart = firstEnd;
+  while (nameStart < text.length && /\s/.test(text[nameStart] ?? "")) nameStart += 1;
+  let nameEnd = text.length;
+  for (let i = nameStart; i < text.length; i += 1) {
+    if (/\s/.test(text[i] ?? "")) {
+      nameEnd = i;
+      break;
+    }
+  }
+
+  // Caret must be past the "/skill" word and no further than the name word's end.
+  if (selectionStart <= firstEnd || selectionStart > nameEnd) return null;
+
+  return {
+    start: leadingWhitespace,
+    end: nameEnd,
+    token: text.slice(leadingWhitespace, nameEnd),
+    query: text.slice(nameStart, nameEnd),
+  };
+}
+
 export function buildSkillCommandText(skillName: string, body: string): string {
   const trimmedBody = body.trim();
-  return trimmedBody ? `/${skillName} ${trimmedBody}` : `/${skillName}`;
+  const head = `/${SKILL_NAMESPACE} ${skillName}`;
+  return trimmedBody ? `${head} ${trimmedBody}` : head;
 }
 
 export function parseLeadingSlashCommand(text: string): ParsedSlashCommand | null {
@@ -111,17 +172,25 @@ export function parseLeadingSlashCommand(text: string): ParsedSlashCommand | nul
   };
 }
 
+/**
+ * Resolve composer text of the form `/skill <name> [arg…]` into the canonical
+ * skill name + argument, or null when it isn't a known skill invocation. The
+ * `<name>` token may itself contain a slash (e.g. `user/review`).
+ */
 export function resolveComposerSkillCommand(
   text: string,
   skillNames: readonly string[] | null | undefined,
 ): ParsedSlashCommand | null {
-  const parsed = parseLeadingSlashCommand(text);
-  if (!parsed || !skillNames?.length) return null;
+  if (!skillNames?.length) return null;
+  const match = text
+    .trimStart()
+    .match(new RegExp(`^/${SKILL_NAMESPACE}\\s+(\\S+)(?:\\s+([\\s\\S]*))?$`, "i"));
+  if (!match?.[1]) return null;
 
   const canonicalByLower = new Map(skillNames.map((name) => [name.toLowerCase(), name]));
-  const canonical = canonicalByLower.get(parsed.name.toLowerCase());
+  const canonical = canonicalByLower.get(match[1].toLowerCase());
   if (!canonical) return null;
-  return { ...parsed, name: canonical };
+  return { name: canonical, arg: match[2]?.trim() ?? "" };
 }
 
 function candidateRank(skill: SkillInfo, query: string, index: number): number | null {
@@ -166,7 +235,7 @@ export function filterComposerSkills(
     const translated = translateSkill(skill.name, skill.description);
     return {
       skill,
-      command: `/${skill.name}`,
+      command: `/${SKILL_NAMESPACE} ${skill.name}`,
       displayName: translated.displayName,
       description: translated.description,
       categoryLabel: translateCategory(skill.category),

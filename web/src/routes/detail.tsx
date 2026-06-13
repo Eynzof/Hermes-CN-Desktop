@@ -16,6 +16,8 @@ import {
   removeApprovalAtom,
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
+import { useSkills } from "@/hooks/use-skills";
+import { useActiveProfileName } from "@/hooks/use-profiles";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
@@ -27,6 +29,7 @@ import { recordModelUsage } from "@/lib/model-usage-log";
 import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { parseBuiltinComposerCommand } from "@/lib/builtin-commands";
+import { resolveComposerSkillCommand } from "@/lib/composer-skills";
 import { formatCompressNotice } from "@/lib/compress-feedback";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
@@ -51,6 +54,14 @@ import {
 } from "@/lib/workspaces";
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
+import { QueuePanel } from "@/components/composer/queue-panel";
+import {
+  enqueueQueuedPrompt,
+  removeQueuedPrompt,
+  shouldAutoDrainOnSettle,
+  useQueuedPrompts,
+  type QueuedPromptEntry,
+} from "@/stores/composer-queue";
 import type {
   ComposerModelSelection,
   ComposerSubmitControls,
@@ -96,12 +107,20 @@ export function DetailRoute() {
     getModelOptions,
     setSessionModel,
     setSessionReasoningEffort,
+    dispatchCommand,
+    completePath,
     attachImage,
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
+  const skillsQuery = useSkills();
+  const activeProfile = useActiveProfileName();
+  const enabledSkills = useMemo(
+    () => (skillsQuery.data ?? []).filter((skill) => skill.enabled),
+    [skillsQuery.data],
+  );
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
   // 思考强度是全局配置（agent.reasoning_effort），不分会话；本地态仅用于
   // 选中后即时反馈，等 config 重新拉到后两者一致。null 表示尚未本地改过，
@@ -319,6 +338,46 @@ export function DetailRoute() {
     }
   }, [appendNotice, compressSession, getSessionUsage, setSessionUsage]);
 
+  // The actual send. Shared by direct submits and by draining the queue.
+  const submitPayload = useCallback(async (
+    payload: ComposerSubmitPayload,
+    updateAttachment: ComposerSubmitControls["updateAttachment"] = () => {},
+  ) => {
+    if (!taskId) return;
+    const gatewaySessionId = await ensureGatewaySession();
+    if (payload.workspacePath) {
+      rememberWorkspaceProject(payload.workspacePath);
+      rememberSessionWorkspace(taskId, payload.workspacePath);
+      rememberSessionWorkspace(gatewaySessionId, payload.workspacePath);
+      rememberSessionWorkspace(restSessionId, payload.workspacePath);
+    }
+    // A `/skill <name>` invocation dispatches to the backend skill registry; the
+    // returned payload becomes the transport text while the composer still shows
+    // the literal command. Mirrors the new-task path in use-create-and-send-session.
+    let transportText: string | undefined;
+    const skillCommand = resolveComposerSkillCommand(payload.text, payload.skillCommandNames);
+    if (skillCommand) {
+      const dispatched = await dispatchCommand(
+        gatewaySessionId,
+        skillCommand.name,
+        skillCommand.arg,
+      );
+      if (dispatched.type === "skill" && dispatched.message?.trim()) {
+        transportText = dispatched.message;
+      }
+    }
+    const prepared = await prepareComposerPrompt(gatewaySessionId, payload, {
+      attachImage,
+      detectDroppedPath,
+      uploadFile: uploadAttachmentFile,
+      onAttachmentUpdate: updateAttachment,
+    }, { transportText });
+    await sendPrompt(gatewaySessionId, prepared.promptText, {
+      displayText: prepared.displayText,
+      displayImages: prepared.displayImages,
+    });
+  }, [attachImage, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
     controls: ComposerSubmitControls,
@@ -330,24 +389,83 @@ export function DetailRoute() {
       void runManualCompress(sessionId, builtin.arg);
       return;
     }
-    const gatewaySessionId = await ensureGatewaySession();
-    if (payload.workspacePath) {
-      rememberWorkspaceProject(payload.workspacePath);
-      rememberSessionWorkspace(taskId, payload.workspacePath);
-      rememberSessionWorkspace(gatewaySessionId, payload.workspacePath);
-      rememberSessionWorkspace(restSessionId, payload.workspacePath);
+    // Park the submission while the agent is busy; the composer clears on resolve
+    // and the queue drains (auto on settle, or manually) when it frees up.
+    if (runtimeIsBusy) {
+      enqueueQueuedPrompt(taskId, { text: payload.text, attachments: payload.attachments }, Date.now());
+      return;
     }
-    const prepared = await prepareComposerPrompt(gatewaySessionId, payload, {
-      attachImage,
-      detectDroppedPath,
-      uploadFile: uploadAttachmentFile,
-      onAttachmentUpdate: controls.updateAttachment,
-    });
-    await sendPrompt(gatewaySessionId, prepared.promptText, {
-      displayText: prepared.displayText,
-      displayImages: prepared.displayImages,
-    });
-  }, [attachImage, detectDroppedPath, ensureGatewaySession, restSessionId, runManualCompress, sendPrompt, taskId]);
+    await submitPayload(payload, controls.updateAttachment);
+  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+
+  // ---- Send queue (drain on settle, send-now / edit / delete) --------------
+  const queuedPrompts = useQueuedPrompts(taskId);
+  const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
+  const drainingRef = useRef(false);
+  const previousBusyRef = useRef(runtimeIsBusy);
+  const userInterruptedRef = useRef(false);
+
+  const drainEntry = useCallback(async (entry: QueuedPromptEntry) => {
+    if (!taskId || drainingRef.current) return;
+    drainingRef.current = true;
+    try {
+      await submitPayload({
+        text: entry.text,
+        attachments: entry.attachments,
+        skillCommandNames: enabledSkills.map((skill) => skill.name),
+      });
+      removeQueuedPrompt(taskId, entry.id);
+    } catch (error) {
+      console.error("Failed to drain queued prompt:", error);
+    } finally {
+      drainingRef.current = false;
+    }
+  }, [enabledSkills, submitPayload, taskId]);
+
+  // Auto-drain the next queued prompt when the agent settles (busy → idle),
+  // unless an explicit Stop just interrupted the turn.
+  useEffect(() => {
+    const wasBusy = previousBusyRef.current;
+    previousBusyRef.current = runtimeIsBusy;
+    if (runtimeIsBusy && !wasBusy) {
+      userInterruptedRef.current = false;
+      return;
+    }
+    const interrupted = userInterruptedRef.current;
+    if (!runtimeIsBusy && wasBusy && interrupted) {
+      userInterruptedRef.current = false;
+    }
+    if (shouldAutoDrainOnSettle({
+      isBusy: runtimeIsBusy,
+      wasBusy,
+      queueLength: queuedPrompts.length,
+      userInterrupted: interrupted,
+    })) {
+      void drainEntry(queuedPrompts[0]!);
+    }
+  }, [drainEntry, queuedPrompts, runtimeIsBusy]);
+
+  const onQueueSendNow = useCallback((id: string) => {
+    const entry = queuedPrompts.find((item) => item.id === id);
+    if (entry) void drainEntry(entry);
+  }, [drainEntry, queuedPrompts]);
+
+  const onQueueEdit = useCallback((entry: QueuedPromptEntry) => {
+    setComposerPrefill((prefill) => ({ text: entry.text, nonce: prefill.nonce + 1 }));
+    removeQueuedPrompt(taskId, entry.id);
+  }, [taskId]);
+
+  const onQueueDelete = useCallback((id: string) => {
+    removeQueuedPrompt(taskId, id);
+  }, [taskId]);
+
+  // Switching sessions must not leak one task's edit draft / busy-transition
+  // bookkeeping into another.
+  useEffect(() => {
+    setComposerPrefill({ text: "", nonce: 0 });
+    previousBusyRef.current = false;
+    userInterruptedRef.current = false;
+  }, [taskId]);
 
   // Capability discovery is server-global — don't piggy-back on
   // ensureGatewaySession here. That helper can trigger session.resume, which
@@ -396,6 +514,9 @@ export function DetailRoute() {
   const onStop = useCallback(async () => {
     const sessionId = runtimeSessionId ?? taskId;
     if (!sessionId || !runtimeIsBusy) return;
+    // A deliberate Stop suppresses exactly one auto-drain so the queue doesn't
+    // immediately re-fire the turn the user just halted.
+    userInterruptedRef.current = true;
     await interruptSession(sessionId);
   }, [interruptSession, runtimeIsBusy, runtimeSessionId, taskId]);
 
@@ -551,9 +672,19 @@ export function DetailRoute() {
             {runtimeIsBusy && stall.isStalled ? (
               <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
             ) : null}
+            <QueuePanel
+              entries={queuedPrompts}
+              busy={runtimeIsBusy}
+              editingId={null}
+              onSendNow={onQueueSendNow}
+              onEdit={onQueueEdit}
+              onDelete={onQueueDelete}
+            />
             <GooseComposer
               key={taskId}
               initialWorkspacePath={sessionWorkspace}
+              initial={composerPrefill.text}
+              initialNonce={composerPrefill.nonce}
               onSend={onSend}
               loadingPlaceholder={composerLoadingPlaceholder}
               showMeta={false}
@@ -572,6 +703,24 @@ export function DetailRoute() {
               reasoningPicker={{
                 value: reasoningEffort,
                 onSelect: onReasoningEffortSelect,
+                disabled: runtimeIsBusy,
+              }}
+              skillPicker={{
+                skills: enabledSkills,
+                loading: skillsQuery.isLoading || skillsQuery.isFetching,
+                error: skillsQuery.isError
+                  ? (skillsQuery.error instanceof Error ? skillsQuery.error.message : "Skill 加载失败")
+                  : undefined,
+                disabled: runtimeIsBusy,
+              }}
+              mentionPicker={{
+                completePath: (word) =>
+                  completePath(word, {
+                    sessionId: runtimeSessionId ?? undefined,
+                    cwd: sessionWorkspace || undefined,
+                  }),
+                sessions: sessionsData?.sessions,
+                profile: activeProfile,
                 disabled: runtimeIsBusy,
               }}
               contextUsage={contextUsage}

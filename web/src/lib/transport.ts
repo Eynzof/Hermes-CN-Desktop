@@ -206,6 +206,30 @@ export async function fetchExternalJSON<T>(
   return parser ? parser.parse(data) : data as T;
 }
 
+/**
+ * Fetch an external URL and return its raw response body as text (no JSON
+ * parsing). Routes through the Rust `external_request` proxy when available
+ * (avoids webview CSP / CORS), otherwise a plain fetch. Used for lightweight
+ * metadata scrapes like reading a page's <title>.
+ */
+export async function fetchExternalText(url: string, init?: RequestInit): Promise<string> {
+  const headers = (init?.headers as Record<string, string>) ?? {};
+  const externalRequest = window.hermesDesktop?.externalRequest;
+  if (externalRequest) {
+    const result = await externalRequest({
+      path: url,
+      method: init?.method,
+      headers,
+      body: typeof init?.body === "string" ? init.body : null,
+    });
+    if (!result.ok) throw new Error(`HTTP ${result.status}: ${result.body}`);
+    return result.body ?? "";
+  }
+  const res = await fetch(url, { ...init, headers, signal: timeoutSignal(init?.signal ?? undefined) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
 export async function putJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
   return fetchJSON<T>(path, { method: "PUT", body: JSON.stringify(body) }, parser);
 }

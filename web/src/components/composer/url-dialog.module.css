@@ -1,0 +1,167 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(31, 30, 27, 0.55);
+  padding: 24px;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(460px, calc(100vw - 32px));
+  border: 1px solid var(--h-line);
+  border-radius: 18px;
+  background: var(--h-bg-input);
+  box-shadow:
+    0 24px 72px rgba(31, 30, 27, 0.18),
+    0 8px 24px rgba(31, 30, 27, 0.08);
+  color: var(--h-text);
+  overflow: hidden;
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--h-line-soft);
+  padding: 16px 18px 14px;
+}
+
+.titleBar h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--h-text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.titleBar h2 svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
+.close {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--h-text-2);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+}
+
+.close:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.urlText {
+  font-size: 12px;
+  font-family: var(--h-font-mono, ui-monospace, monospace);
+  color: var(--h-text-2);
+  word-break: break-all;
+  background: var(--h-bg-soft);
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.titlePreview {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--h-text);
+  line-height: 1.4;
+}
+
+.titlePreview[data-muted] {
+  color: var(--h-text-2);
+  font-weight: 400;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--h-text-2);
+  line-height: 1.5;
+}
+
+.hint code {
+  font-family: var(--h-font-mono, ui-monospace, monospace);
+  background: var(--h-bg-soft);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--h-line-soft);
+  padding: 14px 18px;
+}
+
+.secondary,
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--h-line);
+}
+
+.secondary {
+  background: transparent;
+  color: var(--h-text-2);
+}
+
+.secondary:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.primary {
+  background: var(--h-accent, #c2410c);
+  border-color: transparent;
+  color: #fff;
+}
+
+.primary svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
+.primary:hover {
+  filter: brightness(1.05);
+}

@@ -432,6 +432,28 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  // `@`-reference completion (files / folders / url / git starters). Mirrors the
+  // backend `complete.path` used by the official desktop: a bare "@" returns the
+  // reference starters, "@file:<basename>" fuzzy-matches repo files. `cwd` scopes
+  // the search to the composer's selected workspace; both args are optional.
+  const completePath = useCallback(
+    async (
+      word: string,
+      opts?: { sessionId?: string; cwd?: string },
+    ): Promise<SlashCompletionResult> => {
+      ensureSubscribed();
+      const params: { word: string; session_id?: string; cwd?: string } = { word };
+      if (opts?.sessionId) params.session_id = opts.sessionId;
+      if (opts?.cwd) params.cwd = opts.cwd;
+      return parseGatewayResult(
+        SlashCompletionResult,
+        await getGatewayClient().request("complete.path", params),
+        "complete.path",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const dispatchCommand = useCallback(
     async (
       sessionId: string,
@@ -645,6 +667,7 @@ export function useGateway() {
     compressSession,
     getModelOptions,
     completeSlash,
+    completePath,
     dispatchCommand,
     probeProvider,
     setSessionModel,
