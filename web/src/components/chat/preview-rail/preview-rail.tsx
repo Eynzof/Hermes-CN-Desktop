@@ -1,0 +1,121 @@
+import { useAtom } from "jotai";
+import { useSearchParams } from "react-router-dom";
+import {
+  FileText,
+  GitCompare,
+  Globe,
+  Package,
+  ScrollText,
+  TerminalSquare,
+  X,
+} from "lucide-react";
+import {
+  PREVIEW_PANEL_QUERY_KEY,
+  normalizePreviewPanel,
+  type PreviewPanel,
+} from "@/lib/preview-rail";
+import {
+  EMPTY_PREVIEW_RAIL_SELECTION,
+  previewRailSelectionMapAtom,
+  type PreviewRailSelection,
+} from "@/stores/preview-rail";
+import { WebPreviewTab } from "./web-preview-tab";
+import { FilePreviewTab } from "./file-preview-tab";
+import { TerminalTab } from "./terminal-tab";
+import { LogsTab } from "./logs-tab";
+import s from "./preview-rail.module.css";
+
+interface PreviewRailProps {
+  /** Resolved session id; scopes the per-session selection. */
+  sessionId: string;
+  /** Session workspace root for file reads (may be empty). */
+  workspaceRoot: string;
+  onClose: () => void;
+}
+
+const TABS: Array<{ key: PreviewPanel; label: string; icon: typeof Globe }> = [
+  { key: "web", label: "网页", icon: Globe },
+  { key: "files", label: "文件", icon: FileText },
+  { key: "terminal", label: "终端", icon: TerminalSquare },
+  { key: "logs", label: "日志", icon: ScrollText },
+];
+
+// Tabs planned but blocked on backend (PRD §5 P0: session change audit log /
+// artifact manifest). Shown disabled so the layout matches the target spec.
+const PENDING_TABS: Array<{ key: string; label: string; icon: typeof Globe }> = [
+  { key: "diff", label: "Diff", icon: GitCompare },
+  { key: "artifacts", label: "产物", icon: Package },
+];
+
+export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const active = normalizePreviewPanel(searchParams.get(PREVIEW_PANEL_QUERY_KEY));
+
+  const setActive = (panel: PreviewPanel) => {
+    const next = new URLSearchParams(searchParams);
+    next.set(PREVIEW_PANEL_QUERY_KEY, panel);
+    setSearchParams(next, { replace: true });
+  };
+
+  const [selectionMap, setSelectionMap] = useAtom(previewRailSelectionMapAtom);
+  const selection = selectionMap[sessionId] ?? EMPTY_PREVIEW_RAIL_SELECTION;
+  const patchSelection = (patch: Partial<PreviewRailSelection>) => {
+    setSelectionMap((map) => ({
+      ...map,
+      [sessionId]: { ...(map[sessionId] ?? EMPTY_PREVIEW_RAIL_SELECTION), ...patch },
+    }));
+  };
+
+  return (
+    <aside className={s.panel} aria-label="预览面板">
+      <header className={s.header}>
+        <div className={s.tabs} role="tablist">
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={active === key}
+              className={s.tab}
+              data-active={active === key ? "true" : undefined}
+              onClick={() => setActive(key)}
+            >
+              <Icon size={13} aria-hidden />
+              {label}
+            </button>
+          ))}
+          {PENDING_TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              className={s.tab}
+              disabled
+              title="依赖后端能力，后续提供"
+            >
+              <Icon size={13} aria-hidden />
+              {label}
+            </button>
+          ))}
+        </div>
+        <button className={s.close} type="button" onClick={onClose} aria-label="关闭预览面板">
+          <X size={14} aria-hidden />
+        </button>
+      </header>
+
+      <div className={s.body}>
+        {active === "web" ? (
+          <WebPreviewTab url={selection.webUrl} onUrlChange={(url) => patchSelection({ webUrl: url })} />
+        ) : null}
+        {active === "files" ? (
+          <FilePreviewTab
+            workspaceRoot={workspaceRoot}
+            filePath={selection.filePath}
+            onSelectFile={(path) => patchSelection({ filePath: path })}
+          />
+        ) : null}
+        {active === "terminal" ? <TerminalTab /> : null}
+        {active === "logs" ? <LogsTab /> : null}
+      </div>
+    </aside>
+  );
+}

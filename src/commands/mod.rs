@@ -11,6 +11,7 @@ pub mod im_onboarding;
 pub mod log_export;
 pub mod memory;
 pub mod notify;
+pub mod preview;
 pub mod profiles;
 pub mod restart;
 pub mod runtime_manager;

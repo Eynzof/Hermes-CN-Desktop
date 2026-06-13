@@ -104,6 +104,19 @@ export const showReasoningAtom = atom(
   },
 );
 
+// Task-detail right rail (issue #233): rich preview panel visibility. Persisted
+// so the user's last choice survives reload; ⌘B toggles it. The active tab
+// lives in the `?panel=` query, not here (see lib/preview-rail.ts).
+const RIGHT_RAIL_VISIBLE_KEY = "hermes.right-rail-visible";
+const rightRailVisibleBaseAtom = atom<boolean>(readUiValue<unknown>(RIGHT_RAIL_VISIBLE_KEY, false) === true);
+export const rightRailVisibleAtom = atom(
+  (get) => get(rightRailVisibleBaseAtom),
+  (_get, set, next: boolean) => {
+    set(rightRailVisibleBaseAtom, next === true);
+    writeUiValue(RIGHT_RAIL_VISIBLE_KEY, next === true);
+  },
+);
+
 const COMPOSER_SUBMIT_SHORTCUT_KEY = "hermes.composer-submit-shortcut";
 
 function normalizeComposerSubmitShortcut(value: unknown): ComposerSubmitShortcut {

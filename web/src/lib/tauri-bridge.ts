@@ -45,6 +45,9 @@ import type {
 import type {
   DesktopNotifyInput,
   DesktopNotifyResult,
+  FilePreview,
+  PreviewFileChangedPayload,
+  ReadWorkspaceFileInput,
   SkillMarkdownResult,
   ExportDebugBundleInput,
   ExportDebugBundleResult,
@@ -56,6 +59,7 @@ import type {
   UiEventInput,
   UiStoreSnapshot,
   UiTurnStats,
+  WatchPreviewFileResult,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
 import hermesLogoSvg from "../../../icons/icon.svg?raw";
@@ -377,6 +381,32 @@ const tauriBridge = {
     let unlisten: (() => void) | null = null;
     import("@tauri-apps/api/event").then(({ listen }) => {
       listen<TerminalEventPayload>("terminal-output", (event) => {
+        handler(event.payload);
+      }).then((fn) => {
+        unlisten = fn;
+      });
+    });
+    return () => {
+      unlisten?.();
+    };
+  },
+
+  async readWorkspaceFile(input: ReadWorkspaceFileInput): Promise<FilePreview> {
+    return invokeCommand("read_workspace_file", { input });
+  },
+
+  async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {
+    return invokeCommand("watch_preview_file", { input });
+  },
+
+  async stopPreviewFileWatch(input: { watchId: string }): Promise<boolean> {
+    return invokeCommand("stop_preview_file_watch", { input });
+  },
+
+  onPreviewFileChanged(handler: (payload: PreviewFileChangedPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen<PreviewFileChangedPayload>("preview-file-changed", (event) => {
         handler(event.payload);
       }).then((fn) => {
         unlisten = fn;

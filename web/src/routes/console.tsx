@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import "@xterm/xterm/css/xterm.css";
 import { ExternalLink, Play, Power, RotateCcw, TerminalSquare } from "lucide-react";
-import type { TerminalEventPayload, TerminalStartResult } from "@/lib/runtime";
-import { openExternalUrl } from "@/lib/external-links";
-import { runtime } from "@/lib/runtime";
+import type { TerminalStartResult } from "@/lib/runtime";
+import {
+  EmbeddedTerminal,
+  type EmbeddedTerminalHandle,
+  type TerminalPurpose,
+  type TerminalStatus,
+} from "@/components/console/embedded-terminal";
 import { SectionShell } from "./section-shell";
 import s from "./console.module.css";
-
-type ConsoleStatus = "starting" | "ready" | "error" | "closed" | "unsupported";
 
 interface CommandAction {
   label: string;
@@ -50,32 +48,21 @@ function normalizePath(path?: string | null) {
 
 export function ConsoleRoute() {
   const location = useLocation();
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const terminalRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-  const terminalIdRef = useRef<string | null>(null);
-  const pendingEventsRef = useRef<TerminalEventPayload[]>([]);
-  const [status, setStatus] = useState<ConsoleStatus>("starting");
+  const terminalRef = useRef<EmbeddedTerminalHandle | null>(null);
+  const [status, setStatus] = useState<TerminalStatus>("starting");
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<TerminalStartResult | null>(null);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
   const [externalOpening, setExternalOpening] = useState(false);
   const [externalOpened, setExternalOpened] = useState<string | null>(null);
-  const [armed, setArmed] = useState(false);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setArmed(true), 250);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  const isDesktopTerminalAvailable = Boolean(window.hermesDesktop?.terminalStart);
   const isExternalTerminalAvailable = Boolean(window.hermesDesktop?.terminalOpenExternal);
-  const autoPurpose = useMemo(() => {
+  const autoPurpose = useMemo<TerminalPurpose>(() => {
     const params = new URLSearchParams(location.search);
     const run = params.get("run") ?? params.get("command") ?? "";
-    if (["gateway-setup", "gatewaySetup", "gateway_setup"].includes(run)) return "gatewaySetup" as const;
-    if (["gateway-status", "gatewayStatus", "gateway_status"].includes(run)) return "gatewayStatus" as const;
-    return "shell" as const;
+    if (["gateway-setup", "gatewaySetup", "gateway_setup"].includes(run)) return "gatewaySetup";
+    if (["gateway-status", "gatewayStatus", "gateway_status"].includes(run)) return "gatewayStatus";
+    return "shell";
   }, [location.search]);
 
   const statusText = useMemo(() => {
@@ -86,166 +73,10 @@ export function ConsoleRoute() {
     return "终端不可用";
   }, [status]);
 
-  useEffect(() => {
-    if (!armed || !containerRef.current) return;
-
-    if (!isDesktopTerminalAvailable) {
-      setStatus("unsupported");
-      setError("Hermes Console 需要在桌面端中打开。浏览器预览只能查看页面，不能启动本地终端。");
-      return;
-    }
-
-    let disposed = false;
-    const term = new Terminal({
-      cursorBlink: true,
-      cursorStyle: "bar",
-      fontFamily: "JetBrains Mono, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-      fontSize: 13.5,
-      lineHeight: 1.22,
-      letterSpacing: 0.1,
-      scrollback: 4000,
-      convertEol: true,
-      theme: {
-        background: "#080807",
-        foreground: "#f5efe5",
-        cursor: "#ffb35c",
-        selectionBackground: "#5a3b22",
-        black: "#191714",
-        red: "#d76f54",
-        green: "#7fc083",
-        yellow: "#d7a84d",
-        blue: "#7aa7d9",
-        magenta: "#b989d6",
-        cyan: "#74b8c4",
-        white: "#f3eee6",
-        brightBlack: "#6f675d",
-        brightRed: "#ff8b6e",
-        brightGreen: "#9fe1a5",
-        brightYellow: "#ffd074",
-        brightBlue: "#9cc9ff",
-        brightMagenta: "#d9a9ff",
-        brightCyan: "#9be7ef",
-        brightWhite: "#fffaf1",
-      },
-    });
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon((_event, uri) => {
-      void openExternalUrl(uri);
-    }));
-    term.open(containerRef.current);
-    fit.fit();
-    term.focus();
-    terminalRef.current = term;
-    fitRef.current = fit;
-
-    const writeBanner = () => {
-      term.writeln("\x1b[38;5;214mHermes\x1b[0m \x1b[38;5;81mConsole\x1b[0m");
-      term.writeln("这里是真实终端。你可以直接输入 Hermes 命令，也可以点下方常用操作自动填入。推荐先运行 hermes。");
-      if (autoPurpose === "gatewaySetup") {
-        term.writeln("正在为你打开消息平台接入向导\r\n");
-      } else if (autoPurpose === "gatewayStatus") {
-        term.writeln("正在为你查看消息平台接入状态\r\n");
-      } else {
-        term.writeln("");
-      }
-    };
-    writeBanner();
-
-    const writeEvent = (event: TerminalEventPayload) => {
-      const id = terminalIdRef.current;
-      if (!id) {
-        pendingEventsRef.current.push(event);
-        return;
-      }
-      if (event.terminalId !== id) return;
-      if (event.kind === "data" && event.data) {
-        term.write(event.data);
-      } else if (event.kind === "error") {
-        term.writeln(`\r\n\x1b[31m终端错误：${event.message ?? "未知错误"}\x1b[0m`);
-        setError(event.message ?? "终端错误");
-        setStatus("error");
-      } else if (event.kind === "exit") {
-        const suffix = typeof event.exitCode === "number" ? `，退出码 ${event.exitCode}` : "";
-        term.writeln(`\r\n\x1b[90m终端已结束${suffix}。\x1b[0m`);
-        setStatus("closed");
-      }
-    };
-
-    const unlisten = window.hermesDesktop?.onTerminalOutput?.(writeEvent);
-    const disposable = term.onData((data) => {
-      const id = terminalIdRef.current;
-      if (!id) return;
-      void window.hermesDesktop?.terminalWrite?.({ terminalId: id, data }).catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-        setStatus("error");
-      });
-    });
-
-    const resize = () => {
-      if (disposed) return;
-      try {
-        fit.fit();
-        const id = terminalIdRef.current;
-        if (id) {
-          void window.hermesDesktop?.terminalResize?.({ terminalId: id, cols: term.cols, rows: term.rows });
-        }
-      } catch {
-        // xterm fit may throw while the container is being mounted or hidden; the next resize fixes it.
-      }
-    };
-
-    const scheduleResize = () => {
-      window.requestAnimationFrame(() => {
-        resize();
-        window.requestAnimationFrame(resize);
-      });
-      window.setTimeout(resize, 160);
-    };
-    const observer = new ResizeObserver(resize);
-    observer.observe(containerRef.current);
-    scheduleResize();
-
-    window.hermesDesktop
-      ?.terminalStart?.({ purpose: autoPurpose, cols: term.cols, rows: term.rows })
-      .then((result) => {
-        if (disposed) return;
-        terminalIdRef.current = result.terminalId;
-        setSession(result);
-        setStatus("ready");
-        const pending = pendingEventsRef.current.splice(0);
-        pending.forEach(writeEvent);
-        scheduleResize();
-      })
-      .catch((err) => {
-        if (disposed) return;
-        const message = err instanceof Error ? err.message : String(err);
-        term.writeln(`\r\n\x1b[31m${message}\x1b[0m`);
-        setError(message);
-        setStatus("error");
-      });
-
-    return () => {
-      disposed = true;
-      observer.disconnect();
-      disposable.dispose();
-      unlisten?.();
-      const id = terminalIdRef.current;
-      terminalIdRef.current = null;
-      if (id) void window.hermesDesktop?.terminalClose?.({ terminalId: id });
-      term.dispose();
-      terminalRef.current = null;
-      fitRef.current = null;
-    };
-  }, [armed, autoPurpose, isDesktopTerminalAvailable]);
-
   const runCommand = (command: string) => {
-    const id = terminalIdRef.current;
-    const term = terminalRef.current;
-    if (!id || !term || status !== "ready") return;
+    if (status !== "ready") return;
     setLastCommand(command);
-    term.focus();
-    void window.hermesDesktop?.terminalWrite?.({ terminalId: id, data: `${command}\r` });
+    terminalRef.current?.runCommand(command);
   };
 
   const restartTerminal = () => {
@@ -253,11 +84,7 @@ export function ConsoleRoute() {
   };
 
   const closeTerminal = () => {
-    const id = terminalIdRef.current;
-    if (!id) return;
-    terminalIdRef.current = null;
-    void window.hermesDesktop?.terminalClose?.({ terminalId: id });
-    setStatus("closed");
+    terminalRef.current?.close();
   };
 
   const openExternalTerminal = () => {
@@ -295,7 +122,7 @@ export function ConsoleRoute() {
             <RotateCcw size={13} />
             重新打开
           </button>
-          <button type="button" className={s.dangerButton} onClick={closeTerminal} disabled={!terminalIdRef.current}>
+          <button type="button" className={s.dangerButton} onClick={closeTerminal} disabled={status !== "ready"}>
             <Power size={13} />
             关闭终端
           </button>
@@ -335,7 +162,14 @@ export function ConsoleRoute() {
                 {statusText}
               </div>
             </div>
-            <div ref={containerRef} className={s.terminalSurface} />
+            <EmbeddedTerminal
+              ref={terminalRef}
+              purpose={autoPurpose}
+              className={s.terminalSurface}
+              onStatusChange={setStatus}
+              onSession={setSession}
+              onError={setError}
+            />
           </div>
 
           {error && <div className={s.errorBox}>{error}</div>}

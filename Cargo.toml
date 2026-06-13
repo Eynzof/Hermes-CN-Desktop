@@ -34,6 +34,10 @@ base64 = "0.22"
 url = "2"
 urlencoding = "2"
 open = "5"
+# Native filesystem watch powering the right-rail preview's "文件实时刷新"
+# (commands/preview.rs). Raw change events are emitted to the renderer, which
+# debounces before re-reading.
+notify = "6"
 futures-util = "0.3"
 # WebSocket relay to the runtime's native /api/ws (commands/ws_proxy.rs).
 # The relay also carries remote-mode connections (src/connection.rs), which

@@ -1,0 +1,328 @@
+.panel {
+  width: 460px;
+  flex: 0 0 460px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--h-line);
+  background: var(--h-bg-app);
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover:not(:disabled) {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.tab[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+  border-color: var(--h-line);
+}
+
+.tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.close:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Shared bits ─────────────────────────────────────────────────────────── */
+
+.bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-chip);
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.iconBtn:hover:not(:disabled) {
+  color: var(--h-text);
+  border-color: var(--h-accent-border);
+}
+
+.iconBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 22px;
+  text-align: center;
+  color: var(--h-text-3);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.notice {
+  margin: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-soft);
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ── Web preview ─────────────────────────────────────────────────────────── */
+
+.iframe {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+
+/* ── File preview ────────────────────────────────────────────────────────── */
+
+.fileBrowser {
+  flex: 0 0 auto;
+  max-height: 38%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-bottom: 1px solid var(--h-line-soft);
+  padding: 4px;
+}
+
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.fileEntry {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fileEntry:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.fileEntry[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.fileEntryIcon {
+  flex: 0 0 auto;
+  color: var(--h-text-4);
+}
+
+.fileMeta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+.fileMetaName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--h-font-mono);
+  color: var(--h-text-2);
+}
+
+.fileContent {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.fileImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* ── Logs ────────────────────────────────────────────────────────────────── */
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.segmentButton {
+  padding: 4px 8px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font-family: var(--h-font-cn);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.segmentButton[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.logViewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px;
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.logLine {
+  display: flex;
+  gap: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.logLine[data-tone="error"] .lineText {
+  color: var(--h-err, #d76f54);
+}
+
+.logLine[data-tone="warning"] .lineText {
+  color: var(--h-warn);
+}
+
+.lineNumber {
+  flex: 0 0 auto;
+  width: 34px;
+  text-align: right;
+  color: var(--h-text-4);
+  user-select: none;
+}
+
+.lineText {
+  flex: 1;
+  min-width: 0;
+  color: var(--h-text-2);
+}
+
+/* Terminal tab fills the body; the surface paints its own dark theme. */
+.terminalSurface {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+}

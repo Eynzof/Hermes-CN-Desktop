@@ -223,6 +223,37 @@ export interface TerminalEventPayload {
   message?: string | null;
 }
 
+// Right-rail rich preview (issue #233). Mirrors the Rust commands in
+// src/commands/preview.rs and the upstream Electron preload API.
+export interface ReadWorkspaceFileInput {
+  /** Absolute path, or relative to `root`. Must resolve inside `root`. */
+  path: string;
+  /** Session workspace root; reads are confined to this directory. */
+  root: string;
+}
+
+export interface FilePreview {
+  /** UTF-8 text content, when the file is textual. */
+  text?: string;
+  /** `data:<mime>;base64,...` for previewable images. */
+  dataUrl?: string;
+  /** Full size on disk in bytes. */
+  byteSize: number;
+  /** True when the content is binary (no text preview). */
+  binary: boolean;
+  /** True when `text` was cut at the 512 KB cap. */
+  truncated: boolean;
+}
+
+export interface WatchPreviewFileResult {
+  watchId: string;
+}
+
+export interface PreviewFileChangedPayload {
+  watchId: string;
+  path: string;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -295,6 +326,10 @@ declare global {
       terminalResize?(input: { terminalId: string; cols: number; rows: number }): Promise<boolean>;
       terminalClose?(input: { terminalId: string }): Promise<boolean>;
       onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
+      readWorkspaceFile?(input: ReadWorkspaceFileInput): Promise<FilePreview>;
+      watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
+      stopPreviewFileWatch?(input: { watchId: string }): Promise<boolean>;
+      onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;
       onSystemResume?(handler: () => void): () => void;
     };
   }

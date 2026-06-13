@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useNavigate, useParams } from "react-router-dom";
-import { Bot, Check, Copy } from "lucide-react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Bot, Check, Copy, PanelRight } from "lucide-react";
 import {
   activeSessionIdAtom,
   conversationFontSizeAtom,
   conversationFontSizeVars,
   conversationWidthMaxWidth,
   conversationWidthModeAtom,
+  rightRailVisibleAtom,
 } from "@/stores/ui";
 import {
   appendNoticeAtom,
@@ -58,6 +59,8 @@ import type {
 import { MessageTimeline } from "@/components/chat/message-timeline";
 import { StallNotice } from "@/components/chat/stall-notice";
 import { SubagentPanel, useSessionSubagents } from "@/components/chat/subagent-panel";
+import { PreviewRail } from "@/components/chat/preview-rail/preview-rail";
+import { PREVIEW_PANEL_QUERY_KEY } from "@/lib/preview-rail";
 import { activeSubagentCount } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
@@ -79,6 +82,8 @@ export function DetailRoute() {
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
   const [conversationWidthMode, setConversationWidthMode] = useAtom(conversationWidthModeAtom);
   const conversationFontSizeMode = useAtomValue(conversationFontSizeAtom);
+  const [rightRailVisible, setRightRailVisible] = useAtom(rightRailVisibleAtom);
+  const [searchParams] = useSearchParams();
   const taskId = activeSessionId ?? urlTaskId;
   const turnStats = useSessionTurnStats(taskId);
 
@@ -160,6 +165,32 @@ export function DetailRoute() {
   useEffect(() => {
     if (urlTaskId && urlTaskId !== activeSessionId) setActiveId(urlTaskId);
   }, [urlTaskId, activeSessionId, setActiveId]);
+
+  // ⌘B / Ctrl+B toggles the rich-preview right rail (issue #233). A ref holds
+  // the latest visibility so the listener stays attached once.
+  const railVisibleRef = useRef(rightRailVisible);
+  railVisibleRef.current = rightRailVisible;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        setRightRailVisible(!railVisibleRef.current);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setRightRailVisible]);
+
+  // Deep link: arriving with ?panel=… opens the rail to that tab. Runs once so
+  // a later manual close isn't fought by this effect.
+  const didAutoOpenRail = useRef(false);
+  useEffect(() => {
+    if (didAutoOpenRail.current) return;
+    didAutoOpenRail.current = true;
+    if (searchParams.has(PREVIEW_PANEL_QUERY_KEY) && !railVisibleRef.current) {
+      setRightRailVisible(true);
+    }
+  }, [searchParams, setRightRailVisible]);
 
 
   // Reset the user-selected model whenever the route changes to a different
@@ -482,6 +513,16 @@ export function DetailRoute() {
                 </span>
               ) : null}
             </TopBarActionButton>
+            <TopBarActionButton
+              onClick={() => setRightRailVisible(!rightRailVisible)}
+              data-active={rightRailVisible ? "true" : undefined}
+              title="预览面板（⌘B）"
+              aria-label="预览面板"
+              aria-pressed={rightRailVisible}
+            >
+              <PanelRight size={12} aria-hidden="true" />
+              <span>预览</span>
+            </TopBarActionButton>
             <TopBarActions />
           </>
         }
@@ -537,6 +578,13 @@ export function DetailRoute() {
             />
           </div>
         </div>
+        {rightRailVisible && taskId ? (
+          <PreviewRail
+            sessionId={taskId}
+            workspaceRoot={sessionWorkspace}
+            onClose={() => setRightRailVisible(false)}
+          />
+        ) : null}
         {subagentPanelOpen ? (
           <SubagentPanel subagents={subagents} onClose={() => setSubagentPanelOpen(false)} />
         ) : null}
