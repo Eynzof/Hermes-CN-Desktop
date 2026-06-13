@@ -12,6 +12,7 @@ import {
   getProviderEntry,
   getProviderOrder,
   maskSecretPreview,
+  parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
   sortProvidersForCnEdition,
@@ -620,5 +621,69 @@ describe("provider catalog config updates", () => {
         },
       ],
     });
+  });
+});
+
+describe("parseContextWindowInput", () => {
+  it("treats empty / blank input as auto (0)", () => {
+    expect(parseContextWindowInput("")).toBe(0);
+    expect(parseContextWindowInput("   ")).toBe(0);
+    expect(parseContextWindowInput(undefined)).toBe(0);
+  });
+
+  it("treats an explicit 0 as auto", () => {
+    expect(parseContextWindowInput("0")).toBe(0);
+  });
+
+  it("parses a positive integer and trims whitespace", () => {
+    expect(parseContextWindowInput("128000")).toBe(128000);
+    expect(parseContextWindowInput("  200000 ")).toBe(200000);
+  });
+
+  it("floors decimals", () => {
+    expect(parseContextWindowInput("100.9")).toBe(100);
+  });
+
+  it("rejects non-numeric and negative values as auto", () => {
+    expect(parseContextWindowInput("128k")).toBe(0);
+    expect(parseContextWindowInput("abc")).toBe(0);
+    expect(parseContextWindowInput("-5")).toBe(0);
+  });
+});
+
+describe("context window override in config updates", () => {
+  const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "deepseek")!;
+
+  it("writes a positive override as a top-level model_context_length field", () => {
+    const config = buildCurrentModelConfigUpdate({}, preset, {
+      apiKey: "",
+      baseUrl: "",
+      model: "deepseek-chat",
+      contextWindow: "200000",
+    });
+    expect(config.model_context_length).toBe(200000);
+    // The override lives at the top level, not nested in model.* — the backend
+    // denormalizes it back into model.context_length.
+    expect(config.model.context_length).toBeUndefined();
+  });
+
+  it("resets the override to 0 when the field is left empty (switch semantics)", () => {
+    const config = buildCurrentModelConfigUpdate(
+      { model_context_length: 200000 },
+      preset,
+      { apiKey: "", baseUrl: "", model: "deepseek-chat", contextWindow: "" },
+    );
+    expect(config.model_context_length).toBe(0);
+  });
+
+  it("does not write the override in the provider-only settings path", () => {
+    const config = buildProviderSettingsUpdate(
+      { model: { provider: "kimi-for-coding", default: "kimi-k2.6" } },
+      preset,
+      { apiKey: "", baseUrl: "", model: "deepseek-chat", contextWindow: "200000" },
+    );
+    expect(config.model_context_length).toBeUndefined();
+    // The active model is untouched by a non-current provider save.
+    expect(config.model).toEqual({ provider: "kimi-for-coding", default: "kimi-k2.6" });
   });
 });

@@ -32,6 +32,7 @@ import {
   buildProviderSettingsUpdate,
   getProviderCredentialPreview,
   getProviderEntry,
+  parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
   sortProvidersForModelsPage,
@@ -640,6 +641,8 @@ export function ModelsSection() {
     apiKey: "",
     baseUrl: initialProvider?.baseUrl ?? "",
     model: initialProvider?.defaultModel ?? "",
+    // 上下文窗口覆盖（token）。空串 = 自动。仅对「当前主模型」有效（后端单槽语义）。
+    contextWindow: "",
   });
   // Last saved values for the selected provider. Used to compute whether the
   // form is dirty (vs. baseline) so the save button can show an idle "已保存"
@@ -647,6 +650,7 @@ export function ModelsSection() {
   const [savedSnapshot, setSavedSnapshot] = useState<{
     baseUrl: string;
     model: string;
+    contextWindow: string;
     providerId: string;
   } | null>(null);
   const [savedFlashFor, setSavedFlashFor] = useState<string | null>(null);
@@ -903,12 +907,25 @@ export function ModelsSection() {
     const baseUrl = typeof selectedProviderEntry.base_url === "string"
       ? selectedProviderEntry.base_url
       : selectedProvider.baseUrl;
-    setProviderForm({ apiKey: "", baseUrl, model });
-    setSavedSnapshot({ baseUrl, model, providerId: selectedProvider.id });
+    // The context-window override lives in a single top-level config field tied
+    // to the *current* model. Only backfill it when this provider's model is the
+    // active one; otherwise the field stays empty (it applies on set-current).
+    const overrideRaw = config?.model_context_length;
+    const isCurrentModel =
+      currentProviderId === selectedProvider.id && modelInfo?.model === model;
+    const contextWindow =
+      isCurrentModel && typeof overrideRaw === "number" && overrideRaw > 0
+        ? String(overrideRaw)
+        : "";
+    setProviderForm({ apiKey: "", baseUrl, model, contextWindow });
+    setSavedSnapshot({ baseUrl, model, contextWindow, providerId: selectedProvider.id });
   }, [
     selectedProvider,
     selectedProviderEntry.base_url,
     selectedProviderEntry.model,
+    config?.model_context_length,
+    currentProviderId,
+    modelInfo?.model,
   ]);
 
   useEffect(() => {
@@ -973,7 +990,8 @@ export function ModelsSection() {
     selectedProvider &&
     (providerForm.apiKey.trim() !== "" ||
       providerForm.baseUrl !== (savedSnapshot?.baseUrl ?? "") ||
-      providerForm.model !== (savedSnapshot?.model ?? ""))
+      providerForm.model !== (savedSnapshot?.model ?? "") ||
+      providerForm.contextWindow !== (savedSnapshot?.contextWindow ?? ""))
   );
   const showSavedFlash = !isFormDirty && savedFlashFor === selectedProvider?.id;
   const selectedProviderModel = selectedProvider
@@ -1165,13 +1183,25 @@ export function ModelsSection() {
     setProviderSaveError("");
     try {
       await syncProviderApiKeyToCanonicalEnv(selectedProvider, newApiKey);
-      await saveConfig.mutateAsync(
-        buildProviderSettingsUpdate(config, selectedProvider, providerForm),
-      );
+      // "保存配置" only touches providers.<id> — it does not switch the active
+      // model. The context-window override is a single field tied to the current
+      // model, so persist it here only when this provider's model is already the
+      // active one (editing the live model's window without re-switching).
+      // Writing it for a non-current provider would stomp the real current
+      // model's override.
+      let settingsUpdate = buildProviderSettingsUpdate(config, selectedProvider, providerForm);
+      if (selectedProviderIsCurrent) {
+        settingsUpdate = {
+          ...settingsUpdate,
+          model_context_length: parseContextWindowInput(providerForm.contextWindow),
+        };
+      }
+      await saveConfig.mutateAsync(settingsUpdate);
       setProviderForm((prev) => ({ ...prev, apiKey: "" }));
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
         model: savedModel,
+        contextWindow: providerForm.contextWindow,
         providerId,
       });
       setSavedFlashFor(providerId);
@@ -1212,6 +1242,7 @@ export function ModelsSection() {
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
         model: savedModel,
+        contextWindow: providerForm.contextWindow,
         providerId,
       });
       setSavedFlashFor(providerId);
@@ -1277,7 +1308,7 @@ export function ModelsSection() {
         onSuccess: () => {
           selectProvider(candidate);
           closeCustomForm();
-          setProviderForm({ apiKey: "", baseUrl, model });
+          setProviderForm({ apiKey: "", baseUrl, model, contextWindow: "" });
         },
       },
     );
@@ -1636,6 +1667,37 @@ export function ModelsSection() {
                       )}
                       {refreshErrorText && (
                         <div className={s.modelPickerError}>{refreshErrorText}</div>
+                      )}
+                      <label className={s.fieldRow}>
+                        <div className={s.fieldLabel}>上下文窗口</div>
+                        <input
+                          className={s.fieldInput}
+                          data-mono="true"
+                          inputMode="numeric"
+                          placeholder={
+                            selectedProviderIsCurrent && modelInfo?.effective_context_length
+                              ? `自动（约 ${modelInfo.effective_context_length.toLocaleString()}）`
+                              : "自动"
+                          }
+                          value={providerForm.contextWindow}
+                          onChange={(event) =>
+                            setProviderForm((prev) => ({ ...prev, contextWindow: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <div className={s.modelPickerHint}>
+                        留空或填 0 使用该模型自动探测到的上下文窗口；本地 / 自建模型探测不准时可手动指定（单位 token）。
+                        {!selectedProviderIsCurrent && " 该值会在「设为当前模型」时生效。"}
+                      </div>
+                      {selectedProviderIsCurrent && modelInfo && (
+                        <div className={s.modelPickerHint}>
+                          自动探测 {(modelInfo.auto_context_length ?? 0).toLocaleString()}
+                          {" · "}覆盖{" "}
+                          {modelInfo.config_context_length
+                            ? modelInfo.config_context_length.toLocaleString()
+                            : "无"}
+                          {" · "}生效 {(modelInfo.effective_context_length ?? 0).toLocaleString()}
+                        </div>
                       )}
                     </div>
 

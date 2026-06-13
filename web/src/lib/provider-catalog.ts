@@ -203,6 +203,21 @@ export interface ProviderConfigInput {
   apiKey: string;
   baseUrl: string;
   model: string;
+  // 用户手填的上下文窗口覆盖（token）。空串 / "0" / 非法值 = 自动探测。
+  // 仅在「设为当前模型」路径落盘为顶层 model_context_length 字段。
+  contextWindow?: string;
+}
+
+/**
+ * 把用户在输入框里填的上下文窗口字符串解析成后端要的整数。
+ * 空串 / 非数字 / 负数 → 0（= 让后端自动探测）；小数向下取整。
+ */
+export function parseContextWindowInput(raw: string | undefined): number {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return 0;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.floor(parsed);
 }
 
 export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.07.1";
@@ -725,6 +740,10 @@ export function buildCurrentModelConfigUpdate(
       api_mode: preset.apiMode,
       ...(nextApiKey ? { api_key: nextApiKey } : {}),
     },
+    // 顶层字段，由后端 _denormalize_config_from_web() 落盘为 model.context_length。
+    // 覆盖值绑定「当前模型」语义：切到新模型时用户没填即写回 0，自动重置旧覆盖，
+    // 避免把上一个模型的窗口串到新模型。
+    model_context_length: parseContextWindowInput(input.contextWindow),
   };
 }
 
