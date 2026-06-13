@@ -108,6 +108,15 @@ async fn acquire_managed_dashboard(
     install_bundled: bool,
 ) -> Result<DashboardHandle, String> {
     emit_runtime_status(app, "checking-env", "正在检查本机环境...");
+    // Resolve the user's real PATH (login shell / registry) before anything
+    // spawns, so the dashboard and its MCP descendants inherit it.
+    let _ = tauri::async_runtime::spawn_blocking(|| {
+        hermes_agent_cn::path_resolver::refresh_blocking(
+            hermes_agent_cn::path_resolver::SHELL_PROBE_TIMEOUT,
+            true,
+        )
+    })
+    .await;
     if let Err(err) = environment::check_bootstrap_environment(&options.hermes_home) {
         return Err(record_bootstrap_error(app, err));
     }

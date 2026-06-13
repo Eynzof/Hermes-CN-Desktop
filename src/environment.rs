@@ -6,7 +6,6 @@
 //! repair anything automatically.
 
 use serde::Serialize;
-use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -449,6 +448,11 @@ pub async fn collect_environment_check(input: EnvironmentCheckInput) -> Environm
     agent_browser.category = EnvironmentCheckCategory::Browser;
     items.push(agent_browser);
     items.push(browser_executable_item(Path::new(&hermes_home)));
+    items.push(managed_env_file_item(Path::new(&hermes_home)));
+    items.push(effective_path_item(
+        &crate::path_resolver::snapshot(),
+        crate::path_resolver::runtime_path_stale(),
+    ));
 
     EnvironmentCheckResult {
         generated_at_ms: now_ms(),
@@ -594,8 +598,15 @@ fn tool_item(check: ToolCheck<'_>) -> EnvironmentCheckItem {
             check.missing_summary,
         )
         .details(probe.error)
-        .recommendation(check.recommendation)
+        .recommendation(check.recommendation.map(missing_tool_recommendation))
     }
+}
+
+/// Shared remediation suffix: detection now follows the login-shell /
+/// registry PATH, so a fresh install only needs a re-check — and a kernel
+/// restart for tools the running runtime spawns itself.
+fn missing_tool_recommendation(base: &str) -> String {
+    format!("{base}；安装后点「刷新检查」即可重新探测，若内核已在运行需重启内核生效")
 }
 
 fn check_node_item() -> EnvironmentCheckItem {
@@ -610,7 +621,9 @@ fn check_node_item() -> EnvironmentCheckItem {
             "Node.js 未找到；浏览器工具和部分扩展能力可能不可用",
         )
         .details(probe.error)
-        .recommendation(Some("安装 Node.js LTS 20.19+ 或 22.12+"));
+        .recommendation(Some(missing_tool_recommendation(
+            "安装 Node.js LTS 20.19+ 或 22.12+",
+        )));
     }
 
     let version_text = probe.version.clone().unwrap_or_default();
@@ -672,6 +685,108 @@ fn browser_executable_item(hermes_home: &Path) -> EnvironmentCheckItem {
         .recommendation(Some(
             "如浏览器工具不可用，可安装 agent-browser 或配置 AGENT_BROWSER_EXECUTABLE_PATH",
         )),
+    }
+}
+
+/// The desktop's isolated `.env` is a recurring support pitfall: users edit
+/// `~/.hermes/.env` (the CLI's home) and wonder why the desktop never sees
+/// their keys. Surface the real location prominently. (#197)
+fn managed_env_file_item(hermes_home: &Path) -> EnvironmentCheckItem {
+    let env_file = hermes_home.join(".env");
+    let exists = env_file.is_file();
+    EnvironmentCheckItem::new(
+        "managed-env-file",
+        EnvironmentCheckCategory::Paths,
+        "环境变量文件 (.env)",
+        if exists {
+            EnvironmentCheckStatus::Ok
+        } else {
+            EnvironmentCheckStatus::Unknown
+        },
+        false,
+        if exists {
+            "桌面端使用独立的 HERMES_HOME，API Key 等环境变量保存在此 .env（不是 ~/.hermes/.env）"
+        } else {
+            "尚未生成 .env；在设置页保存任意环境变量后会自动创建（桌面端不读取 ~/.hermes/.env）"
+        },
+    )
+    .path(Some(&env_file))
+    .recommendation(Some(
+        "请在设置页管理环境变量，保存后立即生效；手动编辑此文件则需重启内核",
+    ))
+}
+
+fn effective_path_item(
+    snapshot: &crate::path_resolver::EffectivePath,
+    runtime_stale: bool,
+) -> EnvironmentCheckItem {
+    use crate::path_resolver::ShellProbeOutcome;
+
+    let entry_count = snapshot.entries.len();
+    let (mut status, summary) = match &snapshot.probe {
+        ShellProbeOutcome::Ok { shell } => (
+            EnvironmentCheckStatus::Ok,
+            format!("已合并登录 shell（{shell}）PATH，共 {entry_count} 个目录"),
+        ),
+        ShellProbeOutcome::Timeout { shell } => (
+            EnvironmentCheckStatus::Warning,
+            format!("登录 shell（{shell}）PATH 读取超时，当前仅使用进程 PATH 和常见安装目录"),
+        ),
+        ShellProbeOutcome::Failed { shell, error } => (
+            EnvironmentCheckStatus::Warning,
+            format!(
+                "登录 shell（{shell}）PATH 读取失败（{error}），当前仅使用进程 PATH 和常见安装目录"
+            ),
+        ),
+        ShellProbeOutcome::Disabled => (
+            EnvironmentCheckStatus::Ok,
+            format!("已按 HERMES_DESKTOP_DISABLE_SHELL_PATH 跳过登录 shell 导入，共 {entry_count} 个目录"),
+        ),
+        ShellProbeOutcome::NotApplicable => (
+            EnvironmentCheckStatus::Ok,
+            format!("已合并注册表系统/用户 PATH，共 {entry_count} 个目录"),
+        ),
+    };
+    let mut recommendation: Option<String> = None;
+    if runtime_stale {
+        status = EnvironmentCheckStatus::Warning;
+        recommendation = Some(
+            "PATH 自内核启动后发生变化，请重启内核让运行中的工具（MCP、浏览器等）看到新 PATH"
+                .to_string(),
+        );
+    }
+
+    const MAX_DETAIL_ENTRIES: usize = 15;
+    let mut lines: Vec<String> = snapshot
+        .entries
+        .iter()
+        .take(MAX_DETAIL_ENTRIES)
+        .map(|(path, source)| format!("{}（{}）", path.display(), path_source_label(*source)))
+        .collect();
+    if entry_count > MAX_DETAIL_ENTRIES {
+        lines.push(format!("… 共 {entry_count} 项"));
+    }
+
+    EnvironmentCheckItem::new(
+        "effective-path",
+        EnvironmentCheckCategory::Paths,
+        "PATH 解析",
+        status,
+        false,
+        summary,
+    )
+    .details((!lines.is_empty()).then(|| lines.join("\n")))
+    .recommendation(recommendation)
+}
+
+fn path_source_label(source: crate::path_resolver::PathSource) -> &'static str {
+    use crate::path_resolver::PathSource;
+    match source {
+        PathSource::Process => "进程",
+        PathSource::LoginShell => "登录 shell",
+        PathSource::RegistryMachine => "系统注册表",
+        PathSource::RegistryUser => "用户注册表",
+        PathSource::WellKnown => "常见目录",
     }
 }
 
@@ -769,9 +884,12 @@ fn find_on_path(command: &str) -> Option<PathBuf> {
         return command_path.is_file().then(|| command_path.to_path_buf());
     }
 
-    let path = env::var_os("PATH")?;
+    find_in_entries(command, &crate::path_resolver::effective_entries())
+}
+
+fn find_in_entries(command: &str, entries: &[PathBuf]) -> Option<PathBuf> {
     let candidates = executable_candidates(command);
-    for dir in env::split_paths(&path) {
+    for dir in entries {
         for candidate in &candidates {
             let path = dir.join(candidate);
             if path.is_file() {
@@ -791,7 +909,10 @@ fn executable_candidates(command: &str) -> Vec<OsString> {
             out.push(OsString::from(command));
             return out;
         }
-        let pathext = env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string());
+        // Registry PATHEXT first: it survives the stale GUI env block.
+        let pathext = crate::path_resolver::effective_pathext()
+            .or_else(|| std::env::var("PATHEXT").ok())
+            .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".to_string());
         for ext in pathext.split(';').filter(|s| !s.is_empty()) {
             out.push(OsString::from(format!("{}{}", command, ext)));
             out.push(OsString::from(format!(
@@ -923,5 +1044,105 @@ mod tests {
         let target = dir.path().join("nested");
         check_writable_dir(&target).unwrap();
         assert!(target.is_dir());
+    }
+
+    #[test]
+    fn find_in_entries_finds_executable_in_given_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = if cfg!(windows) {
+            "mytool.exe"
+        } else {
+            "mytool"
+        };
+        fs::write(dir.path().join(name), b"#!/bin/sh\n").unwrap();
+
+        let found = find_in_entries(
+            "mytool",
+            &[PathBuf::from("/nonexistent"), dir.path().to_path_buf()],
+        );
+        assert_eq!(found, Some(dir.path().join(name)));
+        assert_eq!(
+            find_in_entries("missing-tool", &[dir.path().to_path_buf()]),
+            None
+        );
+    }
+
+    #[test]
+    fn find_on_path_absolute_path_short_circuits() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("tool");
+        fs::write(&file, b"x").unwrap();
+        assert_eq!(find_on_path(file.to_str().unwrap()), Some(file.clone()));
+        assert_eq!(
+            find_on_path(dir.path().join("absent").to_str().unwrap()),
+            None
+        );
+    }
+
+    #[test]
+    fn managed_env_file_item_reports_missing_vs_present() {
+        let home = tempfile::tempdir().unwrap();
+        let missing = managed_env_file_item(home.path());
+        assert_eq!(missing.status, EnvironmentCheckStatus::Unknown);
+        assert_eq!(missing.category, EnvironmentCheckCategory::Paths);
+        assert_eq!(
+            missing.path.as_deref(),
+            Some(home.path().join(".env").to_str().unwrap())
+        );
+
+        fs::write(home.path().join(".env"), b"TAVILY_API_KEY=x\n").unwrap();
+        let present = managed_env_file_item(home.path());
+        assert_eq!(present.status, EnvironmentCheckStatus::Ok);
+        assert!(present.summary.contains("不是 ~/.hermes/.env"));
+    }
+
+    #[test]
+    fn effective_path_item_warns_when_runtime_stale() {
+        use crate::path_resolver::{EffectivePath, PathSource, ShellProbeOutcome};
+        let snapshot = EffectivePath {
+            entries: vec![(PathBuf::from("/opt/homebrew/bin"), PathSource::LoginShell)],
+            probe: ShellProbeOutcome::Ok {
+                shell: "/bin/zsh".to_string(),
+            },
+            pathext: None,
+        };
+
+        let fresh = effective_path_item(&snapshot, false);
+        assert_eq!(fresh.status, EnvironmentCheckStatus::Ok);
+        assert!(fresh.recommendation.is_none());
+        assert!(fresh.details.as_deref().unwrap().contains("登录 shell"));
+
+        let stale = effective_path_item(&snapshot, true);
+        assert_eq!(stale.status, EnvironmentCheckStatus::Warning);
+        assert!(stale
+            .recommendation
+            .as_deref()
+            .unwrap()
+            .contains("重启内核"));
+    }
+
+    #[test]
+    fn effective_path_item_truncates_long_entry_lists() {
+        use crate::path_resolver::{EffectivePath, PathSource, ShellProbeOutcome};
+        let entries = (0..20)
+            .map(|i| (PathBuf::from(format!("/dir{i}")), PathSource::Process))
+            .collect();
+        let snapshot = EffectivePath {
+            entries,
+            probe: ShellProbeOutcome::Disabled,
+            pathext: None,
+        };
+        let item = effective_path_item(&snapshot, false);
+        let details = item.details.unwrap();
+        assert!(details.contains("… 共 20 项"));
+        assert!(!details.contains("/dir15"));
+    }
+
+    #[test]
+    fn missing_tool_recommendation_appends_recheck_hint() {
+        let text = missing_tool_recommendation("安装 ripgrep");
+        assert!(text.starts_with("安装 ripgrep；"));
+        assert!(text.contains("刷新检查"));
+        assert!(text.contains("重启内核"));
     }
 }

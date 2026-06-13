@@ -494,11 +494,19 @@ fn build_terminal_env(
         );
     }
 
+    // Effective PATH so the in-app terminal matches the user's real one.
+    // The shell is spawned non-login (no `-l`), so it will not rebuild PATH
+    // from .zprofile itself — inject it even without a managed runtime,
+    // overriding the GUI-truncated process PATH forwarded above.
+    let effective = crate::path_resolver::effective_path_os()
+        .to_string_lossy()
+        .to_string();
+    vars.insert("PATH".to_string(), effective.clone());
+
     if let Some(summary) = runtime_summary {
-        let existing = env::var("PATH").unwrap_or_default();
         vars.insert(
             "PATH".to_string(),
-            prepend_path(&summary.shim_dir, &existing),
+            prepend_path(&summary.shim_dir, &effective),
         );
         vars.insert(
             "HERMES_MANAGED_RUNTIME".to_string(),
@@ -1120,5 +1128,25 @@ mod tests {
                 .is_some_and(|path| path.starts_with("/runtime/desktop-bin")),
             "PATH should start with managed runtime shim dir"
         );
+    }
+
+    // 没有 managed runtime 时终端同样要拿到有效 PATH：shell 以非登录方式
+    // 启动，不会自己重建 PATH，缺了注入就只剩 GUI 精简 PATH。
+    #[test]
+    fn build_terminal_env_sets_effective_path_without_managed_runtime() {
+        let context = TerminalContext {
+            hermes_home: "/tmp/hermes-home/default".to_string(),
+            hermes_home_base: "/tmp/hermes-home".to_string(),
+            profile: "default".to_string(),
+            api_base_url: String::new(),
+        };
+
+        let env_vars = build_terminal_env(&context, None, "/bin/zsh");
+
+        let expected = crate::path_resolver::effective_path_os()
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(env_vars.get("PATH"), Some(&expected));
+        assert!(!env_vars.contains_key("HERMES_MANAGED_RUNTIME"));
     }
 }

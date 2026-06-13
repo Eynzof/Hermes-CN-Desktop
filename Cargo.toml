@@ -54,6 +54,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security",
     "Win32_System_JobObjects",
 ] }
+# Read-only registry access for live PATH/PATHEXT resolution (path_resolver.rs).
+winreg = "0.55"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

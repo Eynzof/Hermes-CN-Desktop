@@ -328,7 +328,8 @@ fn apply_managed_gateway_env(
         .env("HERMES_DESKTOP_MANAGED", "1")
         .env("HERMES_GATEWAY_DETACHED", "1")
         .env("HERMES_NONINTERACTIVE", "1")
-        .env("PYTHONUNBUFFERED", "1");
+        .env("PYTHONUNBUFFERED", "1")
+        .env("PATH", crate::path_resolver::effective_path_os());
 }
 
 fn spawn_gateway_stop_helper(

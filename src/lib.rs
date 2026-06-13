@@ -3,6 +3,7 @@ pub mod cron_runs;
 pub mod env_file;
 pub mod environment;
 pub mod error;
+pub mod path_resolver;
 pub mod prevent_sleep;
 pub mod process;
 pub mod session_archive;
