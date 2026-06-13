@@ -18,8 +18,14 @@ import {
   extractBodyAfterLeadingSlashToken,
   filterComposerSkills,
   getLeadingSlashToken,
+  replaceLeadingSlashToken,
   type ComposerSkillCandidate,
 } from "@/lib/composer-skills";
+import {
+  filterBuiltinCommands,
+  isBuiltinComposerCommandToken,
+  type ComposerCommandCandidate,
+} from "@/lib/builtin-commands";
 import { contextUsageRisk } from "@/lib/context-usage";
 import {
   composerSubmitShortcutHint,
@@ -174,18 +180,33 @@ export function GooseComposer({
     () => selectedSkill ? null : getLeadingSlashToken(value, selectionStart, selectionEnd),
     [selectionEnd, selectionStart, selectedSkill, value],
   );
+  // A built-in slash command (e.g. /compress) is handled client-side on submit,
+  // so keep the skill picker out of its way — otherwise Enter could select a
+  // fuzzy skill match instead of running the command.
+  const builtinSlash = useMemo(
+    () => Boolean(slashToken && isBuiltinComposerCommandToken(slashToken.token)),
+    [slashToken],
+  );
   const skillCandidates = useMemo(
-    () => slashToken && skillPicker
+    () => slashToken && skillPicker && !builtinSlash
       ? filterComposerSkills(skillPicker.skills, slashToken.query)
       : [],
-    [skillPicker, slashToken],
+    [builtinSlash, skillPicker, slashToken],
   );
+  // Built-in commands (e.g. /compress) share the suggestion panel with skills.
+  // They surface for partial input ("/comp"); a fully-typed "/compress" sets
+  // builtinSlash, the panel closes, and Enter runs the command immediately.
+  const commandCandidates = useMemo(
+    () => slashToken && !builtinSlash ? filterBuiltinCommands(slashToken.query) : [],
+    [builtinSlash, slashToken],
+  );
+  const totalCandidates = commandCandidates.length + skillCandidates.length;
   const skillPanelOpen = Boolean(
     slashToken &&
-    skillPicker &&
+    !builtinSlash &&
     !controlsDisabled &&
-    !skillPicker.disabled &&
-    dismissedSlashToken !== slashToken.token,
+    dismissedSlashToken !== slashToken.token &&
+    (commandCandidates.length > 0 || (skillPicker && !skillPicker.disabled)),
   );
   const resolvedPlaceholder = selectedSkill
     ? `继续描述给 ${selectedSkill.displayName} 的任务…`
@@ -256,7 +277,7 @@ export function GooseComposer({
 
   useEffect(() => {
     setSkillActiveIndex(0);
-  }, [slashToken?.token, skillCandidates.length]);
+  }, [slashToken?.token, commandCandidates.length, skillCandidates.length]);
 
   // Picker now groups candidates internally (recent / configured /
   // recommended / more) from the catalog + usage log. Composer just hands it
@@ -425,6 +446,25 @@ export function GooseComposer({
     });
   };
 
+  const commitCommandSelection = (candidate: ComposerCommandCandidate) => {
+    if (!slashToken) return;
+    // Fill "/compress " so the user can optionally append a focus topic; a
+    // following Enter runs it via the detail-route built-in interception.
+    const next = replaceLeadingSlashToken(value, slashToken, candidate.name);
+    setValue(next.text);
+    setSelectionStart(next.cursor);
+    setSelectionEnd(next.cursor);
+    setDismissedSlashToken("");
+    window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(next.cursor, next.cursor);
+      setSelectionStart(next.cursor);
+      setSelectionEnd(next.cursor);
+    });
+  };
+
   const clearSelectedSkill = () => {
     setSelectedSkill(null);
     window.requestAnimationFrame(() => {
@@ -486,20 +526,25 @@ export function GooseComposer({
       if (event.key === "ArrowDown") {
         event.preventDefault();
         setSkillActiveIndex((current) =>
-          skillCandidates.length ? (current + 1) % skillCandidates.length : 0);
+          totalCandidates ? (current + 1) % totalCandidates : 0);
         return;
       }
       if (event.key === "ArrowUp") {
         event.preventDefault();
         setSkillActiveIndex((current) =>
-          skillCandidates.length
-            ? (current - 1 + skillCandidates.length) % skillCandidates.length
+          totalCandidates
+            ? (current - 1 + totalCandidates) % totalCandidates
             : 0);
         return;
       }
-      if ((event.key === "Enter" || event.key === "Tab") && skillCandidates.length > 0) {
+      if ((event.key === "Enter" || event.key === "Tab") && totalCandidates > 0) {
         event.preventDefault();
-        commitSkillSelection(skillCandidates[Math.min(skillActiveIndex, skillCandidates.length - 1)]!);
+        const index = Math.min(skillActiveIndex, totalCandidates - 1);
+        if (index < commandCandidates.length) {
+          commitCommandSelection(commandCandidates[index]!);
+        } else {
+          commitSkillSelection(skillCandidates[index - commandCandidates.length]!);
+        }
         return;
       }
     }
@@ -750,48 +795,76 @@ export function GooseComposer({
         />
 
         {skillPanelOpen ? (
-          <div className={s.skillPanel} role="listbox" aria-label="选择 Skill">
+          <div className={s.skillPanel} role="listbox" aria-label="命令与 Skill">
             <div className={s.skillPanelHead}>
               <span>
                 <Sparkles aria-hidden="true" />
-                选择 Skill
+                命令与 Skill
               </span>
               <small>Enter / Tab 选择，Esc 关闭</small>
             </div>
-            {skillPicker?.loading && skillCandidates.length === 0 ? (
-              <div className={s.skillPanelState}>正在读取已启用 Skill…</div>
-            ) : skillPicker?.error && skillCandidates.length === 0 ? (
-              <div className={s.skillPanelState} data-tone="error">
-                {skillPicker.error}
-              </div>
-            ) : skillCandidates.length === 0 ? (
-              <div className={s.skillPanelState}>没有匹配的 Skill</div>
-            ) : (
+            {commandCandidates.length > 0 ? (
               <div className={s.skillList}>
-                {skillCandidates.map((candidate, index) => (
+                {commandCandidates.map((candidate, index) => (
                   <button
-                    key={candidate.skill.name}
+                    key={`cmd-${candidate.name}`}
                     type="button"
                     className={s.skillOption}
                     data-active={index === skillActiveIndex}
+                    data-kind="command"
                     role="option"
                     aria-selected={index === skillActiveIndex}
                     onMouseEnter={() => setSkillActiveIndex(index)}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => commitSkillSelection(candidate)}
+                    onClick={() => commitCommandSelection(candidate)}
                   >
                     <span className={s.skillCommand}>{candidate.command}</span>
                     <span className={s.skillMain}>
                       <span className={s.skillName}>{candidate.displayName}</span>
                       <span className={s.skillDesc}>{candidate.description}</span>
                     </span>
-                    <span className={s.skillMeta}>
-                      {candidate.originLabel} · {candidate.categoryLabel}
-                    </span>
+                    <span className={s.skillMeta}>内置命令</span>
                   </button>
                 ))}
               </div>
-            )}
+            ) : null}
+            {skillPicker?.loading && totalCandidates === 0 ? (
+              <div className={s.skillPanelState}>正在读取已启用 Skill…</div>
+            ) : skillPicker?.error && totalCandidates === 0 ? (
+              <div className={s.skillPanelState} data-tone="error">
+                {skillPicker.error}
+              </div>
+            ) : totalCandidates === 0 ? (
+              <div className={s.skillPanelState}>没有匹配的 Skill</div>
+            ) : skillCandidates.length > 0 ? (
+              <div className={s.skillList}>
+                {skillCandidates.map((candidate, index) => {
+                  const combinedIndex = commandCandidates.length + index;
+                  return (
+                    <button
+                      key={candidate.skill.name}
+                      type="button"
+                      className={s.skillOption}
+                      data-active={combinedIndex === skillActiveIndex}
+                      role="option"
+                      aria-selected={combinedIndex === skillActiveIndex}
+                      onMouseEnter={() => setSkillActiveIndex(combinedIndex)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => commitSkillSelection(candidate)}
+                    >
+                      <span className={s.skillCommand}>{candidate.command}</span>
+                      <span className={s.skillMain}>
+                        <span className={s.skillName}>{candidate.displayName}</span>
+                        <span className={s.skillDesc}>{candidate.description}</span>
+                      </span>
+                      <span className={s.skillMeta}>
+                        {candidate.originLabel} · {candidate.categoryLabel}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         ) : null}
 

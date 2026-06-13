@@ -440,6 +440,16 @@ function appendNoticeMessage(
   };
 }
 
+// Map backend status.update lifecycle signals to localized, user-facing text.
+// Returns "" to clear the status line, undefined to leave it unchanged.
+function localizeStatusUpdate(kind: string, text: string): string | undefined {
+  if (kind === "compressing") return "正在压缩上下文…";
+  // session.compress pins a neutral "ready" status when compaction settles —
+  // surface nothing rather than a raw English "ready" string in the timeline.
+  if (kind === "ready" || text === "ready") return "";
+  return text || undefined;
+}
+
 function gatewayUsageMetadata(usage: GatewayMessageUsageT | undefined): HermesMessageMetadata["usage"] | undefined {
   if (!usage) return undefined;
   const next: NonNullable<HermesMessageMetadata["usage"]> = {};
@@ -822,9 +832,11 @@ function reduceGatewayEventInner(
 
     case "status.update": {
       const kind = typeof payload.kind === "string" ? payload.kind : "status";
+      const text = typeof payload.text === "string" ? payload.text : "";
+      const localized = localizeStatusUpdate(kind, text);
       return {
         ...runtime,
-        statusMessage: typeof payload.text === "string" ? payload.text : runtime.statusMessage,
+        statusMessage: localized !== undefined ? localized : runtime.statusMessage,
         statusKind: kind,
         statusUpdatedAt: now,
         updatedAt: now,
@@ -1054,6 +1066,29 @@ export const startPromptAtom = atom(
         turnFirstTokenAt: undefined,
         activeAssistantId: assistantId,
       })),
+    );
+  },
+);
+
+/** Append a standalone system/notice message to a session — used for client-side
+ *  command results (e.g. manual /compress) that aren't part of a model turn. */
+export const appendNoticeAtom = atom(
+  null,
+  (
+    _get,
+    set,
+    params: {
+      sessionId: string;
+      text: string;
+      level?: "info" | "warning" | "error" | "system";
+      now?: number;
+    },
+  ) => {
+    const now = params.now ?? Date.now();
+    set(chatRuntimeBySessionAtom, (state) =>
+      updateSessionRuntime(state, params.sessionId, (runtime) =>
+        appendNoticeMessage(runtime, params.sessionId, now, params.text, params.level ?? "system"),
+      ),
     );
   },
 );

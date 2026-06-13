@@ -142,6 +142,7 @@ export function ContextIndicator({
               {riskText}
             </span>
           ) : null}
+          <span className={s.contextPopoverMeta}>输入 /compress 手动压缩上下文</span>
         </span>
       ) : null}
     </span>

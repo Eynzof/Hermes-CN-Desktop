@@ -141,18 +141,22 @@ export function buildComposerContextUsage({
   };
 }
 
+// Percentage is capped at 100: a session can exceed its window (used > max),
+// but the ring fills at 100% and a ">100%" label reads as a rendering bug. The
+// token label (used / max) still conveys the overflow numerically, and the
+// danger risk still fires since the cap lands exactly on CONTEXT_DANGER_PERCENT.
 export function contextUsagePercent(usage: ContextUsageLike | null | undefined): number | undefined {
   if (!usage) return undefined;
 
   const explicit = finiteNumber(usage.percent);
   if (explicit !== undefined) {
-    return Math.max(0, explicit);
+    return Math.min(100, Math.max(0, explicit));
   }
 
   const used = finiteNumber(usage.used);
   const max = finiteNumber(usage.max);
   if (used === undefined || max === undefined || max <= 0) return undefined;
-  return Math.max(0, (used / max) * 100);
+  return Math.min(100, Math.max(0, (used / max) * 100));
 }
 
 export function contextUsageRisk(usage: ContextUsageLike | null | undefined): ContextRisk {

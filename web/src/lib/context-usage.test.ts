@@ -12,7 +12,14 @@ describe("context usage helpers", () => {
   });
 
   it("computes percentage from used and max", () => {
-    expect(contextUsagePercent({ used: 1_600_000, max: 1_000_000 })).toBe(160);
+    expect(contextUsagePercent({ used: 500_000, max: 1_000_000 })).toBe(50);
+  });
+
+  it("caps the percentage at 100 even when the window is exceeded", () => {
+    expect(contextUsagePercent({ used: 1_600_000, max: 1_000_000 })).toBe(100);
+    expect(contextUsagePercent({ percent: 160 })).toBe(100);
+    // ...but it still reads as danger.
+    expect(contextUsageRisk({ used: 1_600_000, max: 1_000_000 })).toBe("danger");
   });
 
   it("classifies warning and danger levels", () => {

@@ -830,6 +830,27 @@ export const SessionUsageResult = z.object({
 }).passthrough();
 export type SessionUsageResult = z.infer<typeof SessionUsageResult>;
 
+// Manual context compaction — mirrors the backend `session.compress` RPC
+// (tui_gateway/server.py). `focus_topic` lets the user steer which thread to
+// keep; the backend refuses (error 4009) while a turn is running.
+export const SessionCompressParams = z.object({
+  session_id: z.string(),
+  focus_topic: z.string().optional(),
+});
+export type SessionCompressParams = z.infer<typeof SessionCompressParams>;
+
+export const SessionCompressResult = z.object({
+  status: z.string().optional(),
+  removed: z.number().optional(),
+  before_messages: z.number().optional(),
+  after_messages: z.number().optional(),
+  before_tokens: z.number().optional(),
+  after_tokens: z.number().optional(),
+  summary: z.string().optional(),
+  usage: SessionUsageResult.optional(),
+}).passthrough();
+export type SessionCompressResult = z.infer<typeof SessionCompressResult>;
+
 export const GatewayModelProvider = z.object({
   slug: z.string(),
   name: z.string().optional(),
@@ -932,6 +953,9 @@ export const GatewayMessageUsage = z
     context_used: z.number().optional(),
     context_max: z.number().optional(),
     context_percent: z.number().optional(),
+    // Backend `_get_usage` reports this on every usage payload; declaring it
+    // lets the live message-stream count match the polled session.usage one.
+    compressions: z.number().optional(),
     cost_usd: z.number().nullable().optional(),
     cost_status: z.string().optional(),
     finish_reason: z.string().optional(),

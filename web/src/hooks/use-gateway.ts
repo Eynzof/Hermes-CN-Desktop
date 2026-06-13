@@ -14,6 +14,7 @@ import {
   SessionTitleResult,
   SlashCompletionResult,
   SessionUsageResult,
+  SessionCompressResult,
   type GatewayEvent,
 } from "@hermes/protocol";
 import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
@@ -373,6 +374,31 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  const compressSession = useCallback(
+    async (
+      sessionId: string,
+      focusTopic?: string,
+    ): Promise<SessionCompressResult> => {
+      ensureSubscribed();
+      const focus = focusTopic?.trim();
+      return parseGatewayResult(
+        SessionCompressResult,
+        await getGatewayClient().request(
+          "session.compress",
+          {
+            session_id: sessionId,
+            ...(focus ? { focus_topic: focus } : {}),
+          },
+          // Compaction summarises the whole history through the model; the
+          // backend classifies it as a slow handler, so give it room.
+          { timeoutMs: 180_000 },
+        ),
+        "session.compress",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const getModelOptions = useCallback(
     async (sessionId?: string): Promise<ModelOptionsResult> => {
       ensureSubscribed();
@@ -616,6 +642,7 @@ export function useGateway() {
     resumeSession,
     sendPrompt,
     getSessionUsage,
+    compressSession,
     getModelOptions,
     completeSlash,
     dispatchCommand,
