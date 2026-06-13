@@ -500,3 +500,60 @@ export interface SetYoloModeResult {
   sessionToken?: string;
   error?: string;
 }
+
+// --- Connection config: local managed runtime vs remote Hermes Agent -------
+// Mirrors the official desktop's connection IPC (token auth only). The token
+// value never crosses to the renderer — only presence/preview signals.
+
+export type ConnectionMode = "local" | "remote";
+
+export interface ConnectionConfigInput {
+  mode?: ConnectionMode;
+  remoteUrl?: string;
+  /** Empty/absent keeps the previously saved token. */
+  remoteToken?: string;
+}
+
+export interface ConnectionConfigView {
+  /** The saved (target) mode — may differ from effectiveMode until applied. */
+  mode: ConnectionMode;
+  remoteUrl: string;
+  remoteTokenSet: boolean;
+  /** "set" or "...XXXXXX" (last 6 chars); absent when no token is saved. */
+  remoteTokenPreview?: string | null;
+  /** True when HERMES_DESKTOP_REMOTE_URL forces the connection; UI read-only. */
+  envOverride: boolean;
+  /** What the running desktop is actually attached to right now. */
+  effectiveMode: ConnectionMode;
+}
+
+export interface ProbeConnectionResult {
+  reachable: boolean;
+  /** The gateway requires OAuth login, which this desktop does not support yet. */
+  authRequired: boolean;
+  version?: string;
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  baseUrl: string;
+  httpOk: boolean;
+  httpStatus?: number;
+  wsOk: boolean;
+  authRequired: boolean;
+  version?: string;
+  error?: string;
+}
+
+// On `ok: true` the connection switched live; the renderer should reload the
+// webview so transport, socket-path selection, and all query caches rebuild
+// from get_runtime_config. On `ok: false` the previous backend is untouched
+// (local→remote probes the remote before tearing anything down).
+export interface ApplyConnectionResult {
+  ok: boolean;
+  mode: ConnectionMode;
+  apiBaseUrl?: string;
+  gatewayUrl?: string;
+  sessionToken?: string;
+  error?: string;
+}

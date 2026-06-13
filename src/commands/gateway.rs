@@ -12,6 +12,9 @@ pub struct RuntimeConfig {
     pub gateway_url: String,
     pub session_token: Option<String>,
     pub current_profile: String,
+    /// "local" or "remote" — whether the desktop runs its own managed runtime
+    /// or is attached to a remote Hermes Agent as a shell.
+    pub connection_mode: String,
 }
 
 #[tauri::command]
@@ -22,6 +25,7 @@ pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, A
         gateway_url: inner.gateway_url.clone(),
         session_token: inner.session_token.clone(),
         current_profile: inner.current_profile.clone(),
+        connection_mode: inner.connection_mode.as_str().to_string(),
     })
 }
 
@@ -36,10 +40,25 @@ pub struct RefreshGatewayResult {
 pub async fn refresh_gateway_url(
     state: State<'_, AppState>,
 ) -> Result<RefreshGatewayResult, AppError> {
-    let (api_base_url, current_token) = {
+    let (api_base_url, current_token, is_remote) = {
         let inner = state.inner.lock()?;
-        (inner.api_base_url.clone(), inner.session_token.clone())
+        (
+            inner.api_base_url.clone(),
+            inner.session_token.clone(),
+            inner.connection_mode == crate::connection::ConnectionMode::Remote,
+        )
     };
+
+    // Remote tokens are static (Settings or env), never rotated by a local
+    // dashboard restart — return the current connection unchanged instead of
+    // scraping the remote's HTML for a token it doesn't embed.
+    if is_remote {
+        let inner = state.inner.lock()?;
+        return Ok(RefreshGatewayResult {
+            gateway_url: inner.gateway_url.clone(),
+            session_token: inner.session_token.clone(),
+        });
+    }
 
     let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
         .ok()

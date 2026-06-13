@@ -36,8 +36,9 @@ urlencoding = "2"
 open = "5"
 futures-util = "0.3"
 # WebSocket relay to the runtime's native /api/ws (commands/ws_proxy.rs).
-# Loopback is always ws:// so no TLS backend feature is needed.
-tokio-tungstenite = "0.29"
+# The relay also carries remote-mode connections (src/connection.rs), which
+# may be wss://, so a rustls backend is required.
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 fs2 = "0.4"
 thiserror = "2"
 portable-pty = "0.9"

@@ -1077,6 +1077,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const source = info?.source;
   const kernelRuntimeTag = kernelRuntimeTagLabel(info?.current);
   const rendererRuntime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
+  const isRemote = rendererRuntime?.connectionMode === "remote";
   const hermesHomePath = status?.hermes_home;
   const runtimeRootPath = info?.runtimeRoot;
   const runtimeVersionPath = info?.current?.path;
@@ -1128,26 +1129,28 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   return (
     <div>
       {showHeading && <h2 className={s.heading}>内核</h2>}
-      <div className={s.aboutHero} data-ok={isolationOk}>
-        <div className={s.aboutHeroMark}>{isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}</div>
+      <div className={s.aboutHero} data-ok={isRemote || isolationOk}>
+        <div className={s.aboutHeroMark}>{isRemote ? <Globe2 size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}</div>
         <div className={s.aboutHeroBody}>
           <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版内核</div>
-          <h3>{isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}</h3>
+          <h3>{isRemote ? "已连接远程 Hermes Agent" : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}</h3>
           <p>
-            {isolationOk && process?.ownsProcess
+            {isRemote
+              ? `桌面端当前作为界面壳运行，所有会话与配置由远程端（${rendererRuntime?.dashboardApiBaseUrl ?? "远程地址"}）提供。本机 runtime 未在使用，可在 设置 → 连接 切回本机内核。`
+              : isolationOk && process?.ownsProcess
               ? "当前 Dashboard 由桌面端托管的 managed runtime 子进程提供，内核、gateway runtime 与锁文件都收束在桌面 runtime 目录下。"
               : isolationOk
                 ? "当前固定端口上已有兼容 Dashboard，桌面端已连接它；runtime 指针和可执行路径仍位于桌面 managed runtime 目录内。"
               : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"}
           </p>
-          {kernelRuntimeTag && (
+          {!isRemote && kernelRuntimeTag && (
             <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
               {kernelRuntimeTag}
             </code>
           )}
         </div>
-        <span className={s.statusBadge} data-on={isolationOk}>
-          {info ? runtimeModeLabel(info.mode) : "读取中"}
+        <span className={s.statusBadge} data-on={isRemote || isolationOk}>
+          {isRemote ? "远程" : info ? runtimeModeLabel(info.mode) : "读取中"}
         </span>
       </div>
 
@@ -1181,8 +1184,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
         <button
           className={s.btnPrimary}
           onClick={() => void gatewayRestart.restart()}
-          disabled={gatewayRestart.locked}
-          title={gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
+          disabled={gatewayRestart.locked || isRemote}
+          title={isRemote ? "远程模式下由远程端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
           aria-busy={gatewayRestart.busy}
         >
           <RotateCcw size={13} />
@@ -1275,7 +1278,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   className={s.btn}
                   type="button"
                   onClick={handleCheckRuntime}
-                  disabled={!info?.updatesConfigured || checking}
+                  disabled={!info?.updatesConfigured || checking || isRemote}
+                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
                 >
                   <RefreshCw size={13} />
                   {checking ? "检查中" : "检查更新"}
@@ -1284,7 +1288,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   className={s.btnPrimary}
                   type="button"
                   onClick={handleInstallRuntime}
-                  disabled={!canInstall || installing}
+                  disabled={!canInstall || installing || isRemote}
+                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
                 >
                   {installing ? "安装中…" : "安装更新"}
                 </button>
@@ -1292,7 +1297,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   className={s.btn}
                   type="button"
                   onClick={handleRollbackRuntime}
-                  disabled={!info?.current?.previousRuntimeVersion || rollingBack}
+                  disabled={!info?.current?.previousRuntimeVersion || rollingBack || isRemote}
+                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
                 >
                   {rollingBack ? "回滚中…" : "回滚 Runtime"}
                 </button>

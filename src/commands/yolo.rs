@@ -60,6 +60,14 @@ pub struct SetYoloModeResult {
 #[tauri::command]
 pub fn get_yolo_mode(state: State<'_, AppState>) -> Result<YoloModeStatus, AppError> {
     let inner = state.inner.lock()?;
+    // YOLO is a launch flag of the desktop-owned managed runtime; a remote
+    // Hermes Agent decides its own approval policy.
+    if inner.connection_mode == crate::connection::ConnectionMode::Remote {
+        return Ok(YoloModeStatus {
+            enabled: false,
+            effective: false,
+        });
+    }
     Ok(YoloModeStatus {
         enabled: crate::ui_store::yolo_mode_enabled(&inner.hermes_home),
         effective: inner.yolo_mode,
@@ -77,6 +85,18 @@ pub async fn set_yolo_mode(
     // a restart regardless of what happens to the live process.
     let (hermes_home, owns_process) = {
         let inner = state.inner.lock()?;
+        // Don't persist a preference into the local HERMES_HOME while a remote
+        // agent is connected — it wouldn't affect the remote, and would
+        // surprise the user on the next local boot.
+        if inner.connection_mode == crate::connection::ConnectionMode::Remote {
+            return Ok(SetYoloModeResult {
+                ok: false,
+                enabled: false,
+                effective: false,
+                error: Some("当前连接的是远程 Hermes Agent，YOLO 模式由远程端自行配置".to_string()),
+                ..Default::default()
+            });
+        }
         let owns = inner
             .dashboard_handle
             .as_ref()

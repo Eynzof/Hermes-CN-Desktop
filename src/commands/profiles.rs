@@ -108,6 +108,17 @@ pub async fn switch_profile(
     let (base, current_profile, _owns_process, previous_home) = {
         let inner = state.inner.lock()?;
 
+        // Profiles are HERMES_HOME-scoped local state; a remote Hermes Agent
+        // owns its own home. (The owns_process check below would also catch
+        // this, but with a misleading "not the owner" message.)
+        if inner.connection_mode == crate::connection::ConnectionMode::Remote {
+            return Ok(SwitchProfileResult {
+                ok: false,
+                error: Some("当前连接的是远程 Hermes Agent，不支持切换 Profile".to_string()),
+                ..Default::default()
+            });
+        }
+
         if !inner
             .dashboard_handle
             .as_ref()

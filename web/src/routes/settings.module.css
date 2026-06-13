@@ -2863,6 +2863,96 @@
   }
 }
 
+/* ── Connection (local managed runtime vs remote Hermes Agent) ───────── */
+.connModeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 20px;
+}
+
+@media (max-width: 720px) {
+  .connModeGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.connEnvWarn {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--h-err) 40%, var(--h-line));
+  border-radius: var(--h-r-md);
+  background: color-mix(in srgb, var(--h-err) 8%, transparent);
+  color: var(--h-err);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.connEnvWarn svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.connEnvWarn code {
+  font-family: var(--h-font-mono);
+}
+
+.connProbe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--h-text-3);
+}
+
+.connProbe[data-tone="ok"] {
+  color: var(--h-accent);
+}
+
+.connProbe[data-tone="error"] {
+  color: var(--h-err);
+}
+
+.connProbe svg {
+  flex-shrink: 0;
+}
+
+.connSpin {
+  animation: hermesButtonSpin 0.7s linear infinite;
+}
+
+.connFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.connFooterSpacer {
+  margin-right: auto;
+}
+
+.connResult {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--h-text-3);
+}
+
+.connResult[data-tone="ok"] {
+  color: var(--h-accent);
+}
+
+.connResult[data-tone="error"] {
+  color: var(--h-err);
+}
+
 /* ── Danger zone (high-risk operations, e.g. YOLO mode) ──────────────── */
 .dangerZone {
   margin-top: 28px;

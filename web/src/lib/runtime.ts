@@ -1,10 +1,14 @@
 import type {
+  ApplyConnectionResult,
   BackupExportResult,
   BackupImportResult,
   ConfigMigrationImportInput,
   ConfigMigrationImportResult,
   ConfigMigrationScanInput,
   ConfigMigrationScanResult,
+  ConnectionConfigInput,
+  ConnectionConfigView,
+  ConnectionMode,
   DesktopUpdateManifestFetchResult,
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
@@ -19,6 +23,7 @@ import type {
   ImOnboardingPollResult,
   ImOnboardingStateInput,
   ImOnboardingStateResult,
+  ProbeConnectionResult,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -26,6 +31,7 @@ import type {
   SetYoloModeResult,
   SwitchProfileInput,
   SwitchProfileResult,
+  TestConnectionResult,
   YoloModeStatus,
 } from "@hermes/protocol";
 
@@ -229,6 +235,8 @@ declare global {
       gatewayUrl?: string;
       sessionToken?: string;
       currentProfile?: string;
+      /** "remote" when the desktop is attached to a remote Hermes Agent as a shell. */
+      connectionMode?: ConnectionMode;
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
@@ -253,6 +261,11 @@ declare global {
       exportProfileBackup?(): Promise<BackupExportResult>;
       importProfileBackup?(): Promise<BackupImportResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
+      getConnectionConfig?(): Promise<ConnectionConfigView>;
+      saveConnectionConfig?(input: ConnectionConfigInput): Promise<ConnectionConfigView>;
+      applyConnectionConfig?(input: ConnectionConfigInput): Promise<ApplyConnectionResult>;
+      testConnectionConfig?(input: ConnectionConfigInput): Promise<TestConnectionResult>;
+      probeConnectionConfig?(remoteUrl: string): Promise<ProbeConnectionResult>;
       scanConfigMigration?(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult>;
       importConfigMigration?(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult>;
       getYoloMode?(): Promise<YoloModeStatus>;
@@ -316,6 +329,11 @@ export const runtime = {
 
   getSessionToken(): string | undefined {
     return window.__HERMES_RUNTIME__?.sessionToken ?? window.__HERMES_SESSION_TOKEN__;
+  },
+
+  /** True when the desktop is attached to a remote Hermes Agent (shell mode). */
+  isRemote(): boolean {
+    return window.__HERMES_RUNTIME__?.connectionMode === "remote";
   },
 
   getApiUrl(path: string): string {

@@ -68,6 +68,7 @@ class MockNativeSocket {
 interface FakeWindow {
   location: { search: string; href: string };
   __TAURI_INTERNALS__?: unknown;
+  __HERMES_RUNTIME__?: { connectionMode?: "local" | "remote" };
 }
 
 let fakeWindow: FakeWindow;
@@ -183,6 +184,31 @@ describe("createGatewaySocket path selection", () => {
     const third = mod.createGatewaySocket(URL) as unknown as MockNativeSocket;
     third.failBeforeOpen();
     expect(mod.getActiveSocketPath()).toBe("native");
+  });
+
+  it("remote mode always rides the relay and never writes the learned key", async () => {
+    fakeWindow.__HERMES_RUNTIME__ = { connectionMode: "remote" };
+    const { mod, uiStore } = await loadModule();
+    const socket = mod.createGatewaySocket(URL) as unknown as FakeRelaySocket;
+    expect(socket).toBeInstanceOf(FakeRelaySocket);
+    await flushMicrotasks();
+    socket.open();
+    // Switching back to local must re-probe native — remote never learns.
+    expect(uiStore.readUiValue("HERMES_WS_PATH_LEARNED", "unset")).toBe("unset");
+  });
+
+  it("remote mode overrides a learned native preference", async () => {
+    fakeWindow.__HERMES_RUNTIME__ = { connectionMode: "remote" };
+    const { mod } = await loadModule({ HERMES_WS_PATH_LEARNED: "native" });
+    const socket = mod.createGatewaySocket(URL);
+    expect(socket).toBeInstanceOf(FakeRelaySocket);
+  });
+
+  it("local mode ignores the remote override path", async () => {
+    fakeWindow.__HERMES_RUNTIME__ = { connectionMode: "local" };
+    const { mod } = await loadModule();
+    const socket = mod.createGatewaySocket(URL);
+    expect(socket).toBeInstanceOf(MockNativeSocket);
   });
 
   it("clears the learned value and reverts to native when the relay keeps failing", async () => {

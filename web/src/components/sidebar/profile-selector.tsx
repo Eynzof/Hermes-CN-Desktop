@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Check, ChevronsUpDown, Globe2, X } from "lucide-react";
 import { Popover } from "@hermes/shared-ui";
 import {
   useActiveProfileName,
   useProfiles,
   useSetActiveProfile,
 } from "@/hooks/use-profiles";
+import { runtime } from "@/lib/runtime";
 import s from "./profile-selector.module.css";
 
 type ProfileSelectorVariant = "sidebar" | "topbar";
@@ -48,6 +49,26 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
     setOpen(false);
     navigate("/profiles");
   };
+
+  // Remote mode: profiles are HERMES_HOME-scoped local state, and the remote
+  // agent owns its own home — show a remote indicator instead of a switcher.
+  if (runtime.isRemote()) {
+    return (
+      <button
+        type="button"
+        className={s.trigger}
+        data-variant={variant}
+        data-no-drag={variant === "topbar" ? true : undefined}
+        disabled
+        title="已连接远程 Hermes Agent；远程模式下不支持切换档案（设置 → 连接 可切回本机内核）"
+      >
+        <span className={s.triggerLabel}>
+          <Globe2 size={11} aria-hidden="true" /> 远程
+        </span>
+        <span className={s.triggerName}>Hermes Agent</span>
+      </button>
+    );
+  }
 
   return (
     <>

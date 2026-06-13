@@ -11,55 +11,16 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use hermes_agent_cn::bootstrap::{
+    acquire_managed_dashboard, connect_remote_backend, finalize_bootstrap,
+    install_bundled_runtime_for_bootstrap, record_bootstrap_error,
+};
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
-use hermes_agent_cn::environment;
+use hermes_agent_cn::connection::{self, ConnectionMode};
 use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use hermes_agent_cn::tray;
-use tauri::Emitter;
-
-/// Emit a "runtime-status" event for the frontend overlay to consume.
-/// Phases (in order along the happy path):
-///   "installing" — managed runtime is being downloaded
-///   "starting-dashboard" — runtime ready, spawning dashboard
-///   "ready" — full bootstrap complete, frontend can mount the app
-///   "error" — fatal; frontend should display message and offer retry
-fn emit_runtime_status(app: &tauri::AppHandle, phase: &str, message: &str) {
-    let _ = app.emit(
-        "runtime-status",
-        serde_json::json!({ "phase": phase, "message": message }),
-    );
-}
-
-async fn install_bundled_runtime_for_bootstrap(
-    app: &tauri::AppHandle,
-    resource_dir: Option<&Path>,
-) -> bool {
-    if !runtime::bundled_runtime_available(resource_dir) {
-        return true;
-    }
-
-    emit_runtime_status(app, "installing", "正在安装内置 hermes-agent-cn runtime...");
-    log::info!("Bootstrap: install bundled runtime");
-    let install = runtime::install_bundled_runtime_if_needed(resource_dir).await;
-    if !install.ok {
-        let msg = install
-            .error
-            .clone()
-            .unwrap_or_else(|| "unknown bundled runtime install error".into());
-        record_bootstrap_error(app, format!("内置 runtime 安装失败: {}", msg));
-        return false;
-    }
-
-    if let Some(installed) = &install.installed {
-        log::info!(
-            "Installed bundled managed runtime v{}",
-            installed.runtime_version
-        );
-    }
-    true
-}
 
 /// Build a `DashboardHandle` describing an externally-managed dev dashboard we
 /// merely attach to (and never spawn or own).
@@ -78,129 +39,6 @@ fn external_dev_handle(api_base_url: String) -> DashboardHandle {
         attached_pid: None,
         child: None,
     }
-}
-
-/// Record a fatal bootstrap error: log it, stash it in AppState for the UI to
-/// read, and emit a "runtime-status" error event. Returns the message so
-/// callers can write `return Err(record_bootstrap_error(...))`.
-fn record_bootstrap_error(app: &tauri::AppHandle, message: String) -> String {
-    use tauri::Manager;
-    log::error!("{}", message);
-    let state = app.state::<AppState>();
-    if let Ok(mut inner) = state.inner.lock() {
-        inner.last_runtime_error = Some(message.clone());
-    }
-    emit_runtime_status(app, "error", &message);
-    message
-}
-
-/// Install the managed runtime if needed, sync bundled resources, and ensure
-/// the dashboard process is running. Shared by every (non-external) bootstrap
-/// path. On failure the error is surfaced via `record_bootstrap_error` and
-/// returned as `Err`.
-///
-/// `install_bundled` controls whether the bundled-runtime install runs here;
-/// the synchronous fallback already does it up front and passes `false`.
-async fn acquire_managed_dashboard(
-    app: &tauri::AppHandle,
-    options: dashboard::EnsureDashboardOptions,
-    resource_dir: Option<PathBuf>,
-    install_bundled: bool,
-) -> Result<DashboardHandle, String> {
-    emit_runtime_status(app, "checking-env", "正在检查本机环境...");
-    // Resolve the user's real PATH (login shell / registry) before anything
-    // spawns, so the dashboard and its MCP descendants inherit it.
-    let _ = tauri::async_runtime::spawn_blocking(|| {
-        hermes_agent_cn::path_resolver::refresh_blocking(
-            hermes_agent_cn::path_resolver::SHELL_PROBE_TIMEOUT,
-            true,
-        )
-    })
-    .await;
-    if let Err(err) = environment::check_bootstrap_environment(&options.hermes_home) {
-        return Err(record_bootstrap_error(app, err));
-    }
-
-    if install_bundled && !install_bundled_runtime_for_bootstrap(app, resource_dir.as_deref()).await
-    {
-        // install_bundled_runtime_for_bootstrap already recorded the error.
-        return Err("bundled runtime install failed".to_string());
-    }
-
-    let info = runtime::get_runtime_info(None);
-    if info.current.is_none() && info.updates_configured {
-        emit_runtime_status(app, "installing", "正在下载 hermes-agent-cn runtime...");
-        log::info!("Bootstrap: install_runtime_update");
-        let install = runtime::install_runtime_update(None).await;
-        if !install.ok {
-            let msg = install
-                .error
-                .unwrap_or_else(|| "unknown install error".into());
-            return Err(record_bootstrap_error(
-                app,
-                format!("runtime 安装失败: {}", msg),
-            ));
-        }
-        if let Some(installed) = &install.installed {
-            log::info!("Installed managed runtime v{}", installed.runtime_version);
-        }
-    } else if info.current.is_none() {
-        log::warn!(
-            "No managed runtime installed and update channel is not configured. \
-             PATH `hermes` fallback is disabled; dashboard startup will fail \
-             until a managed runtime is installed."
-        );
-    }
-
-    if let Err(err) = runtime::sync_runtime_resources_if_available(resource_dir.as_deref()) {
-        log::warn!("Failed to sync bundled runtime resources: {}", err);
-    }
-
-    emit_runtime_status(app, "starting-dashboard", "正在启动 dashboard...");
-    dashboard::ensure_hermes_dashboard(options)
-        .await
-        .map_err(|e| record_bootstrap_error(app, format!("dashboard 启动失败: {}", e)))
-}
-
-/// Finish bootstrap once a dashboard handle is available: fetch the session
-/// token, build the gateway URL, populate AppState, and emit the "ready"
-/// event the frontend waits on.
-async fn finalize_bootstrap(
-    app: &tauri::AppHandle,
-    handle: DashboardHandle,
-    hermes_home: String,
-    hermes_home_base: String,
-    profile: String,
-) {
-    use tauri::Manager;
-
-    let session_token = match handle.session_token.clone() {
-        Some(token) => Some(token),
-        None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
-            .ok()
-            .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
-        {
-            Some(token) => Some(token),
-            None => dashboard::fetch_session_token(&handle.api_base_url).await,
-        },
-    };
-    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
-
-    {
-        let state = app.state::<AppState>();
-        let mut inner = state.inner.lock().unwrap();
-        inner.api_base_url = handle.api_base_url.clone();
-        inner.gateway_url = gateway_url;
-        inner.hermes_home = hermes_home;
-        inner.hermes_home_base = hermes_home_base;
-        inner.session_token = session_token;
-        inner.current_profile = profile;
-        inner.yolo_mode = dashboard::yolo_mode_effective(&inner.hermes_home);
-        inner.dashboard_handle = Some(handle);
-    }
-
-    emit_runtime_status(app, "ready", "");
-    log::info!("Hermes Agent 中文社区桌面版 ready");
 }
 
 fn shutdown_owned_runtime(app: &tauri::AppHandle, reason: &str) {
@@ -350,6 +188,17 @@ fn main() {
                 allow_port_fallback,
             };
 
+            // Resolve the backend for this boot: env override → connection.json
+            // remote mode → local managed runtime. An env URL without a token
+            // is the one fatal misconfiguration (matching the official desktop).
+            let remote_backend = match connection::resolve_remote_backend() {
+                Ok(remote) => remote,
+                Err(msg) => {
+                    record_bootstrap_error(app.handle(), msg);
+                    return Ok(());
+                }
+            };
+
             // --- Default path: bring the dashboard up in the background. ---
             if async_bootstrap {
                 let app_handle = app.handle().clone();
@@ -360,7 +209,12 @@ fn main() {
                 let profile_for_task = current_profile.clone();
 
                 tauri::async_runtime::spawn(async move {
-                    let handle = if external_dev_dashboard {
+                    let (handle, mode) = if let Some(remote) = remote_backend {
+                        (
+                            connect_remote_backend(&app_handle, &remote).await,
+                            ConnectionMode::Remote,
+                        )
+                    } else if external_dev_dashboard {
                         let api_base_url = dashboard::dashboard_base_url(&host_for_task, port);
                         if !dashboard::probe_dashboard(&api_base_url).await {
                             log::warn!(
@@ -368,12 +222,12 @@ fn main() {
                                 api_base_url
                             );
                         }
-                        external_dev_handle(api_base_url)
+                        (external_dev_handle(api_base_url), ConnectionMode::Local)
                     } else {
                         match acquire_managed_dashboard(&app_handle, options, resource_dir, true)
                             .await
                         {
-                            Ok(h) => h,
+                            Ok(h) => (h, ConnectionMode::Local),
                             // Error already surfaced to the UI via runtime-status.
                             Err(_) => return,
                         }
@@ -385,6 +239,7 @@ fn main() {
                         boot_home_for_task,
                         base_for_task,
                         profile_for_task,
+                        mode,
                     )
                     .await;
                 });
@@ -394,6 +249,20 @@ fn main() {
             }
 
             // --- Synchronous fallback (HERMES_DESKTOP_SYNC_BOOTSTRAP). ---
+            if let Some(remote) = remote_backend {
+                let handle =
+                    tauri::async_runtime::block_on(connect_remote_backend(app.handle(), &remote));
+                tauri::async_runtime::block_on(finalize_bootstrap(
+                    app.handle(),
+                    handle,
+                    boot_home_str,
+                    base_str,
+                    current_profile,
+                    ConnectionMode::Remote,
+                ));
+                return Ok(());
+            }
+
             if external_dev_dashboard {
                 let api_base_url = dashboard::dashboard_base_url(&host, port);
                 if !tauri::async_runtime::block_on(dashboard::probe_dashboard(&api_base_url)) {
@@ -408,6 +277,7 @@ fn main() {
                     boot_home_str,
                     base_str,
                     current_profile,
+                    ConnectionMode::Local,
                 ));
                 return Ok(());
             }
@@ -446,6 +316,7 @@ fn main() {
                         boot_home_for_task,
                         base_for_task,
                         profile_for_task,
+                        ConnectionMode::Local,
                     )
                     .await;
                 });
@@ -474,12 +345,18 @@ fn main() {
                 boot_home_str,
                 base_str,
                 current_profile,
+                ConnectionMode::Local,
             ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::gateway::get_runtime_config,
             commands::gateway::refresh_gateway_url,
+            commands::connection::get_connection_config,
+            commands::connection::save_connection_config,
+            commands::connection::probe_connection_config,
+            commands::connection::test_connection_config,
+            commands::connection::apply_connection_config,
             commands::backup::backup_export_profile,
             commands::backup::backup_import_profile,
             commands::config_migration::config_migration_scan,

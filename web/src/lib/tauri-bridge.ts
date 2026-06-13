@@ -8,12 +8,15 @@
 import type {
   ApiRequestInput,
   ApiRequestResult,
+  ApplyConnectionResult,
   BackupExportResult,
   BackupImportResult,
   ConfigMigrationImportInput,
   ConfigMigrationImportResult,
   ConfigMigrationScanInput,
   ConfigMigrationScanResult,
+  ConnectionConfigInput,
+  ConnectionConfigView,
   DesktopUpdateManifestFetchResult,
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
@@ -28,6 +31,7 @@ import type {
   ImOnboardingPollResult,
   ImOnboardingStateInput,
   ImOnboardingStateResult,
+  ProbeConnectionResult,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -35,6 +39,7 @@ import type {
   SetYoloModeResult,
   SwitchProfileInput,
   SwitchProfileResult,
+  TestConnectionResult,
   YoloModeStatus,
 } from "@hermes/protocol";
 import type {
@@ -237,6 +242,26 @@ const tauriBridge = {
 
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {
     return invokeCommand("switch_profile", { input });
+  },
+
+  async getConnectionConfig(): Promise<ConnectionConfigView> {
+    return invokeCommand("get_connection_config");
+  },
+
+  async saveConnectionConfig(input: ConnectionConfigInput): Promise<ConnectionConfigView> {
+    return invokeCommand("save_connection_config", { input });
+  },
+
+  async applyConnectionConfig(input: ConnectionConfigInput): Promise<ApplyConnectionResult> {
+    return invokeCommand("apply_connection_config", { input });
+  },
+
+  async testConnectionConfig(input: ConnectionConfigInput): Promise<TestConnectionResult> {
+    return invokeCommand("test_connection_config", { input });
+  },
+
+  async probeConnectionConfig(remoteUrl: string): Promise<ProbeConnectionResult> {
+    return invokeCommand("probe_connection_config", { remoteUrl });
   },
 
 
@@ -658,6 +683,7 @@ export async function installTauriBridge(): Promise<void> {
     gatewayUrl: string;
     sessionToken?: string;
     currentProfile: string;
+    connectionMode?: "local" | "remote";
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
@@ -695,13 +721,22 @@ export async function installTauriBridge(): Promise<void> {
     config = await invokeCommand("get_runtime_config");
   }
 
+  // Remote mode must keep the real URLs even in Vite dev: the Vite proxy
+  // targets the LOCAL dashboard port, so relative URLs would route remote
+  // traffic to a backend that isn't connected. With apiBaseUrl set, transport
+  // goes through the Rust proxy and the gateway socket through the Rust relay,
+  // exactly like production.
+  const isRemote = config.connectionMode === "remote";
+  const hideUrlsForViteProxy = isDevMode && !isRemote;
+
   window.__HERMES_RUNTIME__ = {
     platform: "tauri" as const,
-    apiBaseUrl: isDevMode ? undefined : config.apiBaseUrl,
+    apiBaseUrl: hideUrlsForViteProxy ? undefined : config.apiBaseUrl,
     dashboardApiBaseUrl: config.apiBaseUrl,
-    gatewayUrl: isDevMode ? undefined : config.gatewayUrl,
+    gatewayUrl: hideUrlsForViteProxy ? undefined : config.gatewayUrl,
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
+    connectionMode: config.connectionMode ?? "local",
   };
 
   (window as any).hermesDesktop = tauriBridge;

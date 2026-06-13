@@ -488,15 +488,32 @@ pub async fn api_request(
     input: ApiRequestInput,
     state: State<'_, AppState>,
 ) -> Result<ApiRequestResult, AppError> {
-    let (api_base_url, session_token, hermes_home, hermes_home_base) = {
+    let (api_base_url, session_token, hermes_home, hermes_home_base, is_remote) = {
         let inner = state.inner.lock()?;
         (
             inner.api_base_url.clone(),
             inner.session_token.clone(),
             inner.hermes_home.clone(),
             inner.hermes_home_base.clone(),
+            inner.connection_mode == crate::connection::ConnectionMode::Remote,
         )
     };
+
+    // Remote mode: the runtime-update intercept below manages the LOCAL
+    // managed runtime, which is not what this desktop is connected to.
+    if is_remote
+        && url_path(&input.path) == "/api/hermes/update"
+        && input.method.as_deref().unwrap_or("GET").to_uppercase() == "POST"
+    {
+        return Ok(json_result(
+            409,
+            "Conflict",
+            serde_json::json!({
+                "ok": false,
+                "error": "当前连接的是远程 Hermes Agent，无法更新本地 runtime"
+            }),
+        ));
+    }
 
     let first = api_request_impl_with_home_base(
         input.clone(),
@@ -506,7 +523,10 @@ pub async fn api_request(
         &hermes_home_base,
     )
     .await?;
-    if first.status != 401 {
+    // Remote tokens are static (entered in Settings or via env); the
+    // refresh-by-scraping-the-dashboard-HTML recovery below only applies to
+    // the local managed runtime, whose token rotates on restart.
+    if first.status != 401 || is_remote {
         return Ok(first);
     }
 

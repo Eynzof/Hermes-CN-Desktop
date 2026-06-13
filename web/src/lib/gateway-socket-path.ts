@@ -141,6 +141,15 @@ export function createGatewaySocket(url: string): WebSocket {
     return new WebSocket(url);
   }
 
+  // Remote mode (attached to a remote Hermes Agent) always rides the Rust
+  // relay: the webview CSP only allows connect-src 127.0.0.1, so a native
+  // ws(s):// to a remote host is blocked — and the relay keeps the session
+  // token on the Rust side. Deliberately NOT learned (like the QA override):
+  // switching back to local must re-probe the native path.
+  if (runtime.isRemote()) {
+    return new GatewayRelaySocket(url) as unknown as WebSocket;
+  }
+
   if (getActiveSocketPath() === "relay") {
     const socket = new GatewayRelaySocket(url);
     queueMicrotask(() => watchRelayAttempt(socket));

@@ -92,9 +92,13 @@ pub async fn gateway_ws_open(
     let connection_id = input.connection_id;
     shutdown_active(&state)?;
 
-    let (api_base_url, token) = {
+    let (api_base_url, token, is_remote) = {
         let inner = state.inner.lock()?;
-        (inner.api_base_url.clone(), inner.session_token.clone())
+        (
+            inner.api_base_url.clone(),
+            inner.session_token.clone(),
+            inner.connection_mode == crate::connection::ConnectionMode::Remote,
+        )
     };
 
     let stream =
@@ -102,6 +106,9 @@ pub async fn gateway_ws_open(
             .await
         {
             Ok((ws, _resp)) => ws,
+            // Remote tokens are static; scraping the remote's HTML for a fresh
+            // one would just hammer it with a doomed retry. Surface the error.
+            Err(first_err) if is_remote => return Err(AppError::GatewayWs(first_err.to_string())),
             Err(first_err) => {
                 // The token may have rotated (dashboard restarted). Refresh once and retry.
                 match fetch_session_token(&api_base_url).await {
