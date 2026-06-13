@@ -75,7 +75,11 @@ describe("humanizeGatewayError", () => {
   });
 
   it("localizes timeout errors", () => {
-    expect(humanizeGatewayError(new Error("RPC timeout: session.resume"))).toContain("超时");
+    const message = humanizeGatewayError(new Error("RPC timeout: session.resume"));
+    expect(message).toContain("超时");
+    expect(message).toContain("LM Studio");
+    expect(message).toContain("64K");
+    expect(message).toContain("OOM");
   });
 
   it("localizes connection-closed errors", () => {

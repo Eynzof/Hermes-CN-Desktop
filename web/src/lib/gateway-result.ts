@@ -99,7 +99,7 @@ export function humanizeGatewayError(error: unknown): string {
 
   const lower = message.toLowerCase();
   if (lower.includes("timeout") || message.includes("超时")) {
-    return "请求超时，请检查网络或重启 Hermes 后重试。";
+    return "请求超时。如果正在使用 LM Studio、Ollama 等本地模型，请确认本地服务已启动、模型已加载、上下文窗口已设为至少 64K，且显存/内存没有因上下文过大而 OOM；也可以重启 Hermes 后重试。";
   }
   if (
     lower.includes("connection closed") ||

@@ -14,9 +14,6 @@ const RECONNECT_MAX_DELAY_MS = 15_000;
 const RECONNECT_EXP_CAP = 4;
 const RECONNECT_MAX_ATTEMPTS = Infinity;
 
-const HEARTBEAT_INTERVAL_MS = 30_000;
-const HEARTBEAT_TIMEOUT_MS = 10_000;
-
 const WAKE_WATCHDOG_INTERVAL_MS = 2_000;
 // 比 watchdog 间隔大得多——正常 tick 间隔约 2s，超过这个值基本只有
 // 进程被冻结过（macOS 睡眠 / OS 节流 / 标签页 background）才会出现。
@@ -63,10 +60,6 @@ export class GatewayClient {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
-
-  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-  private heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
-  private lastPongAt = 0;
 
   private wakeWatchdogTimer: ReturnType<typeof setInterval> | null = null;
   private lastWakeTickAt = 0;
@@ -131,7 +124,6 @@ export class GatewayClient {
         clearConnectState();
         this.reconnectAttempts = 0;
         this.setState("open");
-        this.startHeartbeat();
         resolve();
       };
       const settleConnectError = (err: Error, state: ConnectionState) => {
@@ -181,7 +173,6 @@ export class GatewayClient {
         if (!isCurrentSocket()) return;
 
         this.ws = null;
-        this.stopHeartbeat();
 
         if (!settled) {
           settleConnectError(new Error("WebSocket closed"), "closed");
@@ -200,7 +191,6 @@ export class GatewayClient {
       ws.onerror = () => {
         if (!isCurrentSocket()) return;
         this.ws = null;
-        this.stopHeartbeat();
         if (!settled) {
           settleConnectError(new Error("WebSocket connection failed"), "error");
         } else {
@@ -216,7 +206,6 @@ export class GatewayClient {
 
       ws.onmessage = (ev) => {
         if (!isCurrentSocket()) return;
-        this.lastPongAt = Date.now();
         try {
           this.handleFrame(JSON.parse(ev.data));
         } catch {
@@ -268,64 +257,6 @@ export class GatewayClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-  }
-
-  private startHeartbeat() {
-    this.stopHeartbeat();
-    this.lastPongAt = Date.now();
-
-    this.heartbeatInterval = setInterval(() => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        this.stopHeartbeat();
-        return;
-      }
-
-      try {
-        // 服务端没有注册 "ping" 方法——这一帧会换回一个 unknown-method 错误
-        // 响应。这正是我们要的:onmessage 把任意入站帧都当 pong(lastPongAt),
-        // 所以错误回显足以证明链路活着。别给这帧加 id,否则会进 pending 表。
-        this.ws.send(JSON.stringify({ jsonrpc: "2.0", method: "ping" }));
-      } catch {
-        this.handleHeartbeatFailure();
-        return;
-      }
-
-      this.heartbeatTimeout = setTimeout(() => {
-        this.heartbeatTimeout = null;
-        if (Date.now() - this.lastPongAt >= HEARTBEAT_INTERVAL_MS + HEARTBEAT_TIMEOUT_MS) {
-          this.handleHeartbeatFailure();
-        }
-      }, HEARTBEAT_TIMEOUT_MS);
-    }, HEARTBEAT_INTERVAL_MS);
-  }
-
-  private stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-    if (this.heartbeatTimeout) {
-      clearTimeout(this.heartbeatTimeout);
-      this.heartbeatTimeout = null;
-    }
-  }
-
-  private handleHeartbeatFailure() {
-    this.stopHeartbeat();
-    this.pending.forEach(({ reject, timer }) => {
-      clearTimeout(timer);
-      reject(new Error("Heartbeat timeout"));
-    });
-    this.pending.clear();
-    const ws = this.ws;
-    this.ws = null;
-    this.connectPromise = null;
-    if (ws) {
-      try { ws.close(); } catch {}
-    }
-    this.setState("closed");
-    this.emitDisconnect();
-    this.scheduleReconnect();
   }
 
   private handleFrame(frame: any) {
@@ -492,8 +423,9 @@ export class GatewayClient {
     if (!this.autoReconnect || this.intentionalClose) return;
 
     // forceful=false 是 "提示" 路径（visibility/online）——已经 OPEN 的连接
-    // 没必要 tear down。半开 socket 会被 heartbeat（30s+10s 内）或下一次 RPC
-    // 失败兜住，不至于让窗口每次切回前台都闪 "连接已断开"。
+    // 没必要 tear down。对齐官方桌面端，不主动发 synthetic ping；
+    // 半开 socket 由下一次 RPC timeout / WebSocket close-error 兜住，
+    // 不至于让窗口每次切回前台都闪 "连接已断开"。
     if (!forceful && this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -509,7 +441,6 @@ export class GatewayClient {
     if (hadSocket || hadInflight) {
       this.ws = null;
       this.connectPromise = null;
-      this.stopHeartbeat();
       // 拒绝挂在旧 socket 上的 RPC——不然要等 120s RPC timeout，UI 卡住。
       this.pending.forEach(({ reject, timer }) => {
         clearTimeout(timer);
@@ -531,7 +462,6 @@ export class GatewayClient {
   close() {
     this.intentionalClose = true;
     this.cancelReconnect();
-    this.stopHeartbeat();
     this.removeWakeListeners();
     this.abortConnect?.();
     this.pending.forEach(({ reject, timer }) => {

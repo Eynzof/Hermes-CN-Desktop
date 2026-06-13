@@ -30,8 +30,8 @@
 **关键事实**:`/api/ws`(原生)和 `/api/v2/*`(我们的补丁)由同一个 dashboard 进程提供。官方 WS 端点
 本来就在,SSE 是我们多加的,不是替代品。官方代码里**零个** EventSource / api/v2 消费者。
 
-我们仓库里 `web/src/lib/gateway-client.ts`(~607 行)已经是一个完整的 WS 客户端
-(心跳 30s/10s、指数退避+jitter、唤醒看门狗、online/visibility 触发),线协议与官方
+我们仓库里 `web/src/lib/gateway-client.ts` 已经是一个完整的 WS 客户端
+(指数退避+jitter、唤醒看门狗、online/visibility 触发),线协议与官方
 `JsonRpcGatewayClient` 完全一致(JSON-RPC 2.0、`{method:'event'}` 事件帧、15s 连接超时、120s 请求超时),
 但 `pickTransport()` 因一句已被证伪的「WS 被 P-003 闸门挡住」注释在 Tauri 上强制走 SSE,成了死代码。
 实际上:运行时原生在 `/api/ws` 提供服务、`tauri.conf.json` CSP 已放行 `ws://127.0.0.1:*`、dev 模式已在用。
@@ -40,7 +40,7 @@
 
 | 症状 | 根因 | 处置 |
 |---|---|---|
-| 掉线 / 重连失败 | SSE 路径无心跳;上游 #177 已补退避/宽限,但属于在错误架构上打补丁 | **切 WS**(自带 30s/10s 心跳 + 指数退避) |
+| 掉线 / 重连失败 | SSE 路径无重连恢复;上游 #177 已补退避/宽限,但属于在错误架构上打补丁 | **切 WS**(官方一致:无主动 ping,靠 close/error/RPC timeout + 指数退避) |
 | 回复要切走再切回才可见 | 重连后**不重发 `session.resume`**,服务端事件只发给会话绑定的 transport | **C2**:重连后重发 `session.resume` |
 | 全链路延迟高 | 每 RPC 经 Rust 代理 + `res.text()` 整包缓冲;慢 turn 再走 SSE 第二跳(异步 ack) | **切 WS**:RPC 与事件同一条 socket,一帧到达 |
 | 401 风暴 | dashboard 重启即轮换 token;SSE 流建立时才发现 | WS 路径 `scheduleReconnect` 已在每次重试前 `refreshGatewayUrl()` |
@@ -54,8 +54,8 @@
 - 事件只路由给会话当前绑定的 transport;重新绑定靠 `session.resume` 或 `prompt.submit`。
 - → 重连后**必须**重发 `session.resume`,这是客户端的责任(官方也这么做:
   `apps/desktop` 的 `use-route-resume.ts` 在 gateway 重新 open 时 resume)。
-- 服务端**没有 `ping` RPC 方法**:我方心跳的「pong」实际是 unknown-method 错误回显,客户端把任意
-  入站帧当 pong(`lastPongAt`),功能正常。可选的 Core 跟进:注册 trivial `ping` 方法去掉这个 wart。
+- 服务端**没有 `ping` RPC 方法**;客户端对齐官方桌面端,不再发 synthetic `ping`。半开连接由
+  WebSocket close/error、RPC timeout、OS 唤醒后的强制重连兜住,避免本地慢推理场景误判 `Heartbeat timeout`。
 
 ---
 
@@ -67,7 +67,7 @@
 | 数据路径跳数 | 0 代理 | 2(IPC+reqwest),整包缓冲 | 0(直连)/ 1(中继,逐帧转发不缓冲) |
 | RPC 结果 | 同 socket 一帧 | 异步 ack → 另走 SSE 第二跳 | 同 socket 一帧 |
 | 重连退避 | `min(15s, 1s·2^min(n,4))` + 唤醒/online/visibility 触发 | #177:1→30s(SSE) | **对齐官方:15s 封顶**,触发器同官方(已内置于 `GatewayClient`) |
-| 心跳/半开检测 | 无(靠 close + 连接超时) | 无 | 30s/10s ping(保留,比官方多一层保护,见 §1 服务端语义) |
+| 心跳/半开检测 | 无(靠 close + 连接超时) | 无 | 官方一致:无主动 ping,靠 close/error/RPC timeout + 唤醒强制重连 |
 | 重连→恢复 | `session.resume` on reopen | **无** | `gateway.disconnected` arm → 下次 open 重发 `session.resume`(C2) |
 | Token | spawn 时 env 注入 `HERMES_DASHBOARD_SESSION_TOKEN`,WS `?token=` | 同左(main 已实现)+ 接管外部 dashboard 时 HTML 抓取(legacy) | 不变 |
 | 自造 Rust 行数 | n/a | `sse_proxy.rs` ~350 + `api_proxy` RPC 半 | `sse_proxy.rs` **删除**;`ws_proxy.rs` ~260(仅兜底);`api_proxy` 仅 REST |
@@ -109,7 +109,6 @@
 - `FORK_NOTES.md`(+zh-CN):P-009 标 **deprecated**——新桌面端(≥0.4)用官方 `/api/ws`;
   端点**必须保留**至老外壳(≤0.3.x)EOL(外壳无自更新而 runtime 热更新,新 runtime 必须继续服务老外壳)。
 - 可选:`/api/v2/events` 处理器加一行弃用使用日志,量化残留用量。
-- 可选:`tui_gateway/server.py` 注册 trivial `ping` 方法(标新 P-NNN)。
 - 必须保留:P-002 上传、P-004 fs/list、P-005 mcp-servers、P-008 profiles 兼容、P-011 slug_filter/probe
   (均与传输无关,本桌面端在用);P-006/P-010 国内 provider、P-014/P-015 冻结运行时打包。
 
@@ -143,7 +142,7 @@
 2. `?wspath=relay` 强制中继:完整对话回合、审批、打断。
 3. 睡眠 ≥2min 中途唤醒:≤15s 重连,在途回合续流到同一条消息(不再「切走再切回才可见」)。
 4. dashboard 重启(YOLO 切换 / kill -9):token 轮换后正常重连,无 401 风暴。
-5. ≥10min 长回合流式:顺序正确、无心跳误杀(重 markdown 渲染时看门狗误报检查)。
+5. ≥10min 长回合流式:顺序正确、无主动心跳误杀(重 markdown 渲染时看门狗误报检查)。
 6. 老外壳兼容:v0.3.2 外壳连 Core main 构建的新 runtime(P-009 SSE 端点仍可用)。
 
 ## 6. 风险与已知限制
@@ -154,7 +153,7 @@
    `detail.tsx` 的 `ensureGatewaySession` 懒恢复(内容不丢,转录可从历史重建)。后续增强:遍历
    `streamStatus === "connecting"` 的会话逐个 resume。
 3. **`session.resume` 慢**(分钟级 agent 重建):`reattachInFlight` 防叠加 + 瞬态文案 + 长超时。
-4. 心跳依赖 unknown-method 回显 —— 已注释说明;可选 Core `ping` 方法消除。
+4. 无主动 heartbeat 后,极端半开 socket 会等到下一次 RPC timeout 或 OS 唤醒强制重连才暴露;这是对齐官方桌面端以避免本地慢推理误杀的取舍。
 5. 接管外部已运行 dashboard 时无法 env 注入 token —— HTML 抓取保留为显式 legacy 路径。
 
 ## 7. 关键文件索引

@@ -437,6 +437,18 @@
   font-family: var(--h-font-cn);
 }
 
+.localContextWarning {
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--h-warn, #c8782a) 42%, var(--h-line));
+  border-radius: 10px;
+  background: var(--h-warn-soft);
+  color: var(--h-text-2);
+  padding: 9px 10px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  font-family: var(--h-font-cn);
+}
+
 .btn, .btnPrimary, .btnDanger {
   display: inline-flex;
   align-items: center;
@@ -1739,6 +1751,84 @@
   line-height: 1.55;
   color: var(--h-text-3);
   font-family: var(--h-font-cn);
+}
+
+.localProviderContextNotice {
+  border: 1px solid color-mix(in srgb, var(--h-warn, #c8782a) 42%, var(--h-line));
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 8% -10%, color-mix(in srgb, var(--h-warn, #c8782a) 16%, transparent), transparent 42%),
+    var(--h-warn-soft);
+  color: var(--h-text-2);
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: var(--h-font-cn);
+}
+
+.localProviderContextNotice strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--h-text);
+  font-size: 13px;
+}
+
+.localProviderContextNotice p {
+  margin: 0 0 6px;
+}
+
+.localProviderDocLinks {
+  display: grid;
+  gap: 6px;
+}
+
+.localProviderDocLinkRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.localProviderDocUrl {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-3);
+  line-height: 1.45;
+  word-break: break-all;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.localProviderDocCopy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 19px;
+  padding: 0 7px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--h-text-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.localProviderDocCopy:hover {
+  border-color: color-mix(in srgb, var(--h-accent) 38%, var(--h-line));
+  color: var(--h-accent);
+}
+
+.localProviderDocCopy[data-copy-state="copied"] {
+  border-color: color-mix(in srgb, var(--h-ok) 42%, var(--h-line));
+  background: var(--h-ok-soft);
+  color: var(--h-ok);
+}
+
+.localProviderDocCopy[data-copy-state="error"] {
+  border-color: color-mix(in srgb, var(--h-err) 42%, var(--h-line));
+  color: var(--h-err);
 }
 
 .localProviderGuide {

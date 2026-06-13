@@ -549,8 +549,8 @@ describe("GatewayClient", () => {
     });
   });
 
-  describe("heartbeat", () => {
-    it("sends ping every 30s after connection opens", async () => {
+  describe("idle connection liveness", () => {
+    it("does not send synthetic ping frames during long idle periods", async () => {
       vi.useFakeTimers();
       const client = new GatewayClient();
       const connected = client.connect();
@@ -560,19 +560,14 @@ describe("GatewayClient", () => {
       const ws = MockWebSocket.instances[0];
       expect(ws.sent).toHaveLength(0);
 
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(ws.sent).toHaveLength(1);
-      expect(JSON.parse(ws.sent[0])).toEqual({ jsonrpc: "2.0", method: "ping" });
-
-      ws.onmessage?.({ data: JSON.stringify({ jsonrpc: "2.0", result: {} }) });
-
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(ws.sent).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(ws.sent).toHaveLength(0);
+      expect(client.state).toBe("open");
 
       client.close();
     });
 
-    it("detects stale connection after 30s+10s with no message", async () => {
+    it("keeps an idle open socket instead of failing after the old 40s heartbeat window", async () => {
       vi.useFakeTimers();
       const client = new GatewayClient();
       const disconnects: string[] = [];
@@ -584,17 +579,14 @@ describe("GatewayClient", () => {
 
       expect(client.state).toBe("open");
 
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(40_000);
       expect(client.state).toBe("open");
-
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(client.state).toBe("closed");
-      expect(disconnects).toHaveLength(1);
+      expect(disconnects).toHaveLength(0);
 
       client.close();
     });
 
-    it("incoming message prevents heartbeat failure", async () => {
+    it("pending requests are rejected by RPC timeout, not heartbeat timeout", async () => {
       vi.useFakeTimers();
       const client = new GatewayClient();
 
@@ -602,62 +594,22 @@ describe("GatewayClient", () => {
       MockWebSocket.instances[0].open();
       await connected;
 
-      const ws = MockWebSocket.instances[0];
-
-      await vi.advanceTimersByTimeAsync(30_000);
-
-      ws.onmessage?.({
-        data: JSON.stringify({
-          method: "event",
-          params: { type: "status.update", session_id: "s1", payload: {} },
-        }),
-      });
-
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(client.state).toBe("open");
-
-      client.close();
-    });
-
-    it("rejects pending requests with heartbeat timeout error", async () => {
-      vi.useFakeTimers();
-      const client = new GatewayClient();
-
-      const connected = client.connect();
-      MockWebSocket.instances[0].open();
-      await connected;
-
+      let settled = false;
       const result = client.request("some.method", {}, { timeoutMs: 120_000 })
         .then(() => null)
+        .finally(() => { settled = true; })
         .catch((err: Error) => err);
       await vi.advanceTimersByTimeAsync(0);
 
-      await vi.advanceTimersByTimeAsync(30_000);
-      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(40_000);
+      expect(settled).toBe(false);
+      expect(client.state).toBe("open");
+
+      await vi.advanceTimersByTimeAsync(80_000);
 
       const error = await result;
       expect(error).toBeInstanceOf(Error);
-      expect(error!.message).toBe("Heartbeat timeout");
-      client.close();
-    });
-
-    it("heartbeat failure triggers auto-reconnect", async () => {
-      vi.useFakeTimers();
-      vi.spyOn(Math, "random").mockReturnValue(0);
-      const client = new GatewayClient();
-      client.enableAutoReconnect();
-
-      const connected = client.connect();
-      MockWebSocket.instances[0].open();
-      await connected;
-
-      await vi.advanceTimersByTimeAsync(30_000);
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(client.state).toBe("closed");
-
-      await vi.advanceTimersByTimeAsync(1_000);
-      expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(2);
-
+      expect(error!.message).toBe("RPC timeout: some.method");
       client.close();
     });
   });

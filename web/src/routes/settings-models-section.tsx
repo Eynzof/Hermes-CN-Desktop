@@ -44,7 +44,15 @@ import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
 import { fetchExternalJSON } from "@/lib/transport";
+import { openExternalUrl } from "@/lib/external-links";
+import {
+  getLocalContextWarning,
+  HERMES_CONTEXT_REQUIREMENTS_URL,
+  HERMES_PROVIDER_CONTEXT_URL,
+  RECOMMENDED_LOCAL_CONTEXT_LENGTH,
+} from "@/lib/local-provider-context";
 import type { EnvVarInfo } from "@hermes/protocol";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Alert, Button, Field, Input, Select, Textarea } from "@hermes/shared-ui";
 import { OAuthProvidersSection } from "./settings-oauth-section";
 import s from "./settings.module.css";
@@ -120,6 +128,16 @@ interface LocalProviderPreset {
   baseUrl: string;
   model: string;
   tutorial: string;
+}
+
+function initialCustomProviderForm(mode: CustomProviderMode) {
+  return {
+    name: "",
+    baseUrl: "",
+    apiKey: "",
+    model: "",
+    contextWindow: mode === "local" ? String(RECOMMENDED_LOCAL_CONTEXT_LENGTH) : "",
+  };
 }
 
 function buildChatCompletionsUrl(baseUrl: string): string {
@@ -298,27 +316,59 @@ const LOCAL_PROVIDER_PRESETS: LocalProviderPreset[] = [
     name: "LM Studio",
     baseUrl: "http://127.0.0.1:1234/v1",
     model: "local-model",
-    tutorial: "打开 Developer / Local Server，加载模型后点击 Start Server；模型名以 /v1/models 返回为准。",
+    tutorial: "打开 Developer / Local Server，模型设置里将 Context Length 调到 ≥65536，重新加载模型后点击 Start Server。",
   },
   {
     name: "Ollama",
     baseUrl: "http://127.0.0.1:11434/v1",
     model: "qwen2.5-coder:7b",
-    tutorial: "先运行 ollama pull qwen2.5-coder:7b，并确认 ollama serve 正在运行；API Key 通常留空。",
+    tutorial: "先运行 ollama pull，并用 ollama run <model> -c 65536 或 Modelfile 设置上下文；API Key 通常留空。",
   },
   {
     name: "vLLM",
     baseUrl: "http://127.0.0.1:8000/v1",
     model: "Qwen/Qwen2.5-Coder-7B-Instruct",
-    tutorial: "启动 OpenAI-compatible server，建议用 --served-model-name 固定一个容易填写的模型名。",
+    tutorial: "启动 OpenAI-compatible server，带上 --max-model-len 64k，并用 --served-model-name 固定模型名。",
   },
   {
     name: "llama.cpp",
     baseUrl: "http://127.0.0.1:8080/v1",
     model: "local-model",
-    tutorial: "启动 llama-server 的 OpenAI 兼容接口；未启用鉴权时 API Key 留空即可。",
+    tutorial: "启动 llama-server 的 OpenAI 兼容接口时使用 --ctx-size 65536；未启用鉴权时 API Key 留空即可。",
   },
 ];
+
+const LOCAL_PROVIDER_DOC_LINKS = [
+  { label: "Quickstart 说明", url: HERMES_CONTEXT_REQUIREMENTS_URL },
+  { label: "Providers 指引", url: HERMES_PROVIDER_CONTEXT_URL },
+] as const;
+
+function LocalProviderDocLinks() {
+  return (
+    <div className={s.localProviderDocLinks}>
+      {LOCAL_PROVIDER_DOC_LINKS.map((item) => (
+        <div key={item.url} className={s.localProviderDocLinkRow}>
+          <a
+            className={s.link}
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => {
+              event.preventDefault();
+              void openExternalUrl(item.url);
+            }}
+          >
+            {item.label} ↗
+          </a>
+          <code className={s.localProviderDocUrl}>{item.url}</code>
+          <CopyButton className={s.localProviderDocCopy} text={item.url} showStatusIcon={false}>
+            复制
+          </CopyButton>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const AUXILIARY_TASK_BY_ID = Object.fromEntries(
   AUXILIARY_TASKS.map((task) => [task.id, task]),
@@ -669,12 +719,7 @@ export function ModelsSection() {
   const [providerSearch, setProviderSearch] = useState("");
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customProviderMode, setCustomProviderMode] = useState<CustomProviderMode>("custom");
-  const [customForm, setCustomForm] = useState({
-    name: "",
-    baseUrl: "",
-    apiKey: "",
-    model: "",
-  });
+  const [customForm, setCustomForm] = useState(() => initialCustomProviderForm("custom"));
   const [selectedAuxTask, setSelectedAuxTask] = useState<AuxiliaryTaskId>("vision");
   const [auxForm, setAuxForm] = useState<AuxiliaryTaskForm>(() =>
     auxiliaryFormFromConfig(config, "vision"));
@@ -706,12 +751,12 @@ export function ModelsSection() {
   const closeCustomForm = useCallback(() => {
     setShowCustomForm(false);
     setCustomProviderMode("custom");
-    setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+    setCustomForm(initialCustomProviderForm("custom"));
   }, []);
 
   const openCustomProviderForm = useCallback((mode: CustomProviderMode) => {
     setCustomProviderMode(mode);
-    setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+    setCustomForm(initialCustomProviderForm(mode));
     setShowCustomForm(true);
   }, []);
 
@@ -721,6 +766,7 @@ export function ModelsSection() {
       name: preset.name,
       baseUrl: preset.baseUrl,
       model: preset.model,
+      contextWindow: String(RECOMMENDED_LOCAL_CONTEXT_LENGTH),
     }));
   }, []);
   useEffect(() => {
@@ -826,9 +872,10 @@ export function ModelsSection() {
   const selectedProviderCredentialPreview = selectedProvider
     ? getProviderCredentialPreview(config, resolvedEnvVars, selectedProvider)
     : undefined;
-  const selectedProviderCanOmitApiKey = selectedProvider
+  const selectedProviderIsLocal = selectedProvider
     ? isLocalProviderBaseUrl(providerForm.baseUrl || selectedProvider.baseUrl)
     : false;
+  const selectedProviderCanOmitApiKey = selectedProviderIsLocal;
   const customBaseUrl = customForm.baseUrl.trim();
   const customBaseUrlValid = !customBaseUrl || isValidProviderBaseUrl(customBaseUrl);
   const duplicateBaseUrlProvider = useMemo(() => {
@@ -1004,6 +1051,11 @@ export function ModelsSection() {
     currentProviderId === selectedProvider.id &&
     modelInfo?.model === selectedProviderModel,
   );
+  const selectedLocalContextWarning = getLocalContextWarning({
+    isLocalProvider: selectedProviderIsLocal,
+    configuredContextWindow: providerForm.contextWindow,
+    effectiveContextLength: selectedProviderIsCurrent ? modelInfo?.effective_context_length : undefined,
+  });
 
   // Deep-link from the picker's "去设置" CTA: /models#provider-<slug> selects
   // and scrolls to that provider so the user lands on the right key field.
@@ -1273,6 +1325,7 @@ export function ModelsSection() {
     const baseUrl = customForm.baseUrl.trim();
     const model = customForm.model.trim();
     const apiKey = customForm.apiKey.trim();
+    const contextWindow = customProviderMode === "local" ? customForm.contextWindow.trim() : "";
     if (!name || !baseUrl || !model) return;
     if (!isValidProviderBaseUrl(baseUrl)) {
       setProviderSaveError("Base URL 必须是 http 或 https 地址");
@@ -1300,7 +1353,7 @@ export function ModelsSection() {
       isCustom: true,
     };
     const nextConfig = buildProviderOrderUpdate(
-      buildProviderConfigUpdate(config, preset, { apiKey, baseUrl, model }),
+      buildProviderConfigUpdate(config, preset, { apiKey, baseUrl, model, contextWindow }),
       [candidate, ...orderedProviders.map((provider) => provider.id)],
     );
     saveConfig.mutate(
@@ -1309,7 +1362,7 @@ export function ModelsSection() {
         onSuccess: () => {
           selectProvider(candidate);
           closeCustomForm();
-          setProviderForm({ apiKey: "", baseUrl, model, contextWindow: "" });
+          setProviderForm({ apiKey: "", baseUrl, model, contextWindow });
         },
       },
     );
@@ -1438,7 +1491,7 @@ export function ModelsSection() {
   const customProviderIsLocal = customProviderMode === "local";
   const customProviderTitle = customProviderIsLocal ? "添加本地部署服务商" : "添加自定义服务商";
   const customProviderHint = customProviderIsLocal
-    ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务并加载模型，再选择下面的端点或手动填写。"
+    ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务、加载模型并把上下文窗口设到至少 64K，再选择下面的端点或手动填写。"
     : "添加任意 OpenAI Chat Completions 兼容服务（百度千帆 / 腾讯混元 / SiliconFlow / 私有部署等）。提交后可在左侧列表里随时切换。";
   const customProviderPlaceholders = customProviderIsLocal
     ? {
@@ -1446,13 +1499,19 @@ export function ModelsSection() {
         baseUrl: "http://127.0.0.1:1234/v1",
         model: "qwen2.5-coder:7b",
         apiKey: "本地服务一般可留空，启用鉴权时再填写",
+        contextWindow: String(RECOMMENDED_LOCAL_CONTEXT_LENGTH),
       }
     : {
         name: "例如：Deepseek",
         baseUrl: "https://api.example.com/v1",
         model: "deepseek-v4-flash",
         apiKey: "可选，先建后填也可以",
+        contextWindow: "自动",
       };
+  const customLocalContextWarning = getLocalContextWarning({
+    isLocalProvider: customProviderIsLocal,
+    configuredContextWindow: customForm.contextWindow,
+  });
 
   return (
     <div className={s.modelsSettings}>
@@ -1690,6 +1749,11 @@ export function ModelsSection() {
                         留空或填 0 使用该模型自动探测到的上下文窗口；本地 / 自建模型探测不准时可手动指定（单位 token）。
                         {!selectedProviderIsCurrent && " 该值会在「设为当前模型」时生效。"}
                       </div>
+                      {selectedLocalContextWarning && (
+                        <div className={s.localContextWarning} role="alert">
+                          {selectedLocalContextWarning.message}
+                        </div>
+                      )}
                       {selectedProviderIsCurrent && modelInfo && (
                         <div className={s.modelPickerHint}>
                           自动探测 {(modelInfo.auto_context_length ?? 0).toLocaleString()}
@@ -1863,20 +1927,30 @@ export function ModelsSection() {
                 {customProviderHint}
               </p>
               {customProviderIsLocal && (
-                <div className={s.localProviderGuide} aria-label="常用本地部署端点">
-                  {LOCAL_PROVIDER_PRESETS.map((preset) => (
-                    <button
-                      key={preset.name}
-                      type="button"
-                      className={s.localProviderCard}
-                      onClick={() => applyLocalProviderPreset(preset)}
-                    >
-                      <strong>{preset.name}</strong>
-                      <code>{preset.baseUrl}</code>
-                      <span>{preset.tutorial}</span>
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className={s.localProviderContextNotice}>
+                    <strong>本地模型上下文需要 ≥64K</strong>
+                    <p>
+                      Hermes Agent 会拒绝低于 64,000 tokens 的模型上下文。建议在本地运行时和下方「上下文窗口」中都设为{" "}
+                      {RECOMMENDED_LOCAL_CONTEXT_LENGTH.toLocaleString()}，并在 LM Studio / Ollama / vLLM / llama.cpp 中重新加载模型。
+                    </p>
+                    <LocalProviderDocLinks />
+                  </div>
+                  <div className={s.localProviderGuide} aria-label="常用本地部署端点">
+                    {LOCAL_PROVIDER_PRESETS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        className={s.localProviderCard}
+                        onClick={() => applyLocalProviderPreset(preset)}
+                      >
+                        <strong>{preset.name}</strong>
+                        <code>{preset.baseUrl}</code>
+                        <span>{preset.tutorial}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
               <Field label="名称" className={s.fieldRow}>
                 <Input
@@ -1910,6 +1984,27 @@ export function ModelsSection() {
                   onChange={(e) => setCustomForm((p) => ({ ...p, model: e.target.value }))}
                 />
               </Field>
+              {customProviderIsLocal && (
+                <>
+                  <Field label="上下文窗口" className={s.fieldRow}>
+                    <Input
+                      mono
+                      inputMode="numeric"
+                      value={customForm.contextWindow}
+                      placeholder={customProviderPlaceholders.contextWindow}
+                      onChange={(e) => setCustomForm((p) => ({ ...p, contextWindow: e.target.value }))}
+                    />
+                  </Field>
+                  <div className={s.modelPickerHint}>
+                    保存时会写入桌面端的模型上下文覆盖；请同步确认本地服务实际加载的模型也已使用同样或更大的上下文。
+                  </div>
+                  {customLocalContextWarning && (
+                    <div className={s.localContextWarning} role="alert">
+                      {customLocalContextWarning.message}
+                    </div>
+                  )}
+                </>
+              )}
               <Field label="API Key" className={s.fieldRow}>
                 <Input
                   mono
