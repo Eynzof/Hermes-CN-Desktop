@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Copy } from "lucide-react";
+import { Bot, Check, Copy } from "lucide-react";
 import {
   activeSessionIdAtom,
   conversationFontSizeAtom,
@@ -56,6 +56,8 @@ import type {
 } from "@/components/chat/composer-types";
 import { MessageTimeline } from "@/components/chat/message-timeline";
 import { StallNotice } from "@/components/chat/stall-notice";
+import { SubagentPanel, useSessionSubagents } from "@/components/chat/subagent-panel";
+import { activeSubagentCount } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
   hermesUIMessagesToChatMessages,
@@ -120,6 +122,18 @@ export function DetailRoute() {
     runtimeIsBusy,
     getSessionUsage,
   });
+
+  // 子代理监视（issue #238）：面板按会话 id 读取 subagent 树。store 按事件 session_id
+  // (网关会话 id) keyed，故按 detail 解析出的多个候选 id 取首个命中（覆盖 resume 后
+  // 持久 id / 网关 id 的形态差异）。
+  const [subagentPanelOpen, setSubagentPanelOpen] = useState(false);
+  const subagents = useSessionSubagents([
+    runtimeSessionId,
+    activeMappedGatewaySessionId,
+    usageGatewaySessionId,
+    taskId,
+  ]);
+  const subagentActive = activeSubagentCount(subagents);
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
   const { data: messagesData, isLoading } = messagesQuery;
@@ -451,55 +465,77 @@ export function DetailRoute() {
                 </span>
               </TopBarActionButton>
             ) : null}
+            <TopBarActionButton
+              onClick={() => setSubagentPanelOpen((v) => !v)}
+              data-active={subagentPanelOpen ? "true" : undefined}
+              title="子代理监视"
+              aria-label="子代理监视"
+              aria-pressed={subagentPanelOpen}
+            >
+              <Bot size={12} aria-hidden="true" />
+              <span>子代理</span>
+              {subagents.length > 0 ? (
+                <span className={s.subagentBadge} data-active={subagentActive > 0 ? "true" : undefined}>
+                  {subagentActive > 0 ? subagentActive : subagents.length}
+                </span>
+              ) : null}
+            </TopBarActionButton>
             <TopBarActions />
           </>
         }
       />
-      {/* key={taskId}：切会话强制重挂载时间线。layout effect 在首帧绘制前就
-          把滚动定位到底部，避免新会话内容先以上一个会话的滚动位置绘制、再
-          在 650ms 的滚动校正窗口里反复跳动（用户感知为"闪烁两下"）。 */}
-      <MessageTimeline
-        key={taskId}
-        messages={chatMessages}
-        loading={isLoading && runtime.messages.length === 0}
-        statusMessage={timelineStatus}
-        pendingApproval={
-          pendingApproval ? (
-            <ApprovalDialog approval={pendingApproval} />
-          ) : undefined
-        }
-        turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
-        sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
-        progressModel={runtimeIsBusy ? model || undefined : undefined}
-      />
-      <div className={s.composerArea}>
-        {runtimeIsBusy && stall.isStalled ? (
-          <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
+      <div className={s.workArea}>
+        <div className={s.chatColumn}>
+          {/* key={taskId}：切会话强制重挂载时间线。layout effect 在首帧绘制前就
+              把滚动定位到底部，避免新会话内容先以上一个会话的滚动位置绘制、再
+              在 650ms 的滚动校正窗口里反复跳动（用户感知为"闪烁两下"）。 */}
+          <MessageTimeline
+            key={taskId}
+            messages={chatMessages}
+            loading={isLoading && runtime.messages.length === 0}
+            statusMessage={timelineStatus}
+            pendingApproval={
+              pendingApproval ? (
+                <ApprovalDialog approval={pendingApproval} />
+              ) : undefined
+            }
+            turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
+            sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
+            progressModel={runtimeIsBusy ? model || undefined : undefined}
+          />
+          <div className={s.composerArea}>
+            {runtimeIsBusy && stall.isStalled ? (
+              <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
+            ) : null}
+            <GooseComposer
+              key={taskId}
+              initialWorkspacePath={sessionWorkspace}
+              onSend={onSend}
+              loadingPlaceholder={composerLoadingPlaceholder}
+              showMeta={false}
+              loading={runtimeIsBusy}
+              onStop={onStop}
+              modelPicker={{
+                selected: contextSelection,
+                label: model || modelInfo?.model,
+                loadOptions: loadModelOptions,
+                initialOptions: modelOptionsCache ?? null,
+                onSelect: onModelSelect,
+                onConfigureProvider,
+                disabled: runtimeIsBusy,
+              }}
+              reasoningPicker={{
+                value: reasoningEffort,
+                onSelect: onReasoningEffortSelect,
+                disabled: runtimeIsBusy,
+              }}
+              contextUsage={contextUsage}
+            />
+          </div>
+        </div>
+        {subagentPanelOpen ? (
+          <SubagentPanel subagents={subagents} onClose={() => setSubagentPanelOpen(false)} />
         ) : null}
-        <GooseComposer
-          key={taskId}
-          initialWorkspacePath={sessionWorkspace}
-          onSend={onSend}
-          loadingPlaceholder={composerLoadingPlaceholder}
-          showMeta={false}
-          loading={runtimeIsBusy}
-          onStop={onStop}
-          modelPicker={{
-            selected: contextSelection,
-            label: model || modelInfo?.model,
-            loadOptions: loadModelOptions,
-            initialOptions: modelOptionsCache ?? null,
-            onSelect: onModelSelect,
-            onConfigureProvider,
-            disabled: runtimeIsBusy,
-          }}
-          reasoningPicker={{
-            value: reasoningEffort,
-            onSelect: onReasoningEffortSelect,
-            disabled: runtimeIsBusy,
-          }}
-          contextUsage={contextUsage}
-        />
       </div>
     </div>
   );

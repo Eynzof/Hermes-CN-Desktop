@@ -18,6 +18,7 @@ import {
 import { notifyFromGatewayEvent } from "@/lib/notifications";
 import { resolvePersistentSessionId } from "@/lib/session-map";
 import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
+import { routeSubagentGatewayEventAtom } from "@/stores/subagents";
 
 export interface ToolEntry {
   tool_id: string;
@@ -1185,6 +1186,9 @@ export const applyGatewayEventAtom = atom(null, (get, set, event: GatewayEvent) 
       return next;
     }),
   );
+  // Route subagent activity into its own store (issue #238). Self-contained in
+  // stores/subagents.ts; chat timeline reduction is untouched.
+  set(routeSubagentGatewayEventAtom, event);
 });
 
 export const setSessionErrorAtom = atom(

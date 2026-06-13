@@ -1,0 +1,325 @@
+.panel {
+  width: 360px;
+  flex: 0 0 360px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--h-line);
+  background: var(--h-bg-app);
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.headerTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--h-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.summary {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  margin: 0;
+  color: var(--h-text-3);
+  font-size: 11px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+.empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--h-text-4);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--h-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.emptyDesc {
+  margin: 0;
+  max-width: 260px;
+  color: var(--h-text-3);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+/* ── Delegation group ────────────────────────────────────────────────────── */
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.groupLabel {
+  margin: 0;
+  color: var(--h-text-3);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.groupActive {
+  color: var(--h-accent);
+}
+
+.groupBody {
+  display: grid;
+  gap: 12px;
+}
+
+/* ── Subagent row ────────────────────────────────────────────────────────── */
+
+.row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rowHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.chevron {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--h-text-4);
+  transition: transform 0.12s ease;
+}
+
+.chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+.statusIcon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.statusIcon[data-tone="run"] {
+  color: var(--h-accent);
+}
+
+.statusIcon[data-tone="ok"] {
+  color: var(--h-ok);
+}
+
+.statusIcon[data-tone="err"] {
+  color: var(--h-err);
+}
+
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.goal {
+  color: var(--h-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.goal[data-running="true"] {
+  color: var(--h-text-2);
+}
+
+.subtitle {
+  color: var(--h-text-3);
+  font-size: 10.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.timer {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Stream ──────────────────────────────────────────────────────────────── */
+
+.stream {
+  display: grid;
+  gap: 3px;
+  padding-left: 21px;
+}
+
+.streamLine {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.streamGlyphWrap {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 0.95rem;
+}
+
+.streamGlyph[data-tone="ok"] {
+  color: var(--h-ok);
+}
+
+.streamGlyph[data-tone="err"] {
+  color: var(--h-err);
+}
+
+.streamDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--h-text-4);
+}
+
+.streamDot[data-kind="tool"] {
+  width: 5px;
+  height: 5px;
+  background: var(--h-text-2);
+}
+
+.streamText {
+  flex: 1;
+  min-width: 0;
+  color: var(--h-text-2);
+  overflow-wrap: anywhere;
+}
+
+.streamText[data-kind="progress"],
+.streamText[data-kind="thinking"] {
+  color: var(--h-text-3);
+}
+
+.streamText[data-kind="tool"] {
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+.streamLine[data-error="true"] .streamText {
+  color: var(--h-err);
+}
+
+.inlineSpin {
+  margin-left: 5px;
+  vertical-align: middle;
+  color: var(--h-text-3);
+}
+
+/* ── Files ───────────────────────────────────────────────────────────────── */
+
+.files {
+  display: grid;
+  gap: 1px;
+  padding-left: 21px;
+}
+
+.filesLabel {
+  color: var(--h-text-4);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fileLine,
+.fileMore {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* ── Children ────────────────────────────────────────────────────────────── */
+
+.children {
+  display: grid;
+  gap: 12px;
+  padding-left: 21px;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+
+.spin {
+  animation: subagentSpin 0.9s linear infinite;
+}
+
+@keyframes subagentSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

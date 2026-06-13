@@ -1,0 +1,272 @@
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useAtomValue } from "jotai";
+import { AlertCircle, Bot, CheckCircle2, ChevronRight, Loader2, X } from "lucide-react";
+import { formatCostUsd, formatTokens } from "@/lib/format";
+import {
+  activeSubagentCount,
+  buildSubagentTree,
+  flattenSubagents,
+  subagentsBySessionAtom,
+  type SubagentNode,
+  type SubagentProgress,
+  type SubagentStatus,
+  type SubagentStreamEntry,
+} from "@/stores/subagents";
+import s from "./subagent-panel.module.css";
+
+// One persistent session id can surface under several gateway-session ids across
+// resume/reconnect. The subagent store is keyed by the live event session_id, so
+// we probe the candidate ids detail resolves and take the first non-empty hit.
+export function useSessionSubagents(candidates: (string | undefined)[]): SubagentProgress[] {
+  const bySession = useAtomValue(subagentsBySessionAtom);
+  const key = candidates.filter(Boolean).join("|");
+  return useMemo(() => {
+    for (const id of candidates) {
+      if (id && bySession[id]?.length) return bySession[id]!;
+    }
+    return [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bySession, key]);
+}
+
+function fmtDuration(seconds: number | undefined): string {
+  if (!seconds || seconds <= 0) return "";
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const m = Math.floor(seconds / 60);
+  const sec = Math.round(seconds % 60);
+  return `${m}分${sec.toString().padStart(2, "0")}秒`;
+}
+
+function fmtAge(updatedAt: number, now: number): string {
+  const sec = Math.max(0, Math.round((now - updatedAt) / 1000));
+  if (sec < 2) return "刚刚";
+  if (sec < 60) return `${sec}秒前`;
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m}分前`;
+  return `${Math.floor(m / 60)}时前`;
+}
+
+function StatusIcon({ status }: { status: SubagentStatus }) {
+  if (status === "running" || status === "queued") {
+    return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={14} aria-label="运行中" />;
+  }
+  if (status === "failed" || status === "interrupted") {
+    return <AlertCircle className={s.statusIcon} data-tone="err" size={14} aria-label="失败" />;
+  }
+  return <CheckCircle2 className={s.statusIcon} data-tone="ok" size={14} aria-label="已完成" />;
+}
+
+function streamGlyph(entry: SubagentStreamEntry): ReactNode {
+  if (entry.isError) return <AlertCircle className={s.streamGlyph} data-tone="err" size={11} aria-hidden />;
+  if (entry.kind === "summary") {
+    return <CheckCircle2 className={s.streamGlyph} data-tone="ok" size={11} aria-hidden />;
+  }
+  return <span className={s.streamDot} data-kind={entry.kind} aria-hidden />;
+}
+
+function StreamLine({ entry, active }: { entry: SubagentStreamEntry; active: boolean }) {
+  return (
+    <div className={s.streamLine} data-error={entry.isError ? "true" : undefined}>
+      <span className={s.streamGlyphWrap}>{streamGlyph(entry)}</span>
+      <span className={s.streamText} data-kind={entry.kind}>
+        {entry.text}
+        {active ? <Loader2 className={`${s.inlineSpin} ${s.spin}`} size={10} aria-hidden /> : null}
+      </span>
+    </div>
+  );
+}
+
+function SubagentRow({ node, depth, now }: { node: SubagentNode; depth: number; now: number }) {
+  const running = node.status === "running" || node.status === "queued";
+  const [open, setOpen] = useState(() => running || depth < 2);
+
+  useEffect(() => {
+    if (running) setOpen(true);
+  }, [running]);
+
+  const durationSeconds =
+    typeof node.durationSeconds === "number"
+      ? Math.max(0, Math.round(node.durationSeconds))
+      : Math.max(0, Math.round((now - node.startedAt) / 1000));
+
+  const tokens = (node.inputTokens ?? 0) + (node.outputTokens ?? 0);
+  const subtitle = [
+    node.model,
+    fmtDuration(durationSeconds),
+    node.toolCount ? `${node.toolCount} 工具` : "",
+    tokens ? `${formatTokens(tokens)} tok` : "",
+    `更新于 ${fmtAge(node.updatedAt, now)}`,
+  ].filter(Boolean);
+
+  const visibleRows = open ? node.stream.slice(-10) : node.stream.slice(-2);
+  const fileLines = [...node.filesWritten.map((p) => `+ ${p}`), ...node.filesRead.map((p) => `· ${p}`)];
+
+  return (
+    <div className={s.row} style={depth > 0 ? { paddingLeft: 14 } : undefined} data-running={running ? "true" : undefined}>
+      <button className={s.rowHead} type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={13} aria-hidden />
+        <StatusIcon status={node.status} />
+        <span className={s.rowMain}>
+          <span className={s.goal} data-running={running ? "true" : undefined}>
+            {node.goal}
+          </span>
+          {subtitle.length > 0 ? <span className={s.subtitle}>{subtitle.join(" · ")}</span> : null}
+        </span>
+        {running ? <span className={s.timer}>{fmtDuration(durationSeconds) || "0s"}</span> : null}
+      </button>
+
+      {visibleRows.length > 0 ? (
+        <div className={s.stream}>
+          {visibleRows.map((entry, i) => (
+            <StreamLine
+              key={`${entry.kind}:${entry.at}:${i}`}
+              entry={entry}
+              active={running && i === visibleRows.length - 1}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {open && fileLines.length > 0 ? (
+        <div className={s.files}>
+          <span className={s.filesLabel}>文件</span>
+          {fileLines.slice(0, 8).map((line) => (
+            <span className={s.fileLine} key={line}>
+              {line}
+            </span>
+          ))}
+          {fileLines.length > 8 ? <span className={s.fileMore}>还有 {fileLines.length - 8} 个文件</span> : null}
+        </div>
+      ) : null}
+
+      {node.children.length > 0 ? (
+        <div className={s.children}>
+          {node.children.map((child) => (
+            <SubagentRow key={child.id} node={child} depth={depth + 1} now={now} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+interface RootGroup {
+  id: string;
+  delegationIndex: number;
+  nodes: SubagentNode[];
+  taskCount: number;
+}
+
+// Groups parallel workers (same taskCount, started close in time, distinct
+// taskIndex) under one delegation header. Ported from upstream agents view.
+function groupDelegations(roots: readonly SubagentNode[]): RootGroup[] {
+  const groups: RootGroup[] = [];
+  let n = 0;
+  for (const node of roots) {
+    const prev = groups.at(-1);
+    const prevTail = prev?.nodes.at(-1);
+    const closeInTime = prevTail ? Math.abs(node.startedAt - prevTail.startedAt) <= 5_000 : false;
+    const sameShape = prev && node.taskCount > 1 && prev.taskCount === node.taskCount;
+    const uniqueStep = prev ? !prev.nodes.some((item) => item.taskIndex === node.taskIndex) : false;
+
+    if (prev && sameShape && closeInTime && uniqueStep) {
+      prev.nodes.push(node);
+      continue;
+    }
+    if (node.taskCount > 1) {
+      n += 1;
+      groups.push({ id: `delegation-${n}`, delegationIndex: n, nodes: [node], taskCount: node.taskCount });
+      continue;
+    }
+    groups.push({ id: node.id, delegationIndex: 0, nodes: [node], taskCount: node.taskCount });
+  }
+  return groups;
+}
+
+function DelegationGroup({ group, now }: { group: RootGroup; now: number }) {
+  if (group.nodes.length === 1 && group.taskCount <= 1) {
+    return <SubagentRow node={group.nodes[0]!} depth={0} now={now} />;
+  }
+  const activeWorkers = group.nodes.filter((nd) => nd.status === "running" || nd.status === "queued").length;
+  return (
+    <section className={s.group}>
+      <p className={s.groupLabel}>
+        {group.delegationIndex > 0 ? `委派 #${group.delegationIndex} · ` : ""}
+        {group.nodes.length} 个并行子代理
+        {activeWorkers > 0 ? <span className={s.groupActive}> · {activeWorkers} 个运行中</span> : null}
+      </p>
+      <div className={s.groupBody}>
+        {group.nodes.map((node) => (
+          <SubagentRow key={node.id} node={node} depth={0} now={now} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function SubagentPanel({
+  subagents,
+  onClose,
+}: {
+  subagents: SubagentProgress[];
+  onClose: () => void;
+}) {
+  const tree = useMemo(() => buildSubagentTree(subagents), [subagents]);
+  const flat = useMemo(() => flattenSubagents(tree), [tree]);
+  const groups = useMemo(() => groupDelegations(tree), [tree]);
+  const active = activeSubagentCount(flat);
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (active <= 0) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  const failed = flat.filter((nd) => nd.status === "failed" || nd.status === "interrupted").length;
+  const tools = flat.reduce((sum, nd) => sum + (nd.toolCount ?? 0), 0);
+  const files = flat.reduce((sum, nd) => sum + nd.filesRead.length + nd.filesWritten.length, 0);
+  const tokens = flat.reduce((sum, nd) => sum + (nd.inputTokens ?? 0) + (nd.outputTokens ?? 0), 0);
+  const cost = flat.reduce((sum, nd) => sum + (nd.costUsd ?? 0), 0);
+
+  const summary = [
+    `${flat.length} 个子代理`,
+    active > 0 ? `${active} 活跃` : "",
+    failed > 0 ? `${failed} 失败` : "",
+    tools > 0 ? `${tools} 工具` : "",
+    files > 0 ? `${files} 文件` : "",
+    tokens > 0 ? `${formatTokens(tokens)} tok` : "",
+    cost > 0 ? formatCostUsd(cost) : "",
+  ].filter(Boolean);
+
+  return (
+    <aside className={s.panel} aria-label="子代理监视">
+      <header className={s.header}>
+        <span className={s.headerTitle}>
+          <Bot size={14} aria-hidden />
+          子代理监视
+        </span>
+        <button className={s.close} type="button" onClick={onClose} aria-label="关闭子代理监视">
+          <X size={14} aria-hidden />
+        </button>
+      </header>
+
+      {flat.length === 0 ? (
+        <div className={s.empty}>
+          <Bot size={26} className={s.emptyIcon} aria-hidden />
+          <p className={s.emptyTitle}>暂无子代理活动</p>
+          <p className={s.emptyDesc}>当本会话派生子代理（委派/并行任务）时，这里会实时展示它们的层级、状态与流式输出。</p>
+        </div>
+      ) : (
+        <>
+          <p className={s.summary}>{summary.join(" · ")}</p>
+          <div className={s.scroll}>
+            {groups.map((group) => (
+              <DelegationGroup key={group.id} group={group} now={now} />
+            ))}
+          </div>
+        </>
+      )}
+    </aside>
+  );
+}
