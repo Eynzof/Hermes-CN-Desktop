@@ -725,6 +725,7 @@ export function HistoryRoute() {
                   const meta = getSourceMeta(session.source);
                   const selected = selectedSessionIds.has(session.id);
                   const pinned = pinnedSessionIds.has(session.id);
+                  const menuDisabled = live || deleteSessions.isPending;
                   const workspacePath = normalizeWorkspacePath(workspaceMap[session.id]);
                   const workspaceName = workspacePath
                     ? workspaceNameFromPath(workspacePath)
@@ -775,15 +776,18 @@ export function HistoryRoute() {
                       </span>
                       <span className={s.cellTimestamp}>{updatedDisplay}</span>
                       <Popover.Root
-                        open={openMenuId === session.id}
-                        onOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
+                        open={!menuDisabled && openMenuId === session.id}
+                        onOpenChange={(open) => {
+                          setOpenMenuId(open && !menuDisabled ? session.id : null);
+                        }}
                       >
                         <Popover.Trigger asChild>
                           <button
                             type="button"
                             className={s.cellMore}
                             aria-label="会话操作"
-                            disabled={deleteSessions.isPending}
+                            title={live ? "运行中任务暂不可操作" : "会话操作"}
+                            disabled={menuDisabled}
                             onClick={(event) => event.stopPropagation()}
                           >
                             <MoreHorizontal size={14} />
@@ -791,7 +795,7 @@ export function HistoryRoute() {
                         </Popover.Trigger>
                         <SessionRowMenu
                           pinned={pinned}
-                          disabled={deleteSessions.isPending}
+                          disabled={menuDisabled}
                           onTogglePin={() => onTogglePinSession(session.id)}
                           onRename={() => startRename(session)}
                           onArchive={() => handleArchive(session)}

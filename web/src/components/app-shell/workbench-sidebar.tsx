@@ -81,6 +81,7 @@ interface SessionRowProps {
   meta: string;
   projectName?: string;
   pinned: boolean;
+  menuDisabled?: boolean;
   actions: UseSessionRowActions;
   onClick: () => void;
   onHover?: () => void;
@@ -93,12 +94,14 @@ function SessionRow({
   meta,
   projectName,
   pinned,
+  menuDisabled = false,
   actions,
   onClick,
   onHover,
 }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
   const dotState = state === "idle" ? undefined : state;
+  const actionMenuDisabled = menuDisabled || actions.isDeleting;
   return (
     // role=button (not a real <button>) so the "⋯" trigger can nest inside it.
     <div
@@ -132,15 +135,18 @@ function SessionRow({
         </div>
       </div>
       <Popover.Root
-        open={actions.openMenuId === session.id}
-        onOpenChange={(open) => actions.setOpenMenuId(open ? session.id : null)}
+        open={!actionMenuDisabled && actions.openMenuId === session.id}
+        onOpenChange={(open) => {
+          actions.setOpenMenuId(open && !actionMenuDisabled ? session.id : null);
+        }}
       >
         <Popover.Trigger asChild>
           <button
             type="button"
             className={s.rowMore}
             aria-label="会话操作"
-            disabled={actions.isDeleting}
+            title={menuDisabled ? "运行中任务暂不可操作" : "会话操作"}
+            disabled={actionMenuDisabled}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
@@ -149,7 +155,7 @@ function SessionRow({
         </Popover.Trigger>
         <SessionRowMenu
           pinned={pinned}
-          disabled={actions.isDeleting}
+          disabled={actionMenuDisabled}
           onTogglePin={() => actions.togglePin(session.id)}
           onRename={() => actions.startRename(session)}
           onArchive={() => actions.handleArchive(session)}
@@ -352,6 +358,7 @@ export function WorkbenchSidebar() {
                 meta={`${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}`}
                 projectName={projectNameBySessionId.get(sess.id)}
                 pinned={pinnedSessionIds.has(sess.id)}
+                menuDisabled
                 actions={rowActions}
                 onClick={() => goSession(sess)}
                 onHover={() => hoverSession(sess)}
@@ -384,6 +391,7 @@ export function WorkbenchSidebar() {
                   meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
                   projectName={projectNameBySessionId.get(sess.id)}
                   pinned={pinnedSessionIds.has(sess.id)}
+                  menuDisabled={running}
                   actions={rowActions}
                   onClick={() => goSession(sess)}
                   onHover={() => hoverSession(sess)}
