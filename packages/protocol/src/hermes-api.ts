@@ -112,6 +112,10 @@ export const SessionSummary = z.object({
   model: NullableStringAsEmpty,
   title: z.string().nullable(),
   preview: z.string().optional(),
+  // Backend-stored working directory for the session (sessions.cwd). Null when
+  // the user never explicitly picked a workspace ("No workspace"). Used to
+  // restore the per-session workspace when switching sessions (see #216).
+  cwd: z.string().nullable().optional(),
   started_at: z.number(),
   ended_at: z.number().nullable(),
   end_reason: z.string().nullable().optional(),

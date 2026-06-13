@@ -215,6 +215,36 @@ export function rememberSessionWorkspace(sessionId: string | null | undefined, p
   rememberWorkspaceProject(normalizedPath);
 }
 
+/**
+ * Resolve the workspace that should be shown for a session.
+ *
+ * Precedence:
+ *   1. The backend's stored `cwd` for the session (source of truth — survives
+ *      across devices, storage clears, and sessions created before this build).
+ *   2. The client-side session→workspace map, keyed by any of the session's ids
+ *      (gateway / persistent), for sessions the backend has no explicit cwd for
+ *      (legacy sessions, or ones where the user never picked a folder).
+ *
+ * Returns "" when no workspace is known for the session, so the caller can fall
+ * back to its own default (e.g. the last-used global workspace).
+ */
+export function resolveSessionWorkspace(
+  backendCwd: string | null | undefined,
+  sessionIds: Array<string | null | undefined>,
+): string {
+  const fromBackend = normalizeWorkspacePath(backendCwd);
+  if (fromBackend) return fromBackend;
+
+  const map = readSessionWorkspaceMap();
+  for (const sessionId of sessionIds) {
+    const key = sessionId?.trim();
+    if (!key) continue;
+    const fromMap = normalizeWorkspacePath(map[key]);
+    if (fromMap) return fromMap;
+  }
+  return "";
+}
+
 export function mirrorSessionWorkspaceMapping(
   gatewaySessionId: string | null | undefined,
   persistentSessionId: string | null | undefined,

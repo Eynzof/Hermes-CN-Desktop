@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { AnalyticsResponse, CronJob, CronJobsResponse, CronRunDetail, CronRunsResponse } from "./hermes-api";
+import {
+  AnalyticsResponse,
+  CronJob,
+  CronJobsResponse,
+  CronRunDetail,
+  CronRunsResponse,
+  SessionsResponse,
+  SessionSummary,
+} from "./hermes-api";
 
 describe("CronJobsResponse", () => {
   it("parses current dashboard cron jobs with structured schedules", () => {
@@ -207,5 +215,44 @@ describe("AnalyticsResponse", () => {
         },
       }),
     ).toThrow();
+  });
+});
+
+describe("SessionSummary cwd (#216)", () => {
+  const baseSession = {
+    id: "20260613_000000_abcd",
+    model: "claude-opus-4-8",
+    title: "Demo",
+    started_at: 1,
+    ended_at: null,
+    message_count: 2,
+    input_tokens: 10,
+    output_tokens: 20,
+    estimated_cost_usd: null,
+  };
+
+  it("carries the backend per-session cwd", () => {
+    const parsed = SessionSummary.parse({ ...baseSession, cwd: "/Users/claw/project-a" });
+    expect(parsed.cwd).toBe("/Users/claw/project-a");
+  });
+
+  it("accepts a null cwd for sessions with no explicit workspace", () => {
+    const parsed = SessionSummary.parse({ ...baseSession, cwd: null });
+    expect(parsed.cwd).toBeNull();
+  });
+
+  it("treats cwd as optional for older payloads", () => {
+    const parsed = SessionSummary.parse(baseSession);
+    expect(parsed.cwd).toBeUndefined();
+  });
+
+  it("preserves cwd through the /api/sessions list response", () => {
+    const parsed = SessionsResponse.parse({
+      sessions: [{ ...baseSession, cwd: "/Users/claw/project-b" }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
+    expect(parsed.sessions[0]?.cwd).toBe("/Users/claw/project-b");
   });
 });

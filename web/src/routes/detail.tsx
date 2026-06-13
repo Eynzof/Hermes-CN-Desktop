@@ -37,7 +37,11 @@ import {
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
 import { uploadAttachmentFile } from "@/lib/transport";
-import { rememberSessionWorkspace, rememberWorkspaceProject } from "@/lib/workspaces";
+import {
+  rememberSessionWorkspace,
+  rememberWorkspaceProject,
+  resolveSessionWorkspace,
+} from "@/lib/workspaces";
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
 import type {
@@ -112,6 +116,14 @@ export function DetailRoute() {
     (item) => item.id === restSessionId || item.id === taskId,
   );
   const copyableSessionId = sessionData?.id ?? sessionSummary?.id ?? restSessionId ?? taskId ?? "";
+
+  // Workspace bound to *this* session (#216): prefer the backend's stored cwd
+  // (source of truth), then the client-side session→workspace map. Empty string
+  // lets the composer fall back to its own default (last-used global workspace).
+  const sessionWorkspace = useMemo(
+    () => resolveSessionWorkspace(sessionData?.cwd ?? sessionSummary?.cwd, [restSessionId, taskId]),
+    [sessionData?.cwd, sessionSummary?.cwd, restSessionId, taskId],
+  );
 
   // Sync URL → atom on mount and whenever URL changes (browser back/forward
   // or a deep-link entry). Sidebar / history clicks already update the atom
@@ -402,6 +414,8 @@ export function DetailRoute() {
       />
       <div className={s.composerArea}>
         <GooseComposer
+          key={taskId}
+          initialWorkspacePath={sessionWorkspace}
           onSend={onSend}
           loadingPlaceholder={composerLoadingPlaceholder}
           showMeta={false}

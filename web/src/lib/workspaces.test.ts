@@ -8,6 +8,7 @@ import {
   rememberSessionWorkspace,
   rememberWorkspaceProject,
   removeWorkspaceProject,
+  resolveSessionWorkspace,
   togglePinnedWorkspaceProject,
   unpinWorkspaceProjects,
   writePinnedWorkspaceProjectPaths,
@@ -54,6 +55,44 @@ describe("workspace persistence helpers", () => {
     expect(readSessionWorkspaceMap()).toEqual({
       "session-2": "/Users/claw/Project",
     });
+  });
+
+  it("resolveSessionWorkspace prefers the backend cwd over the client map", () => {
+    __resetUiStoreForTests({
+      "hermes-cn-ui.sessionWorkspaces": { "sess-1": "/Users/claw/from-map" },
+    });
+
+    // Backend cwd wins, and is normalized (trailing slash stripped).
+    expect(resolveSessionWorkspace("/Users/claw/from-backend/", ["sess-1"])).toBe(
+      "/Users/claw/from-backend",
+    );
+  });
+
+  it("resolveSessionWorkspace falls back to the client map when backend cwd is blank", () => {
+    __resetUiStoreForTests({
+      "hermes-cn-ui.sessionWorkspaces": { "sess-1": "/Users/claw/from-map" },
+    });
+
+    expect(resolveSessionWorkspace(null, ["sess-1"])).toBe("/Users/claw/from-map");
+    expect(resolveSessionWorkspace(undefined, ["sess-1"])).toBe("/Users/claw/from-map");
+    expect(resolveSessionWorkspace("   ", ["sess-1"])).toBe("/Users/claw/from-map");
+  });
+
+  it("resolveSessionWorkspace checks each provided id in order and skips blanks", () => {
+    __resetUiStoreForTests({
+      "hermes-cn-ui.sessionWorkspaces": { "persistent-id": "/Users/claw/proj" },
+    });
+
+    expect(
+      resolveSessionWorkspace(null, [null, "  ", "gateway-id", "persistent-id"]),
+    ).toBe("/Users/claw/proj");
+  });
+
+  it("resolveSessionWorkspace returns empty string when no workspace is known", () => {
+    __resetUiStoreForTests();
+
+    expect(resolveSessionWorkspace(null, ["unknown", null])).toBe("");
+    expect(resolveSessionWorkspace("", [])).toBe("");
   });
 
   it("stores workspace projects without duplicating equivalent paths", () => {
