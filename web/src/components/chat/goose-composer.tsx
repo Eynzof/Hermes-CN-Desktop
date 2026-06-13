@@ -39,6 +39,7 @@ import {
   type ComposerContextUsage,
   type ComposerModelPickerProps,
   type ComposerModelSelection,
+  type ComposerReasoningPickerProps,
   type ComposerSkillPickerProps,
   type ComposerSubmitControls,
   type ComposerSubmitPayload,
@@ -60,6 +61,7 @@ import {
   modelButtonText,
 } from "./goose-composer-model-picker";
 import { WorkspacePickerModal } from "@/components/composer/workspace-picker";
+import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
 import s from "./goose-composer.module.css";
 
 export interface ComposerHint {
@@ -92,6 +94,7 @@ interface GooseComposerProps {
   submitShortcut?: ComposerSubmitShortcut;
   loadingPlaceholder?: string;
   modelPicker?: ComposerModelPickerProps;
+  reasoningPicker?: ComposerReasoningPickerProps;
   skillPicker?: ComposerSkillPickerProps;
   contextUsage?: ComposerContextUsage | null;
   initialWorkspacePath?: string;
@@ -118,6 +121,7 @@ export function GooseComposer({
   hints,
   submitShortcut,
   modelPicker,
+  reasoningPicker,
   skillPicker,
   contextUsage,
   initialWorkspacePath = "",
@@ -849,6 +853,13 @@ export function GooseComposer({
                 <span>模型</span>
                 <small>{modelText}</small>
               </button>
+            ) : null}
+            {reasoningPicker ? (
+              <ReasoningEffortMenu
+                value={reasoningPicker.value}
+                onSelect={reasoningPicker.onSelect}
+                disabled={controlsDisabled || reasoningPicker.disabled}
+              />
             ) : null}
             {showMeta && (
               <>

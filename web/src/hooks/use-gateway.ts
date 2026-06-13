@@ -24,6 +24,7 @@ import {
   invalidateModelOptionsCache,
 } from "@/lib/model-options-cache";
 import { buildGatewayModelConfigValue } from "@/lib/provider-id";
+import type { ReasoningEffort } from "@/lib/reasoning-effort";
 import {
   rememberSessionMapping,
   resolveGatewaySessionId,
@@ -495,6 +496,31 @@ export function useGateway() {
     [ensureSubscribed, queryClient],
   );
 
+  // 思考强度走和模型选择同一条路：网关 config.set（key="reasoning"）。
+  // 后端会把字面档位写进 config.yaml 的 agent.reasoning_effort，并即时更新
+  // 该会话在内存里的 agent.reasoning_config，从而下一轮对话生效。
+  // （PUT /api/config 只落盘、不热更新当前会话，不满足"下一轮生效"。）
+  const setSessionReasoningEffort = useCallback(
+    async (sessionId: string, effort: ReasoningEffort): Promise<ConfigSetResult> => {
+      ensureSubscribed();
+      const result = parseGatewayResult(
+        ConfigSetResult,
+        await getGatewayClient().request("config.set", {
+          session_id: sessionId,
+          key: "reasoning",
+          value: effort,
+        }),
+        "config.set",
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["config"] }),
+        queryClient.invalidateQueries({ queryKey: ["model-info"] }),
+      ]);
+      return result;
+    },
+    [ensureSubscribed, queryClient],
+  );
+
   const attachImage = useCallback(
     async (sessionId: string, path: string): Promise<ImageAttachResult> => {
       ensureSubscribed();
@@ -596,6 +622,7 @@ export function useGateway() {
     probeProvider,
     setSessionModel,
     setRuntimeModel,
+    setSessionReasoningEffort,
     attachImage,
     detectDroppedPath,
     interruptSession,

@@ -31,6 +31,7 @@ import {
   estimateRenderedContextTokens,
 } from "@/lib/context-usage";
 import { resolveModelContextWindow } from "@/lib/model-context";
+import { reasoningEffortFromConfig, type ReasoningEffort } from "@/lib/reasoning-effort";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
   readSessionTitleOverrides,
@@ -80,6 +81,7 @@ export function DetailRoute() {
     getSessionUsage,
     getModelOptions,
     setSessionModel,
+    setSessionReasoningEffort,
     attachImage,
     detectDroppedPath,
   } = useGateway();
@@ -87,6 +89,10 @@ export function DetailRoute() {
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
+  // 思考强度是全局配置（agent.reasoning_effort），不分会话；本地态仅用于
+  // 选中后即时反馈，等 config 重新拉到后两者一致。null 表示尚未本地改过，
+  // 以配置里的值为准（再读不到则回落到后端默认）。
+  const [reasoningEffortOverride, setReasoningEffortOverride] = useState<ReasoningEffort | null>(null);
   const [sessionIdCopyState, setSessionIdCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
   const sessionIdCopyTimer = useRef<number | null>(null);
@@ -290,6 +296,21 @@ export function DetailRoute() {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
 
+  const configReasoningEffort = useMemo(() => reasoningEffortFromConfig(config), [config]);
+  const reasoningEffort = reasoningEffortOverride ?? configReasoningEffort;
+
+  const onReasoningEffortSelect = useCallback(async (effort: ReasoningEffort) => {
+    setReasoningEffortOverride(effort); // 立即反馈，等 config 重新拉到后一致
+    try {
+      const gatewaySessionId = await ensureGatewaySession();
+      await setSessionReasoningEffort(gatewaySessionId, effort);
+    } catch (error) {
+      // 失败则回退到配置里的实际值（override 置空 → 用 configReasoningEffort）
+      setReasoningEffortOverride(null);
+      console.error("设置思考强度失败：", error);
+    }
+  }, [ensureGatewaySession, setSessionReasoningEffort]);
+
   const onStop = useCallback(async () => {
     const sessionId = runtimeSessionId ?? taskId;
     if (!sessionId || !runtimeIsBusy) return;
@@ -428,6 +449,11 @@ export function DetailRoute() {
             initialOptions: modelOptionsCache ?? null,
             onSelect: onModelSelect,
             onConfigureProvider,
+            disabled: runtimeIsBusy,
+          }}
+          reasoningPicker={{
+            value: reasoningEffort,
+            onSelect: onReasoningEffortSelect,
             disabled: runtimeIsBusy,
           }}
           contextUsage={contextUsage}

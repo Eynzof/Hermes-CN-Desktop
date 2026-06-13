@@ -1,4 +1,5 @@
 import type { ModelOptionsResult, SkillInfo } from "@hermes/protocol";
+import type { ReasoningEffort } from "@/lib/reasoning-effort";
 
 export type ComposerAttachmentKind = "image" | "file" | "directory";
 export type ComposerAttachmentSource = "browser" | "path" | "uploaded";
@@ -71,6 +72,13 @@ export interface ComposerSkillPickerProps {
   skills: SkillInfo[];
   loading?: boolean;
   error?: string;
+  disabled?: boolean;
+}
+
+export interface ComposerReasoningPickerProps {
+  /** 当前思考强度；null 表示配置里未显式设置（后端回落到默认档）。 */
+  value: ReasoningEffort | null;
+  onSelect: (effort: ReasoningEffort) => void | Promise<void>;
   disabled?: boolean;
 }
 
