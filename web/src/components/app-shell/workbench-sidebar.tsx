@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Folder, MessageSquare, Plus } from "lucide-react";
+import { Popover } from "@hermes/shared-ui";
+import { Folder, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useActiveProfileName } from "@/hooks/use-profiles";
-import { prefetchSessionMessages, useSessions } from "@/hooks/use-sessions";
+import {
+  prefetchSessionMessages,
+  useArchiveSession,
+  useDeleteSessions,
+  useSessions,
+} from "@/hooks/use-sessions";
+import { useGateway } from "@/hooks/use-gateway";
 import {
   isSessionRunning,
   mergeLiveRuntimeSessions,
@@ -20,6 +27,13 @@ import {
   unpinSessions,
 } from "@/lib/session-ui-state";
 import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
+import {
+  SessionDeleteModal,
+  SessionRenameModal,
+  SessionRowMenu,
+  useSessionRowActions,
+  type UseSessionRowActions,
+} from "@/components/session-actions";
 import {
   readPinnedWorkspaceProjectPaths,
   readSessionWorkspaceMap,
@@ -66,36 +80,83 @@ interface SessionRowProps {
   active: boolean;
   meta: string;
   projectName?: string;
+  pinned: boolean;
+  actions: UseSessionRowActions;
   onClick: () => void;
   onHover?: () => void;
 }
 
-function SessionRow({ session, state, active, meta, projectName, onClick, onHover }: SessionRowProps) {
+function SessionRow({
+  session,
+  state,
+  active,
+  meta,
+  projectName,
+  pinned,
+  actions,
+  onClick,
+  onHover,
+}: SessionRowProps) {
   const title = sessionDisplayTitle(session);
   const dotState = state === "idle" ? undefined : state;
   return (
-    <button
-      type="button"
+    // role=button (not a real <button>) so the "⋯" trigger can nest inside it.
+    <div
       className={s.sessionRow}
       data-active={active ? "true" : undefined}
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       onMouseEnter={onHover}
       onFocus={onHover}
       title={title}
     >
-      <div className={s.ttl}>
-        <span className={s.dot} data-state={dotState} />
-        <span className={s.ttlText}>{title}</span>
+      <div className={s.rowMain}>
+        <div className={s.ttl}>
+          <span className={s.dot} data-state={dotState} />
+          <span className={s.ttlText}>{title}</span>
+        </div>
+        <div className={s.meta}>
+          <span className={s.metaText}>{meta}</span>
+          {projectName ? (
+            <span className={s.metaProject} title={projectName}>
+              {projectName}
+            </span>
+          ) : null}
+        </div>
       </div>
-      <div className={s.meta}>
-        <span className={s.metaText}>{meta}</span>
-        {projectName ? (
-          <span className={s.metaProject} title={projectName}>
-            {projectName}
-          </span>
-        ) : null}
-      </div>
-    </button>
+      <Popover.Root
+        open={actions.openMenuId === session.id}
+        onOpenChange={(open) => actions.setOpenMenuId(open ? session.id : null)}
+      >
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            className={s.rowMore}
+            aria-label="会话操作"
+            disabled={actions.isDeleting}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        </Popover.Trigger>
+        <SessionRowMenu
+          pinned={pinned}
+          disabled={actions.isDeleting}
+          onTogglePin={() => actions.togglePin(session.id)}
+          onRename={() => actions.startRename(session)}
+          onArchive={() => actions.handleArchive(session)}
+          onDelete={() => actions.openDeleteDialog([session])}
+        />
+      </Popover.Root>
+    </div>
   );
 }
 
@@ -107,6 +168,9 @@ export function WorkbenchSidebar() {
   const queryClient = useQueryClient();
   const profile = useActiveProfileName();
   const { data } = useSessions();
+  const archiveSession = useArchiveSession();
+  const deleteSessions = useDeleteSessions();
+  const { setSessionTitle, resumeSession } = useGateway();
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
@@ -202,6 +266,27 @@ export function WorkbenchSidebar() {
   const activeSessionId = location.pathname.startsWith("/tasks/")
     ? decodeURIComponent(location.pathname.slice("/tasks/".length))
     : null;
+
+  const onSessionsDeleted = useCallback(
+    (succeededIds: string[]) => {
+      // If the session being viewed was deleted, leave its detail route so we
+      // don't fall back to loading a now-missing session id.
+      if (activeSessionId && succeededIds.includes(activeSessionId)) {
+        setActiveId(null);
+        navigate("/");
+      }
+    },
+    [activeSessionId, navigate, setActiveId],
+  );
+  const rowActions = useSessionRowActions({
+    deleteSessions: (ids) => deleteSessions.mutateAsync(ids),
+    isDeleting: deleteSessions.isPending,
+    setSessionTitle,
+    resumeSession,
+    archive: archiveSession.mutate,
+    onDeleted: onSessionsDeleted,
+  });
+
   const showPinned = pinned.length > 0;
   const pinnedProjectSectionIndex = showPinned ? 3 : 2;
   const recentSectionIndex = pinnedProjectSectionIndex + 1;
@@ -266,6 +351,8 @@ export function WorkbenchSidebar() {
                 active={sessionIdMatches(sess.id, activeSessionId)}
                 meta={`${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}`}
                 projectName={projectNameBySessionId.get(sess.id)}
+                pinned={pinnedSessionIds.has(sess.id)}
+                actions={rowActions}
                 onClick={() => goSession(sess)}
                 onHover={() => hoverSession(sess)}
               />
@@ -296,6 +383,8 @@ export function WorkbenchSidebar() {
                   active={sessionIdMatches(sess.id, activeSessionId)}
                   meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
                   projectName={projectNameBySessionId.get(sess.id)}
+                  pinned={pinnedSessionIds.has(sess.id)}
+                  actions={rowActions}
                   onClick={() => goSession(sess)}
                   onHover={() => hoverSession(sess)}
                 />
@@ -362,6 +451,8 @@ export function WorkbenchSidebar() {
                   active={sessionIdMatches(sess.id, activeSessionId)}
                   meta={meta}
                   projectName={projectNameBySessionId.get(sess.id)}
+                  pinned={pinnedSessionIds.has(sess.id)}
+                  actions={rowActions}
                   onClick={() => goSession(sess)}
                   onHover={() => hoverSession(sess)}
                 />
@@ -370,6 +461,26 @@ export function WorkbenchSidebar() {
           )}
         </section>
       </div>
+
+      {rowActions.renamingSession ? (
+        <SessionRenameModal
+          value={rowActions.renameValue}
+          saving={rowActions.renameSaving}
+          error={rowActions.renameError}
+          onChange={rowActions.setRenameValue}
+          onClose={rowActions.closeRename}
+          onSubmit={rowActions.submitRename}
+        />
+      ) : null}
+
+      {rowActions.deleteTargets ? (
+        <SessionDeleteModal
+          sessions={rowActions.deleteTargets}
+          deleting={rowActions.isDeleting}
+          onClose={rowActions.closeDeleteDialog}
+          onConfirm={rowActions.confirmDelete}
+        />
+      ) : null}
     </aside>
   );
 }

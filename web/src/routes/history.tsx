@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Dialog, Popover } from "@hermes/shared-ui";
+import { Popover } from "@hermes/shared-ui";
 import {
-  Archive,
   ChevronDown,
-  Edit3,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -55,6 +53,11 @@ import {
   togglePinnedSource,
 } from "@/lib/source-pin";
 import { renameSession } from "@/lib/session-rename";
+import {
+  SessionDeleteModal,
+  SessionRenameModal,
+  SessionRowMenu,
+} from "@/components/session-actions";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
 import s from "./history.module.css";
 
@@ -92,179 +95,6 @@ function classifySession(
     return { kind: "failed", label: session.end_reason === "interrupted" ? "已中止" : "失败" };
   }
   return { kind: "done", label: "已完成" };
-}
-
-interface RowMenuProps {
-  pinned: boolean;
-  disabled?: boolean;
-  onTogglePin: () => void;
-  onRename: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-}
-
-function RowMenu({ pinned, disabled, onTogglePin, onRename, onArchive, onDelete }: RowMenuProps) {
-  return (
-    <Popover.Portal>
-      <Popover.Content
-        className={s.rowMenu}
-        align="end"
-        side="bottom"
-        sideOffset={4}
-        role="menu"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <Popover.Close asChild>
-          <button type="button" onClick={onTogglePin} role="menuitem" disabled={disabled}>
-            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
-            {pinned ? "取消置顶" : "置顶"}
-          </button>
-        </Popover.Close>
-        <Popover.Close asChild>
-          <button type="button" onClick={onRename} role="menuitem" disabled={disabled}>
-            <Edit3 size={13} /> 重命名
-          </button>
-        </Popover.Close>
-        <Popover.Close asChild>
-          <button type="button" onClick={onArchive} role="menuitem" disabled={disabled}>
-            <Archive size={13} /> 归档
-          </button>
-        </Popover.Close>
-        <Popover.Close asChild>
-          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger" disabled={disabled}>
-            <Trash2 size={13} /> 删除
-          </button>
-        </Popover.Close>
-      </Popover.Content>
-    </Popover.Portal>
-  );
-}
-
-interface RenameModalProps {
-  value: string;
-  saving: boolean;
-  error: string;
-  onChange: (next: string) => void;
-  onClose: () => void;
-  onSubmit: () => void;
-}
-
-function RenameModal({ value, saving, error, onChange, onClose, onSubmit }: RenameModalProps) {
-  return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open && !saving) onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className={s.modalBackdrop} />
-        <Dialog.Content
-          className={s.renameModal}
-          aria-describedby={error ? "history-rename-error" : undefined}
-          onEscapeKeyDown={(event) => {
-            if (saving) event.preventDefault();
-          }}
-          onInteractOutside={(event) => {
-            if (saving) event.preventDefault();
-          }}
-        >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmit();
-            }}
-          >
-            <Dialog.Title asChild>
-              <h2>重命名会话</h2>
-            </Dialog.Title>
-            <input
-              className={s.renameInput}
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-              autoFocus
-              maxLength={80}
-            />
-            {error ? (
-              <div id="history-rename-error" className={s.renameError}>
-                {error}
-              </div>
-            ) : null}
-            <div className={s.renameActions}>
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className={s.renameCancel}
-                  disabled={saving}
-                >
-                  取消
-                </button>
-              </Dialog.Close>
-              <button type="submit" className={s.renameSubmit} disabled={saving}>
-                {saving ? "保存中…" : "保存"}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-interface DeleteConfirmModalProps {
-  sessions: SessionSummary[];
-  deleting: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}
-
-function DeleteConfirmModal({ sessions, deleting, onClose, onConfirm }: DeleteConfirmModalProps) {
-  const count = sessions.length;
-  const preview = sessions.slice(0, 5);
-  return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open && !deleting) onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className={s.modalBackdrop} />
-        <Dialog.Content
-          className={s.confirmModal}
-          aria-describedby="history-delete-confirm-desc"
-          onEscapeKeyDown={(event) => {
-            if (deleting) event.preventDefault();
-          }}
-        >
-          <Dialog.Title asChild>
-            <h2>{count === 1 ? "删除会话" : "批量删除会话"}</h2>
-          </Dialog.Title>
-          <Dialog.Description id="history-delete-confirm-desc" className={s.confirmText}>
-            将删除 {count} 个会话，此操作不可撤销。
-          </Dialog.Description>
-          <div className={s.confirmList}>
-            {preview.map((session) => (
-              <div key={session.id} className={s.confirmListItem}>
-                {sessionDisplayTitle(session)}
-              </div>
-            ))}
-            {count > preview.length ? (
-              <div className={s.confirmListMore}>另有 {count - preview.length} 个会话</div>
-            ) : null}
-          </div>
-          <div className={s.confirmActions}>
-            <button type="button" className={s.confirmCancel} onClick={onClose} disabled={deleting}>
-              取消
-            </button>
-            <button type="button" className={s.confirmDanger} onClick={onConfirm} disabled={deleting}>
-              {deleting ? "删除中…" : "确认删除"}
-            </button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
 }
 
 interface SourcePopoverProps {
@@ -959,7 +789,7 @@ export function HistoryRoute() {
                             <MoreHorizontal size={14} />
                           </button>
                         </Popover.Trigger>
-                        <RowMenu
+                        <SessionRowMenu
                           pinned={pinned}
                           disabled={deleteSessions.isPending}
                           onTogglePin={() => onTogglePinSession(session.id)}
@@ -987,7 +817,7 @@ export function HistoryRoute() {
       </div>
 
       {renamingSession ? (
-        <RenameModal
+        <SessionRenameModal
           value={renameValue}
           saving={renameSaving}
           error={renameError}
@@ -1001,7 +831,7 @@ export function HistoryRoute() {
       ) : null}
 
       {deleteTargets ? (
-        <DeleteConfirmModal
+        <SessionDeleteModal
           sessions={deleteTargets}
           deleting={deleteSessions.isPending}
           onClose={closeDeleteDialog}
