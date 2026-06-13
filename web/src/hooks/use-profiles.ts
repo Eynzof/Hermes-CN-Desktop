@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteJSON, fetchJSON, postJSON, putJSON } from "@/lib/transport";
@@ -54,20 +54,56 @@ export function useActiveProfileName(): string {
 // arg 推到 __HERMES_RUNTIME__ 里——直接读它就够了，不需要走后端 query
 // （而且桌面端的 dashboard 进程绑定的就是这个 profile，绕开 query 减少
 // 一次启动 RTT）。Web 模式下走 query 路径。
+
+export interface BootstrapDecision {
+  /** 要把 atom 设成的 profile 名；null 表示保持不变。 */
+  next: string | null;
+  /** 本次是否已完成首次同步——调用方据此置 ref，之后不再覆盖。 */
+  hydrated: boolean;
+}
+
+// 纯函数（导出供测试）：决定引导期「一次性 hydration」的目标。
+//
+// 关键点：这是 *一次性* 引导。`useActiveProfile`（/api/profiles/active，staleTime 30s）
+// 在切换瞬间会短暂返回旧 profile；老逻辑每次 atom 变化都重跑，于是用户从其他档案切回
+// default 时，刚 setActive("default") 又被过期的 query 值改回旧档案（#189/#195 根因）。
+// 一旦 alreadyHydrated 为 true，这里一律返回 next=null——绝不回退用户的主动切换。
+export function resolveBootstrapProfile(input: {
+  alreadyHydrated: boolean;
+  current: string;
+  electronProfile: string | undefined;
+  queryData: string | undefined;
+}): BootstrapDecision {
+  const { alreadyHydrated, current, electronProfile, queryData } = input;
+  // 首次同步完成后，运行期的 profile 切换由 useSetActiveProfile 全权负责。
+  if (alreadyHydrated) return { next: null, hydrated: true };
+  // 桌面端：主进程已同步把权威 profile 推进 __HERMES_RUNTIME__，启动即可得。
+  if (electronProfile) {
+    const next =
+      current === "default" && electronProfile !== "default" ? electronProfile : null;
+    return { next, hydrated: true };
+  }
+  // Web：等后端 sticky 到达再决定；未到达则先不标记 hydrated，待下次重试。
+  if (queryData === undefined) return { next: null, hydrated: false };
+  const next = current === "default" && queryData !== "default" ? queryData : null;
+  return { next, hydrated: true };
+}
+
 export function useBootstrapActiveProfile() {
   const setActive = useSetAtom(activeProfileAtom);
   const current = useAtomValue(activeProfileAtom);
   const electronProfile = runtime.getCurrentProfile();
   const query = useActiveProfile();
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    if (electronProfile && current === "default" && electronProfile !== "default") {
-      setActive(electronProfile);
-      return;
-    }
-    if (!query.data) return;
-    if (current === "default" && query.data !== "default") {
-      setActive(query.data);
-    }
+    const decision = resolveBootstrapProfile({
+      alreadyHydrated: hydratedRef.current,
+      current,
+      electronProfile,
+      queryData: query.data,
+    });
+    if (decision.hydrated) hydratedRef.current = true;
+    if (decision.next !== null) setActive(decision.next);
   }, [electronProfile, query.data, current, setActive]);
 }
 
