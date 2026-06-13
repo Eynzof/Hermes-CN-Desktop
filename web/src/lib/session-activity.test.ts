@@ -4,11 +4,14 @@ import { createEmptyChatRuntime } from "@/stores/chat";
 import { __resetUiStoreForTests } from "@/lib/ui-store";
 import { rememberSessionMapping } from "@/lib/session-map";
 import {
+  STALL_WATCHDOG_THRESHOLD_MS,
   isRuntimeRunning,
   isSessionRunning,
   mergeLiveRuntimeSessions,
   sessionIdMatches,
+  streamSilenceMs,
 } from "./session-activity";
+import type { ChatSessionRuntime } from "@/stores/chat";
 
 function session(overrides: Partial<SessionSummary>): SessionSummary {
   return {
@@ -165,5 +168,53 @@ describe("session activity", () => {
     expect(sessions[0]?.id).toBe("persist-1");
     expect(isSessionRunning(sessions[0]!, { "gw-1": runtime })).toBe(true);
     expect(sessionIdMatches("persist-1", "gw-1")).toBe(true);
+  });
+});
+
+describe("streamSilenceMs (stall watchdog input)", () => {
+  function runningRuntime(overrides: Partial<ChatSessionRuntime> = {}): ChatSessionRuntime {
+    return {
+      ...createEmptyChatRuntime(0),
+      streamStatus: "streaming",
+      ...overrides,
+    };
+  }
+
+  it("returns null when the turn is not running", () => {
+    const idle = createEmptyChatRuntime(0); // streamStatus "idle"
+    expect(streamSilenceMs(idle, 10_000)).toBeNull();
+    expect(streamSilenceMs(undefined, 10_000)).toBeNull();
+  });
+
+  it("measures elapsed since the last backend activity while running", () => {
+    const runtime = runningRuntime({ lastActivityAt: 1_000, turnStartedAt: 500 });
+    expect(streamSilenceMs(runtime, 4_000)).toBe(3_000);
+  });
+
+  it("pauses while waiting on a pending approval (not a stall)", () => {
+    const runtime = runningRuntime({
+      lastActivityAt: 1_000,
+      pendingApprovals: [
+        { requestId: "r1", sessionId: "s1", command: "ls" },
+      ],
+    });
+    expect(streamSilenceMs(runtime, 999_000)).toBeNull();
+  });
+
+  it("falls back to turnStartedAt when no activity has been recorded yet", () => {
+    const runtime = runningRuntime({ lastActivityAt: undefined, turnStartedAt: 2_000 });
+    expect(streamSilenceMs(runtime, 5_000)).toBe(3_000);
+  });
+
+  it("never reports negative silence for clock skew", () => {
+    const runtime = runningRuntime({ lastActivityAt: 10_000 });
+    expect(streamSilenceMs(runtime, 1_000)).toBe(0);
+  });
+
+  it("exposes a generous default threshold", () => {
+    // A sanity bound: long enough to outlast normal pre-first-token thinking,
+    // short enough to be useful. Keep it in the tens-of-seconds range.
+    expect(STALL_WATCHDOG_THRESHOLD_MS).toBeGreaterThanOrEqual(30_000);
+    expect(STALL_WATCHDOG_THRESHOLD_MS).toBeLessThanOrEqual(180_000);
   });
 });

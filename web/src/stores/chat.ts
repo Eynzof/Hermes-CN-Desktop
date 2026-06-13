@@ -63,6 +63,14 @@ export interface ChatSessionRuntime {
   statusKind?: string;
   statusUpdatedAt?: number;
   updatedAt: number;
+  /**
+   * Wall-clock ms of the last *backend* event reduced for this session. Unlike
+   * {@link updatedAt} (also bumped by local atom mutations like manual
+   * interrupt / reset), this only advances when the gateway actually sends
+   * something, so the stall watchdog can tell a live turn apart from a wedged
+   * one where the backend has gone completely silent. See `session-activity.ts`.
+   */
+  lastActivityAt?: number;
   turnStartedAt?: number;
   turnFirstTokenAt?: number;
   activeAssistantId?: string;
@@ -513,6 +521,20 @@ function finalizeAssistantParts(
 }
 
 export function reduceGatewayEvent(
+  runtime: ChatSessionRuntime,
+  event: GatewayEvent,
+  now = Date.now(),
+): ChatSessionRuntime {
+  const next = reduceGatewayEventInner(runtime, event, now);
+  // Stamp the last time we heard from the backend. `next === runtime` means
+  // the event was a no-op (e.g. a late event from an interrupted turn that was
+  // dropped) — don't count those as activity. Everything the gateway actually
+  // applies resets the stall watchdog's silence timer.
+  if (next === runtime) return next;
+  return { ...next, lastActivityAt: now };
+}
+
+function reduceGatewayEventInner(
   runtime: ChatSessionRuntime,
   event: GatewayEvent,
   now = Date.now(),

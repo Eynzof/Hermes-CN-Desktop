@@ -18,6 +18,7 @@ import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { useComposerTimer } from "@/hooks/use-composer-timer";
+import { useStallWatchdog } from "@/hooks/use-stall-watchdog";
 import { useSessionResolution } from "@/hooks/use-session-resolution";
 import { useSessionUsagePolling } from "@/hooks/use-session-usage-polling";
 import { recordModelUsage } from "@/lib/model-usage-log";
@@ -51,6 +52,7 @@ import type {
   ComposerSubmitPayload,
 } from "@/components/chat/composer-types";
 import { MessageTimeline } from "@/components/chat/message-timeline";
+import { StallNotice } from "@/components/chat/stall-notice";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
   hermesUIMessagesToChatMessages,
@@ -345,6 +347,9 @@ export function DetailRoute() {
   const pendingApproval = runtime.pendingApprovals[0] ?? null;
 
   const composerTick = useComposerTimer(runtimeIsBusy, runtime.turnStartedAt);
+  // Task-level stall watchdog: detects a turn wedged on a dead provider call
+  // (the connection heartbeat can't — the gateway keeps answering pings).
+  const stall = useStallWatchdog(runtime);
 
   const composerLoadingPlaceholder = runtimeIsBusy && runtime.turnStartedAt
     ? `Hermes 思考中 · ${formatElapsedTimer(composerTick)}`
@@ -434,6 +439,9 @@ export function DetailRoute() {
         progressModel={runtimeIsBusy ? model || undefined : undefined}
       />
       <div className={s.composerArea}>
+        {runtimeIsBusy && stall.isStalled ? (
+          <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
+        ) : null}
         <GooseComposer
           key={taskId}
           initialWorkspacePath={sessionWorkspace}

@@ -1073,3 +1073,37 @@ describe("manual interrupt (markSessionInterruptedAtom)", () => {
     expect(textFromParts(assistants[assistants.length - 1].parts)).toContain("重试回合");
   });
 });
+
+describe("lastActivityAt (stall watchdog source)", () => {
+  it("stamps lastActivityAt with the event time for applied backend events", () => {
+    const base = createEmptyChatRuntime(0);
+    const started = reduceGatewayEvent(base, { type: "message.start", session_id: "s1" }, 1_000);
+    expect(started.lastActivityAt).toBe(1_000);
+
+    const delta = reduceGatewayEvent(
+      started,
+      { type: "message.delta", session_id: "s1", payload: { text: "hi" } },
+      2_500,
+    );
+    expect(delta.lastActivityAt).toBe(2_500);
+  });
+
+  it("does not advance lastActivityAt for dropped late events on an interrupted turn", () => {
+    const interrupted = {
+      ...createEmptyChatRuntime(0),
+      streamStatus: "streaming" as const,
+      interrupted: true,
+      lastActivityAt: 1_000,
+    };
+    // A late stream delta from the interrupted turn is dropped (no-op) — it must
+    // not count as activity, otherwise an interrupted-but-noisy turn would keep
+    // resetting the watchdog.
+    const next = reduceGatewayEvent(
+      interrupted,
+      { type: "message.delta", session_id: "s1", payload: { text: "late" } },
+      9_000,
+    );
+    expect(next).toBe(interrupted);
+    expect(next.lastActivityAt).toBe(1_000);
+  });
+});
