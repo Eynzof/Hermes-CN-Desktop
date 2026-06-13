@@ -25,6 +25,7 @@ use crate::state::AppState;
 const SESSION_LOG_ROUTE_PREFIX: &str = "/__hermes_session_log/";
 const EXTERNAL_TIMEOUT: Duration = Duration::from_secs(15);
 const DASHBOARD_PROXY_TIMEOUT: Duration = Duration::from_secs(30);
+const DASHBOARD_AUDIO_PROXY_TIMEOUT: Duration = Duration::from_secs(180);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_UPLOAD_BYTES: usize = 100 * 1024 * 1024;
 const MAX_UPLOAD_BASE64_LEN: usize = MAX_UPLOAD_BYTES.div_ceil(3) * 4;
@@ -33,6 +34,12 @@ static DASHBOARD_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(||
         .timeout(DASHBOARD_PROXY_TIMEOUT)
         .build()
         .expect("valid dashboard proxy HTTP client")
+});
+static DASHBOARD_AUDIO_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(DASHBOARD_AUDIO_PROXY_TIMEOUT)
+        .build()
+        .expect("valid dashboard audio proxy HTTP client")
 });
 static UPLOAD_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
@@ -89,6 +96,10 @@ fn url_path(path: &str) -> String {
     } else {
         path.split('?').next().unwrap_or(path).to_string()
     }
+}
+
+fn is_audio_api_path(path: &str) -> bool {
+    url_path(path).starts_with("/api/audio/")
 }
 
 fn upload_limit_error() -> AppError {
@@ -247,6 +258,13 @@ mod tests {
     #[test]
     fn url_path_handles_root() {
         assert_eq!(url_path("/"), "/");
+    }
+
+    #[test]
+    fn audio_api_path_matches_audio_routes_with_queries() {
+        assert!(is_audio_api_path("/api/audio/transcribe"));
+        assert!(is_audio_api_path("/api/audio/speak?debug=1"));
+        assert!(!is_audio_api_path("/api/model/info"));
     }
 
     #[test]
@@ -435,8 +453,13 @@ pub async fn api_request_impl_with_home_base(
         format!("{}{}", base, p)
     };
 
-    let mut req = DASHBOARD_PROXY_HTTP_CLIENT
-        .request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
+    let dashboard_client = if is_audio_api_path(path) {
+        &*DASHBOARD_AUDIO_PROXY_HTTP_CLIENT
+    } else {
+        &*DASHBOARD_PROXY_HTTP_CLIENT
+    };
+    let mut req =
+        dashboard_client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
 
     // Inject auth headers
     if let Some(token) = session_token {

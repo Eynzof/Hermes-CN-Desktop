@@ -36,6 +36,11 @@ describe("TOP_TABS", () => {
     expect(BACKUP_ITEMS.some((item) => item.label === "备份恢复" && item.path === "/backup")).toBe(true);
   });
 
+  it("keeps voice setup under the 02 config tab and sidebar section", () => {
+    expect(tabFor("/voice")).toBe("skills");
+    expect(CONFIG_ITEMS.some((item) => item.label === "语音" && item.path === "/voice")).toBe(true);
+  });
+
   it("keeps soul under the 02 config tab and sidebar section", () => {
     expect(tabFor("/soul")).toBe("skills");
     expect(tabFor("/soul/edit")).toBe("skills");

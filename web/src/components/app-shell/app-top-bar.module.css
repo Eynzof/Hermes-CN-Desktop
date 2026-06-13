@@ -22,6 +22,7 @@
   position: relative;
   z-index: 10;
   -webkit-app-region: drag;
+  min-width: 0;
 }
 
 .topbar > *:not([data-no-drag]) {
@@ -118,12 +119,16 @@
 .nav {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 2px;
   margin-left: 0;
   -webkit-app-region: no-drag;
+  white-space: nowrap;
 }
 
 .navLink {
+  flex: 0 0 auto;
   padding: 6px 10px;
   font-size: 12px;
   color: var(--h-text-2);
@@ -138,6 +143,7 @@
   background: transparent;
   border: none;
   transition: color 0.12s, background 0.12s;
+  white-space: nowrap;
 }
 
 .navLink:hover {
@@ -185,8 +191,9 @@
 }
 
 .search {
-  flex: 0 1 clamp(220px, 28vw, 360px);
-  width: clamp(220px, 28vw, 360px);
+  flex: 1 1 clamp(96px, 28vw, 360px);
+  width: auto;
+  min-width: 96px;
   max-width: 360px;
   margin-left: auto;
   height: var(--h-topbar-control-h);
@@ -204,6 +211,14 @@
   -webkit-app-region: no-drag;
   user-select: none;
   transition: var(--h-topbar-control-transition);
+  overflow: hidden;
+}
+
+.search > span:not(.searchKbd) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .search:hover {
@@ -213,6 +228,7 @@
 }
 
 .searchKbd {
+  flex: 0 0 auto;
   margin-left: auto;
   font-family: var(--h-font-mono);
   font-size: 9.5px;
@@ -227,6 +243,7 @@
 .actions {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 6px;
   margin-left: 0;
   -webkit-app-region: no-drag;

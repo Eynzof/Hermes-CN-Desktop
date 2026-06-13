@@ -60,7 +60,7 @@
 |---|---|---|---|---|
 | **右栏富预览（三栏）** | `app/chat/right-rail/{preview,preview-pane,preview-file,preview-console}.tsx`：网页沙箱 iframe 预览、文件/代码/JSON 预览、工具输出 console、**磁盘文件实时 watch** | `web/src/routes/detail.tsx` + `components/chat/message-timeline.tsx` 为**单栏时间线**，无集成预览（仅有独立 `console.tsx` 终端页、`logs.tsx` 日志页） | 🔴 高 | **已计划**（proto 03–06，PRD §5.1 三栏，未实现） |
 | **富 Composer** | `app/chat/composer/`：斜杠 `/skill` 弹层（`skin-slash-popover.tsx`、`trigger-popover.tsx`）、`@`-mention 内联引用文件/URL/历史会话（`inline-refs.ts`）、URL 元数据弹窗（`url-dialog.tsx`）、**队列/批量发送**（`queue-panel.tsx`）、补全抽屉（`completion-drawer.tsx`） | `components/chat/goose-composer*.tsx` 有附件 + 模型选择（`lib/composer-skills.ts` 部分能力），**缺队列 / URL 弹窗 / `@`-mention / 斜杠弹层** | 🟡 中 | 部分计划（proto 02） |
-| **Composer 语音 I/O** | 麦克风录音 + 静音检测（`composer/voice-activity.tsx`）+ Whisper 转写 + TTS 朗读 | **仅在设置暴露 `voice.*`/`tts.*` 配置项**（`lib/config-translations.ts`、`lib/env-translations.ts`），无录音 / 朗读 UI（后端已支持，缺前端） | 🟢 低 | 未提及 |
+| **Composer 语音 I/O** | 麦克风录音 + 静音检测（`composer/voice-activity.tsx`）+ Whisper 转写 + TTS 朗读 | 已补 Composer 录音转写入口、助手回复朗读/停止入口和 `/voice` 语音模型配置向导，复用 `/api/audio/transcribe`、`/api/audio/speak` 与 `voice.*`/`stt.*`/`tts.*` 配置；暂未实现官方连续语音对话模式 | 🟢 低 | 未提及 |
 
 ### 3.2 我们缺的独立页面
 

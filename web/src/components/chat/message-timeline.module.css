@@ -639,6 +639,35 @@
   color: var(--h-err);
 }
 
+.messageActions button[data-speech-state] {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.messageActions button[data-speech-state] svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2;
+}
+
+.messageActions button[data-speech-state="preparing"] svg {
+  animation: spin 0.85s linear infinite;
+}
+
+.messageActions button[data-speech-state="preparing"],
+.messageActions button[data-speech-state="speaking"] {
+  color: var(--h-accent);
+}
+
+.messageSpeechError {
+  max-width: min(360px, 52vw);
+  overflow: hidden;
+  color: var(--h-err);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .messageStats {
   position: relative;
   display: inline-flex;
@@ -1132,5 +1161,11 @@
 
   .toolActivityMeta {
     max-width: 180px;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }

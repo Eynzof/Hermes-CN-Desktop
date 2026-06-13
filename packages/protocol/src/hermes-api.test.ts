@@ -1,13 +1,58 @@
 import { describe, expect, it } from "vitest";
 import {
   AnalyticsResponse,
+  AudioSpeakResponse,
+  AudioTranscriptionResponse,
   CronJob,
   CronJobsResponse,
   CronRunDetail,
   CronRunsResponse,
+  ElevenLabsVoicesResponse,
   SessionsResponse,
   SessionSummary,
 } from "./hermes-api";
+
+
+describe("Audio API schemas", () => {
+  it("parses desktop transcription responses", () => {
+    const parsed = AudioTranscriptionResponse.parse({
+      ok: true,
+      transcript: "你好 Hermes",
+      provider: "openai",
+    });
+
+    expect(parsed.transcript).toBe("你好 Hermes");
+    expect(parsed.provider).toBe("openai");
+  });
+
+  it("parses desktop speech responses with nullable provider", () => {
+    const parsed = AudioSpeakResponse.parse({
+      ok: true,
+      data_url: "data:audio/mpeg;base64,AAAA",
+      mime_type: "audio/mpeg",
+      provider: null,
+    });
+
+    expect(parsed.data_url).toContain("data:audio/mpeg");
+    expect(parsed.provider).toBeNull();
+  });
+
+  it("parses ElevenLabs voice list responses", () => {
+    const parsed = ElevenLabsVoicesResponse.parse({
+      available: true,
+      voices: [
+        {
+          voice_id: "voice-1",
+          name: "Rachel",
+          label: "Rachel (premade)",
+        },
+      ],
+    });
+
+    expect(parsed.available).toBe(true);
+    expect(parsed.voices[0]?.voice_id).toBe("voice-1");
+  });
+});
 
 describe("CronJobsResponse", () => {
   it("parses current dashboard cron jobs with structured schedules", () => {

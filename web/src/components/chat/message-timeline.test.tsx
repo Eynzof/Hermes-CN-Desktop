@@ -259,4 +259,31 @@ describe("MessageTimeline", () => {
 
     expect(html).not.toContain("对话轮次定位");
   });
+  it("renders read-aloud controls only for completed assistant messages", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "问题" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, status: "complete", text: "回答" },
+    ];
+
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MessageTimeline messages={messages} />,
+    );
+
+    expect(html).toContain('title="朗读回复"');
+    expect(html).toContain("朗读");
+  });
+
+  it("does not render read-aloud controls for user or streaming assistant messages", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "问题" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, status: "streaming", text: "回答中" },
+    ];
+
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MessageTimeline messages={messages} />,
+    );
+
+    expect(html).not.toContain('title="朗读回复"');
+  });
+
 });

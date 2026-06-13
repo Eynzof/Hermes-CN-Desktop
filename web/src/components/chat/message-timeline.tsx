@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
-import { AlertTriangle, ChevronRight, Info } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
 import { showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { MessageImage } from "./message-image";
@@ -12,6 +12,7 @@ import s from "./message-timeline.module.css";
 import { summarizeToolActivity } from "./tool-activity";
 import { groupConsecutiveTools, groupElapsedMs } from "./group-tools";
 import { truncateMiddle } from "@/lib/truncate-middle";
+import { sanitizeTextForSpeech, speakText, voiceErrorMessage } from "@/lib/voice";
 import {
   formatDurationMs,
   formatElapsedTimer,
@@ -32,12 +33,32 @@ interface MessageTimelineProps {
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
   progressModel?: string;
+  autoTts?: boolean;
 }
 
 interface TurnAnchor {
   id: string;
   index: number;
   title: string;
+}
+
+type SpeechPlaybackStatus = "idle" | "preparing" | "speaking";
+
+interface SpeechPlaybackState {
+  messageId: string | null;
+  status: SpeechPlaybackStatus;
+}
+
+interface SpeechPlaybackError {
+  message: string;
+  messageId: string;
+}
+
+interface SpeechPlaybackControls {
+  error: SpeechPlaybackError | null;
+  onSpeak: (messageId: string, text: string) => void;
+  onStop: () => void;
+  state: SpeechPlaybackState;
 }
 
 export function resolveBottomFollowState(
@@ -483,6 +504,18 @@ function getCopyableText(message: ChatMessage): string | undefined {
   return message.text || message.reasoning;
 }
 
+function getReadableText(message: ChatMessage): string | undefined {
+  if (message.blocks?.length) {
+    const text = message.blocks
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n\n")
+      .trim();
+    return text || undefined;
+  }
+  return message.text?.trim() || undefined;
+}
+
 const FINISH_REASON_LABEL: Record<string, string> = {
   stop: "正常",
   end_turn: "正常",
@@ -598,15 +631,21 @@ interface MessageBubbleProps {
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
   progressModel?: string;
+  speech?: SpeechPlaybackControls;
 }
 
-function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: MessageBubbleProps) {
+function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
   const isUser = message.role === "user";
   const isToolOnly = message.role === "tool";
   const isSystem = message.role === "system";
   const streaming = message.status === "streaming";
   const copyable = getCopyableText(message);
+  const readable = !isUser && !isSystem && !isToolOnly && !streaming && message.status !== "error"
+    ? getReadableText(message)
+    : undefined;
+  const speechStatus = speech?.state.messageId === message.id ? speech.state.status : "idle";
+  const speechBusy = speechStatus === "preparing" || speechStatus === "speaking";
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
 
   if (isToolOnly) {
@@ -685,6 +724,33 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: 
                 复制
               </CopyButton>
             ) : null}
+            {readable && speech ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (speechBusy) {
+                    speech.onStop();
+                  } else {
+                    speech.onSpeak(message.id, readable);
+                  }
+                }}
+                data-speech-state={speechStatus}
+                aria-pressed={speechBusy}
+                title={speechBusy ? "停止朗读" : "朗读回复"}
+              >
+                {speechStatus === "preparing" ? (
+                  <Loader2 aria-hidden="true" />
+                ) : speechStatus === "speaking" ? (
+                  <VolumeX aria-hidden="true" />
+                ) : (
+                  <Volume2 aria-hidden="true" />
+                )}
+                <span>{speechBusy ? "停止" : "朗读"}</span>
+              </button>
+            ) : null}
+            {speech?.error?.messageId === message.id ? (
+              <span className={s.messageSpeechError}>{speech.error.message}</span>
+            ) : null}
           </span>
           {message.stats ? <MessageStatsFooter stats={message.stats} /> : null}
         </div>
@@ -701,6 +767,7 @@ export function MessageTimeline({
   turnStartedAt,
   sessionUsage,
   progressModel,
+  autoTts = false,
 }: MessageTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -717,7 +784,17 @@ export function MessageTimeline({
   const programmaticTimerRef = useRef<number | null>(null);
   const messageCountRef = useRef(0);
   const firstMessageIdRef = useRef<string | undefined>(undefined);
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechStopRef = useRef<(() => void) | null>(null);
+  const speechSequenceRef = useRef(0);
+  const autoTtsSeenRef = useRef<Set<string>>(new Set());
+  const autoTtsSessionKeyRef = useRef<string | undefined>(undefined);
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
+  const [speechState, setSpeechState] = useState<SpeechPlaybackState>({
+    messageId: null,
+    status: "idle",
+  });
+  const [speechError, setSpeechError] = useState<SpeechPlaybackError | null>(null);
   const visibleMessages = useMemo(
     () =>
       messages.filter(
@@ -744,6 +821,116 @@ export function MessageTimeline({
     return anchors;
   }, [visibleMessages]);
   const showTurnRail = turnAnchors.length > 1;
+
+  const stopSpeech = useCallback(() => {
+    speechSequenceRef.current += 1;
+    speechStopRef.current?.();
+    speechStopRef.current = null;
+    if (speechAudioRef.current) {
+      speechAudioRef.current.pause();
+      speechAudioRef.current.src = "";
+      speechAudioRef.current.load();
+      speechAudioRef.current = null;
+    }
+    setSpeechState({ messageId: null, status: "idle" });
+  }, []);
+
+  const playSpeech = useCallback(async (messageId: string, text: string) => {
+    const speakableText = sanitizeTextForSpeech(text);
+    if (!speakableText) {
+      setSpeechError({ messageId, message: "没有可朗读的文本。" });
+      return;
+    }
+
+    stopSpeech();
+    const ownSequence = speechSequenceRef.current;
+    setSpeechError(null);
+    setSpeechState({ messageId, status: "preparing" });
+
+    try {
+      const response = await speakText(speakableText);
+      if (speechSequenceRef.current !== ownSequence) return;
+
+      const audio = new Audio(response.data_url);
+      speechAudioRef.current = audio;
+      setSpeechState({ messageId, status: "speaking" });
+
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          audio.removeEventListener("ended", onEnded);
+          audio.removeEventListener("error", onError);
+          if (speechStopRef.current === onStop) speechStopRef.current = null;
+        };
+        const onEnded = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error("音频播放失败"));
+        };
+        const onStop = () => {
+          cleanup();
+          resolve();
+        };
+        speechStopRef.current = onStop;
+        audio.addEventListener("ended", onEnded, { once: true });
+        audio.addEventListener("error", onError, { once: true });
+        void audio.play().catch(reject);
+      });
+
+      if (speechSequenceRef.current !== ownSequence) return;
+      speechAudioRef.current = null;
+      setSpeechState({ messageId: null, status: "idle" });
+    } catch (error) {
+      if (speechSequenceRef.current !== ownSequence) return;
+      speechAudioRef.current = null;
+      speechStopRef.current = null;
+      setSpeechState({ messageId: null, status: "idle" });
+      setSpeechError({ messageId, message: voiceErrorMessage(error, "朗读失败") });
+    }
+  }, [stopSpeech]);
+
+  useEffect(() => () => {
+    speechSequenceRef.current += 1;
+    speechStopRef.current?.();
+    speechStopRef.current = null;
+    if (speechAudioRef.current) {
+      speechAudioRef.current.pause();
+      speechAudioRef.current.src = "";
+      speechAudioRef.current.load();
+      speechAudioRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const completed = messages.filter((message) =>
+      message.role === "assistant" &&
+      message.status === "complete" &&
+      Boolean(getReadableText(message)),
+    );
+    const sessionKey = messages[0]?.id;
+    if (autoTtsSessionKeyRef.current !== sessionKey) {
+      autoTtsSessionKeyRef.current = sessionKey;
+      autoTtsSeenRef.current = new Set(completed.map((message) => message.id));
+      return;
+    }
+
+    const fresh = completed.filter((message) => !autoTtsSeenRef.current.has(message.id));
+    for (const message of completed) autoTtsSeenRef.current.add(message.id);
+    if (!autoTts || fresh.length === 0) return;
+
+    const target = fresh[fresh.length - 1];
+    const text = target ? getReadableText(target) : undefined;
+    if (target && text) void playSpeech(target.id, text);
+  }, [autoTts, messages, playSpeech]);
+
+  const speechControls = useMemo<SpeechPlaybackControls>(() => ({
+    error: speechError,
+    onSpeak: (messageId, text) => void playSpeech(messageId, text),
+    onStop: stopSpeech,
+    state: speechState,
+  }), [playSpeech, speechError, speechState, stopSpeech]);
 
   const setTurnAnchorNode = useCallback((id: string, node: HTMLDivElement | null) => {
     if (node) {
@@ -1063,6 +1250,7 @@ export function MessageTimeline({
                 turnStartedAt={isLast ? turnStartedAt : undefined}
                 sessionUsage={isLast ? sessionUsage : undefined}
                 progressModel={isLast ? progressModel : undefined}
+                speech={speechControls}
               />
             </div>
           );

@@ -4,6 +4,7 @@
 
 .box {
   position: relative;
+  container: hermes-composer / inline-size;
   width: 100%;
   border: 1px solid var(--h-line);
   border-radius: 18px;
@@ -413,6 +414,78 @@
   white-space: nowrap;
 }
 
+
+.voiceActivity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 2px 10px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 24%, var(--h-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--h-accent-soft) 54%, var(--h-bg-soft));
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 9px;
+}
+
+.box[data-variant="big"] .voiceActivity {
+  margin: 14px 18px 0;
+}
+
+.voiceActivityIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--h-accent) 13%, transparent);
+  color: var(--h-accent);
+}
+
+.voiceActivityIcon svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
+}
+
+.voiceActivityIcon[data-status="transcribing"] svg,
+.iconButton[data-status="transcribing"] svg {
+  animation: spin 0.85s linear infinite;
+}
+
+.voiceActivityText {
+  color: var(--h-text);
+  font-weight: 600;
+}
+
+.voiceActivityTime {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.voiceBars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: 28px;
+  height: 14px;
+  color: var(--h-accent);
+}
+
+.voiceBars span {
+  width: 2px;
+  min-height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.72;
+  transition: height 0.1s ease-out;
+}
+
 .skillPanel {
   margin: 8px 2px 0;
   border: 1px solid var(--h-line);
@@ -572,6 +645,26 @@
 
 .errorText {
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.errorAction {
+  border: 1px solid color-mix(in srgb, var(--h-err) 34%, var(--h-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--h-err) 8%, transparent);
+  color: var(--h-err);
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 9px;
+}
+
+.errorAction:hover {
+  background: color-mix(in srgb, var(--h-err) 12%, transparent);
 }
 
 .contextWarning {
@@ -1141,6 +1234,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   min-height: var(--composer-action-height);
   margin-top: 8px;
 }
@@ -1154,7 +1248,13 @@
   min-height: var(--composer-action-height);
 }
 
+.leftTools {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 .rightTools {
+  flex: 0 0 auto;
   margin-left: auto;
 }
 
@@ -1180,6 +1280,16 @@
   padding: 0;
 }
 
+.iconButton:hover:not(:disabled),
+.iconButton[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.iconButton[data-active="true"] {
+  color: var(--h-accent);
+}
+
 .iconButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -1187,6 +1297,7 @@
 
 .toolButton {
   flex: 0 1 auto;
+  max-width: min(232px, 34%);
   height: var(--composer-tool-height);
   gap: 6px;
   border-radius: var(--h-r-md);
@@ -1393,6 +1504,7 @@
 .sendButton {
   --composer-send-accent: var(--h-accent);
 
+  flex: 0 0 auto;
   min-width: 88px;
   height: var(--composer-action-height);
   gap: 7px;
@@ -1444,11 +1556,68 @@
   flex: 0 0 auto;
 }
 
+@container hermes-composer (max-width: 760px) {
+  .toolbar {
+    gap: 8px;
+  }
+
+  .leftTools,
+  .rightTools {
+    gap: 5px;
+  }
+
+  .toolButton {
+    max-width: none;
+    padding: 0 9px;
+  }
+
+  .toolButton small,
+  .leftTools > button small {
+    display: none;
+  }
+
+  .sendButton {
+    min-width: 76px;
+    padding: 0 12px;
+  }
+}
+
+@container hermes-composer (max-width: 620px) {
+  .toolButton,
+  .leftTools > button[aria-haspopup="menu"] {
+    width: var(--composer-tool-height);
+    padding: 0;
+  }
+
+  .toolButton span,
+  .leftTools > button[aria-haspopup="menu"] span {
+    display: none;
+  }
+}
+
+@container hermes-composer (max-width: 520px) {
+  .sendButton {
+    min-width: var(--composer-action-height);
+    width: var(--composer-action-height);
+    padding: 0;
+  }
+
+  .sendButton span {
+    display: none;
+  }
+}
+
 .liveDot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
   background: var(--h-ok);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {

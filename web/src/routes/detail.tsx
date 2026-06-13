@@ -42,6 +42,7 @@ import {
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
 import { uploadAttachmentFile } from "@/lib/transport";
+import { voiceAutoTtsFromConfig } from "@/lib/voice";
 import {
   rememberSessionWorkspace,
   rememberWorkspaceProject,
@@ -422,6 +423,7 @@ export function DetailRoute() {
     selectedContextMax,
     estimatedUsed: estimatedContextUsed,
   });
+  const autoTts = voiceAutoTtsFromConfig(config);
   const pageStyle = useMemo(
     () => {
       const font = conversationFontSizeVars(conversationFontSizeMode);
@@ -502,6 +504,7 @@ export function DetailRoute() {
             turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
             sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
             progressModel={runtimeIsBusy ? model || undefined : undefined}
+            autoTts={autoTts}
           />
           <div className={s.composerArea}>
             {runtimeIsBusy && stall.isStalled ? (
@@ -515,6 +518,7 @@ export function DetailRoute() {
               showMeta={false}
               loading={runtimeIsBusy}
               onStop={onStop}
+              voiceConfig={config ?? null}
               modelPicker={{
                 selected: contextSelection,
                 label: model || modelInfo?.model,
@@ -536,6 +540,7 @@ export function DetailRoute() {
         {subagentPanelOpen ? (
           <SubagentPanel subagents={subagents} onClose={() => setSubagentPanelOpen(false)} />
         ) : null}
+
       </div>
     </div>
   );

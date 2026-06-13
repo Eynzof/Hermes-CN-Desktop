@@ -245,6 +245,7 @@ declare global {
       uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
       pickFiles?(): Promise<ElectronFilePickerResult>;
       pickDirectory?(): Promise<ElectronFilePickerResult>;
+      requestMicrophoneAccess?(): Promise<boolean>;
       createWorkspaceProject?(): Promise<ElectronFilePickerResult>;
       openWorkspacePath?(input: { path: string }): Promise<ElectronApiRequestResult>;
       openExternalUrl?(input: { url: string }): Promise<ElectronSimpleResult>;

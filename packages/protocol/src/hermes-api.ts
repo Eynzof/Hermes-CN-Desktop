@@ -41,6 +41,44 @@ export const StatusResponse = z.object({
 });
 export type StatusResponse = z.infer<typeof StatusResponse>;
 
+// ── Audio (/api/audio/*) ──────────────────────────────────────────────
+
+export const AudioTranscriptionResponse = z
+  .object({
+    ok: z.boolean(),
+    transcript: z.string(),
+    provider: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type AudioTranscriptionResponse = z.infer<typeof AudioTranscriptionResponse>;
+
+export const AudioSpeakResponse = z
+  .object({
+    ok: z.boolean(),
+    data_url: z.string(),
+    mime_type: z.string(),
+    provider: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type AudioSpeakResponse = z.infer<typeof AudioSpeakResponse>;
+
+export const ElevenLabsVoice = z
+  .object({
+    voice_id: z.string(),
+    name: z.string(),
+    label: z.string(),
+  })
+  .passthrough();
+export type ElevenLabsVoice = z.infer<typeof ElevenLabsVoice>;
+
+export const ElevenLabsVoicesResponse = z
+  .object({
+    available: z.boolean(),
+    voices: z.array(ElevenLabsVoice),
+  })
+  .passthrough();
+export type ElevenLabsVoicesResponse = z.infer<typeof ElevenLabsVoicesResponse>;
+
 // ── Messaging platforms (/api/messaging/platforms) ────────────────────
 
 export const MessagingEnvVarInfo = z
