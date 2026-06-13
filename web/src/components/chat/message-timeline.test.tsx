@@ -99,10 +99,10 @@ describe("MessageTimeline", () => {
 
   it("keeps safe relative Markdown links renderable", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
-      <MarkdownText text="[内部帮助](/advanced/about)" />,
+      <MarkdownText text="[内部帮助](/about)" />,
     );
 
-    expect(html).toContain("href=\"/advanced/about\"");
+    expect(html).toContain("href=\"/about\"");
     expect(html).toContain("内部帮助");
   });
 

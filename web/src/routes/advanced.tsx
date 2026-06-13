@@ -6,6 +6,26 @@ import { EnvironmentSection } from "./environment";
 
 type AdvancedSection = "general" | "notifications" | "config" | "connection" | "kernel" | "env" | "about";
 
+const SECTION_PATHS: Record<AdvancedSection, string> = {
+  general: "/common",
+  notifications: "/notifications",
+  config: "/config",
+  connection: "/connection",
+  kernel: "/kernel",
+  env: "/env",
+  about: "/about",
+};
+
+const LEGACY_SECTION_PATHS: Record<string, AdvancedSection> = {
+  "/advanced": "general",
+  "/advanced/notifications": "notifications",
+  "/advanced/config": "config",
+  "/advanced/connection": "connection",
+  "/advanced/kernel": "kernel",
+  "/advanced/env": "env",
+  "/advanced/about": "about",
+};
+
 const SECTION_META: Record<AdvancedSection, { title: string; sub: string }> = {
   general: { title: "常规", sub: "调整会话显示与输入偏好。" },
   notifications: { title: "通知", sub: "控制任务完成与权限确认的系统通知、提示音。" },
@@ -25,21 +45,20 @@ export function ThemeRoute() {
 }
 
 function sectionFromPath(pathname: string): AdvancedSection | null {
-  if (pathname === "/advanced" || pathname === "/advanced/") return "general";
-  if (pathname === "/advanced/notifications") return "notifications";
-  if (pathname === "/advanced/config") return "config";
-  if (pathname === "/advanced/connection") return "connection";
-  if (pathname === "/advanced/kernel") return "kernel";
-  if (pathname === "/advanced/env") return "env";
-  if (pathname === "/advanced/about") return "about";
-  return null;
+  const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  const canonicalSection = Object.entries(SECTION_PATHS).find(([, path]) => path === normalized)?.[0];
+  return (canonicalSection as AdvancedSection | undefined) ?? LEGACY_SECTION_PATHS[normalized] ?? null;
 }
 
 export function AdvancedRoute() {
-  const { pathname } = useLocation();
+  const { hash, pathname } = useLocation();
   const section = sectionFromPath(pathname);
 
-  if (!section) return <Navigate to="/advanced" replace />;
+  if (!section) return <Navigate to="/common" replace />;
+
+  const canonicalPath = SECTION_PATHS[section];
+  const normalizedPathname = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  if (normalizedPathname !== canonicalPath) return <Navigate to={`${canonicalPath}${hash}`} replace />;
 
   const meta = SECTION_META[section];
   return (

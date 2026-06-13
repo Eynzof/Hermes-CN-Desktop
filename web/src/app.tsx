@@ -80,8 +80,15 @@ export function App() {
           <Route path="/logs" element={withBoundary(<LogsRoute />)} />
           <Route path="/debug" element={withBoundary(<DebugRoute />)} />
           <Route path="/theme" element={withBoundary(<ThemeRoute />)} />
+          <Route path="/common" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/notifications" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/config" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/connection" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/kernel" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/env" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/settings" element={<Navigate to="/advanced" replace />} />
+          <Route path="/settings" element={<Navigate to="/common" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppShell>

@@ -504,7 +504,7 @@ function ApprovalDialog({ approval }: { approval: { requestId: string; sessionId
         <button className={s.approvalDeny} onClick={() => respond("deny")} disabled={responding !== null}>
           {responding === "deny" ? "发送中..." : "拒绝"}
         </button>
-        <button className={s.approvalSettings} onClick={() => navigate("/advanced#approval-mode")} disabled={responding !== null}>
+        <button className={s.approvalSettings} onClick={() => navigate("/common#approval-mode")} disabled={responding !== null}>
           调整审批模式
         </button>
       </div>

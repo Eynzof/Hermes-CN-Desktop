@@ -22,7 +22,7 @@ describe("external-links", () => {
     expect(normalizeExternalUrl("javascript:alert(1)")).toBeNull();
     expect(normalizeExternalUrl("tauri://localhost")).toBeNull();
     expect(normalizeExternalUrl("obsidian:open")).toBeNull();
-    expect(normalizeExternalUrl("/advanced/about")).toBeNull();
+    expect(normalizeExternalUrl("/about")).toBeNull();
   });
 
   it("uses the desktop opener before falling back to window.open", async () => {

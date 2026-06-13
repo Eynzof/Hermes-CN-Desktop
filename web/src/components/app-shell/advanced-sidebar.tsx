@@ -30,14 +30,14 @@ const OBSERVABILITY_ITEMS: readonly AdvancedItem[] = [
 ];
 
 const ADVANCED_ITEMS: readonly AdvancedItem[] = [
-  { label: "常规", path: "/advanced", icon: SlidersHorizontal },
-  { label: "通知", path: "/advanced/notifications", icon: Bell },
+  { label: "常规", path: "/common", icon: SlidersHorizontal },
+  { label: "通知", path: "/notifications", icon: Bell },
   { label: "主题", path: "/theme", icon: Palette },
-  { label: "配置", path: "/advanced/config", icon: FileCog },
-  { label: "连接", path: "/advanced/connection", icon: Cable },
-  { label: "内核", path: "/advanced/kernel", icon: Cpu },
-  { label: "环境", path: "/advanced/env", icon: MonitorCog },
-  { label: "关于", path: "/advanced/about", icon: Info },
+  { label: "配置", path: "/config", icon: FileCog },
+  { label: "连接", path: "/connection", icon: Cable },
+  { label: "内核", path: "/kernel", icon: Cpu },
+  { label: "环境", path: "/env", icon: MonitorCog },
+  { label: "关于", path: "/about", icon: Info },
 ];
 
 const SECTIONS: readonly {
@@ -53,9 +53,7 @@ export function AdvancedSidebar() {
   const location = useLocation();
 
   const isActive = (path: string) =>
-    path === "/advanced"
-      ? location.pathname === "/advanced" || location.pathname === "/advanced/"
-      : location.pathname === path || location.pathname.startsWith(`${path}/`);
+    location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   return (
     <aside className={s.sidebar} aria-label="高级侧栏">

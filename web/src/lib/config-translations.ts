@@ -1,5 +1,5 @@
 /**
- * 配置项（/advanced/config）的中文翻译表。
+ * 配置项（/config）的中文翻译表。
  *
  * 后端 `/api/config/schema` 返回的 `description` 是上游英文：约 20 个字段在内核
  * `_SCHEMA_OVERRIDES` 里有手写英文，其余字段由内核用 key 自动 Title-Case 生成

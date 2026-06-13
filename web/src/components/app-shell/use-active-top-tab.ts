@@ -13,6 +13,20 @@ export interface TopTabDef {
   matches: (path: string) => boolean;
 }
 
+const isRoute = (path: string, route: string) => path === route || path.startsWith(`${route}/`);
+
+const ADVANCED_ROUTES = [
+  "/common",
+  "/notifications",
+  "/config",
+  "/connection",
+  "/kernel",
+  "/env",
+  "/about",
+  "/advanced",
+  "/settings",
+] as const;
+
 export const TOP_TABS: readonly TopTabDef[] = [
   {
     id: "workbench",
@@ -55,8 +69,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/logs") ||
       path.startsWith("/debug") ||
       path.startsWith("/theme") ||
-      path.startsWith("/advanced") ||
-      path.startsWith("/settings"),
+      ADVANCED_ROUTES.some((route) => isRoute(path, route)),
   },
 ];
 

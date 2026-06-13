@@ -12,6 +12,16 @@ describe("TOP_TABS", () => {
     expect(tabFor("/config-migration/details")).toBe("skills");
   });
 
+  it("keeps canonical advanced pages under the 03 advanced tab", () => {
+    expect(tabFor("/common")).toBe("advanced");
+    expect(tabFor("/notifications")).toBe("advanced");
+    expect(tabFor("/config")).toBe("advanced");
+    expect(tabFor("/connection")).toBe("advanced");
+    expect(tabFor("/kernel")).toBe("advanced");
+    expect(tabFor("/env")).toBe("advanced");
+    expect(tabFor("/about")).toBe("advanced");
+  });
+
   it("shows config migration in the 021 config sidebar section", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "配置迁移" && item.path === "/config-migration")).toBe(true);
   });

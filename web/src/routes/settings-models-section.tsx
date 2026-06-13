@@ -1845,7 +1845,7 @@ export function ModelsSection() {
           onSaveTask={() => void handleSaveAuxiliaryTask()}
           onResetTask={(task) => void handleResetAuxiliaryTask(task)}
           onResetAll={() => void handleResetAllAuxiliary()}
-          onConfigureApprovalMode={() => navigate("/advanced#approval-mode")}
+          onConfigureApprovalMode={() => navigate("/common#approval-mode")}
           imageInputMode={getImageInputMode(config)}
           onImageInputModeChange={(mode) => void handleImageInputModeChange(mode)}
         />
