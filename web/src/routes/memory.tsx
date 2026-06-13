@@ -10,8 +10,11 @@ import {
   useUpdateMemoryEntry,
   type MemoryProviderOption,
 } from "@/hooks/use-memory";
+import { Button } from "@hermes/shared-ui";
 import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
+import { SettingsHero } from "./settings-hero";
+import settings from "./settings.module.css";
 import s from "./memory.module.css";
 
 const PROVIDER_URLS: Record<string, string> = {
@@ -154,27 +157,35 @@ export function MemoryRoute() {
   };
 
   const right = (
-    <button type="button" className={s.iconButton} onClick={() => void memoryQuery.refetch()} disabled={memoryQuery.isFetching}>
+    <Button type="button" variant="outline" onClick={() => void memoryQuery.refetch()} disabled={memoryQuery.isFetching}>
       <RefreshCw size={14} />
       {memoryQuery.isFetching ? "刷新中" : "刷新"}
-    </button>
+    </Button>
   );
 
   return (
     <SectionShell title="记忆" sub="MEMORY.md / USER.md" right={right}>
+      <SettingsHero
+        ok={!memoryQuery.isError}
+        icon={<Brain size={24} />}
+        eyebrow="Hermes Agent 长期记忆"
+        title="长期记忆与用户画像"
+        description="这里管理当前档案的长期记忆。记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。"
+        badge={(
+          <span className={settings.statusBadge} data-on={!memoryQuery.isError}>
+            {isLoading ? "读取中" : data ? `${data.memory.entries.length} 条记忆` : "记忆"}
+          </span>
+        )}
+      />
       {memoryQuery.isError && !data ? (
         <div className={s.memoryPage}>
           <div className={s.errorState}>无法读取记忆：{errorMessage(memoryQuery.error)}</div>
-          <button type="button" className={s.secondaryButton} onClick={() => void memoryQuery.refetch()}>重试</button>
+          <Button type="button" variant="outline" onClick={() => void memoryQuery.refetch()}>重试</Button>
         </div>
       ) : isLoading || !data ? (
         <div className={s.emptyState}>加载记忆中…</div>
       ) : (
         <div className={s.memoryPage}>
-          <p className={s.desc}>
-            这里管理当前档案的长期记忆。记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。
-          </p>
-
           <div className={s.statsGrid}>
             {stats.map((item) => (
               <div key={item.label} className={s.statCard}>
@@ -210,9 +221,9 @@ export function MemoryRoute() {
                   <strong>{data.memory.entries.length} 条记忆</strong>
                   <span>写入当前档案的 memories/MEMORY.md</span>
                 </div>
-                <button type="button" className={s.primaryButton} onClick={() => setShowAdd((v) => !v)}>
+                <Button type="button" variant="solid" tone="accent" size="sm" onClick={() => setShowAdd((v) => !v)}>
                   <Plus size={14} /> 添加记忆
-                </button>
+                </Button>
               </div>
 
               {showAdd && (
@@ -226,8 +237,8 @@ export function MemoryRoute() {
                   />
                   <div className={s.formActions}>
                     <span>{newEntry.length} 字符</span>
-                    <button type="button" className={s.secondaryButton} onClick={() => { setShowAdd(false); setNewEntry(""); }}>取消</button>
-                    <button type="button" className={s.primaryButton} onClick={handleAdd} disabled={!newEntry.trim() || addEntry.isPending}>保存</button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setShowAdd(false); setNewEntry(""); }}>取消</Button>
+                    <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleAdd} disabled={!newEntry.trim() || addEntry.isPending}>保存</Button>
                   </div>
                 </div>
               )}
@@ -246,23 +257,23 @@ export function MemoryRoute() {
                           <textarea value={editContent} onChange={(event) => setEditContent(event.target.value)} rows={3} autoFocus />
                           <div className={s.formActions}>
                             <span>{editContent.length} 字符</span>
-                            <button type="button" className={s.secondaryButton} onClick={() => setEditingIndex(null)}>取消</button>
-                            <button type="button" className={s.primaryButton} onClick={handleSaveEdit} disabled={updateEntry.isPending}>保存</button>
+                            <Button type="button" variant="outline" size="sm" onClick={() => setEditingIndex(null)}>取消</Button>
+                            <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveEdit} disabled={updateEntry.isPending}>保存</Button>
                           </div>
                         </div>
                       ) : (
                         <>
                           <p>{entry.content}</p>
                           <div className={s.entryActions}>
-                            <button type="button" onClick={() => { setEditingIndex(entry.index); setEditContent(entry.content); }}>编辑</button>
+                            <Button type="button" variant="plain" size="inherit" onClick={() => { setEditingIndex(entry.index); setEditContent(entry.content); }}>编辑</Button>
                             {confirmDelete === entry.index ? (
                               <span className={s.confirmDelete}>
                                 确认删除？
-                                <button type="button" onClick={() => removeEntry.mutate(entry.index, { onSuccess: () => setConfirmDelete(null) })}>是</button>
-                                <button type="button" onClick={() => setConfirmDelete(null)}>否</button>
+                                <Button type="button" variant="plain" size="inherit" onClick={() => removeEntry.mutate(entry.index, { onSuccess: () => setConfirmDelete(null) })}>是</Button>
+                                <Button type="button" variant="plain" size="inherit" onClick={() => setConfirmDelete(null)}>否</Button>
                               </span>
                             ) : (
-                              <button type="button" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={13} /></button>
+                              <Button type="button" variant="plain" size="inherit" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={13} /></Button>
                             )}
                           </div>
                         </>
@@ -293,7 +304,7 @@ export function MemoryRoute() {
                 />
                 <div className={`${s.formActions} ${s.profileFooter}`}>
                   <span>{userContent.length} / {data.user.charLimit} 字符</span>
-                  <button type="button" className={s.primaryButton} onClick={handleSaveUser} disabled={!userDirty || saveUser.isPending}>保存画像</button>
+                  <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveUser} disabled={!userDirty || saveUser.isPending}>保存画像</Button>
                 </div>
               </div>
             </section>
@@ -328,14 +339,16 @@ export function MemoryRoute() {
                         {externalUrl && (
                           <a href={externalUrl} target="_blank" rel="noreferrer"><ExternalLink size={12} /> 官网</a>
                         )}
-                        <button
+                        <Button
                           type="button"
-                          className={active ? s.secondaryButton : s.primaryButton}
+                          variant={active ? "outline" : "solid"}
+                          tone={active ? "neutral" : "accent"}
+                          size="sm"
                           disabled={active || setProvider.isPending}
                           onClick={() => setProvider.mutate(provider.name === "builtin" ? "" : provider.name)}
                         >
                           {active ? "已启用" : "设为当前"}
-                        </button>
+                        </Button>
                       </div>
                     </article>
                   );

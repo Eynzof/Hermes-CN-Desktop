@@ -199,7 +199,7 @@ function Hero({ platform, stateSub, onPrimary, primaryBusy }: {
   return (
     <div className={s.headBand}>
       <div className={s.heroCopy}>
-        <div className={s.heroKicker}><span>{isFeishu ? "№ 023A" : "№ 023B"}</span><span>IM ONBOARDING</span><em>配置 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
+        <div className={s.heroKicker}><span>{isFeishu ? "№ 031A" : "№ 031B"}</span><span>IM ONBOARDING</span><em>消息网关 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
         <h1>将<em>{isFeishu ? "飞书消息平台" : "微信消息平台"}</em>接入<br />中文社区桌面版</h1>
         <p className={s.sub}>{isFeishu
           ? "跟着向导用手机扫码，保存到当前档案后，再按提示到飞书后台勾选权限并发布。全程不需要敲命令，新手也能一步步完成。"
@@ -919,7 +919,7 @@ function FeishuRoute() {
   };
 
   return (
-    <SectionShell title="消息平台接入 · 飞书" sub="02 配置 / 023 消息平台接入" rail={<Rail platform="feishu" />} railLabel="飞书接入诊断边栏">
+    <SectionShell title="消息平台接入 · 飞书" sub="03 消息网关 / 031 消息平台接入" rail={<Rail platform="feishu" />} railLabel="飞书接入诊断边栏">
       <div className={s.wrap}>
         <main className={s.mainCol}>
           <Hero platform="feishu" stateSub={`当前档案：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={start} primaryBusy={busy} />
@@ -1188,7 +1188,7 @@ function WeixinRoute() {
   };
 
   return (
-    <SectionShell title="消息平台接入 · 微信" sub="02 配置 / 023 消息平台接入" rail={<Rail platform="weixin" />} railLabel="微信接入诊断边栏">
+    <SectionShell title="消息平台接入 · 微信" sub="03 消息网关 / 031 消息平台接入" rail={<Rail platform="weixin" />} railLabel="微信接入诊断边栏">
       <div className={s.wrap}>
         <main className={s.mainCol}>
           <Hero platform="weixin" stateSub={`当前档案：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={start} primaryBusy={busy} />

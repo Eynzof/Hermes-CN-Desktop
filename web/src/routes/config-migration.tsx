@@ -8,6 +8,7 @@ import type {
   ConfigMigrationImportResult,
   ConfigMigrationScanResult,
 } from "@hermes/protocol";
+import { Alert, Button } from "@hermes/shared-ui";
 import { runtime } from "@/lib/runtime";
 import { buildConfigMigrationAssistantPrompt } from "@/lib/config-migration-assistant";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
@@ -15,6 +16,7 @@ import { reloadUiStore } from "@/lib/ui-store";
 import { activeProfileAtom, profileSwitchingAtom } from "@/stores/ui";
 import { composerPrefillAtom } from "@/stores/panel";
 import { SectionShell } from "./section-shell";
+import { SettingsHero } from "./settings-hero";
 import settings from "./settings.module.css";
 import s from "./config-migration.module.css";
 
@@ -98,9 +100,9 @@ function MigrationPreview({
         将从 <code>{candidate.path}</code> 复制配置包到桌面端独立 Hermes home。已有桌面端配置不会被覆盖；如果当前 profile 已配置，后端会自动导入到新 profile。
       </p>
       {hasSecrets && (
-        <div className={s.notice}>
+        <Alert tone="warning" size="sm">
           <AlertTriangle size={14} /> 此来源包含 <code>.env</code> 或 <code>auth.json</code>，导入后这些密钥只会写入桌面端 managed runtime 的独立目录。
-        </div>
+        </Alert>
       )}
       <div className={s.entryList}>
         {candidate.copyEntries.map((entry) => (
@@ -116,10 +118,10 @@ function MigrationPreview({
         </ul>
       )}
       <div className={s.actions}>
-        <button type="button" className={settings.btnPrimary} onClick={onImport} disabled={importing}>
+        <Button type="button" variant="solid" tone="accent" onClick={onImport} disabled={importing}>
           <ShieldCheck size={13} />
           {importing ? "迁移中…" : "确认迁移并切换"}
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -234,27 +236,29 @@ function LegacyConfigMigrationRoute() {
 
   return (
     <SectionShell title="配置迁移" sub={sub}>
-      <div className={s.introCard}>
-        <h2 className={s.introTitle}>把已经安装的 Hermes 配置复制到桌面端内核</h2>
-        <p className={s.introText}>
-          桌面端使用独立 managed runtime，不会直接读取用户全局 <code>~/.hermes</code>。这里会在用户确认后复制配置、密钥、技能和记忆文件，避免重新配置模型 API Key。
-        </p>
-      </div>
+      <SettingsHero
+        ok={!loading && !importing}
+        icon={<ShieldCheck size={24} />}
+        eyebrow="Hermes Agent 配置迁移"
+        title="把已有 Hermes 配置复制到桌面端内核"
+        description="桌面端使用独立 managed runtime，不会直接读取用户全局 ~/.hermes。这里会在用户确认后复制配置、密钥、技能和记忆文件，避免重新配置模型 API Key。"
+        badge={<span className={settings.statusBadge} data-on={!loading && !importing}>{loading ? "扫描中" : importing ? "迁移中" : `${candidates.length} 个候选`}</span>}
+      />
 
       <div className={s.actions}>
-        <button type="button" className={settings.btn} onClick={() => scan()} disabled={loading || importing}>
+        <Button type="button" variant="outline" onClick={() => scan()} disabled={loading || importing}>
           <RefreshCw size={13} />
           {loading ? "扫描中…" : "重新扫描"}
-        </button>
-        <button type="button" className={settings.btn} onClick={chooseManualDirectory} disabled={loading || importing}>
+        </Button>
+        <Button type="button" variant="outline" onClick={chooseManualDirectory} disabled={loading || importing}>
           <FolderOpen size={13} />
           手动选择目录
-        </button>
+        </Button>
       </div>
 
-      {message && <div className={lastImport?.ok ? s.success : s.notice}>{message}</div>}
-      {error && <div className={s.error}>{error}</div>}
-      {scanResult?.warnings.map((warning) => <div key={warning} className={s.notice}>{warning}</div>)}
+      {message && <Alert tone={lastImport?.ok ? "success" : "neutral"} size="sm">{message}</Alert>}
+      {error && <Alert tone="danger" size="sm">{error}</Alert>}
+      {scanResult?.warnings.map((warning) => <Alert key={warning} tone="warning" size="sm">{warning}</Alert>)}
 
       <div className={s.candidateGrid}>
         {candidates.map((candidate) => (
@@ -335,29 +339,28 @@ function ConfigMigrationAssistantRoute() {
 
   return (
     <SectionShell title="配置迁移" sub="把已有 Hermes 配置安全迁移到当前桌面端">
-      <div className={s.heroCard}>
-        <div className={s.heroIcon}><Sparkles size={22} /></div>
-        <div>
-          <h2 className={s.heroTitle}>让 Hermes 帮你迁移已有配置。</h2>
-          <p className={s.heroText}>
-            如果你以前在命令行版、其它档案或其它目录里配置过模型、密钥、MCP、技能或记忆，可以从这里开始迁移。系统会把一段迁移说明填入新任务输入框，你确认后再发送给 Hermes。
-          </p>
-        </div>
-      </div>
+      <SettingsHero
+        ok={!preparing}
+        icon={<Sparkles size={24} />}
+        eyebrow="Hermes Agent 配置迁移"
+        title="让 Hermes 帮你迁移已有配置"
+        description="如果你以前在命令行版、其它档案或其它目录里配置过模型、密钥、MCP、技能或记忆，可以从这里开始迁移。系统会把一段迁移说明填入新任务输入框，你确认后再发送给 Hermes。"
+        badge={<span className={settings.statusBadge} data-on={!preparing}>{preparing ? "准备中" : "向导"}</span>}
+      />
 
       <div className={s.actions}>
-        <button type="button" className={settings.btnPrimary} onClick={startMigrationGuide} disabled={preparing}>
+        <Button type="button" variant="solid" tone="accent" onClick={startMigrationGuide} disabled={preparing}>
           <Sparkles size={13} />
           {preparing ? "正在准备…" : "开始迁移向导"}
-        </button>
-        <button type="button" className={settings.btn} onClick={copyPrompt} disabled={preparing || copying}>
+        </Button>
+        <Button type="button" variant="outline" onClick={copyPrompt} disabled={preparing || copying}>
           <Copy size={13} />
           {copying ? "正在复制…" : "复制迁移说明"}
-        </button>
+        </Button>
       </div>
 
-      {message && <div className={s.success}>{message}</div>}
-      {error && <div className={s.error}>{error}</div>}
+      {message && <Alert tone="success" size="sm">{message}</Alert>}
+      {error && <Alert tone="danger" size="sm">{error}</Alert>}
 
       <div className={s.assistantGrid}>
         <section className={s.previewPanel}>

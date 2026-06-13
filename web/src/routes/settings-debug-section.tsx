@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { debugBus, type DebugEntry, type DebugEntryLevel, type DebugEntryType } from "@/lib/debug-bus";
+import { Button, Input } from "@hermes/shared-ui";
 import { CopyButton } from "@/components/ui/copy-button";
 import s from "./settings.module.css";
 
@@ -129,8 +130,7 @@ export function DebugSection({ showHeading = true }: DebugSectionProps) {
       </div>
 
       <div className={s.logToolbar}>
-        <input
-          className={s.fieldInput}
+        <Input
           placeholder="搜索 summary…"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -147,8 +147,8 @@ export function DebugSection({ showHeading = true }: DebugSectionProps) {
           </button>
           <span>暂停采集</span>
         </label>
-        <button className={s.btn} onClick={() => debugBus.clear()}>清空</button>
-        <CopyButton className={s.btn} text={() => safeStringify(debugBus.snapshot())}>导出 JSON</CopyButton>
+        <Button variant="outline" onClick={() => debugBus.clear()}>清空</Button>
+        <CopyButton variant="outline" size="md" text={() => safeStringify(debugBus.snapshot())}>导出 JSON</CopyButton>
       </div>
 
       <div

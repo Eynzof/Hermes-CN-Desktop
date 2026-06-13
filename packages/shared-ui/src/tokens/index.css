@@ -1,3 +1,8 @@
+@import "./primitive.css";
 @import "./colors.css";
+@import "./semantic.css";
 @import "./typography.css";
 @import "./spacing.css";
+@import "./component.css";
+@import "./motion.css";
+@import "./z-index.css";

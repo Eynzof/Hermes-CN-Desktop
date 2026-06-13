@@ -6,33 +6,33 @@
 :root {
   /* ── Raw palette (ink/bone/accents)
      ── Source: hermes-cn-ui-prototypes/src/styles/tokens.base.css */
-  --ink-000: #050403;
-  --ink-050: #0a0908;
-  --ink-100: #11100e;
-  --ink-200: #1a1816;
-  --ink-300: #232120;
-  --ink-400: #2e2b29;
-  --ink-500: #3a3633;
-  --ink-600: #4a4541;
-  --ink-700: #5a554f;
-  --ink-800: #6e685f;
+  --ink-000: var(--h-color-ink-000);
+  --ink-050: var(--h-color-ink-050);
+  --ink-100: var(--h-color-ink-100);
+  --ink-200: var(--h-color-ink-200);
+  --ink-300: var(--h-color-ink-300);
+  --ink-400: var(--h-color-ink-400);
+  --ink-500: var(--h-color-ink-500);
+  --ink-600: var(--h-color-ink-600);
+  --ink-700: var(--h-color-ink-700);
+  --ink-800: var(--h-color-ink-800);
 
-  --bone-100: #f6f1e3;
-  --bone-200: #e8e2d4;
-  --bone-300: #d2cabb;
-  --bone-400: #aaa291;
-  --bone-500: #8a8273;
-  --bone-600: #6d6759;
+  --bone-100: var(--h-color-bone-100);
+  --bone-200: var(--h-color-bone-200);
+  --bone-300: var(--h-color-bone-300);
+  --bone-400: var(--h-color-bone-400);
+  --bone-500: var(--h-color-bone-500);
+  --bone-600: var(--h-color-bone-600);
 
-  --persimmon: #ff7a3d;
-  --persimmon-dim: #c95722;
-  --amber: #e8b85d;
-  --moss: #8db580;
-  --moss-deep: #5e7d54;
-  --rust: #d96666;
-  --rust-deep: #a8413f;
-  --sky: #6e9bd1;
-  --plum: #b58dc4;
+  --persimmon: var(--h-color-persimmon-500);
+  --persimmon-dim: var(--h-color-persimmon-600);
+  --amber: var(--h-color-amber-500);
+  --moss: var(--h-color-green-500);
+  --moss-deep: var(--h-color-green-600);
+  --rust: var(--h-color-red-500);
+  --rust-deep: var(--h-color-red-600);
+  --sky: var(--h-color-sky-500);
+  --plum: var(--h-color-plum-500);
 }
 
 :root,

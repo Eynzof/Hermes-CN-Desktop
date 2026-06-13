@@ -489,15 +489,6 @@
   opacity: 0.55;
 }
 
-.buttonSpinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: hermesButtonSpin 650ms linear infinite;
-}
-
 @keyframes hermesButtonSpin {
   to { transform: rotate(360deg); }
 }
@@ -519,20 +510,18 @@
   overflow: hidden;
   margin: 0 0 18px;
   border: 1px solid var(--h-line);
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 16% -12%, color-mix(in srgb, var(--h-accent) 12%, transparent), transparent 34%),
-    linear-gradient(180deg, color-mix(in srgb, var(--h-bg-pane) 96%, var(--h-bg-app)), var(--h-bg-app));
-  box-shadow: var(--h-shadow);
+  border-radius: 12px;
+  background: var(--h-bg-app);
 }
 
 .appearanceHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: start;
-  padding: 20px 24px;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-pane);
 }
 
 .appearanceHeaderText {
@@ -542,33 +531,38 @@
 .appearanceHeaderText h3 {
   margin: 0;
   color: var(--h-text);
-  font-size: 22px;
+  font-size: 13.5px;
   font-weight: 650;
-  letter-spacing: -0.02em;
 }
 
 .appearanceHeaderText p {
-  margin: 6px 0 0;
-  color: var(--h-text-3);
+  margin: 4px 0 0;
+  color: var(--h-text-2);
   font-size: 12px;
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 .appearanceMeta {
-  margin-top: 4px;
-  color: var(--h-text-4);
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-pill);
+  background: var(--h-bg-chip);
+  color: var(--h-text-3);
   font-family: var(--h-font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
 .appearanceRow {
   display: grid;
-  grid-template-columns: minmax(220px, 0.88fr) minmax(260px, 1.18fr) minmax(128px, auto);
-  gap: 22px;
-  align-items: center;
-  padding: 22px 24px;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -582,17 +576,16 @@
 
 .appearanceRowLabel {
   color: var(--h-text);
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 620;
-  letter-spacing: -0.01em;
 }
 
 .appearanceRowSub {
-  max-width: 330px;
-  margin-top: 6px;
+  max-width: 360px;
+  margin-top: 4px;
   color: var(--h-text-3);
-  font-size: 12.5px;
-  line-height: 1.72;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .appearanceRowControl {
@@ -612,9 +605,9 @@
 
 .skinPicker {
   display: grid;
-  grid-template-columns: repeat(2, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
-  width: min(100%, 560px);
+  width: 100%;
 }
 
 .skinCard {
@@ -623,21 +616,23 @@
   grid-template-columns: 48px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  padding: 10px;
+  padding: 10px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--h-bg-pane) 78%, transparent);
+  border-radius: var(--h-r-lg);
+  background: var(--h-bg-pane);
   color: var(--h-text-2);
   cursor: pointer;
   font-family: var(--h-font-cn);
   text-align: left;
-  transition: border-color 0.14s ease, background 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+  transition:
+    border-color var(--h-duration-fast) var(--h-ease-standard),
+    background var(--h-duration-fast) var(--h-ease-standard),
+    box-shadow var(--h-duration-fast) var(--h-ease-standard);
 }
 
 .skinCard:hover {
   border-color: color-mix(in srgb, var(--h-accent) 34%, var(--h-line));
-  background: var(--h-bg-pane);
-  transform: translateY(-1px);
+  background: var(--h-bg-soft);
 }
 
 .skinCard[data-active="true"] {
@@ -708,7 +703,7 @@
 .skinTitle {
   overflow: hidden;
   color: var(--h-text);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1661,11 +1656,6 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-}
-
-.providerToolbarActions .btn {
-  width: 100%;
-  justify-content: center;
 }
 
 .providerListHint {

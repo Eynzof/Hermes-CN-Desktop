@@ -17,10 +17,10 @@
 
 /* Single radius scale — no user-facing toggle */
 :root {
-  --h-r-sm: 4px;
-  --h-r-md: 8px;
-  --h-r-lg: 12px;
-  --h-r-pill: 999px;
+  --h-r-sm: var(--h-radius-sm);
+  --h-r-md: var(--h-radius-md);
+  --h-r-lg: var(--h-radius-lg);
+  --h-r-pill: var(--h-radius-pill);
 }
 
 /* App-shell layout sizing — aligned with prototypes' --topbar-h / --sidebar-w / --statusbar-h. */

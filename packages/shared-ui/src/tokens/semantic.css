@@ -1,0 +1,48 @@
+/* Hermes Design Tokens — Semantic aliases
+   组件和页面应优先使用这一层，而不是直接依赖原始色值。 */
+
+:root {
+  --h-color-bg-app: var(--h-bg-app);
+  --h-color-bg-surface: var(--h-bg-pane);
+  --h-color-bg-subtle: var(--h-bg-soft);
+  --h-color-bg-input: var(--h-bg-input);
+  --h-color-bg-chip: var(--h-bg-chip);
+  --h-color-bg-code: var(--h-bg-code);
+
+  --h-color-fg-default: var(--h-text);
+  --h-color-fg-muted: var(--h-text-2);
+  --h-color-fg-subtle: var(--h-text-3);
+  --h-color-fg-disabled: var(--h-text-4);
+  --h-color-fg-on-accent: var(--h-accent-contrast);
+
+  --h-color-border-default: var(--h-line);
+  --h-color-border-subtle: var(--h-line-soft);
+  --h-color-border-strong: color-mix(in srgb, var(--h-line) 72%, var(--h-text-3));
+
+  --h-color-accent-bg: var(--h-accent);
+  --h-color-accent-fg: var(--h-accent);
+  --h-color-accent-soft: var(--h-accent-soft);
+  --h-color-accent-border: var(--h-accent-border);
+
+  --h-color-success-bg: var(--h-ok-soft);
+  --h-color-success-fg: var(--h-ok);
+  --h-color-success-border: color-mix(in srgb, var(--h-ok) 30%, var(--h-line));
+
+  --h-color-warning-bg: var(--h-warn-soft);
+  --h-color-warning-fg: var(--h-warn);
+  --h-color-warning-border: color-mix(in srgb, var(--h-warn) 30%, var(--h-line));
+
+  --h-danger: var(--h-err);
+  --h-color-danger-bg: color-mix(in srgb, var(--h-err) 12%, var(--h-bg-pane));
+  --h-color-danger-fg: var(--h-err);
+  --h-color-danger-border: color-mix(in srgb, var(--h-err) 34%, var(--h-line));
+
+  --h-color-info-bg: color-mix(in srgb, var(--sky) 12%, var(--h-bg-pane));
+  --h-color-info-fg: var(--sky);
+  --h-color-info-border: color-mix(in srgb, var(--sky) 30%, var(--h-line));
+
+  --h-shadow-sm: var(--h-shadow);
+  --h-shadow-lg: var(--h-shadow-l);
+  --h-focus-ring: 0 0 0 2px color-mix(in srgb, var(--h-accent) 38%, transparent);
+  --h-focus-ring-danger: 0 0 0 2px color-mix(in srgb, var(--h-err) 34%, transparent);
+}

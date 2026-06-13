@@ -44,8 +44,8 @@ const SECTIONS: readonly {
   label: string;
   items: readonly AdvancedItem[];
 }[] = [
-  { label: "§031 · 可观测", items: OBSERVABILITY_ITEMS },
-  { label: "§032 · 高级", items: ADVANCED_ITEMS },
+  { label: "§041 · 可观测", items: OBSERVABILITY_ITEMS },
+  { label: "§042 · 高级", items: ADVANCED_ITEMS },
 ];
 
 export function AdvancedSidebar() {

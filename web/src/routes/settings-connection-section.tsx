@@ -23,6 +23,8 @@ import type {
   ConnectionMode,
   TestConnectionResult,
 } from "@hermes/protocol";
+import { Alert, Button, Input } from "@hermes/shared-ui";
+import { SettingsHero } from "./settings-hero";
 import s from "./settings.module.css";
 
 interface SettingsSectionProps {
@@ -219,24 +221,37 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
   const tokenPlaceholder = config?.remoteTokenSet
     ? `已保存（${config.remoteTokenPreview ?? "set"}），留空保持不变`
     : "粘贴远程 Dashboard 的 session token";
+  const connectionLoaded = Boolean(config) && !loadError;
+  const connectionTitle = !connectionLoaded
+    ? "正在读取网关连接状态"
+    : envOverride
+      ? "网关连接由环境变量覆盖"
+      : effectiveMode === "remote"
+        ? "已连接远程 Hermes Agent"
+        : "本机 managed runtime 正在使用";
+  const connectionDescription = envOverride
+    ? `当前会话由环境变量强制连接到远程端（${config?.remoteUrl ?? "远程地址"}），需取消环境变量后才能在此修改。`
+    : "桌面端默认在本机启动自己的 Hermes 内核。当你想把它当作「壳」连接另一台机器上已运行的 Hermes Agent 时，选择远程模式。当前版本仅支持 session token 认证。";
+  const connectionBadge = !connectionLoaded
+    ? "读取中"
+    : envOverride
+      ? "环境变量"
+      : effectiveMode === "remote"
+        ? "远程"
+        : "本机";
 
   return (
     <div>
       {showHeading && <h2 className={s.heading}>连接</h2>}
 
-      <div className={s.approvalModeHead}>
-        <Globe2 size={14} aria-hidden="true" />
-        <div>
-          <h3>
-            网关连接
-            {envOverride && <span className={s.approvalModeBadge} style={{ marginLeft: 8 }}>环境变量覆盖</span>}
-          </h3>
-          <p>
-            桌面端默认在本机启动自己的 Hermes 内核。当你想把它当作「壳」连接另一台机器上已运行的 Hermes
-            Agent 时，选择远程模式。当前版本仅支持 session token 认证。
-          </p>
-        </div>
-      </div>
+      <SettingsHero
+        ok={connectionLoaded}
+        icon={effectiveMode === "remote" || envOverride ? <Globe2 size={24} /> : <HardDrive size={24} />}
+        eyebrow="Hermes Agent 网关连接"
+        title={connectionTitle}
+        description={connectionDescription}
+        badge={<span className={s.statusBadge} data-on={connectionLoaded}>{connectionBadge}</span>}
+      />
 
       {loadError && <div className={s.connResult} data-tone="error">{loadError}</div>}
 
@@ -305,9 +320,8 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
               )}
             </div>
             <div className={s.rowRight}>
-              <input
-                className={s.fieldInput}
-                data-mono="true"
+              <Input
+                mono
                 style={{ minWidth: 280 }}
                 value={remoteUrl}
                 placeholder="https://gateway.example.com/hermes"
@@ -327,8 +341,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
               </div>
             </div>
             <div className={s.rowRight}>
-              <input
-                className={s.fieldInput}
+              <Input
                 type="password"
                 style={{ minWidth: 280 }}
                 value={tokenInput}
@@ -345,42 +358,44 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
 
       <div className={s.connFooter}>
         {mode === "remote" && (
-          <button
+          <Button
             type="button"
-            className={`${s.btn} ${s.connFooterSpacer}`}
+            className={s.connFooterSpacer}
+            variant="outline"
             onClick={() => void handleTest()}
             disabled={disabled || testing || !trimmedUrl}
             aria-busy={testing}
           >
             {testing ? <Loader2 size={13} className={s.connSpin} /> : <Cable size={13} />}
             测试连接
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
-          className={s.btn}
+          variant="outline"
           onClick={() => void submit(false)}
           disabled={disabled || (mode === "remote" && !remoteReady)}
           aria-busy={saving}
         >
           仅保存（下次启动生效）
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={s.btnPrimary}
+          variant="solid"
+          tone="accent"
           onClick={() => void submit(true)}
           disabled={disabled || (mode === "remote" && !remoteReady)}
           aria-busy={applying}
         >
           {applying && <Loader2 size={13} className={s.connSpin} />}
           {mode === "remote" ? "保存并连接远程" : "保存并切回本机"}
-        </button>
+        </Button>
       </div>
 
       {message && (
-        <div className={s.connResult} data-tone={message.tone}>
+        <Alert className={s.connResult} tone={message.tone} size="sm">
           {message.text}
-        </div>
+        </Alert>
       )}
     </div>
   );

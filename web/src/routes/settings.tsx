@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
+  Brush,
   Bug,
   CheckCircle2,
   Copy,
@@ -22,7 +23,7 @@ import {
   ShieldCheck,
   Terminal,
 } from "lucide-react";
-import { Dialog, useTheme, type ThemeConfig } from "@hermes/shared-ui";
+import { Alert, Button, Dialog, Field, Input, Select, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import { cronJobProfile, useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
@@ -68,6 +69,7 @@ import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
+import { SettingsHero } from "./settings-hero";
 import s from "./settings.module.css";
 
 /* ── General ─────────────────────────────────────────────────────────── */
@@ -186,14 +188,14 @@ export function NotificationSection({ showHeading = true }: SettingsSectionProps
         <p className={s.desc}>系统通知与提示音均已关闭，上方事件开关暂不生效。</p>
       )}
       <Row label="发送测试通知" sub={testSub} right={
-        <button
+        <Button
           type="button"
-          className={s.btn}
+          variant="outline"
           disabled={testState.phase === "sending"}
           onClick={() => void handleTestNotification()}
         >
           {testState.phase === "sending" ? "发送中…" : "测试"}
-        </button>
+        </Button>
       } />
     </div>
   );
@@ -202,17 +204,27 @@ export function NotificationSection({ showHeading = true }: SettingsSectionProps
 export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
+  const activeSkin = THEME_SKINS.find((skin) => skin.value === config.theme);
+  const densityLabel = config.density === "compact" ? "紧凑" : "舒适";
 
   return (
     <div>
       {showHeading && <h2 className={s.heading}>主题</h2>}
+      <SettingsHero
+        ok
+        icon={<Brush size={24} />}
+        eyebrow="Hermes Agent 视觉系统"
+        title="主题与显示偏好"
+        description="统一管理桌面端皮肤、界面密度和会话阅读字号。所有修改都会立即应用，方便快速预览整体界面风格。"
+        badge={<span className={s.statusBadge} data-on="true">{activeSkin?.label ?? "主题"}</span>}
+      />
       <div className={s.appearancePanel}>
         <div className={s.appearanceHeader}>
           <div className={s.appearanceHeaderText}>
-            <h3>外观</h3>
-            <p>颜色、密度和对话阅读字号会立即应用到桌面端界面。</p>
+            <h3>界面外观</h3>
+            <p>使用同一套设置页卡片结构承载主题配置，避免主题页拥有独立视觉语言。</p>
           </div>
-          <span className={s.appearanceMeta}>颜色 · 密度 · 字号</span>
+          <span className={s.appearanceMeta}>实时生效 · {densityLabel}</span>
         </div>
 
         <AppearanceRow
@@ -530,9 +542,9 @@ function ApprovalModeSection() {
       </div>
 
       <div className={s.approvalModeFooter}>
-        <button type="button" className={s.btn} onClick={openSmartModelConfig}>
+        <Button type="button" variant="outline" onClick={openSmartModelConfig}>
           配置智能审批辅助模型
-        </button>
+        </Button>
         <span>
           Smart 模式会使用 <code>auxiliary.approval</code> 槽位。未指定时由后端自动选择可用辅助模型。
         </span>
@@ -562,11 +574,11 @@ function ApprovalModeSection() {
             </label>
             <div className={s.dangerDialogActions}>
               <Dialog.Close asChild>
-                <button className={s.btn}>取消</button>
+                <Button variant="outline">取消</Button>
               </Dialog.Close>
-              <button className={s.btnDanger} disabled={!acknowledged || busy} onClick={() => void confirmEnableYolo()}>
+              <Button variant="outline" tone="danger" disabled={!acknowledged || busy} onClick={() => void confirmEnableYolo()}>
                 确认开启
-              </button>
+              </Button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -637,7 +649,7 @@ export function ConfigSection({ showHeading = true }: SettingsSectionProps) {
       </p>
 
       <div style={{ marginBottom: 12 }}>
-        <input className={s.fieldInput} placeholder="搜索配置项…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        <Input placeholder="搜索配置项…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
       </div>
 
       {!isSearching && (
@@ -688,10 +700,10 @@ export function SkillsSection() {
   const toggleSkill = useToggleSkill();
   const [filter, setFilter] = useState("");
   const refreshButton = (
-    <button className={s.btn} type="button" onClick={() => void refetch()} disabled={isFetching}>
+    <Button variant="outline" type="button" onClick={() => void refetch()} disabled={isFetching}>
       <RefreshCw size={13} />
       {isFetching ? "刷新中" : "刷新"}
-    </button>
+    </Button>
   );
 
   if (isLoading) return <div className={s.desc}>加载中…</div>;
@@ -717,7 +729,7 @@ export function SkillsSection() {
       <div className={s.sectionTitleRow}>{refreshButton}</div>
       <p className={s.desc}>{skills.length} 个可用技能。启用/禁用后立即生效。</p>
       <div style={{ marginBottom: 16 }}>
-        <input className={s.fieldInput} placeholder="搜索技能…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <Input placeholder="搜索技能…" value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
       {skills.length === 0 && <div className={s.desc}>未发现已安装技能。后端当前返回 0 项，请检查 Hermes home 的 skills 同步。</div>}
       {skills.length > 0 && filtered.length === 0 && <div className={s.desc}>没有匹配的技能。</div>}
@@ -892,15 +904,15 @@ export function CronSection() {
     <div>
       <p className={s.desc}>Agent 会按计划自动执行这些任务。</p>
       {feedback && (
-        <div className={s.cronFeedback} data-tone={feedback.tone} role={feedback.tone === "error" ? "alert" : "status"}>
+        <Alert className={s.cronFeedback} tone={feedback.tone} size="sm">
           {feedback.message}
-        </div>
+        </Alert>
       )}
       {isLoading && <div className={s.desc}>加载中…</div>}
       {isError && (
         <div className={s.providerDetail} style={{ marginTop: 12 }}>
           <div className={s.desc}>加载定时任务失败：{error instanceof Error ? error.message : String(error)}</div>
-          <button className={s.btn} onClick={() => void refetch()}>重试</button>
+          <Button variant="outline" onClick={() => void refetch()}>重试</Button>
         </div>
       )}
       {!isLoading && !isError && jobs && jobs.length === 0 && !showNew && <div className={s.desc}>暂无定时任务。</div>}
@@ -916,11 +928,11 @@ export function CronSection() {
             </div>
             <div className={s.rowRight} style={{ gap: 6 }}>
               <span className={s.statusBadge} data-on={!paused}>{cronStateLabel(job)}</span>
-              <button className={s.btn} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, paused ? "resume" : "pause")}>
+              <Button variant="outline" disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, paused ? "resume" : "pause")}>
                 {paused ? "恢复" : "暂停"}
-              </button>
-              <button className={s.btn} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, "trigger")}>触发</button>
-              <button className={s.btnDanger} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleDelete(job)}>删除</button>
+              </Button>
+              <Button variant="outline" disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, "trigger")}>触发</Button>
+              <Button variant="outline" tone="danger" disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleDelete(job)}>删除</Button>
             </div>
           </div>
         );
@@ -931,12 +943,12 @@ export function CronSection() {
           <FieldRow label="Cron 表达式" value={newSchedule} onChange={setNewSchedule} placeholder="0 9 * * *" />
           <FieldRow label="Prompt" value={newPrompt} onChange={setNewPrompt} placeholder="每天执行的任务描述…" />
           <div className={s.providerActions}>
-            <button className={s.btnPrimary} onClick={handleCreate} disabled={createJob.isPending}>创建</button>
-            <button className={s.btn} onClick={() => setShowNew(false)} disabled={createJob.isPending}>取消</button>
+            <Button variant="solid" tone="accent" onClick={handleCreate} disabled={createJob.isPending}>创建</Button>
+            <Button variant="outline" onClick={() => setShowNew(false)} disabled={createJob.isPending}>取消</Button>
           </div>
         </div>
       ) : (
-        <button className={s.btnPrimary} style={{ marginTop: 12 }} onClick={() => setShowNew(true)}>＋ 新建定时任务</button>
+        <Button variant="solid" tone="accent" style={{ marginTop: 12 }} onClick={() => setShowNew(true)}>＋ 新建定时任务</Button>
       )}
     </div>
   );
@@ -1011,9 +1023,9 @@ export function LogsSection() {
           <span>自动刷新</span>
           {autoRefresh && <span className={s.liveDot} />}
         </label>
-        <button className={s.btn} onClick={() => refetch()} disabled={isLoading}>
+        <Button variant="outline" onClick={() => void refetch()} disabled={isLoading}>
           {isLoading ? "加载中…" : "刷新"}
-        </button>
+        </Button>
       </div>
 
       <div className={s.logBlock} ref={scrollRef} style={{ maxHeight: "calc(100vh - 340px)", minHeight: 300 }}>
@@ -1129,60 +1141,63 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   return (
     <div>
       {showHeading && <h2 className={s.heading}>内核</h2>}
-      <div className={s.aboutHero} data-ok={isRemote || isolationOk}>
-        <div className={s.aboutHeroMark}>{isRemote ? <Globe2 size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}</div>
-        <div className={s.aboutHeroBody}>
-          <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版内核</div>
-          <h3>{isRemote ? "已连接远程 Hermes Agent" : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}</h3>
-          <p>
-            {isRemote
+      <SettingsHero
+        ok={isRemote || isolationOk}
+        icon={isRemote ? <Globe2 size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}
+        eyebrow="Hermes Agent 中文社区桌面版内核"
+        title={isRemote ? "已连接远程 Hermes Agent" : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}
+        description={
+          isRemote
               ? `桌面端当前作为界面壳运行，所有会话与配置由远程端（${rendererRuntime?.dashboardApiBaseUrl ?? "远程地址"}）提供。本机 runtime 未在使用，可在 设置 → 连接 切回本机内核。`
               : isolationOk && process?.ownsProcess
               ? "当前 Dashboard 由桌面端托管的 managed runtime 子进程提供，内核、gateway runtime 与锁文件都收束在桌面 runtime 目录下。"
               : isolationOk
                 ? "当前固定端口上已有兼容 Dashboard，桌面端已连接它；runtime 指针和可执行路径仍位于桌面 managed runtime 目录内。"
-              : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"}
-          </p>
-          {!isRemote && kernelRuntimeTag && (
-            <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
-              {kernelRuntimeTag}
-            </code>
-          )}
-        </div>
-        <span className={s.statusBadge} data-on={isRemote || isolationOk}>
-          {isRemote ? "远程" : info ? runtimeModeLabel(info.mode) : "读取中"}
-        </span>
-      </div>
+              : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"
+        }
+        badge={(
+          <span className={s.statusBadge} data-on={isRemote || isolationOk}>
+            {isRemote ? "远程" : info ? runtimeModeLabel(info.mode) : "读取中"}
+          </span>
+        )}
+      >
+        {!isRemote && kernelRuntimeTag && (
+          <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
+            {kernelRuntimeTag}
+          </code>
+        )}
+      </SettingsHero>
 
       <div className={s.debugActionBar}>
-        <button className={s.btn} type="button" onClick={handleRefreshAll} disabled={refreshing}>
+        <Button variant="outline" type="button" onClick={handleRefreshAll} disabled={refreshing}>
           <RefreshCw size={13} />
           {refreshing ? "刷新中" : "刷新状态"}
-        </button>
-        <CopyButton className={s.btn} text={() => JSON.stringify(diagnostics, null, 2)}>
+        </Button>
+        <CopyButton variant="outline" size="md" text={() => JSON.stringify(diagnostics, null, 2)}>
           <Copy size={13} />
           复制诊断 JSON
         </CopyButton>
-        <button
-          className={s.btn}
+        <Button
+          variant="outline"
           type="button"
           onClick={() => handleOpenPath(hermesHomePath, " HERMES_HOME", setAboutMessage)}
           disabled={!hermesHomePath || !window.hermesDesktop?.openWorkspacePath}
         >
           <FolderOpen size={13} />
           打开 HERMES_HOME
-        </button>
-        <button
-          className={s.btn}
+        </Button>
+        <Button
+          variant="outline"
           type="button"
           onClick={() => handleOpenPath(runtimeRootPath, " runtime 根目录")}
           disabled={!runtimeRootPath || !window.hermesDesktop?.openWorkspacePath}
         >
           <FolderOpen size={13} />
           打开 runtime
-        </button>
-        <button
-          className={s.btnPrimary}
+        </Button>
+        <Button
+          variant="solid"
+          tone="accent"
           onClick={() => void gatewayRestart.restart()}
           disabled={gatewayRestart.locked || isRemote}
           title={isRemote ? "远程模式下由远程端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
@@ -1190,7 +1205,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
         >
           <RotateCcw size={13} />
           {gatewayRestart.phase === "idle" ? "重启 Gateway" : gatewayRestartButtonLabel(gatewayRestart.phase)}
-        </button>
+        </Button>
       </div>
       {aboutMessage && <div className={s.runtimeMessage} data-tone="error">{aboutMessage}</div>}
       {gatewayRestart.message && (
@@ -1256,26 +1271,26 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                 </div>
               )}
               <div className={s.providerActions}>
-                <button
-                  className={s.btn}
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => handleOpenPath(runtimeVersionPath, " runtime 版本目录")}
                   disabled={!runtimeVersionPath || !window.hermesDesktop?.openWorkspacePath}
                 >
                   <FolderOpen size={13} />
                   打开版本目录
-                </button>
-                <button
-                  className={s.btn}
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => handleOpenPath(currentRecordPath, " current.json")}
                   disabled={!currentRecordPath || !window.hermesDesktop?.openWorkspacePath}
                 >
                   <FolderOpen size={13} />
                   打开 current.json
-                </button>
-                <button
-                  className={s.btn}
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={handleCheckRuntime}
                   disabled={!info?.updatesConfigured || checking || isRemote}
@@ -1283,25 +1298,26 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                 >
                   <RefreshCw size={13} />
                   {checking ? "检查中" : "检查更新"}
-                </button>
-                <button
-                  className={s.btnPrimary}
+                </Button>
+                <Button
+                  variant="solid"
+                  tone="accent"
                   type="button"
                   onClick={handleInstallRuntime}
                   disabled={!canInstall || installing || isRemote}
                   title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
                 >
                   {installing ? "安装中…" : "安装更新"}
-                </button>
-                <button
-                  className={s.btn}
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={handleRollbackRuntime}
                   disabled={!info?.current?.previousRuntimeVersion || rollingBack || isRemote}
                   title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
                 >
                   {rollingBack ? "回滚中…" : "回滚 Runtime"}
-                </button>
+                </Button>
               </div>
               {!info?.updatesConfigured && (
                 <p className={s.desc}>
@@ -1400,16 +1416,12 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   return (
     <div>
       {showHeading && <h2 className={s.heading}>关于</h2>}
-      <div className={s.aboutHero}>
-        <div className={s.aboutHeroMark}><Heart size={24} /></div>
-        <div className={s.aboutHeroBody}>
-          <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版</div>
-          <h3>联系与致谢</h3>
-          <p>
-            致谢，联系方式及项目链接。
-          </p>
-        </div>
-      </div>
+      <SettingsHero
+        icon={<Heart size={24} />}
+        eyebrow="Hermes Agent 中文社区桌面版"
+        title="联系与致谢"
+        description="致谢，联系方式及项目链接。"
+      />
 
       <div className={s.aboutDebugGrid}>
         <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
@@ -1437,19 +1449,19 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             {formatDesktopUpdateMessage(desktopUpdateResult, desktopUpdateChecking, hasDesktopUpdateBridge)}
           </div>
           <div className={s.providerActions}>
-            <button
-              className={s.btn}
+            <Button
+              variant="outline"
               type="button"
               onClick={() => void handleCheckDesktopUpdate()}
               disabled={!hasDesktopUpdateBridge || desktopUpdateChecking}
             >
               <RefreshCw size={13} />
               {desktopUpdateChecking ? "检查中" : "检查更新"}
-            </button>
-            <button className={s.btnPrimary} type="button" onClick={handleOpenDesktopDownload}>
+            </Button>
+            <Button variant="solid" tone="accent" type="button" onClick={handleOpenDesktopDownload}>
               <ExternalLinkIcon size={13} />
               去官网下载
-            </button>
+            </Button>
           </div>
           <p className={s.desc}>
             这里提醒的是桌面壳版本。下载新版安装包后，请按系统提示覆盖安装；应用不会自动下载安装包或替换正在运行的程序。
@@ -1758,7 +1770,7 @@ function ConfigFieldRow({ fieldKey, field, value, onSave, showCategory }: {
       <Row
         label={label}
         sub={showCategory ? `[${CATEGORY_CN[field.category] ?? field.category}] ${fieldKey}` : fieldKey}
-        right={<select className={s.select} value={String(value ?? "")} onChange={(e) => onSave(e.target.value)}>{field.options.map((o) => <option key={o} value={o}>{translateConfigOption(fieldKey, o)}</option>)}</select>}
+        right={<Select value={String(value ?? "")} onChange={(e) => onSave(e.target.value)}>{field.options.map((o) => <option key={o} value={o}>{translateConfigOption(fieldKey, o)}</option>)}</Select>}
       />
     );
   }
@@ -1779,14 +1791,14 @@ function ConfigFieldRow({ fieldKey, field, value, onSave, showCategory }: {
       sub={showCategory ? `[${CATEGORY_CN[field.category] ?? field.category}] ${fieldKey}` : fieldKey}
       right={editing ? (
         <div style={{ display: "flex", gap: 6 }}>
-          <input className={s.input} data-mono value={localVal} onChange={(e) => setLocalVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSave()} autoFocus style={{ width: 200 }} />
-          <button className={s.btnPrimary} onClick={handleSave}>保存</button>
-          <button className={s.btn} onClick={() => setEditing(false)}>取消</button>
+          <Input mono value={localVal} onChange={(e) => setLocalVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSave()} autoFocus style={{ width: 200 }} fullWidth={false} />
+          <Button variant="solid" tone="accent" onClick={handleSave}>保存</Button>
+          <Button variant="outline" onClick={() => setEditing(false)}>取消</Button>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontFamily: "var(--h-font-mono)", fontSize: 12, color: "var(--h-text-2)" }}>{value != null ? String(value) : "—"}</span>
-          <button className={s.btn} onClick={() => { setLocalVal(String(value ?? "")); setEditing(true); }}>编辑</button>
+          <Button variant="outline" onClick={() => { setLocalVal(String(value ?? "")); setEditing(true); }}>编辑</Button>
         </div>
       )}
     />
@@ -1797,10 +1809,9 @@ function FieldRow({ label, value, onChange, placeholder }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string;
 }) {
   return (
-    <div className={s.fieldRow}>
-      <div className={s.fieldLabel}>{label}</div>
-      <input className={s.fieldInput} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-    </div>
+    <Field label={label} className={s.fieldRow}>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    </Field>
   );
 }
 

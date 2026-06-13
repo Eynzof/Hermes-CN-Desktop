@@ -1,0 +1,68 @@
+/* Hermes Design Tokens — Primitive values
+   只在这一层维护原始色板、尺寸、圆角和排版阶梯。业务样式应消费 semantic/component token。 */
+
+:root {
+  /* Ink / bone palette kept for the warm Hermes themes. */
+  --h-color-ink-000: #050403;
+  --h-color-ink-050: #0a0908;
+  --h-color-ink-100: #11100e;
+  --h-color-ink-200: #1a1816;
+  --h-color-ink-300: #232120;
+  --h-color-ink-400: #2e2b29;
+  --h-color-ink-500: #3a3633;
+  --h-color-ink-600: #4a4541;
+  --h-color-ink-700: #5a554f;
+  --h-color-ink-800: #6e685f;
+
+  --h-color-bone-100: #f6f1e3;
+  --h-color-bone-200: #e8e2d4;
+  --h-color-bone-300: #d2cabb;
+  --h-color-bone-400: #aaa291;
+  --h-color-bone-500: #8a8273;
+  --h-color-bone-600: #6d6759;
+
+  --h-color-persimmon-500: #ff7a3d;
+  --h-color-persimmon-600: #c95722;
+  --h-color-blue-500: #0078d4;
+  --h-color-blue-400: #4fc1ff;
+  --h-color-amber-500: #e8b85d;
+  --h-color-green-500: #8db580;
+  --h-color-green-600: #5e7d54;
+  --h-color-red-500: #d96666;
+  --h-color-red-600: #a8413f;
+  --h-color-sky-500: #6e9bd1;
+  --h-color-plum-500: #b58dc4;
+
+  --h-space-0: 0;
+  --h-space-0-5: 2px;
+  --h-space-1: 4px;
+  --h-space-1-5: 6px;
+  --h-space-2: 8px;
+  --h-space-2-5: 10px;
+  --h-space-3: 12px;
+  --h-space-3-5: 14px;
+  --h-space-4: 16px;
+  --h-space-5: 20px;
+  --h-space-6: 24px;
+  --h-space-8: 32px;
+  --h-space-10: 40px;
+
+  --h-radius-xs: 3px;
+  --h-radius-sm: 4px;
+  --h-radius-md: 8px;
+  --h-radius-lg: 12px;
+  --h-radius-xl: 16px;
+  --h-radius-pill: 999px;
+
+  --h-font-size-2xs: 10px;
+  --h-font-size-xs: 11px;
+  --h-font-size-sm: 12px;
+  --h-font-size-md: 12.5px;
+  --h-font-size-lg: 14px;
+  --h-font-size-xl: 16px;
+  --h-font-size-2xl: 20px;
+
+  --h-line-height-tight: 1.25;
+  --h-line-height-normal: 1.55;
+  --h-line-height-relaxed: 1.75;
+}

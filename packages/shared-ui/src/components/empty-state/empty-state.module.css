@@ -1,0 +1,58 @@
+.emptyState {
+  min-width: 0;
+  min-height: 220px;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px dashed var(--h-color-border-default);
+  border-radius: var(--h-r-lg);
+  background: color-mix(in srgb, var(--h-color-bg-subtle) 72%, transparent);
+  color: var(--h-color-fg-muted);
+  text-align: center;
+}
+
+.emptyState[data-variant="plain"] {
+  min-height: 160px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-color-fg-subtle);
+}
+
+.body {
+  display: grid;
+  gap: 5px;
+  max-width: 460px;
+}
+
+.title {
+  color: var(--h-color-fg-default);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: var(--h-line-height-tight);
+}
+
+.description {
+  color: var(--h-color-fg-muted);
+  font-size: 12px;
+  line-height: var(--h-line-height-normal);
+}
+
+.actions {
+  margin-top: 2px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}

@@ -1,9 +1,9 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.36);
+  background: color-mix(in srgb, var(--h-color-ink-000) 36%, transparent);
   animation: hermesDialogFadeIn 120ms ease-out;
-  z-index: 60;
+  z-index: var(--h-z-dialog-overlay);
 }
 .overlay[data-state="closed"] {
   animation: hermesDialogFadeOut 100ms ease-in;
@@ -14,7 +14,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 61;
+  z-index: var(--h-z-dialog);
   background: var(--h-bg-pane);
   color: var(--h-text);
   border: 1px solid var(--h-line);

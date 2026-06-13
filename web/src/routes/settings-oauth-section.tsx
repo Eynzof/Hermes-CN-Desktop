@@ -11,6 +11,7 @@ import {
 } from "@/hooks/use-oauth-providers";
 import { CopyButton } from "@/components/ui/copy-button";
 import { openExternalUrl } from "@/lib/external-links";
+import { Badge, Button, Input } from "@hermes/shared-ui";
 import settings from "./settings.module.css";
 import s from "./settings-oauth-section.module.css";
 
@@ -50,6 +51,15 @@ function badgeLabel(status: ReturnType<typeof badgeStatus>): string {
     case "expired": return "已过期";
     case "error": return "错误";
     default: return "未连接";
+  }
+}
+
+function badgeTone(status: ReturnType<typeof badgeStatus>): "success" | "warning" | "danger" | "neutral" {
+  switch (status) {
+    case "connected": return "success";
+    case "expired": return "warning";
+    case "error": return "danger";
+    default: return "neutral";
   }
 }
 
@@ -93,7 +103,7 @@ export function OAuthProvidersSection() {
             {connectedCount}/{providers.length} 个 OAuth 登录已连接
           </div>
         </div>
-        <button className={settings.btn} onClick={() => refetch()}>刷新</button>
+        <Button variant="outline" onClick={() => void refetch()}>刷新</Button>
       </div>
 
       {providers.map((provider) => {
@@ -115,36 +125,31 @@ export function OAuthProvidersSection() {
               </div>
             </div>
             <div className={s.providerRight}>
-              <span className={s.badge} data-status={status}>{badgeLabel(status)}</span>
+              <Badge tone={badgeTone(status)} size="sm">{badgeLabel(status)}</Badge>
               {canLogin && (
-                <button className={settings.btnPrimary} onClick={() => setLoginProvider(provider)}>
+                <Button variant="solid" tone="accent" onClick={() => setLoginProvider(provider)}>
                   登录
-                </button>
+                </Button>
               )}
               {!provider.status.logged_in && provider.flow === "external" && provider.cli_command && (
-                <CopyButton className={settings.btn} text={provider.cli_command}>
+                <CopyButton variant="outline" size="md" text={provider.cli_command}>
                   复制命令
                 </CopyButton>
               )}
               {canDisconnect && (
-                <button
-                  className={settings.btnDanger}
+                <Button
+                  variant="outline"
+                  tone="danger"
                   disabled={disconnect.isPending}
                   onClick={() => handleDisconnect(provider)}
                 >
                   断开
-                </button>
+                </Button>
               )}
               {provider.docs_url && (
-                <a
-                  href={provider.docs_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={settings.btn}
-                  style={{ textDecoration: "none" }}
-                >
+                <Button variant="outline" onClick={() => void openExternalUrl(provider.docs_url!)}>
                   文档 ↗
-                </a>
+                </Button>
               )}
             </div>
           </div>
@@ -296,7 +301,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
       <div className={s.modal} onClick={(e) => e.stopPropagation()}>
         <div className={s.modalHeader}>
           <div className={s.modalTitle}>登录 {provider.name}</div>
-          <button className={s.modalClose} onClick={handleClose}>✕</button>
+          <Button variant="plain" size="inherit" className={s.modalClose} onClick={handleClose} aria-label="关闭">✕</Button>
         </div>
 
         {phase === "starting" && (
@@ -310,8 +315,9 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               <li>授权完成后，复制页面上显示的授权码</li>
               <li>将授权码粘贴到下方输入框</li>
             </ol>
-            <input
+            <Input
               className={s.codeInput}
+              mono
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="粘贴授权码…"
@@ -319,13 +325,14 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               onKeyDown={(e) => { if (e.key === "Enter") handleSubmitCode(); }}
             />
             <div className={s.modalActions}>
-              <button
-                className={settings.btnPrimary}
+              <Button
+                variant="solid"
+                tone="accent"
                 disabled={!code.trim() || submitCode.isPending}
                 onClick={handleSubmitCode}
               >
                 {submitCode.isPending ? "验证中…" : "提交"}
-              </button>
+              </Button>
               <button
                 className={s.linkBtn}
                 onClick={() => void openExternalUrl((startResult as StartResultPkce).auth_url)}
@@ -344,7 +351,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
             </p>
             <div className={s.userCode}>{startResult.user_code}</div>
             <div className={s.modalActions}>
-              <CopyButton className={settings.btn} text={startResult.user_code}>
+              <CopyButton variant="outline" size="md" text={startResult.user_code}>
                 复制验证码
               </CopyButton>
               <button
@@ -367,7 +374,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
           <>
             <div className={s.statusMessage} data-type="error">{errorMsg}</div>
             <div className={s.modalActions}>
-              <button className={settings.btn} onClick={handleClose}>关闭</button>
+              <Button variant="outline" onClick={handleClose}>关闭</Button>
             </div>
           </>
         )}

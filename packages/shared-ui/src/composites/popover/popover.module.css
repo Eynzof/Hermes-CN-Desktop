@@ -1,5 +1,5 @@
 .content {
-  z-index: 50;
+  z-index: var(--h-z-popover);
   background: var(--h-bg-pane);
   color: var(--h-text);
   border: 1px solid var(--h-line);

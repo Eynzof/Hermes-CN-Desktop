@@ -3,11 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import { AlertTriangle, Archive, CheckCircle2, Download, FolderOpen, Upload } from "lucide-react";
 import type { BackupExportResult, BackupImportResult } from "@hermes/protocol";
+import { Alert, Button } from "@hermes/shared-ui";
 import { runtime } from "@/lib/runtime";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
 import { activeProfileAtom, profileSwitchingAtom } from "@/stores/ui";
 import { SectionShell } from "./section-shell";
+import { SettingsHero } from "./settings-hero";
 import settings from "./settings.module.css";
 import s from "./config-migration.module.css";
 
@@ -114,31 +116,32 @@ export function BackupRoute() {
 
   return (
     <SectionShell title="备份恢复" sub="导出或导入当前 Hermes profile 的完整备份压缩包">
-      <div className={s.introCard}>
-        <h2 className={s.introTitle}>一键备份当前桌面端内核档案</h2>
-        <p className={s.introText}>
-          备份包会保存当前 profile 下的配置、密钥、技能、记忆、灵魂和会话历史。导入时不会覆盖现有档案，
-          而是恢复成一个新的 profile 并自动切换过去。
-        </p>
-      </div>
+      <SettingsHero
+        ok={!busy}
+        icon={<Archive size={24} />}
+        eyebrow="Hermes Agent 档案备份"
+        title="当前桌面端内核档案备份与恢复"
+        description="备份包会保存当前 profile 下的配置、密钥、技能、记忆、灵魂和会话历史。导入时不会覆盖现有档案，而是恢复成一个新的 profile 并自动切换过去。"
+        badge={<span className={settings.statusBadge} data-on={!busy}>{busy ? "处理中" : "就绪"}</span>}
+      />
 
-      <div className={s.notice}>
+      <Alert tone="warning" size="sm">
         <AlertTriangle size={14} /> 备份 zip 可能包含 <code>.env</code>、OAuth token、API Key 和聊天历史。请只保存在可信位置，不要直接发给他人。
-      </div>
+      </Alert>
 
       <div className={s.actions}>
-        <button type="button" className={settings.btnPrimary} onClick={exportBackup} disabled={busy}>
+        <Button type="button" variant="solid" tone="accent" onClick={exportBackup} disabled={busy}>
           <Download size={13} />
           {exporting ? "导出中…" : "导出当前档案备份"}
-        </button>
-        <button type="button" className={settings.btn} onClick={importBackup} disabled={busy}>
+        </Button>
+        <Button type="button" variant="outline" onClick={importBackup} disabled={busy}>
           <Upload size={13} />
           {importing ? "导入中…" : "导入备份压缩包"}
-        </button>
+        </Button>
       </div>
 
-      {message && <div className={lastExport?.ok || lastImport?.ok ? s.success : s.notice}>{message}</div>}
-      {error && <div className={s.error}>{error}</div>}
+      {message && <Alert tone={lastExport?.ok || lastImport?.ok ? "success" : "neutral"} size="sm">{message}</Alert>}
+      {error && <Alert tone="danger" size="sm">{error}</Alert>}
 
       <section className={s.previewPanel}>
         <h3 className={s.previewTitle}>
@@ -185,15 +188,15 @@ export function BackupRoute() {
             </ul>
           )}
           <div className={s.actions}>
-            <button
+            <Button
               type="button"
-              className={settings.btn}
+              variant="outline"
               onClick={() => void openBackupDirectory(lastExport.backupPath)}
               disabled={!lastExport.backupPath || !window.hermesDesktop?.openWorkspacePath}
             >
               <FolderOpen size={13} />
               打开所在文件夹
-            </button>
+            </Button>
           </div>
         </section>
       )}
