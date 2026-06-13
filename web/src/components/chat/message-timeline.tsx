@@ -62,6 +62,17 @@ function distanceFromBottom(element: HTMLElement): number {
   return Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight);
 }
 
+// 只有"用户主动上滑"才应脱离贴底跟随。程序触发的轮次跳转平滑滚动同样会让 scrollTop
+// 递减，但绝不能被当成用户手势——否则会把自己的跳转动画硬取消掉。
+export function shouldDetachOnScroll(
+  scrollTop: number,
+  lastScrollTop: number,
+  programmaticScroll: boolean,
+): boolean {
+  if (programmaticScroll) return false;
+  return scrollTop < lastScrollTop - 1;
+}
+
 function formatDay(timestamp: number): string {
   const date = new Date(timestamp);
   const now = new Date();
@@ -699,6 +710,11 @@ export function MessageTimeline({
   const autoAnchorRef = useRef(false);
   const autoAnchorTimerRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef(0);
+  // 程序触发的轮次跳转（平滑滚动）守卫：跳转动画期间 onScroll 会被误判为用户上滑而
+  // 触发 detachFromBottomAutoFollow 硬取消滚动，这里用标记把跳转滚动与用户手势区分开。
+  const programmaticScrollRef = useRef(false);
+  const programmaticTargetRef = useRef(0);
+  const programmaticTimerRef = useRef<number | null>(null);
   const messageCountRef = useRef(0);
   const firstMessageIdRef = useRef<string | undefined>(undefined);
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
@@ -774,9 +790,22 @@ export function MessageTimeline({
     const containerRect = container.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const top = container.scrollTop + nodeRect.top - containerRect.top - 12;
-    nearBottomRef.current = container.scrollHeight - top - container.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
+    const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const targetTop = Math.min(Math.max(0, top), maxTop);
+    nearBottomRef.current = container.scrollHeight - targetTop - container.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
     userDetachedFromBottomRef.current = !nearBottomRef.current;
-    container.scrollTo({ top, behavior: "smooth" });
+    // 标记这是一次程序跳转：handleScroll 在到达目标前不得把它当成用户上滑。
+    // 兜底定时器防止动画因目标 clamp / 内容重排始终差几像素而无法清除标记。
+    programmaticScrollRef.current = true;
+    programmaticTargetRef.current = targetTop;
+    if (programmaticTimerRef.current !== null) {
+      window.clearTimeout(programmaticTimerRef.current);
+    }
+    programmaticTimerRef.current = window.setTimeout(() => {
+      programmaticScrollRef.current = false;
+      programmaticTimerRef.current = null;
+    }, 700);
+    container.scrollTo({ top: targetTop, behavior: "smooth" });
     lastScrollTopRef.current = container.scrollTop;
     setActiveTurnId(id);
   }, []);
@@ -805,6 +834,12 @@ export function MessageTimeline({
 
   const detachFromBottomAutoFollow = useCallback(() => {
     const container = containerRef.current;
+    // 用户的显式手势（滚轮/拖动）应能中断进行中的轮次跳转并夺回滚动控制。
+    programmaticScrollRef.current = false;
+    if (programmaticTimerRef.current !== null) {
+      window.clearTimeout(programmaticTimerRef.current);
+      programmaticTimerRef.current = null;
+    }
     clearAutoAnchor();
     userDetachedFromBottomRef.current = true;
     nearBottomRef.current = false;
@@ -920,6 +955,9 @@ export function MessageTimeline({
       if (autoAnchorTimerRef.current !== null) {
         window.clearTimeout(autoAnchorTimerRef.current);
       }
+      if (programmaticTimerRef.current !== null) {
+        window.clearTimeout(programmaticTimerRef.current);
+      }
     };
   }, []);
 
@@ -932,8 +970,27 @@ export function MessageTimeline({
   const handleScroll = () => {
     const container = containerRef.current;
     if (!container) return;
+
+    // 轮次跳转动画进行中：不要把它当成用户上滑（否则会自取消）。到达目标后解除守卫。
+    if (programmaticScrollRef.current) {
+      lastScrollTopRef.current = container.scrollTop;
+      if (Math.abs(container.scrollTop - programmaticTargetRef.current) <= 2) {
+        programmaticScrollRef.current = false;
+        if (programmaticTimerRef.current !== null) {
+          window.clearTimeout(programmaticTimerRef.current);
+          programmaticTimerRef.current = null;
+        }
+      }
+      updateActiveTurnFromScroll();
+      return;
+    }
+
     const bottomDistance = distanceFromBottom(container);
-    const scrollingUp = container.scrollTop < lastScrollTopRef.current - 1;
+    const scrollingUp = shouldDetachOnScroll(
+      container.scrollTop,
+      lastScrollTopRef.current,
+      programmaticScrollRef.current,
+    );
 
     if (scrollingUp) {
       detachFromBottomAutoFollow();

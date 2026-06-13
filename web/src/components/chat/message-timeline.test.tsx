@@ -2,7 +2,7 @@ import ReactDOMServer from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { MarkdownText } from "./markdown-renderer";
-import { MessageTimeline, resolveBottomFollowState } from "./message-timeline";
+import { MessageTimeline, resolveBottomFollowState, shouldDetachOnScroll } from "./message-timeline";
 import type { ChatMessage } from "./chat-types";
 
 describe("MessageTimeline", () => {
@@ -18,6 +18,20 @@ describe("MessageTimeline", () => {
       nearBottom: true,
       userDetachedFromBottom: false,
     });
+  });
+
+  it("treats a genuine user upward scroll as a bottom-detach gesture", () => {
+    expect(shouldDetachOnScroll(800, 1000, false)).toBe(true);
+  });
+
+  it("does not detach while a programmatic turn jump animates upward", () => {
+    // The smooth scrollTo from scrollToTurn drives scrollTop down too; without the
+    // guard handleScroll would cancel its own jump. This locks in the fix.
+    expect(shouldDetachOnScroll(800, 1000, true)).toBe(false);
+  });
+
+  it("does not detach when scrolling downward", () => {
+    expect(shouldDetachOnScroll(1000, 800, false)).toBe(false);
   });
 
   it("uses the optimistic progress model instead of stale session usage", () => {
