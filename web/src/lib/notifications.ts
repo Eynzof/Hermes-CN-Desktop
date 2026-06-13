@@ -30,7 +30,10 @@ const MAX_DEDUPE_KEYS = 500;
 function truncate(text: string, max: number): string {
   const trimmed = text.replace(/\s+/g, " ").trim();
   if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, Math.max(0, max - 1))}…`;
+  // 按码点切，`slice` 按 UTF-16 截断会把 emoji 的代理对劈成孤立代理字符。
+  const chars = Array.from(trimmed);
+  if (chars.length <= max) return trimmed;
+  return `${chars.slice(0, Math.max(0, max - 1)).join("")}…`;
 }
 
 function payloadOf(event: GatewayEvent): Record<string, any> {

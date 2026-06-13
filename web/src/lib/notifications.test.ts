@@ -179,6 +179,21 @@ describe("decideNotification — approval.request", () => {
     expect(action?.body.length).toBeLessThanOrEqual(120);
     expect(action?.body.endsWith("…")).toBe(true);
   });
+
+  it("does not split surrogate pairs when truncating", async () => {
+    const { decideNotification } = await loadNotifications();
+    const action = decideNotification({
+      event: approvalEvent({ request_id: "r1", command: "🚀".repeat(200) }),
+      prevRuntime: runtimeWith(),
+      settings: settings(),
+      alreadyNotified: never,
+    });
+    const body = action?.body ?? "";
+    expect(body.endsWith("…")).toBe(true);
+    expect(Array.from(body).length).toBeLessThanOrEqual(120);
+    // 截断点不能落在代理对中间产生孤立代理字符。
+    expect(body).toMatch(/^(?:🚀)+…$/u);
+  });
 });
 
 describe("decideNotification — message.complete", () => {
