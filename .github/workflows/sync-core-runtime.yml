@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          node - <<'NODE'
+          node --input-type=commonjs - <<'NODE'
           const crypto = require("node:crypto");
           const fs = require("node:fs");
           const path = require("node:path");
@@ -358,7 +358,7 @@ jobs:
             done
           }
 
-          target_path="$(node - <<'NODE'
+          target_path="$(node --input-type=commonjs - <<'NODE'
           const baseUrl = new URL(process.env.RUNTIME_FEED_BASE_URL);
           const publicParts = baseUrl.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
           let remotePath = (process.env.LINUX_DEPLOY_REMOTE_PATH || "").replace(/[\\/]+$/g, "");
