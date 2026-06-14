@@ -9,6 +9,7 @@ import {
   CronRunsResponse,
   ElevenLabsVoicesResponse,
   SessionsResponse,
+  SessionCompressResult,
   SessionSummary,
 } from "./hermes-api";
 
@@ -260,6 +261,37 @@ describe("AnalyticsResponse", () => {
         },
       }),
     ).toThrow();
+  });
+});
+
+describe("SessionCompressResult", () => {
+  it("accepts current backend structured manual compression summaries", () => {
+    const parsed = SessionCompressResult.parse({
+      status: "compressed",
+      removed: 0,
+      before_messages: 0,
+      after_messages: 0,
+      before_tokens: 0,
+      after_tokens: 0,
+      summary: {
+        noop: true,
+        headline: "No changes from compression: 0 messages",
+        token_line: "Approx request size: ~0 tokens (unchanged)",
+        note: null,
+      },
+      usage: { total: 0, compressions: 0 },
+    });
+
+    expect(parsed.summary).toMatchObject({ noop: true });
+  });
+
+  it("keeps accepting older string summaries", () => {
+    const parsed = SessionCompressResult.parse({
+      status: "compressed",
+      summary: "Compressed: 20 → 8 messages",
+    });
+
+    expect(parsed.summary).toBe("Compressed: 20 → 8 messages");
   });
 });
 

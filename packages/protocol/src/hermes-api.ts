@@ -884,7 +884,12 @@ export const SessionCompressResult = z.object({
   after_messages: z.number().optional(),
   before_tokens: z.number().optional(),
   after_tokens: z.number().optional(),
-  summary: z.string().optional(),
+  // Core currently returns a structured manual-compression summary object
+  // ({ noop, headline, token_line, note }); older runtimes returned a string.
+  // The desktop UI derives its Chinese notice from the numeric before/after
+  // fields, so accept either shape instead of rejecting otherwise-successful
+  // /compress RPC results as "unrecognized".
+  summary: z.unknown().optional(),
   usage: SessionUsageResult.optional(),
 }).passthrough();
 export type SessionCompressResult = z.infer<typeof SessionCompressResult>;
