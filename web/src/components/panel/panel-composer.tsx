@@ -154,9 +154,11 @@ export function PanelComposer() {
         variant="big"
         headerLabel="新任务"
         hints={[
-          { kbd: "/", label: "选择 Skill" },
+          { kbd: "/skill", label: "选择 Skill" },
+          { kbd: "/", label: "输入指令" },
           { label: "把文件拖入此处直接附加" },
         ]}
+        showCompressCommand={false}
         showMeta={false}
         loading={sending}
         voiceConfig={config ?? null}

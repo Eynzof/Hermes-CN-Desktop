@@ -67,9 +67,11 @@ export function contextRiskText(risk: ContextRisk, active: boolean): string {
 export function ContextIndicator({
   usage,
   active = false,
+  showCompressCommand = true,
 }: {
   usage: ComposerContextUsage;
   active?: boolean;
+  showCompressCommand?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement>(null);
@@ -142,7 +144,9 @@ export function ContextIndicator({
               {riskText}
             </span>
           ) : null}
-          <span className={s.contextPopoverMeta}>输入 /compress 手动压缩上下文</span>
+          {showCompressCommand ? (
+            <span className={s.contextPopoverMeta}>输入 /compress 手动压缩上下文</span>
+          ) : null}
         </span>
       ) : null}
     </span>

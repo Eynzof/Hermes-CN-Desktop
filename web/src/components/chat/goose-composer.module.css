@@ -277,9 +277,15 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 0 18px 12px;
+  margin: 8px 2px 0;
+  padding: 0;
   font-size: 11.5px;
   color: var(--h-text-3);
+}
+
+.box[data-variant="big"] .hintRow {
+  margin: 0;
+  padding: 0 18px 12px;
 }
 
 .hintItem {

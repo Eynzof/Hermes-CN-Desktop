@@ -72,6 +72,12 @@ describe("filterComposerCommands", () => {
     });
   });
 
+  it("can hide /compress in new-task composers", () => {
+    expect(filterComposerCommands("", { skillsAvailable: true, includeCompress: false })
+      .map((c) => c.command)).toEqual(["/skill"]);
+    expect(filterComposerCommands("comp", { includeCompress: false })).toEqual([]);
+  });
+
   it("matches a partial prefix of the command name", () => {
     expect(filterComposerCommands("comp").map((c) => c.token)).toEqual(["compress"]);
     expect(filterComposerCommands("sk", { skillsAvailable: true }).map((c) => c.token)).toEqual([

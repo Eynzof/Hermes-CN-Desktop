@@ -104,12 +104,16 @@ function rankCommandSpec(spec: CommandSpec, q: string): number | null {
 export interface ComposerCommandOptions {
   /** Include the `/skill` namespace command (only where a skill picker is wired). */
   skillsAvailable?: boolean;
+  /** Include built-in context compression commands such as `/compress`. */
+  includeCompress?: boolean;
 }
 
 /**
  * Rank the composer's top-level slash commands against the typed query (the
- * text after "/"). `/skill` is included only when a skill picker is available.
- * Empty query lists all; an alias (prefix) match outranks a name/description hit.
+ * text after "/"). `/skill` is included only when a skill picker is available,
+ * and `/compress` can be hidden in new-task composers where no existing session
+ * can be compressed. Empty query lists all; an alias (prefix) match outranks a
+ * name/description hit.
  */
 export function filterComposerCommands(
   query: string,
@@ -118,7 +122,7 @@ export function filterComposerCommands(
   const q = query.trim().toLowerCase();
   const specs: CommandSpec[] = [];
   if (options.skillsAvailable) specs.push(SKILL_NAMESPACE_COMMAND);
-  specs.push(...BUILTIN_COMMAND_SPECS);
+  if (options.includeCompress !== false) specs.push(...BUILTIN_COMMAND_SPECS);
 
   const ranked: { spec: CommandSpec; rank: number }[] = [];
   for (const spec of specs) {

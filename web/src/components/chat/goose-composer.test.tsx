@@ -1,7 +1,17 @@
 import ReactDOMServer from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import { ComposerErrorMessage } from "./goose-composer";
+import { ComposerErrorMessage, GooseComposer } from "./goose-composer";
+
+function renderComposer(element: ReactElement): string {
+  return ReactDOMServer.renderToStaticMarkup(
+    <MemoryRouter>
+      {element}
+    </MemoryRouter>,
+  );
+}
 
 describe("ComposerErrorMessage", () => {
   it("shows a voice setup action for missing STT provider errors", () => {
@@ -26,3 +36,40 @@ describe("ComposerErrorMessage", () => {
   });
 });
 
+describe("GooseComposer slash hints", () => {
+  it("renders new-task slash hints without the compress command", () => {
+    const html = renderComposer(
+      <GooseComposer
+        hints={[
+          { kbd: "/skill", label: "选择 Skill" },
+          { kbd: "/", label: "输入指令" },
+          { label: "把文件拖入此处直接附加" },
+        ]}
+        showCompressCommand={false}
+      />,
+    );
+
+    expect(html).toContain("/skill");
+    expect(html).toContain("选择 Skill");
+    expect(html).toContain("输入指令");
+    expect(html).toContain("把文件拖入此处直接附加");
+    expect(html).not.toContain("/compress");
+  });
+
+  it("renders session slash hints with the compress command", () => {
+    const html = renderComposer(
+      <GooseComposer
+        hints={[
+          { kbd: "/skill", label: "选择 Skill" },
+          { kbd: "/", label: "输入指令" },
+          { kbd: "/compress", label: "触发会话压缩" },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("/skill");
+    expect(html).toContain("输入指令");
+    expect(html).toContain("/compress");
+    expect(html).toContain("触发会话压缩");
+  });
+});
