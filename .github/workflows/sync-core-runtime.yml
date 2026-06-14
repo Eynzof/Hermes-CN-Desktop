@@ -1,0 +1,442 @@
+# Mirror official Hermes-CN-Core runtime release assets to the production
+# runtime feed server. The signed manifest JSON is uploaded as-is; do not
+# rewrite artifactUrl here because it is part of the runtime signature payload.
+
+name: sync-core-runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_tag:
+        description: "Official Eynzof/Hermes-CN-Core runtime tag to sync, or latest"
+        default: "latest"
+        required: false
+      channel:
+        description: "Runtime manifest channel"
+        default: "stable"
+        required: false
+      platforms:
+        description: "Comma-separated platform-arch list"
+        default: "win32-x64,darwin-arm64,darwin-x64,linux-x64"
+        required: false
+      remote_path:
+        description: "Linux server web root, downloads root, or runtime root. Empty uses LINUX_DEPLOY_PATH."
+        default: ""
+        required: false
+      verify_public_urls:
+        description: "Verify public manifest URLs after upload"
+        default: true
+        type: boolean
+        required: false
+  schedule:
+    # Keep the public mirror close to the official runtime feed without making
+    # desktop release builds responsible for refreshing it.
+    - cron: "17 20 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-core-runtime-${{ github.event.inputs.channel || 'stable' }}
+  cancel-in-progress: false
+
+env:
+  CORE_RUNTIME_REPO: Eynzof/Hermes-CN-Core
+  RUNTIME_FEED_BASE_URL: https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime
+
+jobs:
+  sync:
+    name: Sync official runtime assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download and verify official runtime assets
+        id: runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RUNTIME_TAG: ${{ github.event.inputs.runtime_tag || 'latest' }}
+          CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
+          PLATFORMS: ${{ github.event.inputs.platforms || 'win32-x64,darwin-arm64,darwin-x64,linux-x64' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node - <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const repo = process.env.CORE_RUNTIME_REPO || "Eynzof/Hermes-CN-Core";
+          const requestedTag = (process.env.RUNTIME_TAG || "latest").trim() || "latest";
+          const channel = (process.env.CHANNEL || "stable").trim() || "stable";
+          const platforms = (process.env.PLATFORMS || "")
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+          const token = process.env.GITHUB_TOKEN || "";
+
+          if (platforms.length === 0) {
+            throw new Error("No platforms requested.");
+          }
+
+          const headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "hermes-agent-cn-desktop-runtime-sync",
+          };
+          if (token) headers.Authorization = `Bearer ${token}`;
+
+          async function fetchOk(url, options = {}) {
+            const response = await fetch(url, {
+              ...options,
+              headers: {
+                ...headers,
+                ...(options.headers || {}),
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`${url} -> HTTP ${response.status}`);
+            }
+            return response;
+          }
+
+          async function fetchJson(url) {
+            return await (await fetchOk(url)).json();
+          }
+
+          async function sleep(ms) {
+            await new Promise((resolve) => setTimeout(resolve, ms));
+          }
+
+          async function downloadBytes(url, attempts = 4) {
+            let lastError;
+            for (let attempt = 1; attempt <= attempts; attempt += 1) {
+              try {
+                const response = await fetchOk(url, {
+                  headers: {
+                    "Accept": "application/octet-stream",
+                  },
+                });
+                return Buffer.from(await response.arrayBuffer());
+              } catch (error) {
+                lastError = error;
+                if (attempt < attempts) {
+                  console.warn(`download failed for ${url} (attempt ${attempt}/${attempts}): ${error?.message || error}`);
+                  await sleep(1000 * attempt);
+                }
+              }
+            }
+            throw lastError;
+          }
+
+          function sha256(buffer) {
+            return crypto.createHash("sha256").update(buffer).digest("hex");
+          }
+
+          function splitPlatformArch(value) {
+            const index = value.lastIndexOf("-");
+            if (index <= 0 || index === value.length - 1) {
+              throw new Error(`Invalid platform-arch entry: ${value}`);
+            }
+            return {
+              platform: value.slice(0, index),
+              arch: value.slice(index + 1),
+            };
+          }
+
+          const release = requestedTag === "latest"
+            ? await fetchJson(`https://api.github.com/repos/${repo}/releases/latest`)
+            : await fetchJson(`https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(requestedTag)}`);
+
+          const releaseTag = release.tag_name;
+          if (!releaseTag) {
+            throw new Error("GitHub release response is missing tag_name.");
+          }
+
+          const assets = new Map((release.assets || []).map((asset) => [asset.name, asset]));
+          const outRoot = "runtime-sync";
+          fs.rmSync(outRoot, { recursive: true, force: true });
+          fs.mkdirSync(path.join(outRoot, channel), { recursive: true });
+
+          const records = [];
+          const runtimeVersions = new Set();
+
+          for (const platformArch of platforms) {
+            const { platform, arch } = splitPlatformArch(platformArch);
+            const manifestName = `${channel}-${platform}-${arch}.json`;
+            const zipName = `hermes-agent-cn-runtime-${platform}-${arch}.zip`;
+            const manifestAsset = assets.get(manifestName);
+            const zipAsset = assets.get(zipName);
+            if (!manifestAsset) {
+              throw new Error(`Release ${releaseTag} is missing asset: ${manifestName}`);
+            }
+            if (!zipAsset) {
+              throw new Error(`Release ${releaseTag} is missing asset: ${zipName}`);
+            }
+
+            const manifestBytes = await downloadBytes(manifestAsset.browser_download_url);
+            const manifest = JSON.parse(manifestBytes.toString("utf8"));
+            if (manifest.schemaVersion !== 2) {
+              throw new Error(`${manifestName}: expected schemaVersion 2, got ${manifest.schemaVersion}`);
+            }
+            if (manifest.channel !== channel || manifest.platform !== platform || manifest.arch !== arch) {
+              throw new Error(`${manifestName}: manifest identity mismatch`);
+            }
+            if (!manifest.runtimeVersion) {
+              throw new Error(`${manifestName}: missing runtimeVersion`);
+            }
+            if (!manifest.sha256) {
+              throw new Error(`${manifestName}: missing sha256`);
+            }
+            if (!manifest.signature) {
+              throw new Error(`${manifestName}: missing signature`);
+            }
+
+            const zipBytes = await downloadBytes(zipAsset.browser_download_url);
+            const actualSha = sha256(zipBytes);
+            const expectedSha = String(manifest.sha256).toLowerCase();
+            if (actualSha !== expectedSha) {
+              throw new Error(`${zipName}: sha256 mismatch, expected ${expectedSha}, got ${actualSha}`);
+            }
+
+            const releaseVersionDir = path.join(outRoot, "releases", manifest.runtimeVersion);
+            fs.mkdirSync(releaseVersionDir, { recursive: true });
+            fs.writeFileSync(path.join(outRoot, channel, manifestName), manifestBytes);
+            fs.writeFileSync(path.join(outRoot, channel, zipName), zipBytes);
+            fs.writeFileSync(path.join(releaseVersionDir, manifestName), manifestBytes);
+            fs.writeFileSync(path.join(releaseVersionDir, zipName), zipBytes);
+
+            runtimeVersions.add(manifest.runtimeVersion);
+            records.push({
+              platform,
+              arch,
+              manifestName,
+              zipName,
+              runtimeVersion: manifest.runtimeVersion,
+              sha256: actualSha,
+              sourceRepo: manifest.sourceRepo,
+              sourceCommit: manifest.sourceCommit,
+              artifactUrl: manifest.artifactUrl,
+              zipSize: zipBytes.length,
+            });
+          }
+
+          fs.writeFileSync(path.join(outRoot, "summary.json"), JSON.stringify({
+            repo,
+            requestedTag,
+            releaseTag,
+            channel,
+            runtimeVersions: Array.from(runtimeVersions).sort(),
+            records,
+          }, null, 2) + "\n");
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_tag=${releaseTag}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `channel=${channel}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runtime_versions=${Array.from(runtimeVersions).sort().join(",")}\n`);
+          console.log(`Prepared ${records.length} runtime platform asset set(s) from ${repo}@${releaseTag}.`);
+          for (const record of records) {
+            console.log(`${record.manifestName}: ${record.runtimeVersion} ${record.sha256}`);
+            if (!String(record.artifactUrl || "").startsWith(process.env.RUNTIME_FEED_BASE_URL || "")) {
+              console.log(`notice: ${record.manifestName} keeps signed artifactUrl: ${record.artifactUrl}`);
+            }
+          }
+          NODE
+
+      - name: Upload prepared runtime sync artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-sync-${{ steps.runtime.outputs.release_tag }}
+          path: runtime-sync/
+
+      - name: Configure SSH for Linux upload
+        env:
+          SECRET_LINUX_DEPLOY_HOST: ${{ secrets.LINUX_DEPLOY_HOST }}
+          SECRET_LINUX_DEPLOY_PORT: ${{ secrets.LINUX_DEPLOY_PORT }}
+          SECRET_LINUX_DEPLOY_USER: ${{ secrets.LINUX_DEPLOY_USER }}
+          VAR_LINUX_DEPLOY_HOST: ${{ vars.LINUX_DEPLOY_HOST }}
+          VAR_LINUX_DEPLOY_PORT: ${{ vars.LINUX_DEPLOY_PORT }}
+          VAR_LINUX_DEPLOY_USER: ${{ vars.LINUX_DEPLOY_USER }}
+          LINUX_DEPLOY_KEY: ${{ secrets.LINUX_DEPLOY_KEY }}
+          LINUX_DEPLOY_KNOWN_HOSTS: ${{ secrets.LINUX_DEPLOY_KNOWN_HOSTS }}
+          SECRET_LINUX_DEPLOY_PATH: ${{ secrets.LINUX_DEPLOY_PATH }}
+          VAR_LINUX_DEPLOY_PATH: ${{ vars.LINUX_DEPLOY_PATH }}
+          INPUT_REMOTE_PATH: ${{ github.event.inputs.remote_path || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_host="${SECRET_LINUX_DEPLOY_HOST:-${VAR_LINUX_DEPLOY_HOST:-}}"
+          deploy_port="${SECRET_LINUX_DEPLOY_PORT:-${VAR_LINUX_DEPLOY_PORT:-}}"
+          deploy_user="${SECRET_LINUX_DEPLOY_USER:-${VAR_LINUX_DEPLOY_USER:-}}"
+          configured_remote_path="${SECRET_LINUX_DEPLOY_PATH:-${VAR_LINUX_DEPLOY_PATH:-}}"
+
+          if [[ -z "$deploy_host" ]]; then deploy_host="43.224.248.112"; fi
+          if [[ -z "$deploy_user" ]]; then deploy_user="root"; fi
+          if [[ -z "$deploy_port" ]]; then deploy_port="22"; fi
+
+          missing=()
+          if [[ -z "${LINUX_DEPLOY_KEY:-}" ]]; then missing+=("secrets.LINUX_DEPLOY_KEY"); fi
+          if [[ -z "${INPUT_REMOTE_PATH:-}" && -z "$configured_remote_path" ]]; then
+            missing+=("workflow input remote_path, secrets.LINUX_DEPLOY_PATH, or vars.LINUX_DEPLOY_PATH")
+          fi
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing Linux upload configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+          remote_path="${INPUT_REMOTE_PATH:-$configured_remote_path}"
+          remote_path="${remote_path%/}"
+
+          mkdir -p "$HOME/.ssh"
+          key_path="$HOME/.ssh/linux_deploy_key"
+          printf '%s' "$LINUX_DEPLOY_KEY" | tr -d '\r' > "$key_path"
+          chmod 600 "$key_path"
+
+          known_hosts_path="$HOME/.ssh/known_hosts"
+          if [[ -z "${LINUX_DEPLOY_KNOWN_HOSTS:-}" ]]; then
+            : > "$known_hosts_path"
+            strict_host_key_checking="accept-new"
+          else
+            printf '%s' "$LINUX_DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$known_hosts_path"
+            strict_host_key_checking="yes"
+          fi
+
+          {
+            echo "SSH_KEY_PATH=$key_path"
+            echo "SSH_KNOWN_HOSTS_PATH=$known_hosts_path"
+            echo "SSH_STRICT_HOST_KEY_CHECKING=$strict_host_key_checking"
+            echo "LINUX_DEPLOY_HOST=$deploy_host"
+            echo "LINUX_DEPLOY_PORT=$deploy_port"
+            echo "LINUX_DEPLOY_USER=$deploy_user"
+            echo "LINUX_DEPLOY_REMOTE_PATH=$remote_path"
+          } >> "$GITHUB_ENV"
+
+      - name: Upload runtime assets to Linux server
+        env:
+          CHANNEL: ${{ steps.runtime.outputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ssh_common_options=(
+            -i "$SSH_KEY_PATH"
+            -o "UserKnownHostsFile=$SSH_KNOWN_HOSTS_PATH"
+            -o "StrictHostKeyChecking=$SSH_STRICT_HOST_KEY_CHECKING"
+            -o "BatchMode=yes"
+            -o "ConnectTimeout=60"
+            -o "ConnectionAttempts=3"
+            -o "ServerAliveInterval=15"
+            -o "ServerAliveCountMax=20"
+            -o "TCPKeepAlive=yes"
+            -o "IPQoS=throughput"
+          )
+          remote="$LINUX_DEPLOY_USER@$LINUX_DEPLOY_HOST"
+
+          remote_quote() {
+            python3 -c 'import shlex, sys; print(shlex.quote(sys.argv[1]))' "$1"
+          }
+
+          retry() {
+            local label="$1"
+            shift
+            local attempt=1
+            local max_attempts=6
+            local delay
+            until "$@"; do
+              if [[ "$attempt" -ge "$max_attempts" ]]; then
+                echo "$label failed after $max_attempts attempts" >&2
+                return 1
+              fi
+              delay=$((15 * (2 ** (attempt - 1))))
+              if [[ "$delay" -gt 120 ]]; then delay=120; fi
+              echo "$label failed; retrying in ${delay}s."
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
+
+          target_path="$(node - <<'NODE'
+          const baseUrl = new URL(process.env.RUNTIME_FEED_BASE_URL);
+          const publicParts = baseUrl.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+          let remotePath = (process.env.LINUX_DEPLOY_REMOTE_PATH || "").replace(/[\\/]+$/g, "");
+          const remoteParts = remotePath.split(/[\\/]+/).filter(Boolean);
+          const last = remoteParts[remoteParts.length - 1] || "";
+          if (last === "runtime") {
+            console.log(remotePath);
+          } else if (last === "Hermes-CN-Core") {
+            console.log(`${remotePath}/runtime`);
+          } else if (last === "downloads") {
+            console.log(`${remotePath}/${publicParts.slice(1).join("/")}`);
+          } else {
+            console.log(`${remotePath}/${publicParts.join("/")}`);
+          }
+          NODE
+          )"
+
+          echo "Uploading runtime feed to $target_path"
+          retry "create remote runtime directories" \
+            ssh "${ssh_common_options[@]}" -p "$LINUX_DEPLOY_PORT" "$remote" \
+            "mkdir -p $(remote_quote "$target_path/$CHANNEL") $(remote_quote "$target_path/releases")"
+
+          # Upload immutable release-versioned files first. Stable zips are
+          # copied before stable manifests so clients never see a new manifest
+          # before its stable fallback zip exists.
+          find runtime-sync/releases -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' version_dir; do
+            version="$(basename "$version_dir")"
+            retry "create remote release directory $version" \
+              ssh "${ssh_common_options[@]}" -p "$LINUX_DEPLOY_PORT" "$remote" \
+              "mkdir -p $(remote_quote "$target_path/releases/$version")"
+
+            while IFS= read -r -d '' file; do
+              retry "upload release file $(basename "$file")" \
+                scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" "$file" "$remote:$target_path/releases/$version/"
+            done < <(find "$version_dir" -maxdepth 1 -type f -print0)
+          done
+
+          while IFS= read -r -d '' zip_file; do
+            retry "upload stable zip $(basename "$zip_file")" \
+              scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" "$zip_file" "$remote:$target_path/$CHANNEL/"
+          done < <(find "runtime-sync/$CHANNEL" -maxdepth 1 -type f -name '*.zip' -print0)
+
+          while IFS= read -r -d '' manifest; do
+            retry "upload stable manifest $(basename "$manifest")" \
+              scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" "$manifest" "$remote:$target_path/$CHANNEL/"
+          done < <(find "runtime-sync/$CHANNEL" -maxdepth 1 -type f -name '*.json' -print0)
+
+          retry "upload sync summary" \
+            scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" runtime-sync/summary.json "$remote:$target_path/sync-summary.json"
+
+      - name: Verify public runtime manifests
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.verify_public_urls != 'false' }}
+        env:
+          CHANNEL: ${{ steps.runtime.outputs.channel }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for manifest in runtime-sync/"$CHANNEL"/*.json; do
+            name="$(basename "$manifest")"
+            expected_sha="$(sha256sum "$manifest" | awk '{print $1}')"
+            url="$RUNTIME_FEED_BASE_URL/$CHANNEL/$name"
+            echo "Verifying $url"
+            tmp="$(mktemp)"
+            for attempt in 1 2 3 4 5; do
+              if curl -fsSL -H "Cache-Control: no-cache" "$url" -o "$tmp"; then
+                actual_sha="$(sha256sum "$tmp" | awk '{print $1}')"
+                if [[ "$actual_sha" == "$expected_sha" ]]; then
+                  rm -f "$tmp"
+                  continue 2
+                fi
+                echo "Downloaded manifest sha256 mismatch on attempt $attempt: $actual_sha != $expected_sha"
+              else
+                echo "Manifest download failed on attempt $attempt"
+              fi
+              sleep $((attempt * 10))
+            done
+            rm -f "$tmp"
+            echo "Public manifest did not match uploaded content: $url" >&2
+            exit 1
+          done
