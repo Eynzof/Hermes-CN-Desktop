@@ -346,6 +346,27 @@ fn downloads_root() -> PathBuf {
     runtime_root().join("downloads")
 }
 
+fn create_runtime_staging_dir() -> Result<tempfile::TempDir, String> {
+    let versions = versions_root();
+    fs::create_dir_all(&versions).map_err(|e| {
+        format!(
+            "Failed to create versions dir {}: {}",
+            versions.display(),
+            e
+        )
+    })?;
+    tempfile::Builder::new()
+        .prefix(".installing-")
+        .tempdir_in(&versions)
+        .map_err(|e| {
+            format!(
+                "Failed to create staging dir in {}: {}",
+                versions.display(),
+                e
+            )
+        })
+}
+
 pub fn gateway_runtime_dir() -> PathBuf {
     runtime_root().join("gateway-runtime")
 }
@@ -1170,12 +1191,35 @@ async fn wait_for_smoke_child(
 }
 
 async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
+    let workdir = executable_path.parent().unwrap_or_else(|| Path::new("."));
+    let executable_display = executable_path.display().to_string();
+    let workdir_display = workdir.display().to_string();
+    let cwd_display = std::env::current_dir()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|e| format!("<unavailable: {}>", e));
+    let size = fs::metadata(executable_path)
+        .map(|metadata| metadata.len().to_string())
+        .unwrap_or_else(|e| format!("<unavailable: {}>", e));
+
     let child = Command::new(executable_path)
+        .current_dir(workdir)
         .args(["dashboard", "--help"])
+        .env("HERMES_DISABLE_LAZY_INSTALLS", "1")
+        .env("HERMES_DASHBOARD_PREWARM_AGENT", "0")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| format!("Smoke check spawn failed: {}", e))?;
+        .map_err(|e| {
+            format!(
+                "Smoke check spawn failed for {} (exists={}, file_size={}, cwd={}, workdir={}): {}",
+                executable_display,
+                executable_path.is_file(),
+                size,
+                cwd_display,
+                workdir_display,
+                e
+            )
+        })?;
 
     wait_for_smoke_child(child, SMOKE_TIMEOUT).await
 }
@@ -1247,19 +1291,6 @@ async fn install_runtime_zip(
         };
     }
 
-    // Extract to staging directory.
-    let staging = match tempfile::tempdir() {
-        Ok(d) => d,
-        Err(e) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Failed to create temp dir: {}", e)),
-            };
-        }
-    };
-
     let _ = fs::create_dir_all(downloads_root());
     let _ = fs::create_dir_all(versions_root());
     let cached_zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
@@ -1273,6 +1304,24 @@ async fn install_runtime_zip(
             };
         }
     }
+
+    // Extract to a staging directory inside the managed runtime tree, not the
+    // system temp directory. Windows endpoint protection commonly applies
+    // stricter rules to executables created under %TEMP%; running the smoke
+    // check from the same tree that will hold the installed runtime avoids a
+    // false first-launch failure while keeping current.json untouched until the
+    // smoke check succeeds.
+    let staging = match create_runtime_staging_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
 
     if let Err(e) = extract_zip(&cached_zip_path, staging.path()) {
         return RuntimeInstallUpdateResult {
@@ -1375,14 +1424,14 @@ async fn install_runtime_tree(
         };
     }
 
-    let staging = match tempfile::tempdir() {
+    let staging = match create_runtime_staging_dir() {
         Ok(d) => d,
         Err(e) => {
             return RuntimeInstallUpdateResult {
                 ok: false,
                 installed: None,
                 previous: None,
-                error: Some(format!("Failed to create temp dir: {}", e)),
+                error: Some(e),
             };
         }
     };
@@ -2372,6 +2421,47 @@ mod tests {
             .await
             .expect_err("hung smoke child should time out");
         assert!(err.contains("timed out"), "unexpected error: {err}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn smoke_check_runs_from_executable_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempDir::new().unwrap();
+        let executable = dir.path().join(primary_runtime_name());
+        std::fs::write(
+            &executable,
+            b"#!/bin/sh\n[ -f smoke-marker.txt ] || exit 42\nexit 0\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("smoke-marker.txt"), b"ok").unwrap();
+        let mut perms = std::fs::metadata(&executable).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&executable, perms).unwrap();
+
+        smoke_check_runtime(&executable)
+            .await
+            .expect("smoke check should use executable parent as cwd");
+    }
+
+    #[test]
+    #[serial]
+    fn runtime_staging_dir_lives_under_versions_root() {
+        let dir = TempDir::new().unwrap();
+        let runtime_root = dir.path().join("runtime-root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let staging = create_runtime_staging_dir().expect("staging dir should be created");
+        let staging_path = staging.path().to_path_buf();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        assert!(
+            staging_path.starts_with(runtime_root.join("versions")),
+            "staging path should stay in runtime versions tree: {}",
+            staging_path.display()
+        );
     }
 
     // -------- signature_payload --------

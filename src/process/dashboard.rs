@@ -6,7 +6,7 @@
 use std::fs;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -755,6 +755,12 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    if let Some(program_dir) = Path::new(&program)
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        cmd.current_dir(program_dir);
+    }
     // User-configured $HERMES_HOME/.env goes in first so every explicit
     // .env(...) below — and the env_remove for HERMES_YOLO_MODE — wins
     // over file contents. Re-read on every respawn so profile switches and
