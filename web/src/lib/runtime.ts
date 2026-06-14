@@ -254,6 +254,15 @@ export interface PreviewFileChangedPayload {
   path: string;
 }
 
+export interface DesktopFileDropPayload {
+  phase: "enter" | "over" | "drop" | "leave";
+  paths: string[];
+  position?: {
+    x: number;
+    y: number;
+  };
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -330,6 +339,7 @@ declare global {
       watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
       stopPreviewFileWatch?(input: { watchId: string }): Promise<boolean>;
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;
+      onFileDrop?(handler: (payload: DesktopFileDropPayload) => void): () => void;
       onSystemResume?(handler: () => void): () => void;
     };
   }

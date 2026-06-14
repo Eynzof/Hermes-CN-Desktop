@@ -45,6 +45,7 @@ import type {
 import type {
   DesktopNotifyInput,
   DesktopNotifyResult,
+  DesktopFileDropPayload,
   FilePreview,
   PreviewFileChangedPayload,
   ReadWorkspaceFileInput,
@@ -72,6 +73,17 @@ export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
 
 const BASE64_CHUNK_SIZE = 0x8000;
 const BOOTSTRAP_LOGO_BLUE_RGB = "0,95,249";
+
+type TauriFileDropPosition = {
+  x: number;
+  y: number;
+};
+
+type TauriFileDropEventPayload =
+  | { type: "enter"; paths?: string[]; position?: TauriFileDropPosition }
+  | { type: "over"; position?: TauriFileDropPosition }
+  | { type: "drop"; paths?: string[]; position?: TauriFileDropPosition }
+  | { type: "leave" };
 
 interface BootstrapVersionLine {
   label: "界面";
@@ -150,6 +162,16 @@ async function invokeCommand<T = any>(command: string, args?: Record<string, unk
   }
 }
 
+function normalizeFileDropPayload(payload: TauriFileDropEventPayload): DesktopFileDropPayload {
+  return {
+    phase: payload.type,
+    paths: "paths" in payload && Array.isArray(payload.paths) ? payload.paths : [],
+    position: "position" in payload && payload.position
+      ? { x: payload.position.x, y: payload.position.y }
+      : undefined,
+  };
+}
+
 const tauriBridge = {
   windowType: "tauri" as const,
 
@@ -183,6 +205,32 @@ const tauriBridge = {
 
   async createWorkspaceProject(): Promise<FilePickerResult> {
     return invokeCommand("create_workspace_project");
+  },
+
+  onFileDrop(handler: (payload: DesktopFileDropPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    import("@tauri-apps/api/webview")
+      .then(({ getCurrentWebview }) =>
+        getCurrentWebview().onDragDropEvent((event) => {
+          handler(normalizeFileDropPayload(event.payload as TauriFileDropEventPayload));
+        }))
+      .then((fn) => {
+        if (disposed) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to register Tauri file drop handler", error);
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   },
 
   async openWorkspacePath(input: { path: string }): Promise<ApiRequestResult> {

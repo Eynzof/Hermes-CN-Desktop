@@ -7,13 +7,34 @@ import {
 } from "./tauri-bridge";
 
 const mockInvoke = vi.fn();
+const mockFileDropUnlisten = vi.fn();
+let fileDropHandler: ((event: {
+  payload: {
+    type: "enter" | "over" | "drop" | "leave";
+    paths?: string[];
+    position?: { x: number; y: number };
+  };
+}) => void) | null = null;
+const mockOnDragDropEvent = vi.fn((handler: NonNullable<typeof fileDropHandler>) => {
+  fileDropHandler = handler;
+  return Promise.resolve(mockFileDropUnlisten);
+});
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: mockInvoke,
 }));
 
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: mockOnDragDropEvent,
+  }),
+}));
+
 beforeEach(() => {
   mockInvoke.mockReset();
+  mockFileDropUnlisten.mockReset();
+  mockOnDragDropEvent.mockClear();
+  fileDropHandler = null;
   mockInvoke.mockImplementation((command: string, args?: unknown) => {
     if (command === "get_runtime_config") {
       return Promise.resolve({
@@ -129,6 +150,41 @@ describe("isTauriDevMode", () => {
     expect(mockInvoke).toHaveBeenCalledWith("terminal_open_external", {
       input: { purpose: "gatewaySetup" },
     });
+  });
+
+  it("exposes native Tauri file drop events through the desktop bridge", async () => {
+    await installTauriBridge();
+
+    const received: unknown[] = [];
+    const unsubscribe = window.hermesDesktop?.onFileDrop?.((payload) => {
+      received.push(payload);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockOnDragDropEvent).toHaveBeenCalledTimes(1);
+
+    fileDropHandler?.({
+      payload: { type: "enter", paths: ["/Users/alice/a.txt"], position: { x: 10, y: 20 } },
+    });
+    fileDropHandler?.({
+      payload: { type: "over", position: { x: 11, y: 21 } },
+    });
+    fileDropHandler?.({
+      payload: { type: "drop", paths: ["/Users/alice/a.txt"], position: { x: 12, y: 22 } },
+    });
+    fileDropHandler?.({
+      payload: { type: "leave" },
+    });
+
+    expect(received).toEqual([
+      { phase: "enter", paths: ["/Users/alice/a.txt"], position: { x: 10, y: 20 } },
+      { phase: "over", paths: [], position: { x: 11, y: 21 } },
+      { phase: "drop", paths: ["/Users/alice/a.txt"], position: { x: 12, y: 22 } },
+      { phase: "leave", paths: [], position: undefined },
+    ]);
+
+    unsubscribe?.();
+    expect(mockFileDropUnlisten).toHaveBeenCalledTimes(1);
   });
 
   it("normalizes structured Tauri IPC errors while preserving code and kind", () => {

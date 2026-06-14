@@ -570,7 +570,7 @@ export function GooseComposer({
   // recommended / more) from the catalog + usage log. Composer just hands it
   // the raw model.options payload and stays out of the way.
 
-  const appendAttachmentDrafts = (drafts: ComposerAttachment[]) => {
+  const appendAttachmentDrafts = useCallback((drafts: ComposerAttachment[]) => {
     if (!drafts.length) return;
     setAttachments((current) => {
       const existing = new Set(current.map(attachmentIdentity));
@@ -586,16 +586,16 @@ export function GooseComposer({
       }
       return additions.length ? [...current, ...additions] : current;
     });
-  };
+  }, []);
 
-  const addPathAttachments = (paths: string[]) => {
+  const addPathAttachments = useCallback((paths: string[]) => {
     const nextPaths = uniquePaths(paths);
     if (!nextPaths.length) return;
     setSubmitError("");
     appendAttachmentDrafts(nextPaths.map((path, index) => createPathAttachment(path, index)));
-  };
+  }, [appendAttachmentDrafts]);
 
-  const addBrowserFiles = (files: File[] | FileList) => {
+  const addBrowserFiles = useCallback((files: File[] | FileList) => {
     const accepted: File[] = [];
     const rejected: string[] = [];
     for (const file of Array.from(files)) {
@@ -616,7 +616,41 @@ export function GooseComposer({
       setSubmitError("");
     }
     appendAttachmentDrafts(accepted.map((file, index) => createFileAttachment(file, index)));
-  };
+  }, [appendAttachmentDrafts]);
+
+  useEffect(() => {
+    const onFileDrop = window.hermesDesktop?.onFileDrop;
+    if (!onFileDrop) return;
+
+    return onFileDrop((payload) => {
+      if (payload.phase === "leave") {
+        dragDepthRef.current = 0;
+        setDragActive(false);
+        return;
+      }
+
+      if (controlsDisabled) {
+        dragDepthRef.current = 0;
+        setDragActive(false);
+        return;
+      }
+
+      if (payload.phase === "enter" || payload.phase === "over") {
+        setDragActive(true);
+        return;
+      }
+
+      if (payload.phase === "drop") {
+        dragDepthRef.current = 0;
+        setDragActive(false);
+        if (payload.paths.length) {
+          addPathAttachments(payload.paths);
+        } else {
+          setSubmitError("未能读取拖拽文件路径，请使用 + 按钮添加附件。");
+        }
+      }
+    });
+  }, [addPathAttachments, controlsDisabled]);
 
   const pickFiles = async () => {
     if (controlsDisabled) return;
