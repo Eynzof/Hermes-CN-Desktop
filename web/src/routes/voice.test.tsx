@@ -80,5 +80,24 @@ describe("VoiceSettingsView", () => {
     expect(html).toContain("Rachel (premade)");
     expect(html).toContain("保存配置");
   });
-});
 
+  it("renders a macOS dependency note for Edge TTS", () => {
+    const draft = voiceSettingsDraftFromConfig({
+      stt: { enabled: true, provider: "local" },
+      tts: { provider: "edge", edge: { voice: "en-US-AriaNeural" } },
+      voice: { auto_tts: false, max_recording_seconds: 120 },
+    });
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <VoiceSettingsView
+        draft={draft}
+        schema={schema}
+        envVars={envVars}
+        sttProviders={voiceProviderOptions("stt", schema, draft.sttProvider)}
+        ttsProviders={voiceProviderOptions("tts", schema, draft.ttsProvider)}
+      />,
+    );
+
+    expect(html).toContain("Edge TTS 不是 macOS");
+    expect(html).toContain("edge-tts");
+  });
+});

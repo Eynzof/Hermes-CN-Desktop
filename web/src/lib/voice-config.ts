@@ -7,6 +7,7 @@ export interface VoiceProviderMeta {
   id: string;
   label: string;
   description: string;
+  notice?: string;
   envKey?: string;
   configKeys: readonly string[];
   local?: boolean;
@@ -78,7 +79,8 @@ const TTS_PROVIDER_META: Record<string, VoiceProviderMeta> = {
   edge: {
     id: "edge",
     label: "Edge TTS",
-    description: "Microsoft Edge 神经网络语音，免费，不需要 API Key。",
+    description: "Microsoft Edge 神经网络语音，免费，不需要 API Key，但需要 edge-tts 依赖。",
+    notice: "备注：Edge TTS 不是 macOS 系统或 Microsoft Edge 浏览器自带能力；当前运行环境需要能调用 edge-tts 依赖。若测试朗读提示 edge-tts 不可用，请安装依赖或切换 OpenAI、ElevenLabs、NeuTTS。",
     local: true,
     configKeys: ["tts.edge.voice"],
   },
@@ -284,4 +286,3 @@ export function envConfigured(envVars: Record<string, EnvVarInfo> | undefined, k
   if (!key) return true;
   return Boolean(envVars?.[key]?.is_set);
 }
-

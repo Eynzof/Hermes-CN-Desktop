@@ -162,6 +162,17 @@
   line-height: 1.55;
 }
 
+.providerNotice {
+  margin: 0 0 14px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--h-warn) 28%, var(--h-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--h-warn) 8%, var(--h-bg-pane));
+  color: var(--h-text-2);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
 .badge {
   display: inline-block;
   flex: 0 1 auto;

@@ -223,6 +223,7 @@
 }
 
 .sessionRow {
+  position: relative;
   padding: 8px 16px 8px 18px;
   border-left: 2px solid transparent;
   cursor: pointer;
@@ -254,13 +255,14 @@
 }
 
 .rowMore {
-  flex-shrink: 0;
+  position: absolute;
+  top: 7px;
+  right: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
-  margin-top: -1px;
   padding: 0;
   border: none;
   border-radius: 4px;
@@ -289,6 +291,7 @@
 }
 
 .ttl {
+  box-sizing: border-box;
   font-size: 12.5px;
   color: var(--h-text);
   white-space: nowrap;
@@ -298,6 +301,7 @@
   width: 100%;
   min-width: 0;
   overflow: visible;
+  padding-right: 30px;
 }
 
 .ttlText {

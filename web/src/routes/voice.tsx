@@ -333,6 +333,10 @@ export function VoiceSettingsView({
             onDraftChange={onDraftChange}
           />
 
+          {ttsProvider?.notice ? (
+            <p className={s.providerNotice}>{ttsProvider.notice}</p>
+          ) : null}
+
           <div className={s.field}>
             <label htmlFor="voice-tts-sample">朗读测试文本</label>
             <textarea

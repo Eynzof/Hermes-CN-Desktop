@@ -153,7 +153,7 @@ export function voiceErrorMessage(error: unknown, fallback: string): string {
     return "语音识别尚未配置可用提供方。请到“语音”设置选择本地识别，或填写 Groq、OpenAI、xAI、ElevenLabs 的 API Key。";
   }
   if (lower.includes("no tts provider available")) {
-    return "回复朗读尚未配置可用的语音合成提供方。请到“语音”设置选择 Edge TTS、OpenAI、ElevenLabs 或本地 TTS。";
+    return "回复朗读尚未配置可用的语音合成提供方。请到“语音”设置选择 Edge TTS（需 edge-tts 依赖）、OpenAI、ElevenLabs 或本地 TTS。";
   }
   if (lower.includes("groq_api_key")) {
     return "Groq 语音识别需要配置 GROQ_API_KEY，请到“语音”设置填写 API Key。";
@@ -168,7 +168,7 @@ export function voiceErrorMessage(error: unknown, fallback: string): string {
     return "xAI 语音识别需要配置 XAI_API_KEY 或完成 xAI OAuth，请到“语音”设置填写 API Key。";
   }
   if (lower.includes("edge-tts")) {
-    return "Edge TTS 本地依赖不可用，请安装 edge-tts，或到“语音”设置切换其它朗读提供方。";
+    return "Edge TTS 依赖不可用；macOS 不自带 edge-tts，请安装该依赖，或到“语音”设置切换其它朗读提供方。";
   }
   if (lower.includes("faster-whisper") || lower.includes("hermes_local_stt_command")) {
     return "本地语音识别依赖不可用，请安装 faster-whisper、本地 whisper CLI，或到“语音”设置切换云端识别提供方。";
