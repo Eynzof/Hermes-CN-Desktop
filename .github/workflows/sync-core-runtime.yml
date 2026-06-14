@@ -147,102 +147,109 @@ jobs:
             };
           }
 
-          const release = requestedTag === "latest"
-            ? await fetchJson(`https://api.github.com/repos/${repo}/releases/latest`)
-            : await fetchJson(`https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(requestedTag)}`);
+          async function main() {
+            const release = requestedTag === "latest"
+              ? await fetchJson(`https://api.github.com/repos/${repo}/releases/latest`)
+              : await fetchJson(`https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(requestedTag)}`);
 
-          const releaseTag = release.tag_name;
-          if (!releaseTag) {
-            throw new Error("GitHub release response is missing tag_name.");
+            const releaseTag = release.tag_name;
+            if (!releaseTag) {
+              throw new Error("GitHub release response is missing tag_name.");
+            }
+
+            const assets = new Map((release.assets || []).map((asset) => [asset.name, asset]));
+            const outRoot = "runtime-sync";
+            fs.rmSync(outRoot, { recursive: true, force: true });
+            fs.mkdirSync(path.join(outRoot, channel), { recursive: true });
+
+            const records = [];
+            const runtimeVersions = new Set();
+
+            for (const platformArch of platforms) {
+              const { platform, arch } = splitPlatformArch(platformArch);
+              const manifestName = `${channel}-${platform}-${arch}.json`;
+              const zipName = `hermes-agent-cn-runtime-${platform}-${arch}.zip`;
+              const manifestAsset = assets.get(manifestName);
+              const zipAsset = assets.get(zipName);
+              if (!manifestAsset) {
+                throw new Error(`Release ${releaseTag} is missing asset: ${manifestName}`);
+              }
+              if (!zipAsset) {
+                throw new Error(`Release ${releaseTag} is missing asset: ${zipName}`);
+              }
+
+              const manifestBytes = await downloadBytes(manifestAsset.browser_download_url);
+              const manifest = JSON.parse(manifestBytes.toString("utf8"));
+              if (manifest.schemaVersion !== 2) {
+                throw new Error(`${manifestName}: expected schemaVersion 2, got ${manifest.schemaVersion}`);
+              }
+              if (manifest.channel !== channel || manifest.platform !== platform || manifest.arch !== arch) {
+                throw new Error(`${manifestName}: manifest identity mismatch`);
+              }
+              if (!manifest.runtimeVersion) {
+                throw new Error(`${manifestName}: missing runtimeVersion`);
+              }
+              if (!manifest.sha256) {
+                throw new Error(`${manifestName}: missing sha256`);
+              }
+              if (!manifest.signature) {
+                throw new Error(`${manifestName}: missing signature`);
+              }
+
+              const zipBytes = await downloadBytes(zipAsset.browser_download_url);
+              const actualSha = sha256(zipBytes);
+              const expectedSha = String(manifest.sha256).toLowerCase();
+              if (actualSha !== expectedSha) {
+                throw new Error(`${zipName}: sha256 mismatch, expected ${expectedSha}, got ${actualSha}`);
+              }
+
+              const releaseVersionDir = path.join(outRoot, "releases", manifest.runtimeVersion);
+              fs.mkdirSync(releaseVersionDir, { recursive: true });
+              fs.writeFileSync(path.join(outRoot, channel, manifestName), manifestBytes);
+              fs.writeFileSync(path.join(outRoot, channel, zipName), zipBytes);
+              fs.writeFileSync(path.join(releaseVersionDir, manifestName), manifestBytes);
+              fs.writeFileSync(path.join(releaseVersionDir, zipName), zipBytes);
+
+              runtimeVersions.add(manifest.runtimeVersion);
+              records.push({
+                platform,
+                arch,
+                manifestName,
+                zipName,
+                runtimeVersion: manifest.runtimeVersion,
+                sha256: actualSha,
+                sourceRepo: manifest.sourceRepo,
+                sourceCommit: manifest.sourceCommit,
+                artifactUrl: manifest.artifactUrl,
+                zipSize: zipBytes.length,
+              });
+            }
+
+            fs.writeFileSync(path.join(outRoot, "summary.json"), JSON.stringify({
+              repo,
+              requestedTag,
+              releaseTag,
+              channel,
+              runtimeVersions: Array.from(runtimeVersions).sort(),
+              records,
+            }, null, 2) + "\n");
+
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_tag=${releaseTag}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `channel=${channel}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `runtime_versions=${Array.from(runtimeVersions).sort().join(",")}\n`);
+            console.log(`Prepared ${records.length} runtime platform asset set(s) from ${repo}@${releaseTag}.`);
+            for (const record of records) {
+              console.log(`${record.manifestName}: ${record.runtimeVersion} ${record.sha256}`);
+              if (!String(record.artifactUrl || "").startsWith(process.env.RUNTIME_FEED_BASE_URL || "")) {
+                console.log(`notice: ${record.manifestName} keeps signed artifactUrl: ${record.artifactUrl}`);
+              }
+            }
           }
 
-          const assets = new Map((release.assets || []).map((asset) => [asset.name, asset]));
-          const outRoot = "runtime-sync";
-          fs.rmSync(outRoot, { recursive: true, force: true });
-          fs.mkdirSync(path.join(outRoot, channel), { recursive: true });
-
-          const records = [];
-          const runtimeVersions = new Set();
-
-          for (const platformArch of platforms) {
-            const { platform, arch } = splitPlatformArch(platformArch);
-            const manifestName = `${channel}-${platform}-${arch}.json`;
-            const zipName = `hermes-agent-cn-runtime-${platform}-${arch}.zip`;
-            const manifestAsset = assets.get(manifestName);
-            const zipAsset = assets.get(zipName);
-            if (!manifestAsset) {
-              throw new Error(`Release ${releaseTag} is missing asset: ${manifestName}`);
-            }
-            if (!zipAsset) {
-              throw new Error(`Release ${releaseTag} is missing asset: ${zipName}`);
-            }
-
-            const manifestBytes = await downloadBytes(manifestAsset.browser_download_url);
-            const manifest = JSON.parse(manifestBytes.toString("utf8"));
-            if (manifest.schemaVersion !== 2) {
-              throw new Error(`${manifestName}: expected schemaVersion 2, got ${manifest.schemaVersion}`);
-            }
-            if (manifest.channel !== channel || manifest.platform !== platform || manifest.arch !== arch) {
-              throw new Error(`${manifestName}: manifest identity mismatch`);
-            }
-            if (!manifest.runtimeVersion) {
-              throw new Error(`${manifestName}: missing runtimeVersion`);
-            }
-            if (!manifest.sha256) {
-              throw new Error(`${manifestName}: missing sha256`);
-            }
-            if (!manifest.signature) {
-              throw new Error(`${manifestName}: missing signature`);
-            }
-
-            const zipBytes = await downloadBytes(zipAsset.browser_download_url);
-            const actualSha = sha256(zipBytes);
-            const expectedSha = String(manifest.sha256).toLowerCase();
-            if (actualSha !== expectedSha) {
-              throw new Error(`${zipName}: sha256 mismatch, expected ${expectedSha}, got ${actualSha}`);
-            }
-
-            const releaseVersionDir = path.join(outRoot, "releases", manifest.runtimeVersion);
-            fs.mkdirSync(releaseVersionDir, { recursive: true });
-            fs.writeFileSync(path.join(outRoot, channel, manifestName), manifestBytes);
-            fs.writeFileSync(path.join(outRoot, channel, zipName), zipBytes);
-            fs.writeFileSync(path.join(releaseVersionDir, manifestName), manifestBytes);
-            fs.writeFileSync(path.join(releaseVersionDir, zipName), zipBytes);
-
-            runtimeVersions.add(manifest.runtimeVersion);
-            records.push({
-              platform,
-              arch,
-              manifestName,
-              zipName,
-              runtimeVersion: manifest.runtimeVersion,
-              sha256: actualSha,
-              sourceRepo: manifest.sourceRepo,
-              sourceCommit: manifest.sourceCommit,
-              artifactUrl: manifest.artifactUrl,
-              zipSize: zipBytes.length,
-            });
-          }
-
-          fs.writeFileSync(path.join(outRoot, "summary.json"), JSON.stringify({
-            repo,
-            requestedTag,
-            releaseTag,
-            channel,
-            runtimeVersions: Array.from(runtimeVersions).sort(),
-            records,
-          }, null, 2) + "\n");
-
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_tag=${releaseTag}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `channel=${channel}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `runtime_versions=${Array.from(runtimeVersions).sort().join(",")}\n`);
-          console.log(`Prepared ${records.length} runtime platform asset set(s) from ${repo}@${releaseTag}.`);
-          for (const record of records) {
-            console.log(`${record.manifestName}: ${record.runtimeVersion} ${record.sha256}`);
-            if (!String(record.artifactUrl || "").startsWith(process.env.RUNTIME_FEED_BASE_URL || "")) {
-              console.log(`notice: ${record.manifestName} keeps signed artifactUrl: ${record.artifactUrl}`);
-            }
-          }
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
           NODE
 
       - name: Upload prepared runtime sync artifact
