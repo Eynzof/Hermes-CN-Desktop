@@ -37,9 +37,50 @@ permissions:
   contents: write
 
 jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or reuse GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null
+
+          if gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          cat > "$notes_file" <<'EOF'
+          Automated Hermes Agent CN Desktop installers.
+
+          Windows installer name, install directory, and uninstall registry
+          entries use the English name Hermes Agent CN Desktop to avoid
+          compatibility issues caused by non-ASCII install paths.
+          EOF
+
+          prerelease_args=()
+          if [[ "$RELEASE_TAG" == *-alpha* || "$RELEASE_TAG" == *-beta* || "$RELEASE_TAG" == *-rc* ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            -R "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Hermes Agent CN Desktop $RELEASE_TAG" \
+            --notes-file "$notes_file" \
+            "${prerelease_args[@]}"
+
   build:
+    needs: prepare-release
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         include:
           - runner: windows-latest
