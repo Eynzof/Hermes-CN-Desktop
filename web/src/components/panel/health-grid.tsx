@@ -269,10 +269,10 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
 
   const health = useMemo(() => {
     // `gateway_running` is the *PTY daemon* status — a Python subprocess
-    // the dashboard *can* spawn for the embedded chat tab. With P-009
-    // the SSE+POST transport calls tui_gateway.dispatch() in-process,
-    // so the daemon stays "stopped" by design and that's fine. The real
-    // health signal is whether the dashboard responded to /api/status.
+    // the dashboard *can* spawn for the embedded chat tab. The desktop now
+    // talks to the dashboard's official /api/ws directly or through the Rust
+    // relay, so the daemon may still stay "stopped" by design. The real health
+    // signal here is whether the dashboard responded to /api/status.
     const dashboardReachable = !!status;
     const daemonRunning = status?.gateway_running === true;
     const gatewayState = status?.gateway_state || (daemonRunning ? "running" : "stopped");

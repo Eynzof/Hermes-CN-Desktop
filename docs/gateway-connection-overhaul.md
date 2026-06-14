@@ -24,7 +24,7 @@
 
 - **官方**:渲染进程直连一条 `JSON-RPC 2.0 over WebSocket` 到 `/api/ws?token=…`,主进程只做控制面
   (spawn dashboard、REST 代理、token 注入)。协议层在 Core `apps/shared/src/json-rpc-gateway.ts`。
-- **我们(现状)**:webview → Tauri IPC → 两层 Rust 代理(`sse_proxy.rs` + `api_proxy.rs`)→ dashboard 的
+- **我们(现状)**:webview → Tauri IPC → 两层 Rust 代理（旧 SSE 通道 + `api_proxy.rs`）→ dashboard 的
   **SSE 事件流 + 每次 RPC 一个 POST**(`/api/v2/events` + `/api/v2/rpc`,这是 fork 补丁 **P-009**)。
 
 **关键事实**:`/api/ws`(原生)和 `/api/v2/*`(我们的补丁)由同一个 dashboard 进程提供。官方 WS 端点
@@ -70,7 +70,7 @@
 | 心跳/半开检测 | 无(靠 close + 连接超时) | 无 | 官方一致:无主动 ping,靠 close/error/RPC timeout + 唤醒强制重连 |
 | 重连→恢复 | `session.resume` on reopen | **无** | `gateway.disconnected` arm → 下次 open 重发 `session.resume`(C2) |
 | Token | spawn 时 env 注入 `HERMES_DASHBOARD_SESSION_TOKEN`,WS `?token=` | 同左(main 已实现)+ 接管外部 dashboard 时 HTML 抓取(legacy) | 不变 |
-| 自造 Rust 行数 | n/a | `sse_proxy.rs` ~350 + `api_proxy` RPC 半 | `sse_proxy.rs` **删除**;`ws_proxy.rs` ~260(仅兜底);`api_proxy` 仅 REST |
+| 自造 Rust 行数 | n/a | 旧 SSE 通道约 350 行 + `api_proxy` RPC 半 | 旧 SSE Rust command **删除**；`ws_proxy.rs` ~260(仅兜底)；`api_proxy` 仅 REST |
 
 ---
 
@@ -96,11 +96,11 @@
   `refreshGatewayUrl()` 重试一次(排除 token 轮换误判)→ 仍失败切 relay 工厂重连。
   粘性记忆 `HERMES_WS_PATH_LEARNED`(native|relay),`?wspath=` 强制覆盖(QA);relay 也失败则清记忆重探。
 ### C5 refactor — 删除 SSE 路径全部残留
-- 删 `gateway-sse-client.ts`(+test)、`src/commands/sse_proxy.rs`;清理 Rust state/error/main/
+- 删旧 Gateway SSE 客户端与 Rust SSE command；清理 Rust state/error/main/
   debug_bundle/runtime_manager/restart/environment(`dashboard-sse` 健康项改真实 WS 探测)/
   dashboard.rs(`dashboard_supports_sse`)/gateway.rs(`transport` 字段、`HERMES_DESKTOP_TRANSPORT`);
   web 侧 gateway-result(`"sse closed"` 分支)/tauri-bridge/runtime(`transport` 类型)/health-grid 文案/
-  settings「SSE 代理」字段;CLAUDE.md「Gateway transport」章节更新。
+  settings 旧传输字段；CLAUDE.md「Gateway transport」章节更新。
 ### C6 test — 重写 transport 相关用例
 - `gateway-factory.test.ts` 重写为 native/relay 选择;新增 relay socket shim、退避常量、
   resume-on-reopen 用例;删 SSE 客户端用例。

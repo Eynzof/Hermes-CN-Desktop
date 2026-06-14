@@ -18,7 +18,7 @@ hermes-agent-cn-desktop/
 │   │   ├── gateway.rs           runtime config + gateway URL 刷新
 │   │   ├── runtime_manager.rs   runtime 下载/更新/回滚
 │   │   ├── profiles.rs          profile 切换（含故障恢复）
-│   │   └── sse_proxy.rs         SSE 事件流代理（绕过 CORS）
+│   │   └── ws_proxy.rs          Rust WS 中继（兜底连接官方 /api/ws）
 │   ├── process/
 │   │   ├── dashboard.rs         dashboard 子进程管理（probe/spawn/port fallback）
 │   │   └── runtime.rs           managed runtime 安装/签名验证
@@ -29,7 +29,8 @@ hermes-agent-cn-desktop/
 │   │   ├── lib/tauri-bridge.ts    Tauri invoke 包装 + hermesDesktop shim
 │   │   ├── lib/runtime.ts         平台检测（web / electron / tauri）
 │   │   ├── lib/transport.ts       HTTP 路由（native IPC vs fetch）
-│   │   └── lib/gateway-sse-client.ts  SSE 客户端（含 Tauri 代理模式）
+│   │   ├── lib/gateway-client.ts      JSON-RPC over WebSocket 客户端
+│   │   └── lib/gateway-socket-path.ts 路径选择（原生 WS / Rust 中继）
 │   └── vite.config.ts
 ├── packages/
 │   ├── protocol/              Zod schemas、IPC 类型、会话日志解析
@@ -104,7 +105,7 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 |--|---------|---------|
 | WebView 加载 | `http://localhost:9545`（Vite） | 打包的 `web/dist/` |
 | REST API | Vite proxy → dashboard（同源） | Rust IPC 代理（`api_request` command） |
-| SSE 事件流 | EventSource → Vite proxy | Rust SSE 代理（`sse_proxy.rs`） |
+| Gateway 事件流 | WebSocket → Vite proxy 的 `/api/ws` | 官方 `/api/ws`，必要时 Rust WS 中继（`ws_proxy.rs`） |
 | Session token | Vite `/__hermes_token` 端点 | Rust `get_runtime_config` command |
 | `apiBaseUrl` | 不设置（走相对路径） | 设置为 dashboard URL |
 
@@ -126,8 +127,8 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 
 ### Gateway transport
 
-默认 SSE（`gateway-sse-client.ts`），因为 Dashboard WebSocket 可能被 P-003 闸门阻断。
-生产模式下 SSE 通过 Rust 代理（`sse_proxy.rs`）绕过 CORS。
+唯一传输是 **JSON-RPC over WebSocket（官方 `/api/ws`）**，与 Core 官方桌面端架构一致。
+`gateway-client.ts` 负责协议层与重连编排，`gateway-socket-path.ts` 在原生 WebSocket 和 Rust 中继之间选择；打包态 webview 拦截 `ws://` 时回退到 `ws_proxy.rs`，线协议仍保持 `/api/ws` 不变。
 
 ## 不要做的事
 

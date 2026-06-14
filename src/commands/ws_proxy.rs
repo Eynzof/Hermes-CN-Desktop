@@ -8,9 +8,9 @@
 //! webview over Tauri events + commands. The kernel therefore always sees a
 //! standard official JSON-RPC/WS client, regardless of platform.
 //!
-//! This replaces the fork-only SSE+POST transport (`sse_proxy.rs`, P-009) on the
-//! relay path: one ordered bidirectional channel, no per-RPC HTTP round trip, no
-//! async-ack split, and the session token never leaves Rust (no query-string leak).
+//! This supersedes the removed fork-only SSE+POST relay path (P-009): one
+//! ordered bidirectional channel, no per-RPC HTTP round trip, no async-ack split,
+//! and the session token never leaves Rust (no query-string leak).
 //!
 //! Wire contract with the JS shim (`web/src/lib/gateway-relay-socket.ts`):
 //!   - `gateway_ws_open { connectionId }`  → resolves once the WS handshake succeeds
@@ -82,7 +82,7 @@ fn shutdown_active(state: &State<'_, AppState>) -> Result<(), AppError> {
 ///
 /// Resolves once the handshake completes; the JS shim treats that as `onopen`.
 /// On token rotation (dashboard restart between launches) the first connect can
-/// fail auth — we refresh the session token once and retry, mirroring the SSE path.
+/// fail auth — we refresh the session token once and retry before surfacing the error.
 #[tauri::command]
 pub async fn gateway_ws_open(
     input: GatewayWsOpenInput,

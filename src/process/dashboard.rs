@@ -904,8 +904,8 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
 async fn dashboard_is_compatible(api_base_url: &str, hermes_home: &str) -> bool {
     // `/api/ws` is upstream-native — every runtime this desktop can manage
     // serves it, so compatibility only needs the fork's upload route and a
-    // matching HERMES_HOME. (The old `/api/v2/*` SSE probe is gone with the
-    // SSE transport.)
+    // matching HERMES_HOME. The legacy `/api/v2/*` transport probe was removed
+    // when the desktop switched to WS-only Gateway traffic.
     probe_dashboard(api_base_url).await
         && dashboard_supports_uploads(api_base_url).await
         && dashboard_matches_hermes_home(api_base_url, hermes_home).await

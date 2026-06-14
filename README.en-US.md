@@ -76,7 +76,7 @@ These screenshots are synced from the landing repository and cover the workbench
 
 ## Why this project exists
 
-Hermes Agent already provides a local Dashboard. This repository focuses on the desktop experience around that Dashboard: native windows, local process management, file dialogs, managed runtime installation, runtime diagnostics, and a safer production transport layer for REST and SSE traffic.
+Hermes Agent already provides a local Dashboard. This repository focuses on the desktop experience around that Dashboard: native windows, local process management, file dialogs, managed runtime installation, runtime diagnostics, and a safer production transport layer for REST traffic plus a WS relay fallback.
 
 This repository is the desktop shell. The agent runtime and Dashboard source live in [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core).
 
@@ -87,7 +87,7 @@ This repository is the desktop shell. The agent runtime and Dashboard source liv
 - **Built-in independent Hermes Agent core**: the desktop app can install, update, verify, health-check, and roll back the local Hermes Agent core.
 - **Agent-first UI**: chat, streaming responses, attachments, MCP tools, skills, memory, profiles, scheduled tasks, LaTeX/Mermaid rendering, and runtime health panels.
 - **Chinese model and platform ecosystem**: support for major cloud model providers plus local deployments such as Ollama, vLLM, LM Studio, and llama.cpp, including Feishu integration setup; see the [Hermes Agent Chinese Community](https://hermesagent.org.cn) for more Chinese ecosystem content.
-- **Production transport bridge**: Rust commands proxy REST requests, uploads, and SSE streams to avoid WebView CORS limitations and centralize auth handling.
+- **Production transport bridge**: Rust commands proxy REST requests and uploads, while the Gateway uses the official `/api/ws` transport with a Rust WS relay fallback when packaged WebViews block native sockets.
 
 ## Download
 
