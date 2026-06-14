@@ -68,24 +68,37 @@
   position: relative;
 }
 
+.markdownRoot :global([data-streamdown="code-block-header"][data-language=""] > span:empty::before) {
+  content: "code";
+}
+
 .markdownRoot :global([data-streamdown="code-block-actions"]) {
   position: absolute;
-  top: 1px;
-  right: 4px;
+  top: 4px;
+  right: 8px;
   display: flex;
   align-items: center;
+  gap: 2px;
 }
 
 .markdownRoot :global([data-streamdown="code-block-copy-button"]) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
   border: 0;
   border-radius: var(--h-r-sm);
   background: transparent;
-  padding: 5px;
+  padding: 0;
   color: var(--h-text-3);
   cursor: pointer;
+}
+
+.markdownRoot :global([data-streamdown="code-block-copy-button"] svg) {
+  width: 13px;
+  height: 13px;
 }
 
 .markdownRoot :global([data-streamdown="code-block-copy-button"]:hover) {
