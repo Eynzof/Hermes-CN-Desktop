@@ -116,6 +116,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(app_state)
         .setup(move |app| {
             use tauri::Manager;
@@ -377,6 +378,7 @@ fn main() {
             commands::api_proxy::api_request,
             commands::api_proxy::external_request,
             commands::api_proxy::upload_file,
+            commands::api_proxy::download_external_image,
             commands::runtime_manager::runtime_info,
             commands::runtime_manager::runtime_check_update,
             commands::runtime_manager::runtime_install_update,

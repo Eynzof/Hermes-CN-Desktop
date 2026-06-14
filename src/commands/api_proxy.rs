@@ -12,6 +12,7 @@ use std::net::IpAddr;
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -29,6 +30,8 @@ const DASHBOARD_AUDIO_PROXY_TIMEOUT: Duration = Duration::from_secs(180);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_UPLOAD_BYTES: usize = 100 * 1024 * 1024;
 const MAX_UPLOAD_BASE64_LEN: usize = MAX_UPLOAD_BYTES.div_ceil(3) * 4;
+const MAX_EXTERNAL_IMAGE_BYTES: usize = 20 * 1024 * 1024;
+const MAX_EXTERNAL_IMAGE_REDIRECTS: usize = 5;
 static DASHBOARD_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(DASHBOARD_PROXY_TIMEOUT)
@@ -77,6 +80,22 @@ pub struct ApiRequestResult {
     pub body: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadExternalImageInput {
+    pub url: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadExternalImageResult {
+    pub final_url: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub data_base64: String,
+    pub size: usize,
+}
+
 fn json_result(status: u16, status_text: &str, body: serde_json::Value) -> ApiRequestResult {
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -106,6 +125,13 @@ fn upload_limit_error() -> AppError {
     AppError::InvalidRequest(format!(
         "upload_file exceeds {} MiB limit",
         MAX_UPLOAD_BYTES / 1024 / 1024
+    ))
+}
+
+fn external_image_limit_error() -> AppError {
+    AppError::InvalidRequest(format!(
+        "download_external_image exceeds {} MiB limit",
+        MAX_EXTERNAL_IMAGE_BYTES / 1024 / 1024
     ))
 }
 
@@ -590,6 +616,219 @@ pub async fn api_request(
 pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult, AppError> {
     let target_url = validate_external_url(&input.path).await?;
     external_request_impl(input, target_url).await
+}
+
+fn image_mime_from_magic(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n']) {
+        return Some("image/png");
+    }
+    if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        return Some("image/jpeg");
+    }
+    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        return Some("image/gif");
+    }
+    if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        return Some("image/webp");
+    }
+    if bytes.starts_with(b"BM") {
+        return Some("image/bmp");
+    }
+    if bytes.starts_with(b"II*\0") || bytes.starts_with(b"MM\0*") {
+        return Some("image/tiff");
+    }
+    None
+}
+
+fn image_extension(mime: &str) -> &'static str {
+    match mime
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" => "bmp",
+        "image/tiff" => "tiff",
+        "image/svg+xml" => "svg",
+        "image/avif" => "avif",
+        _ => "png",
+    }
+}
+
+fn content_type_mime(headers: &reqwest::header::HeaderMap) -> Option<String> {
+    headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| {
+            value
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase()
+        })
+        .filter(|value| !value.is_empty())
+}
+
+fn filename_from_url(url: &url::Url, mime_type: &str) -> String {
+    let ext = image_extension(mime_type);
+    let candidate = url
+        .path_segments()
+        .and_then(|mut segments| segments.next_back())
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+        .unwrap_or("external-image");
+    let safe: String = candidate
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let safe = safe.trim_matches('.').trim_matches('_');
+    if safe.is_empty() {
+        return format!("external-image.{ext}");
+    }
+    if safe.rsplit_once('.').is_some_and(|(_, suffix)| {
+        (2..=8).contains(&suffix.len()) && suffix.chars().all(|ch| ch.is_ascii_alphanumeric())
+    }) {
+        safe.to_string()
+    } else {
+        format!("{safe}.{ext}")
+    }
+}
+
+async fn read_response_limited(
+    response: reqwest::Response,
+    limit: usize,
+) -> Result<Vec<u8>, AppError> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return Err(external_image_limit_error());
+    }
+
+    let mut bytes = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| {
+            AppError::InvalidRequest(format!("download_external_image failed: {}", e))
+        })?;
+        if bytes.len() + chunk.len() > limit {
+            return Err(external_image_limit_error());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+async fn next_redirect_url(
+    current: &url::Url,
+    response: &reqwest::Response,
+) -> Result<url::Url, AppError> {
+    let location = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| {
+            AppError::InvalidRequest(
+                "download_external_image redirect missing Location".to_string(),
+            )
+        })?;
+    let next = current.join(location)?;
+    validate_external_url(next.as_str()).await
+}
+
+pub async fn download_external_image_impl(
+    input: DownloadExternalImageInput,
+    mut target_url: url::Url,
+) -> Result<DownloadExternalImageResult, AppError> {
+    use base64::Engine;
+
+    for redirect_count in 0..=MAX_EXTERNAL_IMAGE_REDIRECTS {
+        let response = EXTERNAL_HTTP_CLIENT
+            .get(target_url.clone())
+            .header(
+                reqwest::header::ACCEPT,
+                "image/avif,image/webp,image/png,image/jpeg,image/gif,image/*;q=0.8,*/*;q=0.3",
+            )
+            .send()
+            .await
+            .map_err(|e| {
+                AppError::InvalidRequest(format!(
+                    "download_external_image failed for {}: {}",
+                    input.url, e
+                ))
+            })?;
+
+        if response.status().is_redirection() {
+            if redirect_count >= MAX_EXTERNAL_IMAGE_REDIRECTS {
+                return Err(AppError::InvalidRequest(
+                    "download_external_image followed too many redirects".to_string(),
+                ));
+            }
+            target_url = next_redirect_url(&target_url, &response).await?;
+            continue;
+        }
+
+        if !response.status().is_success() {
+            return Err(AppError::InvalidRequest(format!(
+                "download_external_image returned HTTP {}",
+                response.status().as_u16()
+            )));
+        }
+
+        let header_mime = content_type_mime(response.headers());
+        let bytes = read_response_limited(response, MAX_EXTERNAL_IMAGE_BYTES).await?;
+        let magic_mime = image_mime_from_magic(&bytes).map(str::to_string);
+        let mime_type = match (header_mime, magic_mime) {
+            // Trust explicit image/* for formats not covered by the small magic
+            // table (for example avif), but still reject empty bodies below.
+            (Some(header), _) if header.starts_with("image/") => header,
+            (_, Some(magic)) => magic,
+            _ => {
+                return Err(AppError::InvalidRequest(
+                    "download_external_image URL did not return image content".to_string(),
+                ));
+            }
+        };
+        if bytes.is_empty() {
+            return Err(AppError::InvalidRequest(
+                "download_external_image returned an empty image".to_string(),
+            ));
+        }
+        let filename = filename_from_url(&target_url, &mime_type);
+        return Ok(DownloadExternalImageResult {
+            final_url: target_url.to_string(),
+            filename,
+            mime_type,
+            data_base64: base64::engine::general_purpose::STANDARD.encode(bytes.as_slice()),
+            size: bytes.len(),
+        });
+    }
+
+    Err(AppError::InvalidRequest(
+        "download_external_image followed too many redirects".to_string(),
+    ))
+}
+
+/// Download a public image URL for use as a composer attachment. URL validation
+/// intentionally mirrors `external_request` and every redirect is revalidated.
+#[tauri::command]
+pub async fn download_external_image(
+    input: DownloadExternalImageInput,
+) -> Result<DownloadExternalImageResult, AppError> {
+    let target_url = validate_external_url(&input.url).await?;
+    download_external_image_impl(input, target_url).await
 }
 
 /// Core implementation of `external_request` with validation already handled by

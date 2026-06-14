@@ -1,6 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { debugBus } from "./debug-bus";
-import { fetchExternalJSON, fetchJSON, uploadAttachmentFile } from "./transport";
+import {
+  downloadExternalImageFile,
+  fetchExternalJSON,
+  fetchJSON,
+  uploadAttachmentFile,
+} from "./transport";
 
 type PushArg = Parameters<typeof debugBus.push>[0];
 
@@ -216,5 +221,28 @@ describe("transport · debug-bus integration", () => {
     expect(uploadInput.data).toBeInstanceOf(ArrayBuffer);
     expect(onProgress).toHaveBeenNthCalledWith(1, 0);
     expect(onProgress).toHaveBeenNthCalledWith(2, 100);
+  });
+
+  it("downloadExternalImageFile uses desktop downloadExternalImage capability", async () => {
+    const downloadExternalImage = vi.fn(async () => ({
+      finalUrl: "https://example.com/image.png",
+      filename: "image.png",
+      mimeType: "image/png",
+      dataBase64: btoa("png-bytes"),
+      size: 9,
+    }));
+    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request: vi.fn(),
+      downloadExternalImage,
+    };
+
+    const file = await downloadExternalImageFile("https://example.com/image.png");
+
+    expect(downloadExternalImage).toHaveBeenCalledWith({ url: "https://example.com/image.png" });
+    expect(file.name).toBe("image.png");
+    expect(file.type).toBe("image/png");
+    expect(await file.text()).toBe("png-bytes");
   });
 });

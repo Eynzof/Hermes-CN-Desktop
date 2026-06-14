@@ -46,6 +46,8 @@ import type {
   DesktopNotifyInput,
   DesktopNotifyResult,
   DesktopFileDropPayload,
+  DownloadExternalImageInput,
+  DownloadedImageResult,
   FilePreview,
   PreviewFileChangedPayload,
   ReadWorkspaceFileInput,
@@ -193,6 +195,10 @@ const tauriBridge = {
         data: base64,
       },
     });
+  },
+
+  async downloadExternalImage(input: DownloadExternalImageInput): Promise<DownloadedImageResult> {
+    return invokeCommand("download_external_image", { input });
   },
 
   async pickFiles(): Promise<FilePickerResult> {

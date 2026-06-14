@@ -3,6 +3,7 @@ import { runtime } from "./runtime";
 import { debugBus } from "./debug-bus";
 import { activeProfileAtom } from "@/stores/ui";
 import { AttachmentUploadResult } from "@hermes/protocol";
+import type { DownloadExternalImageInput, DownloadedImageResult } from "./runtime";
 
 interface Parser<T> {
   parse(value: unknown): T;
@@ -230,6 +231,56 @@ export async function fetchExternalText(url: string, init?: RequestInit): Promis
   return res.text();
 }
 
+function base64ToArrayBuffer(value: string): ArrayBuffer {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function filenameFromUrl(url: string, mimeType?: string): string {
+  const extFromMime = mimeType?.toLowerCase().includes("png")
+    ? "png"
+    : mimeType?.toLowerCase().includes("jpeg") || mimeType?.toLowerCase().includes("jpg")
+      ? "jpg"
+      : mimeType?.toLowerCase().includes("gif")
+        ? "gif"
+        : mimeType?.toLowerCase().includes("webp")
+          ? "webp"
+          : "png";
+  try {
+    const pathname = new URL(url).pathname;
+    const last = decodeURIComponent(pathname.split("/").filter(Boolean).pop() ?? "");
+    if (last && /\.[a-z0-9]{2,8}$/i.test(last)) return last;
+  } catch {
+    // Fall through to timestamped filename.
+  }
+  return `external-image-${Date.now()}.${extFromMime}`;
+}
+
+export async function downloadExternalImageFile(url: string): Promise<File> {
+  const input: DownloadExternalImageInput = { url };
+  const nativeDownload = window.hermesDesktop?.downloadExternalImage;
+  if (nativeDownload) {
+    const result: DownloadedImageResult = await nativeDownload(input);
+    const data = base64ToArrayBuffer(result.dataBase64);
+    return new File([data], result.filename, { type: result.mimeType });
+  }
+
+  const res = await fetch(url, {
+    headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif,image/*;q=0.8,*/*;q=0.3" },
+    signal: timeoutSignal(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith("image/")) {
+    throw new Error("URL 返回的不是图片内容");
+  }
+  return new File([blob], filenameFromUrl(url, blob.type), { type: blob.type });
+}
+
 export async function putJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
   return fetchJSON<T>(path, { method: "PUT", body: JSON.stringify(body) }, parser);
 }
@@ -297,4 +348,3 @@ export function uploadAttachmentFile(
     xhr.send(form);
   });
 }
-

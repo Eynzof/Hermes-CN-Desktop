@@ -1,7 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Globe, Link2, X } from "lucide-react";
-import { fetchUrlTitle } from "@/lib/composer-url";
+import { Globe, ImagePlus, Link2, X } from "lucide-react";
+import {
+  fetchLinkMetadata,
+  isLikelyImageUrl,
+  type LinkMetadata,
+} from "@/lib/composer-url";
+import { downloadExternalImageFile } from "@/lib/transport";
 import s from "./url-dialog.module.css";
 
 interface UrlDialogProps {
@@ -11,6 +16,8 @@ interface UrlDialogProps {
   onInsertReference: () => void;
   /** Insert the raw URL as plain text. */
   onInsertPlain: () => void;
+  /** Download the URL or rich preview image and add it as a composer attachment. */
+  onAttachImage?: (url: string) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -19,26 +26,65 @@ interface UrlDialogProps {
  * (best-effort) and lets the user attach it as an `@url:` reference or drop it
  * in as plain text.
  */
-export function UrlDialog({ open, url, onInsertReference, onInsertPlain, onCancel }: UrlDialogProps) {
+export function UrlDialog({
+  open,
+  url,
+  onInsertReference,
+  onInsertPlain,
+  onAttachImage,
+  onCancel,
+}: UrlDialogProps) {
   const titleId = useId();
-  const [title, setTitle] = useState("");
-  const [loadingTitle, setLoadingTitle] = useState(false);
+  const [metadata, setMetadata] = useState<LinkMetadata | null>(null);
+  const [loadingMetadata, setLoadingMetadata] = useState(false);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState("");
+  const [attachError, setAttachError] = useState("");
+  const [attachingImage, setAttachingImage] = useState(false);
   const insertRef = useRef<HTMLButtonElement>(null);
+  const previewSource = metadata?.imageUrl || (isLikelyImageUrl(url) ? url : metadata?.faviconUrl);
 
   useEffect(() => {
     if (!open || !url) return;
     let cancelled = false;
-    setTitle("");
-    setLoadingTitle(true);
-    void fetchUrlTitle(url).then((value) => {
+    setMetadata(null);
+    setAttachError("");
+    setLoadingMetadata(true);
+    void fetchLinkMetadata(url).then((value) => {
       if (cancelled) return;
-      setTitle(value);
-      setLoadingTitle(false);
+      setMetadata(value);
+    }).finally(() => {
+      if (cancelled) return;
+      setLoadingMetadata(false);
     });
     return () => {
       cancelled = true;
     };
   }, [open, url]);
+
+  useEffect(() => {
+    if (!open || !previewSource || typeof URL === "undefined") {
+      setPreviewObjectUrl("");
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl = "";
+    setPreviewObjectUrl("");
+    void downloadExternalImageFile(previewSource)
+      .then((file) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(file);
+        setPreviewObjectUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewObjectUrl("");
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [open, previewSource]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +103,29 @@ export function UrlDialog({ open, url, onInsertReference, onInsertPlain, onCance
   }, [open, onCancel, onInsertReference]);
 
   if (!open || typeof document === "undefined") return null;
+
+  const imageCandidate = isLikelyImageUrl(url) ? url : metadata?.imageUrl;
+  const displayTitle = metadata?.title || (loadingMetadata ? "读取链接信息…" : "未能读取页面标题");
+  const displayHost = metadata?.siteName || (() => {
+    try {
+      return new URL(metadata?.canonicalUrl || url).host;
+    } catch {
+      return "";
+    }
+  })();
+
+  const attachImage = async () => {
+    if (!imageCandidate || !onAttachImage) return;
+    setAttachingImage(true);
+    setAttachError("");
+    try {
+      await onAttachImage(imageCandidate);
+    } catch (error) {
+      setAttachError(error instanceof Error ? error.message : String(error || "添加图片失败"));
+    } finally {
+      setAttachingImage(false);
+    }
+  };
 
   return createPortal(
     <div
@@ -83,9 +152,27 @@ export function UrlDialog({ open, url, onInsertReference, onInsertPlain, onCance
         </div>
         <div className={s.body}>
           <div className={s.urlText}>{url}</div>
-          <div className={s.titlePreview} data-muted={!title || undefined}>
-            {loadingTitle ? "读取标题…" : title || "（未能读取页面标题）"}
+          <div className={s.previewCard}>
+            {previewObjectUrl ? (
+              <div className={s.previewImage} aria-hidden="true">
+                <img src={previewObjectUrl} alt="" />
+              </div>
+            ) : (
+              <div className={s.previewIcon} aria-hidden="true">
+                <Globe />
+              </div>
+            )}
+            <div className={s.previewMeta}>
+              {displayHost ? <div className={s.previewSite}>{displayHost}</div> : null}
+              <div className={s.titlePreview} data-muted={!metadata?.title || undefined}>
+                {displayTitle}
+              </div>
+              {metadata?.description ? (
+                <div className={s.previewDescription}>{metadata.description}</div>
+              ) : null}
+            </div>
           </div>
+          {attachError ? <div className={s.errorText}>{attachError}</div> : null}
           <p className={s.hint}>
             插入为 <code>@url:</code> 引用后，发送时会自动抓取网页正文作为上下文。
           </p>
@@ -94,6 +181,17 @@ export function UrlDialog({ open, url, onInsertReference, onInsertPlain, onCance
           <button type="button" className={s.secondary} onClick={onInsertPlain}>
             作为纯文本
           </button>
+          {imageCandidate && onAttachImage ? (
+            <button
+              type="button"
+              className={s.secondary}
+              onClick={() => void attachImage()}
+              disabled={attachingImage}
+            >
+              <ImagePlus aria-hidden="true" />
+              {attachingImage ? "添加中…" : isLikelyImageUrl(url) ? "添加图片" : "添加预览图"}
+            </button>
+          ) : null}
           <button ref={insertRef} type="button" className={s.primary} onClick={onInsertReference}>
             <Link2 aria-hidden="true" />
             插入引用

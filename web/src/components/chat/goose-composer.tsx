@@ -18,6 +18,7 @@ import {
   GitBranch,
   Globe,
   Folder,
+  ImagePlus,
   Loader2,
   MessageSquare,
   Mic,
@@ -101,6 +102,8 @@ import {
 import { WorkspacePickerModal } from "@/components/composer/workspace-picker";
 import { UrlDialog } from "@/components/composer/url-dialog";
 import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
+import { imageFileFromClipboardData, readClipboardImageAsFile } from "@/lib/clipboard-image";
+import { downloadExternalImageFile } from "@/lib/transport";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
 import s from "./goose-composer.module.css";
 
@@ -674,6 +677,29 @@ export function GooseComposer({
     event.target.value = "";
   };
 
+  const attachClipboardImage = async () => {
+    if (controlsDisabled) return;
+    setSubmitError("");
+    try {
+      const file = await readClipboardImageAsFile();
+      if (!file) {
+        setSubmitError("剪贴板中没有可读取的图片。");
+        return;
+      }
+      addBrowserFiles([file]);
+    } catch (error) {
+      setSubmitError(messageFromError(error));
+    }
+  };
+
+  const attachImageFromUrl = async (imageUrl: string) => {
+    if (controlsDisabled) return;
+    setSubmitError("");
+    const file = await downloadExternalImageFile(imageUrl);
+    addBrowserFiles([file]);
+    setUrlDialog(null);
+  };
+
   const applyWorkspacePath = (path: string) => {
     const nextPath = normalizeWorkspacePath(path);
     if (!nextPath) return;
@@ -933,16 +959,25 @@ export function GooseComposer({
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (controlsDisabled) return;
-    const files = Array.from(event.clipboardData.files);
-    if (files.length) {
+    const clipboardData = event.clipboardData;
+    const text = clipboardData.getData("text/plain");
+    const pastedImage = imageFileFromClipboardData(clipboardData);
+    if (pastedImage) {
       event.preventDefault();
-      addBrowserFiles(files);
+      addBrowserFiles([pastedImage]);
+      return;
+    }
+    if (!text) {
+      event.preventDefault();
+      void readClipboardImageAsFile(null).then((file) => {
+        if (!file) return;
+        addBrowserFiles([file]);
+      });
       return;
     }
     // A bare-URL paste offers to attach it as an `@url:` reference (only where
     // backend ref expansion is wired, i.e. a mention source is present).
     if (mentionPicker && !mentionPicker.disabled) {
-      const text = event.clipboardData.getData("text/plain");
       if (text && isSingleUrl(text)) {
         event.preventDefault();
         setUrlDialog({ url: text.trim(), start: selectionStart, end: selectionEnd });
@@ -1389,6 +1424,16 @@ export function GooseComposer({
             <button
               className={s.iconButton}
               type="button"
+              onClick={() => void attachClipboardImage()}
+              disabled={controlsDisabled}
+              title="添加剪贴板图片"
+              aria-label="添加剪贴板图片"
+            >
+              <ImagePlus className={s.toolIcon} aria-hidden="true" />
+            </button>
+            <button
+              className={s.iconButton}
+              type="button"
               onClick={toggleVoiceRecording}
               disabled={voiceButtonDisabled}
               data-active={voiceStatus !== "idle"}
@@ -1531,6 +1576,7 @@ export function GooseComposer({
         url={urlDialog?.url ?? ""}
         onInsertReference={() => applyUrlInsertion(urlReferenceText(urlDialog?.url ?? ""))}
         onInsertPlain={() => applyUrlInsertion(urlDialog?.url ?? "")}
+        onAttachImage={(imageUrl) => attachImageFromUrl(imageUrl)}
         onCancel={() => setUrlDialog(null)}
       />
     </div>
