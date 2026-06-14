@@ -33,8 +33,9 @@ interface PreviewRailProps {
   onClose: () => void;
 }
 
-const TABS: Array<{ key: PreviewPanel; label: string; icon: typeof Globe }> = [
-  { key: "web", label: "网页", icon: Globe },
+const TABS: Array<{ key: PreviewPanel; label: string; icon: typeof Globe; hidden?: boolean }> = [
+  // 网页预览暂时隐藏（用处不大）。保留代码与 WebPreviewTab，方便后续按需重启用。
+  { key: "web", label: "网页", icon: Globe, hidden: true },
   { key: "files", label: "文件", icon: FileText },
   { key: "terminal", label: "终端", icon: TerminalSquare },
   { key: "logs", label: "日志", icon: ScrollText },
@@ -70,7 +71,7 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
     <aside className={s.panel} aria-label="预览面板">
       <header className={s.header}>
         <div className={s.tabs} role="tablist">
-          {TABS.map(({ key, label, icon: Icon }) => (
+          {TABS.filter((tab) => !tab.hidden).map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               type="button"

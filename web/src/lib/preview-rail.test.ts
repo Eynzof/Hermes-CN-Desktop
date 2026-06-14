@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBreadcrumbs,
   DEFAULT_PREVIEW_PANEL,
   detectLanguage,
   fileExtension,
@@ -89,5 +90,33 @@ describe("isPreviewableUrl", () => {
     expect(isPreviewableUrl("file:///etc/passwd")).toBe(false);
     expect(isPreviewableUrl("javascript:alert(1)")).toBe(false);
     expect(isPreviewableUrl("not a url")).toBe(false);
+  });
+});
+
+describe("buildBreadcrumbs", () => {
+  it("splits a POSIX path into clickable segments with cumulative paths", () => {
+    expect(buildBreadcrumbs("/Users/Enzo/Documents")).toEqual([
+      { label: "/", path: "/" },
+      { label: "Users", path: "/Users" },
+      { label: "Enzo", path: "/Users/Enzo" },
+      { label: "Documents", path: "/Users/Enzo/Documents" },
+    ]);
+  });
+
+  it("handles the POSIX root", () => {
+    expect(buildBreadcrumbs("/")).toEqual([{ label: "/", path: "/" }]);
+  });
+
+  it("returns empty for blank input", () => {
+    expect(buildBreadcrumbs("")).toEqual([]);
+    expect(buildBreadcrumbs("   ")).toEqual([]);
+  });
+
+  it("splits a Windows path with drive-letter cumulative paths", () => {
+    expect(buildBreadcrumbs("C:\\Users\\Enzo")).toEqual([
+      { label: "C:", path: "C:\\" },
+      { label: "Users", path: "C:\\Users" },
+      { label: "Enzo", path: "C:\\Users\\Enzo" },
+    ]);
   });
 });

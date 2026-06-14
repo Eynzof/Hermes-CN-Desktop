@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { ChevronUp, File as FileIcon, Folder, RefreshCw } from "lucide-react";
 import { useFsList } from "@/hooks/use-fs-list";
 import type { FilePreview } from "@/lib/runtime";
-import {
-  detectLanguage,
-  fileExtension,
-  formatBytes,
-  isMarkdownPath,
-  toFencedMarkdown,
-} from "@/lib/preview-rail";
+import { buildBreadcrumbs, formatBytes, isMarkdownPath } from "@/lib/preview-rail";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import s from "./preview-rail.module.css";
 
@@ -25,6 +27,12 @@ function basename(path: string): string {
 // Debounced read so a burst of native file-change events (the upstream uses a
 // 200ms FILE_RELOAD_DEBOUNCE_MS) collapses into one re-read.
 const RELOAD_DEBOUNCE_MS = 200;
+
+// Draggable split between the directory browser and the file content.
+const BROWSER_DEFAULT_HEIGHT = 200;
+const BROWSER_MIN_HEIGHT = 72;
+const BROWSER_MIN_BOTTOM = 120;
+const SPLITTER_HEIGHT = 7;
 
 export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePreviewTabProps) {
   const [dir, setDir] = useState(workspaceRoot);
@@ -43,6 +51,37 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
     });
   }, [list.data?.entries]);
   const canGoUp = Boolean(dir && workspaceRoot && dir !== workspaceRoot && list.data?.parent);
+  const crumbs = useMemo(() => buildBreadcrumbs(dir), [dir]);
+
+  // Draggable split between the directory browser (top) and the content (below).
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [browserHeight, setBrowserHeight] = useState(BROWSER_DEFAULT_HEIGHT);
+  const onSplitterDown = useCallback(
+    (event: ReactPointerEvent) => {
+      event.preventDefault();
+      const layout = layoutRef.current;
+      if (!layout) return;
+      const layoutHeight = layout.getBoundingClientRect().height;
+      const startY = event.clientY;
+      const startHeight = browserHeight;
+
+      const onMove = (move: PointerEvent) => {
+        const maxTop = layoutHeight - BROWSER_MIN_BOTTOM - SPLITTER_HEIGHT;
+        const next = Math.max(
+          BROWSER_MIN_HEIGHT,
+          Math.min(startHeight + (move.clientY - startY), maxTop),
+        );
+        setBrowserHeight(next);
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [browserHeight],
+  );
 
   const [preview, setPreview] = useState<FilePreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -120,9 +159,31 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
   }
 
   return (
-    <>
-      <div className={s.fileBrowser}>
-        <div className={s.crumb}>{dir}</div>
+    <div className={s.fileLayout} ref={layoutRef}>
+      <div className={s.fileBrowser} style={{ height: browserHeight }}>
+        <nav className={s.breadcrumb} aria-label="目录路径">
+          {crumbs.map((crumb, index) => {
+            const isLast = index === crumbs.length - 1;
+            const showSep = index > 0 && crumbs[index - 1]?.path !== "/";
+            return (
+              <Fragment key={crumb.path}>
+                {showSep ? <span className={s.crumbSep}>/</span> : null}
+                {isLast ? (
+                  <span className={s.crumbCurrent}>{crumb.label}</span>
+                ) : (
+                  <button
+                    type="button"
+                    className={s.crumbItem}
+                    onClick={() => setDir(crumb.path)}
+                    title={crumb.path}
+                  >
+                    {crumb.label}
+                  </button>
+                )}
+              </Fragment>
+            );
+          })}
+        </nav>
         {canGoUp ? (
           <button
             type="button"
@@ -151,30 +212,46 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
             {entry.name}
           </button>
         ))}
-        {!list.isLoading && entries.length === 0 ? <div className={s.crumb}>空目录</div> : null}
+        {list.isError ? (
+          <div className={s.crumb}>无法打开此目录（可能超出可访问范围）。</div>
+        ) : !list.isLoading && entries.length === 0 ? (
+          <div className={s.crumb}>空目录</div>
+        ) : null}
       </div>
 
-      {filePath ? (
-        <>
-          <div className={s.fileMeta}>
-            <span className={s.fileMetaName} title={filePath}>
-              {basename(filePath)}
-            </span>
-            {preview ? <span>{formatBytes(preview.byteSize)}</span> : null}
-            {preview?.truncated ? <span>· 已截断预览</span> : null}
-            {loading ? <RefreshCw size={12} aria-hidden /> : null}
+      <div
+        className={s.splitter}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="调整目录与内容的高度"
+        onPointerDown={onSplitterDown}
+      >
+        <div className={s.splitterGrip} />
+      </div>
+
+      <div className={s.fileLower}>
+        {filePath ? (
+          <>
+            <div className={s.fileMeta}>
+              <span className={s.fileMetaName} title={filePath}>
+                {basename(filePath)}
+              </span>
+              {preview ? <span>{formatBytes(preview.byteSize)}</span> : null}
+              {preview?.truncated ? <span>· 已截断预览</span> : null}
+              {loading ? <RefreshCw size={12} aria-hidden /> : null}
+            </div>
+            <div className={s.fileContent}>
+              <FileContent path={filePath} preview={preview} error={loadError} loading={loading} />
+            </div>
+          </>
+        ) : (
+          <div className={s.empty}>
+            <FileIcon size={24} aria-hidden />
+            <p>从上方选择一个文件预览。修改磁盘上的文件后，这里会自动刷新。</p>
           </div>
-          <div className={s.fileContent}>
-            <FileContent path={filePath} preview={preview} error={loadError} loading={loading} />
-          </div>
-        </>
-      ) : (
-        <div className={s.empty}>
-          <FileIcon size={24} aria-hidden />
-          <p>从上方选择一个文件预览。修改磁盘上的文件后，这里会自动刷新。</p>
-        </div>
-      )}
-    </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -199,8 +276,20 @@ function FileContent({
     return <div className={s.notice}>二进制文件（{formatBytes(preview.byteSize)}），暂不支持预览。</div>;
   }
   const text = preview.text ?? "";
-  if (isMarkdownPath(path)) {
-    return <MarkdownText text={text} />;
+  if (text.length === 0) {
+    return <div className={s.notice}>空文件。</div>;
   }
-  return <MarkdownText text={toFencedMarkdown(text, detectLanguage(path) ?? fileExtension(path))} />;
+  // Markdown renders formatted; everything else shows raw source in a plain,
+  // reliable <pre>. Routing arbitrary source through the heavyweight markdown
+  // pipeline (Streamdown + math + mermaid) was fragile/slow and could render
+  // blank — a plain <pre> always shows the content. Mirrors the upstream
+  // source view.
+  if (isMarkdownPath(path)) {
+    return (
+      <div className={s.markdownView}>
+        <MarkdownText text={text} />
+      </div>
+    );
+  }
+  return <pre className={s.codePre}>{text}</pre>;
 }

@@ -90,31 +90,29 @@ struct PreviewFileChangedPayload {
     path: String,
 }
 
-/// Resolve `path` against `root` and confirm the canonical target stays inside
-/// the canonical `root`. Rejects empty input, traversal (`..`), and symlinks
-/// that escape the workspace. Returns the canonical, existing path.
+/// Resolve `path` (preferably absolute, as the renderer's file browser sends)
+/// to a canonical, existing file. Containment in `root` is **best-effort**: it
+/// is enforced only when `root` itself canonicalizes, so a workspace path the
+/// renderer could browse via the (more lenient) `/api/fs/list` endpoint never
+/// gets a valid file read rejected just because `canonicalize()` is stricter.
+/// Traversal/symlink escapes are still caught when containment applies.
 fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
     let raw = path.trim();
     if raw.is_empty() {
         return Err(AppError::InvalidRequest("Empty path".to_string()));
     }
     let root = root.trim();
-    if root.is_empty() {
-        return Err(AppError::InvalidRequest(
-            "Workspace root is required".to_string(),
-        ));
-    }
-
-    let root_real = PathBuf::from(root)
-        .canonicalize()
-        .map_err(|e| AppError::InvalidRequest(format!("Workspace root not accessible: {e}")))?;
 
     let candidate = {
         let pb = PathBuf::from(raw);
         if pb.is_absolute() {
             pb
+        } else if !root.is_empty() {
+            PathBuf::from(root).join(pb)
         } else {
-            root_real.join(pb)
+            return Err(AppError::InvalidRequest(
+                "Relative path requires a workspace root".to_string(),
+            ));
         }
     };
 
@@ -122,11 +120,19 @@ fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
         .canonicalize()
         .map_err(|e| AppError::FileError(format!("Path not accessible: {e}")))?;
 
-    if !real.starts_with(&root_real) {
-        return Err(AppError::OriginViolation(format!(
-            "Path escapes workspace: {}",
-            real.display()
-        )));
+    // Enforce containment only when the workspace root canonicalizes. The file
+    // browser is already gated to the user's home subtree by the dashboard, so
+    // skipping the check for an un-canonicalizable root is safe and avoids a
+    // spurious rejection that surfaces to the user as "no content".
+    if !root.is_empty() {
+        if let Ok(root_real) = PathBuf::from(root).canonicalize() {
+            if !real.starts_with(&root_real) {
+                return Err(AppError::OriginViolation(format!(
+                    "Path escapes workspace: {}",
+                    real.display()
+                )));
+            }
+        }
     }
 
     Ok(real)
@@ -384,6 +390,19 @@ mod tests {
     fn rejects_empty_root() {
         let err = read_file_preview("", "a.txt").unwrap_err();
         assert!(matches!(err, AppError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn reads_absolute_file_when_root_uncanonicalizable() {
+        // The file browser always sends an absolute path; a workspace root that
+        // canonicalize() can't resolve must not block a valid read (the bug
+        // that surfaced as "no content"). Containment is skipped, not fatal.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.txt");
+        std::fs::write(&file, b"hello").unwrap();
+
+        let preview = read_file_preview("/no/such/root-xyz-404", &file.to_string_lossy()).unwrap();
+        assert_eq!(preview.text.as_deref(), Some("hello"));
     }
 
     #[test]

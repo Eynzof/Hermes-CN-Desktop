@@ -172,13 +172,57 @@
 
 /* ── File preview ────────────────────────────────────────────────────────── */
 
+/* File tab: resizable two-pane layout (browser on top, content below). */
+.fileLayout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .fileBrowser {
+  /* Height is driven by the draggable splitter (inline style). */
   flex: 0 0 auto;
-  max-height: 38%;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-bottom: 1px solid var(--h-line-soft);
   padding: 4px;
+}
+
+/* Drag handle between the directory browser and the content. */
+.splitter {
+  flex: 0 0 auto;
+  height: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  border-top: 1px solid var(--h-line-soft);
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-soft);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.splitterGrip {
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--h-line);
+}
+
+.splitter:hover .splitterGrip,
+.splitter:active .splitterGrip {
+  background: var(--h-accent-border);
+}
+
+.fileLower {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .crumb {
@@ -190,6 +234,45 @@
   font-family: var(--h-font-mono);
   font-size: 11px;
   word-break: break-all;
+}
+
+/* Clickable path breadcrumb above the file list. */
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.crumbItem {
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font: inherit;
+  padding: 1px 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.crumbItem:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.crumbCurrent {
+  color: var(--h-text);
+  padding: 1px 3px;
+  white-space: nowrap;
+}
+
+.crumbSep {
+  color: var(--h-text-4);
+  user-select: none;
 }
 
 .fileEntry {
@@ -249,6 +332,16 @@
   min-height: 0;
   overflow: auto;
   padding: 10px 12px;
+  cursor: text;
+}
+
+/* The global reset disables selection via `#root *` (ID specificity), so a
+   plain class rule can't re-enable it — match that specificity. Mirrors the
+   standalone /logs route's approach. */
+:global(#root) .fileContent,
+:global(#root) .fileContent * {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .fileImage {
@@ -256,6 +349,23 @@
   max-width: 100%;
   height: auto;
   margin: 0 auto;
+}
+
+/* Raw source view: plain, always-visible, horizontally scrollable. */
+.codePre {
+  margin: 0;
+  white-space: pre;
+  tab-size: 2;
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--h-text);
+}
+
+.markdownView {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--h-text);
 }
 
 /* ── Logs ────────────────────────────────────────────────────────────────── */
@@ -289,6 +399,14 @@
   font-family: var(--h-font-mono);
   font-size: 11.5px;
   line-height: 1.55;
+  cursor: text;
+}
+
+/* Re-enable selection for log text at `#root *` specificity (line numbers stay
+   unselectable so copies don't include them). Mirrors the /logs route. */
+:global(#root) .logViewport .lineText {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .logLine {
@@ -311,6 +429,8 @@
   width: 34px;
   text-align: right;
   color: var(--h-text-4);
+  /* Keep line numbers out of copied selections. */
+  -webkit-user-select: none;
   user-select: none;
 }
 

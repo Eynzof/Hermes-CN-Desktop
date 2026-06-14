@@ -124,3 +124,37 @@ export function isPreviewableUrl(value: string): boolean {
     return false;
   }
 }
+
+export interface Breadcrumb {
+  /** Display label for this segment. */
+  label: string;
+  /** Absolute path this segment navigates to. */
+  path: string;
+}
+
+/**
+ * Split an absolute directory into clickable breadcrumb segments, each carrying
+ * the absolute path to navigate to. Supports POSIX (`/Users/Enzo/Documents`)
+ * and Windows (`C:\Users\Enzo`) paths. The POSIX root is its own `/` segment.
+ */
+export function buildBreadcrumbs(dir: string): Breadcrumb[] {
+  const trimmed = (dir ?? "").trim();
+  if (!trimmed) return [];
+
+  // Windows: drive-letter root (C:\ or C:/).
+  if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
+    const parts = trimmed.split(/[\\/]+/).filter(Boolean); // ["C:", "Users", ...]
+    return parts.map((label, index) => ({
+      label,
+      path: index === 0 ? `${parts[0]}\\` : `${parts[0]}\\${parts.slice(1, index + 1).join("\\")}`,
+    }));
+  }
+
+  // POSIX: leading "/" root, then each component.
+  const parts = trimmed.split("/").filter(Boolean);
+  const crumbs: Breadcrumb[] = [{ label: "/", path: "/" }];
+  parts.forEach((label, index) => {
+    crumbs.push({ label, path: `/${parts.slice(0, index + 1).join("/")}` });
+  });
+  return crumbs;
+}
