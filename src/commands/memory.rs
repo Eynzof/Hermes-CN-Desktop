@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::task;
 
@@ -12,6 +12,35 @@ use crate::state::AppState;
 const ENTRY_DELIMITER: &str = "\n§\n";
 const MEMORY_CHAR_LIMIT: usize = 2200;
 const USER_CHAR_LIMIT: usize = 1375;
+
+#[derive(Debug, Deserialize)]
+struct MemoryConfig {
+    memory: Option<MemoryConfigSection>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MemoryConfigSection {
+    #[serde(rename = "memory_char_limit")]
+    memory_char_limit: Option<usize>,
+    #[serde(rename = "user_char_limit")]
+    user_char_limit: Option<usize>,
+}
+
+fn load_memory_limits(home: &Path) -> (usize, usize) {
+    let config_path = home.join("config.yaml");
+    let limits = fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|content| serde_yaml::from_str::<MemoryConfig>(&content).ok())
+        .and_then(|c| c.memory)
+        .map(|m| {
+            (
+                m.memory_char_limit.unwrap_or(MEMORY_CHAR_LIMIT),
+                m.user_char_limit.unwrap_or(USER_CHAR_LIMIT),
+            )
+        })
+        .unwrap_or((MEMORY_CHAR_LIMIT, USER_CHAR_LIMIT));
+    limits
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -154,8 +183,9 @@ fn active_hermes_home(state: &State<'_, AppState>) -> AppResult<PathBuf> {
 }
 
 fn read_memory_from_home(home: &Path) -> MemoryInfo {
-    let mem_file = read_file_safe(&memory_path(home), MEMORY_CHAR_LIMIT);
-    let user_file = read_file_safe(&user_path(home), USER_CHAR_LIMIT);
+    let (memory_limit, user_limit) = load_memory_limits(home);
+    let mem_file = read_file_safe(&memory_path(home), memory_limit);
+    let user_file = read_file_safe(&user_path(home), user_limit);
     let entries = parse_memory_entries(&mem_file.content);
 
     MemoryInfo {
@@ -208,21 +238,22 @@ pub async fn add_memory_entry(
 
     let home = active_hermes_home(&state)?;
     run_memory_io(move || {
+        let (memory_limit, _) = load_memory_limits(&home);
         let path = memory_path(&home);
-        let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
+        let existing = read_file_safe(&path, memory_limit);
         let mut entries = parse_memory_entries(&existing.content);
         entries.push(MemoryEntry {
             index: entries.len(),
             content: trimmed,
         });
         let next = serialize_entries(&entries);
-        if char_count(&next) > MEMORY_CHAR_LIMIT {
+        if char_count(&next) > memory_limit {
             return Ok(MemoryMutationResult {
                 success: false,
                 error: Some(format!(
                     "超过记忆上限（{} / {} 字符）",
                     char_count(&next),
-                    MEMORY_CHAR_LIMIT
+                    memory_limit
                 )),
             });
         }
@@ -245,8 +276,9 @@ pub async fn update_memory_entry(
     let next_content = content.trim().to_string();
     let home = active_hermes_home(&state)?;
     run_memory_io(move || {
+        let (memory_limit, _) = load_memory_limits(&home);
         let path = memory_path(&home);
-        let existing = read_file_safe(&path, MEMORY_CHAR_LIMIT);
+        let existing = read_file_safe(&path, memory_limit);
         let mut entries = parse_memory_entries(&existing.content);
 
         if index >= entries.len() {
@@ -258,13 +290,13 @@ pub async fn update_memory_entry(
 
         entries[index].content = next_content;
         let next = serialize_entries(&entries);
-        if char_count(&next) > MEMORY_CHAR_LIMIT {
+        if char_count(&next) > memory_limit {
             return Ok(MemoryMutationResult {
                 success: false,
                 error: Some(format!(
                     "超过记忆上限（{} / {} 字符）",
                     char_count(&next),
-                    MEMORY_CHAR_LIMIT
+                    memory_limit
                 )),
             });
         }
@@ -303,17 +335,18 @@ pub async fn write_user_profile(
     state: State<'_, AppState>,
 ) -> AppResult<MemoryMutationResult> {
     let count = char_count(&content);
-    if count > USER_CHAR_LIMIT {
+    let home = active_hermes_home(&state)?;
+    let (_, user_limit) = load_memory_limits(&home);
+    if count > user_limit {
         return Ok(MemoryMutationResult {
             success: false,
             error: Some(format!(
                 "超过用户画像上限（{} / {} 字符）",
-                count, USER_CHAR_LIMIT
+                count, user_limit
             )),
         });
     }
 
-    let home = active_hermes_home(&state)?;
     run_memory_io(move || {
         write_file_safe(&user_path(&home), &content)?;
         Ok(MemoryMutationResult {
@@ -369,5 +402,27 @@ mod tests {
     #[test]
     fn counts_unicode_characters_not_bytes() {
         assert_eq!(char_count("中文🙂"), 3);
+    }
+
+    #[test]
+    fn load_memory_limits_reads_from_config_yaml() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let config_yaml = tmp.path().join("config.yaml");
+        fs::write(
+            &config_yaml,
+            "memory:\n  memory_char_limit: 5000\n  user_char_limit: 3000\n",
+        )
+        .unwrap();
+        let (mem, user) = load_memory_limits(tmp.path());
+        assert_eq!(mem, 5000);
+        assert_eq!(user, 3000);
+    }
+
+    #[test]
+    fn load_memory_limits_falls_back_to_defaults_when_config_missing() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let (mem, user) = load_memory_limits(tmp.path());
+        assert_eq!(mem, MEMORY_CHAR_LIMIT);
+        assert_eq!(user, USER_CHAR_LIMIT);
     }
 }
