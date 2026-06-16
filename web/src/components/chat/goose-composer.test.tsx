@@ -73,3 +73,20 @@ describe("GooseComposer slash hints", () => {
     expect(html).toContain("触发会话压缩");
   });
 });
+
+describe("GooseComposer workspace picker", () => {
+  it("renders a clear workspace action when a workspace is selected", () => {
+    const html = renderComposer(
+      <GooseComposer initialWorkspacePath="/Users/enzo/Project" />,
+    );
+
+    expect(html).toContain("Project");
+    expect(html).toContain("不指定默认工作区：/Users/enzo/Project");
+  });
+
+  it("does not render the clear workspace action without a selected workspace", () => {
+    const html = renderComposer(<GooseComposer />);
+
+    expect(html).not.toContain("不指定默认工作区：");
+  });
+});

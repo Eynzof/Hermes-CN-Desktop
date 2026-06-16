@@ -1326,6 +1326,37 @@
   opacity: 0.55;
 }
 
+.workspaceClearButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: var(--h-bg-soft);
+  color: var(--h-text-3);
+  cursor: pointer;
+  padding: 0;
+}
+
+.workspaceClearButton:hover:not(:disabled) {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.workspaceClearButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.workspaceClearButton svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
+}
+
 .toolButton span,
 .toolButton small {
   min-width: 0;
