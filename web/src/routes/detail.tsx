@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Bot, Check, Copy, PanelRight } from "lucide-react";
 import {
   activeSessionIdAtom,
+  assistantDisplayNameAtom,
   conversationFontSizeAtom,
   conversationFontSizeVars,
   conversationWidthMaxWidth,
@@ -93,6 +94,7 @@ export function DetailRoute() {
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
   const [conversationWidthMode, setConversationWidthMode] = useAtom(conversationWidthModeAtom);
   const conversationFontSizeMode = useAtomValue(conversationFontSizeAtom);
+  const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
   const [rightRailVisible, setRightRailVisible] = useAtom(rightRailVisibleAtom);
   const [searchParams] = useSearchParams();
   const taskId = activeSessionId ?? urlTaskId;
@@ -553,7 +555,7 @@ export function DetailRoute() {
   const stall = useStallWatchdog(runtime);
 
   const composerLoadingPlaceholder = runtimeIsBusy && runtime.turnStartedAt
-    ? `Hermes 思考中 · ${formatElapsedTimer(composerTick)}`
+    ? `${assistantDisplayName} 思考中 · ${formatElapsedTimer(composerTick)}`
     : undefined;
 
   const timelineStatus =

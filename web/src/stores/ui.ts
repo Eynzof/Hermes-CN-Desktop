@@ -23,6 +23,11 @@ export const CONVERSATION_FONT_SIZE_OPTIONS = [
 
 export type ConversationFontSizeMode = typeof CONVERSATION_FONT_SIZE_OPTIONS[number]["value"];
 
+export const DEFAULT_ASSISTANT_DISPLAY_NAME = "Hermes";
+export const ASSISTANT_DISPLAY_NAME_KEY = "hermes.assistant-display-name";
+export const ASSISTANT_AVATAR_KEY = "hermes.assistant-avatar-data-url";
+const MAX_ASSISTANT_DISPLAY_NAME_LENGTH = 40;
+
 const DEFAULT_CONVERSATION_WIDTH_MODE: ConversationWidthMode = "medium";
 const CONVERSATION_WIDTH_KEY = "hermes.conversation-width";
 const CONVERSATION_WIDTH_VALUES = CONVERSATION_WIDTH_OPTIONS.map((option) => option.value);
@@ -50,6 +55,18 @@ export function conversationFontSizeVars(mode: ConversationFontSizeMode): { font
   const option = CONVERSATION_FONT_SIZE_OPTIONS.find((item) => item.value === mode)
     ?? CONVERSATION_FONT_SIZE_OPTIONS[1];
   return { fontSize: option.fontSize, lineHeight: option.lineHeight };
+}
+
+export function normalizeAssistantDisplayName(value: unknown): string {
+  const trimmed = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (!trimmed) return DEFAULT_ASSISTANT_DISPLAY_NAME;
+  return Array.from(trimmed).slice(0, MAX_ASSISTANT_DISPLAY_NAME_LENGTH).join("");
+}
+
+export function normalizeAssistantAvatarDataUrl(value: unknown): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return "";
+  return /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(text) ? text : "";
 }
 
 const conversationWidthModeBaseAtom = atom<ConversationWidthMode>(
@@ -92,6 +109,34 @@ export const activeProfileAtom = atom(
   (_get, set, next: string) => {
     set(activeProfileBaseAtom, next);
     writeUiValue("hermes.active-profile", next);
+  },
+);
+
+const assistantDisplayNameBaseAtom = atom<string>(
+  normalizeAssistantDisplayName(readUiValue(ASSISTANT_DISPLAY_NAME_KEY, DEFAULT_ASSISTANT_DISPLAY_NAME)),
+);
+export const assistantDisplayNameAtom = atom(
+  (get) => get(assistantDisplayNameBaseAtom),
+  (_get, set, next: string) => {
+    const value = normalizeAssistantDisplayName(next);
+    set(assistantDisplayNameBaseAtom, value);
+    if (value === DEFAULT_ASSISTANT_DISPLAY_NAME) {
+      writeUiValue(ASSISTANT_DISPLAY_NAME_KEY, "");
+    } else {
+      writeUiValue(ASSISTANT_DISPLAY_NAME_KEY, value);
+    }
+  },
+);
+
+const assistantAvatarDataUrlBaseAtom = atom<string>(
+  normalizeAssistantAvatarDataUrl(readUiValue(ASSISTANT_AVATAR_KEY, "")),
+);
+export const assistantAvatarDataUrlAtom = atom(
+  (get) => get(assistantAvatarDataUrlBaseAtom),
+  (_get, set, next: string) => {
+    const value = normalizeAssistantAvatarDataUrl(next);
+    set(assistantAvatarDataUrlBaseAtom, value);
+    writeUiValue(ASSISTANT_AVATAR_KEY, value);
   },
 );
 

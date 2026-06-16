@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
-import { showReasoningAtom } from "@/stores/ui";
+import { assistantAvatarDataUrlAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { MessageImage } from "./message-image";
 import { MessageSkeleton } from "./message-skeleton";
@@ -636,6 +636,8 @@ interface MessageBubbleProps {
 
 function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
+  const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
+  const assistantAvatarDataUrl = useAtomValue(assistantAvatarDataUrlAtom);
   const isUser = message.role === "user";
   const isToolOnly = message.role === "tool";
   const isSystem = message.role === "system";
@@ -685,7 +687,14 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   return (
     <div className={s.messageRow} data-role={isUser ? "user" : "assistant"}>
       <div className={s.messageContent}>
-        {!isUser ? <div className={s.assistantName}>Hermes</div> : null}
+        {!isUser ? (
+          <div className={assistantAvatarDataUrl ? s.assistantIdentity : s.assistantName}>
+            {assistantAvatarDataUrl ? (
+              <img className={s.assistantAvatar} src={assistantAvatarDataUrl} alt={`${assistantDisplayName} 头像`} />
+            ) : null}
+            <span>{assistantDisplayName}</span>
+          </div>
+        ) : null}
         <div className={s.bubble} data-role={isUser ? "user" : "assistant"}>
           {hasBlocks ? (
             <MessageBlocks

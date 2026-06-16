@@ -276,3 +276,40 @@ describe("runtimeUpdatingAtom", () => {
     expect(store.get(runtimeUpdatingAtom)).toEqual({ active: true, mode: "rollback" });
   });
 });
+
+describe("assistant display profile atoms (persisted)", () => {
+  it("defaults to Hermes and restores a saved custom name", async () => {
+    const { assistantDisplayNameAtom } = await loadUi();
+    const store = createStore();
+    expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
+
+    const restored = await loadUi({ "hermes.assistant-display-name": "Claudia" });
+    const restoredStore = createStore();
+    expect(restoredStore.get(restored.assistantDisplayNameAtom)).toBe("Claudia");
+  });
+
+  it("trims, limits and persists custom assistant names", async () => {
+    const { assistantDisplayNameAtom, uiStore } = await loadUi();
+    const store = createStore();
+    store.set(assistantDisplayNameAtom, "  Claudia   Agent  ");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Claudia Agent");
+    expect(uiStore.readUiValue("hermes.assistant-display-name", "")).toBe("Claudia Agent");
+
+    store.set(assistantDisplayNameAtom, "");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
+    expect(uiStore.readUiValue("hermes.assistant-display-name", "fallback")).toBe("");
+  });
+
+  it("accepts image data URLs and rejects non-image avatar values", async () => {
+    const { assistantAvatarDataUrlAtom, uiStore } = await loadUi();
+    const store = createStore();
+    const avatar = "data:image/png;base64,AAAA";
+    store.set(assistantAvatarDataUrlAtom, avatar);
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe(avatar);
+    expect(uiStore.readUiValue("hermes.assistant-avatar-data-url", "")).toBe(avatar);
+
+    store.set(assistantAvatarDataUrlAtom, "https://example.test/avatar.png");
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe("");
+    expect(uiStore.readUiValue("hermes.assistant-avatar-data-url", "fallback")).toBe("");
+  });
+});

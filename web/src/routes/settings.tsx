@@ -15,6 +15,7 @@ import {
   GitFork,
   Globe2,
   Heart,
+  Image as ImageIcon,
   Info,
   MessageCircle,
   RefreshCw,
@@ -23,6 +24,8 @@ import {
   Server,
   ShieldCheck,
   Terminal,
+  Upload,
+  X,
 } from "lucide-react";
 import { Alert, Button, Dialog, Field, Input, Select, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
@@ -41,6 +44,9 @@ import {
 } from "@/hooks/use-runtime-update";
 import {
   CONVERSATION_FONT_SIZE_OPTIONS,
+  DEFAULT_ASSISTANT_DISPLAY_NAME,
+  assistantAvatarDataUrlAtom,
+  assistantDisplayNameAtom,
   composerSubmitShortcutAtom,
   conversationFontSizeAtom,
   notifyOnApprovalAtom,
@@ -50,6 +56,7 @@ import {
   notifySystemAtom,
   profileSwitchingAtom,
   showReasoningAtom,
+  normalizeAssistantDisplayName,
   type ConversationFontSizeMode,
 } from "@/stores/ui";
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
@@ -82,6 +89,45 @@ interface SettingsSectionProps {
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
   const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
+  const [assistantDisplayName, setAssistantDisplayName] = useAtom(assistantDisplayNameAtom);
+  const [assistantAvatarDataUrl, setAssistantAvatarDataUrl] = useAtom(assistantAvatarDataUrlAtom);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [assistantProfileError, setAssistantProfileError] = useState("");
+
+  const handleAssistantNameChange = (value: string) => {
+    setAssistantProfileError("");
+    setAssistantDisplayName(value);
+  };
+
+  const handleAvatarFile = async (file: File | undefined) => {
+    if (!file) return;
+    setAssistantProfileError("");
+    if (!file.type.startsWith("image/")) {
+      setAssistantProfileError("请选择 PNG、JPG、WebP、GIF 或 SVG 图片。");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAssistantProfileError("头像图片不能超过 2 MB。");
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error ?? new Error("读取头像失败"));
+        reader.readAsDataURL(file);
+      });
+      if (!dataUrl.startsWith("data:image/")) {
+        setAssistantProfileError("头像文件格式不受支持。");
+        return;
+      }
+      setAssistantAvatarDataUrl(dataUrl);
+    } catch (error) {
+      setAssistantProfileError(error instanceof Error ? error.message : "读取头像失败");
+    } finally {
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
 
   return (
     <div>
@@ -92,6 +138,54 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
+      <Row label="Hermes 名称" sub="修改后会影响对话中助手消息上方显示的名称；留空会恢复 Hermes。" right={
+        <div className={s.assistantProfileControl}>
+          <input
+            className={s.assistantNameInput}
+            value={assistantDisplayName === DEFAULT_ASSISTANT_DISPLAY_NAME ? "" : assistantDisplayName}
+            placeholder={DEFAULT_ASSISTANT_DISPLAY_NAME}
+            maxLength={40}
+            onChange={(event) => handleAssistantNameChange(event.target.value)}
+            onBlur={(event) => setAssistantDisplayName(normalizeAssistantDisplayName(event.target.value))}
+          />
+          {assistantDisplayName !== DEFAULT_ASSISTANT_DISPLAY_NAME ? (
+            <button
+              type="button"
+              className={s.iconPlainButton}
+              onClick={() => handleAssistantNameChange("")}
+              title="恢复默认名称"
+            >
+              <X size={13} />
+            </button>
+          ) : null}
+        </div>
+      } />
+      <Row label="Hermes 头像" sub="上传后会显示在 Hermes 的对话消息旁；不设置时保持原有纯文本样式。" right={
+        <div className={s.assistantAvatarControl}>
+          <input
+            ref={avatarInputRef}
+            className={s.hiddenFileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+            onChange={(event) => void handleAvatarFile(event.target.files?.[0])}
+          />
+          {assistantAvatarDataUrl ? (
+            <img className={s.assistantAvatarPreview} src={assistantAvatarDataUrl} alt="Hermes 头像预览" />
+          ) : (
+            <span className={s.assistantAvatarPlaceholder}><ImageIcon size={16} /></span>
+          )}
+          <button type="button" className={s.btn} onClick={() => avatarInputRef.current?.click()}>
+            <Upload size={13} /> 上传
+          </button>
+          {assistantAvatarDataUrl ? (
+            <button type="button" className={s.btn} onClick={() => { setAssistantProfileError(""); setAssistantAvatarDataUrl(""); }}>
+              移除
+            </button>
+          ) : null}
+        </div>
+      } />
+      {assistantProfileError ? <p className={s.assistantProfileError}>{assistantProfileError}</p> : null}
+      <p className={s.assistantProfileStorageHint}>名称和头像只影响桌面端显示，不会改写模型提示词；清空名称和移除头像后会恢复之前的对话样式。</p>
       <ApprovalModeSection />
     </div>
   );

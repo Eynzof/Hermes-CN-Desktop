@@ -297,6 +297,16 @@ function legacyMetadata(msg: SessionMessage): HermesMessageMetadata | undefined 
   return metadata;
 }
 
+const PROCESS_NOTIFICATION_RE = /^\[IMPORTANT: Background process\s+([\s\S]*?)\]$/;
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+function normalizeProcessNotificationText(text: string): string | null {
+  const clean = text.replace(ANSI_RE, "").trim();
+  const match = clean.match(PROCESS_NOTIFICATION_RE);
+  if (!match) return null;
+  return `后台进程通知：${match[1]}`;
+}
+
 // Roles we know how to render. Hermes integrations (Feishu bridge etc.)
 // emit extra marker roles like "session_meta" into the persisted log —
 // the response schema accepts arbitrary strings so the row doesn't
@@ -332,6 +342,9 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
 
   const content = textAndImagesFromStructuredContent(msg.content);
   const text = normalizeContent(content.text);
+  const processNotificationText = msg.role === "user"
+    ? normalizeProcessNotificationText(text ?? "")
+    : null;
   const reasoning = normalizeContent(
     normalizeReasoningText(msg.reasoning_content ?? msg.reasoning ?? undefined),
   );
@@ -352,10 +365,10 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
   return {
     id: `stored-${msg.id}`,
     sessionId: msg.session_id,
-    role: msg.role as "user" | "assistant" | "system",
+    role: processNotificationText ? "system" : msg.role as "user" | "assistant" | "system",
     createdAt,
     status: msg.finish_reason === "error" ? "error" : "complete",
-    parts,
+    parts: processNotificationText ? [{ type: "notice", level: "system", text: processNotificationText }] : parts,
     metadata: legacyMetadata(msg),
   };
 }
@@ -857,6 +870,19 @@ function hasInterruptedCompletion(message: HermesUIMessage, canonicalMessageText
   return canonicalMessageText.toLowerCase().includes("operationinterrupted:");
 }
 
+function isStaleInterruptedLiveMessage(
+  live: HermesUIMessage,
+  storedMessages: HermesUIMessage[],
+): boolean {
+  if (live.role !== "assistant") return false;
+  if (!hasInterruptedCompletion(live, canonicalText(live))) return false;
+  return storedMessages.some((stored) =>
+    stored.role === "assistant" &&
+    stored.createdAt >= live.createdAt &&
+    !hasInterruptedCompletion(stored, canonicalText(stored)),
+  );
+}
+
 function isInterruptedLiveSuperset(
   stored: HermesUIMessage,
   live: HermesUIMessage,
@@ -992,7 +1018,9 @@ export function mergeHermesUIMessages(
   }
 
   consolidatedLive.forEach((liveMessage, index) => {
-    if (!usedLiveIndexes.has(index)) merged.push(liveMessage);
+    if (usedLiveIndexes.has(index)) return;
+    if (isStaleInterruptedLiveMessage(liveMessage, stored)) return;
+    merged.push(liveMessage);
   });
 
   // Issue #98: a live message that fails to match any stored row — typically

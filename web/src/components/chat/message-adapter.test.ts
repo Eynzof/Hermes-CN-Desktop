@@ -589,6 +589,50 @@ describe("message adapter", () => {
     expect(chat[0]?.stats?.finishReason).toBe("interrupted");
   });
 
+  it("hides stale interrupted live replies once a later stored assistant answer exists", () => {
+    const stored = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({
+        id: 875,
+        role: "user",
+        content: "爱为何物？",
+        timestamp: 1_000,
+      }),
+      sessionMessage({
+        id: 910,
+        role: "user",
+        content:
+          '[IMPORTANT: Background process proc_99f1ebe876c0 matched watch pattern "Local:".\n' +
+          "Command: pnpm dev:web\n" +
+          "Matched output:\n" +
+          "\x1b[36m@acme/web:dev: \x1b[0m- Local:         http://localhost:3000]",
+        timestamp: 1_054,
+      }),
+      sessionMessage({
+        id: 911,
+        role: "assistant",
+        content: "爱是长期选择。\n\n顺便：你的 web dev server 已起来了，地址是 `http://localhost:3000`。",
+        timestamp: 1_069,
+      }),
+    ]);
+    const live = [
+      uiMessage({
+        id: "live-interrupted-turn",
+        createdAt: 1_025_000,
+        parts: [{ type: "text", text: "Operation interrupted: waiting for model response (45.4s elapsed)." }],
+        metadata: { finishReason: "interrupted" },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    expect(merged.map((message) => message.id)).toEqual(["stored-875", "stored-910", "stored-911"]);
+    expect(chat.map((message) => message.role)).toEqual(["user", "system", "assistant"]);
+    expect(chat.map((message) => message.text).join("\n")).not.toContain("Operation interrupted");
+    expect(chat[1]?.text).toContain("后台进程通知：");
+    expect(chat[1]?.text).not.toContain("\x1b[36m");
+  });
+
   it("keeps persisted stats when a matching live message has no metadata", () => {
     const stored = [
       uiMessage({
