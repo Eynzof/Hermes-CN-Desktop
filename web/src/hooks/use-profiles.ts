@@ -73,14 +73,19 @@ export function resolveBootstrapProfile(input: {
   current: string;
   electronProfile: string | undefined;
   queryData: string | undefined;
+  forceElectronProfile?: boolean;
 }): BootstrapDecision {
-  const { alreadyHydrated, current, electronProfile, queryData } = input;
+  const { alreadyHydrated, current, electronProfile, queryData, forceElectronProfile = false } = input;
   // 首次同步完成后，运行期的 profile 切换由 useSetActiveProfile 全权负责。
   if (alreadyHydrated) return { next: null, hydrated: true };
   // 桌面端：主进程已同步把权威 profile 推进 __HERMES_RUNTIME__，启动即可得。
   if (electronProfile) {
     const next =
-      current === "default" && electronProfile !== "default" ? electronProfile : null;
+      forceElectronProfile && current !== electronProfile
+        ? electronProfile
+        : current === "default" && electronProfile !== "default"
+          ? electronProfile
+          : null;
     return { next, hydrated: true };
   }
   // Web：等后端 sticky 到达再决定；未到达则先不标记 hydrated，待下次重试。
@@ -93,6 +98,7 @@ export function useBootstrapActiveProfile() {
   const setActive = useSetAtom(activeProfileAtom);
   const current = useAtomValue(activeProfileAtom);
   const electronProfile = runtime.getCurrentProfile();
+  const forceElectronProfile = runtime.isAttached();
   const query = useActiveProfile();
   const hydratedRef = useRef(false);
   useEffect(() => {
@@ -101,10 +107,11 @@ export function useBootstrapActiveProfile() {
       current,
       electronProfile,
       queryData: query.data,
+      forceElectronProfile,
     });
     if (decision.hydrated) hydratedRef.current = true;
     if (decision.next !== null) setActive(decision.next);
-  }, [electronProfile, query.data, current, setActive]);
+  }, [electronProfile, forceElectronProfile, query.data, current, setActive]);
 }
 
 // 切 profile 时需要 invalidate 的 query keys——和下面在 hook 里加 profileId

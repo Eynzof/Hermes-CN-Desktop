@@ -333,3 +333,24 @@ describe("SessionSummary cwd (#216)", () => {
     expect(parsed.sessions[0]?.cwd).toBe("/Users/claw/project-b");
   });
 });
+
+describe("OAuth schemas", () => {
+  it("accepts loopback providers and start responses", async () => {
+    const { OAuthProvider, OAuthStartResponse } = await import("./hermes-api");
+    const provider = OAuthProvider.parse({
+      id: "xai-oauth",
+      name: "xAI Grok OAuth",
+      flow: "loopback",
+      status: { logged_in: false },
+    });
+    expect(provider.flow).toBe("loopback");
+
+    const start = OAuthStartResponse.parse({
+      session_id: "sid",
+      flow: "loopback",
+      auth_url: "https://example.test/authorize",
+      expires_in: 900,
+    });
+    expect(start.flow).toBe("loopback");
+  });
+});

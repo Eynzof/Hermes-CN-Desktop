@@ -98,16 +98,30 @@ impl DashboardHandle {
     /// attaches to. `owns_process` is false, so app shutdown and restart paths
     /// never try to terminate or `/api/shutdown` the remote agent.
     pub fn remote(api_base_url: String, session_token: String) -> Self {
+        Self::attached(api_base_url, Some(session_token), "remote")
+    }
+
+    /// Build a handle for a loopback Hermes Agent CLI dashboard that the
+    /// desktop attaches to but does not own.
+    pub fn local(api_base_url: String, session_token: Option<String>) -> Self {
+        Self::attached(api_base_url, session_token, "local")
+    }
+
+    fn attached(
+        api_base_url: String,
+        session_token: Option<String>,
+        ownership_state: &str,
+    ) -> Self {
         Self {
             api_base_url,
-            session_token: Some(session_token),
+            session_token,
             owns_process: false,
             command_program: None,
             command_args: vec![],
             gateway_runtime_dir: None,
             gateway_lock_dir: None,
             ownership_marker_path: None,
-            ownership_state: Some("remote".to_string()),
+            ownership_state: Some(ownership_state.to_string()),
             job_handle: None,
             attached_pid: None,
             child: None,
@@ -177,10 +191,11 @@ pub struct AppStateInner {
     /// which can briefly differ from the persisted preference between a toggle
     /// and the runtime restart that applies it.
     pub yolo_mode: bool,
-    /// Whether the desktop is attached to a remote Hermes Agent (shell mode)
-    /// or running its own managed runtime. Set during bootstrap and by
-    /// `apply_connection_config`; commands consult it to skip local-only
-    /// behavior (token refresh, profile switch, YOLO, runtime updates).
+    /// Whether the desktop is running its own managed runtime, attached to a
+    /// loopback CLI dashboard, or attached to a remote Hermes Agent. Set
+    /// during bootstrap and by `apply_connection_config`; commands consult it
+    /// to decide ownership-only behavior (profile switch, YOLO, runtime
+    /// updates) and token refresh strategy.
     pub connection_mode: crate::connection::ConnectionMode,
 }
 
@@ -204,7 +219,7 @@ impl AppState {
                 dashboard_restart_in_flight: false,
                 last_runtime_error: None,
                 yolo_mode: false,
-                connection_mode: crate::connection::ConnectionMode::Local,
+                connection_mode: crate::connection::ConnectionMode::Managed,
             }),
         }
     }

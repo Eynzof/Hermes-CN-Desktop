@@ -12,12 +12,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use hermes_agent_cn::bootstrap::{
-    acquire_managed_dashboard, connect_remote_backend, finalize_bootstrap,
+    acquire_managed_dashboard, connect_local_backend, connect_remote_backend, finalize_bootstrap,
     install_bundled_runtime_for_bootstrap, record_bootstrap_error,
 };
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
-use hermes_agent_cn::connection::{self, ConnectionMode};
+use hermes_agent_cn::connection::{self, ConnectionBackend, ConnectionMode};
 use hermes_agent_cn::process::{dashboard, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use hermes_agent_cn::tray;
@@ -190,10 +190,10 @@ fn main() {
             };
 
             // Resolve the backend for this boot: env override → connection.json
-            // remote mode → local managed runtime. An env URL without a token
+            // local/remote attachment → managed runtime. An env URL without a token
             // is the one fatal misconfiguration (matching the official desktop).
-            let remote_backend = match connection::resolve_remote_backend() {
-                Ok(remote) => remote,
+            let backend = match connection::resolve_connection_backend() {
+                Ok(backend) => backend,
                 Err(msg) => {
                     record_bootstrap_error(app.handle(), msg);
                     return Ok(());
@@ -210,27 +210,38 @@ fn main() {
                 let profile_for_task = current_profile.clone();
 
                 tauri::async_runtime::spawn(async move {
-                    let (handle, mode) = if let Some(remote) = remote_backend {
-                        (
+                    let (handle, mode) = match backend {
+                        ConnectionBackend::Remote(remote) => (
                             connect_remote_backend(&app_handle, &remote).await,
                             ConnectionMode::Remote,
-                        )
-                    } else if external_dev_dashboard {
-                        let api_base_url = dashboard::dashboard_base_url(&host_for_task, port);
-                        if !dashboard::probe_dashboard(&api_base_url).await {
-                            log::warn!(
-                                "External dev dashboard mode: dashboard not reachable at {}",
-                                api_base_url
-                            );
+                        ),
+                        ConnectionBackend::Local(local) => (
+                            connect_local_backend(&app_handle, &local).await,
+                            ConnectionMode::Local,
+                        ),
+                        ConnectionBackend::Managed if external_dev_dashboard => {
+                            let api_base_url = dashboard::dashboard_base_url(&host_for_task, port);
+                            if !dashboard::probe_dashboard(&api_base_url).await {
+                                log::warn!(
+                                    "External dev dashboard mode: dashboard not reachable at {}",
+                                    api_base_url
+                                );
+                            }
+                            (external_dev_handle(api_base_url), ConnectionMode::Managed)
                         }
-                        (external_dev_handle(api_base_url), ConnectionMode::Local)
-                    } else {
-                        match acquire_managed_dashboard(&app_handle, options, resource_dir, true)
+                        ConnectionBackend::Managed => {
+                            match acquire_managed_dashboard(
+                                &app_handle,
+                                options,
+                                resource_dir,
+                                true,
+                            )
                             .await
-                        {
-                            Ok(h) => (h, ConnectionMode::Local),
-                            // Error already surfaced to the UI via runtime-status.
-                            Err(_) => return,
+                            {
+                                Ok(h) => (h, ConnectionMode::Managed),
+                                // Error already surfaced to the UI via runtime-status.
+                                Err(_) => return,
+                            }
                         }
                     };
 
@@ -250,18 +261,36 @@ fn main() {
             }
 
             // --- Synchronous fallback (HERMES_DESKTOP_SYNC_BOOTSTRAP). ---
-            if let Some(remote) = remote_backend {
-                let handle =
-                    tauri::async_runtime::block_on(connect_remote_backend(app.handle(), &remote));
-                tauri::async_runtime::block_on(finalize_bootstrap(
-                    app.handle(),
-                    handle,
-                    boot_home_str,
-                    base_str,
-                    current_profile,
-                    ConnectionMode::Remote,
-                ));
-                return Ok(());
+            match backend {
+                ConnectionBackend::Remote(remote) => {
+                    let handle = tauri::async_runtime::block_on(connect_remote_backend(
+                        app.handle(),
+                        &remote,
+                    ));
+                    tauri::async_runtime::block_on(finalize_bootstrap(
+                        app.handle(),
+                        handle,
+                        boot_home_str,
+                        base_str,
+                        current_profile,
+                        ConnectionMode::Remote,
+                    ));
+                    return Ok(());
+                }
+                ConnectionBackend::Local(local) => {
+                    let handle =
+                        tauri::async_runtime::block_on(connect_local_backend(app.handle(), &local));
+                    tauri::async_runtime::block_on(finalize_bootstrap(
+                        app.handle(),
+                        handle,
+                        boot_home_str,
+                        base_str,
+                        current_profile,
+                        ConnectionMode::Local,
+                    ));
+                    return Ok(());
+                }
+                ConnectionBackend::Managed => {}
             }
 
             if external_dev_dashboard {
@@ -278,7 +307,7 @@ fn main() {
                     boot_home_str,
                     base_str,
                     current_profile,
-                    ConnectionMode::Local,
+                    ConnectionMode::Managed,
                 ));
                 return Ok(());
             }
@@ -317,7 +346,7 @@ fn main() {
                         boot_home_for_task,
                         base_for_task,
                         profile_for_task,
-                        ConnectionMode::Local,
+                        ConnectionMode::Managed,
                     )
                     .await;
                 });
@@ -346,7 +375,7 @@ fn main() {
                 boot_home_str,
                 base_str,
                 current_profile,
-                ConnectionMode::Local,
+                ConnectionMode::Managed,
             ));
             Ok(())
         })

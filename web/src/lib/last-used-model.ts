@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 import type { ComposerModelSelection } from "@/components/chat/composer-types";
 
-const STORAGE_KEY = "hermes:last-used-model";
+const STORAGE_KEY_PREFIX = "hermes:last-used-model";
+const LEGACY_STORAGE_KEY = STORAGE_KEY_PREFIX;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const subscribers = new Set<() => void>();
@@ -26,14 +27,38 @@ function isValidSelection(value: unknown): value is ComposerModelSelection {
   return true;
 }
 
+function safeScopePart(value: string | undefined | null, fallback: string): string {
+  const normalized = (value ?? "").trim();
+  return encodeURIComponent(normalized || fallback);
+}
+
+export function modelSelectionScopeKey(): string {
+  const runtime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
+  const mode = runtime?.connectionMode ?? "managed";
+  const baseUrl = runtime?.apiBaseUrl || runtime?.dashboardApiBaseUrl || "relative";
+  const profile = runtime?.currentProfile || "default";
+  return [mode, baseUrl, profile].map((part) => safeScopePart(part, "default")).join(":");
+}
+
+function scopedStorageKey(): string {
+  return `${STORAGE_KEY_PREFIX}:${modelSelectionScopeKey()}`;
+}
+
+function readEntry(key: string): ComposerModelSelection | null {
+  const parsed = readUiValue<StoredEntry | null>(key, null);
+  if (!parsed || typeof parsed !== "object") return null;
+  if (typeof parsed.ts !== "number") return null;
+  if (Date.now() - parsed.ts > MAX_AGE_MS) return null;
+  if (!isValidSelection(parsed.selection)) return null;
+  return parsed.selection;
+}
+
 export function readLastUsedModel(): ComposerModelSelection | null {
   try {
-    const parsed = readUiValue<StoredEntry | null>(STORAGE_KEY, null);
-    if (!parsed || typeof parsed !== "object") return null;
-    if (typeof parsed.ts !== "number") return null;
-    if (Date.now() - parsed.ts > MAX_AGE_MS) return null;
-    if (!isValidSelection(parsed.selection)) return null;
-    return parsed.selection;
+    // Deliberately do not read the legacy global key. It was shared across the
+    // old local/remote split and could make a managed K2.6 selection override a
+    // newly attached CLI backend whose /api/model/info says gpt-5.5.
+    return readEntry(scopedStorageKey());
   } catch {
     return null;
   }
@@ -43,14 +68,17 @@ export function rememberLastUsedModel(selection: ComposerModelSelection) {
   if (!isValidSelection(selection)) return;
   try {
     const entry: StoredEntry = { selection, ts: Date.now() };
-    writeUiValue(STORAGE_KEY, entry);
+    writeUiValue(scopedStorageKey(), entry);
+    // Remove the obsolete global entry opportunistically so future readers in
+    // older renderer windows do not keep resurrecting a cross-backend model.
+    removeUiValue(LEGACY_STORAGE_KEY);
     notifyLastUsedModelChanged();
   } catch {}
 }
 
 export function forgetLastUsedModel() {
   try {
-    removeUiValue(STORAGE_KEY);
+    removeUiValue(scopedStorageKey());
     notifyLastUsedModelChanged();
   } catch {}
 }

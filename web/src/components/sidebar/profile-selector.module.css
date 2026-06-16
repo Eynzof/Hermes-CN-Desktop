@@ -62,11 +62,20 @@
 }
 
 .triggerLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--h-text-3);
   font-weight: 500;
+  line-height: 1;
+}
+
+.triggerLabel svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .triggerName {
@@ -85,6 +94,10 @@
   font-size: 11px;
   letter-spacing: 0;
   text-transform: none;
+}
+
+.trigger[data-variant="topbar"] .triggerLabel svg {
+  transform: translateY(1px);
 }
 
 .trigger[data-variant="topbar"] .triggerName {

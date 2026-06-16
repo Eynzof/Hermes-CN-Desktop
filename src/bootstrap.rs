@@ -6,15 +6,16 @@
 // sync → dashboard spawn) when flipping remote → local, including the
 // "no managed runtime on disk yet" first-install case.
 //
-// Two backend shapes come out of here:
-//   - local: a desktop-owned `hermes dashboard` subprocess (acquire_managed_dashboard)
-//   - remote: an attach-only handle to a remote Hermes Agent (connect_remote_backend)
+// Three backend shapes come out of here:
+//   - managed: a desktop-owned `hermes dashboard` subprocess (acquire_managed_dashboard)
+//   - local: an attach-only handle to a loopback Hermes Agent CLI dashboard
+//   - remote: an attach-only handle to a remote Hermes Agent
 
 use std::path::{Path, PathBuf};
 
 use tauri::Emitter;
 
-use crate::connection::{ConnectionMode, RemoteBackend};
+use crate::connection::{ConnectionMode, LocalBackend, RemoteBackend};
 use crate::environment;
 use crate::process::{dashboard, runtime};
 use crate::state::{AppState, DashboardHandle};
@@ -169,6 +170,36 @@ pub async fn connect_remote_backend(
     DashboardHandle::remote(remote.base_url.clone(), remote.token.clone())
 }
 
+/// Attach to a local Hermes Agent CLI dashboard. The URL is already validated
+/// as loopback by connection.rs; we best-effort fetch the current session token
+/// from the served HTML so users do not have to paste it manually.
+pub async fn connect_local_backend(
+    app: &tauri::AppHandle,
+    local: &LocalBackend,
+) -> DashboardHandle {
+    emit_runtime_status(
+        app,
+        "starting-dashboard",
+        "正在连接本地 Hermes Agent CLI...",
+    );
+    log::info!("Local connection mode: attaching to {}", local.base_url);
+    if !dashboard::probe_attached_dashboard(&local.base_url).await {
+        log::warn!(
+            "Local Hermes Agent CLI dashboard not reachable at {} during bootstrap; continuing — \
+             Settings → 连接 can fix the URL or switch back to managed runtime",
+            local.base_url
+        );
+    }
+    let token = dashboard::fetch_session_token(&local.base_url).await;
+    if token.is_none() {
+        log::warn!(
+            "Local Hermes Agent CLI dashboard at {} did not expose a session token",
+            local.base_url
+        );
+    }
+    DashboardHandle::local(local.base_url.clone(), token)
+}
+
 /// Finish bootstrap once a dashboard handle is available: fetch the session
 /// token, build the gateway URL, populate AppState, and emit the "ready"
 /// event the frontend waits on.
@@ -184,9 +215,8 @@ pub async fn finalize_bootstrap(
 
     let session_token = match handle.session_token.clone() {
         Some(token) => Some(token),
-        // Remote handles always carry their token, so this local-dashboard
-        // fallback chain (env override → scrape the dashboard HTML) only ever
-        // runs in local mode.
+        // Remote handles always carry their token, so this dashboard scrape
+        // fallback is only for managed or loopback-local dashboards.
         None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
             .ok()
             .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
@@ -196,21 +226,39 @@ pub async fn finalize_bootstrap(
         },
     };
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
+    let (effective_home, effective_home_base, effective_profile) = if mode == ConnectionMode::Local
+    {
+        match dashboard::fetch_attached_dashboard_hermes_home(&handle.api_base_url)
+            .await
+            .filter(|h| !h.trim().is_empty())
+        {
+            Some(home) => (home.clone(), home, "default".to_string()),
+            None => {
+                log::warn!(
+                    "Local dashboard at {} did not return hermes_home; keeping bootstrap home until Settings reconnect succeeds",
+                    handle.api_base_url
+                );
+                (hermes_home, hermes_home_base, "default".to_string())
+            }
+        }
+    } else {
+        (hermes_home, hermes_home_base, profile)
+    };
 
     {
         let state = app.state::<AppState>();
         let mut inner = state.inner.lock().unwrap();
         inner.api_base_url = handle.api_base_url.clone();
         inner.gateway_url = gateway_url;
-        inner.hermes_home = hermes_home;
-        inner.hermes_home_base = hermes_home_base;
+        inner.hermes_home = effective_home;
+        inner.hermes_home_base = effective_home_base;
         inner.session_token = session_token;
-        inner.current_profile = profile;
+        inner.current_profile = effective_profile;
         inner.yolo_mode = match mode {
-            ConnectionMode::Local => dashboard::yolo_mode_effective(&inner.hermes_home),
+            ConnectionMode::Managed => dashboard::yolo_mode_effective(&inner.hermes_home),
             // YOLO is a managed-runtime launch flag; it has no meaning for a
             // backend this desktop doesn't own.
-            ConnectionMode::Remote => false,
+            ConnectionMode::Local | ConnectionMode::Remote => false,
         };
         inner.connection_mode = mode;
         inner.dashboard_handle = Some(handle);

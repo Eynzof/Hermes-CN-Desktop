@@ -287,7 +287,7 @@ declare global {
       gatewayUrl?: string;
       sessionToken?: string;
       currentProfile?: string;
-      /** "remote" when the desktop is attached to a remote Hermes Agent as a shell. */
+      /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;
     };
     hermesDesktop?: {
@@ -390,9 +390,28 @@ export const runtime = {
     return window.__HERMES_RUNTIME__?.sessionToken ?? window.__HERMES_SESSION_TOKEN__;
   },
 
+  getConnectionMode(): ConnectionMode {
+    return window.__HERMES_RUNTIME__?.connectionMode ?? "managed";
+  },
+
+  /** True when the desktop owns and can restart the bundled Hermes runtime. */
+  isManaged(): boolean {
+    return this.getConnectionMode() === "managed";
+  },
+
+  /** True when the desktop is attached to a loopback Hermes Agent CLI dashboard. */
+  isLocalConnection(): boolean {
+    return this.getConnectionMode() === "local";
+  },
+
   /** True when the desktop is attached to a remote Hermes Agent (shell mode). */
   isRemote(): boolean {
-    return window.__HERMES_RUNTIME__?.connectionMode === "remote";
+    return this.getConnectionMode() === "remote";
+  },
+
+  /** True for either attached backend where process/profile lifecycle is external. */
+  isAttached(): boolean {
+    return this.getConnectionMode() !== "managed";
   },
 
   getApiUrl(path: string): string {

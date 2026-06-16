@@ -170,11 +170,10 @@
 
 .jobRowTop {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
-.jobTitle,
 .runTitle {
   min-width: 0;
   overflow: hidden;
@@ -184,8 +183,15 @@
 
 .jobTitle {
   flex: 1;
-  font-size: 13px;
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .jobMeta {
@@ -203,6 +209,10 @@
   border-radius: var(--h-r-pill);
   flex: 0 0 auto;
   background: var(--h-text-4);
+}
+
+.dot {
+  margin-top: 4px;
 }
 
 .dot[data-tone="ok"],
@@ -265,10 +275,17 @@
 
 .cardHeader {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.cardHeaderTop {
+  min-width: 0;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 18px;
 }
 
 .titleBlock {
@@ -276,7 +293,8 @@
 }
 
 .breadcrumb {
-  margin-bottom: 14px;
+  min-width: 0;
+  margin-bottom: 0;
   color: var(--h-text-3);
   font-size: 12px;
 }
@@ -288,6 +306,17 @@
   line-height: 1.15;
   letter-spacing: -0.04em;
   font-weight: 650;
+}
+
+.titleBlock h1 {
+  font-size: clamp(20px, 2vw, 24px);
+  line-height: 1.24;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.card .titleBlock p {
+  max-width: none;
 }
 
 .card p {
@@ -641,7 +670,12 @@
   }
 
   .cardHeader {
+    gap: 12px;
+  }
+
+  .cardHeaderTop {
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .detailActions {

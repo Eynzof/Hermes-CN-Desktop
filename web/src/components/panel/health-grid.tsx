@@ -20,12 +20,12 @@ import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useEnvVars } from "@/hooks/use-env";
 import { useSkills } from "@/hooks/use-skills";
 import { useMcpServers } from "@/hooks/use-mcp-servers";
+import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { useLastUsedModel } from "@/lib/last-used-model";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Dot } from "@/components/ui/pill";
 import s from "./health-grid.module.css";
 
-const DEFAULT_DESKTOP_DASHBOARD_ORIGIN = "127.0.0.1:9120";
 const TOKEN_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GLM_API_KEY", "DEEPSEEK_API_KEY"];
 
 type Tone = "ok" | "warn" | "err";
@@ -64,13 +64,21 @@ function formatContextLength(n: number | undefined | null): string {
   return `${n} ctx`;
 }
 
-function originFromHealthUrl(url: string | null | undefined): string {
-  if (!url) return DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+function originFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
   try {
-    return new URL(url).host || DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+    return new URL(url).host || null;
   } catch {
-    return DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+    return null;
   }
+}
+
+function currentDashboardOrigin(statusHealthUrl: string | null | undefined): string {
+  const runtimeConfig = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
+  return originFromUrl(runtimeConfig?.dashboardApiBaseUrl)
+    ?? originFromUrl(runtimeConfig?.apiBaseUrl)
+    ?? originFromUrl(statusHealthUrl)
+    ?? "Dashboard";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -97,7 +105,7 @@ function groupTitle(group: HealthGroup): string {
 
 function groupSub(group: HealthGroup): string {
   if (group === "runtime") return "Dashboard、Gateway 与本地 Hermes 数据目录。";
-  if (group === "model") return "默认模型、API Token 与 provider 字段校验。";
+  if (group === "model") return "默认模型、模型凭证与 provider 字段校验。";
   return "Skills、MCP 以及会话扩展能力。";
 }
 
@@ -259,12 +267,14 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
   const envQuery = useEnvVars();
   const skillsQuery = useSkills();
   const mcpQuery = useMcpServers();
+  const oauthQuery = useOAuthProviders();
   const status = statusQuery.data;
   const modelInfo = modelInfoQuery.data;
   const config = configQuery.data;
   const env = envQuery.data;
   const skills = skillsQuery.data;
   const mcp = mcpQuery.data;
+  const oauthProviders = oauthQuery.data;
   const lastUsedModel = useLastUsedModel();
 
   const health = useMemo(() => {
@@ -276,12 +286,16 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
     const dashboardReachable = !!status;
     const daemonRunning = status?.gateway_running === true;
     const gatewayState = status?.gateway_state || (daemonRunning ? "running" : "stopped");
-    const dashboardOrigin = originFromHealthUrl(status?.gateway_health_url);
+    const dashboardOrigin = currentDashboardOrigin(status?.gateway_health_url);
 
     const setTokens = env ? TOKEN_KEYS.filter((key) => env[key]?.is_set) : [];
     const anyTokenSet = setTokens.length > 0;
 
     const modelName = lastUsedModel?.model || modelInfo?.model || "—";
+    const currentProviderId = modelInfo?.provider || lastUsedModel?.provider || "";
+    const currentOAuthProvider = oauthProviders?.find((provider) => provider.id === currentProviderId);
+    const currentOAuthLoggedIn = currentOAuthProvider?.status.logged_in === true;
+    const anyModelCredential = anyTokenSet || currentOAuthLoggedIn;
     const ctxLabel = formatContextLength(
       lastUsedModel?.contextWindow
         ?? modelInfo?.effective_context_length
@@ -296,7 +310,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
     const providers = providerMap(config);
     const invalidProviders = findInvalidProviderApiKeys(providers);
     const providerTotal = Object.keys(providers).length;
-    const providersOk = providerTotal > 0 && invalidProviders.length === 0;
+    const providersOk = currentOAuthLoggedIn || (providerTotal > 0 && invalidProviders.length === 0);
 
     const items: HealthItem[] = [
       {
@@ -347,37 +361,49 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
       {
         id: "token",
         group: "model",
-        label: "API Token",
-        tone: envQuery.isError ? "err" : env ? (anyTokenSet ? "ok" : "warn") : "warn",
-        value: envQuery.isError ? "读取失败" : env ? (anyTokenSet ? "已配置" : "未配置") : "检测中",
-        sub: anyTokenSet ? formatTokenNames(setTokens) : "模型调用需要至少一个可用 Token",
-        detail: anyTokenSet
-          ? "仅展示已设置的变量名称，不会暴露密钥内容。"
-          : "可在模型设置里补齐 Anthropic、OpenAI、GLM 或 DeepSeek 等服务商密钥。",
-        actionTo: anyTokenSet ? undefined : "/models",
-        actionLabel: "填写 Token",
+        label: "模型凭证",
+        tone: envQuery.isError ? "err" : env ? (anyModelCredential ? "ok" : "warn") : "warn",
+        value: envQuery.isError ? "读取失败" : env ? (anyModelCredential ? "已配置" : "未配置") : "检测中",
+        sub: currentOAuthLoggedIn
+          ? `${currentOAuthProvider?.name ?? currentProviderId} OAuth 已连接`
+          : anyTokenSet
+            ? formatTokenNames(setTokens)
+            : "模型调用需要 API Key 或 OAuth 凭证",
+        detail: currentOAuthLoggedIn
+          ? "当前主模型使用 OAuth 登录凭证，无需额外 API Token。"
+          : anyTokenSet
+            ? "仅展示已设置的变量名称，不会暴露密钥内容。"
+            : "可在模型设置里补齐 API Key，或完成支持 OAuth 的模型登录。",
+        actionTo: anyModelCredential ? undefined : "/models",
+        actionLabel: "配置凭证",
       },
       {
         id: "provider",
         group: "model",
         label: "Provider 配置",
         tone: providersOk ? "ok" : "warn",
-        value: providerTotal === 0
+        value: currentOAuthLoggedIn
+          ? "OAuth 有效"
+          : providerTotal === 0
           ? "未配置"
           : invalidProviders.length > 0
             ? `${invalidProviders.length} / ${providerTotal} 异常`
             : `${providerTotal} 个有效`,
-        sub: invalidProviders.length > 0
+        sub: currentOAuthLoggedIn
+          ? `${currentProviderId} 已通过 OAuth 提供模型凭证`
+          : invalidProviders.length > 0
           ? `api_key 是 URL：${invalidProviders.join(", ")}`
           : providerTotal === 0
             ? "缺少 providers 配置"
             : "api_key 字段形态正常",
-        detail: invalidProviders.length > 0
+        detail: currentOAuthLoggedIn
+          ? "当前后端 /api/model/info 与 OAuth 状态一致，健康检查不再要求 providers.api_key。"
+          : invalidProviders.length > 0
           ? "这些 provider 会把 URL 当作 Bearer token 发送，上游通常会返回 401。"
           : providerTotal === 0
             ? "选择服务商并保存模型后会自动写入 provider 配置。"
             : "已完成基础形态检查；真实额度与连通性仍以模型页探测结果为准。",
-        actionTo: providerTotal === 0 || invalidProviders.length > 0 ? "/models" : undefined,
+        actionTo: providersOk ? undefined : "/models",
         actionLabel: "修正配置",
       },
       {
@@ -434,12 +460,13 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         { label: "活跃会话", value: String(status?.active_sessions ?? 0), sub: status ? `Dashboard v${status.version}` : "等待状态接口", tone: status ? "ok" as Tone : "warn" as Tone },
       ] satisfies HealthMetric[],
     };
-  }, [config, env, envQuery.isError, lastUsedModel, mcp, mcpQuery.isError, modelInfo, skills, skillsQuery.isError, status, statusQuery.isError]);
+  }, [config, env, envQuery.isError, lastUsedModel, mcp, mcpQuery.isError, modelInfo, oauthProviders, skills, skillsQuery.isError, status, statusQuery.isError]);
 
   const isRefreshing = statusQuery.isFetching
     || modelInfoQuery.isFetching
     || configQuery.isFetching
     || envQuery.isFetching
+    || oauthQuery.isFetching
     || skillsQuery.isFetching
     || mcpQuery.isFetching;
 
@@ -449,6 +476,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
       modelInfoQuery.refetch(),
       configQuery.refetch(),
       envQuery.refetch(),
+      oauthQuery.refetch(),
       skillsQuery.refetch(),
       mcpQuery.refetch(),
     ]);

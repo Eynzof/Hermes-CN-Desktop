@@ -10,9 +10,23 @@ interface ModelOptionsCacheEntry {
 
 const cache = new Map<string, ModelOptionsCacheEntry>();
 
+function safeScopePart(value: string | undefined | null, fallback: string): string {
+  const normalized = (value ?? "").trim();
+  return encodeURIComponent(normalized || fallback);
+}
+
+function backendScopeKey(): string {
+  const runtime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
+  const mode = runtime?.connectionMode ?? "managed";
+  const baseUrl = runtime?.apiBaseUrl || runtime?.dashboardApiBaseUrl || "relative";
+  const profile = runtime?.currentProfile || "default";
+  return [mode, baseUrl, profile].map((part) => safeScopePart(part, "default")).join(":");
+}
+
 function cacheKey(sessionId?: string): string {
   const normalized = sessionId?.trim();
-  return normalized ? `session:${normalized}` : "global";
+  const sessionScope = normalized ? `session:${normalized}` : "global";
+  return `${backendScopeKey()}:${sessionScope}`;
 }
 
 export function invalidateModelOptionsCache(sessionId?: string): void {

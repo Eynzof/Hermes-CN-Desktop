@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Brush,
   Bug,
+  Cable,
   CheckCircle2,
   Copy,
   ExternalLink as ExternalLinkIcon,
@@ -1090,6 +1091,9 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const kernelRuntimeTag = kernelRuntimeTagLabel(info?.current);
   const rendererRuntime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
   const isRemote = rendererRuntime?.connectionMode === "remote";
+  const isLocalConnection = rendererRuntime?.connectionMode === "local";
+  const isAttachedConnection = rendererRuntime?.connectionMode === "remote" || rendererRuntime?.connectionMode === "local";
+  const attachedConnectionLabel = isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI";
   const hermesHomePath = status?.hermes_home;
   const runtimeRootPath = info?.runtimeRoot;
   const runtimeVersionPath = info?.current?.path;
@@ -1142,13 +1146,13 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
     <div>
       {showHeading && <h2 className={s.heading}>内核</h2>}
       <SettingsHero
-        ok={isRemote || isolationOk}
-        icon={isRemote ? <Globe2 size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}
+        ok={isAttachedConnection || isolationOk}
+        icon={isRemote ? <Globe2 size={24} /> : isLocalConnection ? <Cable size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}
         eyebrow="Hermes Agent 中文社区桌面版内核"
-        title={isRemote ? "已连接远程 Hermes Agent" : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}
+        title={isAttachedConnection ? `已连接${attachedConnectionLabel}` : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}
         description={
-          isRemote
-              ? `桌面端当前作为界面壳运行，所有会话与配置由远程端（${rendererRuntime?.dashboardApiBaseUrl ?? "远程地址"}）提供。本机 runtime 未在使用，可在 设置 → 连接 切回本机内核。`
+          isAttachedConnection
+              ? `桌面端当前作为界面壳运行，所有会话与配置由${isRemote ? "远程端" : "本机 CLI dashboard"}（${rendererRuntime?.dashboardApiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "目标地址"}）提供。本机 managed runtime 未在使用，可在 设置 → 连接 切回本机内核。`
               : isolationOk && process?.ownsProcess
               ? "当前 Dashboard 由桌面端托管的 managed runtime 子进程提供，内核、gateway runtime 与锁文件都收束在桌面 runtime 目录下。"
               : isolationOk
@@ -1156,12 +1160,12 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
               : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"
         }
         badge={(
-          <span className={s.statusBadge} data-on={isRemote || isolationOk}>
-            {isRemote ? "远程" : info ? runtimeModeLabel(info.mode) : "读取中"}
+          <span className={s.statusBadge} data-on={isAttachedConnection || isolationOk}>
+            {isRemote ? "远程" : isLocalConnection ? "本地" : info ? runtimeModeLabel(info.mode) : "读取中"}
           </span>
         )}
       >
-        {!isRemote && kernelRuntimeTag && (
+        {!isAttachedConnection && kernelRuntimeTag && (
           <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
             {kernelRuntimeTag}
           </code>
@@ -1199,8 +1203,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           variant="solid"
           tone="accent"
           onClick={() => void gatewayRestart.restart()}
-          disabled={gatewayRestart.locked || isRemote}
-          title={isRemote ? "远程模式下由远程端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
+          disabled={gatewayRestart.locked || isAttachedConnection}
+          title={isAttachedConnection ? "当前连接模式下由目标后端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
           aria-busy={gatewayRestart.busy}
         >
           <RotateCcw size={13} />
@@ -1293,8 +1297,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   variant="outline"
                   type="button"
                   onClick={handleCheckRuntime}
-                  disabled={!info?.updatesConfigured || checking || isRemote}
-                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
+                  disabled={!info?.updatesConfigured || checking || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   <RefreshCw size={13} />
                   {checking ? "检查中" : "检查更新"}
@@ -1304,8 +1308,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   tone="accent"
                   type="button"
                   onClick={handleInstallRuntime}
-                  disabled={!canInstall || installing || isRemote}
-                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
+                  disabled={!canInstall || installing || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   {installing ? "安装中…" : "安装更新"}
                 </Button>
@@ -1313,8 +1317,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   variant="outline"
                   type="button"
                   onClick={handleRollbackRuntime}
-                  disabled={!info?.current?.previousRuntimeVersion || rollingBack || isRemote}
-                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
+                  disabled={!info?.current?.previousRuntimeVersion || rollingBack || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   {rollingBack ? "回滚中…" : "回滚 Runtime"}
                 </Button>

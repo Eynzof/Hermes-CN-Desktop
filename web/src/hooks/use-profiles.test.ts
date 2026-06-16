@@ -59,6 +59,18 @@ describe("resolveBootstrapProfile", () => {
         }),
       ).toEqual({ next: null, hydrated: true });
     });
+
+    it("can force attached backends to the runtime profile", () => {
+      expect(
+        resolveBootstrapProfile({
+          alreadyHydrated: false,
+          current: "other",
+          electronProfile: "default",
+          queryData: undefined,
+          forceElectronProfile: true,
+        }),
+      ).toEqual({ next: "default", hydrated: true });
+    });
   });
 
   describe("web mode (first run)", () => {

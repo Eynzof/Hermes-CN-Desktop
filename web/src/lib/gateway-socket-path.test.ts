@@ -68,7 +68,7 @@ class MockNativeSocket {
 interface FakeWindow {
   location: { search: string; href: string };
   __TAURI_INTERNALS__?: unknown;
-  __HERMES_RUNTIME__?: { connectionMode?: "local" | "remote" };
+  __HERMES_RUNTIME__?: { connectionMode?: "managed" | "local" | "remote" };
 }
 
 let fakeWindow: FakeWindow;

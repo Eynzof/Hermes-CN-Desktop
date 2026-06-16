@@ -147,6 +147,11 @@ fn write_file_safe(path: &Path, content: &str) -> AppResult<()> {
 
 fn active_hermes_home(state: &State<'_, AppState>) -> AppResult<PathBuf> {
     let inner = state.inner.lock()?;
+    if inner.connection_mode == crate::connection::ConnectionMode::Remote {
+        return Err(AppError::InvalidRequest(
+            "远程记忆编辑需要远端 Hermes Agent 提供记忆读写 API；当前桌面端不会读取内置内核的 Memory。".to_string(),
+        ));
+    }
     if inner.hermes_home.trim().is_empty() {
         return Err(AppError::NotReady);
     }

@@ -40,6 +40,7 @@ import {
   type ProviderPreset,
 } from "@/lib/provider-catalog";
 import { useProviderCatalog } from "@/hooks/use-provider-catalog";
+import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
@@ -667,6 +668,7 @@ export function ModelsSection() {
     refetch: refetchConfig,
   } = useConfig();
   const { data: modelInfo } = useModelInfo();
+  const { data: oauthProviders, isLoading: oauthProvidersLoading } = useOAuthProviders();
   const saveConfig = useSaveConfig();
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
@@ -898,6 +900,11 @@ export function ModelsSection() {
     () => allProviders.filter((provider) =>
       providerHasSavedCredentials(config, provider.id, resolvedEnvVars, provider)).length,
     [allProviders, config, resolvedEnvVars],
+  );
+  const currentProviderOAuthLoggedIn = useMemo(
+    () => oauthProviders?.some((provider) =>
+      provider.id === currentProviderId && provider.status.logged_in) ?? false,
+    [currentProviderId, oauthProviders],
   );
   const providerEnvEntries = useMemo(
     () => Object.entries(resolvedEnvVars)
@@ -1487,7 +1494,10 @@ export function ModelsSection() {
   }
 
   const envLoadWarning = envIsError ? (envError instanceof Error ? envError.message : "环境变量加载失败") : "";
-  const needsInitialModelSetup = !modelInfo?.model?.trim() || !modelInfo?.provider?.trim() || configuredCount === 0;
+  const needsInitialModelSetup =
+    !modelInfo?.model?.trim() ||
+    !modelInfo?.provider?.trim() ||
+    (!currentProviderOAuthLoggedIn && configuredCount === 0 && !oauthProvidersLoading);
   const customProviderIsLocal = customProviderMode === "local";
   const customProviderTitle = customProviderIsLocal ? "添加本地部署服务商" : "添加自定义服务商";
   const customProviderHint = customProviderIsLocal
