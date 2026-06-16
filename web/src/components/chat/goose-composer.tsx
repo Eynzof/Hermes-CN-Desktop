@@ -718,6 +718,14 @@ export function GooseComposer({
     rememberWorkspaceProject(nextPath);
   };
 
+  const clearWorkspacePath = () => {
+    if (controlsDisabled) return;
+    setSubmitError("");
+    setWorkspacePath("");
+    writeWorkspacePath("");
+    setWorkspacePickerOpen(false);
+  };
+
   const pickWorkspace = async () => {
     if (controlsDisabled) return;
     setSubmitError("");
@@ -1473,6 +1481,18 @@ export function GooseComposer({
               <span>工作区</span>
               {workspacePath ? <small>{fileNameFromPath(workspacePath)}</small> : null}
             </button>
+            {workspacePath ? (
+              <button
+                className={s.workspaceClearButton}
+                type="button"
+                onClick={clearWorkspacePath}
+                disabled={controlsDisabled}
+                title="不指定默认工作区"
+                aria-label={`不指定默认工作区：${workspacePath}`}
+              >
+                <X aria-hidden="true" />
+              </button>
+            ) : null}
             {modelPicker ? (
               <button
                 className={s.toolButton}
