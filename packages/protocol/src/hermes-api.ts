@@ -665,7 +665,7 @@ export type LogsResponse = z.infer<typeof LogsResponse>;
 
 export const OAuthProviderStatus = z.object({
   logged_in: z.boolean(),
-  source: z.string().optional(),
+  source: z.string().nullable().optional(),
   source_label: z.string().nullable().optional(),
   token_preview: z.string().nullable().optional(),
   expires_at: z.union([z.string(), z.number()]).nullable().optional(),

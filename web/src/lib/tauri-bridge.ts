@@ -487,10 +487,10 @@ const tauriBridge = {
   },
 };
 
-// Overlay shown while the Rust side downloads the managed runtime on
-// first launch. Pre-React, plain DOM — we can't mount React yet
-// because the bridge isn't ready (no apiBaseUrl => API calls would
-// throw). Phase strings match the `runtime-status` event emitted by
+// Overlay shown while the Rust side prepares the managed runtime and
+// dashboard before React can mount. Pre-React, plain DOM — we can't mount
+// React yet because the bridge isn't ready (no apiBaseUrl => API calls
+// would throw). Phase strings match the `runtime-status` event emitted by
 // src/main.rs::emit_runtime_status.
 function showBootstrapOverlay(initialMessage: string): {
   update(phase: string, message: string): void;
@@ -631,7 +631,7 @@ function showBootstrapOverlay(initialMessage: string): {
     "font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;" +
       "color:rgba(255,255,255,0.45);letter-spacing:0.06em;text-transform:uppercase;",
   );
-  sub.textContent = "Hermes Agent 中文社区桌面版 · 首次启动";
+  sub.textContent = "Hermes Agent 中文社区桌面版 · 启动中";
   panel.appendChild(sub);
 
   root.appendChild(panel);
@@ -673,7 +673,7 @@ function showBootstrapOverlay(initialMessage: string): {
         errorText.textContent = lastErrorMessage;
         detail.style.display = "block";
         copyButton.disabled = false;
-        sub.textContent = "首次启动失败";
+        sub.textContent = "启动失败";
       } else if (msg) {
         message.textContent = msg;
       }

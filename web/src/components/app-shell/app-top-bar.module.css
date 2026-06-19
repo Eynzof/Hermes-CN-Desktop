@@ -134,7 +134,7 @@
   color: var(--h-text-2);
   border-radius: 3px;
   letter-spacing: 0.01em;
-  font-family: var(--h-font-mono);
+  font-family: var(--h-font-cn);
   text-transform: lowercase;
   cursor: pointer;
   display: inline-flex;
@@ -170,6 +170,7 @@
 }
 
 .navNum {
+  font-family: var(--h-font-mono);
   font-size: 9px;
   color: var(--h-text-3);
   margin-right: 6px;

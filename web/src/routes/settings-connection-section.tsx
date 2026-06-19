@@ -25,9 +25,12 @@ interface SettingsSectionProps {
 }
 
 type ProbeStatus = "idle" | "probing" | "reachable" | "unreachable" | "authRequired";
+type ConnectionMessage = { tone: "ok" | "error"; text: string; hint?: string };
 
 const PROBE_DEBOUNCE_MS = 500;
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:9119";
+const LOCAL_DASHBOARD_RECOVERY_HINT =
+  "如果您确定本机已经安装了 Hermes，请尝试使用 hermes dashboard 启动网关后，确认 http://127.0.0.1:9119/ 可以在浏览器中访问，再试一次。";
 
 function modeLabel(mode: ConnectionMode | undefined): string {
   if (mode === "remote") return "远程连接";
@@ -73,7 +76,7 @@ function ModeCard({
   );
 }
 
-function testResultSummary(result: TestConnectionResult): { tone: "ok" | "error"; text: string } {
+function testResultSummary(result: TestConnectionResult): ConnectionMessage {
   if (result.ok) {
     const version = result.version ? ` · Hermes ${result.version}` : "";
     return { tone: "ok", text: `连接正常：HTTP 与 WebSocket 均可用（${result.baseUrl}${version}）` };
@@ -84,6 +87,11 @@ function testResultSummary(result: TestConnectionResult): { tone: "ok" | "error"
     `WebSocket ${result.wsOk ? "✓" : "✗"}`,
   ];
   return { tone: "error", text: `${detail}　[${parts.join("，")}]` };
+}
+
+function withLocalDashboardHint(message: ConnectionMessage, mode: ConnectionMode): ConnectionMessage {
+  if (mode !== "local" || message.tone !== "error") return message;
+  return { ...message, hint: LOCAL_DASHBOARD_RECOVERY_HINT };
 }
 
 export function ConnectionSection({ showHeading = true }: SettingsSectionProps) {
@@ -102,7 +110,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<ConnectionMessage | null>(null);
 
   useEffect(() => {
     if (!desktop?.getConnectionConfig) return;
@@ -168,9 +176,9 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         remoteUrl: mode === "remote" ? trimmedRemoteUrl : undefined,
         remoteToken: mode === "remote" ? tokenInput || undefined : undefined,
       });
-      setMessage(testResultSummary(result));
+      setMessage(withLocalDashboardHint(testResultSummary(result), mode));
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+      setMessage(withLocalDashboardHint({ tone: "error", text: error instanceof Error ? error.message : String(error) }, mode));
     } finally {
       setTesting(false);
     }
@@ -201,7 +209,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           window.setTimeout(() => window.location.reload(), 600);
           return;
         }
-        setMessage({ tone: "error", text: result.error ?? "切换失败" });
+        setMessage(withLocalDashboardHint({ tone: "error", text: result.error ?? "切换失败" }, mode));
       } else {
         const view = await desktop!.saveConnectionConfig!(payload);
         setConfig(view);
@@ -209,7 +217,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         setMessage({ tone: "ok", text: "已保存，下次启动桌面端时生效" });
       }
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+      setMessage(withLocalDashboardHint({ tone: "error", text: error instanceof Error ? error.message : String(error) }, mode));
     } finally {
       setBusy(false);
     }
@@ -302,7 +310,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
             <div className={s.rowLabel}>本地 Dashboard 地址</div>
             <div className={s.rowSub}>
               仅允许 localhost / 127.0.0.1 / ::1。连接时会自动从本机 dashboard 页面读取 session token，不需要手动粘贴。
-              若 9119 端口提示未连接，请先在命令行中输入 <code>hermes dashboard</code> 启动 dashboard。
+              如果您确定本机已经安装了 Hermes，请尝试使用 <code>hermes dashboard</code> 启动网关后，确认 <code>http://127.0.0.1:9119/</code> 可以在浏览器中访问，再试一次。
             </div>
           </div>
           <div className={s.rowRight}>
@@ -417,7 +425,8 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
 
       {message && (
         <Alert className={s.connResult} tone={message.tone} size="sm">
-          {message.text}
+          <div>{message.text}</div>
+          {message.hint && <div className={s.connResultHint}>{message.hint}</div>}
         </Alert>
       )}
     </div>

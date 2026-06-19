@@ -259,6 +259,30 @@ describe("MessageTimeline", () => {
 
     expect(html).not.toContain("对话轮次定位");
   });
+  it("falls back to session usage stats for the latest completed assistant message", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "问题" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, status: "complete", text: "回答" },
+    ];
+
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MessageTimeline
+        messages={messages}
+        sessionUsage={{
+          model: "deepseek-v4-flash",
+          input: 900,
+          output: 300,
+          total: 1200,
+          cache_read: 100,
+          calls: 1,
+        } as any}
+      />,
+    );
+
+    expect(html).toContain("1.2k");
+    expect(html).toContain('title="详细统计"');
+  });
+
   it("renders read-aloud controls only for completed assistant messages", () => {
     const messages: ChatMessage[] = [
       { id: "user-1", role: "user", createdAt: 1, text: "问题" },

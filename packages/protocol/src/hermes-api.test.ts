@@ -341,9 +341,10 @@ describe("OAuth schemas", () => {
       id: "xai-oauth",
       name: "xAI Grok OAuth",
       flow: "loopback",
-      status: { logged_in: false },
+      status: { logged_in: false, source: null },
     });
     expect(provider.flow).toBe("loopback");
+    expect(provider.status.source).toBeNull();
 
     const start = OAuthStartResponse.parse({
       session_id: "sid",
