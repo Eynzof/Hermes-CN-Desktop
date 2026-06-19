@@ -3033,6 +3033,11 @@
   color: var(--h-err);
 }
 
+.connResultHint {
+  margin-top: 4px;
+  color: var(--h-text-2);
+}
+
 /* ── Danger zone (high-risk operations, e.g. YOLO mode) ──────────────── */
 .dangerZone {
   margin-top: 28px;
