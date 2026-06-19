@@ -534,6 +534,45 @@ function finishReasonRisk(reason: string | undefined): "warn" | "err" | undefine
   return undefined;
 }
 
+function sessionUsageFallbackStats(
+  message: ChatMessage,
+  sessionUsage: SessionUsageResult | null | undefined,
+): AssistantMessageStats | undefined {
+  if (message.role !== "assistant" || message.status === "streaming" || message.status === "error") return undefined;
+  if (!sessionUsage) return undefined;
+
+  const stats: AssistantMessageStats = {};
+  const tokensInput = sessionUsage.input ?? sessionUsage.prompt;
+  const tokensOutput = sessionUsage.output ?? sessionUsage.completion;
+  const tokensTotal = sessionUsage.total ?? (
+    typeof tokensInput === "number" || typeof tokensOutput === "number"
+      ? (tokensInput ?? 0) + (tokensOutput ?? 0)
+      : undefined
+  );
+
+  if (typeof tokensInput === "number") stats.tokensInput = tokensInput;
+  if (typeof tokensOutput === "number") stats.tokensOutput = tokensOutput;
+  if (typeof tokensTotal === "number") stats.tokensTotal = tokensTotal;
+  if (typeof sessionUsage.cache_read === "number") stats.cacheRead = sessionUsage.cache_read;
+  if (typeof sessionUsage.cache_write === "number") stats.cacheWrite = sessionUsage.cache_write;
+  if (typeof sessionUsage.calls === "number") stats.apiCalls = sessionUsage.calls;
+  if (typeof sessionUsage.model === "string" && sessionUsage.model) stats.model = sessionUsage.model;
+
+  const costStatus = typeof sessionUsage.cost_status === "string"
+    ? sessionUsage.cost_status.toLowerCase()
+    : undefined;
+  if (
+    typeof sessionUsage.cost_usd === "number" &&
+    Number.isFinite(sessionUsage.cost_usd) &&
+    costStatus !== "stale_pricing" &&
+    costStatus !== "unknown"
+  ) {
+    stats.costUsd = sessionUsage.cost_usd;
+  }
+
+  return Object.keys(stats).length > 0 ? stats : undefined;
+}
+
 function MessageStatsFooter({ stats }: { stats: AssistantMessageStats }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
@@ -649,6 +688,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   const speechStatus = speech?.state.messageId === message.id ? speech.state.status : "idle";
   const speechBusy = speechStatus === "preparing" || speechStatus === "speaking";
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
+  const messageStats = message.stats ?? sessionUsageFallbackStats(message, sessionUsage);
 
   if (isToolOnly) {
     return (
@@ -761,7 +801,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
               <span className={s.messageSpeechError}>{speech.error.message}</span>
             ) : null}
           </span>
-          {message.stats ? <MessageStatsFooter stats={message.stats} /> : null}
+          {messageStats ? <MessageStatsFooter stats={messageStats} /> : null}
         </div>
       </div>
     </div>
