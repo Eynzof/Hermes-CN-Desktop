@@ -276,7 +276,7 @@ fork CI release-runtime.yml 触发：
 ## 六、桌面端升级
 
 ```
-你 git tag v0.5.1; git push origin v0.5.1
+你 git tag v0.5.2; git push origin v0.5.2
   ↓
 desktop CI release-desktop.yml 触发：
   matrix: windows-latest / macos-14 (arm64)
@@ -289,7 +289,7 @@ desktop CI release-desktop.yml 触发：
     5. tauri-apps/tauri-action@v0 → 打 .exe / .dmg
        runtime URL + 公钥仍是 baked-in 兜底，不需要 env wire 进 CI
   ↓
-新装包发到 releases/v0.5.1 → 用户下载装新版
+新装包发到 releases/v0.5.2 → 用户下载装新版
   ↓
 新版起来后，看到 current.json 已经有 runtime → 不下载 → 直接用。
 全新安装则先使用安装包内置 runtime；除非内置资源缺失或用户主动升级，
