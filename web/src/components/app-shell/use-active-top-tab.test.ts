@@ -17,6 +17,10 @@ describe("TOP_TABS", () => {
     expect(tabFor("/im/weixin")).toBe("gateway");
   });
 
+  it("keeps kanban under the 01 workbench tab", () => {
+    expect(tabFor("/kanban")).toBe("workbench");
+  });
+
   it("keeps canonical advanced pages under the 04 advanced tab", () => {
     expect(tabFor("/common")).toBe("advanced");
     expect(tabFor("/notifications")).toBe("advanced");
