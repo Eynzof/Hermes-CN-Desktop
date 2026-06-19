@@ -112,6 +112,17 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     priority: 2,
   },
   {
+    id: "command-kanban",
+    group: "commands",
+    label: "看板 Kanban",
+    subtitle: "/kanban · 打开官方 Dashboard 看板",
+    keywords: ["kanban", "board", "dashboard", "official", "看板", "任务板"],
+    icon: "project",
+    action: { type: "navigate", to: "/kanban" },
+    defaultVisible: true,
+    priority: 3,
+  },
+  {
     id: "command-skills",
     group: "commands",
     label: "Skills 管理",
@@ -120,7 +131,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     icon: "skill",
     action: { type: "navigate", to: "/skills" },
     defaultVisible: true,
-    priority: 3,
+    priority: 4,
   },
   {
     id: "command-models",
@@ -131,7 +142,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     icon: "models",
     action: { type: "navigate", to: "/models" },
     defaultVisible: true,
-    priority: 4,
+    priority: 5,
   },
   {
     id: "command-mcp",
@@ -142,7 +153,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     icon: "mcp",
     action: { type: "navigate", to: "/mcp" },
     defaultVisible: true,
-    priority: 5,
+    priority: 6,
   },
   {
     id: "command-profiles",
@@ -153,7 +164,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     icon: "profiles",
     action: { type: "navigate", to: "/profiles" },
     defaultVisible: true,
-    priority: 6,
+    priority: 7,
   },
   {
     id: "command-cron",
@@ -164,7 +175,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     icon: "cron",
     action: { type: "navigate", to: "/cron" },
     defaultVisible: true,
-    priority: 7,
+    priority: 8,
   },
   {
     id: "command-health",
@@ -175,7 +186,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     icon: "health",
     action: { type: "navigate", to: "/health" },
     defaultVisible: true,
-    priority: 8,
+    priority: 9,
   },
   {
     id: "command-analytics",
@@ -185,7 +196,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["analytics", "usage", "tokens", "cost", "statistics", "统计", "用量"],
     icon: "analytics",
     action: { type: "navigate", to: "/analytics" },
-    priority: 9,
+    priority: 10,
   },
   {
     id: "command-logs",
@@ -195,7 +206,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["logs", "log", "debug", "journal", "日志"],
     icon: "file",
     action: { type: "navigate", to: "/logs" },
-    priority: 10,
+    priority: 11,
   },
   {
     id: "command-debug",
@@ -205,7 +216,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["debug", "diagnostics", "bundle", "troubleshoot", "调试", "排障"],
     icon: "debug",
     action: { type: "navigate", to: "/debug" },
-    priority: 11,
+    priority: 12,
   },
   {
     id: "command-settings",
@@ -215,7 +226,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["settings", "config", "preferences", "common", "设置", "配置"],
     icon: "settings",
     action: { type: "navigate", to: "/common" },
-    priority: 12,
+    priority: 13,
   },
   {
     id: "command-backup",
@@ -225,7 +236,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["backup", "restore", "export", "import", "备份", "恢复"],
     icon: "backup",
     action: { type: "navigate", to: "/backup" },
-    priority: 13,
+    priority: 14,
   },
   {
     id: "command-memory",
@@ -235,7 +246,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["memory", "profile", "remember", "记忆", "用户画像"],
     icon: "memory",
     action: { type: "navigate", to: "/memory" },
-    priority: 14,
+    priority: 15,
   },
   {
     id: "command-soul",
@@ -245,7 +256,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["soul", "prompt", "persona", "system prompt", "灵魂", "人格"],
     icon: "soul",
     action: { type: "navigate", to: "/soul" },
-    priority: 15,
+    priority: 16,
   },
   {
     id: "command-console",
@@ -255,7 +266,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["console", "terminal", "command", "shell", "终端", "命令行"],
     icon: "console",
     action: { type: "navigate", to: "/console" },
-    priority: 16,
+    priority: 17,
   },
 ];
 

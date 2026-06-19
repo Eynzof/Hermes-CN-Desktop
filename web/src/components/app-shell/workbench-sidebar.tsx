@@ -74,6 +74,18 @@ function sectionLabel(index: number, label: string): string {
   return `§${index.toString().padStart(2, "0")} · ${label}`;
 }
 
+function KanbanQuickIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="2.2" y="2.4" width="11.6" height="11.2" rx="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6 4.8v6.4M10 4.8v6.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+      <rect x="3.8" y="4.5" width="2.2" height="3" rx="0.6" fill="currentColor" opacity="0.8" />
+      <rect x="6.9" y="4.5" width="2.2" height="4.8" rx="0.6" fill="currentColor" opacity="0.58" />
+      <rect x="10" y="4.5" width="2.2" height="2.6" rx="0.6" fill="currentColor" opacity="0.72" />
+    </svg>
+  );
+}
+
 interface SessionRowProps {
   session: SessionSummary;
   state: "live" | "ok" | "err" | "idle";
@@ -337,6 +349,18 @@ export function WorkbenchSidebar() {
           </span>
           <span className={s.entryLabel}>工作空间</span>
           <span className={s.entryCommand}>/workspace</span>
+        </button>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/kanban") ? "true" : undefined}
+          onClick={() => navigate("/kanban")}
+        >
+          <span className={s.entryIcon}>
+            <KanbanQuickIcon />
+          </span>
+          <span className={s.entryLabel}>看板</span>
+          <span className={s.entryCommand}>/kanban</span>
         </button>
       </div>
 

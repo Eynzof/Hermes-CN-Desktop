@@ -15,6 +15,7 @@ import { DetailRoute } from "@/routes/detail";
 import { HistoryRoute } from "@/routes/history";
 import { ProjectsRoute } from "@/routes/projects";
 import { ProjectDetailRoute } from "@/routes/project-detail";
+import { KanbanRoute } from "@/routes/kanban";
 import { SkillsRoute } from "@/routes/skills";
 import { ModelsRoute } from "@/routes/models";
 import { VoiceRoute } from "@/routes/voice";
@@ -66,6 +67,7 @@ export function App() {
           <Route path="/history" element={withBoundary(<HistoryRoute />)} />
           <Route path="/projects" element={withBoundary(<ProjectsRoute />)} />
           <Route path="/projects/:workspacePath" element={withBoundary(<ProjectDetailRoute />)} />
+          <Route path="/kanban" element={withBoundary(<KanbanRoute />)} />
           <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
           <Route path="/models" element={withBoundary(<ModelsRoute />)} />
           <Route path="/voice" element={withBoundary(<VoiceRoute />)} />

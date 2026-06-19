@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dashboardPortFromUrl, dashboardUrlFromInputs } from "./dashboard-url";
+import { dashboardPageUrlFromInputs, dashboardPortFromUrl, dashboardUrlFromInputs } from "./dashboard-url";
 
 describe("dashboardUrlFromInputs", () => {
   it("opens the dashboard origin from gateway health URLs", () => {
@@ -27,5 +27,25 @@ describe("dashboardPortFromUrl", () => {
     expect(dashboardPortFromUrl("http://localhost:9120/")).toBe("9120");
     expect(dashboardPortFromUrl("http://localhost/")).toBe("80");
     expect(dashboardPortFromUrl("bad")).toBe("9120");
+  });
+});
+
+describe("dashboardPageUrlFromInputs", () => {
+  it("builds official dashboard page URLs from the normalized dashboard origin", () => {
+    expect(
+      dashboardPageUrlFromInputs(
+        { healthUrl: "http://127.0.0.1:9120/api/gateway/health" },
+        "/kanban",
+      ),
+    ).toBe("http://localhost:9120/kanban");
+  });
+
+  it("accepts page paths without a leading slash", () => {
+    expect(
+      dashboardPageUrlFromInputs(
+        { runtimeConfig: { dashboardApiBaseUrl: "http://127.0.0.1:9567" } },
+        "kanban",
+      ),
+    ).toBe("http://localhost:9567/kanban");
   });
 });
