@@ -3,6 +3,7 @@ import type { FsEntry, SessionSummary, SkillInfo } from "@hermes/protocol";
 import {
   buildCommandPaletteItems,
   buildFileItems,
+  COMMAND_PALETTE_COMMANDS,
   filterCommandPaletteGroups,
   shouldLoadCommandPaletteFiles,
 } from "./command-palette";
@@ -40,6 +41,14 @@ describe("command palette item building and filtering", () => {
   it("matches fixed commands by Chinese and English keywords", () => {
     expect(groupLabels("健康")).toContain("健康检查");
     expect(groupLabels("provider")).toContain("模型配置");
+  });
+
+  it("includes a Kanban command that navigates to the desktop guide route", () => {
+    const command = COMMAND_PALETTE_COMMANDS.find((item) => item.id === "command-kanban");
+    expect(command?.label).toBe("看板 Kanban");
+    expect(command?.action).toEqual({ type: "navigate", to: "/kanban" });
+    expect(groupLabels("kanban")).toContain("看板 Kanban");
+    expect(groupLabels("看板")).toContain("看板 Kanban");
   });
 
   it("matches sessions by title, preview and id", () => {

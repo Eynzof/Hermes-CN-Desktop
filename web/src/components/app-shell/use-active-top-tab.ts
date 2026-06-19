@@ -39,7 +39,8 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/new") ||
       path.startsWith("/tasks/") ||
       path.startsWith("/history") ||
-      path.startsWith("/projects"),
+      path.startsWith("/projects") ||
+      path.startsWith("/kanban"),
   },
   {
     id: "skills",
