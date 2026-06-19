@@ -16,6 +16,8 @@ export function useOAuthProviders() {
       const res = await fetchJSON("/api/providers/oauth", { signal }, OAuthProvidersResponse);
       return res.providers;
     },
+    retry: 1,
+    staleTime: 30_000,
   });
 }
 

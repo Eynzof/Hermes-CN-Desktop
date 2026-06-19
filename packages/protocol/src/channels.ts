@@ -501,14 +501,16 @@ export interface SetYoloModeResult {
   error?: string;
 }
 
-// --- Connection config: local managed runtime vs remote Hermes Agent -------
+// --- Connection config: managed runtime vs local/remote Hermes Agent -------
 // Mirrors the official desktop's connection IPC (token auth only). The token
 // value never crosses to the renderer — only presence/preview signals.
 
-export type ConnectionMode = "local" | "remote";
+export type ConnectionMode = "managed" | "local" | "remote";
 
 export interface ConnectionConfigInput {
   mode?: ConnectionMode;
+  /** Loopback CLI dashboard URL for local connection mode. Defaults to 127.0.0.1:9119. */
+  localUrl?: string;
   remoteUrl?: string;
   /** Empty/absent keeps the previously saved token. */
   remoteToken?: string;
@@ -517,6 +519,7 @@ export interface ConnectionConfigInput {
 export interface ConnectionConfigView {
   /** The saved (target) mode — may differ from effectiveMode until applied. */
   mode: ConnectionMode;
+  localUrl: string;
   remoteUrl: string;
   remoteTokenSet: boolean;
   /** "set" or "...XXXXXX" (last 6 chars); absent when no token is saved. */

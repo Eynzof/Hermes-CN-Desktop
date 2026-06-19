@@ -678,7 +678,7 @@ export type OAuthProviderStatus = z.infer<typeof OAuthProviderStatus>;
 export const OAuthProvider = z.object({
   id: z.string(),
   name: z.string(),
-  flow: z.enum(["pkce", "device_code", "external"]).optional(),
+  flow: z.enum(["pkce", "device_code", "external", "loopback"]).optional(),
   cli_command: z.string().optional(),
   docs_url: z.string().optional(),
   status: OAuthProviderStatus,
@@ -706,9 +706,17 @@ const OAuthStartResponseDeviceCode = z.object({
   poll_interval: z.number(),
 });
 
+const OAuthStartResponseLoopback = z.object({
+  session_id: z.string(),
+  flow: z.literal("loopback"),
+  auth_url: z.string(),
+  expires_in: z.number(),
+});
+
 export const OAuthStartResponse = z.discriminatedUnion("flow", [
   OAuthStartResponsePkce,
   OAuthStartResponseDeviceCode,
+  OAuthStartResponseLoopback,
 ]);
 export type OAuthStartResponse = z.infer<typeof OAuthStartResponse>;
 

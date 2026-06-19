@@ -60,9 +60,9 @@ pub struct SetYoloModeResult {
 #[tauri::command]
 pub fn get_yolo_mode(state: State<'_, AppState>) -> Result<YoloModeStatus, AppError> {
     let inner = state.inner.lock()?;
-    // YOLO is a launch flag of the desktop-owned managed runtime; a remote
-    // Hermes Agent decides its own approval policy.
-    if inner.connection_mode == crate::connection::ConnectionMode::Remote {
+    // YOLO is a launch flag of the desktop-owned managed runtime; attached
+    // local/remote agents decide their own approval policy.
+    if inner.connection_mode != crate::connection::ConnectionMode::Managed {
         return Ok(YoloModeStatus {
             enabled: false,
             effective: false,
@@ -85,15 +85,15 @@ pub async fn set_yolo_mode(
     // a restart regardless of what happens to the live process.
     let (hermes_home, owns_process) = {
         let inner = state.inner.lock()?;
-        // Don't persist a preference into the local HERMES_HOME while a remote
-        // agent is connected — it wouldn't affect the remote, and would
-        // surprise the user on the next local boot.
-        if inner.connection_mode == crate::connection::ConnectionMode::Remote {
+        // Don't persist a preference while attached to another agent — it
+        // wouldn't affect that process, and would surprise the user on the
+        // next managed-runtime boot.
+        if inner.connection_mode != crate::connection::ConnectionMode::Managed {
             return Ok(SetYoloModeResult {
                 ok: false,
                 enabled: false,
                 effective: false,
-                error: Some("当前连接的是远程 Hermes Agent，YOLO 模式由远程端自行配置".to_string()),
+                error: Some("当前连接的不是本机内核，YOLO 模式由当前后端自行配置".to_string()),
                 ..Default::default()
             });
         }

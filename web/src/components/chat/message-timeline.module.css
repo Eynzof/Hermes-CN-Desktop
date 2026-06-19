@@ -128,7 +128,8 @@
 
 .systemNoticeIcon {
   flex-shrink: 0;
-  margin-top: 2px;
+  display: block;
+  margin-top: 5px;
   color: var(--h-text-3);
 }
 
@@ -170,6 +171,26 @@
   margin: 0 0 4px 2px;
   color: var(--h-text-2);
   font-size: 12px;
+}
+
+.assistantIdentity {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px 0;
+  color: var(--h-text-2);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.assistantAvatar {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-chip);
+  object-fit: cover;
 }
 
 .bubble {

@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Brush,
   Bug,
+  Cable,
   CheckCircle2,
   Copy,
   ExternalLink as ExternalLinkIcon,
@@ -14,6 +15,7 @@ import {
   GitFork,
   Globe2,
   Heart,
+  Image as ImageIcon,
   Info,
   MessageCircle,
   RefreshCw,
@@ -22,6 +24,8 @@ import {
   Server,
   ShieldCheck,
   Terminal,
+  Upload,
+  X,
 } from "lucide-react";
 import { Alert, Button, Dialog, Field, Input, Select, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
@@ -40,6 +44,9 @@ import {
 } from "@/hooks/use-runtime-update";
 import {
   CONVERSATION_FONT_SIZE_OPTIONS,
+  DEFAULT_ASSISTANT_DISPLAY_NAME,
+  assistantAvatarDataUrlAtom,
+  assistantDisplayNameAtom,
   composerSubmitShortcutAtom,
   conversationFontSizeAtom,
   notifyOnApprovalAtom,
@@ -49,6 +56,7 @@ import {
   notifySystemAtom,
   profileSwitchingAtom,
   showReasoningAtom,
+  normalizeAssistantDisplayName,
   type ConversationFontSizeMode,
 } from "@/stores/ui";
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
@@ -81,6 +89,45 @@ interface SettingsSectionProps {
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
   const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
+  const [assistantDisplayName, setAssistantDisplayName] = useAtom(assistantDisplayNameAtom);
+  const [assistantAvatarDataUrl, setAssistantAvatarDataUrl] = useAtom(assistantAvatarDataUrlAtom);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [assistantProfileError, setAssistantProfileError] = useState("");
+
+  const handleAssistantNameChange = (value: string) => {
+    setAssistantProfileError("");
+    setAssistantDisplayName(value);
+  };
+
+  const handleAvatarFile = async (file: File | undefined) => {
+    if (!file) return;
+    setAssistantProfileError("");
+    if (!file.type.startsWith("image/")) {
+      setAssistantProfileError("请选择 PNG、JPG、WebP、GIF 或 SVG 图片。");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAssistantProfileError("头像图片不能超过 2 MB。");
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error ?? new Error("读取头像失败"));
+        reader.readAsDataURL(file);
+      });
+      if (!dataUrl.startsWith("data:image/")) {
+        setAssistantProfileError("头像文件格式不受支持。");
+        return;
+      }
+      setAssistantAvatarDataUrl(dataUrl);
+    } catch (error) {
+      setAssistantProfileError(error instanceof Error ? error.message : "读取头像失败");
+    } finally {
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
 
   return (
     <div>
@@ -91,6 +138,54 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
+      <Row label="Hermes 名称" sub="修改后会影响对话中助手消息上方显示的名称；留空会恢复 Hermes。" right={
+        <div className={s.assistantProfileControl}>
+          <input
+            className={s.assistantNameInput}
+            value={assistantDisplayName === DEFAULT_ASSISTANT_DISPLAY_NAME ? "" : assistantDisplayName}
+            placeholder={DEFAULT_ASSISTANT_DISPLAY_NAME}
+            maxLength={40}
+            onChange={(event) => handleAssistantNameChange(event.target.value)}
+            onBlur={(event) => setAssistantDisplayName(normalizeAssistantDisplayName(event.target.value))}
+          />
+          {assistantDisplayName !== DEFAULT_ASSISTANT_DISPLAY_NAME ? (
+            <button
+              type="button"
+              className={s.iconPlainButton}
+              onClick={() => handleAssistantNameChange("")}
+              title="恢复默认名称"
+            >
+              <X size={13} />
+            </button>
+          ) : null}
+        </div>
+      } />
+      <Row label="Hermes 头像" sub="上传后会显示在 Hermes 的对话消息旁；不设置时保持原有纯文本样式。" right={
+        <div className={s.assistantAvatarControl}>
+          <input
+            ref={avatarInputRef}
+            className={s.hiddenFileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+            onChange={(event) => void handleAvatarFile(event.target.files?.[0])}
+          />
+          {assistantAvatarDataUrl ? (
+            <img className={s.assistantAvatarPreview} src={assistantAvatarDataUrl} alt="Hermes 头像预览" />
+          ) : (
+            <span className={s.assistantAvatarPlaceholder}><ImageIcon size={16} /></span>
+          )}
+          <button type="button" className={s.btn} onClick={() => avatarInputRef.current?.click()}>
+            <Upload size={13} /> 上传
+          </button>
+          {assistantAvatarDataUrl ? (
+            <button type="button" className={s.btn} onClick={() => { setAssistantProfileError(""); setAssistantAvatarDataUrl(""); }}>
+              移除
+            </button>
+          ) : null}
+        </div>
+      } />
+      {assistantProfileError ? <p className={s.assistantProfileError}>{assistantProfileError}</p> : null}
+      <p className={s.assistantProfileStorageHint}>名称和头像只影响桌面端显示，不会改写模型提示词；清空名称和移除头像后会恢复之前的对话样式。</p>
       <ApprovalModeSection />
     </div>
   );
@@ -1090,6 +1185,9 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const kernelRuntimeTag = kernelRuntimeTagLabel(info?.current);
   const rendererRuntime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
   const isRemote = rendererRuntime?.connectionMode === "remote";
+  const isLocalConnection = rendererRuntime?.connectionMode === "local";
+  const isAttachedConnection = rendererRuntime?.connectionMode === "remote" || rendererRuntime?.connectionMode === "local";
+  const attachedConnectionLabel = isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI";
   const hermesHomePath = status?.hermes_home;
   const runtimeRootPath = info?.runtimeRoot;
   const runtimeVersionPath = info?.current?.path;
@@ -1142,13 +1240,13 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
     <div>
       {showHeading && <h2 className={s.heading}>内核</h2>}
       <SettingsHero
-        ok={isRemote || isolationOk}
-        icon={isRemote ? <Globe2 size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}
+        ok={isAttachedConnection || isolationOk}
+        icon={isRemote ? <Globe2 size={24} /> : isLocalConnection ? <Cable size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}
         eyebrow="Hermes Agent 中文社区桌面版内核"
-        title={isRemote ? "已连接远程 Hermes Agent" : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}
+        title={isAttachedConnection ? `已连接${attachedConnectionLabel}` : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}
         description={
-          isRemote
-              ? `桌面端当前作为界面壳运行，所有会话与配置由远程端（${rendererRuntime?.dashboardApiBaseUrl ?? "远程地址"}）提供。本机 runtime 未在使用，可在 设置 → 连接 切回本机内核。`
+          isAttachedConnection
+              ? `桌面端当前作为界面壳运行，所有会话与配置由${isRemote ? "远程端" : "本机 CLI dashboard"}（${rendererRuntime?.dashboardApiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "目标地址"}）提供。本机 managed runtime 未在使用，可在 设置 → 连接 切回本机内核。`
               : isolationOk && process?.ownsProcess
               ? "当前 Dashboard 由桌面端托管的 managed runtime 子进程提供，内核、gateway runtime 与锁文件都收束在桌面 runtime 目录下。"
               : isolationOk
@@ -1156,12 +1254,12 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
               : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"
         }
         badge={(
-          <span className={s.statusBadge} data-on={isRemote || isolationOk}>
-            {isRemote ? "远程" : info ? runtimeModeLabel(info.mode) : "读取中"}
+          <span className={s.statusBadge} data-on={isAttachedConnection || isolationOk}>
+            {isRemote ? "远程" : isLocalConnection ? "本地" : info ? runtimeModeLabel(info.mode) : "读取中"}
           </span>
         )}
       >
-        {!isRemote && kernelRuntimeTag && (
+        {!isAttachedConnection && kernelRuntimeTag && (
           <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
             {kernelRuntimeTag}
           </code>
@@ -1199,8 +1297,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           variant="solid"
           tone="accent"
           onClick={() => void gatewayRestart.restart()}
-          disabled={gatewayRestart.locked || isRemote}
-          title={isRemote ? "远程模式下由远程端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
+          disabled={gatewayRestart.locked || isAttachedConnection}
+          title={isAttachedConnection ? "当前连接模式下由目标后端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
           aria-busy={gatewayRestart.busy}
         >
           <RotateCcw size={13} />
@@ -1293,8 +1391,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   variant="outline"
                   type="button"
                   onClick={handleCheckRuntime}
-                  disabled={!info?.updatesConfigured || checking || isRemote}
-                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
+                  disabled={!info?.updatesConfigured || checking || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   <RefreshCw size={13} />
                   {checking ? "检查中" : "检查更新"}
@@ -1304,8 +1402,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   tone="accent"
                   type="button"
                   onClick={handleInstallRuntime}
-                  disabled={!canInstall || installing || isRemote}
-                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
+                  disabled={!canInstall || installing || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   {installing ? "安装中…" : "安装更新"}
                 </Button>
@@ -1313,8 +1411,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   variant="outline"
                   type="button"
                   onClick={handleRollbackRuntime}
-                  disabled={!info?.current?.previousRuntimeVersion || rollingBack || isRemote}
-                  title={isRemote ? "远程模式下本机 runtime 未在使用" : undefined}
+                  disabled={!info?.current?.previousRuntimeVersion || rollingBack || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   {rollingBack ? "回滚中…" : "回滚 Runtime"}
                 </Button>

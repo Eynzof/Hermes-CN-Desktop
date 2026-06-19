@@ -767,7 +767,7 @@ export async function installTauriBridge(): Promise<void> {
     gatewayUrl: string;
     sessionToken?: string;
     currentProfile: string;
-    connectionMode?: "local" | "remote";
+    connectionMode?: "managed" | "local" | "remote";
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
@@ -805,13 +805,12 @@ export async function installTauriBridge(): Promise<void> {
     config = await invokeCommand("get_runtime_config");
   }
 
-  // Remote mode must keep the real URLs even in Vite dev: the Vite proxy
-  // targets the LOCAL dashboard port, so relative URLs would route remote
-  // traffic to a backend that isn't connected. With apiBaseUrl set, transport
-  // goes through the Rust proxy and the gateway socket through the Rust relay,
-  // exactly like production.
-  const isRemote = config.connectionMode === "remote";
-  const hideUrlsForViteProxy = isDevMode && !isRemote;
+  // Attached local/remote mode must keep the real URLs even in Vite dev: the
+  // Vite proxy targets the managed dashboard port (9120), so relative URLs
+  // would route traffic to the wrong backend. Managed dev still hides URLs and
+  // uses the proxy as before.
+  const connectionMode = config.connectionMode ?? "managed";
+  const hideUrlsForViteProxy = isDevMode && connectionMode === "managed";
 
   window.__HERMES_RUNTIME__ = {
     platform: "tauri" as const,
@@ -820,7 +819,7 @@ export async function installTauriBridge(): Promise<void> {
     gatewayUrl: hideUrlsForViteProxy ? undefined : config.gatewayUrl,
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
-    connectionMode: config.connectionMode ?? "local",
+    connectionMode,
   };
 
   (window as any).hermesDesktop = tauriBridge;

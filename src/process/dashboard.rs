@@ -29,7 +29,8 @@ use crate::state::{DashboardHandle, DashboardJobHandle};
 // bootstrap has already failed. Keep a wider production-safe margin.
 const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(120);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(900);
-const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_millis(1200);
+const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_secs(3);
+const ATTACHED_DASHBOARD_TIMEOUT: Duration = Duration::from_secs(5);
 const SHUTDOWN_HTTP_TIMEOUT: Duration = Duration::from_millis(800);
 const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(1800);
 const FORCE_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(1200);
@@ -50,6 +51,12 @@ static SESSION_TOKEN_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .timeout(SESSION_TOKEN_TIMEOUT)
         .build()
         .expect("valid dashboard session token HTTP client")
+});
+static ATTACHED_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(ATTACHED_DASHBOARD_TIMEOUT)
+        .build()
+        .expect("valid attached dashboard HTTP client")
 });
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -465,6 +472,53 @@ pub async fn probe_dashboard(api_base_url: &str) -> bool {
     }
 }
 
+/// More tolerant probe for an already-running local/remote dashboard we do not
+/// own. The normal readiness probe is intentionally short so managed startup
+/// loops remain responsive, but a user CLI dashboard can briefly spend more
+/// than 900ms in `/api/status` while spawning TUI sidecars or loading plugins.
+/// Treat that as transient instead of reporting "9119 unreachable".
+pub async fn probe_attached_dashboard(api_base_url: &str) -> bool {
+    let url = format!("{}/api/status", api_base_url);
+
+    for attempt in 0..3 {
+        match ATTACHED_HTTP_CLIENT
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+        {
+            Ok(res) if res.status().is_success() || res.status().as_u16() == 401 => {
+                return true;
+            }
+            Ok(res) => {
+                log::debug!(
+                    "Attached dashboard probe at {} returned HTTP {}",
+                    api_base_url,
+                    res.status()
+                );
+            }
+            Err(err) => {
+                log::debug!(
+                    "Attached dashboard probe attempt {} at {} failed: {}",
+                    attempt + 1,
+                    api_base_url,
+                    err
+                );
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    if probe_dashboard_port(api_base_url) {
+        log::warn!(
+            "Attached dashboard port is listening at {}, but /api/status did not answer within {:?}",
+            api_base_url,
+            ATTACHED_DASHBOARD_TIMEOUT
+        );
+    }
+    false
+}
+
 async fn probe_dashboard_openapi(api_base_url: &str) -> bool {
     let url = format!("{}/openapi.json", api_base_url);
 
@@ -549,7 +603,7 @@ async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
 }
 
 /// Get the HERMES_HOME value from a running dashboard.
-async fn get_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
+pub async fn fetch_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
     let url = format!("{}/api/status", api_base_url);
 
     let res = PROBE_HTTP_CLIENT
@@ -564,9 +618,57 @@ async fn get_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Tolerant HERMES_HOME lookup for attached local dashboards. This mirrors
+/// `probe_attached_dashboard` so a busy CLI dashboard does not make the
+/// desktop fall back to its managed runtime data root.
+pub async fn fetch_attached_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
+    let url = format!("{}/api/status", api_base_url);
+
+    for attempt in 0..3 {
+        match ATTACHED_HTTP_CLIENT
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+        {
+            Ok(res) => match res.json::<serde_json::Value>().await {
+                Ok(data) => {
+                    if let Some(home) = data
+                        .get("hermes_home")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                        .filter(|s| !s.trim().is_empty())
+                    {
+                        return Some(home);
+                    }
+                }
+                Err(err) => {
+                    log::debug!(
+                        "Attached dashboard hermes_home parse attempt {} at {} failed: {}",
+                        attempt + 1,
+                        api_base_url,
+                        err
+                    );
+                }
+            },
+            Err(err) => {
+                log::debug!(
+                    "Attached dashboard hermes_home attempt {} at {} failed: {}",
+                    attempt + 1,
+                    api_base_url,
+                    err
+                );
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    None
+}
+
 /// Check whether an existing dashboard's hermes_home matches ours.
 async fn dashboard_matches_hermes_home(api_base_url: &str, hermes_home: &str) -> bool {
-    match get_dashboard_hermes_home(api_base_url).await {
+    match fetch_dashboard_hermes_home(api_base_url).await {
         Some(current) if !current.is_empty() => {
             let left = std::fs::canonicalize(&current).unwrap_or_else(|_| PathBuf::from(&current));
             let right =

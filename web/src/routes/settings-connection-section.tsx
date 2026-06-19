@@ -1,13 +1,6 @@
-// Settings → 连接: choose between the local managed runtime and a remote
-// Hermes Agent (shell mode). Token-auth-only port of the official desktop's
-// gateway-settings UI (Hermes-CN-Core apps/desktop/src/app/settings/
-// gateway-settings.tsx), matching its product shape: side-by-side mode cards,
-// a debounced reachability probe under the URL field, a session-token entry
-// that never round-trips the saved secret, a prominent env-override warning,
-// and a Test / Save-for-next-restart / Save-and-reconnect button row.
-//
-// The official UI additionally offers OAuth sign-in and per-profile scopes;
-// this v1 is token-only and global (see the connection.rs scope decision).
+// Settings → 连接: choose between the desktop-managed runtime, a loopback
+// Hermes Agent CLI dashboard, and a remote Hermes Agent. 本地连接自动从
+// dashboard HTML 读取 session token；远程连接继续使用手动 session token。
 import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -34,6 +27,13 @@ interface SettingsSectionProps {
 type ProbeStatus = "idle" | "probing" | "reachable" | "unreachable" | "authRequired";
 
 const PROBE_DEBOUNCE_MS = 500;
+const DEFAULT_LOCAL_URL = "http://127.0.0.1:9119";
+
+function modeLabel(mode: ConnectionMode | undefined): string {
+  if (mode === "remote") return "远程连接";
+  if (mode === "local") return "本地连接";
+  return "本机内核";
+}
 
 function ModeCard({
   active,
@@ -92,7 +92,8 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
 
   const [config, setConfig] = useState<ConnectionConfigView | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [mode, setMode] = useState<ConnectionMode>("local");
+  const [mode, setMode] = useState<ConnectionMode>("managed");
+  const [localUrl, setLocalUrl] = useState(DEFAULT_LOCAL_URL);
   const [remoteUrl, setRemoteUrl] = useState("");
   // The saved token never round-trips; this holds only what the user types.
   const [tokenInput, setTokenInput] = useState("");
@@ -110,6 +111,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       .then((view) => {
         setConfig(view);
         setMode(view.mode);
+        setLocalUrl(view.localUrl || DEFAULT_LOCAL_URL);
         setRemoteUrl(view.remoteUrl);
       })
       .catch((error) => {
@@ -120,13 +122,14 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
   const envOverride = config?.envOverride ?? false;
   const busy = saving || applying;
   const disabled = !supported || envOverride || busy;
-  const trimmedUrl = remoteUrl.trim();
-  const effectiveMode = config?.effectiveMode ?? "local";
+  const trimmedLocalUrl = localUrl.trim() || DEFAULT_LOCAL_URL;
+  const trimmedRemoteUrl = remoteUrl.trim();
+  const effectiveMode = config?.effectiveMode ?? "managed";
 
-  // Debounced as-you-type reachability probe, sequence-guarded so a slow
-  // response for an old URL can't overwrite the status of the current one.
+  // Debounced as-you-type reachability probe for remote URLs, sequence-guarded
+  // so a slow response for an old URL can't overwrite the current status.
   useEffect(() => {
-    if (mode !== "remote" || envOverride || !/^https?:\/\//i.test(trimmedUrl)) {
+    if (mode !== "remote" || envOverride || !/^https?:\/\//i.test(trimmedRemoteUrl)) {
       setProbeStatus("idle");
       return;
     }
@@ -134,7 +137,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
     setProbeStatus("probing");
     const timer = window.setTimeout(() => {
       desktop
-        ?.probeConnectionConfig?.(trimmedUrl)
+        ?.probeConnectionConfig?.(trimmedRemoteUrl)
         .then((result) => {
           if (seq !== probeSeq.current) return;
           if (!result.reachable) setProbeStatus("unreachable");
@@ -148,20 +151,22 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
     }, PROBE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, trimmedUrl, envOverride]);
+  }, [mode, trimmedRemoteUrl, envOverride]);
 
-  // Enough to submit a remote connection: a URL plus either a freshly typed
-  // token or a previously saved one (mirrors the official canUseRemote gate).
-  const remoteReady = mode === "local" || Boolean(trimmedUrl && (tokenInput.trim() || config?.remoteTokenSet));
+  const remoteReady = Boolean(trimmedRemoteUrl && (tokenInput.trim() || config?.remoteTokenSet));
+  const localReady = Boolean(trimmedLocalUrl);
+  const canSubmit = mode === "managed" || (mode === "local" ? localReady : remoteReady);
 
   const handleTest = async () => {
-    if (!desktop?.testConnectionConfig) return;
+    if (!desktop?.testConnectionConfig || mode === "managed") return;
     setMessage(null);
     setTesting(true);
     try {
       const result = await desktop.testConnectionConfig({
-        remoteUrl: trimmedUrl || undefined,
-        remoteToken: tokenInput || undefined,
+        mode,
+        localUrl: mode === "local" ? trimmedLocalUrl : undefined,
+        remoteUrl: mode === "remote" ? trimmedRemoteUrl : undefined,
+        remoteToken: mode === "remote" ? tokenInput || undefined : undefined,
       });
       setMessage(testResultSummary(result));
     } catch (error) {
@@ -172,8 +177,11 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
   };
 
   const submit = async (apply: boolean) => {
-    if (mode === "remote" && !remoteReady) {
-      setMessage({ tone: "error", text: "请先填写远程地址和 session token" });
+    if (!canSubmit) {
+      setMessage({
+        tone: "error",
+        text: mode === "remote" ? "请先填写远程地址和 session token" : "请先填写本地连接地址",
+      });
       return;
     }
     setMessage(null);
@@ -182,15 +190,13 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
     try {
       const payload = {
         mode,
-        remoteUrl: mode === "remote" ? trimmedUrl : undefined,
-        remoteToken: tokenInput || undefined,
+        localUrl: mode === "local" ? trimmedLocalUrl : undefined,
+        remoteUrl: mode === "remote" ? trimmedRemoteUrl : undefined,
+        remoteToken: mode === "remote" ? tokenInput || undefined : undefined,
       };
       if (apply) {
         const result = await desktop!.applyConnectionConfig!(payload);
         if (result.ok) {
-          // The connection mode feeds transport routing, socket-path selection
-          // and every query cache — a clean reload rebuilds it all from
-          // get_runtime_config, exactly like a fresh boot.
           setMessage({ tone: "ok", text: "已切换，正在重新加载界面…" });
           window.setTimeout(() => window.location.reload(), 600);
           return;
@@ -226,19 +232,11 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
     ? "正在读取网关连接状态"
     : envOverride
       ? "网关连接由环境变量覆盖"
-      : effectiveMode === "remote"
-        ? "已连接远程 Hermes Agent"
-        : "本机 managed runtime 正在使用";
+      : `已连接${modeLabel(effectiveMode)}`;
   const connectionDescription = envOverride
     ? `当前会话由环境变量强制连接到远程端（${config?.remoteUrl ?? "远程地址"}），需取消环境变量后才能在此修改。`
-    : "桌面端默认在本机启动自己的 Hermes 内核。当你想把它当作「壳」连接另一台机器上已运行的 Hermes Agent 时，选择远程模式。当前版本仅支持 session token 认证。";
-  const connectionBadge = !connectionLoaded
-    ? "读取中"
-    : envOverride
-      ? "环境变量"
-      : effectiveMode === "remote"
-        ? "远程"
-        : "本机";
+    : "桌面端现在支持三种连接：本机内核由桌面端管理 9120；本地连接自动接入本机 CLI dashboard 9119；远程连接继续使用 session token。";
+  const connectionBadge = !connectionLoaded ? "读取中" : envOverride ? "环境变量" : modeLabel(effectiveMode);
 
   return (
     <div>
@@ -246,7 +244,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
 
       <SettingsHero
         ok={connectionLoaded}
-        icon={effectiveMode === "remote" || envOverride ? <Globe2 size={24} /> : <HardDrive size={24} />}
+        icon={effectiveMode === "remote" || envOverride ? <Globe2 size={24} /> : effectiveMode === "local" ? <Cable size={24} /> : <HardDrive size={24} />}
         eyebrow="Hermes Agent 网关连接"
         title={connectionTitle}
         description={connectionDescription}
@@ -270,11 +268,20 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
 
       <div className={s.connModeGrid}>
         <ModeCard
-          active={mode === "local"}
-          current={effectiveMode === "local"}
+          active={mode === "managed"}
+          current={effectiveMode === "managed"}
           icon={HardDrive}
           title="本机内核"
-          description="在本机启动私有 Hermes 后端，默认且可离线运行。"
+          description="桌面端启动并管理私有 Hermes runtime，默认端口 9120，适合离线和独立使用。"
+          disabled={disabled}
+          onSelect={() => setMode("managed")}
+        />
+        <ModeCard
+          active={mode === "local"}
+          current={effectiveMode === "local"}
+          icon={Cable}
+          title="本地连接"
+          description="连接本机已运行的 Hermes Agent CLI dashboard，默认 http://127.0.0.1:9119。"
           disabled={disabled}
           onSelect={() => setMode("local")}
         />
@@ -282,12 +289,35 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           active={mode === "remote"}
           current={effectiveMode === "remote"}
           icon={Globe2}
-          title="远程 Hermes Agent"
+          title="远程连接"
           description="把桌面端作为界面壳连接另一台机器上的 Hermes 后端，使用 session token 认证。"
           disabled={disabled}
           onSelect={() => setMode("remote")}
         />
       </div>
+
+      {mode === "local" && (
+        <div className={s.row}>
+          <div className={s.rowLeft}>
+            <div className={s.rowLabel}>本地 Dashboard 地址</div>
+            <div className={s.rowSub}>
+              仅允许 localhost / 127.0.0.1 / ::1。连接时会自动从本机 dashboard 页面读取 session token，不需要手动粘贴。
+              若 9119 端口提示未连接，请先在命令行中输入 <code>hermes dashboard</code> 启动 dashboard。
+            </div>
+          </div>
+          <div className={s.rowRight}>
+            <Input
+              mono
+              style={{ minWidth: 280 }}
+              value={localUrl}
+              placeholder={DEFAULT_LOCAL_URL}
+              disabled={disabled}
+              onChange={(e) => setLocalUrl(e.target.value)}
+              spellCheck={false}
+            />
+          </div>
+        </div>
+      )}
 
       {mode === "remote" && (
         <>
@@ -300,13 +330,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
               {probeStatus !== "idle" && (
                 <div
                   className={s.connProbe}
-                  data-tone={
-                    probeStatus === "reachable"
-                      ? "ok"
-                      : probeStatus === "probing"
-                        ? undefined
-                        : "error"
-                  }
+                  data-tone={probeStatus === "reachable" ? "ok" : probeStatus === "probing" ? undefined : "error"}
                   aria-live="polite"
                 >
                   {probeStatus === "probing" && <Loader2 size={12} className={s.connSpin} />}
@@ -315,7 +339,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
                   {probeStatus === "probing" && "正在探测网关认证方式…"}
                   {probeStatus === "reachable" && "网关可达"}
                   {probeStatus === "unreachable" && "暂时无法连接该网关，检查地址与网络后会自动重试"}
-                  {probeStatus === "authRequired" && "该网关需要 OAuth 登录，当前版本仅支持 session token"}
+                  {probeStatus === "authRequired" && "该网关需要 OAuth 登录，本轮远程连接仍仅支持 session token"}
                 </div>
               )}
             </div>
@@ -336,8 +360,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
             <div className={s.rowLeft}>
               <div className={s.rowLabel}>Session Token</div>
               <div className={s.rowSub}>
-                远程端用于 REST 与 WebSocket 鉴权的会话令牌（启动远程 dashboard 时由
-                HERMES_DASHBOARD_SESSION_TOKEN 指定）。仅保存在本机，留空保持不变。
+                远程端用于 REST 与 WebSocket 鉴权的会话令牌。仅保存在本机，留空保持不变。
               </div>
             </div>
             <div className={s.rowRight}>
@@ -357,13 +380,13 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       )}
 
       <div className={s.connFooter}>
-        {mode === "remote" && (
+        {mode !== "managed" && (
           <Button
             type="button"
             className={s.connFooterSpacer}
             variant="outline"
             onClick={() => void handleTest()}
-            disabled={disabled || testing || !trimmedUrl}
+            disabled={disabled || testing || (mode === "local" ? !trimmedLocalUrl : !trimmedRemoteUrl)}
             aria-busy={testing}
           >
             {testing ? <Loader2 size={13} className={s.connSpin} /> : <Cable size={13} />}
@@ -374,7 +397,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           type="button"
           variant="outline"
           onClick={() => void submit(false)}
-          disabled={disabled || (mode === "remote" && !remoteReady)}
+          disabled={disabled || !canSubmit}
           aria-busy={saving}
         >
           仅保存（下次启动生效）
@@ -384,11 +407,11 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           variant="solid"
           tone="accent"
           onClick={() => void submit(true)}
-          disabled={disabled || (mode === "remote" && !remoteReady)}
+          disabled={disabled || !canSubmit}
           aria-busy={applying}
         >
           {applying && <Loader2 size={13} className={s.connSpin} />}
-          {mode === "remote" ? "保存并连接远程" : "保存并切回本机"}
+          {mode === "remote" ? "保存并连接远程" : mode === "local" ? "保存并连接本地" : "保存并切回本机内核"}
         </Button>
       </div>
 

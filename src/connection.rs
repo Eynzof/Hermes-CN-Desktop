@@ -1,4 +1,4 @@
-// Desktop connection config: local managed runtime vs remote Hermes Agent.
+// Desktop connection config: managed runtime vs local/remote Hermes Agent.
 //
 // Port of the official desktop's connection layer (Hermes-CN-Core
 // apps/desktop/electron/connection-config.cjs + the resolveRemoteBackend logic
@@ -14,10 +14,11 @@
 // Resolution precedence (first match wins), matching the official desktop:
 //   1. HERMES_DESKTOP_REMOTE_URL + HERMES_DESKTOP_REMOTE_TOKEN env override
 //      (URL without token is a hard error, not a silent fallback)
-//   2. connection.json with mode == "remote"
-//   3. local managed runtime
+//   2. connection.json with mode == "remote" or "local"
+//   3. desktop-managed runtime
 
 use std::fs;
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -27,12 +28,15 @@ use crate::process::runtime;
 
 pub const ENV_REMOTE_URL: &str = "HERMES_DESKTOP_REMOTE_URL";
 pub const ENV_REMOTE_TOKEN: &str = "HERMES_DESKTOP_REMOTE_TOKEN";
+pub const DEFAULT_LOCAL_DASHBOARD_URL: &str = "http://127.0.0.1:9119";
 const CONNECTION_FILE: &str = "connection.json";
+const CONNECTION_FILE_VERSION: u32 = 2;
 
 /// Effective connection mode of the running desktop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConnectionMode {
     #[default]
+    Managed,
     Local,
     Remote,
 }
@@ -40,6 +44,7 @@ pub enum ConnectionMode {
 impl ConnectionMode {
     pub fn as_str(&self) -> &'static str {
         match self {
+            ConnectionMode::Managed => "managed",
             ConnectionMode::Local => "local",
             ConnectionMode::Remote => "remote",
         }
@@ -62,6 +67,23 @@ impl RemoteSource {
     }
 }
 
+/// A local CLI dashboard the desktop should attach to instead of spawning the
+/// managed runtime. The session token is fetched from the dashboard at connect
+/// time, so it is never persisted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalBackend {
+    /// Normalized loopback base URL (no trailing slash, no query/hash).
+    pub base_url: String,
+}
+
+/// Effective backend selected for this boot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionBackend {
+    Managed,
+    Local(LocalBackend),
+    Remote(RemoteBackend),
+}
+
 /// A fully-resolved remote backend the desktop should attach to instead of
 /// spawning the managed runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +98,7 @@ pub struct RemoteBackend {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ConnectionConfig {
     pub mode: ConnectionMode,
+    pub local_url: Option<String>,
     pub remote_url: Option<String>,
     pub remote_token: Option<String>,
 }
@@ -85,6 +108,7 @@ pub struct ConnectionConfig {
 #[serde(rename_all = "camelCase")]
 pub struct SanitizedConnectionConfig {
     pub mode: String,
+    pub local_url: String,
     pub remote_url: String,
     pub remote_token_set: bool,
     pub remote_token_preview: Option<String>,
@@ -98,7 +122,14 @@ struct ConnectionFile {
     version: u32,
     mode: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    local: Option<LocalFileEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     remote: Option<RemoteFileEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LocalFileEntry {
+    url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -120,7 +151,7 @@ pub fn config_path() -> PathBuf {
 }
 
 /// Read the persisted connection config. Fails closed: a missing, unreadable,
-/// or malformed file yields the default local config rather than an error, so
+/// or malformed file yields the default managed config rather than an error, so
 /// a corrupt connection.json can never brick the desktop boot.
 pub fn read_config() -> ConnectionConfig {
     read_config_from(&config_path())
@@ -135,7 +166,7 @@ fn read_config_from(path: &PathBuf) -> ConnectionConfig {
         Ok(file) => file,
         Err(err) => {
             log::warn!(
-                "Malformed connection config at {}; falling back to local mode: {}",
+                "Malformed connection config at {}; falling back to managed mode: {}",
                 path.display(),
                 err
             );
@@ -143,11 +174,20 @@ fn read_config_from(path: &PathBuf) -> ConnectionConfig {
         }
     };
 
-    let mode = if file.mode == "remote" {
-        ConnectionMode::Remote
-    } else {
-        ConnectionMode::Local
+    let mode = match file.mode.as_str() {
+        "remote" => ConnectionMode::Remote,
+        // v1 used "local" for the desktop-managed runtime. Only v2+ can mean
+        // the new “local CLI connection” mode, so old files must migrate to
+        // managed to avoid unexpectedly attaching to 127.0.0.1:9119.
+        "local" if file.version >= CONNECTION_FILE_VERSION => ConnectionMode::Local,
+        "managed" | "local" => ConnectionMode::Managed,
+        _ => ConnectionMode::Managed,
     };
+    let local_url = file
+        .local
+        .as_ref()
+        .map(|r| r.url.trim().to_string())
+        .filter(|url| !url.is_empty());
     let remote_url = file
         .remote
         .as_ref()
@@ -163,6 +203,7 @@ fn read_config_from(path: &PathBuf) -> ConnectionConfig {
 
     ConnectionConfig {
         mode,
+        local_url,
         remote_url,
         remote_token,
     }
@@ -176,8 +217,12 @@ pub fn write_config(config: &ConnectionConfig) -> AppResult<()> {
 
 fn write_config_to(path: &PathBuf, config: &ConnectionConfig) -> AppResult<()> {
     let file = ConnectionFile {
-        version: 1,
+        version: CONNECTION_FILE_VERSION,
         mode: config.mode.as_str().to_string(),
+        local: config
+            .local_url
+            .as_ref()
+            .map(|url| LocalFileEntry { url: url.clone() }),
         remote: config.remote_url.as_ref().map(|url| RemoteFileEntry {
             url: url.clone(),
             token: config.remote_token.as_ref().map(|value| TokenFileEntry {
@@ -234,6 +279,52 @@ pub fn normalize_remote_base_url(raw: &str) -> AppResult<String> {
     Ok(parsed.to_string().trim_end_matches('/').to_string())
 }
 
+fn normalize_base_url(raw: &str, empty_message: &str, invalid_prefix: &str) -> AppResult<url::Url> {
+    let value = raw.trim();
+    if value.is_empty() {
+        return Err(AppError::InvalidRequest(empty_message.to_string()));
+    }
+
+    let mut parsed = url::Url::parse(value)
+        .map_err(|e| AppError::InvalidRequest(format!("{}无效: {}", invalid_prefix, e)))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(AppError::InvalidRequest(format!(
+            "{}必须是 http:// 或 https://，当前为 {}://",
+            invalid_prefix,
+            parsed.scheme()
+        )));
+    }
+    parsed.set_fragment(None);
+    parsed.set_query(None);
+    let trimmed_path = parsed.path().trim_end_matches('/').to_string();
+    parsed.set_path(&trimmed_path);
+    Ok(parsed)
+}
+
+fn is_loopback_host(parsed: &url::Url) -> bool {
+    match parsed.host() {
+        Some(url::Host::Domain(host)) => {
+            let lower = host.to_ascii_lowercase();
+            lower == "localhost" || lower.ends_with(".localhost")
+        }
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => IpAddr::V6(ip).is_loopback(),
+        None => false,
+    }
+}
+
+/// Normalize a local CLI dashboard URL. Unlike remote URLs, this must stay on
+/// loopback so the desktop never treats a LAN/Internet host as “local”.
+pub fn normalize_local_base_url(raw: &str) -> AppResult<String> {
+    let parsed = normalize_base_url(raw, "本地 Hermes Agent 地址不能为空", "本地地址")?;
+    if !is_loopback_host(&parsed) {
+        return Err(AppError::InvalidRequest(
+            "本地连接仅允许 localhost / 127.0.0.1 / ::1 地址".to_string(),
+        ));
+    }
+    Ok(parsed.to_string().trim_end_matches('/').to_string())
+}
+
 /// "…XXXXXX" preview of a stored token for display: short tokens collapse to
 /// "set" so the preview can never reconstruct a meaningful fraction of them.
 pub fn token_preview(token: &str) -> Option<String> {
@@ -265,12 +356,10 @@ pub fn env_override_active() -> bool {
 
 /// Resolve the effective backend for this boot.
 ///
-/// Returns `Ok(Some(remote))` when the desktop should attach to a remote
-/// agent, `Ok(None)` for the local managed runtime, and `Err(message)` when
-/// the configuration is unusable (env URL without token, or an invalid URL —
-/// the latter only for env; a bad *saved* URL falls back to local with a
-/// warning so the user can still reach Settings to fix it).
-pub fn resolve_remote_backend() -> Result<Option<RemoteBackend>, String> {
+/// Returns a managed/local/remote backend. Env remote misconfiguration is a
+/// hard error; invalid saved local/remote entries fall back to managed so the
+/// user can still reach Settings and repair them.
+pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
     if let Some(raw_url) = env_non_empty(ENV_REMOTE_URL) {
         let token = env_non_empty(ENV_REMOTE_TOKEN).ok_or_else(|| {
             format!(
@@ -280,7 +369,7 @@ pub fn resolve_remote_backend() -> Result<Option<RemoteBackend>, String> {
         })?;
         let base_url = normalize_remote_base_url(&raw_url)
             .map_err(|e| format!("{} 无效: {}", ENV_REMOTE_URL, e))?;
-        return Ok(Some(RemoteBackend {
+        return Ok(ConnectionBackend::Remote(RemoteBackend {
             base_url,
             token,
             source: RemoteSource::Env,
@@ -288,27 +377,52 @@ pub fn resolve_remote_backend() -> Result<Option<RemoteBackend>, String> {
     }
 
     let config = read_config();
-    if config.mode != ConnectionMode::Remote {
-        return Ok(None);
-    }
-
-    let (Some(raw_url), Some(token)) = (config.remote_url, config.remote_token) else {
-        log::warn!("connection.json 选择了远程模式但缺少 URL 或 token；回退到本地模式");
-        return Ok(None);
-    };
-    match normalize_remote_base_url(&raw_url) {
-        Ok(base_url) => Ok(Some(RemoteBackend {
-            base_url,
-            token,
-            source: RemoteSource::Settings,
-        })),
-        Err(err) => {
-            log::warn!(
-                "connection.json 中的远程地址无效（{}）；回退到本地模式",
-                err
-            );
-            Ok(None)
+    match config.mode {
+        ConnectionMode::Managed => Ok(ConnectionBackend::Managed),
+        ConnectionMode::Local => {
+            let raw_url = config
+                .local_url
+                .as_deref()
+                .unwrap_or(DEFAULT_LOCAL_DASHBOARD_URL);
+            match normalize_local_base_url(raw_url) {
+                Ok(base_url) => Ok(ConnectionBackend::Local(LocalBackend { base_url })),
+                Err(err) => {
+                    log::warn!(
+                        "connection.json 中的本地连接地址无效（{}）；回退到本机内核",
+                        err
+                    );
+                    Ok(ConnectionBackend::Managed)
+                }
+            }
         }
+        ConnectionMode::Remote => {
+            let (Some(raw_url), Some(token)) = (config.remote_url, config.remote_token) else {
+                log::warn!("connection.json 选择了远程模式但缺少 URL 或 token；回退到本机内核");
+                return Ok(ConnectionBackend::Managed);
+            };
+            match normalize_remote_base_url(&raw_url) {
+                Ok(base_url) => Ok(ConnectionBackend::Remote(RemoteBackend {
+                    base_url,
+                    token,
+                    source: RemoteSource::Settings,
+                })),
+                Err(err) => {
+                    log::warn!(
+                        "connection.json 中的远程地址无效（{}）；回退到本机内核",
+                        err
+                    );
+                    Ok(ConnectionBackend::Managed)
+                }
+            }
+        }
+    }
+}
+
+/// Backward-compatible helper for older tests/callers.
+pub fn resolve_remote_backend() -> Result<Option<RemoteBackend>, String> {
+    match resolve_connection_backend()? {
+        ConnectionBackend::Remote(remote) => Ok(Some(remote)),
+        ConnectionBackend::Managed | ConnectionBackend::Local(_) => Ok(None),
     }
 }
 
@@ -320,6 +434,10 @@ pub fn sanitize(config: &ConnectionConfig) -> SanitizedConnectionConfig {
         let token = env_non_empty(ENV_REMOTE_TOKEN);
         return SanitizedConnectionConfig {
             mode: ConnectionMode::Remote.as_str().to_string(),
+            local_url: config
+                .local_url
+                .clone()
+                .unwrap_or_else(|| DEFAULT_LOCAL_DASHBOARD_URL.to_string()),
             remote_url: url,
             remote_token_set: token.is_some(),
             remote_token_preview: token.as_deref().and_then(token_preview),
@@ -329,6 +447,10 @@ pub fn sanitize(config: &ConnectionConfig) -> SanitizedConnectionConfig {
 
     SanitizedConnectionConfig {
         mode: config.mode.as_str().to_string(),
+        local_url: config
+            .local_url
+            .clone()
+            .unwrap_or_else(|| DEFAULT_LOCAL_DASHBOARD_URL.to_string()),
         remote_url: config.remote_url.clone().unwrap_or_default(),
         remote_token_set: config.remote_token.is_some(),
         remote_token_preview: config.remote_token.as_deref().and_then(token_preview),
@@ -435,6 +557,7 @@ mod tests {
         let path = dir.path().join("connection.json");
         let config = ConnectionConfig {
             mode: ConnectionMode::Remote,
+            local_url: Some(DEFAULT_LOCAL_DASHBOARD_URL.to_string()),
             remote_url: Some("http://host:9221".to_string()),
             remote_token: Some("tok-123".to_string()),
         };
@@ -443,18 +566,65 @@ mod tests {
     }
 
     #[test]
-    fn read_missing_file_falls_back_to_local() {
+    fn read_missing_file_falls_back_to_managed() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("connection.json");
         assert_eq!(read_config_from(&path), ConnectionConfig::default());
     }
 
     #[test]
-    fn read_malformed_file_falls_back_to_local() {
+    fn read_malformed_file_falls_back_to_managed() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("connection.json");
         fs::write(&path, "{ not json").unwrap();
         assert_eq!(read_config_from(&path), ConnectionConfig::default());
+    }
+
+    #[test]
+    fn read_v1_local_migrates_to_managed() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("connection.json");
+        fs::write(
+            &path,
+            r#"{ "version": 1, "mode": "local",
+                 "local": { "url": "http://127.0.0.1:9119" } }"#,
+        )
+        .unwrap();
+        let config = read_config_from(&path);
+        assert_eq!(config.mode, ConnectionMode::Managed);
+        assert_eq!(
+            config.local_url.as_deref(),
+            Some(DEFAULT_LOCAL_DASHBOARD_URL)
+        );
+    }
+
+    #[test]
+    fn read_v2_local_keeps_local_cli_mode() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("connection.json");
+        fs::write(
+            &path,
+            r#"{ "version": 2, "mode": "local",
+                 "local": { "url": "http://localhost:9119/" } }"#,
+        )
+        .unwrap();
+        let config = read_config_from(&path);
+        assert_eq!(config.mode, ConnectionMode::Local);
+        assert_eq!(config.local_url.as_deref(), Some("http://localhost:9119/"));
+    }
+
+    #[test]
+    fn normalize_local_allows_only_loopback() {
+        assert_eq!(
+            normalize_local_base_url(" http://127.0.0.1:9119/?x=1#frag ").unwrap(),
+            DEFAULT_LOCAL_DASHBOARD_URL
+        );
+        assert_eq!(
+            normalize_local_base_url("http://localhost:9119/").unwrap(),
+            "http://localhost:9119"
+        );
+        assert!(normalize_local_base_url("http://192.168.1.10:9119").is_err());
+        assert!(normalize_local_base_url("https://example.com").is_err());
     }
 
     #[test]
@@ -483,6 +653,7 @@ mod tests {
             &path,
             &ConnectionConfig {
                 mode: ConnectionMode::Remote,
+                local_url: None,
                 remote_url: Some("http://h:1".to_string()),
                 remote_token: Some("secret".to_string()),
             },
@@ -536,6 +707,7 @@ mod tests {
         clear_env();
         let config = ConnectionConfig {
             mode: ConnectionMode::Remote,
+            local_url: None,
             remote_url: Some("http://h:1".to_string()),
             remote_token: Some("supersecretvalue".to_string()),
         };

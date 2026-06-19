@@ -67,13 +67,14 @@ function flowLabel(flow: string | undefined): string {
   switch (flow) {
     case "pkce": return "浏览器授权";
     case "device_code": return "设备码登录";
+    case "loopback": return "浏览器回调";
     case "external": return "外部管理";
     default: return "";
   }
 }
 
 export function OAuthProvidersSection() {
-  const { data: providers, isLoading, refetch } = useOAuthProviders();
+  const { data: providers, isLoading, isError, error, refetch } = useOAuthProviders();
   const disconnect = useDisconnectOAuth();
   const [loginProvider, setLoginProvider] = useState<OAuthProvider | null>(null);
 
@@ -92,6 +93,19 @@ export function OAuthProvidersSection() {
   );
 
   if (isLoading) return <div className={s.oauthBlock}><span className={settings.desc}>加载 OAuth 状态…</span></div>;
+  if (isError) {
+    return (
+      <div className={s.oauthBlock}>
+        <div className={s.oauthHeader}>
+          <div>
+            <div className={s.oauthTitle}>OAuth 登录</div>
+            <div className={s.oauthDesc}>OAuth 状态加载失败：{error instanceof Error ? error.message : String(error)}</div>
+          </div>
+          <Button variant="outline" onClick={() => void refetch()}>重试</Button>
+        </div>
+      </div>
+    );
+  }
   if (!providers || providers.length === 0) return null;
 
   return (
@@ -108,7 +122,9 @@ export function OAuthProvidersSection() {
 
       {providers.map((provider) => {
         const status = badgeStatus(provider);
-        const canLogin = !provider.status.logged_in && (provider.flow === "pkce" || provider.flow === "device_code");
+        const canLogin = !provider.status.logged_in && (
+          provider.flow === "pkce" || provider.flow === "device_code" || provider.flow === "loopback"
+        );
         const canDisconnect = provider.status.logged_in && provider.flow !== "external";
         const expiry = formatExpiry(provider.status.expires_at);
 
@@ -189,13 +205,20 @@ interface StartResultDeviceCode {
   poll_interval: number;
 }
 
+interface StartResultLoopback {
+  flow: "loopback";
+  session_id: string;
+  auth_url: string;
+  expires_in: number;
+}
+
 function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClose: () => void }) {
   const startLogin = useStartOAuthLogin();
   const submitCode = useSubmitOAuthCode();
   const cancelSession = useCancelOAuthSession();
 
   const [phase, setPhase] = useState<LoginPhase>("starting");
-  const [startResult, setStartResult] = useState<StartResultPkce | StartResultDeviceCode | null>(null);
+  const [startResult, setStartResult] = useState<StartResultPkce | StartResultDeviceCode | StartResultLoopback | null>(null);
   const [code, setCode] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [countdown, setCountdown] = useState(0);
@@ -203,19 +226,22 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
 
   const polling = usePollOAuthSession(
     provider.id,
-    startResult?.flow === "device_code" ? startResult.session_id : null,
+    startResult?.flow === "device_code" || startResult?.flow === "loopback" ? startResult.session_id : null,
     phase === "polling",
   );
 
   useEffect(() => {
     startLogin.mutateAsync(provider.id).then((result) => {
-      setStartResult(result as StartResultPkce | StartResultDeviceCode);
+      setStartResult(result as StartResultPkce | StartResultDeviceCode | StartResultLoopback);
       sessionIdRef.current = result.session_id;
       setCountdown(result.expires_in);
 
       if (result.flow === "pkce") {
         void openExternalUrl(result.auth_url);
         setPhase("awaiting_user");
+      } else if (result.flow === "loopback") {
+        void openExternalUrl(result.auth_url);
+        setPhase("polling");
       } else {
         void openExternalUrl(result.verification_url);
         setPhase("polling");
@@ -362,6 +388,24 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               </button>
             </div>
             <div className={s.statusMessage} data-type="pending">等待授权中…</div>
+            {countdown > 0 && <div className={s.countdown}>剩余时间: {formatCountdown(countdown)}</div>}
+          </>
+        )}
+
+        {phase === "polling" && startResult?.flow === "loopback" && (
+          <>
+            <p style={{ fontSize: 13, color: "var(--h-text)", margin: "0 0 8px" }}>
+              浏览器已打开授权页；授权完成后会自动回到本机回调地址，无需复制验证码。
+            </p>
+            <div className={s.modalActions}>
+              <button
+                className={s.linkBtn}
+                onClick={() => void openExternalUrl(startResult.auth_url)}
+              >
+                重新打开授权页
+              </button>
+            </div>
+            <div className={s.statusMessage} data-type="pending">等待浏览器回调中…</div>
             {countdown > 0 && <div className={s.countdown}>剩余时间: {formatCountdown(countdown)}</div>}
           </>
         )}

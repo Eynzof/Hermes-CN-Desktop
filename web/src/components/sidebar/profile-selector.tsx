@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronsUpDown, Globe2, X } from "lucide-react";
+import { Cable, Check, ChevronsUpDown, Globe2, X } from "lucide-react";
 import { Popover } from "@hermes/shared-ui";
 import {
   useActiveProfileName,
@@ -50,9 +50,13 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
     navigate("/profiles");
   };
 
-  // Remote mode: profiles are HERMES_HOME-scoped local state, and the remote
-  // agent owns its own home — show a remote indicator instead of a switcher.
-  if (runtime.isRemote()) {
+  // Attached mode: profiles are HERMES_HOME-scoped local state, and the
+  // attached agent owns its own home/process — show an indicator instead of a
+  // switcher. The backend may still have its own active profile, but the
+  // desktop cannot restart it here.
+  if (!runtime.isManaged()) {
+    const isRemote = runtime.isRemote();
+    const Icon = isRemote ? Globe2 : Cable;
     return (
       <button
         type="button"
@@ -60,10 +64,10 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
         data-variant={variant}
         data-no-drag={variant === "topbar" ? true : undefined}
         disabled
-        title="已连接远程 Hermes Agent；远程模式下不支持切换档案（设置 → 连接 可切回本机内核）"
+        title={`已连接${isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI"}；当前连接模式下不支持由桌面端切换档案（设置 → 连接 可切回本机内核）`}
       >
         <span className={s.triggerLabel}>
-          <Globe2 size={11} aria-hidden="true" /> 远程
+          <Icon size={11} aria-hidden="true" /> {isRemote ? "远程" : "本地"}
         </span>
         <span className={s.triggerName}>Hermes Agent</span>
       </button>

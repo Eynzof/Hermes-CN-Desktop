@@ -1,16 +1,14 @@
-// Connection-config commands: local managed runtime vs remote Hermes Agent.
+// Connection-config commands: managed runtime vs local/remote Hermes Agent.
 //
 // IPC surface mirrors the official desktop (Hermes-CN-Core apps/desktop
 // preload: getConnectionConfig / saveConnectionConfig / applyConnectionConfig /
 // testConnectionConfig / probeConnectionConfig), token-auth only.
 //
 // `apply_connection_config` switches modes live, without an app restart:
-//   - local → remote: probe the remote FIRST (fail fast leaving the local
-//     dashboard untouched), then stop the owned dashboard and adopt the remote
-//     connection into AppState.
-//   - remote → local: run the full bootstrap acquire path (which can download
-//     a managed runtime on a machine that has never run local) and adopt the
-//     spawned dashboard.
+//   - managed → local/remote: probe the target FIRST, then stop the owned
+//     dashboard and adopt the attachment into AppState.
+//   - local/remote → managed: run the full bootstrap acquire path (which can
+//     download a managed runtime on a machine that has never run it).
 // Both directions hold the shared dashboard-restart guard so they cannot race
 // a profile switch or YOLO toggle. The frontend reloads the webview after a
 // successful apply, which rebuilds all JS-side state from get_runtime_config.
@@ -25,6 +23,7 @@ use crate::commands::restart;
 use crate::connection::{self, ConnectionConfig, ConnectionMode, SanitizedConnectionConfig};
 use crate::error::{AppError, AppResult};
 use crate::process::dashboard;
+use crate::process::runtime;
 use crate::state::{AppState, DashboardHandle};
 
 static CONNECTION_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
@@ -48,6 +47,7 @@ pub struct ConnectionConfigView {
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionConfigInput {
     pub mode: Option<String>,
+    pub local_url: Option<String>,
     pub remote_url: Option<String>,
     /// Empty/absent keeps the previously saved token (so the user can edit the
     /// URL without re-entering the secret), matching the official desktop's
@@ -102,8 +102,9 @@ fn coerce_config(
     input: &ConnectionConfigInput,
 ) -> AppResult<ConnectionConfig> {
     let mode = match input.mode.as_deref() {
+        Some("managed") | None => ConnectionMode::Managed,
+        Some("local") => ConnectionMode::Local,
         Some("remote") => ConnectionMode::Remote,
-        Some("local") | None => ConnectionMode::Local,
         Some(other) => {
             return Err(AppError::InvalidRequest(format!(
                 "未知的连接模式: {}",
@@ -112,6 +113,11 @@ fn coerce_config(
         }
     };
 
+    let local_url = match input.local_url.as_deref().map(str::trim) {
+        Some(url) if !url.is_empty() => Some(connection::normalize_local_base_url(url)?),
+        Some(_) => Some(connection::DEFAULT_LOCAL_DASHBOARD_URL.to_string()),
+        None => existing.local_url.clone(),
+    };
     let remote_url = match input.remote_url.as_deref().map(str::trim) {
         Some(url) if !url.is_empty() => Some(connection::normalize_remote_base_url(url)?),
         // An explicitly empty URL clears the saved one; absent keeps it.
@@ -122,6 +128,12 @@ fn coerce_config(
         Some(token) if !token.is_empty() => Some(token.to_string()),
         // Empty or absent keeps the saved secret — the form never round-trips it.
         _ => existing.remote_token.clone(),
+    };
+
+    let local_url = if mode == ConnectionMode::Local {
+        Some(local_url.unwrap_or_else(|| connection::DEFAULT_LOCAL_DASHBOARD_URL.to_string()))
+    } else {
+        local_url
     };
 
     if mode == ConnectionMode::Remote {
@@ -139,6 +151,7 @@ fn coerce_config(
 
     Ok(ConnectionConfig {
         mode,
+        local_url,
         remote_url,
         remote_token,
     })
@@ -154,10 +167,41 @@ fn reject_env_override() -> AppResult<()> {
     Ok(())
 }
 
+enum TestTarget {
+    Local { base_url: String },
+    Remote { base_url: String, token: String },
+}
+
 /// Resolve the URL/token a test should run against: explicit form input wins,
 /// then the env override, then the saved config.
-fn test_target(input: &ConnectionConfigInput) -> AppResult<(String, String)> {
+fn test_target(input: &ConnectionConfigInput) -> AppResult<TestTarget> {
     let saved = connection::read_config();
+    let mode = match input.mode.as_deref() {
+        Some("local") => ConnectionMode::Local,
+        Some("remote") => ConnectionMode::Remote,
+        Some("managed") | None => saved.mode,
+        Some(other) => {
+            return Err(AppError::InvalidRequest(format!(
+                "未知的连接模式: {}",
+                other
+            )))
+        }
+    };
+
+    if mode == ConnectionMode::Local {
+        let raw_url = input
+            .local_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+            .or(saved.local_url)
+            .unwrap_or_else(|| connection::DEFAULT_LOCAL_DASHBOARD_URL.to_string());
+        return Ok(TestTarget::Local {
+            base_url: connection::normalize_local_base_url(&raw_url)?,
+        });
+    }
+
     let env_url = std::env::var(connection::ENV_REMOTE_URL)
         .ok()
         .map(|v| v.trim().to_string())
@@ -190,7 +234,10 @@ fn test_target(input: &ConnectionConfigInput) -> AppResult<(String, String)> {
             AppError::InvalidRequest("没有可测试的 token：请先填写 session token".to_string())
         })?;
 
-    Ok((connection::normalize_remote_base_url(&raw_url)?, token))
+    Ok(TestTarget::Remote {
+        base_url: connection::normalize_remote_base_url(&raw_url)?,
+        token,
+    })
 }
 
 async fn fetch_status(
@@ -282,14 +329,21 @@ pub async fn probe_connection_config(
 pub async fn test_connection_config(
     input: ConnectionConfigInput,
 ) -> Result<TestConnectionResult, AppError> {
-    let (base_url, token) = test_target(&input)?;
+    let target = test_target(&input)?;
+    let (base_url, token, is_local) = match target {
+        TestTarget::Local { base_url } => {
+            let token = dashboard::fetch_session_token(&base_url).await;
+            (base_url, token, true)
+        }
+        TestTarget::Remote { base_url, token } => (base_url, Some(token), false),
+    };
 
     let mut result = TestConnectionResult {
         base_url: base_url.clone(),
         ..Default::default()
     };
 
-    match fetch_status(&base_url, Some(&token)).await {
+    match fetch_status(&base_url, token.as_deref()).await {
         Ok((status, body)) => {
             result.http_status = Some(status);
             result.http_ok = (200..300).contains(&status);
@@ -300,13 +354,18 @@ pub async fn test_connection_config(
                 .and_then(|v| v.as_str())
                 .map(str::to_string);
             if status == 401 {
-                result.error = Some("token 无效或已过期（HTTP 401）".to_string());
+                result.error = Some(if is_local {
+                    "无法自动读取本地 dashboard session token，或 token 已过期（HTTP 401）"
+                        .to_string()
+                } else {
+                    "token 无效或已过期（HTTP 401）".to_string()
+                });
             } else if !result.http_ok {
-                result.error = Some(format!("远程返回 HTTP {}", status));
+                result.error = Some(format!("目标网关返回 HTTP {}", status));
             }
         }
         Err(err) => {
-            result.error = Some(format!("无法连接远程地址: {}", err));
+            result.error = Some(format!("无法连接目标地址: {}", err));
             return Ok(result);
         }
     }
@@ -317,7 +376,12 @@ pub async fn test_connection_config(
         return Ok(result);
     }
 
-    result.ws_ok = dashboard::dashboard_supports_ws(&base_url, Some(&token)).await;
+    if token.is_none() {
+        result.error = Some("HTTP 可达，但无法自动读取 dashboard session token".to_string());
+        return Ok(result);
+    }
+
+    result.ws_ok = dashboard::dashboard_supports_ws(&base_url, token.as_deref()).await;
     if result.http_ok && !result.ws_ok {
         result.error = Some(
             "HTTP 可达但 WebSocket（/api/ws）握手失败：检查代理/防火墙是否放行 WS，以及 token 是否正确".to_string(),
@@ -351,12 +415,29 @@ pub async fn apply_connection_config(
     }
 
     let result = match config.mode {
+        ConnectionMode::Managed => apply_managed(&app, &state).await,
+        ConnectionMode::Local => apply_local_connection(&state, &config).await,
         ConnectionMode::Remote => apply_remote(&state, &config).await,
-        ConnectionMode::Local => apply_local(&app, &state).await,
     };
 
     restart::end_restart(&state);
     result
+}
+
+fn detach_current_backend(state: &State<'_, AppState>) -> Result<(), AppError> {
+    let mut inner = state.inner.lock()?;
+    if let Some(relay) = inner.gateway_ws.take() {
+        relay
+            .abort
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        relay.notify.notify_waiters();
+    }
+    let session_token = inner.session_token.clone();
+    if let Some(ref mut handle) = inner.dashboard_handle {
+        handle.stop_with_token(session_token.as_deref());
+    }
+    inner.dashboard_handle = None;
+    Ok(())
 }
 
 /// Switch the running desktop onto a remote Hermes Agent. The remote is probed
@@ -393,22 +474,7 @@ async fn apply_remote(
         });
     }
 
-    // Tear down the local side: stop the WS relay, then gracefully stop the
-    // owned dashboard (a no-op for remote/external handles).
-    {
-        let mut inner = state.inner.lock()?;
-        if let Some(relay) = inner.gateway_ws.take() {
-            relay
-                .abort
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-            relay.notify.notify_waiters();
-        }
-        let session_token = inner.session_token.clone();
-        if let Some(ref mut handle) = inner.dashboard_handle {
-            handle.stop_with_token(session_token.as_deref());
-        }
-        inner.dashboard_handle = None;
-    }
+    detach_current_backend(state)?;
 
     let gateway_url = dashboard::build_gateway_url(&base_url, Some(&token));
     {
@@ -433,43 +499,158 @@ async fn apply_remote(
     })
 }
 
-/// Switch back to the local managed runtime. Runs the full bootstrap acquire
+/// Switch the running desktop onto a loopback Hermes Agent CLI dashboard. The
+/// session token is fetched from the dashboard HTML and never stored.
+async fn apply_local_connection(
+    state: &State<'_, AppState>,
+    config: &ConnectionConfig,
+) -> Result<ApplyConnectionResult, AppError> {
+    let base_url = config
+        .local_url
+        .clone()
+        .unwrap_or_else(|| connection::DEFAULT_LOCAL_DASHBOARD_URL.to_string());
+
+    if !dashboard::probe_attached_dashboard(&base_url).await {
+        return Ok(ApplyConnectionResult {
+            ok: false,
+            mode: "local".to_string(),
+            error: Some(format!(
+                "本地 Hermes Agent CLI 不可达（{}/api/status 无响应），已保存配置但未切换",
+                base_url
+            )),
+            ..Default::default()
+        });
+    }
+
+    let token = match dashboard::fetch_session_token(&base_url).await {
+        Some(token) => token,
+        None => {
+            return Ok(ApplyConnectionResult {
+                ok: false,
+                mode: "local".to_string(),
+                error: Some(
+                    "无法从本地 dashboard 页面自动读取 session token，请确认 Hermes Agent CLI dashboard 正常运行"
+                        .to_string(),
+                ),
+                ..Default::default()
+            })
+        }
+    };
+
+    if !dashboard::dashboard_supports_ws(&base_url, Some(&token)).await {
+        return Ok(ApplyConnectionResult {
+            ok: false,
+            mode: "local".to_string(),
+            error: Some(
+                "本地 WebSocket（/api/ws）握手失败：检查本机 dashboard 状态与 session token"
+                    .to_string(),
+            ),
+            ..Default::default()
+        });
+    }
+
+    let hermes_home = match dashboard::fetch_attached_dashboard_hermes_home(&base_url)
+        .await
+        .filter(|h| !h.trim().is_empty())
+    {
+        Some(home) => home,
+        None => {
+            return Ok(ApplyConnectionResult {
+                ok: false,
+                mode: "local".to_string(),
+                error: Some(
+                    "本地 dashboard 未返回 hermes_home，已保存配置但未切换，避免误读桌面端内置内核的 Memory"
+                        .to_string(),
+                ),
+                ..Default::default()
+            })
+        }
+    };
+    let gateway_url = dashboard::build_gateway_url(&base_url, Some(&token));
+    detach_current_backend(state)?;
+
+    {
+        let mut inner = state.inner.lock()?;
+        inner.api_base_url = base_url.clone();
+        inner.gateway_url = gateway_url.clone();
+        inner.session_token = Some(token.clone());
+        inner.hermes_home = hermes_home.clone();
+        inner.hermes_home_base = hermes_home;
+        inner.current_profile = "default".to_string();
+        inner.connection_mode = ConnectionMode::Local;
+        inner.yolo_mode = false;
+        inner.last_runtime_error = None;
+        inner.dashboard_handle = Some(DashboardHandle::local(
+            base_url.clone(),
+            Some(token.clone()),
+        ));
+    }
+
+    log::info!(
+        "Connection switched to local Hermes Agent CLI at {}",
+        base_url
+    );
+    Ok(ApplyConnectionResult {
+        ok: true,
+        mode: "local".to_string(),
+        api_base_url: Some(base_url),
+        gateway_url: Some(gateway_url),
+        session_token: Some(token),
+        error: None,
+    })
+}
+
+/// Switch back to the desktop managed runtime. Runs the full bootstrap acquire
 /// path — a remote-first install may not even have a managed runtime on disk
 /// yet, so this can download one (with runtime-status progress events).
-async fn apply_local(
+async fn apply_managed(
     app: &tauri::AppHandle,
     state: &State<'_, AppState>,
 ) -> Result<ApplyConnectionResult, AppError> {
-    let (hermes_home, already_local) = {
+    let (already_managed, api_base_url, gateway_url, session_token) = {
         let inner = state.inner.lock()?;
         (
-            inner.hermes_home.clone(),
-            inner.connection_mode == ConnectionMode::Local && inner.dashboard_handle.is_some(),
+            inner.connection_mode == ConnectionMode::Managed && inner.dashboard_handle.is_some(),
+            inner.api_base_url.clone(),
+            inner.gateway_url.clone(),
+            inner.session_token.clone(),
         )
     };
-    if already_local {
-        let inner = state.inner.lock()?;
+    if already_managed {
         return Ok(ApplyConnectionResult {
             ok: true,
-            mode: "local".to_string(),
-            api_base_url: Some(inner.api_base_url.clone()),
-            gateway_url: Some(inner.gateway_url.clone()),
-            session_token: inner.session_token.clone(),
+            mode: "managed".to_string(),
+            api_base_url: Some(api_base_url),
+            gateway_url: Some(gateway_url),
+            session_token,
             error: None,
         });
     }
 
-    // Drop the remote attachment (stop_with_token is a no-op for it).
-    {
-        let mut inner = state.inner.lock()?;
-        if let Some(relay) = inner.gateway_ws.take() {
-            relay
-                .abort
-                .store(true, std::sync::atomic::Ordering::Relaxed);
-            relay.notify.notify_waiters();
-        }
-        inner.dashboard_handle = None;
+    let hermes_home_base = runtime::hermes_home_dir().to_string_lossy().to_string();
+    let mut current_profile =
+        crate::commands::profiles::read_active_profile_sticky(&hermes_home_base);
+    let mut hermes_home = if current_profile == "default" {
+        runtime::hermes_home_dir()
+    } else {
+        runtime::hermes_home_dir()
+            .join("profiles")
+            .join(&current_profile)
+    };
+    if current_profile != "default" && !hermes_home.exists() {
+        log::warn!(
+            "saved managed profile {} points to missing {}; falling back to default",
+            current_profile,
+            hermes_home.display()
+        );
+        current_profile = "default".to_string();
+        hermes_home = runtime::hermes_home_dir();
+        let _ = std::fs::remove_file(runtime::hermes_home_dir().join("active_profile"));
     }
+    let hermes_home = hermes_home.to_string_lossy().to_string();
+
+    // Drop the attachment (stop_with_token is a no-op for it).
+    detach_current_backend(state)?;
 
     let (host, port) = restart::host_and_port();
     let options = dashboard::EnsureDashboardOptions {
@@ -487,7 +668,7 @@ async fn apply_local(
             Err(err) => {
                 return Ok(ApplyConnectionResult {
                     ok: false,
-                    mode: "local".to_string(),
+                    mode: "managed".to_string(),
                     error: Some(format!("本地内核启动失败：{}", err)),
                     ..Default::default()
                 })
@@ -512,16 +693,19 @@ async fn apply_local(
         inner.api_base_url = api_base_url.clone();
         inner.gateway_url = gateway_url.clone();
         inner.session_token = token.clone();
-        inner.connection_mode = ConnectionMode::Local;
+        inner.hermes_home = hermes_home.clone();
+        inner.hermes_home_base = hermes_home_base;
+        inner.current_profile = current_profile;
+        inner.connection_mode = ConnectionMode::Managed;
         inner.yolo_mode = dashboard::yolo_mode_effective(&hermes_home);
         inner.last_runtime_error = None;
         inner.dashboard_handle = Some(handle);
     }
 
-    log::info!("Connection switched back to local managed runtime");
+    log::info!("Connection switched back to desktop managed runtime");
     Ok(ApplyConnectionResult {
         ok: true,
-        mode: "local".to_string(),
+        mode: "managed".to_string(),
         api_base_url: Some(api_base_url),
         gateway_url: Some(gateway_url),
         session_token: token,
@@ -537,17 +721,46 @@ mod tests {
     fn remote_config() -> ConnectionConfig {
         ConnectionConfig {
             mode: ConnectionMode::Remote,
+            local_url: Some(connection::DEFAULT_LOCAL_DASHBOARD_URL.to_string()),
             remote_url: Some("http://host:9221".to_string()),
             remote_token: Some("saved-token".to_string()),
         }
     }
 
     #[test]
-    fn coerce_defaults_to_local_keeping_remote_fields() {
+    fn coerce_defaults_to_managed_keeping_saved_fields() {
         let coerced = coerce_config(&remote_config(), &ConnectionConfigInput::default()).unwrap();
-        assert_eq!(coerced.mode, ConnectionMode::Local);
+        assert_eq!(coerced.mode, ConnectionMode::Managed);
+        assert_eq!(
+            coerced.local_url.as_deref(),
+            Some(connection::DEFAULT_LOCAL_DASHBOARD_URL)
+        );
         assert_eq!(coerced.remote_url.as_deref(), Some("http://host:9221"));
         assert_eq!(coerced.remote_token.as_deref(), Some("saved-token"));
+    }
+
+    #[test]
+    fn coerce_local_defaults_to_loopback_cli_url() {
+        let input = ConnectionConfigInput {
+            mode: Some("local".to_string()),
+            ..Default::default()
+        };
+        let coerced = coerce_config(&ConnectionConfig::default(), &input).unwrap();
+        assert_eq!(coerced.mode, ConnectionMode::Local);
+        assert_eq!(
+            coerced.local_url.as_deref(),
+            Some(connection::DEFAULT_LOCAL_DASHBOARD_URL)
+        );
+    }
+
+    #[test]
+    fn coerce_local_rejects_non_loopback_url() {
+        let input = ConnectionConfigInput {
+            mode: Some("local".to_string()),
+            local_url: Some("http://192.168.1.10:9119".to_string()),
+            ..Default::default()
+        };
+        assert!(coerce_config(&ConnectionConfig::default(), &input).is_err());
     }
 
     #[test]
@@ -556,6 +769,7 @@ mod tests {
             mode: Some("remote".to_string()),
             remote_url: Some("http://new-host:9120/".to_string()),
             remote_token: Some("   ".to_string()),
+            ..Default::default()
         };
         let coerced = coerce_config(&remote_config(), &input).unwrap();
         assert_eq!(coerced.mode, ConnectionMode::Remote);
@@ -578,6 +792,7 @@ mod tests {
             mode: Some("remote".to_string()),
             remote_url: Some("http://host:9221".to_string()),
             remote_token: None,
+            ..Default::default()
         };
         assert!(coerce_config(&ConnectionConfig::default(), &input).is_err());
     }
@@ -594,6 +809,7 @@ mod tests {
             mode: Some("remote".to_string()),
             remote_url: Some("ftp://host".to_string()),
             remote_token: Some("tok".to_string()),
+            ..Default::default()
         };
         assert!(coerce_config(&ConnectionConfig::default(), &bad_url).is_err());
     }
@@ -601,9 +817,10 @@ mod tests {
     #[test]
     fn coerce_explicit_empty_url_clears_saved_value() {
         let input = ConnectionConfigInput {
-            mode: Some("local".to_string()),
+            mode: Some("managed".to_string()),
             remote_url: Some("".to_string()),
             remote_token: None,
+            ..Default::default()
         };
         let coerced = coerce_config(&remote_config(), &input).unwrap();
         assert_eq!(coerced.remote_url, None);
