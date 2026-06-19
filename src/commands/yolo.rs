@@ -10,6 +10,13 @@
 // preference and — when the desktop owns the dashboard process — restarts it so
 // the change takes effect immediately, mirroring the stop+respawn flow used by
 // `switch_profile`.
+//
+// The persisted preference is authoritative for the managed runtime: an
+// explicit "off" disables YOLO even when the desktop process inherited
+// `HERMES_YOLO_MODE=1`. The env var only seeds the default before the user has
+// ever set the preference, so `effective` can exceed the persisted `enabled`
+// in two cases: the brief window between a toggle and the restart that applies
+// it, and a never-set preference while the parent env forces YOLO (see #287).
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -25,8 +32,9 @@ pub struct YoloModeStatus {
     /// Persisted desktop preference for the active profile's HERMES_HOME.
     pub enabled: bool,
     /// What the currently-running managed dashboard was actually started with.
-    /// Differs from `enabled` only between a toggle and the runtime restart
-    /// that applies it.
+    /// Usually equals `enabled`; it can exceed it between a toggle and the
+    /// runtime restart that applies it, or when an inherited `HERMES_YOLO_MODE`
+    /// forces YOLO while no preference has been persisted (see #287).
     pub effective: bool,
 }
 
