@@ -12,6 +12,7 @@ export const WORKSPACE_STORAGE_KEY = "hermes-cn-ui.workspacePath";
 const WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.workspaceProjects";
 const SESSION_WORKSPACE_STORAGE_KEY = "hermes-cn-ui.sessionWorkspaces";
 const PINNED_WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.pinnedWorkspaceProjects";
+const WORKSPACE_LOCK_STORAGE_KEY = "hermes-cn-ui.workspaceLock";
 const WORKSPACE_CHANGED_EVENT = "hermes-cn-ui.workspaces.changed";
 
 export function normalizeWorkspacePath(path: unknown): string {
@@ -273,4 +274,93 @@ export function subscribeWorkspaceChanges(listener: () => void): () => void {
     window.removeEventListener(WORKSPACE_CHANGED_EVENT, listener);
     unsubscribe();
   };
+}
+
+/**
+ * Workspace Lock Feature
+ *
+ * When workspace lock is enabled, the workspace will not automatically switch
+ * when changing sessions. This is useful when the user wants to keep the same
+ * workspace across multiple sessions.
+ */
+
+export interface WorkspaceLockState {
+  enabled: boolean;
+  lockedPath: string | null;
+}
+
+export function readWorkspaceLock(): WorkspaceLockState {
+  const raw = readJSON<unknown>(WORKSPACE_LOCK_STORAGE_KEY, { enabled: false, lockedPath: null });
+  if (!isRecord(raw)) return { enabled: false, lockedPath: null };
+  return {
+    enabled: raw.enabled === true,
+    lockedPath: typeof raw.lockedPath === "string" ? raw.lockedPath : null,
+  };
+}
+
+export function writeWorkspaceLock(state: WorkspaceLockState): void {
+  writeJSON(WORKSPACE_LOCK_STORAGE_KEY, state);
+}
+
+export function isWorkspaceLocked(): boolean {
+  return readWorkspaceLock().enabled;
+}
+
+export function toggleWorkspaceLock(): WorkspaceLockState {
+  const current = readWorkspaceLock();
+  const currentPath = readWorkspacePath();
+  const newState: WorkspaceLockState = {
+    enabled: !current.enabled,
+    lockedPath: !current.enabled ? currentPath : null,
+  };
+  writeWorkspaceLock(newState);
+  return newState;
+}
+
+export function lockWorkspaceToCurrent(): WorkspaceLockState {
+  const currentPath = readWorkspacePath();
+  const state: WorkspaceLockState = { enabled: true, lockedPath: currentPath };
+  writeWorkspaceLock(state);
+  return state;
+}
+
+export function unlockWorkspace(): WorkspaceLockState {
+  const state: WorkspaceLockState = { enabled: false, lockedPath: null };
+  writeWorkspaceLock(state);
+  return state;
+}
+
+/**
+ * Get the workspace path for a specific session.
+ * Returns null if no workspace is associated with the session.
+ */
+export function getWorkspaceForSession(sessionId: string | null | undefined): string | null {
+  const normalizedSessionId = sessionId?.trim();
+  if (!normalizedSessionId) return null;
+  const map = readSessionWorkspaceMap();
+  return normalizeWorkspacePath(map[normalizedSessionId]) || null;
+}
+
+/**
+ * Restore workspace for a session when switching to it.
+ * Returns the workspace path that should be set, or null if no change needed.
+ */
+export function restoreWorkspaceForSession(sessionId: string | null | undefined): string | null {
+  const normalizedSessionId = sessionId?.trim();
+  if (!normalizedSessionId) return null;
+
+  const lockState = readWorkspaceLock();
+  if (lockState.enabled) {
+    return null;
+  }
+
+  const sessionWorkspace = getWorkspaceForSession(normalizedSessionId);
+  const currentWorkspace = readWorkspacePath();
+
+  if (sessionWorkspace && sessionWorkspace !== currentWorkspace) {
+    writeWorkspacePath(sessionWorkspace);
+    return sessionWorkspace;
+  }
+
+  return null;
 }
