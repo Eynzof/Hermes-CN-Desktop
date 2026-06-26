@@ -48,6 +48,8 @@ import {
   terminateAllStreamsAtom,
   type ImageEntry,
 } from "@/stores/chat";
+import { sessionTipRedirectAtom } from "@/stores/ui";
+import { recordTipRedirect } from "@/lib/session-tip-redirect";
 
 type GatewayState = ReturnType<typeof getGatewayClient>["state"];
 
@@ -235,6 +237,7 @@ export function useGateway() {
   const markSessionInterrupted = useSetAtom(markSessionInterruptedAtom);
   const startPrompt = useSetAtom(startPromptAtom);
   const setSessionError = useSetAtom(setSessionErrorAtom);
+  const setSessionTipRedirect = useSetAtom(sessionTipRedirectAtom);
   const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);
 
   const activeRuntime = gwSessionId ? runtimeBySession[gwSessionId] : undefined;
@@ -302,12 +305,18 @@ export function useGateway() {
       }),
       "session.resume",
     );
+    const resumed = result.resumed ?? persistentSessionId;
     setGwSessionId(result.session_id);
     resetChatSession(result.session_id);
-    rememberSessionMapping(result.session_id, result.resumed ?? persistentSessionId);
-    mirrorSessionWorkspaceMapping(result.session_id, result.resumed ?? persistentSessionId);
+    rememberSessionMapping(result.session_id, resumed);
+    mirrorSessionWorkspaceMapping(result.session_id, resumed);
+    // Compression rotated the conversation onto a new continuation: the backend
+    // followed the chain and resumed a different persistent id than we asked
+    // for. Record it so the detail route can project onto the live tip instead
+    // of stranding the user on the now-empty pre-compression id (issue #305).
+    setSessionTipRedirect((prev) => recordTipRedirect(prev, persistentSessionId, result.resumed));
     return result.session_id;
-  }, [ensureSubscribed, resetChatSession, setGwSessionId]);
+  }, [ensureSubscribed, resetChatSession, setGwSessionId, setSessionTipRedirect]);
 
   const sendPrompt = useCallback(
     async (

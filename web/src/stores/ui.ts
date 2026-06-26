@@ -3,6 +3,15 @@ import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
 
 export const activeSessionIdAtom = atom<string | null>(null);
+
+// Maps a pre-compression persistent session id to the live continuation "tip"
+// that the backend redirected a `session.resume` to. The detail route watches
+// this so the URL/active id follows the backend's new tip after compression
+// instead of stranding the user on a session whose messages have moved — the
+// "conversation vanished + #2/#3 duplicate" symptom (issue #305). Populated by
+// resumeSession via recordTipRedirect; consumed by the detail route effect.
+export const sessionTipRedirectAtom = atom<Record<string, string>>({});
+
 export const sidebarSearchAtom = atom("");
 export const commandPaletteOpenAtom = atom(false);
 
