@@ -377,6 +377,13 @@ fn main() {
                 current_profile,
                 ConnectionMode::Managed,
             ));
+
+            // Keep the managed dashboard/gateway alive: auto-restart it if the
+            // owned process dies unexpectedly. Self-gates on Managed mode, so it
+            // no-ops for attached local/remote backends.
+            tauri::async_runtime::spawn(hermes_agent_cn::supervisor::supervise_managed_dashboard(
+                app.handle().clone(),
+            ));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
