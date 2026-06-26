@@ -12,7 +12,7 @@ Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese commun
 
 Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn). The desktop app is part of the [Hermes Agent Chinese Community](https://hermesagent.org.cn) ecosystem, where the main site links to Chinese docs, practice guides, community entry points, and more ecosystem projects.
 
-> Current release: `v0.5.3`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
+> Current release: `v0.5.4`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
 
 ## Hermes Agent Chinese Community
 
@@ -95,9 +95,9 @@ Installers are available from the [desktop website](https://desktop.hermesagent.
 
 The current release includes:
 
-- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.5.3_aarch64.dmg`
-- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.5.3_x64.dmg`
-- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.5.3_x64-setup.exe`
+- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.5.4_aarch64.dmg`
+- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.5.4_x64.dmg`
+- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.5.4_x64-setup.exe`
 
 Both the Windows and macOS installers include a bundled `Hermes-CN-Core` runtime. On first launch, the app initializes the local core from the bundled runtime first; managed runtime download/update is only used for upgrades or fallback repair.
 
