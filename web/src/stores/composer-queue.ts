@@ -93,19 +93,48 @@ export function serializeQueue(state: QueueState): string {
   return JSON.stringify(cleaned);
 }
 
+function isQueuedEntry(value: unknown): value is QueuedPromptEntry {
+  if (!value || typeof value !== "object") return false;
+  const e = value as Partial<QueuedPromptEntry>;
+  return (
+    typeof e.id === "string" &&
+    typeof e.text === "string" &&
+    typeof e.queuedAt === "number" &&
+    Array.isArray(e.attachments)
+  );
+}
+
+/** Drop attachments that can't survive a reload (browser File objects lose
+ *  their data); path-based attachments keep working. Tolerates malformed
+ *  elements (null / non-objects) without throwing. */
+function sanitizeAttachments(attachments: ComposerAttachment[]): ComposerAttachment[] {
+  return attachments.filter(
+    (a): a is ComposerAttachment =>
+      Boolean(a) && typeof a === "object" && a.source === "path" && Boolean(a.path),
+  );
+}
+
 export function deserializeQueue(raw: string | null): QueueState {
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw) as QueueState;
-    if (!parsed || typeof parsed !== "object") return {};
-    // Drop attachments that can't survive a reload (browser File objects lose
-    // their data); path-based attachments keep working.
-    for (const entries of Object.values(parsed)) {
-      for (const entry of entries) {
-        entry.attachments = (entry.attachments ?? []).filter((a) => a.source === "path" && a.path);
-      }
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    // Persisted state outlives the code that wrote it: it survives app updates
+    // and reinstalls — only deleting app data clears it. A single malformed
+    // entry (e.g. a `text` that deserializes to an object) would otherwise be
+    // restored verbatim, render as "[object Object]" under the composer, and
+    // wedge send/drain until the user wipes app data — the disaster reported in
+    // issue #224's comments. Validate every entry and drop anything malformed
+    // instead of trusting the persisted shape.
+    const clean: QueueState = {};
+    for (const [key, entries] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!Array.isArray(entries)) continue;
+      const valid = entries
+        .filter(isQueuedEntry)
+        .map((entry) => ({ ...entry, attachments: sanitizeAttachments(entry.attachments) }));
+      if (valid.length > 0) clean[key] = valid;
     }
-    return parsed;
+    return clean;
   } catch {
     return {};
   }
