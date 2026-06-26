@@ -10,7 +10,9 @@ import {
   conversationWidthMaxWidth,
   conversationWidthModeAtom,
   rightRailVisibleAtom,
+  sessionTipRedirectAtom,
 } from "@/stores/ui";
+import { pickTipRedirect } from "@/lib/session-tip-redirect";
 import {
   appendNoticeAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
@@ -284,6 +286,23 @@ export function DetailRoute() {
     }
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
+
+  // Follow the backend's compression tip (issue #305). When a session.resume is
+  // redirected to a live continuation (recorded in sessionTipRedirectAtom), the
+  // detail route is still pinned to the pre-compression id whose messages have
+  // moved — so the conversation looks like it vanished while a #2/#3 duplicate
+  // surfaces in the sidebar. Re-project onto the tip here, at the route layer
+  // (not inside the async ensureGatewaySession closure, which was the #52
+  // closure-stale hazard): a synchronous effect reacting to atom state, with a
+  // replace navigate. pickTipRedirect never returns the current id, so once the
+  // route reaches the tip this is a no-op (no navigation loop).
+  const tipRedirects = useAtomValue(sessionTipRedirectAtom);
+  useEffect(() => {
+    const tip = pickTipRedirect(tipRedirects, { taskId, restSessionId, activeSessionId });
+    if (!tip) return;
+    setActiveId(tip);
+    navigate(`/tasks/${tip}`, { replace: true });
+  }, [tipRedirects, taskId, restSessionId, activeSessionId, setActiveId, navigate]);
 
   const storedMessages = useMemo(
     () => attachTurnStatsMetadata(messagesResponseToHermesUIMessages(messagesData), turnStats),
