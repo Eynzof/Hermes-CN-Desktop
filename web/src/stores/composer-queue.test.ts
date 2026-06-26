@@ -67,4 +67,46 @@ describe("serialization", () => {
     expect(deserializeQueue("not json")).toEqual({});
     expect(deserializeQueue(null)).toEqual({});
   });
+
+  // Persisted state survives app reinstalls; a corrupt entry must never be
+  // restored into app state, or it renders as "[object Object]" under the
+  // composer and wedges send until the user wipes app data (issue #224).
+  it("drops entries whose text is not a string", () => {
+    const raw = JSON.stringify({
+      s1: [
+        { id: "bad", text: {}, attachments: [], queuedAt: 1 },
+        { id: "ok", text: "hello", attachments: [], queuedAt: 2 },
+      ],
+    });
+    const restored = deserializeQueue(raw);
+    expect(entriesFor(restored, "s1").map((e) => e.id)).toEqual(["ok"]);
+  });
+
+  it("drops malformed entries, keys, and attachments without throwing", () => {
+    const raw = JSON.stringify({
+      s1: "not-an-array",
+      s2: [
+        null,
+        { id: 5, text: "wrong id type", attachments: [], queuedAt: 1 },
+        { id: "missing-fields" },
+        {
+          id: "good",
+          text: "ok",
+          queuedAt: 3,
+          attachments: [null, "x", { source: "path", path: "/a", id: "p", name: "a", kind: "file", status: "ready" }],
+        },
+      ],
+    });
+    const restored = deserializeQueue(raw);
+    expect(Object.keys(restored)).toEqual(["s2"]);
+    const entries = entriesFor(restored, "s2");
+    expect(entries.map((e) => e.id)).toEqual(["good"]);
+    expect(entries[0]!.attachments.map((a) => a.id)).toEqual(["p"]);
+  });
+
+  it("returns {} when the top-level value is an array or primitive", () => {
+    expect(deserializeQueue("[]")).toEqual({});
+    expect(deserializeQueue("42")).toEqual({});
+    expect(deserializeQueue('"str"')).toEqual({});
+  });
 });
