@@ -149,12 +149,30 @@ pub async fn gateway_ws_open(
         let abort_w = abort.clone();
         let notify_w = notify.clone();
         tauri::async_runtime::spawn(async move {
+            // The dashboard's uvicorn pings every 20s and closes the socket when it
+            // doesn't see a pong within 20s (ws_ping_timeout). On this split
+            // sink/stream relay, tungstenite's automatic pong only flushes when the
+            // write half is polled — and the writer sits idle between RPCs. So on an
+            // otherwise-quiet gateway the queued pong never goes out, uvicorn drops
+            // the connection, and the desktop reconnects every ~20-40s ("网关经常
+            // 中断，需要重连"). Send our own keepalive ping well under that window:
+            // it keeps the socket warm and, by driving the sink, flushes any pending
+            // pong. The reader already ignores inbound Ping/Pong frames.
+            let mut keepalive = tokio::time::interval(std::time::Duration::from_secs(10));
+            keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 if abort_w.load(Ordering::Relaxed) {
                     break;
                 }
                 tokio::select! {
                     _ = notify_w.notified() => break,
+                    _ = keepalive.tick() => {
+                        // Empty payload; uvicorn just needs the frame to keep the
+                        // socket alive (and the send flushes any pending pong).
+                        if sink.send(Message::Ping(Default::default())).await.is_err() {
+                            break;
+                        }
+                    }
                     out = rx.recv() => match out {
                         Some(text) => {
                             if sink.send(Message::text(text)).await.is_err() {
