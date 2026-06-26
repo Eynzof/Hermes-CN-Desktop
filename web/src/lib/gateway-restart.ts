@@ -1,6 +1,20 @@
+import type { HostOS } from "@/lib/runtime";
+
 export const GATEWAY_RESTART_ACTION_NAME = "gateway-restart";
 
 export type GatewayRestartPhase = "idle" | "starting" | "running" | "success" | "error";
+
+// A gateway start/restart that fails on Windows is, in the field, most often a
+// security-suite false positive (360 / 火绒 / Windows Defender) killing the
+// unsigned frozen runtime. Surface that as actionable guidance next to the retry
+// affordance instead of leaving the user with an opaque failure (issue #224).
+export const GATEWAY_RESTART_ANTIVIRUS_HINT =
+  "若反复失败，网关可能被安全软件（360 / 火绒 / Windows Defender 等）拦截。请将 Hermes 加入信任 / 白名单后重试。";
+
+/** The antivirus hint, shown only on Windows where it applies; empty elsewhere. */
+export function gatewayRestartAntivirusHint(hostOs: HostOS): string {
+  return hostOs === "windows" ? GATEWAY_RESTART_ANTIVIRUS_HINT : "";
+}
 
 export interface GatewayRestartResponse {
   ok: boolean;

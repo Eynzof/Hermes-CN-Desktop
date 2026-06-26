@@ -12,7 +12,12 @@ import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-ur
 import { openExternalUrl } from "@/lib/external-links";
 import { isSessionRunning, mergeLiveRuntimeSessions } from "@/lib/session-activity";
 import { formatTokens } from "@/lib/format";
-import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
+import {
+  gatewayRestartAntivirusHint,
+  gatewayRestartButtonLabel,
+  gatewayRestartTitle,
+} from "@/lib/gateway-restart";
+import { detectHostOS } from "@/lib/runtime";
 import { buildSidebarVersionRows } from "./sidebar-version-tag";
 import s from "./app-status-bar.module.css";
 
@@ -105,6 +110,25 @@ export function AppStatusBar() {
         <span className={s.srOnly} aria-live="polite">
           {gatewayRestart.message ?? ""}
         </span>
+        {gatewayRestart.phase === "error" && (
+          <span className={s.gatewayError} role="alert">
+            <span className={s.gatewayErrorMsg}>
+              <strong>{gatewayRestart.message ?? "网关重启失败"}</strong>
+              {(() => {
+                const hint = gatewayRestartAntivirusHint(detectHostOS());
+                return hint ? <span className={s.gatewayErrorHint}>{hint}</span> : null;
+              })()}
+            </span>
+            <button
+              type="button"
+              className={s.gatewayRetry}
+              onClick={() => void gatewayRestart.restart()}
+            >
+              <RotateCcw size={11} aria-hidden="true" />
+              <span>重试</span>
+            </button>
+          </span>
+        )}
       </span>
       <span className={s.sep} />
       <span className={s.stat}>
