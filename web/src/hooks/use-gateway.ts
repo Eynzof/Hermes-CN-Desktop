@@ -50,6 +50,7 @@ import {
 } from "@/stores/chat";
 import { sessionTipRedirectAtom } from "@/stores/ui";
 import { recordTipRedirect } from "@/lib/session-tip-redirect";
+import { createDeltaCoalescer } from "@/lib/gateway-delta-coalescer";
 
 type GatewayState = ReturnType<typeof getGatewayClient>["state"];
 
@@ -64,6 +65,7 @@ interface GatewaySubscriptionBridge {
   unsubscribeState: () => void;
   unsubscribeAny: () => void;
   unsubscribeDisconnect: () => void;
+  flushPendingDeltas: () => void;
 }
 
 let gatewayBridge: GatewaySubscriptionBridge | null = null;
@@ -131,9 +133,18 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
     unsubscribeState: () => {},
     unsubscribeAny: () => {},
     unsubscribeDisconnect: () => {},
+    flushPendingDeltas: () => {},
   };
   const client = getGatewayClient();
   client.enableAutoReconnect();
+
+  // Coalesce streaming message.delta into one apply per animation frame (see
+  // lib/gateway-delta-coalescer). apply() resolves the primary subscriber lazily
+  // so a buffered flush always lands on the current chat-store binding.
+  const coalescer = createDeltaCoalescer((event) =>
+    primarySubscriber(bridge)?.applyGatewayEvent(event),
+  );
+  bridge.flushPendingDeltas = coalescer.flush;
 
   // Re-issue session.resume only after a disconnect, never on the very first
   // connect (there is no in-flight state to re-pin yet). `gateway.disconnected`
@@ -152,12 +163,14 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
     }
   });
   bridge.unsubscribeAny = client.onAny((event) => {
-    primarySubscriber(bridge)?.applyGatewayEvent(event);
+    coalescer.dispatch(event);
   });
   bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () => {
-    // A disconnect that the transport could not silently recover. Keep the
-    // in-flight turn alive (don't freeze it as an error) and arm a one-shot
+    // A disconnect that the transport could not silently recover. Flush any
+    // buffered deltas first so the in-flight turn's last tokens aren't stranded,
+    // keep the turn alive (don't freeze it as an error), and arm a one-shot
     // session.resume for when the connection comes back.
+    coalescer.flush();
     needsResumeOnReopen = true;
     getDefaultStore().set(markStreamsReconnectingAtom);
   });
@@ -181,6 +194,7 @@ function subscribeGateway(
       bridge.subscribers.splice(index, 1);
     }
     if (bridge.subscribers.length === 0 && gatewayBridge === bridge) {
+      bridge.flushPendingDeltas();
       bridge.unsubscribeState();
       bridge.unsubscribeAny();
       bridge.unsubscribeDisconnect();
@@ -256,6 +270,17 @@ export function useGateway() {
     await getGatewayClient().connect();
   }, [ensureSubscribed]);
 
+  // Pin an already-created gateway session as the live one: target for
+  // reconnect-resume (getActiveSessionId reads gwSessionIdAtom), reset its chat
+  // runtime, and remember it as the persistent key. Shared by createSession's
+  // default activation path and the composer's draft-prewarm reuse, so a
+  // pre-created draft is adopted with the exact same state as a fresh create.
+  const adoptCreatedSession = useCallback((sessionId: string) => {
+    setGwSessionId(sessionId);
+    resetChatSession(sessionId);
+    void rememberPersistentSessionKey(sessionId);
+  }, [resetChatSession, setGwSessionId]);
+
   const createSession = useCallback(async (options?: CreateSessionOptions): Promise<string> => {
     ensureSubscribed();
     const result = parseGatewayResult(
@@ -266,12 +291,10 @@ export function useGateway() {
       "session.create",
     );
     if (options?.activate !== false) {
-      setGwSessionId(result.session_id);
-      resetChatSession(result.session_id);
-      void rememberPersistentSessionKey(result.session_id);
+      adoptCreatedSession(result.session_id);
     }
     return result.session_id;
-  }, [ensureSubscribed, resetChatSession, setGwSessionId]);
+  }, [adoptCreatedSession, ensureSubscribed]);
 
   const closeSession = useCallback(async (sessionId: string) => {
     if (!sessionId) return;
@@ -692,6 +715,7 @@ export function useGateway() {
     streamStatus,
     connect,
     createSession,
+    adoptCreatedSession,
     closeSession,
     beginPrompt,
     failPrompt,
