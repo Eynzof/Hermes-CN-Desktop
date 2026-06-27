@@ -472,6 +472,27 @@ export type SkillInfo = z.infer<typeof SkillInfo>;
 export const SkillsResponse = z.array(SkillInfo);
 export type SkillsResponse = z.infer<typeof SkillsResponse>;
 
+// 技能 hub 搜索（GET /api/skills/hub/search?q=&source=&limit=&profile=）。
+// profile builder 的「从 hub 添加」用它；identifier 是安装时的唯一键。
+export const SkillHubResult = z.object({
+  name: z.string(),
+  description: z.string().optional().default(""),
+  source: z.string(),
+  identifier: z.string(),
+  trust_level: z.string().optional().default(""),
+  repo: z.string().nullable().optional().default(null),
+  tags: z.array(z.string()).optional().default([]),
+});
+export type SkillHubResult = z.infer<typeof SkillHubResult>;
+
+export const SkillsHubSearchResponse = z.object({
+  results: z.array(SkillHubResult).optional().default([]),
+  source_counts: z.record(z.number()).optional().default({}),
+  timed_out: z.array(z.string()).optional().default([]),
+  installed: z.record(z.unknown()).optional().default({}),
+});
+export type SkillsHubSearchResponse = z.infer<typeof SkillsHubSearchResponse>;
+
 // ── Toolsets (/api/tools/toolsets) ────────────────────────────────────
 
 export const ToolsetInfo = z.object({
@@ -763,6 +784,9 @@ export type DashboardThemesResponse = z.infer<typeof DashboardThemesResponse>;
 // process stays bound to the profile it started with. Clients must
 // prompt the user to restart hermes for the switch to take effect.
 
+// 新增字段（gateway_running / description / distribution_* / has_alias）对齐
+// 上游 `_profile_to_dict`。全部 .optional().default(...)：旧 runtime（只发
+// 老字段）不会因缺字段被 Zod 拒掉，新字段自动取兜底值。
 export const ProfileSummary = z.object({
   name: z.string(),
   path: z.string(),
@@ -771,6 +795,13 @@ export const ProfileSummary = z.object({
   provider: z.string().nullable(),
   has_env: z.boolean(),
   skill_count: z.number(),
+  gateway_running: z.boolean().optional().default(false),
+  description: z.string().optional().default(""),
+  description_auto: z.boolean().optional().default(false),
+  distribution_name: z.string().nullable().optional().default(null),
+  distribution_version: z.string().nullable().optional().default(null),
+  distribution_source: z.string().nullable().optional().default(null),
+  has_alias: z.boolean().optional().default(false),
 });
 export type ProfileSummary = z.infer<typeof ProfileSummary>;
 
@@ -779,9 +810,22 @@ export const ProfilesListResponse = z.object({
 });
 export type ProfilesListResponse = z.infer<typeof ProfilesListResponse>;
 
-export const ActiveProfileResponse = z.object({
-  name: z.string(),
-});
+// 当前上游 GET /api/profiles/active 返回 {active, current}（active=sticky 默认，
+// current=运行中 dashboard 实际绑定的档案）；更早的 CN-fork P-008 只返回 {name}。
+// 这里做容错归一化，对两种 runtime 都不炸：active := active ?? name ?? "default"，
+// current := current ?? active。桌面端切换会自动重启 dashboard，故 active==current；
+// web/attached 模式下二者可能不同（sticky 已改但进程还绑旧档案）。
+export const ActiveProfileResponse = z
+  .object({
+    active: z.string().optional(),
+    current: z.string().optional(),
+    name: z.string().optional(),
+  })
+  .transform((r) => {
+    const active = r.active ?? r.name ?? "default";
+    const current = r.current ?? active;
+    return { active, current };
+  });
 export type ActiveProfileResponse = z.infer<typeof ActiveProfileResponse>;
 
 // SOUL.md（按档案存储的首要身份）— GET /api/profiles/{name}/soul
@@ -792,11 +836,54 @@ export const ProfileSoulResponse = z.object({
 });
 export type ProfileSoulResponse = z.infer<typeof ProfileSoulResponse>;
 
+// 创建档案时可一并写入的 MCP server（profile builder）。url（HTTP）或
+// command+args（stdio）二选一。env/auth 不在向导里暴露。
+export const McpServerCreate = z.object({
+  name: z.string(),
+  url: z.string().optional(),
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+});
+export type McpServerCreate = z.infer<typeof McpServerCreate>;
+
+// POST /api/profiles（ProfileCreate）。clone_from_default 是更早 fork 的布尔；
+// 新增 clone_from（按名指定克隆源）、clone_all（连 memories/sessions 一并复制）、
+// no_skills（不预置 bundled 技能）、description/provider/model（创建即设）。
+// profile builder 追加：mcp_servers（写入 config）、keep_skills（REPLACE 语义——
+// 列出要*保留*的技能，其余禁用）、hub_skills（后台 install 的 hub 技能 identifier）。
 export const ProfileCreateRequest = z.object({
   name: z.string(),
   clone_from_default: z.boolean().optional(),
+  clone_from: z.string().optional(),
+  clone_all: z.boolean().optional(),
+  no_skills: z.boolean().optional(),
+  description: z.string().optional(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  mcp_servers: z.array(McpServerCreate).optional(),
+  keep_skills: z.array(z.string()).optional(),
+  hub_skills: z.array(z.string()).optional(),
 });
 export type ProfileCreateRequest = z.infer<typeof ProfileCreateRequest>;
+
+// POST /api/profiles 的响应。hub_skills 会在后台 spawn `hermes skills install`，
+// pid=null 表示 spawn 失败。其余 *_set/*_written/*_disabled 是 best-effort 计数。
+export const ProfileHubInstall = z.object({
+  identifier: z.string(),
+  pid: z.number().nullable(),
+});
+export type ProfileHubInstall = z.infer<typeof ProfileHubInstall>;
+
+export const ProfileCreateResponse = z.object({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  path: z.string().optional(),
+  model_set: z.boolean().optional(),
+  mcp_written: z.number().optional(),
+  skills_disabled: z.number().optional(),
+  hub_installs: z.array(ProfileHubInstall).optional().default([]),
+});
+export type ProfileCreateResponse = z.infer<typeof ProfileCreateResponse>;
 
 export const ProfileRenameRequest = z.object({
   new_name: z.string(),
@@ -807,6 +894,60 @@ export const ActiveProfileSetRequest = z.object({
   name: z.string(),
 });
 export type ActiveProfileSetRequest = z.infer<typeof ActiveProfileSetRequest>;
+
+// PUT /api/profiles/{name}/model — 设档案主模型（model.default + model.provider）。
+// 名字在 path 里，对任意档案生效，无需切换 dashboard。
+export const ProfileModelUpdateRequest = z.object({
+  provider: z.string(),
+  model: z.string(),
+});
+export type ProfileModelUpdateRequest = z.infer<typeof ProfileModelUpdateRequest>;
+
+export const ProfileModelUpdateResponse = z.object({
+  ok: z.boolean(),
+  provider: z.string(),
+  model: z.string(),
+});
+export type ProfileModelUpdateResponse = z.infer<typeof ProfileModelUpdateResponse>;
+
+// PUT /api/profiles/{name}/description — 用户手写描述（写非空即标记 description_auto:false，
+// 自动扫描不会再覆盖）。空串清空。
+export const ProfileDescriptionUpdateRequest = z.object({
+  description: z.string(),
+});
+export type ProfileDescriptionUpdateRequest = z.infer<
+  typeof ProfileDescriptionUpdateRequest
+>;
+
+export const ProfileDescriptionUpdateResponse = z.object({
+  ok: z.boolean(),
+  description: z.string(),
+  description_auto: z.boolean(),
+});
+export type ProfileDescriptionUpdateResponse = z.infer<
+  typeof ProfileDescriptionUpdateResponse
+>;
+
+// POST /api/profiles/{name}/describe-auto — 用辅助 LLM 自动生成描述。生成失败
+// 不抛 HTTP 错误，而是 ok:false + reason，让 UI 内联提示后让用户改配置重试。
+export const ProfileDescribeAutoRequest = z.object({
+  overwrite: z.boolean(),
+});
+export type ProfileDescribeAutoRequest = z.infer<typeof ProfileDescribeAutoRequest>;
+
+export const ProfileDescribeAutoResponse = z.object({
+  ok: z.boolean(),
+  reason: z.string().optional().default(""),
+  description: z.string().nullable(),
+  description_auto: z.boolean(),
+});
+export type ProfileDescribeAutoResponse = z.infer<typeof ProfileDescribeAutoResponse>;
+
+// GET /api/profiles/{name}/setup-command — 拿到「在终端配置此档案」的 shell 命令。
+export const ProfileSetupCommandResponse = z.object({
+  command: z.string(),
+});
+export type ProfileSetupCommandResponse = z.infer<typeof ProfileSetupCommandResponse>;
 
 // ── TUI Gateway JSON-RPC (/api/ws) ────────────────────────────────────
 

@@ -23,6 +23,7 @@ import { BackupRoute } from "@/routes/backup";
 import { ConfigMigrationRoute } from "@/routes/config-migration";
 import { McpRoute } from "@/routes/mcp";
 import { ProfilesRoute } from "@/routes/profiles";
+import { ProfileBuilderRoute } from "@/routes/profile-builder";
 import { MemoryRoute } from "@/routes/memory";
 import { SoulRoute } from "@/routes/soul";
 import { CronRoute } from "@/routes/cron";
@@ -75,6 +76,7 @@ export function App() {
           <Route path="/config-migration" element={withBoundary(<ConfigMigrationRoute />)} />
           <Route path="/mcp" element={withBoundary(<McpRoute />)} />
           <Route path="/profiles" element={withBoundary(<ProfilesRoute />)} />
+          <Route path="/profiles/new" element={withBoundary(<ProfileBuilderRoute />)} />
           <Route path="/memory" element={withBoundary(<MemoryRoute />)} />
           <Route path="/soul" element={withBoundary(<SoulRoute />)} />
           <Route path="/cron" element={withBoundary(<CronRoute />)} />
