@@ -33,6 +33,9 @@ export function PanelComposer() {
     connect,
     getModelOptions,
     completePath,
+    createSession,
+    closeSession,
+    adoptCreatedSession,
   } = useGateway();
   const createAndSendSession = useCreateAndSendSession();
   const { data: config } = useConfig();
@@ -50,6 +53,10 @@ export function PanelComposer() {
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
   const composerSubmitShortcut = useAtomValue(composerSubmitShortcutAtom);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  // Pre-warmed draft session (created by the effect below). Holds the backend
+  // session id + the cwd it was built for, so send only reuses it while the
+  // requested workspace still matches.
+  const draftRef = useRef<{ id: string; cwd: string } | null>(null);
   const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
   const submitShortcutHint = composerSubmitShortcutHint(composerSubmitShortcut);
   const enabledSkills = useMemo(
@@ -71,9 +78,38 @@ export function PanelComposer() {
     setPrefill(null);
   }, [prefill, setPrefill]);
 
+  // Pre-warm: create a draft session as soon as the new-task composer mounts so
+  // the backend starts building the agent (tool/model/MCP discovery) while the
+  // user is still typing. The first prompt then only waits on the model, not a
+  // cold agent build — which is the bulk of the desktop-vs-CLI first-token gap.
+  // `activate: false` keeps it off-screen; send adopts it. An unused draft is
+  // closed on unmount / workspace change so it never holds an active-session
+  // slot. Any failure (e.g. the server's session-slot limit) just leaves
+  // draftRef null and send falls back to a normal cold create.
   useEffect(() => {
-    void connect().catch(() => {});
-  }, [connect]);
+    const cwd = initialWorkspacePath || "";
+    let cancelled = false;
+    void (async () => {
+      try {
+        await connect();
+        if (cancelled) return;
+        const id = await createSession({ cwd: cwd || undefined, activate: false });
+        if (cancelled) {
+          void closeSession(id).catch(() => {});
+          return;
+        }
+        draftRef.current = { id, cwd };
+      } catch {
+        draftRef.current = null;
+      }
+    })();
+    return () => {
+      cancelled = true;
+      const draft = draftRef.current;
+      draftRef.current = null;
+      if (draft) void closeSession(draft.id).catch(() => {});
+    };
+  }, [connect, createSession, closeSession, initialWorkspacePath]);
 
   const contextSelection = useMemo(() => {
     const model = selectedModel?.model ?? modelInfo?.model;
@@ -130,7 +166,28 @@ export function PanelComposer() {
     if (sending) return;
     setSending(true);
     try {
-      await createAndSendSession(payload, controls);
+      const draft = draftRef.current;
+      const requestedCwd = payload.workspacePath?.trim() || "";
+      let options: { createSession: () => Promise<string> } | undefined;
+      if (draft && draft.cwd === requestedCwd) {
+        // Reuse the pre-warmed draft — its agent has been building for this exact
+        // cwd. Claim it (null the ref so unmount cleanup won't close it) and
+        // adopt it as the live session, mirroring a normal create.
+        draftRef.current = null;
+        const draftId = draft.id;
+        options = {
+          createSession: async () => {
+            adoptCreatedSession(draftId);
+            return draftId;
+          },
+        };
+      } else if (draft) {
+        // Workspace changed since pre-warm → the warm agent has the wrong cwd.
+        // Release it and let createAndSendSession make a fresh (cold) session.
+        draftRef.current = null;
+        void closeSession(draft.id).catch(() => {});
+      }
+      await createAndSendSession(payload, controls, options);
     } catch (err) {
       console.error("Failed to create session:", err);
       throw err;
@@ -140,6 +197,8 @@ export function PanelComposer() {
   }, [
     sending,
     createAndSendSession,
+    adoptCreatedSession,
+    closeSession,
   ]);
 
   return (
