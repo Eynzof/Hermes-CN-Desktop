@@ -83,7 +83,12 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
   { prefix: "COMPSHARE_", name: "优云智算 (Compshare)", priority: 14 },
 ];
 
-const PROVIDER_ACTION_LOADING_MIN_MS = 450;
+// Minimum on-screen time for the save / set-current spinner. Purely
+// anti-flicker — keep it small. It used to be 450ms to mask a slow backend,
+// but the model save/switch round-trip is fast now (Core P-027 took the
+// blocking models.dev fetch off the critical path), so the old floor just
+// added dead wait to every action.
+const PROVIDER_ACTION_LOADING_MIN_MS = 150;
 const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 const PROVIDER_ORDER_SAVE_DEBOUNCE_MS = 320;
 const EMPTY_ENV_VARS: Record<string, EnvVarInfo> = {};
