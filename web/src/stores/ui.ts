@@ -121,6 +121,12 @@ export const activeProfileAtom = atom(
   },
 );
 
+// 「管理范围」：UI 当前正在查看/编辑*哪个*档案的 settings（如技能），不切换、不重启
+// 运行中的 dashboard——区别于上面会重启 dashboard 的「活跃档案」。会话级、不持久化
+// （默认 null = 跟随活跃档案），由 /skills?profile= 深链或档案页「管理技能」动作设置，
+// 切换活跃档案时清空。对齐官方 dashboard 的 management-profile scope。
+export const managementProfileAtom = atom<string | null>(null);
+
 const assistantDisplayNameBaseAtom = atom<string>(
   normalizeAssistantDisplayName(readUiValue(ASSISTANT_DISPLAY_NAME_KEY, DEFAULT_ASSISTANT_DISPLAY_NAME)),
 );

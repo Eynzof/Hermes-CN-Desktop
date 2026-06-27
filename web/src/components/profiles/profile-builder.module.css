@@ -1,0 +1,269 @@
+/* /profiles/new 分步创建向导。全部走 shared-ui token。 */
+
+.wrap {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 步骤条 */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.stepBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-pane);
+  color: var(--h-text-3);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.stepBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stepBtn[data-active="true"] {
+  border-color: var(--h-text);
+  background: var(--h-text);
+  color: var(--h-bg-pane);
+}
+
+.stepNum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+
+.stepSep {
+  width: 14px;
+  height: 1px;
+  background: var(--h-line);
+}
+
+/* 步骤内容 */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: var(--h-r-md, 10px);
+  background: var(--h-bg-pane);
+}
+
+.panelHint {
+  font-size: 12px;
+  color: var(--h-text-3);
+  line-height: 1.6;
+}
+
+/* 可滚动列表（模型 / 技能 / hub 结果） */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.skillRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--h-text-2);
+  line-height: 1.4;
+}
+
+.skillRow:hover {
+  background: var(--h-bg-soft);
+}
+
+.skillMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skillName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--h-text);
+  font-weight: 500;
+}
+
+.skillDesc {
+  font-size: 11px;
+  color: var(--h-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyHint {
+  padding: 12px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--h-text-3);
+}
+
+/* hub 搜索 */
+.searchRow {
+  display: flex;
+  gap: 8px;
+}
+
+.searchRow > :first-child {
+  flex: 1;
+}
+
+.hubResult {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.hubResult:hover {
+  background: var(--h-bg-soft);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px 3px 9px;
+  border-radius: 12px;
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-soft);
+  font-size: 11.5px;
+  color: var(--h-text-2);
+}
+
+.chipRemove {
+  display: inline-flex;
+  border: none;
+  background: none;
+  color: var(--h-text-3);
+  cursor: pointer;
+  padding: 0;
+}
+
+.chipRemove:hover {
+  color: var(--h-err);
+}
+
+/* MCP 表单 */
+.mcpGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mcpList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mcpItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.mcpItemMain {
+  min-width: 0;
+}
+
+.mcpItemName {
+  font-weight: 600;
+  color: var(--h-text);
+}
+
+.mcpItemMeta {
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+  color: var(--h-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* review */
+.reviewRow {
+  display: flex;
+  gap: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.reviewLabel {
+  width: 96px;
+  flex-shrink: 0;
+  color: var(--h-text-3);
+}
+
+.reviewValue {
+  flex: 1;
+  min-width: 0;
+  color: var(--h-text);
+  word-break: break-word;
+}
+
+/* 底部导航 */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.navRight {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.formError {
+  font-size: 12px;
+  color: var(--h-err);
+}
