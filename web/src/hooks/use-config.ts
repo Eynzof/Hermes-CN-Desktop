@@ -19,6 +19,10 @@ export function useConfig() {
   return useQuery<Record<string, any>>({
     queryKey: ["config", profile],
     queryFn: ({ signal }) => fetchJSON("/api/config", { signal }, ConfigResponse),
+    // Config changes only via saves (which invalidate this query), so avoid the
+    // focus-refetch storm that re-hits the Models page's backing endpoints.
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -36,6 +40,10 @@ export function useModelInfo() {
   return useQuery<ModelInfo>({
     queryKey: ["model-info", profile],
     queryFn: ({ signal }) => fetchJSON("/api/model/info", { signal }, ModelInfo),
+    // Model metadata changes via config saves (which invalidate this) or an
+    // explicit model switch; no need to refetch on every window focus.
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
