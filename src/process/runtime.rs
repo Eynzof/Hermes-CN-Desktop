@@ -42,6 +42,13 @@ const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 // first run. Keep the smoke check long enough for the cold path and let normal
 // launches stay fast via the runtime's own cache.
 const SMOKE_TIMEOUT: Duration = Duration::from_secs(60);
+// Spawning a just-written/just-extracted executable can transiently fail with
+// ETXTBSY ("Text file busy"): a concurrent fork in another thread may have
+// inherited a write fd to the file, so exec sees it as still open for writing.
+// A few short retries let that inherited fd close (the racing child execs or
+// exits). This hardens both the real post-install path and the smoke-check test
+// under cargo's multi-threaded runner.
+const SMOKE_SPAWN_RETRIES: u32 = 5;
 static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .connect_timeout(RUNTIME_HTTP_CONNECT_TIMEOUT)
@@ -1201,27 +1208,52 @@ async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
         .map(|metadata| metadata.len().to_string())
         .unwrap_or_else(|e| format!("<unavailable: {}>", e));
 
-    let child = Command::new(executable_path)
-        .current_dir(workdir)
-        .args(["dashboard", "--help"])
-        .env("HERMES_DISABLE_LAZY_INSTALLS", "1")
-        .env("HERMES_DASHBOARD_PREWARM_AGENT", "0")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| {
-            format!(
-                "Smoke check spawn failed for {} (exists={}, file_size={}, cwd={}, workdir={}): {}",
-                executable_display,
-                executable_path.is_file(),
-                size,
-                cwd_display,
-                workdir_display,
-                e
-            )
-        })?;
+    let mut attempt = 0;
+    let child = loop {
+        match Command::new(executable_path)
+            .current_dir(workdir)
+            .args(["dashboard", "--help"])
+            .env("HERMES_DISABLE_LAZY_INSTALLS", "1")
+            .env("HERMES_DASHBOARD_PREWARM_AGENT", "0")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => break child,
+            Err(e) if is_text_file_busy(&e) && attempt < SMOKE_SPAWN_RETRIES => {
+                attempt += 1;
+                tokio::time::sleep(Duration::from_millis(50 * u64::from(attempt))).await;
+            }
+            Err(e) => {
+                return Err(format!(
+                    "Smoke check spawn failed for {} (exists={}, file_size={}, cwd={}, workdir={}): {}",
+                    executable_display,
+                    executable_path.is_file(),
+                    size,
+                    cwd_display,
+                    workdir_display,
+                    e
+                ));
+            }
+        }
+    };
 
     wait_for_smoke_child(child, SMOKE_TIMEOUT).await
+}
+
+/// True when the spawn error is ETXTBSY ("Text file busy"), which can briefly
+/// occur right after writing/extracting an executable. Unix-only; the kind has
+/// no Windows equivalent here.
+fn is_text_file_busy(e: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        e.raw_os_error() == Some(libc::ETXTBSY)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = e;
+        false
+    }
 }
 
 fn install_record_from_manifest(
