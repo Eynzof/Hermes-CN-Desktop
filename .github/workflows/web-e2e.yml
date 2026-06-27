@@ -39,7 +39,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22, not 20: the protocol smoke uses the global WebSocket, which only
+          # exists from Node 21+ (Node 20 -> "WebSocket is not defined").
+          node-version: 22
           cache: pnpm
           cache-dependency-path: Hermes-CN-Desktop/pnpm-lock.yaml
 
