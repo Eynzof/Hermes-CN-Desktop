@@ -9,6 +9,7 @@ import {
   CronRunDetail,
   CronRunsResponse,
   ElevenLabsVoicesResponse,
+  FsListResponse,
   ProfileCreateResponse,
   ProfileSummary,
   SessionsResponse,
@@ -454,5 +455,39 @@ describe("OAuth schemas", () => {
       expires_in: 900,
     });
     expect(start.flow).toBe("loopback");
+  });
+});
+
+describe("FsListResponse schema", () => {
+  it("parses the upstream /api/fs/list shape (isDirectory, no path/parent/home)", () => {
+    const parsed = FsListResponse.parse({
+      entries: [
+        { name: "src", path: "/proj/src", isDirectory: true },
+        { name: "README.md", path: "/proj/README.md", isDirectory: false },
+      ],
+    });
+    // Normalized to the canonical `is_dir` regardless of wire field name.
+    expect(parsed.entries[0].is_dir).toBe(true);
+    expect(parsed.entries[1].is_dir).toBe(false);
+    expect(parsed.path).toBeUndefined();
+    expect(parsed.parent).toBeUndefined();
+    expect(parsed.home).toBeUndefined();
+  });
+
+  it("surfaces upstream's HTTP-200 soft error", () => {
+    const parsed = FsListResponse.parse({ entries: [], error: "EACCES" });
+    expect(parsed.error).toBe("EACCES");
+    expect(parsed.entries).toEqual([]);
+  });
+
+  it("still parses the legacy fork shape (is_dir + path/parent/home)", () => {
+    const parsed = FsListResponse.parse({
+      path: "/proj",
+      parent: "/",
+      home: "/home/u",
+      entries: [{ name: "src", path: "/proj/src", is_dir: true }],
+    });
+    expect(parsed.entries[0].is_dir).toBe(true);
+    expect(parsed.parent).toBe("/");
   });
 });

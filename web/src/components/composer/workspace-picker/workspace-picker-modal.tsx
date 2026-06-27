@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { ArrowUp, Folder, X } from "lucide-react";
 import type { FsEntry } from "@hermes/protocol";
 import { useFsList } from "@/hooks/use-fs-list";
+import { parentDir } from "@/lib/preview-rail";
 import s from "./workspace-picker-modal.module.css";
 
 interface WorkspacePickerModalProps {
@@ -84,7 +85,8 @@ export function WorkspacePickerModal({
   );
 
   const resolvedPath = data?.path ?? currentPath;
-  const parentPath = data?.parent ?? null;
+  // `/api/fs/list` no longer returns `parent`; derive it from the resolved path.
+  const parentPath = parentDir(resolvedPath);
   const [lastKnownHome, setLastKnownHome] = useState("");
   const home = data?.home ?? lastKnownHome;
   const breadcrumb = useMemo(() => splitBreadcrumb(resolvedPath, home), [resolvedPath, home]);
