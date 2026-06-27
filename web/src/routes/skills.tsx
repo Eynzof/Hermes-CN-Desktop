@@ -15,6 +15,13 @@ import {
 } from "lucide-react";
 import type { SkillInfo } from "@hermes/protocol";
 import { useSkillMarkdown, useSkills, useToggleSkill } from "@/hooks/use-skills";
+import {
+  useActiveProfileName,
+  useManagementProfile,
+  useProfiles,
+  useSetManagementProfile,
+} from "@/hooks/use-profiles";
+import { ProfileScopeBanner } from "@/components/profiles";
 import { Pill, Dot } from "@/components/ui/pill";
 import {
   categoryTranslations,
@@ -98,8 +105,21 @@ function markdownWithoutFrontmatter(content: string): string {
 
 export function SkillsRoute() {
   const [searchParams] = useSearchParams();
-  const { data: skills, isLoading, isFetching, isError, error, refetch } = useSkills();
-  const toggleSkill = useToggleSkill();
+  // 管理范围：/skills?profile=X 深链或档案页「管理技能」会设它。scope ≠ 活跃档案时，
+  // 技能列表/启停就地作用于该档案（不切换 dashboard），并显示提示横幅。
+  const active = useActiveProfileName();
+  const mgmt = useManagementProfile();
+  const setMgmt = useSetManagementProfile();
+  const scope = mgmt && mgmt !== active ? mgmt : null;
+  const profilesQuery = useProfiles();
+  const profileNames = (profilesQuery.data ?? []).map((p) => p.name);
+  const urlProfile = searchParams.get("profile");
+  useEffect(() => {
+    if (urlProfile) setMgmt(urlProfile);
+  }, [urlProfile, setMgmt]);
+
+  const { data: skills, isLoading, isFetching, isError, error, refetch } = useSkills(scope);
+  const toggleSkill = useToggleSkill(scope);
   const [tab, setTab] = useState<Tab>("builtin");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -198,6 +218,14 @@ export function SkillsRoute() {
           <TopBarActions />
         </div>
       </div>
+
+      {scope && (
+        <ProfileScopeBanner
+          scope={scope}
+          profileNames={profileNames}
+          onSelect={(name) => setMgmt(name && name !== active ? name : null)}
+        />
+      )}
 
       {/* 顶部 tab：内置 / 我的 / 市场 */}
       <div className={s.toptabs}>

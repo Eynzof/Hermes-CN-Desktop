@@ -80,129 +80,16 @@
   background: var(--h-bg-soft);
 }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
-  background: var(--h-bg-pane);
-}
-
-.row[data-active="true"] {
-  border-color: color-mix(in srgb, var(--h-ok, #22c55e) 40%, var(--h-line-soft));
-  background: color-mix(in srgb, var(--h-ok, #22c55e) 4%, var(--h-bg-pane));
-}
-
-.rowMain {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.rowHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.rowName {
-  font-family: var(--h-font-mono);
-  font-size: 13px;
-  color: var(--h-text);
-  font-weight: 600;
-}
-
-.tag {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--h-bg-soft);
-  color: var(--h-text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.activeBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-weight: 500;
-  color: var(--h-ok, #22c55e);
-  background: color-mix(in srgb, var(--h-ok, #22c55e) 14%, transparent);
-}
-
-.rowMeta {
-  display: flex;
-  flex-wrap: wrap;
+/* 卡片网格 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
-  font-size: 11.5px;
-  color: var(--h-text-3);
-}
-
-.metaCell {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.metaCell code {
-  font-family: var(--h-font-mono);
-  font-size: 11px;
-  background: var(--h-bg-soft);
-  padding: 1px 4px;
-  border-radius: 3px;
-  color: var(--h-text-2);
-}
-
-.metaCellMuted {
-  color: color-mix(in srgb, var(--h-text-3) 70%, transparent);
-}
-
-.rowActions {
-  flex-shrink: 0;
-}
-
-.actionBtn {
-  font-size: 11.5px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-  color: var(--h-text);
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.actionBtn:hover:not(:disabled) {
-  border-color: var(--h-text-3);
-  background: var(--h-bg-soft);
-}
-
-.actionBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.actionPlaceholder {
-  color: var(--h-text-3);
-  font-size: 12px;
-  padding: 0 12px;
+  margin-top: 16px;
 }
 
 .emptyState {
+  margin-top: 16px;
   padding: 28px;
   text-align: center;
   color: var(--h-text-3);
@@ -221,6 +108,7 @@
 }
 
 .errorState {
+  margin-top: 16px;
   padding: 16px 18px;
   border: 1px solid color-mix(in srgb, var(--h-err) 35%, transparent);
   border-radius: 10px;
@@ -241,171 +129,10 @@
   color: var(--h-text-2);
 }
 
-.footnote {
-  margin-top: 24px;
-  font-size: 11.5px;
-  color: var(--h-text-3);
-  line-height: 1.7;
-}
-
-.footnote code {
+.errorState code {
   font-family: var(--h-font-mono);
   font-size: 11px;
   background: var(--h-bg-soft);
   padding: 1px 4px;
   border-radius: 3px;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.newBtn {
-  padding: 6px 14px;
-  font-size: 12px;
-  border-radius: 7px;
-  border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-  color: var(--h-text);
-  cursor: pointer;
-  font-family: var(--h-font-cn);
-  font-weight: 500;
-}
-
-.newBtn:hover:not(:disabled) {
-  border-color: var(--h-text-3);
-  background: var(--h-bg-soft);
-}
-
-.newBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.createCard {
-  padding: 14px 16px;
-  border: 1px solid var(--h-line);
-  border-radius: 10px;
-  background: var(--h-bg-pane);
-  margin-bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.createCardTitle {
-  font-size: 12.5px;
-  color: var(--h-text);
-  font-weight: 600;
-}
-
-.createForm {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.fieldRow {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.fieldLabel {
-  font-size: 11px;
-  color: var(--h-text-3);
-  font-family: var(--h-font-cn);
-}
-
-.fieldInput {
-  padding: 6px 10px;
-  font-size: 12.5px;
-  font-family: var(--h-font-mono);
-  border: 1px solid var(--h-line);
-  border-radius: 6px;
-  background: var(--h-bg-input);
-  color: var(--h-text);
-  outline: none;
-}
-
-.fieldInput:focus {
-  border-color: var(--h-text-3);
-}
-
-.fieldRadios {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--h-text-2);
-  font-family: var(--h-font-cn);
-}
-
-.fieldRadios label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-}
-
-.formActions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.formActions button {
-  padding: 5px 14px;
-  font-size: 11.5px;
-  border-radius: 6px;
-  border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-  color: var(--h-text);
-  cursor: pointer;
-  font-family: var(--h-font-cn);
-}
-
-.formActions button:hover:not(:disabled) {
-  background: var(--h-bg-soft);
-}
-
-.formPrimary {
-  background: var(--h-text) !important;
-  color: var(--h-bg-pane) !important;
-  border-color: var(--h-text) !important;
-}
-
-.formPrimary:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.formError {
-  font-size: 11.5px;
-  color: var(--h-err);
-  font-family: var(--h-font-cn);
-}
-
-.deleteBtn {
-  font-size: 11.5px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--h-text-3);
-  cursor: pointer;
-  font-family: var(--h-font-cn);
-}
-
-.deleteBtn:hover:not(:disabled) {
-  color: var(--h-err);
-  border-color: color-mix(in srgb, var(--h-err) 35%, transparent);
-}
-
-.deleteBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
