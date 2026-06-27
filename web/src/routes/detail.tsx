@@ -48,7 +48,7 @@ import {
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
-import { uploadAttachmentFile } from "@/lib/transport";
+import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
 import { voiceAutoTtsFromConfig } from "@/lib/voice";
 import {
   rememberSessionWorkspace,
@@ -114,6 +114,7 @@ export function DetailRoute() {
     dispatchCommand,
     completePath,
     attachImage,
+    attachImageBytes,
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
@@ -389,6 +390,9 @@ export function DetailRoute() {
     }
     const prepared = await prepareComposerPrompt(gatewaySessionId, payload, {
       attachImage,
+      attachImageBytes,
+      remote: isRemoteConnection(),
+      readImageBytes: readImageBytesFromPath,
       detectDroppedPath,
       uploadFile: uploadAttachmentFile,
       onAttachmentUpdate: updateAttachment,
@@ -397,7 +401,7 @@ export function DetailRoute() {
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
-  }, [attachImage, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,

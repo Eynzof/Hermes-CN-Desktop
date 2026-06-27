@@ -138,6 +138,20 @@ export async function prepareComposerPrompt(
       onProgress?: (percent: number) => void,
     ): Promise<AttachmentUploadResult>;
     attachImage(sessionId: string, path: string): Promise<ImageAttachResult>;
+    attachImageBytes?(
+      sessionId: string,
+      contentBase64: string,
+      filename?: string,
+    ): Promise<ImageAttachResult>;
+    // True when attached to a remote gateway: it can't read this machine's
+    // paths, so image bytes must be uploaded (matches the official desktop's
+    // `remote ? attach_bytes : attach{path}`).
+    remote?: boolean;
+    // Read a local image file's bytes for remote upload (path-only attachments
+    // such as drag-dropped files, which have no in-browser File to read).
+    readImageBytes?(
+      path: string,
+    ): Promise<{ contentBase64: string; filename: string } | null>;
     detectDroppedPath(sessionId: string, path: string): Promise<InputDetectDropResult>;
     onAttachmentUpdate?(id: string, patch: Partial<ComposerAttachment>): void;
   },
@@ -169,6 +183,101 @@ export async function prepareComposerPrompt(
       let path = attachment.uploadedPath || attachment.path || "";
       let uploadedName = attachment.uploadedName;
 
+      const looksLikeImage =
+        attachment.kind === "image" ||
+        (!!path && isImagePath(path)) ||
+        (attachment.file?.type?.startsWith("image/") ?? false);
+
+      // Images attach over the gateway. With a gateway-readable path we use
+      // image.attach{path}; for an in-browser File (e.g. a pasted screenshot,
+      // which has no real path) we send the bytes via image.attach_bytes. Both
+      // return the same ImageAttachResult shape. This keeps images off the
+      // fork-only REST /api/upload endpoint, which Core drops/restores across
+      // upstream syncs — matching the official desktop's image-attach path.
+      if (looksLikeImage) {
+        let attached: ImageAttachResult;
+        // Send bytes when there's no gateway-readable path (an in-browser File,
+        // e.g. a pasted screenshot) OR when remote (the gateway can't read this
+        // machine's paths). Otherwise pass the path. This mirrors the official
+        // desktop's `remote ? attach_bytes : attach{path}`, extended to also
+        // cover our pathless pasted Files.
+        const useBytes = !path || !!helpers.remote;
+        if (useBytes) {
+          if (!helpers.attachImageBytes) {
+            throw new Error("当前环境不支持上传这个图片附件");
+          }
+          helpers.onAttachmentUpdate?.(attachment.id, {
+            status: "uploading",
+            progress: 0,
+            error: undefined,
+          });
+          let contentBase64 = "";
+          let filename =
+            attachment.file?.name ||
+            (path ? fileNameFromPath(path) : attachment.name || "image.png");
+          if (attachment.file) {
+            const dataUrl = await readFileAsDataUrl(attachment.file);
+            contentBase64 = dataUrl ? dataUrl.slice(dataUrl.indexOf(",") + 1) : "";
+          } else if (path && helpers.readImageBytes) {
+            const payload = await helpers.readImageBytes(path);
+            if (payload) {
+              contentBase64 = payload.contentBase64;
+              filename = payload.filename;
+            }
+          }
+          if (!contentBase64) {
+            throw new Error("无法读取图片数据");
+          }
+          helpers.onAttachmentUpdate?.(attachment.id, { status: "processing", progress: 100 });
+          attached = await helpers.attachImageBytes(sessionId, contentBase64, filename);
+          if (attached.attached === false) {
+            throw new Error(attached.text || "图片附件未能添加");
+          }
+          path = attached.path || path;
+          uploadedName = attached.name || filename;
+          helpers.onAttachmentUpdate?.(attachment.id, {
+            source: "uploaded",
+            uploadedPath: attached.path,
+            uploadedName,
+            path: attached.path,
+            mimeType: attachment.mimeType,
+          });
+        } else {
+          if (!path) {
+            throw new Error("附件缺少可读取路径");
+          }
+          helpers.onAttachmentUpdate?.(attachment.id, { status: "processing" });
+          attached = await helpers.attachImage(sessionId, path);
+          if (attached.attached === false) {
+            throw new Error(attached.text || "图片附件未能添加");
+          }
+        }
+
+        if (attached.text?.trim()) {
+          const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
+          parts.push([
+            IMAGE_BLOCK_START,
+            `name=${sanitizeContextValue(label)}`,
+            "description:",
+            attached.text.trim(),
+            IMAGE_BLOCK_END,
+          ].join("\n"));
+        }
+        const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
+        displayImages.push({
+          url: await imageDisplayUrl(attachment, attached.path || path),
+          alt: label,
+          title: label,
+          name: label,
+          mimeType: attachment.mimeType,
+        });
+        helpers.onAttachmentUpdate?.(attachment.id, { status: "done", progress: 100 });
+        continue;
+      }
+
+      // Non-image attachments. A browser File with no path still needs the REST
+      // upload (uncommon in the desktop: pickers/drag supply real paths, paste
+      // produces images).
       if (!path && attachment.file) {
         if (!helpers.uploadFile) {
           throw new Error("当前环境不支持上传这个附件");
@@ -200,34 +309,6 @@ export async function prepareComposerPrompt(
 
       if (!path) {
         throw new Error("附件缺少可读取路径");
-      }
-
-      if (attachment.kind === "image" || isImagePath(path)) {
-        helpers.onAttachmentUpdate?.(attachment.id, { status: "processing" });
-        const attached = await helpers.attachImage(sessionId, path);
-        if (attached.attached === false) {
-          throw new Error(attached.text || "图片附件未能添加");
-        }
-        if (attached.text?.trim()) {
-          const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
-          parts.push([
-            IMAGE_BLOCK_START,
-            `name=${sanitizeContextValue(label)}`,
-            "description:",
-            attached.text.trim(),
-            IMAGE_BLOCK_END,
-          ].join("\n"));
-        }
-        const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
-        displayImages.push({
-          url: await imageDisplayUrl(attachment, attached.path || path),
-          alt: label,
-          title: label,
-          name: label,
-          mimeType: attachment.mimeType,
-        });
-        helpers.onAttachmentUpdate?.(attachment.id, { status: "done", progress: 100 });
-        continue;
       }
 
       helpers.onAttachmentUpdate?.(attachment.id, { status: "processing" });

@@ -593,6 +593,31 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  // Attach an image by uploading its bytes over the gateway (image.attach_bytes),
+  // mirroring the official desktop's remote path. Used when the image is an
+  // in-browser File with no gateway-readable filesystem path (e.g. a pasted
+  // screenshot) — avoids the fork-only REST /api/upload endpoint, which keeps
+  // getting dropped/restored across Core upstream syncs.
+  const attachImageBytes = useCallback(
+    async (
+      sessionId: string,
+      contentBase64: string,
+      filename?: string,
+    ): Promise<ImageAttachResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        ImageAttachResult,
+        await getGatewayClient().request("image.attach_bytes", {
+          session_id: sessionId,
+          content_base64: contentBase64,
+          ...(filename ? { filename } : {}),
+        }),
+        "image.attach_bytes",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const detectDroppedPath = useCallback(
     async (sessionId: string, path: string): Promise<InputDetectDropResult> => {
       ensureSubscribed();
@@ -683,6 +708,7 @@ export function useGateway() {
     setRuntimeModel,
     setSessionReasoningEffort,
     attachImage,
+    attachImageBytes,
     detectDroppedPath,
     interruptSession,
     setSessionTitle,
