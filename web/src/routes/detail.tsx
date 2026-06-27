@@ -10,7 +10,9 @@ import {
   conversationWidthMaxWidth,
   conversationWidthModeAtom,
   rightRailVisibleAtom,
+  sessionTipRedirectAtom,
 } from "@/stores/ui";
+import { pickTipRedirect } from "@/lib/session-tip-redirect";
 import {
   appendNoticeAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
@@ -46,7 +48,7 @@ import {
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
-import { uploadAttachmentFile } from "@/lib/transport";
+import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
 import { voiceAutoTtsFromConfig } from "@/lib/voice";
 import {
   rememberSessionWorkspace,
@@ -112,6 +114,7 @@ export function DetailRoute() {
     dispatchCommand,
     completePath,
     attachImage,
+    attachImageBytes,
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
@@ -285,6 +288,23 @@ export function DetailRoute() {
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
 
+  // Follow the backend's compression tip (issue #305). When a session.resume is
+  // redirected to a live continuation (recorded in sessionTipRedirectAtom), the
+  // detail route is still pinned to the pre-compression id whose messages have
+  // moved — so the conversation looks like it vanished while a #2/#3 duplicate
+  // surfaces in the sidebar. Re-project onto the tip here, at the route layer
+  // (not inside the async ensureGatewaySession closure, which was the #52
+  // closure-stale hazard): a synchronous effect reacting to atom state, with a
+  // replace navigate. pickTipRedirect never returns the current id, so once the
+  // route reaches the tip this is a no-op (no navigation loop).
+  const tipRedirects = useAtomValue(sessionTipRedirectAtom);
+  useEffect(() => {
+    const tip = pickTipRedirect(tipRedirects, { taskId, restSessionId, activeSessionId });
+    if (!tip) return;
+    setActiveId(tip);
+    navigate(`/tasks/${tip}`, { replace: true });
+  }, [tipRedirects, taskId, restSessionId, activeSessionId, setActiveId, navigate]);
+
   const storedMessages = useMemo(
     () => attachTurnStatsMetadata(messagesResponseToHermesUIMessages(messagesData), turnStats),
     [messagesData, turnStats],
@@ -370,6 +390,9 @@ export function DetailRoute() {
     }
     const prepared = await prepareComposerPrompt(gatewaySessionId, payload, {
       attachImage,
+      attachImageBytes,
+      remote: isRemoteConnection(),
+      readImageBytes: readImageBytesFromPath,
       detectDroppedPath,
       uploadFile: uploadAttachmentFile,
       onAttachmentUpdate: updateAttachment,
@@ -378,7 +401,7 @@ export function DetailRoute() {
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
-  }, [attachImage, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,

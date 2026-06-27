@@ -3,6 +3,15 @@ import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
 
 export const activeSessionIdAtom = atom<string | null>(null);
+
+// Maps a pre-compression persistent session id to the live continuation "tip"
+// that the backend redirected a `session.resume` to. The detail route watches
+// this so the URL/active id follows the backend's new tip after compression
+// instead of stranding the user on a session whose messages have moved — the
+// "conversation vanished + #2/#3 duplicate" symptom (issue #305). Populated by
+// resumeSession via recordTipRedirect; consumed by the detail route effect.
+export const sessionTipRedirectAtom = atom<Record<string, string>>({});
+
 export const sidebarSearchAtom = atom("");
 export const commandPaletteOpenAtom = atom(false);
 
@@ -111,6 +120,12 @@ export const activeProfileAtom = atom(
     writeUiValue("hermes.active-profile", next);
   },
 );
+
+// 「管理范围」：UI 当前正在查看/编辑*哪个*档案的 settings（如技能），不切换、不重启
+// 运行中的 dashboard——区别于上面会重启 dashboard 的「活跃档案」。会话级、不持久化
+// （默认 null = 跟随活跃档案），由 /skills?profile= 深链或档案页「管理技能」动作设置，
+// 切换活跃档案时清空。对齐官方 dashboard 的 management-profile scope。
+export const managementProfileAtom = atom<string | null>(null);
 
 const assistantDisplayNameBaseAtom = atom<string>(
   normalizeAssistantDisplayName(readUiValue(ASSISTANT_DISPLAY_NAME_KEY, DEFAULT_ASSISTANT_DISPLAY_NAME)),

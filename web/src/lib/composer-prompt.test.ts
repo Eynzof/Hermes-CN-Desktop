@@ -1,7 +1,134 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { prepareComposerPrompt, stripHermesUiWorkspaceContext } from "./composer-prompt";
 
+// Minimal FileReader for the node test env (no DOM): turns a File-like into a
+// data URL so the image-bytes path can be exercised.
+class FakeFileReader {
+  result: string | null = null;
+  private onLoad: (() => void) | null = null;
+  addEventListener(type: string, cb: () => void) {
+    if (type === "load") this.onLoad = cb;
+  }
+  readAsDataURL(file: { type: string; arrayBuffer: () => Promise<ArrayBuffer> }) {
+    void file.arrayBuffer().then((buf) => {
+      this.result = `data:${file.type};base64,${Buffer.from(buf).toString("base64")}`;
+      this.onLoad?.();
+    });
+  }
+}
+
 describe("composer prompt preparation", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("attaches an in-browser image File via image.attach_bytes, never REST upload", async () => {
+    vi.stubGlobal("FileReader", FakeFileReader);
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const file = {
+      name: "pasted.png",
+      type: "image/png",
+      arrayBuffer: async () => bytes.buffer,
+    } as unknown as File;
+    const attachImageBytes = vi.fn(async () => ({
+      attached: true,
+      text: "[User attached image: pasted.png]",
+      name: "pasted.png",
+      path: "/img/pasted.png",
+    }));
+    const uploadFile = vi.fn();
+    const attachImage = vi.fn();
+
+    const result = await prepareComposerPrompt(
+      "s1",
+      {
+        text: "看看这张图",
+        attachments: [{
+          id: "a1",
+          source: "browser",
+          file,
+          name: "pasted.png",
+          kind: "image",
+          status: "ready",
+          mimeType: "image/png",
+        }],
+      },
+      { attachImage, attachImageBytes, uploadFile, detectDroppedPath: vi.fn() },
+    );
+
+    // Bytes go over the gateway; the fork-only REST /api/upload is never touched.
+    expect(attachImageBytes).toHaveBeenCalledWith("s1", "AQIDBA==", "pasted.png");
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(attachImage).not.toHaveBeenCalled();
+    expect(result.promptText).toContain("[Hermes UI Image]");
+    expect(result.displayText).toBe("看看这张图\n\n附件：pasted.png");
+  });
+
+  it("in remote mode, a path-only image uploads its bytes (image.attach_bytes), not the path", async () => {
+    const readImageBytes = vi.fn(async () => ({
+      contentBase64: "QUJD",
+      filename: "screenshot.png",
+    }));
+    const attachImageBytes = vi.fn(async () => ({
+      attached: true,
+      text: "[User attached image: screenshot.png]",
+      name: "screenshot.png",
+      path: "/remote/img/screenshot.png",
+    }));
+    const attachImage = vi.fn();
+
+    const result = await prepareComposerPrompt(
+      "s1",
+      {
+        text: "看看这张图",
+        attachments: [{
+          id: "a1",
+          source: "path",
+          path: "/home/me/screenshot.png",
+          name: "screenshot.png",
+          kind: "image",
+          status: "ready",
+        }],
+      },
+      { attachImage, attachImageBytes, remote: true, readImageBytes, detectDroppedPath: vi.fn() },
+    );
+
+    // The remote gateway can't read the client path, so bytes are read locally
+    // and uploaded — image.attach{path} is never used.
+    expect(readImageBytes).toHaveBeenCalledWith("/home/me/screenshot.png");
+    expect(attachImageBytes).toHaveBeenCalledWith("s1", "QUJD", "screenshot.png");
+    expect(attachImage).not.toHaveBeenCalled();
+    expect(result.promptText).toContain("[Hermes UI Image]");
+  });
+
+  it("in local mode, a path image still attaches by path (image.attach), no byte read", async () => {
+    const attachImageBytes = vi.fn();
+    const readImageBytes = vi.fn();
+    const attachImage = vi.fn(async () => ({
+      attached: true,
+      text: "[User attached image: local.png]",
+      name: "local.png",
+    }));
+
+    await prepareComposerPrompt(
+      "s1",
+      {
+        text: "本地图",
+        attachments: [{
+          id: "a1",
+          source: "path",
+          path: "/home/me/local.png",
+          name: "local.png",
+          kind: "image",
+          status: "ready",
+        }],
+      },
+      { attachImage, attachImageBytes, remote: false, readImageBytes, detectDroppedPath: vi.fn() },
+    );
+
+    expect(attachImage).toHaveBeenCalledWith("s1", "/home/me/local.png");
+    expect(attachImageBytes).not.toHaveBeenCalled();
+    expect(readImageBytes).not.toHaveBeenCalled();
+  });
+
   it("includes image attach/vision text in the transport prompt but hides it from display text", async () => {
     const result = await prepareComposerPrompt(
       "s1",

@@ -1,0 +1,18 @@
+{
+  "name": "@hermes/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests: real Core backend + local fake model, driven through the real web UI.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "smoke": "node harness/protocol-smoke.mjs",
+    "backend": "node harness/start-backend.mjs",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

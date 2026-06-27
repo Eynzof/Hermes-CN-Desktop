@@ -11,7 +11,7 @@ import { buildComposerDisplayText, prepareComposerPrompt } from "@/lib/composer-
 import { resolveComposerSkillCommand } from "@/lib/composer-skills";
 import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
-import { uploadAttachmentFile } from "@/lib/transport";
+import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
 import {
   rememberSessionWorkspace,
   rememberWorkspaceProject,
@@ -32,6 +32,7 @@ export function useCreateAndSendSession() {
     setSessionModel,
     dispatchCommand,
     attachImage,
+    attachImageBytes,
     detectDroppedPath,
   } = useGateway();
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
@@ -101,6 +102,9 @@ export function useCreateAndSendSession() {
         }
         const prepared = await prepareComposerPrompt(sessionId, payload, {
           attachImage,
+          attachImageBytes,
+          remote: isRemoteConnection(),
+          readImageBytes: readImageBytesFromPath,
           detectDroppedPath,
           uploadFile: uploadAttachmentFile,
           onAttachmentUpdate: controls.updateAttachment,
@@ -132,6 +136,7 @@ export function useCreateAndSendSession() {
     return sessionId;
   }, [
     attachImage,
+    attachImageBytes,
     beginPrompt,
     createSession,
     detectDroppedPath,

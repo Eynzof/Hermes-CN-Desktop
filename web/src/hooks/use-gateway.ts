@@ -48,6 +48,8 @@ import {
   terminateAllStreamsAtom,
   type ImageEntry,
 } from "@/stores/chat";
+import { sessionTipRedirectAtom } from "@/stores/ui";
+import { recordTipRedirect } from "@/lib/session-tip-redirect";
 
 type GatewayState = ReturnType<typeof getGatewayClient>["state"];
 
@@ -235,6 +237,7 @@ export function useGateway() {
   const markSessionInterrupted = useSetAtom(markSessionInterruptedAtom);
   const startPrompt = useSetAtom(startPromptAtom);
   const setSessionError = useSetAtom(setSessionErrorAtom);
+  const setSessionTipRedirect = useSetAtom(sessionTipRedirectAtom);
   const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);
 
   const activeRuntime = gwSessionId ? runtimeBySession[gwSessionId] : undefined;
@@ -302,12 +305,18 @@ export function useGateway() {
       }),
       "session.resume",
     );
+    const resumed = result.resumed ?? persistentSessionId;
     setGwSessionId(result.session_id);
     resetChatSession(result.session_id);
-    rememberSessionMapping(result.session_id, result.resumed ?? persistentSessionId);
-    mirrorSessionWorkspaceMapping(result.session_id, result.resumed ?? persistentSessionId);
+    rememberSessionMapping(result.session_id, resumed);
+    mirrorSessionWorkspaceMapping(result.session_id, resumed);
+    // Compression rotated the conversation onto a new continuation: the backend
+    // followed the chain and resumed a different persistent id than we asked
+    // for. Record it so the detail route can project onto the live tip instead
+    // of stranding the user on the now-empty pre-compression id (issue #305).
+    setSessionTipRedirect((prev) => recordTipRedirect(prev, persistentSessionId, result.resumed));
     return result.session_id;
-  }, [ensureSubscribed, resetChatSession, setGwSessionId]);
+  }, [ensureSubscribed, resetChatSession, setGwSessionId, setSessionTipRedirect]);
 
   const sendPrompt = useCallback(
     async (
@@ -584,6 +593,31 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  // Attach an image by uploading its bytes over the gateway (image.attach_bytes),
+  // mirroring the official desktop's remote path. Used when the image is an
+  // in-browser File with no gateway-readable filesystem path (e.g. a pasted
+  // screenshot) — avoids the fork-only REST /api/upload endpoint, which keeps
+  // getting dropped/restored across Core upstream syncs.
+  const attachImageBytes = useCallback(
+    async (
+      sessionId: string,
+      contentBase64: string,
+      filename?: string,
+    ): Promise<ImageAttachResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        ImageAttachResult,
+        await getGatewayClient().request("image.attach_bytes", {
+          session_id: sessionId,
+          content_base64: contentBase64,
+          ...(filename ? { filename } : {}),
+        }),
+        "image.attach_bytes",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const detectDroppedPath = useCallback(
     async (sessionId: string, path: string): Promise<InputDetectDropResult> => {
       ensureSubscribed();
@@ -674,6 +708,7 @@ export function useGateway() {
     setRuntimeModel,
     setSessionReasoningEffort,
     attachImage,
+    attachImageBytes,
     detectDroppedPath,
     interruptSession,
     setSessionTitle,

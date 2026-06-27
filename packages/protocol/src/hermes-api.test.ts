@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ActiveProfileResponse,
   AnalyticsResponse,
   AudioSpeakResponse,
   AudioTranscriptionResponse,
@@ -8,7 +9,10 @@ import {
   CronRunDetail,
   CronRunsResponse,
   ElevenLabsVoicesResponse,
+  ProfileCreateResponse,
+  ProfileSummary,
   SessionsResponse,
+  SkillsHubSearchResponse,
   SessionCompressResult,
   SessionSummary,
 } from "./hermes-api";
@@ -52,6 +56,103 @@ describe("Audio API schemas", () => {
 
     expect(parsed.available).toBe(true);
     expect(parsed.voices[0]?.voice_id).toBe("voice-1");
+  });
+});
+
+describe("Profile API schemas", () => {
+  it("parses the current upstream {active, current} active-profile shape", () => {
+    const parsed = ActiveProfileResponse.parse({ active: "work", current: "default" });
+    expect(parsed).toEqual({ active: "work", current: "default" });
+  });
+
+  it("normalizes the legacy CN-fork {name} shape to {active, current}", () => {
+    // 旧 P-008 runtime 只返回 {name}；新代码统一读 active/current，不能因缺字段而炸。
+    const parsed = ActiveProfileResponse.parse({ name: "sandbox" });
+    expect(parsed).toEqual({ active: "sandbox", current: "sandbox" });
+  });
+
+  it("falls back to default when the active endpoint returns nothing useful", () => {
+    const parsed = ActiveProfileResponse.parse({});
+    expect(parsed).toEqual({ active: "default", current: "default" });
+  });
+
+  it("backfills current from active when only active is present", () => {
+    const parsed = ActiveProfileResponse.parse({ active: "research" });
+    expect(parsed).toEqual({ active: "research", current: "research" });
+  });
+
+  it("defaults the new ProfileSummary fields for an older runtime payload", () => {
+    // 老 runtime 只发基础字段；新字段（gateway_running/description/distribution_*/has_alias）
+    // 必须有兜底默认值，否则整张档案列表解析失败。
+    const parsed = ProfileSummary.parse({
+      name: "default",
+      path: "/home/u/.hermes",
+      is_default: true,
+      model: null,
+      provider: null,
+      has_env: false,
+      skill_count: 0,
+    });
+    expect(parsed.gateway_running).toBe(false);
+    expect(parsed.description).toBe("");
+    expect(parsed.description_auto).toBe(false);
+    expect(parsed.distribution_name).toBeNull();
+    expect(parsed.has_alias).toBe(false);
+  });
+
+  it("defaults hub_installs to [] when the create response omits it", () => {
+    const parsed = ProfileCreateResponse.parse({ ok: true, name: "work", path: "/x" });
+    expect(parsed.hub_installs).toEqual([]);
+  });
+
+  it("parses a create response with background hub installs (pid may be null)", () => {
+    const parsed = ProfileCreateResponse.parse({
+      ok: true,
+      name: "work",
+      path: "/x",
+      model_set: true,
+      mcp_written: 2,
+      skills_disabled: 3,
+      hub_installs: [
+        { identifier: "owner/linear", pid: 4242 },
+        { identifier: "owner/broken", pid: null },
+      ],
+    });
+    expect(parsed.mcp_written).toBe(2);
+    expect(parsed.hub_installs).toHaveLength(2);
+    expect(parsed.hub_installs[1]?.pid).toBeNull();
+  });
+
+  it("parses a skills-hub search response and defaults its optional maps", () => {
+    const parsed = SkillsHubSearchResponse.parse({
+      results: [{ name: "Linear", source: "hermes-index", identifier: "owner/linear" }],
+    });
+    expect(parsed.results[0]?.identifier).toBe("owner/linear");
+    expect(parsed.results[0]?.description).toBe("");
+    expect(parsed.source_counts).toEqual({});
+    expect(parsed.timed_out).toEqual([]);
+  });
+
+  it("keeps the full ProfileSummary fields from a current runtime payload", () => {
+    const parsed = ProfileSummary.parse({
+      name: "coder",
+      path: "/home/u/.hermes/profiles/coder",
+      is_default: false,
+      model: "claude-opus-4-8",
+      provider: "anthropic",
+      has_env: true,
+      skill_count: 12,
+      gateway_running: true,
+      description: "全栈开发档案",
+      description_auto: true,
+      distribution_name: "coder-pro",
+      distribution_version: "1.0.0",
+      distribution_source: "https://example.com/coder-pro",
+      has_alias: true,
+    });
+    expect(parsed.gateway_running).toBe(true);
+    expect(parsed.description_auto).toBe(true);
+    expect(parsed.distribution_name).toBe("coder-pro");
   });
 });
 

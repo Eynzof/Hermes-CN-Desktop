@@ -289,6 +289,10 @@ export async function postJSON<T>(path: string, body: unknown, parser?: Parser<T
   return fetchJSON<T>(path, { method: "POST", body: JSON.stringify(body) }, parser);
 }
 
+export async function patchJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
+  return fetchJSON<T>(path, { method: "PATCH", body: JSON.stringify(body) }, parser);
+}
+
 export async function deleteJSON<T>(path: string, body?: unknown, parser?: Parser<T>): Promise<T> {
   return fetchJSON<T>(path, {
     method: "DELETE",
@@ -347,4 +351,44 @@ export function uploadAttachmentFile(
     };
     xhr.send(form);
   });
+}
+
+/** True when attached to a remote gateway (a different machine's filesystem). */
+export function isRemoteConnection(): boolean {
+  return runtime.isRemote();
+}
+
+function attachmentParentDir(path: string): string {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return i > 0 ? path.slice(0, i) : path;
+}
+
+function attachmentFileName(path: string): string {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return i >= 0 ? path.slice(i + 1) : path;
+}
+
+// Read a local image file's bytes (base64) via the desktop bridge, for attaching
+// to a REMOTE gateway that can't see this machine's filesystem. Mirrors the
+// official desktop's readImageForRemoteAttach. The desktop's read_workspace_file
+// command confines reads to a root, so we pass the image's own directory; it
+// caps inline images at 8 MB and returns null above that. Returns null when the
+// bridge is unavailable or the file can't be read as an image.
+export async function readImageBytesFromPath(
+  path: string,
+): Promise<{ contentBase64: string; filename: string } | null> {
+  const read = window.hermesDesktop?.readWorkspaceFile;
+  if (!read) return null;
+  try {
+    const preview = await read({ path, root: attachmentParentDir(path) });
+    const dataUrl = preview?.dataUrl;
+    if (!dataUrl) return null;
+    const comma = dataUrl.indexOf(",");
+    const contentBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    return contentBase64
+      ? { contentBase64, filename: attachmentFileName(path) }
+      : null;
+  } catch {
+    return null;
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "hermes-agent-cn-desktop",
-  "version": "0.5.2",
+  "version": "0.5.4",
   "private": true,
   "author": "Hermes Agent CN Contributors",
   "homepage": "https://hermesagent.org.cn",
@@ -24,6 +24,8 @@
     "tauri:run": "pnpm run version:sync && cargo run",
     "typecheck": "pnpm run license:check && pnpm run version:check && pnpm -r run typecheck",
     "test:unit": "pnpm -r --workspace-concurrency=1 test:unit",
+    "test:e2e": "pnpm --filter @hermes/e2e test",
+    "test:e2e:smoke": "pnpm --filter @hermes/e2e smoke",
     "runtime:stage-bundled-windows": "node scripts/stage-bundled-runtime.mjs --platform win32 --arch x64",
     "runtime:stage-bundled-macos": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch arm64",
     "dashboard:stage-web-dist": "node scripts/stage-dashboard-web-dist.mjs",
