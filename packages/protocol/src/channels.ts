@@ -476,8 +476,11 @@ export interface YoloModeStatus {
   enabled: boolean;
   /**
    * What the currently-running managed runtime was actually started with.
-   * Differs from `enabled` only between a toggle and the restart that applies
-   * it.
+   * Usually equals `enabled`. It can exceed it (`enabled=false / effective=true`)
+   * in two cases: the brief window between a toggle and the restart that applies
+   * it, and when an inherited `HERMES_YOLO_MODE` forces YOLO while no preference
+   * has been persisted. An explicit persisted preference is authoritative, so a
+   * persisted "off" always yields `effective=false` (see #287).
    */
   effective: boolean;
 }

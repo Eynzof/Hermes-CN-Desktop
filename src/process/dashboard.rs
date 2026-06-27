@@ -782,13 +782,19 @@ async fn known_session_token_for_existing(api_base_url: &str) -> Option<String> 
 /// Whether YOLO mode should be active for a managed dashboard bound to
 /// `hermes_home`.
 ///
-/// Combines the persisted desktop toggle (UI-store KV, see
-/// [`crate::ui_store::yolo_mode_enabled`]) with an explicit `HERMES_YOLO_MODE`
-/// override in the desktop's own environment. The env override keeps the
-/// documented power-user / dev escape hatch working even before the UI toggle
-/// is flipped.
+/// The persisted desktop toggle (UI-store KV, see
+/// [`crate::ui_store::yolo_mode_preference`]) is authoritative: an explicit
+/// preference — including an explicit "off" — wins over any inherited
+/// `HERMES_YOLO_MODE` in the desktop's own environment. So disabling YOLO in
+/// the UI truly disables it, even when the desktop process was launched with
+/// `HERMES_YOLO_MODE=1` (see #287). The env var only acts as the default before
+/// the user has ever touched the toggle, preserving the documented power-user /
+/// dev escape hatch from #78.
 pub fn yolo_mode_effective(hermes_home: &str) -> bool {
-    crate::ui_store::yolo_mode_enabled(hermes_home) || env_flag("HERMES_YOLO_MODE")
+    match crate::ui_store::yolo_mode_preference(hermes_home) {
+        Some(pref) => pref,
+        None => env_flag("HERMES_YOLO_MODE"),
+    }
 }
 
 pub fn external_agent_allowed() -> bool {
@@ -923,9 +929,11 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
 
     // YOLO mode: the backend freezes HERMES_YOLO_MODE at import time, so it can
     // only be toggled by (re)launching the runtime. Drive it from the persisted
-    // desktop preference (per HERMES_HOME) and make the decision authoritative:
-    // when off, explicitly clear any inherited HERMES_YOLO_MODE so the runtime
-    // never silently bypasses approval prompts.
+    // desktop preference (per HERMES_HOME) and make that decision authoritative
+    // (an inherited HERMES_YOLO_MODE only seeds the default before the user has
+    // ever set the preference). When the result is off, explicitly clear any
+    // inherited HERMES_YOLO_MODE so the runtime never silently bypasses approval
+    // prompts (see #287).
     if yolo_mode_effective(&options.hermes_home) {
         cmd.env("HERMES_YOLO_MODE", "1");
         log::warn!(
@@ -1335,11 +1343,23 @@ mod tests {
         crate::ui_store::set_yolo_mode(home, false).unwrap();
         assert!(!yolo_mode_effective(home));
 
-        // Env override enables it even when the persisted pref is off.
+        // The persisted preference is authoritative: an explicit "off" wins over
+        // an inherited HERMES_YOLO_MODE=1 (the #287 bug — the UI toggle must
+        // actually disable the runtime).
         std::env::set_var("HERMES_YOLO_MODE", "1");
-        assert!(yolo_mode_effective(home));
-        std::env::remove_var("HERMES_YOLO_MODE");
         assert!(!yolo_mode_effective(home));
+        // An explicit "on" stays on regardless of env.
+        crate::ui_store::set_yolo_mode(home, true).unwrap();
+        assert!(yolo_mode_effective(home));
+
+        // With no persisted preference, the env var seeds the default — the
+        // documented power-user / dev escape hatch before the UI is ever used.
+        // (Use a fresh home so the preference is genuinely unset.)
+        let fresh = TempDir::new().unwrap();
+        let fresh_home = fresh.path().to_str().unwrap();
+        assert!(yolo_mode_effective(fresh_home));
+        std::env::remove_var("HERMES_YOLO_MODE");
+        assert!(!yolo_mode_effective(fresh_home));
     }
 
     #[test]
