@@ -521,6 +521,106 @@ export const McpServersResponse = z.object({
 });
 export type McpServersResponse = z.infer<typeof McpServersResponse>;
 
+// ── MCP 服务管理（/api/mcp/* — 官方上游接口）──────────────────────────
+// 官方 Dashboard 自带的完整管理面（增删改 / 启停 / 测试连接 / 目录浏览 /
+// 一键安装），桌面版直接复用，不再走只读的 fork 端点 /api/mcp-servers。
+// 这些 schema 对齐 hermes_cli/web_server.py 里的响应形状。
+
+// GET /api/mcp/servers 的单条。transport: "http" | "stdio" | "unknown"。
+// env 的值已被后端脱敏（仅用于展示键名/计数，不含真实密钥）。
+export const McpServer = z.object({
+  name: z.string(),
+  transport: z.string(),
+  url: z.string().nullable().optional(),
+  command: z.string().nullable().optional(),
+  args: z.array(z.string()).optional().default([]),
+  env: z.record(z.string()).optional().default({}),
+  auth: z.string().nullable().optional(),
+  enabled: z.boolean(),
+  // 启用的工具名列表；null = 全部启用。
+  tools: z.array(z.string()).nullable().optional(),
+});
+export type McpServer = z.infer<typeof McpServer>;
+
+export const McpServersFullResponse = z.object({
+  servers: z.array(McpServer),
+});
+export type McpServersFullResponse = z.infer<typeof McpServersFullResponse>;
+
+// POST /api/mcp/servers/{name}/test — 连接→列工具→断开。
+export const McpToolInfo = z.object({
+  name: z.string(),
+  description: z.string().nullable().optional().transform((v) => v ?? ""),
+});
+export type McpToolInfo = z.infer<typeof McpToolInfo>;
+
+export const McpTestResult = z.object({
+  ok: z.boolean(),
+  error: z.string().nullable().optional(),
+  tools: z.array(McpToolInfo).optional().default([]),
+});
+export type McpTestResult = z.infer<typeof McpTestResult>;
+
+// PUT /api/mcp/servers/{name}/enabled
+export const McpEnabledResponse = z.object({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+export type McpEnabledResponse = z.infer<typeof McpEnabledResponse>;
+
+// GET /api/mcp/catalog — Nous 官方审核过的 MCP 目录（optional-mcps/ manifest）。
+export const McpCatalogRequiredEnv = z.object({
+  name: z.string(),
+  prompt: z.string().optional().default(""),
+  required: z.boolean().optional().default(false),
+});
+export type McpCatalogRequiredEnv = z.infer<typeof McpCatalogRequiredEnv>;
+
+export const McpCatalogEntry = z.object({
+  name: z.string(),
+  description: z.string().optional().default(""),
+  source: z.string().optional().default(""),
+  transport: z.string(),
+  auth_type: z.string().optional().default("none"),
+  required_env: z.array(McpCatalogRequiredEnv).optional().default([]),
+  command: z.string().nullable().optional(),
+  args: z.array(z.string()).optional().default([]),
+  url: z.string().nullable().optional(),
+  // git bootstrap（仅 clone+build 类条目有）。
+  install_url: z.string().nullable().optional(),
+  install_ref: z.string().nullable().optional(),
+  bootstrap: z.array(z.string()).optional().default([]),
+  default_enabled: z.array(z.string()).nullable().optional(),
+  post_install: z.string().optional().default(""),
+  needs_install: z.boolean().optional().default(false),
+  installed: z.boolean().optional().default(false),
+  enabled: z.boolean().optional().default(false),
+});
+export type McpCatalogEntry = z.infer<typeof McpCatalogEntry>;
+
+export const McpCatalogDiagnostic = z.object({
+  name: z.string(),
+  kind: z.string(),
+  message: z.string(),
+});
+export type McpCatalogDiagnostic = z.infer<typeof McpCatalogDiagnostic>;
+
+export const McpCatalogResponse = z.object({
+  entries: z.array(McpCatalogEntry),
+  diagnostics: z.array(McpCatalogDiagnostic).optional().default([]),
+});
+export type McpCatalogResponse = z.infer<typeof McpCatalogResponse>;
+
+// POST /api/mcp/catalog/install。background=true 表示 git clone/build 在后台进行。
+export const McpCatalogInstallResponse = z.object({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  background: z.boolean().optional().default(false),
+  action: z.string().nullable().optional(),
+});
+export type McpCatalogInstallResponse = z.infer<typeof McpCatalogInstallResponse>;
+
 // ── Analytics (/api/analytics/usage) ──────────────────────────────────
 
 export const AnalyticsTotals = z.object({
@@ -836,13 +936,17 @@ export const ProfileSoulResponse = z.object({
 });
 export type ProfileSoulResponse = z.infer<typeof ProfileSoulResponse>;
 
-// 创建档案时可一并写入的 MCP server（profile builder）。url（HTTP）或
-// command+args（stdio）二选一。env/auth 不在向导里暴露。
+// 创建 MCP server 的请求体（POST /api/mcp/servers，也复用于 profile builder 的
+// ProfileCreateRequest.mcp_servers）。url（HTTP/SSE）或 command+args（stdio）二选一。
+// env（stdio 的 KEY=VALUE，含 API key 等）、auth（"oauth" 等）由 MCP 管理页填写；
+// 早期 profile 向导不发这两个字段，故均为 optional、向后兼容。
 export const McpServerCreate = z.object({
   name: z.string(),
   url: z.string().optional(),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  auth: z.string().optional(),
 });
 export type McpServerCreate = z.infer<typeof McpServerCreate>;
 
