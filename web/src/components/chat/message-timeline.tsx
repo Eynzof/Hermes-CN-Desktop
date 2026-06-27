@@ -1180,6 +1180,11 @@ export function MessageTimeline({
       frame = window.requestAnimationFrame(anchorToBottom);
     });
     observer.observe(messagesElement);
+    // composer 增高（多行输入 / 技能面板 / 附件托盘 / 上下文告警 / 队列面板等）会让滚动视口
+    // 从底部变矮，但 .messages 内容高度不变、上面这个 observer 不会触发，导致最新内容被挤到
+    // 视口下沿之外（看起来"藏在输入框后面"）。一并观察滚动容器自身：视口高度变化时也走
+    // anchorToBottom 重新贴底——其守卫（userDetached / nearBottom）保证不会把已上滑的用户拽回。
+    observer.observe(container);
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
