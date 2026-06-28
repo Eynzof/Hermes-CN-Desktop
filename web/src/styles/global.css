@@ -30,6 +30,7 @@ html {
 body {
   font-family: var(--h-font-ui);
   font-size: var(--h-fs);
+  font-weight: 400;
   line-height: var(--h-lh);
   background: var(--h-bg-app);
   color: var(--h-text);
@@ -41,6 +42,11 @@ body {
   /* Keep Chinese punctuation in its native full-width form. `proportional-width`
      makes `，。；：` render like narrow Latin punctuation in WebView fonts. */
   font-variant-east-asian: normal;
+}
+
+/* Grayscale antialiasing is a macOS preference; on Windows it disables ClearType
+   (subpixel) and makes small CJK text look thinner/softer, so scope it to mac. */
+body[data-hermes-host-os="macos"] {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

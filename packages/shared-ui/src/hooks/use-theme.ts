@@ -2,27 +2,53 @@ import { atom, useAtom } from "jotai";
 
 export type ThemeVariant = "light" | "light-modern" | "dark" | "dark-modern";
 export type DensityVariant = "comfortable" | "compact";
+/** Global interface scale steps. Maps to a single CSS `zoom` on the document
+ *  root so text, spacing and icons enlarge together — see {@link SCALE_FACTORS}. */
+export type ScaleVariant = "sm" | "md" | "lg" | "xl" | "2xl";
 
 export interface ThemeConfig {
   theme: ThemeVariant;
   density: DensityVariant;
+  scale: ScaleVariant;
 }
 
 export const DEFAULT_THEME_CONFIG: ThemeConfig = {
   theme: "light-modern",
   density: "comfortable",
+  scale: "md",
+};
+
+/** Interface-scale step → zoom factor.
+ *
+ *  The whole UI is enlarged with one `zoom` on the document root rather than a
+ *  root font-size, because nearly all font sizes are hard-coded px (the
+ *  `--h-font-size-*` tokens are unused), so a root font-size would not cascade.
+ *  `zoom` reflows the layout (unlike `transform: scale`) and is supported across
+ *  Chromium WebView2 / WKWebView / WebKitGTK. */
+export const SCALE_FACTORS: Record<ScaleVariant, number> = {
+  sm: 0.9,
+  md: 1,
+  lg: 1.1,
+  xl: 1.25,
+  "2xl": 1.5,
 };
 
 const THEME_VARIANTS = new Set<ThemeVariant>(["light", "light-modern", "dark", "dark-modern"]);
+const SCALE_VARIANTS = new Set<ScaleVariant>(["sm", "md", "lg", "xl", "2xl"]);
 
 function isThemeVariant(value: unknown): value is ThemeVariant {
   return typeof value === "string" && THEME_VARIANTS.has(value as ThemeVariant);
+}
+
+function isScaleVariant(value: unknown): value is ScaleVariant {
+  return typeof value === "string" && SCALE_VARIANTS.has(value as ScaleVariant);
 }
 
 export function normalizeThemeConfig(value: Partial<ThemeConfig> | null | undefined): ThemeConfig {
   return {
     theme: isThemeVariant(value?.theme) ? value.theme : DEFAULT_THEME_CONFIG.theme,
     density: value?.density === "compact" ? "compact" : DEFAULT_THEME_CONFIG.density,
+    scale: isScaleVariant(value?.scale) ? value.scale : DEFAULT_THEME_CONFIG.scale,
   };
 }
 
@@ -49,6 +75,15 @@ export function applyThemeToDOM(config: ThemeConfig) {
   const root = document.documentElement;
   root.setAttribute("data-theme", config.theme);
   root.setAttribute("data-density", config.density);
+  root.setAttribute("data-scale", config.scale);
+  // Single global scaling knob: enlarge the entire interface via `zoom` on the
+  // root element. Skip the property at 1× so default rendering is untouched.
+  const factor = SCALE_FACTORS[config.scale] ?? 1;
+  if (factor === 1) {
+    root.style.removeProperty("zoom");
+  } else {
+    root.style.setProperty("zoom", String(factor));
+  }
 }
 
 export function useTheme() {

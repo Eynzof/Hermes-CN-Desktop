@@ -296,6 +296,14 @@ export function NotificationSection({ showHeading = true }: SettingsSectionProps
   );
 }
 
+const UI_SCALE_OPTIONS: Array<{ value: ThemeConfig["scale"]; label: string }> = [
+  { value: "sm", label: "90%" },
+  { value: "md", label: "100%" },
+  { value: "lg", label: "110%" },
+  { value: "xl", label: "125%" },
+  { value: "2xl", label: "150%" },
+];
+
 export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
@@ -330,6 +338,13 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
               value={config.theme}
               onChange={(theme) => update({ theme })}
             />
+          }
+        />
+        <AppearanceRow
+          label="界面缩放"
+          sub="整体放大或缩小界面（文字、间距、图标一起缩放），适配高分屏 / 4K 显示器。标准为 100%。"
+          right={
+            <RadioGroup value={config.scale} options={UI_SCALE_OPTIONS} onChange={(v) => update({ scale: v as ThemeConfig["scale"] })} />
           }
         />
         <AppearanceRow
