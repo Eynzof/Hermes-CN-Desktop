@@ -2,6 +2,13 @@ import { z } from "zod";
 
 const NullableStringAsEmpty = z.string().nullable().optional().transform((value) => value ?? "");
 
+// Wire value may be null (SQL NULL) or absent; normalize both to `undefined` so
+// consumers keep the simple `string | undefined` / `number | undefined` shape.
+// Zod v3's bare `.optional()` rejects an explicit JSON `null`, which is exactly
+// how routes serialize unset columns — hence these tolerant helpers.
+const NullishString = z.string().nullish().transform((value) => value ?? undefined);
+const NullishNumber = z.number().nullish().transform((value) => value ?? undefined);
+
 function stringifyMessageContent(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (value == null) return null;
@@ -31,8 +38,11 @@ export const StatusResponse = z.object({
   config_version: z.number().optional(),
   latest_config_version: z.number().optional(),
   gateway_running: z.boolean(),
-  gateway_pid: z.number().nullable(),
-  gateway_health_url: z.string().nullable(),
+  // `/api/status` is in PUBLIC_API_PATHS and omits these on an auth-gated bind,
+  // emitting them only on a loopback/insecure bind — so they're optional too,
+  // not merely nullable, otherwise a gated dashboard's 200 fails to parse.
+  gateway_pid: z.number().nullable().optional(),
+  gateway_health_url: z.string().nullable().optional(),
   gateway_state: NullableStringAsEmpty,
   gateway_platforms: z.record(z.string(), PlatformStatus).optional(),
   gateway_exit_reason: z.string().nullable(),
@@ -371,11 +381,13 @@ export type MessagesResponse = z.infer<typeof MessagesResponse>;
 
 export const SearchResult = z.object({
   session_id: z.string(),
-  snippet: z.string().optional(),
-  role: z.string().optional(),
-  source: z.string().optional(),
-  model: z.string().optional(),
-  session_started: z.number().optional(),
+  // The session-id-match branch hardcodes `role: null` and passes nullable
+  // `model`/`source`/`started_at` straight from SQL — all must tolerate null.
+  snippet: NullishString,
+  role: NullishString,
+  source: NullishString,
+  model: NullishString,
+  session_started: NullishNumber,
 });
 export type SearchResult = z.infer<typeof SearchResult>;
 
