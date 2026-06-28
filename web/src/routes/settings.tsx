@@ -296,6 +296,14 @@ export function NotificationSection({ showHeading = true }: SettingsSectionProps
   );
 }
 
+const UI_SCALE_OPTIONS: Array<{ value: ThemeConfig["scale"]; label: string }> = [
+  { value: "sm", label: "90%" },
+  { value: "md", label: "100%" },
+  { value: "lg", label: "110%" },
+  { value: "xl", label: "125%" },
+  { value: "2xl", label: "150%" },
+];
+
 export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
@@ -330,6 +338,13 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
               value={config.theme}
               onChange={(theme) => update({ theme })}
             />
+          }
+        />
+        <AppearanceRow
+          label="界面缩放"
+          sub="整体放大或缩小界面（文字、间距、图标一起缩放），适配高分屏 / 4K 显示器。标准为 100%。"
+          right={
+            <RadioGroup value={config.scale} options={UI_SCALE_OPTIONS} onChange={(v) => update({ scale: v as ThemeConfig["scale"] })} />
           }
         />
         <AppearanceRow
@@ -1579,6 +1594,19 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               的代码贡献，及
               <ExternalTextLink href="https://www.compshare.cn/">优云智算</ExternalTextLink>
               的支持。
+            </p>
+          </div>
+        </DebugCard>
+
+        <DebugCard icon={<Info size={15} />} title="字体许可" sub="界面字体署名" wide>
+          <div className={s.thanksText}>
+            <p>
+              本桌面端内置并使用了华为 HarmonyOS Sans 字体（HarmonyOS Sans SC，Copyright © 2021 Huawei
+              Device Co., Ltd.）。该字体依据
+              <ExternalTextLink href="https://github.com/ajacocks/harmonyos-sans-font/blob/main/LICENSE">
+                《HarmonyOS Sans Fonts License Agreement》
+              </ExternalTextLink>
+              免费用于商业用途，以未修改的原始文件随应用一同分发。
             </p>
           </div>
         </DebugCard>

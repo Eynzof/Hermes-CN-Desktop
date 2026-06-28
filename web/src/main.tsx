@@ -1,9 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, HashRouter } from "react-router-dom";
-import { Provider as JotaiProvider } from "jotai";
+import { Provider as JotaiProvider, createStore } from "jotai";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { DEFAULT_THEME_CONFIG, applyPlatformToDOM, applyThemeToDOM, normalizeThemeConfig, type ThemeConfig } from "@hermes/shared-ui";
+import { DEFAULT_THEME_CONFIG, applyPlatformToDOM, applyThemeToDOM, normalizeThemeConfig, themeAtom, type ThemeConfig } from "@hermes/shared-ui";
 import { queryClient } from "./lib/query-client";
 import { applyHostOSToDOM, runtime } from "./lib/runtime";
 import { installDebugCapture } from "./lib/debug-install";
@@ -42,8 +42,12 @@ async function bootstrap() {
   installExternalLinkHandling();
   await initUiStore();
 
-  const initialTheme = readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG);
-  applyThemeToDOM(normalizeThemeConfig(initialTheme));
+  const initialTheme = normalizeThemeConfig(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
+  applyThemeToDOM(initialTheme);
+  // Seed the shared jotai store so `useTheme()` (and the appearance controls)
+  // start from the persisted theme/density/scale instead of the defaults.
+  const jotaiStore = createStore();
+  jotaiStore.set(themeAtom, initialTheme);
 
   await fetchDevToken();
   installDebugCapture();
@@ -55,7 +59,7 @@ async function bootstrap() {
     <StrictMode>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <JotaiProvider>
+          <JotaiProvider store={jotaiStore}>
             <Router>
               <App />
             </Router>

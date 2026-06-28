@@ -48,7 +48,8 @@
   --h-text: var(--ink-300);
   --h-text-2: var(--ink-700);
   --h-text-3: var(--ink-800);
-  --h-text-4: #cac4b6;
+  /* Was #cac4b6 (~1.7:1 on the cream bg — effectively invisible). */
+  --h-text-4: var(--bone-500);
   --h-ok: #6b8e5a;
   --h-ok-soft: #e3ecdc;
   --h-warn: #c08828;
@@ -76,8 +77,10 @@
   --h-line-soft: #e5e5e5;
   --h-text: #1f1f1f;
   --h-text-2: #3f3f46;
-  --h-text-3: #6e6e6e;
-  --h-text-4: #a6a6a6;
+  /* Deepened for WCAG AA: #6e6e6e (~4.5:1, sub-AA on chips) → #595959 (~7:1);
+     #a6a6a6 (~2.4:1) → #757575 (~4.6:1). Secondary text is the workhorse here. */
+  --h-text-3: #595959;
+  --h-text-4: #757575;
   --h-ok: #16825d;
   --h-ok-soft: rgba(22, 130, 93, 0.1);
   --h-warn: #9d6b00;
@@ -142,7 +145,8 @@
   --h-text: #d4d4d4;
   --h-text-2: #c5c5c5;
   --h-text-3: #9d9d9d;
-  --h-text-4: #6f6f6f;
+  /* Was #6f6f6f (~3.3:1 on #1f1f1f) → #8a8a8a (~4.9:1) for AA on small text. */
+  --h-text-4: #8a8a8a;
   --h-ok: #89d185;
   --h-ok-soft: rgba(137, 209, 133, 0.1);
   --h-warn: #cca700;
