@@ -810,8 +810,7 @@ pub fn git_review_create_pr(input: RepoPathInput) -> AppResult<CreatePrResult> {
     let url = stdout
         .trim()
         .lines()
-        .filter(|l| !l.trim().is_empty())
-        .next_back()
+        .rfind(|l| !l.trim().is_empty())
         .unwrap_or("")
         .to_string();
     Ok(CreatePrResult { url })
