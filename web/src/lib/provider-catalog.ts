@@ -220,7 +220,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.07.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.28.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -269,6 +269,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       defaultModel: "qwen3-coder-plus",
       models: [
         { id: "qwen3-coder-plus", supportsTools: true, supportsReasoning: true },
+        { id: "qwen3.7-max", supportsTools: true, supportsReasoning: true },
+        { id: "qwen3.7-plus", supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "qwen3-max", supportsTools: true, supportsReasoning: true },
         { id: "qwen-plus", supportsTools: true },
         { id: "qwen-max", supportsTools: true },
@@ -324,6 +326,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       docsUrl: "https://docs.bigmodel.cn/",
       defaultModel: "glm-5.1",
       models: [
+        { id: "glm-5.2", supportsTools: true, supportsReasoning: true },
         { id: "glm-5.1", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.6", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.5", supportsTools: true },
@@ -342,6 +345,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       docsUrl: "https://docs.bigmodel.cn/cn/api/introduction",
       defaultModel: "glm-5.1",
       models: [
+        { id: "glm-5.2", supportsTools: true, supportsReasoning: true },
         { id: "glm-5.1", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.7", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.6", supportsTools: true, supportsReasoning: true },
@@ -360,6 +364,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       docsUrl: "https://platform.moonshot.cn/docs",
       defaultModel: "kimi-k2.6",
       models: [
+        { id: "kimi-k2.7-code", supportsTools: true, supportsReasoning: true },
         { id: "kimi-k2.6", supportsTools: true },
         { id: "kimi-k2-0905-preview", supportsTools: true },
         { id: "kimi-latest", supportsTools: true },
@@ -520,6 +525,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       docsUrl: "https://platform.xiaomimimo.com/docs/en-US/api/chat/openai-api",
       defaultModel: "mimo-v2.5-pro",
       models: [
+        { id: "mimo-v2.5-pro-ultraspeed", supportsTools: true, supportsReasoning: true },
         { id: "mimo-v2.5-pro", supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "mimo-v2.5", supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "mimo-v2-flash", supportsTools: true },
@@ -538,6 +544,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       defaultModel: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
       models: [
         { id: "Qwen/Qwen3-Coder-480B-A35B-Instruct", supportsTools: true },
+        { id: "zai-org/GLM-5.2", supportsTools: true, supportsReasoning: true },
+        { id: "deepseek-ai/DeepSeek-V4-Pro", supportsTools: true, supportsReasoning: true },
         { id: "deepseek-ai/DeepSeek-V3.2", supportsTools: true },
         { id: "deepseek-ai/DeepSeek-R1", supportsReasoning: true },
       ],
