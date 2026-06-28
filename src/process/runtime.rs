@@ -883,6 +883,85 @@ pub fn current_bundled_plugins_dir() -> Option<PathBuf> {
     }
 }
 
+// --- Bundled Node.js runtime + prebuilt Ink TUI (P-032) -------------------
+// release-runtime.yml stages a full Node LTS dist and the prebuilt TUI into
+// the runtime payload. Layout (relative to the installed runtime root, i.e.
+// the install record `path`):
+//   POSIX:   node/bin/{node,npm,npx} + node/lib/node_modules/npm
+//   Windows: node/{node.exe,npm.cmd,npx.cmd} + node/node_modules/npm
+//   TUI:     tui/dist/entry.js
+fn runtime_node_bin_dir(runtime_dir: &Path) -> PathBuf {
+    let node = runtime_dir.join("node");
+    if cfg!(target_os = "windows") {
+        node
+    } else {
+        node.join("bin")
+    }
+}
+
+fn runtime_node_binary(runtime_dir: &Path) -> PathBuf {
+    let bin = runtime_node_bin_dir(runtime_dir);
+    if cfg!(target_os = "windows") {
+        bin.join("node.exe")
+    } else {
+        bin.join("node")
+    }
+}
+
+fn runtime_tui_dir(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("tui")
+}
+
+fn node_bin_dir_if_present(runtime_dir: &Path) -> Option<PathBuf> {
+    runtime_node_binary(runtime_dir)
+        .is_file()
+        .then(|| runtime_node_bin_dir(runtime_dir))
+}
+
+fn node_binary_if_present(runtime_dir: &Path) -> Option<PathBuf> {
+    let node = runtime_node_binary(runtime_dir);
+    node.is_file().then_some(node)
+}
+
+fn tui_dir_if_present(runtime_dir: &Path) -> Option<PathBuf> {
+    let tui = runtime_tui_dir(runtime_dir);
+    tui.join("dist").join("entry.js").is_file().then_some(tui)
+}
+
+/// Directory holding the bundled `node`/`npm`/`npx`, when the current managed
+/// runtime ships one. Prepend to a spawned child's PATH so `shutil.which`
+/// (TUI launch, node-based MCP servers, playwright, `npx tsc`) resolves them
+/// without a host Node install. See FORK_NOTES P-032.
+pub fn current_node_bin_dir() -> Option<PathBuf> {
+    node_bin_dir_if_present(Path::new(&read_current_record()?.path))
+}
+
+/// Absolute path to the bundled `node` executable, for the `HERMES_NODE` env
+/// var the frozen runtime prefers when launching the Ink TUI (P-032).
+pub fn current_node_binary() -> Option<PathBuf> {
+    node_binary_if_present(Path::new(&read_current_record()?.path))
+}
+
+/// Directory holding the prebuilt Ink TUI bundle (`tui/dist/entry.js`), for
+/// `HERMES_TUI_DIR` so the frozen runtime launches /chat without a ui-tui/
+/// source checkout (P-032).
+pub fn current_tui_dir() -> Option<PathBuf> {
+    tui_dir_if_present(Path::new(&read_current_record()?.path))
+}
+
+/// Prepend the bundled node `bin/` dir (when present) to `base`, so a spawned
+/// child resolves the runtime's `node`/`npm`/`npx` via PATH — for the Ink TUI,
+/// node-based MCP stdio servers, playwright, and `npx tsc`. Returns `base`
+/// unchanged when no bundled node is installed. See FORK_NOTES P-032.
+pub fn prepend_bundled_node_to_path(base: std::ffi::OsString) -> std::ffi::OsString {
+    let Some(node_bin) = current_node_bin_dir() else {
+        return base;
+    };
+    let mut dirs = vec![node_bin];
+    dirs.extend(std::env::split_paths(&base));
+    std::env::join_paths(dirs).unwrap_or(base)
+}
+
 fn sync_dashboard_web_dist_from_resource(
     resource_dir: Option<&Path>,
     runtime_dir: &Path,
@@ -2337,6 +2416,40 @@ mod tests {
         assert!(now.ends_with('Z'), "missing Z suffix: {now}");
         assert_eq!(&now[4..5], "-");
         assert_eq!(&now[10..11], "T");
+    }
+
+    #[test]
+    fn node_helpers_gate_on_bundled_binary() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        // Nothing staged → no node.
+        assert!(node_bin_dir_if_present(root).is_none());
+        assert!(node_binary_if_present(root).is_none());
+
+        // Stage the node binary at the platform-correct path (helper decides
+        // node/bin/node on POSIX, node/node.exe on Windows).
+        let node = runtime_node_binary(root);
+        std::fs::create_dir_all(node.parent().unwrap()).unwrap();
+        std::fs::write(&node, b"x").unwrap();
+
+        assert_eq!(node_binary_if_present(root), Some(node));
+        assert_eq!(
+            node_bin_dir_if_present(root),
+            Some(runtime_node_bin_dir(root))
+        );
+    }
+
+    #[test]
+    fn tui_dir_present_only_with_entry_js() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let dist = root.join("tui").join("dist");
+        std::fs::create_dir_all(&dist).unwrap();
+        // Directory exists but entry.js missing → not usable.
+        assert!(tui_dir_if_present(root).is_none());
+
+        std::fs::write(dist.join("entry.js"), b"//tui").unwrap();
+        assert_eq!(tui_dir_if_present(root), Some(root.join("tui")));
     }
 
     #[test]
