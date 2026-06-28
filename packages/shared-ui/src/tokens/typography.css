@@ -36,8 +36,13 @@
 }
 
 :root {
+  /* Stack order is deliberate: macOS keeps PingFang SC (CJK+Latin) and SF.
+     Windows has none of HarmonyOS/PingFang/SF, so Latin lands on Segoe UI and
+     CJK on "Microsoft YaHei UI" (sharper hinting and more weights than the bare
+     "Microsoft YaHei" the app fell back to before — no font is bundled). */
   --h-font-ui: "HarmonyOS Sans SC", "HarmonyOS Sans", "PingFang SC",
-    "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+    "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --h-font-cn: var(--h-font-ui);
   --h-font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
     Consolas, monospace;
