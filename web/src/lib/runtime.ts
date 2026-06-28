@@ -354,6 +354,10 @@ declare global {
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;
       onFileDrop?(handler: (payload: DesktopFileDropPayload) => void): () => void;
       onSystemResume?(handler: () => void): () => void;
+      /** Native webview page zoom (reflows layout + viewport) for the interface
+       *  scale setting. Fire-and-forget; far better than CSS `zoom`, which leaves
+       *  viewport units un-scaled and overflows the fixed window. */
+      setUiZoom?(factor: number): void;
     };
   }
 }

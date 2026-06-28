@@ -71,15 +71,33 @@ export const themeWriteAtom = atom(null, (_get, set, update: Partial<ThemeConfig
   });
 });
 
+/** The desktop bridge surface this module needs, kept local so shared-ui stays
+ *  free of a hard dependency on the web app's global typings. */
+type DesktopZoomBridge = { setUiZoom?: (factor: number) => void };
+
 export function applyThemeToDOM(config: ThemeConfig) {
   const root = document.documentElement;
   root.setAttribute("data-theme", config.theme);
   root.setAttribute("data-density", config.density);
   root.setAttribute("data-scale", config.scale);
-  // Single global scaling knob: enlarge the entire interface via `zoom` on the
-  // root element. Skip the property at 1× so default rendering is untouched.
+
   const factor = SCALE_FACTORS[config.scale] ?? 1;
-  if (factor === 1) {
+  const desktop = (globalThis as unknown as { hermesDesktop?: DesktopZoomBridge })
+    .hermesDesktop;
+
+  // Prefer the native webview page zoom on the desktop. Page zoom reflows the
+  // layout AND shrinks the layout viewport, so `100vw`/`100vh` keep tracking the
+  // OS window (which never resizes) — the whole UI enlarges with nothing clipped.
+  //
+  // The CSS `zoom` property is the wrong tool here: it scales painting but leaves
+  // the layout viewport untouched, so full-window containers (the app shell) get
+  // painted `factor`× larger than the window and overflow — exactly the reported
+  // bug where the right edge and bottom status bar are cut off at 150%. Use it
+  // only as a fallback in a plain browser, where native zoom isn't reachable.
+  if (desktop?.setUiZoom) {
+    root.style.removeProperty("zoom");
+    desktop.setUiZoom(factor);
+  } else if (factor === 1) {
     root.style.removeProperty("zoom");
   } else {
     root.style.setProperty("zoom", String(factor));
