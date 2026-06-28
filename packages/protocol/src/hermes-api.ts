@@ -1203,17 +1203,29 @@ export const AttachmentUploadResult = z.object({
 }).passthrough();
 export type AttachmentUploadResult = z.infer<typeof AttachmentUploadResult>;
 
+// `/api/fs/list` entry. Upstream's handler returns `isDirectory`; the fork's
+// original P-004 handler returned `is_dir`. Accept either off the wire and
+// normalize to a single canonical `is_dir` so every consumer (and the inferred
+// type) stays stable regardless of which Core shape answers.
 export const FsEntry = z.object({
   name: z.string(),
   path: z.string(),
-  is_dir: z.boolean(),
-});
+  is_dir: z.boolean().optional(),
+  isDirectory: z.boolean().optional(),
+}).transform((e) => ({
+  name: e.name,
+  path: e.path,
+  is_dir: e.is_dir ?? e.isDirectory ?? false,
+}));
 export type FsEntry = z.infer<typeof FsEntry>;
 
+// `path` / `parent` / `home` are fork-only extras (gone after an upstream sync),
+// so they're optional; `error` is upstream's HTTP-200 soft error (EACCES/ENOENT/…).
 export const FsListResponse = z.object({
-  path: z.string(),
-  parent: z.string().nullable(),
-  home: z.string(),
+  path: z.string().optional(),
+  parent: z.string().nullable().optional(),
+  home: z.string().optional(),
+  error: z.string().optional(),
   entries: z.array(FsEntry).default([]),
 }).passthrough();
 export type FsListResponse = z.infer<typeof FsListResponse>;
