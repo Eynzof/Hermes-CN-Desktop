@@ -4,6 +4,7 @@ pub mod config_migration;
 pub mod connection;
 pub mod debug_bundle;
 pub mod desktop_update;
+pub mod devtools;
 pub mod environment;
 pub mod file_dialogs;
 pub mod gateway;

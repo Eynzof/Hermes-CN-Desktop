@@ -61,6 +61,7 @@ import {
 } from "@/stores/ui";
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
 import { openExternalUrl } from "@/lib/external-links";
+import { detectHostOS } from "@/lib/runtime";
 import { checkDesktopUpdate, DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import {
@@ -1526,6 +1527,11 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     void openExternalUrl(desktopUpdateResult?.downloadUrl ?? DESKTOP_UPDATE_DOWNLOAD_URL);
   };
 
+  // Developer mode ships enabled; the shortcut to open devtools follows the
+  // platform's browser convention (registered in web/src/lib/tauri-bridge.ts).
+  const devtoolsShortcut =
+    detectHostOS() === "macos" ? "F12 或 ⌘ + ⌥ + I" : "F12 或 Ctrl + Shift + I";
+
   return (
     <div>
       {showHeading && <h2 className={s.heading}>关于</h2>}
@@ -1578,6 +1584,17 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           </div>
           <p className={s.desc}>
             这里提醒的是桌面壳版本。下载新版安装包后，请按系统提示覆盖安装；应用不会自动下载安装包或替换正在运行的程序。
+          </p>
+        </DebugCard>
+
+        <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools" wide>
+          <div className={s.runtimeGrid}>
+            <RuntimeField label="开发者模式" value="已默认开启" />
+            <RuntimeField label="打开快捷键" value={devtoolsShortcut} mono />
+          </div>
+          <p className={s.desc}>
+            本桌面端默认开启开发者模式，按上述快捷键即可打开 / 关闭浏览器开发者工具（DevTools），
+            用于查看控制台日志、网络请求等，方便排查问题或向社区反馈。再次按下快捷键可以关闭。
           </p>
         </DebugCard>
 

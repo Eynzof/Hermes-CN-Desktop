@@ -10,7 +10,11 @@ homepage = "https://hermesagent.org.cn"
 name = "hermes_agent_cn"
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+# `devtools` keeps the WebView inspector available in release builds too, so the
+# desktop ships in developer mode by default (toggled via a keyboard shortcut —
+# see commands/devtools.rs). On macOS this uses a private API, which is fine for
+# our dmg distribution since we don't publish through the App Store.
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
