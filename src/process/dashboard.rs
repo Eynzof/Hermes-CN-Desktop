@@ -878,7 +878,11 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     // the whole runtime tree: dashboard → gateway → MCP stdio servers only
     // see node/npx/rg through it (#190 #196 #197). env_file treats PATH as a
     // reserved key, so this explicit set is the single source of child PATH.
-    let effective_path = crate::path_resolver::effective_path_os();
+    // Prepend the bundled node bin dir (P-032) so /chat's Ink TUI and
+    // node-based MCP servers work without a host Node install.
+    let effective_path = crate::process::runtime::prepend_bundled_node_to_path(
+        crate::path_resolver::effective_path_os(),
+    );
     cmd.env("PATH", &effective_path);
     let session_token = session_token_for_spawn();
     let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
@@ -921,6 +925,19 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         cmd.env("HERMES_BUNDLED_PLUGINS", &plugins_dir);
     } else {
         log::warn!("Bundled plugins are missing from the managed runtime");
+    }
+    // Bundled Node runtime + prebuilt Ink TUI (P-032): HERMES_NODE makes node
+    // resolution deterministic for the /chat PTY launcher; HERMES_TUI_DIR
+    // points it at the prebuilt bundle so it never needs a ui-tui/ checkout.
+    if let Some(node) = crate::process::runtime::current_node_binary() {
+        cmd.env("HERMES_NODE", &node);
+    } else {
+        log::warn!("Bundled node is missing from the managed runtime; /chat will be unavailable");
+    }
+    if let Some(tui_dir) = crate::process::runtime::current_tui_dir() {
+        cmd.env("HERMES_TUI_DIR", &tui_dir);
+    } else {
+        log::warn!("Bundled TUI is missing from the managed runtime; /chat will be unavailable");
     }
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir)

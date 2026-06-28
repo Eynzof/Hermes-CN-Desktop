@@ -501,13 +501,31 @@ fn build_terminal_env(
     let effective = crate::path_resolver::effective_path_os()
         .to_string_lossy()
         .to_string();
-    vars.insert("PATH".to_string(), effective.clone());
+    // Prepend the bundled node bin dir (P-032) so `hermes --tui`, `npx`, and
+    // node-based MCP/lint tools resolve node/npm/npx in the in-app + external
+    // terminal without a host Node install. HERMES_NODE/HERMES_TUI_DIR make
+    // the TUI launcher deterministic and source-checkout-free.
+    let mut path = effective;
+    if let Some(node_bin) = runtime::current_node_bin_dir() {
+        let node_bin = node_bin.to_string_lossy().into_owned();
+        path = prepend_path(&node_bin, &path);
+    }
+    if let Some(node) = runtime::current_node_binary() {
+        vars.insert(
+            "HERMES_NODE".to_string(),
+            node.to_string_lossy().into_owned(),
+        );
+    }
+    if let Some(tui_dir) = runtime::current_tui_dir() {
+        vars.insert(
+            "HERMES_TUI_DIR".to_string(),
+            tui_dir.to_string_lossy().into_owned(),
+        );
+    }
+    vars.insert("PATH".to_string(), path.clone());
 
     if let Some(summary) = runtime_summary {
-        vars.insert(
-            "PATH".to_string(),
-            prepend_path(&summary.shim_dir, &effective),
-        );
+        vars.insert("PATH".to_string(), prepend_path(&summary.shim_dir, &path));
         vars.insert(
             "HERMES_MANAGED_RUNTIME".to_string(),
             summary.executable_path.clone(),
