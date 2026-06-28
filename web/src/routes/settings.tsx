@@ -1598,6 +1598,19 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           </div>
         </DebugCard>
 
+        <DebugCard icon={<Info size={15} />} title="字体许可" sub="界面字体署名" wide>
+          <div className={s.thanksText}>
+            <p>
+              本桌面端内置并使用了华为 HarmonyOS Sans 字体（HarmonyOS Sans SC，Copyright © 2021 Huawei
+              Device Co., Ltd.）。该字体依据
+              <ExternalTextLink href="https://github.com/ajacocks/harmonyos-sans-font/blob/main/LICENSE">
+                《HarmonyOS Sans Fonts License Agreement》
+              </ExternalTextLink>
+              免费用于商业用途，以未修改的原始文件随应用一同分发。
+            </p>
+          </div>
+        </DebugCard>
+
         <DebugCard icon={<MessageCircle size={15} />} title="联系方式" sub="社区入口和反馈渠道" wide>
           <div className={s.contactLayout}>
             <div className={s.runtimeGrid}>
