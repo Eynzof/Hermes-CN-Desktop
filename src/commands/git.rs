@@ -810,11 +810,565 @@ pub fn git_review_create_pr(input: RepoPathInput) -> AppResult<CreatePrResult> {
     let url = stdout
         .trim()
         .lines()
-        .filter(|l| !l.trim().is_empty())
-        .next_back()
+        .rfind(|l| !l.trim().is_empty())
         .unwrap_or("")
         .to_string();
     Ok(CreatePrResult { url })
+}
+
+// ── Worktree / branch / status ops (issue #327) ──────────────────────────────
+//
+// Faithful port of the Electron reference `apps/desktop/electron/git-worktree-ops.cjs`:
+// list real worktrees, spin up a fresh one the lightest way (`git worktree add
+// -b`), remove them, list branches for the "convert a branch into a worktree"
+// picker, switch branch, and a compact repo status. Git is the source of truth.
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Worktree {
+    pub path: String,
+    pub branch: Option<String>,
+    pub is_main: bool,
+    pub detached: bool,
+    pub locked: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeAddResult {
+    pub path: String,
+    pub branch: String,
+    pub repo_root: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeRemoveResult {
+    pub removed: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Branch {
+    pub name: String,
+    pub checked_out: bool,
+    pub is_default: bool,
+    pub worktree_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchSwitchResult {
+    pub branch: String,
+}
+
+/// Compact working-tree status for the projects sidebar. A leaner subset of the
+/// upstream `repoStatus` (no per-file list — the worktree UI only needs the
+/// branch line + counts).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoStatus {
+    pub branch: Option<String>,
+    pub default_branch: Option<String>,
+    pub detached: bool,
+    pub ahead: u64,
+    pub behind: u64,
+    pub staged: u64,
+    pub unstaged: u64,
+    pub untracked: u64,
+    pub conflicted: u64,
+    pub changed: u64,
+    pub added: u64,
+    pub removed: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeAddInput {
+    pub repo_path: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub base: Option<String>,
+    /// When set, check this existing branch out into a worktree instead of
+    /// creating a new branch.
+    #[serde(default)]
+    pub existing_branch: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreeRemoveInput {
+    pub repo_path: String,
+    pub worktree_path: String,
+    #[serde(default)]
+    pub force: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchSwitchInput {
+    pub repo_path: String,
+    pub branch: String,
+}
+
+const TRUNK_BRANCHES: [&str; 2] = ["main", "master"];
+
+/// Collapse runs of `ch` into a single occurrence.
+fn collapse_char(input: &str, ch: char) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut prev = false;
+    for c in input.chars() {
+        if c == ch {
+            if !prev {
+                out.push(c);
+            }
+            prev = true;
+        } else {
+            out.push(c);
+            prev = false;
+        }
+    }
+    out
+}
+
+/// A git-ref-safe branch name (spaces → "-", drop forbidden chars, collapse
+/// repeats, trim edges), or "" when nothing usable remains. Mirrors the upstream
+/// `sanitizeBranch` so a bad value can't reach `git`.
+fn sanitize_branch(name: &str) -> String {
+    let spaced: String = name
+        .chars()
+        .map(|c| if c.is_whitespace() { '-' } else { c })
+        .collect();
+    let kept: String = spaced
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '/' | '-'))
+        .collect();
+    let collapsed = collapse_char(&collapse_char(&collapse_char(&kept, '-'), '/'), '.');
+    collapsed
+        .trim_matches(|c| matches!(c, '-' | '.' | '/'))
+        .to_string()
+}
+
+/// A lowercase, hyphenated slug (≤40 chars) for a worktree dir name. Mirrors the
+/// upstream `slugify`; empty input → "work".
+fn slugify(name: &str) -> String {
+    let mut out = String::new();
+    let mut prev_dash = false;
+    for c in name.trim().to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+            prev_dash = false;
+        } else if !prev_dash {
+            out.push('-');
+            prev_dash = true;
+        }
+    }
+    let trimmed = out.trim_matches('-');
+    let capped: String = trimmed.chars().take(40).collect();
+    let slug = capped.trim_end_matches('-').to_string();
+    if slug.is_empty() {
+        "work".to_string()
+    } else {
+        slug
+    }
+}
+
+/// Parse `git worktree list --porcelain` into `(path, branch, detached, locked)`.
+/// The first record is the main worktree.
+fn parse_worktrees(out: &str) -> Vec<(String, Option<String>, bool, bool)> {
+    let mut trees = Vec::new();
+    let mut cur: Option<(String, Option<String>, bool, bool)> = None;
+
+    for line in out.lines() {
+        if let Some(rest) = line.strip_prefix("worktree ") {
+            if let Some(done) = cur.take() {
+                trees.push(done);
+            }
+            cur = Some((rest.trim().to_string(), None, false, false));
+        } else if let Some(entry) = cur.as_mut() {
+            if let Some(branch) = line.strip_prefix("branch ") {
+                entry.1 = Some(
+                    branch
+                        .trim()
+                        .strip_prefix("refs/heads/")
+                        .unwrap_or(branch.trim())
+                        .to_string(),
+                );
+            } else if line == "detached" {
+                entry.2 = true;
+            } else if line.starts_with("locked") {
+                entry.3 = true;
+            }
+        }
+    }
+
+    if let Some(done) = cur {
+        trees.push(done);
+    }
+    trees
+}
+
+fn list_worktrees_impl(cwd: &Path) -> Vec<Worktree> {
+    let out = run_git_ok(cwd, &["worktree", "list", "--porcelain"]);
+    parse_worktrees(&out)
+        .into_iter()
+        .enumerate()
+        .map(|(index, (path, branch, detached, locked))| Worktree {
+            path,
+            branch,
+            is_main: index == 0,
+            detached,
+            locked,
+        })
+        .collect()
+}
+
+/// Resolve the repo's default branch NAME, preferring the remote HEAD, then
+/// `init.defaultBranch`, then common trunk names. "" when none. Mirrors the
+/// upstream `defaultBranch`.
+fn default_branch(cwd: &Path) -> String {
+    let remote = run_git_ok(
+        cwd,
+        &[
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ],
+    );
+    let remote = remote.trim().strip_prefix("origin/").unwrap_or("").trim();
+    if !remote.is_empty() {
+        return remote.to_string();
+    }
+
+    let configured = run_git_ok(cwd, &["config", "--get", "init.defaultBranch"]);
+    let configured = configured.trim();
+    if !configured.is_empty() {
+        return configured.to_string();
+    }
+
+    for branch in TRUNK_BRANCHES {
+        let probe = run_git_ok(
+            cwd,
+            &["show-ref", "--verify", &format!("refs/heads/{branch}")],
+        );
+        if !probe.trim().is_empty() {
+            return branch.to_string();
+        }
+    }
+    String::new()
+}
+
+/// Resolve the repo's MAIN worktree root so `.worktrees/` always nests under the
+/// primary checkout even when called from a linked worktree.
+fn main_root(cwd: &Path) -> PathBuf {
+    list_worktrees_impl(cwd)
+        .into_iter()
+        .find(|tree| tree.is_main)
+        .map(|tree| PathBuf::from(tree.path))
+        .unwrap_or_else(|| cwd.to_path_buf())
+}
+
+/// First non-existing dir of `base`, `base-2`, `base-3`, … Mirrors `uniqueDir`.
+fn unique_dir(base: &Path) -> PathBuf {
+    if !base.exists() {
+        return base.to_path_buf();
+    }
+    let mut n = 1u32;
+    loop {
+        n += 1;
+        let candidate = PathBuf::from(format!("{}-{}", base.display(), n));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+}
+
+/// A brand-new project folder isn't a git repo — and a freshly-init'd one has no
+/// commit to branch from — so `git worktree add` would fail. Make the dir a repo
+/// with a root commit (no-op for a repo that already has commits). Mirrors
+/// `ensureGitRepo`.
+fn ensure_git_repo(dir: &Path) -> AppResult<()> {
+    let mut needs_root = false;
+    match run_git(dir, &["rev-parse", "--is-inside-work-tree"]) {
+        Ok(out) if out.trim() == "true" => {
+            // Repo exists; a worktree still needs a HEAD to branch from.
+            if run_git(dir, &["rev-parse", "--verify", "HEAD"]).is_err() {
+                needs_root = true;
+            }
+        }
+        _ => {
+            run_git(dir, &["init"])?;
+            needs_root = true;
+        }
+    }
+
+    if needs_root {
+        // Inline identity so the seed commit lands even with no global git config.
+        run_git(
+            dir,
+            &[
+                "-c",
+                "user.email=hermes@localhost",
+                "-c",
+                "user.name=Hermes",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "Initial commit",
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+fn add_existing_branch_worktree(root: &Path, name: &str) -> AppResult<WorktreeAddResult> {
+    let branch = sanitize_branch(name);
+    if branch.is_empty() {
+        return Err(AppError::Git("Branch name is required.".to_string()));
+    }
+
+    let root_str = root.to_string_lossy().to_string();
+    if branch == default_branch(root) {
+        run_git(root, &["switch", &branch])?;
+        return Ok(WorktreeAddResult {
+            path: root_str.clone(),
+            branch,
+            repo_root: root_str,
+        });
+    }
+
+    let dir = unique_dir(&root.join(".worktrees").join(slugify(&branch)));
+    let dir_str = dir.to_string_lossy().to_string();
+    run_git(root, &["worktree", "add", &dir_str, &branch])?;
+    Ok(WorktreeAddResult {
+        path: dir_str,
+        branch,
+        repo_root: root_str,
+    })
+}
+
+fn add_worktree_impl(
+    repo_path: &str,
+    name: Option<&str>,
+    branch: Option<&str>,
+    base: Option<&str>,
+    existing_branch: Option<&str>,
+) -> AppResult<WorktreeAddResult> {
+    let resolved = resolve_repo_dir(repo_path)?;
+    // A new project folder may not be a git repo yet — init it (with a root
+    // commit) so the worktree has something to branch from.
+    ensure_git_repo(&resolved)?;
+    let root = main_root(&resolved);
+
+    if let Some(existing) = existing_branch.filter(|b| !b.trim().is_empty()) {
+        return add_existing_branch_worktree(&root, existing);
+    }
+
+    let slug = slugify(name.unwrap_or(""));
+    let sanitized = sanitize_branch(branch.unwrap_or(""));
+    let branch_name = if sanitized.is_empty() {
+        format!("hermes/{slug}")
+    } else {
+        sanitized
+    };
+    let dir = unique_dir(&root.join(".worktrees").join(&slug));
+    let dir_str = dir.to_string_lossy().to_string();
+
+    let mut args: Vec<&str> = vec!["worktree", "add", "-b", &branch_name, &dir_str];
+    let base_owned = base.map(|b| b.to_string()).filter(|b| !b.is_empty());
+    if let Some(base) = base_owned.as_deref() {
+        args.push(base);
+    }
+
+    if let Err(err) = run_git(&root, &args) {
+        // Branch may already exist — retry checking it out into the fresh dir.
+        if err.to_string().to_lowercase().contains("already exists") {
+            run_git(&root, &["worktree", "add", &dir_str, &branch_name])?;
+        } else {
+            return Err(err);
+        }
+    }
+
+    Ok(WorktreeAddResult {
+        path: dir_str,
+        branch: branch_name,
+        repo_root: root.to_string_lossy().to_string(),
+    })
+}
+
+fn remove_worktree_impl(
+    repo_path: &str,
+    worktree_path: &str,
+    force: bool,
+) -> AppResult<WorktreeRemoveResult> {
+    let resolved_repo = resolve_repo_dir(repo_path)?;
+    let tree = std::fs::canonicalize(worktree_path.trim())
+        .unwrap_or_else(|_| PathBuf::from(worktree_path.trim()));
+    let root = main_root(&resolved_repo);
+    let tree_str = tree.to_string_lossy().to_string();
+
+    let mut args: Vec<&str> = vec!["worktree", "remove"];
+    if force {
+        args.push("--force");
+    }
+    args.push(&tree_str);
+    run_git(&root, &args)?;
+
+    Ok(WorktreeRemoveResult { removed: tree_str })
+}
+
+fn list_branches_impl(cwd: &Path) -> Vec<Branch> {
+    let out = run_git_ok(
+        cwd,
+        &[
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "--sort=-committerdate",
+            "refs/heads",
+        ],
+    );
+    if out.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let path_by_branch: HashMap<String, String> = list_worktrees_impl(cwd)
+        .into_iter()
+        .filter_map(|tree| tree.branch.map(|branch| (branch, tree.path)))
+        .collect();
+    let trunk = default_branch(cwd);
+
+    out.lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .map(|name| Branch {
+            name: name.to_string(),
+            checked_out: path_by_branch.contains_key(name),
+            is_default: !trunk.is_empty() && name == trunk,
+            worktree_path: path_by_branch.get(name).cloned(),
+        })
+        .collect()
+}
+
+/// behind/ahead vs the current branch's upstream (0/0 when none configured).
+fn ahead_behind(cwd: &Path) -> (u64, u64) {
+    let out =
+        run_git(cwd, &["rev-list", "--left-right", "--count", "@{u}...HEAD"]).unwrap_or_default();
+    let mut parts = out.split_whitespace();
+    let behind = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let ahead = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    (ahead, behind)
+}
+
+fn repo_status_impl(repo_path: &str) -> Option<RepoStatus> {
+    let cwd = resolve_repo_dir(repo_path).ok()?;
+    let inside = run_git(&cwd, &["rev-parse", "--is-inside-work-tree"])
+        .map(|out| out.trim() == "true")
+        .unwrap_or(false);
+    if !inside {
+        return None;
+    }
+
+    let entries = status_entries(&cwd);
+    let branch = current_branch(&cwd);
+    let detached = branch.is_none();
+
+    let mut staged = 0u64;
+    let mut unstaged = 0u64;
+    let mut untracked = 0u64;
+    let mut conflicted = 0u64;
+    for (x, y, _) in &entries {
+        if is_staged(*x) {
+            staged += 1;
+        }
+        if *y != ' ' && *y != '?' {
+            unstaged += 1;
+        }
+        if *x == '?' || *y == '?' {
+            untracked += 1;
+        }
+        if *x == 'U' || *y == 'U' {
+            conflicted += 1;
+        }
+    }
+
+    let (ahead, behind) = ahead_behind(&cwd);
+
+    let counts = numstat_map(&cwd, &["HEAD"]);
+    let mut added: u64 = counts.values().map(|(a, _)| *a).sum();
+    let removed: u64 = counts.values().map(|(_, d)| *d).sum();
+    for (x, y, path) in &entries {
+        if *x == '?' || *y == '?' {
+            added += untracked_insertions(&cwd, path);
+        }
+    }
+
+    let trunk = default_branch(&cwd);
+    Some(RepoStatus {
+        branch,
+        default_branch: if trunk.is_empty() { None } else { Some(trunk) },
+        detached,
+        ahead,
+        behind,
+        staged,
+        unstaged,
+        untracked,
+        conflicted,
+        changed: entries.len() as u64,
+        added,
+        removed,
+    })
+}
+
+#[tauri::command]
+pub fn git_worktree_list(input: RepoPathInput) -> AppResult<Vec<Worktree>> {
+    let Ok(cwd) = resolve_repo_dir(&input.repo_path) else {
+        return Ok(Vec::new());
+    };
+    Ok(list_worktrees_impl(&cwd))
+}
+
+#[tauri::command]
+pub fn git_worktree_add(input: WorktreeAddInput) -> AppResult<WorktreeAddResult> {
+    add_worktree_impl(
+        &input.repo_path,
+        input.name.as_deref(),
+        input.branch.as_deref(),
+        input.base.as_deref(),
+        input.existing_branch.as_deref(),
+    )
+}
+
+#[tauri::command]
+pub fn git_worktree_remove(input: WorktreeRemoveInput) -> AppResult<WorktreeRemoveResult> {
+    remove_worktree_impl(&input.repo_path, &input.worktree_path, input.force)
+}
+
+#[tauri::command]
+pub fn git_branch_list(input: RepoPathInput) -> AppResult<Vec<Branch>> {
+    let Ok(cwd) = resolve_repo_dir(&input.repo_path) else {
+        return Ok(Vec::new());
+    };
+    Ok(list_branches_impl(&cwd))
+}
+
+#[tauri::command]
+pub fn git_branch_switch(input: BranchSwitchInput) -> AppResult<BranchSwitchResult> {
+    let cwd = resolve_repo_dir(&input.repo_path)?;
+    let target = sanitize_branch(&input.branch);
+    if target.is_empty() {
+        return Err(AppError::Git("Branch name is required.".to_string()));
+    }
+    run_git(&cwd, &["switch", &target])?;
+    Ok(BranchSwitchResult { branch: target })
+}
+
+#[tauri::command]
+pub fn git_repo_status(input: RepoPathInput) -> AppResult<Option<RepoStatus>> {
+    Ok(repo_status_impl(&input.repo_path))
 }
 
 #[cfg(test)]
@@ -1045,6 +1599,138 @@ mod tests {
                 .to_string_lossy()
                 .to_string(),
             reference: None,
+        })
+        .unwrap();
+        assert!(none.is_none());
+    }
+
+    #[test]
+    fn sanitize_branch_makes_ref_safe_names() {
+        assert_eq!(sanitize_branch("Feature  Login"), "Feature-Login");
+        assert_eq!(sanitize_branch("a//b..c--d"), "a/b.c-d");
+        assert_eq!(sanitize_branch("--/trim/--"), "trim");
+        assert_eq!(sanitize_branch("héllo!@#"), "hllo");
+        assert_eq!(sanitize_branch("   "), "");
+    }
+
+    #[test]
+    fn slugify_lowercases_and_hyphenates() {
+        assert_eq!(slugify("My New Feature"), "my-new-feature");
+        assert_eq!(slugify("  spaced  "), "spaced");
+        assert_eq!(slugify("!!!"), "work");
+        assert_eq!(slugify(""), "work");
+    }
+
+    #[test]
+    fn parse_worktrees_reads_porcelain() {
+        let out = "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /repo/.worktrees/feat\nHEAD def\nbranch refs/heads/hermes/feat\nlocked\n";
+        let trees = parse_worktrees(out);
+        assert_eq!(trees.len(), 2);
+        assert_eq!(trees[0].0, "/repo");
+        assert_eq!(trees[0].1.as_deref(), Some("main"));
+        assert_eq!(trees[1].1.as_deref(), Some("hermes/feat"));
+        assert!(trees[1].3, "second worktree is locked");
+    }
+
+    #[test]
+    fn worktree_add_list_and_remove_roundtrip() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+
+        let added = add_worktree_impl(&repo, Some("Login Page"), None, None, None).unwrap();
+        assert_eq!(added.branch, "hermes/login-page", "default branch name");
+        assert!(
+            std::path::Path::new(&added.path).is_dir(),
+            "worktree dir created"
+        );
+        assert!(added.path.contains(".worktrees"));
+
+        let list = list_worktrees_impl(dir.path());
+        assert_eq!(list.len(), 2);
+        assert!(list[0].is_main, "main worktree first");
+        assert!(list
+            .iter()
+            .any(|w| w.branch.as_deref() == Some("hermes/login-page")));
+
+        // The branch picker sees the new branch as checked out, with its path.
+        let branches = list_branches_impl(dir.path());
+        let feat = branches
+            .iter()
+            .find(|b| b.name == "hermes/login-page")
+            .expect("branch listed");
+        assert!(feat.checked_out);
+        assert_eq!(feat.worktree_path.as_deref(), Some(added.path.as_str()));
+        assert!(branches.iter().any(|b| b.name == "main" && b.is_default));
+
+        let removed = remove_worktree_impl(&repo, &added.path, false).unwrap();
+        assert!(removed.removed.contains("login-page"));
+        assert_eq!(
+            list_worktrees_impl(dir.path()).len(),
+            1,
+            "back to one worktree"
+        );
+    }
+
+    #[test]
+    fn worktree_add_existing_default_branch_switches_in_place() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+        // init_repo is already on `main` (the default) — checking out the default
+        // branch switches in place rather than spawning a worktree.
+        let result = add_worktree_impl(&repo, None, None, None, Some("main")).unwrap();
+        assert_eq!(result.branch, "main");
+        assert_eq!(result.path, result.repo_root, "no new worktree dir");
+        assert_eq!(list_worktrees_impl(dir.path()).len(), 1);
+    }
+
+    #[test]
+    fn worktree_add_initializes_a_non_repo_folder() {
+        // A brand-new project folder isn't a git repo — add should init it first.
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().to_string_lossy().to_string();
+        let added = add_worktree_impl(&repo, Some("scratch"), None, None, None).unwrap();
+        assert_eq!(added.branch, "hermes/scratch");
+        assert!(std::path::Path::new(&added.path).is_dir());
+    }
+
+    #[test]
+    fn branch_switch_moves_head() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+        git(dir.path(), &["branch", "topic"]);
+
+        let result = git_branch_switch(BranchSwitchInput {
+            repo_path: repo.clone(),
+            branch: "topic".to_string(),
+        })
+        .unwrap();
+        assert_eq!(result.branch, "topic");
+        assert_eq!(current_branch(dir.path()).as_deref(), Some("topic"));
+    }
+
+    #[test]
+    fn repo_status_reports_branch_and_counts() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+        std::fs::write(dir.path().join("README.md"), "hello\nmore\n").unwrap();
+        std::fs::write(dir.path().join("fresh.txt"), "a\nb\n").unwrap();
+
+        let status = git_repo_status(RepoPathInput { repo_path: repo })
+            .unwrap()
+            .expect("a repo reports status");
+        assert_eq!(status.branch.as_deref(), Some("main"));
+        assert!(!status.detached);
+        assert_eq!(status.untracked, 1, "fresh.txt is untracked");
+        assert_eq!(status.changed, 2, "modified README + untracked fresh");
+        assert!(status.added >= 3, "1 added line + 2 untracked lines");
+
+        // A non-repo folder reports None.
+        let none = git_repo_status(RepoPathInput {
+            repo_path: tempfile::tempdir()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .to_string(),
         })
         .unwrap();
         assert!(none.is_none());

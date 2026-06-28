@@ -333,8 +333,68 @@ export interface HermesGitReviewBridge {
   createPr(input: { repoPath: string }): Promise<{ url: string }>;
 }
 
+// ── Worktree / branch / status (issue #327) ──────────────────────────────────
+
+export interface Worktree {
+  path: string;
+  branch: string | null;
+  isMain: boolean;
+  detached: boolean;
+  locked: boolean;
+}
+
+export interface WorktreeAddResult {
+  path: string;
+  branch: string;
+  repoRoot: string;
+}
+
+export interface GitBranch {
+  name: string;
+  checkedOut: boolean;
+  isDefault: boolean;
+  worktreePath: string | null;
+}
+
+export interface RepoStatus {
+  branch: string | null;
+  defaultBranch: string | null;
+  detached: boolean;
+  ahead: number;
+  behind: number;
+  staged: number;
+  unstaged: number;
+  untracked: number;
+  conflicted: number;
+  changed: number;
+  added: number;
+  removed: number;
+}
+
+export interface HermesGitWorktreeBridge {
+  list(input: { repoPath: string }): Promise<Worktree[]>;
+  add(input: {
+    repoPath: string;
+    name?: string | null;
+    branch?: string | null;
+    base?: string | null;
+    existingBranch?: string | null;
+  }): Promise<WorktreeAddResult>;
+  remove(input: { repoPath: string; worktreePath: string; force?: boolean }): Promise<{
+    removed: string;
+  }>;
+}
+
+export interface HermesGitBranchBridge {
+  list(input: { repoPath: string }): Promise<GitBranch[]>;
+  switch(input: { repoPath: string; branch: string }): Promise<{ branch: string }>;
+}
+
 export interface HermesGitBridge {
   review: HermesGitReviewBridge;
+  worktree: HermesGitWorktreeBridge;
+  branch: HermesGitBranchBridge;
+  repoStatus(input: { repoPath: string }): Promise<RepoStatus | null>;
 }
 
 declare global {
