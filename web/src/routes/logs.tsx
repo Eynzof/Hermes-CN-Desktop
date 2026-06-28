@@ -46,9 +46,7 @@ const LOG_COMPONENT_LABELS: Record<LogComponentOption, string> = {
   tools: "工具",
   cli: "CLI",
   cron: "Cron",
-  mcp: "MCP",
-  skill: "Skill",
-  task: "Task",
+  gui: "界面服务",
 };
 
 type ExportState = { tone: "normal" | "error"; message: string } | null;
