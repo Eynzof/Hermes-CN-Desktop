@@ -678,7 +678,7 @@ export function ModelsSection() {
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const revealEnv = useRevealEnv();
-  const { probeProvider, setRuntimeModel } = useGateway();
+  const { probeProvider, listProviderModels, setRuntimeModel } = useGateway();
   const navigate = useNavigate();
   const { catalog, message: catalogMessage, refresh: refreshCatalog } = useProviderCatalog();
   const resolvedEnvVars = envVars ?? EMPTY_ENV_VARS;
@@ -930,7 +930,12 @@ export function ModelsSection() {
   const liveApiKey = providerForm.apiKey.trim() ||
     (typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
   const supportsModelListing = selectedProvider?.supportsModelListing !== false;
-  const modelsQuery = useProviderModels(providerForm.baseUrl, liveApiKey || undefined);
+  const modelsQuery = useProviderModels(
+    selectedProvider?.id ?? "",
+    providerForm.baseUrl,
+    liveApiKey || undefined,
+    listProviderModels,
+  );
   const liveModelIds = supportsModelListing ? modelsQuery.data?.models ?? [] : [];
   const mergedModelOptions = useMemo(() => {
     const set = new Set<string>();

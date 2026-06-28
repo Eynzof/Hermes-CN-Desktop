@@ -8,6 +8,7 @@ import {
   InputDetectDropResult,
   ModelOptionsResult,
   PromptSubmitParams,
+  ProviderModelsListResult,
   ProviderProbeResult,
   SessionCreateResult,
   SessionResumeResult,
@@ -523,6 +524,26 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  // List a provider's full model set from the backend (which has no
+  // external-request SSRF guard), so a self-hosted provider on a LAN IP — and
+  // the web shell, which can't fetch it cross-origin — can refresh the picker.
+  const listProviderModels = useCallback(
+    async (params: {
+      provider: string;
+      api_key?: string;
+      base_url?: string;
+      timeout_ms?: number;
+    }): Promise<ProviderModelsListResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        ProviderModelsListResult,
+        await getGatewayClient().request("provider.models", params),
+        "provider.models",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const setSessionModel = useCallback(
     async (
       sessionId: string,
@@ -728,6 +749,7 @@ export function useGateway() {
     completePath,
     dispatchCommand,
     probeProvider,
+    listProviderModels,
     setSessionModel,
     setRuntimeModel,
     setSessionReasoningEffort,
