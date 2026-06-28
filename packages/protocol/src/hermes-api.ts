@@ -435,17 +435,6 @@ export const ModelInfo = z.object({
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
-export const ProviderModelsResponse = z.object({
-  object: z.string().optional(),
-  data: z.array(z.object({
-    id: z.string(),
-    object: z.string().optional(),
-    owned_by: z.string().optional(),
-    created: z.number().optional(),
-  })).default([]),
-});
-export type ProviderModelsResponse = z.infer<typeof ProviderModelsResponse>;
-
 // ── Environment Variables (/api/env) ──────────────────────────────────
 
 export const EnvVarInfo = z.object({
@@ -1188,6 +1177,20 @@ export const ProviderProbeResult = z.object({
   error_kind: z.enum(["auth", "timeout", "http", "network", "unknown"]).nullable(),
 }).passthrough();
 export type ProviderProbeResult = z.infer<typeof ProviderProbeResult>;
+
+// Result of the `provider.models` gateway RPC: the full model-id list for a
+// provider, fetched on the backend (no external-request SSRF guard there), so a
+// self-hosted provider on a LAN IP is reachable. Sibling to ProviderProbeResult
+// — that samples 5 for a connectivity check, this returns the complete list.
+export const ProviderModelsListResult = z.object({
+  ok: z.boolean(),
+  models: z.array(z.string()).default([]),
+  model_count: z.number().default(0),
+  status_code: z.number().nullable().default(null),
+  error: z.string().nullable().default(null),
+  error_kind: z.enum(["auth", "timeout", "http", "network", "unknown"]).nullable().default(null),
+}).passthrough();
+export type ProviderModelsListResult = z.infer<typeof ProviderModelsListResult>;
 
 export const ConfigSetResult = z.object({
   key: z.string().optional(),

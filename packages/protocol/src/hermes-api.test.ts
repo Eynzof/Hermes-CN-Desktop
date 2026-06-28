@@ -10,6 +10,7 @@ import {
   CronRunsResponse,
   ElevenLabsVoicesResponse,
   FsListResponse,
+  ProviderModelsListResult,
   ProfileCreateResponse,
   ProfileSummary,
   SearchResponse,
@@ -553,5 +554,42 @@ describe("StatusResponse schema", () => {
     });
     expect(parsed.gateway_pid).toBe(4321);
     expect(parsed.gateway_health_url).toContain("9120");
+  });
+});
+
+describe("ProviderModelsListResult schema", () => {
+  it("parses a successful provider.models result", () => {
+    const parsed = ProviderModelsListResult.parse({
+      ok: true,
+      models: ["qwen2.5-coder:7b", "llama3"],
+      model_count: 2,
+      status_code: 200,
+      error: null,
+      error_kind: null,
+    });
+    expect(parsed.ok).toBe(true);
+    expect(parsed.models).toEqual(["qwen2.5-coder:7b", "llama3"]);
+    expect(parsed.model_count).toBe(2);
+  });
+
+  it("defaults optional fields so a bare {ok} envelope still parses", () => {
+    const parsed = ProviderModelsListResult.parse({ ok: false });
+    expect(parsed.models).toEqual([]);
+    expect(parsed.model_count).toBe(0);
+    expect(parsed.status_code).toBeNull();
+    expect(parsed.error).toBeNull();
+    expect(parsed.error_kind).toBeNull();
+  });
+
+  it("carries an auth failure as data", () => {
+    const parsed = ProviderModelsListResult.parse({
+      ok: false,
+      models: [],
+      status_code: 401,
+      error: "API key rejected (HTTP 401)",
+      error_kind: "auth",
+    });
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error_kind).toBe("auth");
   });
 });
