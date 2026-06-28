@@ -126,6 +126,25 @@ async function ensureInvoke() {
   return invoke;
 }
 
+// Tear down a Tauri event listener without ever surfacing an unhandled rejection.
+// When a listener is unlistened before its async registration has fully landed
+// in Tauri's internal map (e.g. React StrictMode mount→unmount racing the
+// onDragDropEvent/listen promise), Tauri's injected unregisterListener throws
+// "undefined is not an object (evaluating 'listeners[eventId].handlerId')".
+// The unlisten can fail either synchronously or as a rejected promise depending
+// on the transport, so guard both. The listener is gone regardless — swallow it.
+function safeUnlisten(unlisten: (() => void) | null | undefined): void {
+  if (!unlisten) return;
+  try {
+    const result = unlisten() as unknown;
+    if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+      void (result as Promise<unknown>).catch(() => {});
+    }
+  } catch {
+    // Listener was never fully registered or was already removed.
+  }
+}
+
 export interface TauriIpcError extends Error {
   code?: string;
   kind?: string;
@@ -224,7 +243,7 @@ const tauriBridge = {
         }))
       .then((fn) => {
         if (disposed) {
-          fn();
+          safeUnlisten(fn);
         } else {
           unlisten = fn;
         }
@@ -235,7 +254,7 @@ const tauriBridge = {
 
     return () => {
       disposed = true;
-      unlisten?.();
+      safeUnlisten(unlisten);
     };
   },
 
@@ -445,7 +464,7 @@ const tauriBridge = {
       });
     });
     return () => {
-      unlisten?.();
+      safeUnlisten(unlisten);
     };
   },
 
@@ -471,7 +490,7 @@ const tauriBridge = {
       });
     });
     return () => {
-      unlisten?.();
+      safeUnlisten(unlisten);
     };
   },
 
@@ -486,7 +505,7 @@ const tauriBridge = {
       });
     });
     return () => {
-      unlisten?.();
+      safeUnlisten(unlisten);
     };
   },
 };
@@ -719,7 +738,7 @@ async function waitForBootstrap(
     const finish = (result: { failed: boolean; message: string }) => {
       if (settled) return;
       settled = true;
-      unlisten?.();
+      safeUnlisten(unlisten);
       if (interval !== null) window.clearInterval(interval);
       if (showTimer !== null) window.clearTimeout(showTimer);
       if (!result.failed) overlay?.dismiss();
