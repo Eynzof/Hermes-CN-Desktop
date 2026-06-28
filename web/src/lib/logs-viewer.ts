@@ -2,7 +2,12 @@ import { redactSummary } from "./debug-redact";
 
 export const LOG_FILE_OPTIONS = ["agent", "errors", "gateway"] as const;
 export const LOG_LEVEL_OPTIONS = ["ALL", "DEBUG", "INFO", "WARNING", "ERROR"] as const;
-export const LOG_COMPONENT_OPTIONS = ["all", "gateway", "agent", "tools", "cli", "cron", "mcp", "skill", "task"] as const;
+// Must match the backend's COMPONENT_PREFIXES (hermes_logging.py): the only
+// components /api/logs accepts are gateway, agent, tools, cli, cron, gui. The
+// previous mcp/skill/task entries had no backend log namespace and made the API
+// reject the request with HTTP 400 (MCP logs live under `tools`, not a separate
+// component). "gui" covers web_server / pty_bridge / tui_gateway / uvicorn.
+export const LOG_COMPONENT_OPTIONS = ["all", "gateway", "agent", "tools", "cli", "cron", "gui"] as const;
 export const LOG_LINE_COUNT_OPTIONS = [50, 100, 200, 500] as const;
 
 export type LogFileOption = (typeof LOG_FILE_OPTIONS)[number];
