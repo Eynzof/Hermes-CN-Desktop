@@ -1,26 +1,48 @@
 import { useQuery } from "@tanstack/react-query";
-import { ProviderModelsResponse } from "@hermes/protocol";
-import { fetchExternalJSON } from "@/lib/transport";
+import { ProviderModelsListResult } from "@hermes/protocol";
 
 export interface UseProviderModelsResult {
   models: string[];
   fetchedAt: number;
 }
 
-export function buildModelsUrl(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/models`;
+export type ListProviderModelsFn = (params: {
+  provider: string;
+  base_url?: string;
+  api_key?: string;
+}) => Promise<ProviderModelsListResult>;
+
+/**
+ * Normalize a `provider.models` RPC result into a sorted, de-duped id list,
+ * throwing the backend's error so TanStack Query surfaces it as a failure.
+ * Pure (no React) so it stays unit-testable without rendering the hook.
+ */
+export function selectProviderModelIds(result: ProviderModelsListResult): string[] {
+  if (!result.ok) {
+    throw new Error(result.error ?? "模型列表获取失败");
+  }
+  const ids = result.models.filter((id) => id.length > 0);
+  return Array.from(new Set(ids)).sort();
 }
 
-export function useProviderModels(baseUrl: string, apiKey: string | undefined) {
+/**
+ * Fetch a provider's model list through the gateway `provider.models` RPC
+ * rather than the desktop `external_request` proxy. The backend has no
+ * external-request SSRF guard, so a self-hosted provider on a LAN IP (e.g.
+ * http://192.168.x.x:11434/v1) is reachable, and the web shell sidesteps the
+ * browser CORS that blocked a direct fetch.
+ */
+export function useProviderModels(
+  provider: string,
+  baseUrl: string,
+  apiKey: string | undefined,
+  listModels: ListProviderModelsFn,
+) {
   return useQuery<UseProviderModelsResult>({
-    queryKey: ["provider-models", baseUrl],
+    queryKey: ["provider-models", provider, baseUrl],
     queryFn: async () => {
-      const url = buildModelsUrl(baseUrl);
-      const headers: Record<string, string> = { Accept: "application/json" };
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-      const data = await fetchExternalJSON(url, { headers }, ProviderModelsResponse);
-      const models = data.data.map((m) => m.id).filter((id) => id.length > 0).sort();
-      return { models, fetchedAt: Date.now() };
+      const result = await listModels({ provider, base_url: baseUrl, api_key: apiKey });
+      return { models: selectProviderModelIds(result), fetchedAt: Date.now() };
     },
     enabled: false,
     staleTime: 15 * 60 * 1000,

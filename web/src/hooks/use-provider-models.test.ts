@@ -1,43 +1,54 @@
 import { describe, expect, it } from "vitest";
-import { ProviderModelsResponse } from "@hermes/protocol";
-import { buildModelsUrl } from "./use-provider-models";
+import { selectProviderModelIds } from "./use-provider-models";
 
-describe("buildModelsUrl", () => {
-  it("appends /models to the base URL", () => {
-    expect(buildModelsUrl("https://api.modelverse.cn/v1")).toBe(
-      "https://api.modelverse.cn/v1/models",
-    );
-  });
-
-  it("normalises trailing slashes", () => {
-    expect(buildModelsUrl("https://api.modelverse.cn/v1/")).toBe(
-      "https://api.modelverse.cn/v1/models",
-    );
-    expect(buildModelsUrl("https://api.modelverse.cn/v1///")).toBe(
-      "https://api.modelverse.cn/v1/models",
-    );
-  });
-});
-
-describe("ProviderModelsResponse parsing", () => {
-  it("parses canonical OpenAI shape", () => {
-    const result = ProviderModelsResponse.parse({
-      object: "list",
-      data: [
-        { id: "gpt-4", object: "model", owned_by: "openai", created: 1 },
-        { id: "gpt-3.5-turbo", object: "model", owned_by: "openai" },
-      ],
+describe("selectProviderModelIds", () => {
+  it("sorts and de-dupes the returned ids", () => {
+    const ids = selectProviderModelIds({
+      ok: true,
+      models: ["qwen2.5-coder:7b", "llama3", "qwen2.5-coder:7b"],
+      model_count: 3,
+      status_code: 200,
+      error: null,
+      error_kind: null,
     });
-    expect(result.data.map((m) => m.id)).toEqual(["gpt-4", "gpt-3.5-turbo"]);
+    expect(ids).toEqual(["llama3", "qwen2.5-coder:7b"]);
   });
 
-  it("tolerates missing optional fields", () => {
-    const result = ProviderModelsResponse.parse({ data: [{ id: "deepseek-v4-flash" }] });
-    expect(result.data[0]?.id).toBe("deepseek-v4-flash");
+  it("drops empty ids", () => {
+    const ids = selectProviderModelIds({
+      ok: true,
+      models: ["", "a", ""],
+      model_count: 3,
+      status_code: 200,
+      error: null,
+      error_kind: null,
+    });
+    expect(ids).toEqual(["a"]);
   });
 
-  it("defaults data to empty when omitted", () => {
-    const result = ProviderModelsResponse.parse({});
-    expect(result.data).toEqual([]);
+  it("throws the backend error when the probe failed", () => {
+    expect(() =>
+      selectProviderModelIds({
+        ok: false,
+        models: [],
+        model_count: 0,
+        status_code: 401,
+        error: "API key rejected (HTTP 401)",
+        error_kind: "auth",
+      }),
+    ).toThrow("API key rejected (HTTP 401)");
+  });
+
+  it("falls back to a generic message when ok is false with no error text", () => {
+    expect(() =>
+      selectProviderModelIds({
+        ok: false,
+        models: [],
+        model_count: 0,
+        status_code: null,
+        error: null,
+        error_kind: null,
+      }),
+    ).toThrow("模型列表获取失败");
   });
 });
