@@ -589,6 +589,68 @@ describe("message adapter", () => {
     expect(chat[0]?.stats?.finishReason).toBe("interrupted");
   });
 
+  it("drops a reconnect/replay duplicate live turn against the stored canonical turn", () => {
+    // 16:09 canonical turn — persisted with text + a tool call.
+    const stored = [
+      uiMessage({
+        id: "stored-canonical",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: "Now let me dig into the core source files." },
+          { type: "tool", toolCallId: "call-read-1", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_500 },
+        ],
+        metadata: { persistedId: 42 },
+      }),
+    ];
+    // 16:10 reconnect/session.resume replay: a fresh client id, only the SAME
+    // tool call so far (no text streamed yet), still streaming — the recurring
+    // duplicate that text-based matching and the interrupted-only drop miss.
+    const live = [
+      uiMessage({
+        id: "live-replay-2",
+        createdAt: 2_000,
+        status: "streaming",
+        parts: [
+          { type: "tool", toolCallId: "call-read-1", name: "read_file", state: "running", startedAt: 2_000 },
+        ],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("stored-canonical");
+  });
+
+  it("keeps a genuinely new turn whose tool ids differ from the stored turn", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-canonical",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "tool", toolCallId: "call-A", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_500 },
+        ],
+      }),
+    ];
+    // Same tool NAME but a fresh tool id → a real follow-up turn, not a replay.
+    const live = [
+      uiMessage({
+        id: "live-new-turn",
+        createdAt: 2_000,
+        status: "streaming",
+        parts: [
+          { type: "tool", toolCallId: "call-B", name: "read_file", state: "running", startedAt: 2_000 },
+        ],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toHaveLength(2);
+  });
+
   it("hides stale interrupted live replies once a later stored assistant answer exists", () => {
     const stored = legacySessionMessagesToHermesUIMessages([
       sessionMessage({

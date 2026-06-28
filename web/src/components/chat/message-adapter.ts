@@ -883,6 +883,45 @@ function isStaleInterruptedLiveMessage(
   );
 }
 
+// A reconnect / session.resume can re-stream a turn whose canonical copy is
+// already persisted. Gateway events carry no stable turn id (see
+// packages/protocol message.start/complete), so the reducer mints a fresh
+// client id and a *duplicate* assistant bubble appears. While that replay is
+// mid-stream it often has only tool calls and no text yet, so
+// isSameCanonicalMessage (which needs a text match once the stored turn has
+// text) can't match it, and isStaleInterruptedLiveMessage ignores it because a
+// reconnect replay is not "interrupted" — that is the recurring duplicate.
+//
+// Drop it by matching tool-call IDENTITY (`toolCallId:name`) against a stored
+// COMPLETE assistant turn it is a prefix of. toolCallId is a reliable replay
+// discriminator: a replay re-sends the SAME tool ids, whereas a genuinely new
+// turn mints new ones — so this won't drop a real follow-up turn. Mirrors how
+// the official desktop lets the canonical stored turn win after completion.
+function isReplayDuplicateLiveMessage(
+  live: HermesUIMessage,
+  storedMessages: HermesUIMessage[],
+): boolean {
+  if (live.role !== "assistant") return false;
+  const liveTools = canonicalToolIdentityComparable(live);
+  if (!liveTools) return false;
+  const liveText = looseComparableText(canonicalText(live));
+  return storedMessages.some((stored) => {
+    if (stored.role !== "assistant" || stored.status !== "complete") return false;
+    const storedTools = canonicalToolIdentityComparable(stored);
+    if (!storedTools) return false;
+    const toolsArePrefix = storedTools === liveTools || storedTools.startsWith(`${liveTools}|`);
+    if (!toolsArePrefix) return false;
+    // If the replay has already streamed some text, it must be a faithful
+    // prefix of the stored canonical text — otherwise treat it as a genuinely
+    // different turn and keep it.
+    if (liveText) {
+      const storedText = looseComparableText(canonicalText(stored));
+      if (!storedText.startsWith(liveText)) return false;
+    }
+    return true;
+  });
+}
+
 function isInterruptedLiveSuperset(
   stored: HermesUIMessage,
   live: HermesUIMessage,
@@ -1020,6 +1059,7 @@ export function mergeHermesUIMessages(
   consolidatedLive.forEach((liveMessage, index) => {
     if (usedLiveIndexes.has(index)) return;
     if (isStaleInterruptedLiveMessage(liveMessage, stored)) return;
+    if (isReplayDuplicateLiveMessage(liveMessage, stored)) return;
     merged.push(liveMessage);
   });
 
