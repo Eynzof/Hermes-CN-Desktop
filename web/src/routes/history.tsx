@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Popover } from "@hermes/shared-ui";
 import {
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   MoreHorizontal,
   Pin,
@@ -21,6 +23,7 @@ import {
   useArchiveSession,
   useDeleteSessions,
   useSessions,
+  useUnarchiveSession,
 } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { isSessionRunning } from "@/lib/session-activity";
@@ -72,6 +75,11 @@ const STATUS_LABELS: Record<StatusFilter, string> = {
   done: "已完成",
   failed: "失败",
 };
+
+// Archive scope partitions the list orthogonally to status: "active" is the
+// default (archived sessions hidden, matching the rest of the app); "archived"
+// shows only the sessions the user has tucked away, with restore actions.
+type ArchiveScope = "active" | "archived";
 
 function shortId(id: string): string {
   return id.slice(-6);
@@ -223,11 +231,17 @@ function SourcePopover({
 export function HistoryRoute() {
   const navigate = useNavigate();
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
-  const { data, isLoading, isError } = useSessions(PAGE_SIZE, 0);
+  // Always fetch with archived sessions included (annotated `archived: true` by
+  // the Rust proxy) so both scopes share one query and their counts are always
+  // known; we split client-side by `archived`. The sidebar keeps the default
+  // active-only query, so archived sessions never leak there.
+  const { data, isLoading, isError } = useSessions(PAGE_SIZE, 0, { includeArchived: true });
   const archiveSession = useArchiveSession();
+  const unarchiveSession = useUnarchiveSession();
   const deleteSessions = useDeleteSessions();
   const { setSessionTitle, resumeSession } = useGateway();
 
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -273,6 +287,20 @@ export function HistoryRoute() {
     [data?.sessions, titleOverrides],
   );
 
+  // Counts for the scope toggle, derived from the single archived-inclusive set.
+  const activeCount = useMemo(() => sessions.filter((x) => !x.archived).length, [sessions]);
+  const archivedCount = useMemo(() => sessions.filter((x) => x.archived).length, [sessions]);
+
+  // Everything below (status/source counts, filtering, grouping) operates on the
+  // sessions in the current scope only.
+  const scopedSessions = useMemo(
+    () =>
+      sessions.filter((session) =>
+        archiveScope === "archived" ? !!session.archived : !session.archived,
+      ),
+    [archiveScope, sessions],
+  );
+
   useEffect(() => {
     if (!data || data.total > sessions.length || pinnedSessionIds.size === 0) return;
     const liveIds = new Set(sessions.map((session) => session.id));
@@ -283,20 +311,20 @@ export function HistoryRoute() {
   // status counts (across all sessions, ignoring source/search filters)
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = { all: 0, running: 0, done: 0, failed: 0 };
-    for (const session of sessions) {
+    for (const session of scopedSessions) {
       counts.all += 1;
       const live = isSessionRunning(session, runtimeBySession);
       const status = classifySession(session, live).kind;
       counts[status] += 1;
     }
     return counts;
-  }, [runtimeBySession, sessions]);
+  }, [runtimeBySession, scopedSessions]);
 
   // source counts (across sessions matching status + search, ignoring source filter)
   const sourceCounts = useMemo(() => {
     const counts = new Map<string, number>();
     const q = searchQuery.trim().toLowerCase();
-    for (const session of sessions) {
+    for (const session of scopedSessions) {
       const live = isSessionRunning(session, runtimeBySession);
       const status = classifySession(session, live).kind;
       if (statusFilter !== "all" && status !== statusFilter) continue;
@@ -309,7 +337,7 @@ export function HistoryRoute() {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
-  }, [runtimeBySession, searchQuery, sessions, statusFilter]);
+  }, [runtimeBySession, searchQuery, scopedSessions, statusFilter]);
 
   // inline sources: pinned first (sorted by count), then top remaining by count, capped to INLINE_SOURCE_LIMIT
   const inlineSourceKeys = useMemo(() => {
@@ -330,7 +358,7 @@ export function HistoryRoute() {
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const matches: SessionSummary[] = [];
-    for (const session of sessions) {
+    for (const session of scopedSessions) {
       const live = isSessionRunning(session, runtimeBySession);
       const status = classifySession(session, live).kind;
       if (statusFilter !== "all" && status !== statusFilter) continue;
@@ -347,7 +375,7 @@ export function HistoryRoute() {
     }
     matches.sort((a, b) => lastActivitySec(b) - lastActivitySec(a));
     return matches;
-  }, [runtimeBySession, searchQuery, selectedSource, sessions, statusFilter]);
+  }, [runtimeBySession, searchQuery, selectedSource, scopedSessions, statusFilter]);
 
   const dayGroups = useMemo(() => {
     const groups = new Map<string, { label: string; sessions: SessionSummary[]; sortKey: number }>();
@@ -485,6 +513,14 @@ export function HistoryRoute() {
     [archiveSession],
   );
 
+  const handleUnarchive = useCallback(
+    (session: SessionSummary) => {
+      setOpenMenuId(null);
+      unarchiveSession.mutate(session.id);
+    },
+    [unarchiveSession],
+  );
+
   const openDeleteDialog = useCallback((targets: SessionSummary[]) => {
     const uniqueTargets = Array.from(new Map(targets.map((session) => [session.id, session])).values());
     if (uniqueTargets.length === 0) return;
@@ -546,7 +582,7 @@ export function HistoryRoute() {
     <main className={s.page}>
       <TopBar
         title="对话历史"
-        sub={isLoading ? "加载中…" : `${filtered.length} / ${sessions.length} 个会话`}
+        sub={isLoading ? "加载中…" : `${filtered.length} / ${scopedSessions.length} 个会话`}
         right={
           <>
             <span className={s.headerStat}>
@@ -650,6 +686,32 @@ export function HistoryRoute() {
             onChange={(event) => setSearchQuery(event.target.value)}
           />
         </div>
+
+        <div className={s.seg} role="tablist" aria-label="归档筛选">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={archiveScope === "active"}
+            className={s.segItem}
+            data-active={archiveScope === "active" ? "true" : undefined}
+            onClick={() => setArchiveScope("active")}
+          >
+            活跃中
+            <span className={s.segCount}>{activeCount}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={archiveScope === "archived"}
+            className={s.segItem}
+            data-active={archiveScope === "archived" ? "true" : undefined}
+            onClick={() => setArchiveScope("archived")}
+          >
+            <Archive size={12} />
+            已归档
+            <span className={s.segCount}>{archivedCount}</span>
+          </button>
+        </div>
       </div>
 
       {bulkDeleteMode ? (
@@ -687,7 +749,11 @@ export function HistoryRoute() {
           <div className={s.emptyState}>加载会话中…</div>
         ) : dayGroups.length === 0 ? (
           <div className={s.emptyState}>
-            {sessions.length === 0 ? "暂无会话" : "没有匹配当前筛选的会话"}
+            {scopedSessions.length === 0
+              ? archiveScope === "archived"
+                ? "暂无已归档会话"
+                : "暂无会话"
+              : "没有匹配当前筛选的会话"}
           </div>
         ) : (
           dayGroups.map((group, groupIdx) => {
@@ -796,9 +862,11 @@ export function HistoryRoute() {
                         <SessionRowMenu
                           pinned={pinned}
                           disabled={menuDisabled}
+                          archived={archiveScope === "archived"}
                           onTogglePin={() => onTogglePinSession(session.id)}
                           onRename={() => startRename(session)}
                           onArchive={() => handleArchive(session)}
+                          onUnarchive={() => handleUnarchive(session)}
                           onDelete={() => openDeleteDialog([session])}
                         />
                       </Popover.Root>

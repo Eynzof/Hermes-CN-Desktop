@@ -58,11 +58,24 @@ async function fetchSessionMessages(id: string, signal?: AbortSignal): Promise<M
   return await fetchSessionLogMessages(id, signal) ?? result;
 }
 
-export function useSessions(limit = 50, offset = 0) {
+export interface UseSessionsOptions {
+  // When true, ask the Rust proxy to keep archived sessions (annotated with
+  // `archived: true`) instead of stripping them. Defaults to false so the
+  // sidebar and other callers keep the active-only list. See history page.
+  includeArchived?: boolean;
+}
+
+export function useSessions(limit = 50, offset = 0, opts: UseSessionsOptions = {}) {
   const profile = useActiveProfileName();
+  const includeArchived = opts.includeArchived ?? false;
   return useQuery<SessionsResponse>({
-    queryKey: ["sessions", profile, limit, offset],
-    queryFn: ({ signal }) => fetchJSON(`/api/sessions?limit=${limit}&offset=${offset}`, { signal }, SessionsResponse),
+    queryKey: ["sessions", profile, limit, offset, includeArchived ? "all" : "active"],
+    queryFn: ({ signal }) =>
+      fetchJSON(
+        `/api/sessions?limit=${limit}&offset=${offset}${includeArchived ? "&include_archived=true" : ""}`,
+        { signal },
+        SessionsResponse,
+      ),
   });
 }
 
@@ -280,6 +293,49 @@ export function useArchiveSession() {
     },
     onSuccess: (_result, id) => {
       unpinSessions([id]);
+    },
+    onError: (_error, _id, context) => {
+      for (const [queryKey, data] of context?.sessionSnapshots ?? []) {
+        qc.setQueryData(queryKey, data);
+      }
+      for (const [queryKey, data] of context?.searchSnapshots ?? []) {
+        qc.setQueryData(queryKey, data);
+      }
+    },
+    onSettled: () => {
+      invalidateSessionLists(qc);
+    },
+  });
+}
+
+// Inverse of useArchiveSession: DELETE /api/sessions/{id}/archive un-archives a
+// session (see handle_archive_request DELETE branch). The mutation optimistically
+// drops the row from the archived view; onSettled re-fetches so it reappears in
+// the active list. The caller is on the archived scope, so the brief removal is
+// only ever observed where the row should disappear.
+export function useUnarchiveSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      deleteJSON(`/api/sessions/${encodeURIComponent(id)}/archive`, undefined, MutationOkResponse),
+    onMutate: async (id) => {
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ["sessions"] }),
+        qc.cancelQueries({ queryKey: ["sessions-search"] }),
+      ]);
+      const sessionSnapshots = qc.getQueriesData<SessionsResponse>({ queryKey: ["sessions"] });
+      const searchSnapshots = qc.getQueriesData<{ results: SearchResult[] }>({
+        queryKey: ["sessions-search"],
+      });
+
+      qc.setQueriesData<SessionsResponse>({ queryKey: ["sessions"] }, (data) =>
+        withoutSessions(data, [id]),
+      );
+      qc.setQueriesData<{ results: SearchResult[] }>({ queryKey: ["sessions-search"] }, (data) =>
+        withoutSearchResults(data, [id]),
+      );
+
+      return { sessionSnapshots, searchSnapshots };
     },
     onError: (_error, _id, context) => {
       for (const [queryKey, data] of context?.sessionSnapshots ?? []) {

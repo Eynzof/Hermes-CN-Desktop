@@ -90,7 +90,16 @@ pub fn handle_archive_request(
     ))
 }
 
-/// Filter archived sessions from a /api/sessions or /api/sessions/search response.
+/// Filter or annotate archived sessions in a /api/sessions or
+/// /api/sessions/search response.
+///
+/// Default (no `include_archived=true`): archived sessions are removed from the
+/// list (and `total` adjusted), hiding them from the active view.
+///
+/// With `include_archived=true`: archived sessions are kept and each is
+/// annotated with `"archived": true` so the desktop UI can present a dedicated
+/// "archived" scope. Non-archived items are left untouched (an absent field
+/// means "not archived" on the frontend).
 pub fn filter_archived_from_response(
     path: &str,
     method: &str,
@@ -101,18 +110,15 @@ pub fn filter_archived_from_response(
         return body.to_string();
     }
 
-    let url_path = if let Ok(url) = url::Url::parse(&format!("http://x{}", path)) {
-        // Check for include_archived=true query param
-        if url
-            .query_pairs()
-            .any(|(k, v)| k == "include_archived" && v == "true")
-        {
+    let (url_path, include_archived) =
+        if let Ok(url) = url::Url::parse(&format!("http://x{}", path)) {
+            let include_archived = url
+                .query_pairs()
+                .any(|(k, v)| k == "include_archived" && v == "true");
+            (url.path().to_string(), include_archived)
+        } else {
             return body.to_string();
-        }
-        url.path().to_string()
-    } else {
-        return body.to_string();
-    };
+        };
 
     let is_sessions = url_path == "/api/sessions";
     let is_search = url_path == "/api/sessions/search";
@@ -122,6 +128,7 @@ pub fn filter_archived_from_response(
 
     let archived = read_archive_state(hermes_home);
     if archived.is_empty() {
+        // Nothing to strip or annotate, in either mode.
         return body.to_string();
     }
 
@@ -132,17 +139,21 @@ pub fn filter_archived_from_response(
 
     if is_sessions {
         if let Some(sessions) = data.get_mut("sessions").and_then(|s| s.as_array_mut()) {
-            let before = sessions.len();
-            sessions.retain(|s| {
-                s.get("id")
-                    .and_then(|id| id.as_str())
-                    .map(|id| !archived.contains(id))
-                    .unwrap_or(true)
-            });
-            let removed = before - sessions.len();
-            if removed > 0 {
-                if let Some(total) = data.get_mut("total").and_then(|t| t.as_i64()) {
-                    data["total"] = serde_json::json!(std::cmp::max(0, total - removed as i64));
+            if include_archived {
+                annotate_archived(sessions, "id", &archived);
+            } else {
+                let before = sessions.len();
+                sessions.retain(|s| {
+                    s.get("id")
+                        .and_then(|id| id.as_str())
+                        .map(|id| !archived.contains(id))
+                        .unwrap_or(true)
+                });
+                let removed = before - sessions.len();
+                if removed > 0 {
+                    if let Some(total) = data.get_mut("total").and_then(|t| t.as_i64()) {
+                        data["total"] = serde_json::json!(std::cmp::max(0, total - removed as i64));
+                    }
                 }
             }
         }
@@ -150,16 +161,37 @@ pub fn filter_archived_from_response(
 
     if is_search {
         if let Some(results) = data.get_mut("results").and_then(|r| r.as_array_mut()) {
-            results.retain(|r| {
-                r.get("session_id")
-                    .and_then(|id| id.as_str())
-                    .map(|id| !archived.contains(id))
-                    .unwrap_or(true)
-            });
+            if include_archived {
+                annotate_archived(results, "session_id", &archived);
+            } else {
+                results.retain(|r| {
+                    r.get("session_id")
+                        .and_then(|id| id.as_str())
+                        .map(|id| !archived.contains(id))
+                        .unwrap_or(true)
+                });
+            }
         }
     }
 
     serde_json::to_string(&data).unwrap_or_else(|_| body.to_string())
+}
+
+/// Set `"archived": true` on each object whose `id_field` value is in the
+/// archived set. Objects not in the set are left untouched.
+fn annotate_archived(items: &mut [serde_json::Value], id_field: &str, archived: &HashSet<String>) {
+    for item in items.iter_mut() {
+        let is_archived = item
+            .get(id_field)
+            .and_then(|id| id.as_str())
+            .map(|id| archived.contains(id))
+            .unwrap_or(false);
+        if is_archived {
+            if let Some(obj) = item.as_object_mut() {
+                obj.insert("archived".to_string(), serde_json::Value::Bool(true));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -411,9 +443,52 @@ mod tests {
     }
 
     #[test]
-    fn filter_passes_through_when_include_archived_set() {
+    fn filter_annotates_archived_when_include_archived_set() {
+        let dir = TempDir::new().unwrap();
+        archive(home_str(&dir), &["s2"]);
+        let out = filter_archived_from_response(
+            "/api/sessions?include_archived=true",
+            "GET",
+            home_str(&dir),
+            &sessions_body(),
+        );
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let sessions = v["sessions"].as_array().unwrap();
+        // Nothing is removed: all three sessions remain, total untouched.
+        let ids: Vec<&str> = sessions.iter().map(|s| s["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, vec!["s1", "s2", "s3"]);
+        assert_eq!(v["total"], 3);
+        // The archived one carries archived:true; the others have no such field.
+        assert_eq!(sessions[0].get("archived"), None);
+        assert_eq!(sessions[1]["archived"], serde_json::json!(true));
+        assert_eq!(sessions[2].get("archived"), None);
+    }
+
+    #[test]
+    fn filter_annotates_archived_search_results_when_include_archived_set() {
         let dir = TempDir::new().unwrap();
         archive(home_str(&dir), &["s1"]);
+        let out = filter_archived_from_response(
+            "/api/sessions/search?include_archived=true",
+            "GET",
+            home_str(&dir),
+            &search_body(),
+        );
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let results = v["results"].as_array().unwrap();
+        // Both results kept; only the archived one is annotated.
+        let ids: Vec<&str> = results
+            .iter()
+            .map(|r| r["session_id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec!["s1", "s2"]);
+        assert_eq!(results[0]["archived"], serde_json::json!(true));
+        assert_eq!(results[1].get("archived"), None);
+    }
+
+    #[test]
+    fn filter_include_archived_with_empty_set_is_unchanged() {
+        let dir = TempDir::new().unwrap();
         let body = sessions_body();
         let out = filter_archived_from_response(
             "/api/sessions?include_archived=true",

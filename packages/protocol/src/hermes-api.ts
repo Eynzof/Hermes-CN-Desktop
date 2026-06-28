@@ -177,6 +177,10 @@ export const SessionSummary = z.object({
   actual_cost_usd: z.number().nullable().optional(),
   is_active: z.boolean().optional(),
   api_call_count: z.number().optional(),
+  // Desktop-only UI state injected by the Rust proxy when a request carries
+  // ?include_archived=true. Absent on the default (active) list — the proxy
+  // strips archived sessions there. See src/session_archive.rs.
+  archived: z.boolean().optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
 
@@ -388,6 +392,8 @@ export const SearchResult = z.object({
   source: NullishString,
   model: NullishString,
   session_started: NullishNumber,
+  // Desktop-only; see SessionSummary.archived.
+  archived: z.boolean().optional(),
 });
 export type SearchResult = z.infer<typeof SearchResult>;
 
