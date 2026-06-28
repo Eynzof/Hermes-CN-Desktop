@@ -279,20 +279,116 @@ fn runtime_binary_names() -> Vec<String> {
 /// files, and the isolated HERMES_HOME all live under this directory.
 /// `HERMES_DESKTOP_RUNTIME_ROOT` may move the whole tree, but individual
 /// subdirectories are intentionally not independently overridable.
+///
+/// On a fresh Windows release install the root is anchored under the
+/// user-chosen install directory (`<install dir>\data`) so that picking another
+/// drive (e.g. D:\) at install time actually keeps the growing data off C:.
+/// Existing installs (whose data already lives under the legacy AppData root)
+/// and every non-Windows / debug build keep the legacy `dirs::data_dir()`
+/// anchor — there is no migration and no surprise relocation.
 pub fn runtime_root() -> PathBuf {
+    // Explicit override always wins (dev / tests / power users / escape hatch).
+    // Read fresh on every call so tooling can redirect the whole tree at will.
     if let Ok(override_path) = std::env::var("HERMES_DESKTOP_RUNTIME_ROOT") {
         let trimmed = override_path.trim();
         if !trimmed.is_empty() {
             return PathBuf::from(trimmed);
         }
     }
+    NON_OVERRIDE_RUNTIME_ROOT.clone()
+}
 
+/// Resolved (non-override) runtime root, computed once. The probing it does
+/// (current_exe + writability + legacy-data check) touches the filesystem, and
+/// `runtime_root()` is called from many hot paths, so memoize the result.
+static NON_OVERRIDE_RUNTIME_ROOT: LazyLock<PathBuf> =
+    LazyLock::new(|| resolve_non_override_runtime_root(cfg!(all(windows, not(debug_assertions)))));
+
+/// The historical anchor: `<OS data dir>/cn.org.hermesagent.desktop/<runtime>`.
+/// Used for existing Windows installs, all non-Windows platforms, and dev.
+fn legacy_appdata_runtime_root() -> PathBuf {
     let base = resolve_runtime_data_base(dirs::data_dir(), dirs::home_dir()).expect(
         "无法确定可写的数据目录：系统数据目录与用户主目录都不可用。\
          请设置环境变量 HERMES_DESKTOP_RUNTIME_ROOT 指向一个可写目录后重试。",
     );
     base.join("cn.org.hermesagent.desktop")
         .join(runtime_subdir_name())
+}
+
+/// Gather the real inputs (legacy root, install dir, writability) and delegate
+/// the branch policy to the pure `decide_non_override_root` so the decision is
+/// unit testable without touching the real filesystem or executable path.
+fn resolve_non_override_runtime_root(win_release: bool) -> PathBuf {
+    let legacy_root = legacy_appdata_runtime_root();
+
+    // Off the Windows-release path there is nothing to anchor to the install
+    // directory — keep the legacy root and avoid any filesystem side effects
+    // (byte-for-byte the historic behavior on macOS / Linux / dev).
+    if !win_release {
+        return legacy_root;
+    }
+
+    // Existing-install guard: if the legacy AppData tree already holds data,
+    // keep using it so in-place upgrades never strand sessions/config (we do
+    // not migrate). `current.json` exists once a runtime is installed;
+    // `hermes-home` covers the seeded-but-not-yet-installed case.
+    let legacy_has_data =
+        legacy_root.join(CURRENT_FILE).exists() || legacy_root.join("hermes-home").exists();
+
+    // Fresh install: anchor under `<install dir>\data` when it is writable.
+    let install_data_root = std::env::current_exe()
+        .ok()
+        .as_deref()
+        .and_then(Path::parent)
+        .map(|install_dir| install_dir.join("data"));
+    let install_writable = install_data_root
+        .as_deref()
+        .map(dir_is_writable)
+        .unwrap_or(false);
+
+    decide_non_override_root(
+        win_release,
+        legacy_has_data,
+        install_data_root.as_deref(),
+        install_writable,
+        legacy_root,
+    )
+}
+
+/// Pure runtime-root policy (no I/O). Anchor under the install directory only
+/// for a fresh Windows-release install whose target dir is writable; otherwise
+/// fall back to the legacy AppData root. Cross-platform & fully unit tested.
+fn decide_non_override_root(
+    win_release: bool,
+    legacy_has_data: bool,
+    install_data_root: Option<&Path>,
+    install_writable: bool,
+    legacy_root: PathBuf,
+) -> PathBuf {
+    if win_release && !legacy_has_data && install_writable {
+        if let Some(root) = install_data_root {
+            return root.to_path_buf();
+        }
+    }
+    legacy_root
+}
+
+/// Best-effort writability probe: the directory is usable if we can create it
+/// and then create+remove a probe file inside. Rejects read-only or
+/// permission-locked install locations (e.g. an admin-only Program Files) so
+/// the caller can fall back to AppData instead.
+fn dir_is_writable(dir: &Path) -> bool {
+    if fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(".hermes-write-probe");
+    match fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 fn runtime_subdir_name() -> &'static str {
@@ -2313,6 +2409,84 @@ mod tests {
         assert_eq!(gateway_runtime_dir(), tmp.path().join("gateway-runtime"));
 
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    // -------- non-override runtime-root policy (decide_non_override_root) --------
+
+    #[test]
+    fn decide_root_fresh_windows_install_uses_install_dir() {
+        let install = PathBuf::from(r"D:\Hermes\data");
+        assert_eq!(
+            decide_non_override_root(
+                true,  // win_release
+                false, // legacy_has_data
+                Some(install.as_path()),
+                true, // install_writable
+                PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime"),
+            ),
+            install,
+        );
+    }
+
+    #[test]
+    fn decide_root_existing_user_keeps_appdata() {
+        // In-place upgrade: legacy tree already has data -> never migrate.
+        let legacy = PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime");
+        assert_eq!(
+            decide_non_override_root(
+                true,
+                true, // legacy_has_data
+                Some(Path::new(r"D:\Hermes\data")),
+                true,
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn decide_root_non_writable_install_falls_back_to_appdata() {
+        let legacy = PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime");
+        assert_eq!(
+            decide_non_override_root(
+                true,
+                false,
+                Some(Path::new(r"C:\Program Files\Hermes\data")),
+                false, // not writable -> fall back to AppData (no regression)
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn decide_root_non_windows_or_debug_always_appdata() {
+        let legacy = PathBuf::from("/home/u/.local/share/cn.org.hermesagent.desktop/runtime");
+        assert_eq!(
+            decide_non_override_root(
+                false, // not win_release (macOS / Linux / dev)
+                false,
+                Some(Path::new("/opt/app/data")),
+                true,
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn decide_root_unresolvable_exe_falls_back_to_appdata() {
+        let legacy = PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime");
+        assert_eq!(
+            decide_non_override_root(true, false, None, true, legacy.clone()),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn dir_is_writable_true_for_creatable_subdir() {
+        let tmp = TempDir::new().unwrap();
+        assert!(dir_is_writable(&tmp.path().join("data")));
     }
 
     // -------- sha256_hex --------

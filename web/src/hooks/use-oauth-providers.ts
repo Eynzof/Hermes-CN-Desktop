@@ -17,7 +17,12 @@ export function useOAuthProviders() {
       return res.providers;
     },
     retry: 1,
-    staleTime: 30_000,
+    // Enumerating provider login state is the Models page's slowest call (it
+    // probes every provider's auth store server-side). Don't re-run it every
+    // time the window regains focus, and keep it fresh longer; connect/disconnect
+    // mutations already invalidate this query explicitly.
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 

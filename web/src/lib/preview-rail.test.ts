@@ -5,9 +5,11 @@ import {
   detectLanguage,
   fileExtension,
   formatBytes,
+  fsListErrorText,
   isMarkdownPath,
   isPreviewableUrl,
   normalizePreviewPanel,
+  parentDir,
   toFencedMarkdown,
 } from "./preview-rail";
 
@@ -118,5 +120,36 @@ describe("buildBreadcrumbs", () => {
       { label: "Users", path: "C:\\Users" },
       { label: "Enzo", path: "C:\\Users\\Enzo" },
     ]);
+  });
+});
+
+describe("parentDir", () => {
+  it("returns the parent of a POSIX directory", () => {
+    expect(parentDir("/a/b/c")).toBe("/a/b");
+    expect(parentDir("/a")).toBe("/");
+  });
+
+  it("returns null at the filesystem root or for blank input", () => {
+    expect(parentDir("/")).toBeNull();
+    expect(parentDir("")).toBeNull();
+  });
+
+  it("returns the parent of a Windows directory", () => {
+    expect(parentDir("C:\\Users\\x")).toBe("C:\\Users");
+    expect(parentDir("C:\\Users")).toBe("C:\\");
+    expect(parentDir("C:\\")).toBeNull();
+  });
+});
+
+describe("fsListErrorText", () => {
+  it("maps errno-style codes to messages", () => {
+    expect(fsListErrorText("ENOENT")).toContain("不存在");
+    expect(fsListErrorText("EACCES")).toContain("无权限");
+    expect(fsListErrorText("ENOTDIR")).toContain("不是一个目录");
+  });
+
+  it("falls back for unknown codes and transport failures", () => {
+    expect(fsListErrorText(undefined)).toContain("无法读取");
+    expect(fsListErrorText("weird")).toContain("无法读取");
   });
 });

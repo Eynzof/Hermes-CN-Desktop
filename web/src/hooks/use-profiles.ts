@@ -158,6 +158,8 @@ export const PROFILE_AWARE_QUERY_KEYS = [
   "env",
   "skills",
   "mcp-servers",
+  "mcp-servers-full",
+  "mcp-catalog",
   "status",
   "sessions",
   "session",

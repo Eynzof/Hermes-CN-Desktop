@@ -158,3 +158,32 @@ export function buildBreadcrumbs(dir: string): Breadcrumb[] {
   });
   return crumbs;
 }
+
+/**
+ * Parent of an absolute directory, or `null` at the filesystem root. Reuses
+ * {@link buildBreadcrumbs} so POSIX and Windows splitting stay in one place —
+ * the parent is simply the second-to-last breadcrumb. Used to drive the ".."
+ * control client-side now that `/api/fs/list` no longer returns `parent`.
+ */
+export function parentDir(dir: string): string | null {
+  const crumbs = buildBreadcrumbs(dir);
+  return crumbs.length >= 2 ? crumbs[crumbs.length - 2].path : null;
+}
+
+/**
+ * Human message for a `/api/fs/list` failure. `code` is the upstream HTTP-200
+ * soft-error string (errno-style); `undefined` covers transport/HTTP failures
+ * surfaced via TanStack Query's `isError`.
+ */
+export function fsListErrorText(code?: string | null): string {
+  switch (code) {
+    case "ENOENT":
+      return "目录不存在。";
+    case "EACCES":
+      return "无权限访问此目录。";
+    case "ENOTDIR":
+      return "这不是一个目录。";
+    default:
+      return "无法读取此目录，请稍后重试。";
+  }
+}

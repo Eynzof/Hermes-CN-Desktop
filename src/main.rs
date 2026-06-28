@@ -106,6 +106,19 @@ fn profile_hermes_home(base: &Path, profile: &str) -> PathBuf {
 fn main() {
     env_logger::init();
 
+    // Windows: keep the WebView2 user-data folder (network cache, IndexedDB,
+    // service workers, GPU cache — all of which grow over time) under the same
+    // converged runtime root as everything else, instead of letting it default
+    // to %LOCALAPPDATA%\cn.org.hermesagent.desktop\EBWebView on C:. WebView2
+    // honors WEBVIEW2_USER_DATA_FOLDER; it must be set before the webview
+    // environment is created, so do it first thing in main().
+    #[cfg(windows)]
+    {
+        let webview_dir = runtime::runtime_root().join("webview2");
+        let _ = fs::create_dir_all(&webview_dir);
+        std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", &webview_dir);
+    }
+
     let app_state = AppState::new();
     let quit_requested = Arc::new(AtomicBool::new(false));
     let close_quit_requested = Arc::clone(&quit_requested);

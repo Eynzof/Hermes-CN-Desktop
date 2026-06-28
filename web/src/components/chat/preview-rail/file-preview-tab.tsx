@@ -10,7 +10,13 @@ import {
 import { ChevronUp, File as FileIcon, Folder, RefreshCw } from "lucide-react";
 import { useFsList } from "@/hooks/use-fs-list";
 import type { FilePreview } from "@/lib/runtime";
-import { buildBreadcrumbs, formatBytes, isMarkdownPath } from "@/lib/preview-rail";
+import {
+  buildBreadcrumbs,
+  formatBytes,
+  fsListErrorText,
+  isMarkdownPath,
+  parentDir,
+} from "@/lib/preview-rail";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import s from "./preview-rail.module.css";
 
@@ -50,7 +56,9 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
       return a.name.localeCompare(b.name);
     });
   }, [list.data?.entries]);
-  const canGoUp = Boolean(dir && workspaceRoot && dir !== workspaceRoot && list.data?.parent);
+  // Derive the parent client-side: `/api/fs/list` no longer returns `parent`.
+  const parent = useMemo(() => parentDir(dir), [dir]);
+  const canGoUp = Boolean(dir && workspaceRoot && dir !== workspaceRoot && parent);
   const crumbs = useMemo(() => buildBreadcrumbs(dir), [dir]);
 
   // Draggable split between the directory browser (top) and the content (below).
@@ -188,7 +196,7 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
           <button
             type="button"
             className={s.fileEntry}
-            onClick={() => list.data?.parent && setDir(list.data.parent)}
+            onClick={() => parent && setDir(parent)}
           >
             <ChevronUp size={14} className={s.fileEntryIcon} aria-hidden />
             ..
@@ -212,8 +220,8 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
             {entry.name}
           </button>
         ))}
-        {list.isError ? (
-          <div className={s.crumb}>无法打开此目录（可能超出可访问范围）。</div>
+        {list.isError || list.data?.error ? (
+          <div className={s.crumb}>{fsListErrorText(list.data?.error)}</div>
         ) : !list.isLoading && entries.length === 0 ? (
           <div className={s.crumb}>空目录</div>
         ) : null}
