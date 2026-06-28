@@ -106,13 +106,13 @@ export function ProfileCreateDialog({
         />
       </Field>
 
-      <Field label="克隆来源" hint="从某个档案复制 config / .env / SOUL / 技能；留空则新建空白档案。">
+      <Field label="克隆来源" hint="从某个档案复制配置、密钥、人格和技能；留空则新建空白档案。">
         <Select
           value={cloneFrom}
           onChange={(e) => setCloneFrom(e.target.value)}
           disabled={create.isPending}
         >
-          <option value="">空白（之后用 hermes setup 引导）</option>
+          <option value="">空白（之后再配置）</option>
           {profiles.map((p) => (
             <option key={p.name} value={p.name}>
               {p.name}
@@ -158,7 +158,7 @@ export function ProfileCreateDialog({
               onChange={(e) => setCloneAll(e.target.checked)}
               disabled={!cloning || create.isPending}
             />
-            <span>连同 memories / sessions 一并克隆（仅在选了克隆来源时生效）</span>
+            <span>连同记忆和会话一并克隆（仅在选了克隆来源时生效）</span>
           </label>
           <label>
             <input
@@ -167,7 +167,7 @@ export function ProfileCreateDialog({
               onChange={(e) => setNoSkills(e.target.checked)}
               disabled={cloning || create.isPending}
             />
-            <span>不预置 bundled 技能（克隆时由来源决定，此项失效）</span>
+            <span>不预置内置技能（克隆时由来源决定，此项失效）</span>
           </label>
         </div>
       )}
@@ -236,7 +236,7 @@ export function ProfileRenameDialog({
         </>
       }
     >
-      <Field label="新名称" hint="重命名会同步更新 wrapper / service，以及（若改的是当前默认）active_profile。">
+      <Field label="新名称" hint="重命名会自动同步相关配置引用。">
         <Input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
@@ -292,11 +292,11 @@ export function ProfileDeleteDialog({
     >
       <p className={s.deleteWarn}>
         将<span className={s.deleteWarnStrong}>永久删除</span>档案 <code>{p.name}</code> 的整个目录
-        —— config / .env / SOUL.md / sessions / skills / memory / state.db 全部，<strong>无法恢复</strong>。
+        —— 配置、密钥、人格、会话、技能、记忆等全部数据，<strong>无法恢复</strong>。
       </p>
       {p.gateway_running && (
         <p className={s.deleteWarn}>
-          该档案的 gateway 正在运行，删除时会一并停止。
+          该档案的接收服务正在运行，删除时会一并停止。
         </p>
       )}
       {error && <div className={s.formError}>{error}</div>}

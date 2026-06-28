@@ -48,6 +48,6 @@ describe("TOP_TABS", () => {
   it("keeps soul under the 02 config tab and sidebar section", () => {
     expect(tabFor("/soul")).toBe("skills");
     expect(tabFor("/soul/edit")).toBe("skills");
-    expect(CONFIG_ITEMS.some((item) => item.label === "灵魂" && item.path === "/soul")).toBe(true);
+    expect(CONFIG_ITEMS.some((item) => item.label === "人格" && item.path === "/soul")).toBe(true);
   });
 });

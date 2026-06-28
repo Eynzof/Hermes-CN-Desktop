@@ -98,15 +98,15 @@ function toneIcon(tone: Tone, size = 16): ReactNode {
 }
 
 function groupTitle(group: HealthGroup): string {
-  if (group === "runtime") return "运行时与路径";
-  if (group === "model") return "模型与凭证";
+  if (group === "runtime") return "内核与路径";
+  if (group === "model") return "模型与密钥";
   return "扩展能力";
 }
 
 function groupSub(group: HealthGroup): string {
-  if (group === "runtime") return "Dashboard、Gateway 与本地 Hermes 数据目录。";
-  if (group === "model") return "默认模型、模型凭证与 provider 字段校验。";
-  return "Skills、MCP 以及会话扩展能力。";
+  if (group === "runtime") return "内核、接收服务与本地数据目录。";
+  if (group === "model") return "默认模型、模型密钥与服务商字段校验。";
+  return "技能、MCP 以及会话扩展能力。";
 }
 
 function groupIcon(group: HealthGroup): ReactNode {
@@ -320,15 +320,15 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         tone: statusQuery.isError ? "err" : dashboardReachable ? "ok" : "warn",
         value: dashboardOrigin,
         sub: statusQuery.isError
-          ? "状态接口未响应"
+          ? "服务未响应"
           : dashboardReachable
             ? daemonRunning
-              ? "Gateway daemon 运行中"
-              : "Dashboard 就绪 · in-process dispatch"
+              ? "接收服务运行中"
+              : "内核就绪"
             : "正在连接",
         detail: dashboardReachable
-          ? "聊天传输走 dashboard 的 /api/ws WebSocket（进程内 dispatch）；gateway_state=stopped 不等同于不可用。"
-          : "如果长时间停留在连接中，请确认 managed runtime 已启动，或在状态栏执行 Gateway 重启。",
+          ? "聊天通过本机内核传输；gateway_state=stopped 不代表不可用。"
+          : "如果长时间停留在连接中，请确认本机内核已启动，或在状态栏重启接收服务。",
         mono: true,
         title: `dashboardReachable=${dashboardReachable}; gateway_state=${gatewayState}. /api/ws 在 dashboard 进程内 dispatch，gateway_state=stopped 是预期值。`,
       },
@@ -338,7 +338,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         label: "Hermes Home",
         tone: status?.hermes_home ? "ok" : "warn",
         value: status?.hermes_home || "—",
-        sub: status?.hermes_home ? "数据目录已识别" : "等待 /api/status 返回路径",
+        sub: status?.hermes_home ? "数据目录已识别" : "正在读取数据目录",
         detail: status?.config_path || status?.env_path
           ? `配置：${status?.config_path ?? "—"}；环境变量：${status?.env_path ?? "—"}`
           : "这是桌面端当前 profile 的配置、会话和环境变量根目录。",
@@ -502,10 +502,10 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
             <h2>{health.summaryLabel}</h2>
             <p>
               {status
-                ? `Dashboard 已响应，当前版本 ${status.version}，活跃会话 ${status.active_sessions} 个。这里展示启动链路、模型凭证和扩展能力的实时诊断结果。`
+                ? `内核已响应，当前版本 ${status.version}，活跃会话 ${status.active_sessions} 个。这里展示启动状态、模型配置和扩展能力的实时诊断结果。`
                 : statusQuery.isError
-                  ? "无法读取 Dashboard 状态接口，优先检查 managed runtime 是否启动，以及本机端口是否被占用。"
-                  : "正在读取 Dashboard 状态、模型配置、环境变量、Skills 与 MCP 服务。"}
+                  ? "无法读取内核状态，请先确认本机内核是否已启动。"
+                  : "正在读取内核状态、模型配置、环境变量、技能与 MCP 服务。"}
             </p>
           </div>
           <div className={s.heroActions}>
@@ -608,7 +608,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
                 <span>刷新节奏</span>
               </div>
               <p className={s.asideText}>
-                `/api/status` 会自动轮询，其它配置项在进入页面和手动刷新时读取。这里不会再折叠隐藏详情，避免排查问题时漏看异常项。
+                状态会自动刷新，其它配置项在进入页面和手动刷新时读取。详情默认全部展开，避免排查时漏看异常项。
               </p>
             </div>
           </aside>

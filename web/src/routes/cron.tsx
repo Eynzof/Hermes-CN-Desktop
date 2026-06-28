@@ -188,7 +188,7 @@ function matchesStatus(job: CronJob, filter: StatusFilter): boolean {
 function buildRunErrorMessage(error: unknown): string {
   const raw = actionError(error);
   if (raw.includes("HTTP 404") || raw.includes("__hermes_cron_runs")) {
-    return "当前环境无法读取本地运行历史。请使用桌面端，或确认 Tauri IPC 已接管本地历史路由。";
+    return "当前环境无法读取本地运行历史，请使用桌面端打开。";
   }
   return `加载运行历史失败：${raw}`;
 }
@@ -571,7 +571,7 @@ function CreateJobPanel(props: CreateJobPanelProps) {
           </select>
         </label>
         <label className={s.field}>
-          <span>投递目标</span>
+          <span>发送目标</span>
           <select value={props.deliver} onChange={(event) => props.onDeliver(event.target.value)}>
             {DELIVERY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
@@ -644,7 +644,7 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
           <strong>{cronJobProfile(job)}</strong>
         </div>
         <div className={s.detailItem}>
-          <span>投递目标</span>
+          <span>发送目标</span>
           <strong>{deliveryLabel(text(job.deliver))}</strong>
         </div>
         <div className={s.detailItem}>

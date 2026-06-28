@@ -89,7 +89,7 @@ export function ProfileCard({
 
       <span className={s.gatewayRow} data-running={p.gateway_running ? "true" : undefined}>
         <StatusDot tone={p.gateway_running ? "success" : "neutral"} size="sm" />
-        {p.gateway_running ? "gateway 运行中" : "gateway 已停止"}
+        {p.gateway_running ? "接收服务运行中" : "接收服务已停止"}
       </span>
 
       <div className={s.descRow}>
@@ -112,7 +112,7 @@ export function ProfileCard({
             {p.provider ? ` · ${p.provider}` : ""}
           </span>
         ) : (
-          <span>未配置 model</span>
+          <span>未配置模型</span>
         )}
         <span>{p.skill_count} 个技能</span>
         <span className={s.path} title={p.path}>

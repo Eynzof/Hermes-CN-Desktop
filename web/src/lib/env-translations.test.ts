@@ -34,7 +34,7 @@ describe("translateEnvVar", () => {
 
   it("returns Chinese labels and descriptions for Feishu and Weixin keys", () => {
     expect(translateEnvVar("FEISHU_APP_SECRET", envInfo("Feishu secret")).label).toBe("飞书 App Secret");
-    expect(translateEnvVar("WEIXIN_TOKEN", envInfo("Weixin token")).description).toContain("iLink bot");
+    expect(translateEnvVar("WEIXIN_TOKEN", envInfo("Weixin token")).description).toContain("微信接入");
   });
 
   it("returns Chinese labels for plugin-provided messaging keys", () => {

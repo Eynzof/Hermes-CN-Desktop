@@ -15,9 +15,9 @@ export interface ActiveCurrentBannerProps {
 export function ActiveCurrentBanner({ active, current }: ActiveCurrentBannerProps) {
   if (active === current) return null;
   return (
-    <Alert tone="warning" size="sm" title="sticky 默认与运行中档案不一致">
-      默认档案已是 <code>{active}</code>，但当前 dashboard 仍在运行 <code>{current}</code>。
-      重启 dashboard 后才会真正加载 <code>{active}</code> 的 config / sessions。
+    <Alert tone="warning" size="sm" title="默认档案与当前运行的不一致">
+      默认档案已是 <code>{active}</code>，但当前内核仍在运行 <code>{current}</code>。
+      重启内核后才会真正加载 <code>{active}</code> 的配置和会话。
     </Alert>
   );
 }

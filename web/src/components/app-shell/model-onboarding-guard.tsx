@@ -55,7 +55,7 @@ export function ModelOnboardingGuard() {
           <p className={s.kicker}>首次初始化</p>
           <h2 id="model-onboarding-title">先配置模型 API Key</h2>
           <p>
-            当前桌面端正在使用独立的 Hermes Agent runtime，新的 <code>hermes-home</code> 里还没有模型服务商和默认模型。
+            当前桌面端使用的是独立内核，还没有配置模型服务商和默认模型。
             请进入模型页选择服务商，粘贴 API Key，保存后设为当前模型。
           </p>
           <div className={s.steps}>

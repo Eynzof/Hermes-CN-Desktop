@@ -86,7 +86,7 @@ async fn fetch_desktop_update_manifest_from(
                 ok: false,
                 manifest_url: manifest_url.to_string(),
                 manifest: None,
-                error: Some(format!("桌面端更新清单请求失败：{}", error)),
+                error: Some(format!("检查更新失败：{}", error)),
                 checked_at_ms,
             }
         }
@@ -98,7 +98,7 @@ async fn fetch_desktop_update_manifest_from(
             ok: false,
             manifest_url: manifest_url.to_string(),
             manifest: None,
-            error: Some(format!("桌面端更新清单返回 HTTP {}", status.as_u16())),
+            error: Some(format!("检查更新失败：服务返回异常（{}）", status.as_u16())),
             checked_at_ms,
         };
     }
@@ -115,7 +115,7 @@ async fn fetch_desktop_update_manifest_from(
             ok: false,
             manifest_url: manifest_url.to_string(),
             manifest: None,
-            error: Some(format!("桌面端更新清单解析失败：{}", error)),
+            error: Some(format!("检查更新失败：更新信息格式异常（{}）", error)),
             checked_at_ms,
         },
     }
@@ -187,7 +187,7 @@ mod tests {
         .await;
 
         assert!(!result.ok);
-        assert!(result.error.unwrap_or_default().contains("HTTP 404"));
+        assert!(result.error.unwrap_or_default().contains("404"));
     }
 
     #[tokio::test]
@@ -206,7 +206,7 @@ mod tests {
         .await;
 
         assert!(!result.ok);
-        assert!(result.error.unwrap_or_default().contains("解析失败"));
+        assert!(result.error.unwrap_or_default().contains("格式异常"));
     }
 
     #[tokio::test]
@@ -229,6 +229,6 @@ mod tests {
         .await;
 
         assert!(!result.ok);
-        assert!(result.error.unwrap_or_default().contains("请求失败"));
+        assert!(result.error.unwrap_or_default().contains("检查更新失败"));
     }
 }

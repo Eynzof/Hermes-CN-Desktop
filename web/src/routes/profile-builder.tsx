@@ -225,7 +225,7 @@ export function ProfileBuilderRoute() {
 
         {step === "model" && (
           <div className={s.panel}>
-            <p className={s.panelHint}>给这个档案选 provider · model；留空用默认，稍后再设。</p>
+            <p className={s.panelHint}>给这个档案选择服务商和模型；留空则用默认，可稍后再设。</p>
             <Field label="模型">
               <ProfileModelSelect
                 value={modelKey}

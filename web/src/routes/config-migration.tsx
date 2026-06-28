@@ -97,11 +97,11 @@ function MigrationPreview({
     <section className={s.previewPanel}>
       <h3 className={s.previewTitle}>迁移预览</h3>
       <p className={s.introText}>
-        将从 <code>{candidate.path}</code> 复制配置包到桌面端独立 Hermes home。已有桌面端配置不会被覆盖；如果当前 profile 已配置，后端会自动导入到新 profile。
+        将从 <code>{candidate.path}</code> 复制配置到桌面端的独立目录。已有桌面端配置不会被覆盖；如果当前档案已配置，会自动导入到一个新档案。
       </p>
       {hasSecrets && (
         <Alert tone="warning" size="sm">
-          <AlertTriangle size={14} /> 此来源包含 <code>.env</code> 或 <code>auth.json</code>，导入后这些密钥只会写入桌面端 managed runtime 的独立目录。
+          <AlertTriangle size={14} /> 此来源包含 <code>.env</code> 或 <code>auth.json</code>，导入后这些密钥只会写入桌面端的独立目录。
         </Alert>
       )}
       <div className={s.entryList}>
@@ -241,7 +241,7 @@ function LegacyConfigMigrationRoute() {
         icon={<ShieldCheck size={24} />}
         eyebrow="Hermes Agent 配置迁移"
         title="把已有 Hermes 配置复制到桌面端内核"
-        description="桌面端使用独立 managed runtime，不会直接读取用户全局 ~/.hermes。这里会在用户确认后复制配置、密钥、技能和记忆文件，避免重新配置模型 API Key。"
+        description="桌面端使用独立内核，不会直接读取系统全局的 ~/.hermes。这里会在你确认后复制配置、密钥、技能和记忆，避免重新配置模型 API Key。"
         badge={<span className={settings.statusBadge} data-on={!loading && !importing}>{loading ? "扫描中" : importing ? "迁移中" : `${candidates.length} 个候选`}</span>}
       />
 

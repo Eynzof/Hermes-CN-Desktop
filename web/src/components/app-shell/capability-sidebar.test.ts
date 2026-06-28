@@ -14,7 +14,7 @@ describe("configuration navigation", () => {
 
   it("keeps IM routes inside the 03 message gateway top tab", () => {
     const gatewayTab = TOP_TABS.find((tab) => tab.num === "03");
-    expect(gatewayTab?.label).toBe("消息网关");
+    expect(gatewayTab?.label).toBe("消息接入");
     expect(gatewayTab?.matches("/im/feishu")).toBe(true);
     expect(gatewayTab?.matches("/im/weixin")).toBe(true);
   });

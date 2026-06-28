@@ -78,7 +78,7 @@ export function AppStatusBar() {
     (analytics?.daily?.[0]?.input_tokens ?? 0) + (analytics?.daily?.[0]?.output_tokens ?? 0);
   const restartTitle = gatewayOnline || gatewayRestart.phase !== "idle"
     ? gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)
-    : "当前状态接口未确认在线，仍会尝试请求 Dashboard 重启 Gateway";
+    : "当前连接状态未知，仍会尝试重启接收服务";
 
   return (
     <footer className={s.statusbar} role="status" aria-label="运行状态">
@@ -88,10 +88,10 @@ export function AppStatusBar() {
           className={`${s.stat} ${s.gatewayButton}`}
           onClick={() => void openExternalUrl(dashboardUrl)}
           title={`打开 ${dashboardUrl}`}
-          aria-label={`打开 Dashboard ${dashboardUrl}`}
+          aria-label={`在浏览器打开 ${dashboardUrl}`}
         >
           <span className={s.dot} data-state={gatewayOnline ? "running" : "offline"} />
-          <span className={s.lbl}>网关</span>
+          <span className={s.lbl}>接收服务</span>
           <span className={s.val}>{port}</span>
         </button>
         <button
@@ -113,7 +113,7 @@ export function AppStatusBar() {
         {gatewayRestart.phase === "error" && (
           <span className={s.gatewayError} role="alert">
             <span className={s.gatewayErrorMsg}>
-              <strong>{gatewayRestart.message ?? "网关重启失败"}</strong>
+              <strong>{gatewayRestart.message ?? "接收服务重启失败"}</strong>
               {(() => {
                 const hint = gatewayRestartAntivirusHint(detectHostOS());
                 return hint ? <span className={s.gatewayErrorHint}>{hint}</span> : null;

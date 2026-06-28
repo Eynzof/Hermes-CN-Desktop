@@ -30,7 +30,7 @@ type ConnectionMessage = { tone: "ok" | "error"; text: string; hint?: string };
 const PROBE_DEBOUNCE_MS = 500;
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:9119";
 const LOCAL_DASHBOARD_RECOVERY_HINT =
-  "如果您确定本机已经安装了 Hermes，请尝试使用 hermes dashboard 启动网关后，确认 http://127.0.0.1:9119/ 可以在浏览器中访问，再试一次。";
+  "如果确认本机已安装 Hermes，请先运行 hermes dashboard 启动后端，确认 http://127.0.0.1:9119/ 能在浏览器打开，再试一次。";
 
 function modeLabel(mode: ConnectionMode | undefined): string {
   if (mode === "remote") return "远程连接";
@@ -79,12 +79,12 @@ function ModeCard({
 function testResultSummary(result: TestConnectionResult): ConnectionMessage {
   if (result.ok) {
     const version = result.version ? ` · Hermes ${result.version}` : "";
-    return { tone: "ok", text: `连接正常：HTTP 与 WebSocket 均可用（${result.baseUrl}${version}）` };
+    return { tone: "ok", text: `连接正常（${result.baseUrl}${version}）` };
   }
   const detail = result.error ?? "连接失败";
   const parts = [
-    `HTTP ${result.httpOk ? "✓" : `✗${result.httpStatus ? ` (${result.httpStatus})` : ""}`}`,
-    `WebSocket ${result.wsOk ? "✓" : "✗"}`,
+    `接口 ${result.httpOk ? "✓" : `✗${result.httpStatus ? ` (${result.httpStatus})` : ""}`}`,
+    `实时连接 ${result.wsOk ? "✓" : "✗"}`,
   ];
   return { tone: "error", text: `${detail}　[${parts.join("，")}]` };
 }
@@ -188,7 +188,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
     if (!canSubmit) {
       setMessage({
         tone: "error",
-        text: mode === "remote" ? "请先填写远程地址和 session token" : "请先填写本地连接地址",
+        text: mode === "remote" ? "请先填写远程地址和会话令牌" : "请先填写本地连接地址",
       });
       return;
     }
@@ -234,16 +234,16 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
 
   const tokenPlaceholder = config?.remoteTokenSet
     ? `已保存（${config.remoteTokenPreview ?? "set"}），留空保持不变`
-    : "粘贴远程 Dashboard 的 session token";
+    : "粘贴远程后端的会话令牌";
   const connectionLoaded = Boolean(config) && !loadError;
   const connectionTitle = !connectionLoaded
-    ? "正在读取网关连接状态"
+    ? "正在读取连接状态"
     : envOverride
-      ? "网关连接由环境变量覆盖"
+      ? "连接由环境变量覆盖"
       : `已连接${modeLabel(effectiveMode)}`;
   const connectionDescription = envOverride
     ? `当前会话由环境变量强制连接到远程端（${config?.remoteUrl ?? "远程地址"}），需取消环境变量后才能在此修改。`
-    : "桌面端现在支持三种连接：本机内核由桌面端管理 9120；本地连接自动接入本机 CLI dashboard 9119；远程连接继续使用 session token。";
+    : "桌面端支持三种连接方式：本机内核由桌面端自动管理；本地连接接入你已运行的 Hermes；远程连接接入另一台机器上的 Hermes。";
   const connectionBadge = !connectionLoaded ? "读取中" : envOverride ? "环境变量" : modeLabel(effectiveMode);
 
   return (
@@ -253,7 +253,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       <SettingsHero
         ok={connectionLoaded}
         icon={effectiveMode === "remote" || envOverride ? <Globe2 size={24} /> : effectiveMode === "local" ? <Cable size={24} /> : <HardDrive size={24} />}
-        eyebrow="Hermes Agent 网关连接"
+        eyebrow="Hermes Agent 连接"
         title={connectionTitle}
         description={connectionDescription}
         badge={<span className={s.statusBadge} data-on={connectionLoaded}>{connectionBadge}</span>}
@@ -280,7 +280,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           current={effectiveMode === "managed"}
           icon={HardDrive}
           title="本机内核"
-          description="桌面端启动并管理私有 Hermes runtime，默认端口 9120，适合离线和独立使用。"
+          description="桌面端自动启动并管理本机内核，适合离线和独立使用。"
           disabled={disabled}
           onSelect={() => setMode("managed")}
         />
@@ -289,7 +289,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           current={effectiveMode === "local"}
           icon={Cable}
           title="本地连接"
-          description="连接本机已运行的 Hermes Agent CLI dashboard，默认 http://127.0.0.1:9119。"
+          description="连接你在本机已运行的 Hermes，默认地址 http://127.0.0.1:9119。"
           disabled={disabled}
           onSelect={() => setMode("local")}
         />
@@ -298,7 +298,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           current={effectiveMode === "remote"}
           icon={Globe2}
           title="远程连接"
-          description="把桌面端作为界面壳连接另一台机器上的 Hermes 后端，使用 session token 认证。"
+          description="连接另一台机器上的 Hermes，使用会话令牌登录。"
           disabled={disabled}
           onSelect={() => setMode("remote")}
         />
@@ -307,10 +307,10 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       {mode === "local" && (
         <div className={s.row}>
           <div className={s.rowLeft}>
-            <div className={s.rowLabel}>本地 Dashboard 地址</div>
+            <div className={s.rowLabel}>本地连接地址</div>
             <div className={s.rowSub}>
-              仅允许 localhost / 127.0.0.1 / ::1。连接时会自动从本机 dashboard 页面读取 session token，不需要手动粘贴。
-              如果您确定本机已经安装了 Hermes，请尝试使用 <code>hermes dashboard</code> 启动网关后，确认 <code>http://127.0.0.1:9119/</code> 可以在浏览器中访问，再试一次。
+              仅允许 localhost / 127.0.0.1 / ::1。连接时会自动获取登录所需的会话令牌，无需手动粘贴。
+              如果确认本机已安装 Hermes，请先运行 <code>hermes dashboard</code> 启动后端，确认 <code>http://127.0.0.1:9119/</code> 能在浏览器打开，再试一次。
             </div>
           </div>
           <div className={s.rowRight}>
@@ -333,7 +333,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
             <div className={s.rowLeft}>
               <div className={s.rowLabel}>远程地址</div>
               <div className={s.rowSub}>
-                远程 hermes dashboard 后端的基础 URL，支持路径前缀（如 https://gateway.example.com/hermes）。
+                远程 Hermes 后端的地址，支持路径前缀（如 https://gateway.example.com/hermes）。
               </div>
               {probeStatus !== "idle" && (
                 <div
@@ -344,10 +344,10 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
                   {probeStatus === "probing" && <Loader2 size={12} className={s.connSpin} />}
                   {probeStatus === "reachable" && <CheckCircle2 size={12} />}
                   {(probeStatus === "unreachable" || probeStatus === "authRequired") && <XCircle size={12} />}
-                  {probeStatus === "probing" && "正在探测网关认证方式…"}
-                  {probeStatus === "reachable" && "网关可达"}
-                  {probeStatus === "unreachable" && "暂时无法连接该网关，检查地址与网络后会自动重试"}
-                  {probeStatus === "authRequired" && "该网关需要 OAuth 登录，本轮远程连接仍仅支持 session token"}
+                  {probeStatus === "probing" && "正在检测连接方式…"}
+                  {probeStatus === "reachable" && "后端可达"}
+                  {probeStatus === "unreachable" && "暂时无法连接，检查地址与网络后会自动重试"}
+                  {probeStatus === "authRequired" && "该后端需要 OAuth 登录，当前远程连接仅支持会话令牌"}
                 </div>
               )}
             </div>
@@ -366,9 +366,9 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
 
           <div className={s.row}>
             <div className={s.rowLeft}>
-              <div className={s.rowLabel}>Session Token</div>
+              <div className={s.rowLabel}>会话令牌</div>
               <div className={s.rowSub}>
-                远程端用于 REST 与 WebSocket 鉴权的会话令牌。仅保存在本机，留空保持不变。
+                连接远程后端时使用的会话令牌，仅保存在本机，留空保持不变。
               </div>
             </div>
             <div className={s.rowRight}>

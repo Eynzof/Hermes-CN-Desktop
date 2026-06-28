@@ -810,7 +810,7 @@ async fn poll_feishu(flow_id: &str) -> Result<ImOnboardingPollResult, AppError> 
             interval_seconds: flow.interval_seconds,
             expires_at_ms: flow.expires_at_ms,
             credential_summary: flow.credential.as_ref().map(credential_from_feishu),
-            message: Some("飞书扫码授权已过期，请重新生成二维码。".to_string()),
+            message: Some("飞书二维码已过期，请重新生成。".to_string()),
         });
     }
     if let Some(credential) = &flow.credential {
@@ -823,7 +823,7 @@ async fn poll_feishu(flow_id: &str) -> Result<ImOnboardingPollResult, AppError> 
             interval_seconds: flow.interval_seconds,
             expires_at_ms: flow.expires_at_ms,
             credential_summary: Some(credential_from_feishu(credential)),
-            message: Some("飞书机器人凭据已确认。".to_string()),
+            message: Some("飞书机器人已连接。".to_string()),
         });
     }
 
@@ -877,13 +877,13 @@ async fn poll_feishu(flow_id: &str) -> Result<ImOnboardingPollResult, AppError> 
             interval_seconds: flow.interval_seconds,
             expires_at_ms: flow.expires_at_ms,
             credential_summary: Some(credential_from_feishu(&credential)),
-            message: Some("飞书机器人凭据已确认。".to_string()),
+            message: Some("飞书机器人已连接。".to_string()),
         });
     }
     let error = res.get("error").and_then(Value::as_str).unwrap_or("");
     let (status, message) = match error {
         "access_denied" => ("denied", "用户取消或拒绝了飞书授权。"),
-        "expired_token" => ("expired", "飞书扫码授权已过期，请重新生成二维码。"),
+        "expired_token" => ("expired", "飞书二维码已过期，请重新生成。"),
         _ => ("pending", "等待飞书扫码确认。"),
     };
     FLOWS
@@ -983,7 +983,7 @@ async fn begin_weixin(input: &ImOnboardingBeginInput) -> Result<ImOnboardingBegi
         user_code: None,
         interval_seconds: 1,
         expires_at_ms,
-        message: Some("请使用微信手机端扫码，并在手机端确认绑定 iLink bot。".to_string()),
+        message: Some("请使用微信扫码，并在手机上确认绑定。".to_string()),
     })
 }
 
@@ -1026,7 +1026,7 @@ async fn poll_weixin(flow_id: &str) -> Result<ImOnboardingPollResult, AppError> 
             interval_seconds: flow.interval_seconds,
             expires_at_ms: flow.expires_at_ms,
             credential_summary: Some(credential_from_weixin(credential)),
-            message: Some("微信 iLink bot 已确认绑定。".to_string()),
+            message: Some("微信已连接。".to_string()),
         });
     }
     let endpoint = format!(
@@ -1066,10 +1066,7 @@ async fn poll_weixin(flow_id: &str) -> Result<ImOnboardingPollResult, AppError> 
                     interval_seconds: flow.interval_seconds,
                     expires_at_ms: flow.expires_at_ms,
                     credential_summary: None,
-                    message: Some(format!(
-                        "微信二维码已过期，已自动刷新（{}/3）。",
-                        flow.refresh_count
-                    )),
+                    message: Some("微信二维码已过期，已自动刷新。".to_string()),
                 });
             }
         }
@@ -1116,7 +1113,7 @@ async fn poll_weixin(flow_id: &str) -> Result<ImOnboardingPollResult, AppError> 
                 interval_seconds: flow.interval_seconds,
                 expires_at_ms: flow.expires_at_ms,
                 credential_summary: Some(credential_from_weixin(&credential)),
-                message: Some("微信 iLink bot 已确认绑定。".to_string()),
+                message: Some("微信已连接。".to_string()),
             });
         }
         _ => {}

@@ -45,7 +45,7 @@ function isZodError(error: unknown): error is ZodLikeError {
 }
 
 function genericResultMessage(method: string): string {
-  return `服务返回了无法识别的响应（${method}）。可能是运行时版本不匹配或连接异常，请重试，或重启 Hermes 后再试。`;
+  return `内核返回了无法识别的响应（${method}）。可能是版本不一致或连接异常，请重试；若仍失败，请重启 Hermes。`;
 }
 
 /**
@@ -91,7 +91,7 @@ export function humanizeGatewayError(error: unknown): string {
       summary: "Gateway 响应解析失败（ZodError）",
       payload: { issues: error.issues },
     });
-    return "服务返回了无法识别的响应，请重试，或重启 Hermes 后再试。";
+    return "内核返回了无法识别的响应，请重试；若仍失败，请重启 Hermes。";
   }
 
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -99,7 +99,7 @@ export function humanizeGatewayError(error: unknown): string {
 
   const lower = message.toLowerCase();
   if (lower.includes("timeout") || message.includes("超时")) {
-    return "请求超时。如果正在使用 LM Studio、Ollama 等本地模型，请确认本地服务已启动、模型已加载、上下文窗口已设为至少 64K，且显存/内存没有因上下文过大而 OOM；也可以重启 Hermes 后重试。";
+    return "请求超时，请重试。若使用本地模型（如 LM Studio、Ollama），请确认本地服务已启动、模型已加载，且上下文窗口足够大。";
   }
   if (
     lower.includes("connection closed") ||
@@ -107,7 +107,7 @@ export function humanizeGatewayError(error: unknown): string {
     lower.includes("websocket closed") ||
     lower.includes("disconnect")
   ) {
-    return "与运行时的连接已断开，请重试。";
+    return "与内核的连接已断开，正在重新连接。";
   }
   return message;
 }

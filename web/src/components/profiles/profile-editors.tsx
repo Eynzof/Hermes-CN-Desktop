@@ -79,10 +79,10 @@ export function ProfileModelDialog({
     >
       {noChoices ? (
         <p className={s.modelEmpty}>
-          没有已鉴权的 provider —— 先在 <code>/models</code> 配置一个 API key 再来选模型。
+          还没有已授权的服务商 —— 先在 <code>/models</code> 配置一个 API Key 再来选模型。
         </p>
       ) : (
-        <Field label="模型" hint="按 provider · model 选择；写入该档案的 model.default / provider。">
+        <Field label="模型" hint="选择服务商和模型，应用到这个档案。">
           <ProfileModelSelect
             value={sel}
             onChange={setSel}
@@ -160,7 +160,7 @@ export function ProfileDescriptionDialog({
     >
       <Field
         label="描述"
-        hint="一两句话说明该档案的角色（用于看板路由 / 选档案）。手写后会标记为用户撰写，自动扫描不再覆盖。"
+        hint="一两句话说明这个档案的角色（用于看板分派和选择档案）。手动填写后，不会再被自动生成覆盖。"
       >
         <Textarea
           className={s.descArea}

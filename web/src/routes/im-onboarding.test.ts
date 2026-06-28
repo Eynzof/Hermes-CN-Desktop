@@ -34,7 +34,7 @@ describe("im onboarding routing helpers", () => {
 
   it("keeps context rail entries compact and secret-safe", () => {
     expect(railPanels("feishu").map((panel) => panel.label)).toEqual(["检查", "推荐", "诊断"]);
-    expect(railPanels("weixin").map((panel) => panel.label)).toEqual(["iLink", "诊断"]);
+    expect(railPanels("weixin").map((panel) => panel.label)).toEqual(["接入", "诊断"]);
 
     const visibleCopy = JSON.stringify([railPanels("feishu"), railPanels("weixin")]).toLowerCase();
     expect(visibleCopy).not.toContain("app_secret=");
@@ -59,7 +59,7 @@ describe("im onboarding routing helpers", () => {
   it("maps platform failures to beginner-friendly next steps", () => {
     expect(explainMessagingFailure("feishu", "403 permission denied")?.title).toContain("权限");
     expect(explainMessagingFailure("feishu", "event subscription missing")?.nextStep).toContain("im.message.receive_v1");
-    expect(explainMessagingFailure("weixin", "ImportError: No module named aiohttp")?.title).toContain("依赖");
+    expect(explainMessagingFailure("weixin", "ImportError: No module named aiohttp")?.title).toContain("组件");
     expect(explainMessagingFailure("weixin", "QR code expired")?.nextStep).toContain("重新生成二维码");
   });
 
@@ -159,7 +159,7 @@ describe("im onboarding routing helpers", () => {
     expect(bundle.issues).toEqual([
       expect.objectContaining({
         level: "ok",
-        title: "暂未发现明显阻断点",
+        title: "暂未发现明显问题",
       }),
     ]);
     expect(JSON.stringify(bundle.issues)).not.toContain("微信账号或口令不可用");

@@ -26,7 +26,7 @@ const QUICK_COMMANDS: CommandAction[] = [
   {
     label: "查看接入状态",
     command: "hermes gateway status",
-    desc: "确认当前消息网关是否在线，以及正在使用哪个配置。",
+    desc: "确认当前消息接入是否在线，以及正在使用哪个配置。",
   },
   {
     label: "检查 Hermes 配置",
