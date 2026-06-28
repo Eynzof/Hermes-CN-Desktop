@@ -11,9 +11,9 @@ import {
 import s from "./preview-rail.module.css";
 
 const FILE_LABELS: Record<LogFileOption, string> = {
-  agent: "Agent",
-  errors: "Errors",
-  gateway: "Gateway",
+  agent: "智能体",
+  errors: "错误",
+  gateway: "接收服务",
 };
 
 // Compact, in-rail logs viewer. Reuses the data layer (useLogs) and the pure

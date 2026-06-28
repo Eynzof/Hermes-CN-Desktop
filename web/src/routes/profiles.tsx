@@ -93,23 +93,23 @@ export function ProfilesRoute() {
       }
     >
       <p className={s.desc}>
-        档案（profile）是 Hermes Agent 的独立环境（独立的 config / .env / SOUL.md /
-        sessions / skills / memory）。每个档案有自己的 sticky 标记，新 hermes 进程启动时会读它决定加载哪个档案。
+        档案是一套相互独立的环境，各自拥有配置、密钥、人格（SOUL.md）、会话、技能和记忆。
+        启动时由当前档案决定加载哪一套数据。
       </p>
 
-      {runtime.platform === "electron" ? (
+      {runtime.platform !== "web" ? (
         <div className={s.warning}>
-          <strong>切换会自动重启 dashboard 子进程。</strong>
+          <strong>切换会自动重启内核。</strong>
           <span>
-            桌面端 own 着 dashboard 进程，切换档案会自动 stop + 用新 HERMES_HOME 重新 spawn（约
-            20-30 秒）。期间会话和 gateway 短暂断开，重启完成后自动连回新档案的数据。
+            切换档案时，桌面端会自动重启本机内核（约 20-30 秒）。期间连接会短暂断开，
+            完成后自动连到新档案的数据。
           </span>
         </div>
       ) : (
         <div className={s.warning}>
           <strong>切换不会立即生效。</strong>
           <span>
-            切换档案只更新 <code>~/.hermes/active_profile</code>。当前运行的 dashboard 进程已绑定旧档案，要让切换生效必须<strong>重启 dashboard</strong>（终端 <code>Ctrl+C</code>，再跑 <code>hermes dashboard --no-open</code>）。
+            切换档案后，需要重启正在运行的 Hermes 才能生效（在终端按 <code>Ctrl+C</code> 停止，再重新运行 <code>hermes dashboard --no-open</code>）。
           </span>
         </div>
       )}
@@ -119,9 +119,9 @@ export function ProfilesRoute() {
       {restartHint && (
         <div className={s.restartHint}>
           <strong>
-            已设档案 <code>{restartHint}</code> 为默认。
+            已将档案 <code>{restartHint}</code> 设为默认。
           </strong>
-          <span>下次 hermes 启动会用它。在终端重启 dashboard 后刷新此页面即可看到新档案的数据。</span>
+          <span>下次启动时会使用它。重启 Hermes 后刷新本页即可看到新档案的数据。</span>
           <button
             type="button"
             onClick={() => setRestartHint(null)}

@@ -13,14 +13,14 @@ export function ProfileSwitchOverlay() {
       <div className={s.card}>
         <div className={s.title}>
           <span className={s.spinner} aria-hidden="true" />
-          {state.title ?? "正在切换 profile…"}
+          {state.title ?? "正在切换档案…"}
         </div>
         <div className={s.body}>
           {state.body ?? (
             <>
-              桌面端正在重启 dashboard 子进程，加载{" "}
-              <span className={s.target}>{state.targetName ?? "新 profile"}</span> 的配置。
-              通常 20-30 秒，请稍候。
+              正在切换到{" "}
+              <span className={s.target}>{state.targetName ?? "新档案"}</span>，
+              内核会短暂重启，连接断开后自动恢复。通常 20-30 秒，请稍候。
             </>
           )}
         </div>

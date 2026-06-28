@@ -161,7 +161,7 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
     return (
       <div className={s.empty}>
         <Folder size={24} aria-hidden />
-        <p>本会话还没有绑定工作区，无法浏览文件。</p>
+        <p>本会话还没有关联工作区，无法浏览文件。</p>
       </div>
     );
   }

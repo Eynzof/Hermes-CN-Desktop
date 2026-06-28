@@ -23,7 +23,7 @@ export const configFieldTranslations: Record<string, string> = {
   "hooks_auto_accept": "自动接受 Hook",
   "paste_collapse_char_threshold": "粘贴折叠字符阈值",
   "paste_collapse_threshold": "粘贴折叠行数阈值",
-  "paste_collapse_threshold_fallback": "粘贴折叠阈值（兜底）",
+  "paste_collapse_threshold_fallback": "粘贴折叠阈值（备用）",
   "prefill_messages_file": "预填消息文件",
   "timezone": "时区",
   "toolsets": "工具集",
@@ -274,7 +274,7 @@ export const configFieldTranslations: Record<string, string> = {
   "curator.min_idle_hours": "最小空闲（小时）",
   "curator.stale_after_days": "陈旧天数",
   // gateway
-  "gateway.media_delivery_allow_dirs": "媒体投递允许目录",
+  "gateway.media_delivery_allow_dirs": "媒体发送允许目录",
   "gateway.strict": "严格模式",
   "gateway.trust_recent_files": "信任最近文件",
   "gateway.trust_recent_files_seconds": "信任最近文件时长（秒）",

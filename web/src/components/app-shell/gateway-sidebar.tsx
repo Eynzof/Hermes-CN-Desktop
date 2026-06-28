@@ -27,7 +27,7 @@ export function GatewaySidebar() {
     location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   return (
-    <aside className={s.sidebar} aria-label="消息网关侧栏">
+    <aside className={s.sidebar} aria-label="消息接入侧栏">
       <div className={s.scrollY}>
         {GATEWAY_SECTIONS.map((section) => (
           <section key={section.label} className={s.section}>

@@ -138,7 +138,7 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
       } />
-      <Row label="Hermes 名称" sub="修改后会影响对话中助手消息上方显示的名称；留空会恢复 Hermes。" right={
+      <Row label="Hermes 名称" sub="显示在对话中助手消息上方的名称，留空恢复为 Hermes。" right={
         <div className={s.assistantProfileControl}>
           <input
             className={s.assistantNameInput}
@@ -185,7 +185,7 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
         </div>
       } />
       {assistantProfileError ? <p className={s.assistantProfileError}>{assistantProfileError}</p> : null}
-      <p className={s.assistantProfileStorageHint}>名称和头像只影响桌面端显示，不会改写模型提示词；清空名称和移除头像后会恢复之前的对话样式。</p>
+      <p className={s.assistantProfileStorageHint}>名称和头像只改变桌面端显示，不影响模型本身。清空名称、移除头像后即可恢复默认样式。</p>
       <ApprovalModeSection />
     </div>
   );
@@ -318,14 +318,14 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
         icon={<Brush size={24} />}
         eyebrow="Hermes Agent 视觉系统"
         title="主题与显示偏好"
-        description="统一管理桌面端皮肤、界面密度和会话阅读字号。所有修改都会立即应用，方便快速预览整体界面风格。"
+        description="调整界面主题、密度和阅读字号，修改即时生效。"
         badge={<span className={s.statusBadge} data-on="true">{activeSkin?.label ?? "主题"}</span>}
       />
       <div className={s.appearancePanel}>
         <div className={s.appearanceHeader}>
           <div className={s.appearanceHeaderText}>
             <h3>界面外观</h3>
-            <p>使用同一套设置页卡片结构承载主题配置，避免主题页拥有独立视觉语言。</p>
+            <p>选择界面主题与外观风格。</p>
           </div>
           <span className={s.appearanceMeta}>实时生效 · {densityLabel}</span>
         </div>
@@ -497,9 +497,9 @@ function ThemeSkinPicker({
 /* ── Approval mode ───────────────────────────────────────────────────── */
 
 const APPROVAL_MODE_DESC: Record<ApprovalMode, string> = {
-  default: "匹配危险模式的命令会要求你手动确认，适合大多数工作区的默认安全策略。",
-  smart: "使用智能审批辅助模型先判断风险，低风险自动放行，高风险自动拒绝，不确定时再提示你手动决定。",
-  yolo: "自动批准所有危险命令（等同后端 --yolo / HERMES_YOLO_MODE）。请仅在受信任或隔离的工作区使用。",
+  default: "遇到有风险的命令会请你手动确认，适合大多数情况的默认安全策略。",
+  smart: "先由辅助模型判断风险：低风险自动放行，高风险自动拒绝，不确定时再请你手动决定。",
+  yolo: "自动批准所有有风险的命令。请仅在受信任或隔离的环境中使用。",
 };
 
 function ApprovalModeSection() {
@@ -551,7 +551,7 @@ function ApprovalModeSection() {
   const applyMode = async (mode: ApprovalMode) => {
     if (busy) return;
     if (mode === "smart" && !smartAvailable) {
-      setError("当前 runtime 的配置 schema 尚未声明 smart 审批模式，请先更新 Hermes Agent runtime。");
+      setError("当前版本暂不支持智能审批，请先更新 Hermes。");
       return;
     }
     if (mode === "yolo") {
@@ -611,7 +611,7 @@ function ApprovalModeSection() {
         <ShieldCheck size={14} aria-hidden="true" />
         <div>
           <h3 id="approval-mode-title">危险命令审批模式</h3>
-          <p>统一管理危险 shell 命令的确认策略。新设置只影响后续命令，已经弹出的审批请求仍需单独处理。</p>
+          <p>设置有风险命令的确认方式。改动只对之后的命令生效，已弹出的确认请求需单独处理。</p>
         </div>
       </div>
 
@@ -641,7 +641,7 @@ function ApprovalModeSection() {
               </span>
               <span className={s.approvalModeOptionDesc}>{APPROVAL_MODE_DESC[mode]}</span>
               {mode === "smart" && !smartAvailable && (
-                <span className={s.approvalModeWarning}>当前 runtime 暂未声明 smart 选项，请先更新 runtime。</span>
+                <span className={s.approvalModeWarning}>当前版本暂不支持智能审批，请先更新 Hermes。</span>
               )}
               {mode === "yolo" && yoloPending && (
                 <span className={s.approvalModeWarning}>YOLO 启动开关已保存，重启桌面端后生效。</span>
@@ -656,7 +656,7 @@ function ApprovalModeSection() {
           配置智能审批辅助模型
         </Button>
         <span>
-          Smart 模式会使用 <code>auxiliary.approval</code> 槽位。未指定时由后端自动选择可用辅助模型。
+          智能审批会用一个辅助模型来判断；未单独指定时，自动选择可用的辅助模型。
         </span>
       </div>
 
@@ -1258,15 +1258,15 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
         ok={isAttachedConnection || isolationOk}
         icon={isRemote ? <Globe2 size={24} /> : isLocalConnection ? <Cable size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}
         eyebrow="Hermes Agent 中文社区桌面版内核"
-        title={isAttachedConnection ? `已连接${attachedConnectionLabel}` : isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}
+        title={isAttachedConnection ? `已连接${attachedConnectionLabel}` : isolationOk ? (process?.ownsProcess ? "本机内核正在运行" : "已连接到本机内核") : "正在读取内核状态"}
         description={
           isAttachedConnection
-              ? `桌面端当前作为界面壳运行，所有会话与配置由${isRemote ? "远程端" : "本机 CLI dashboard"}（${rendererRuntime?.dashboardApiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "目标地址"}）提供。本机 managed runtime 未在使用，可在 设置 → 连接 切回本机内核。`
+              ? `桌面端当前连接到${isRemote ? "远程后端" : "本机已运行的 Hermes"}（${rendererRuntime?.dashboardApiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "目标地址"}），会话与配置都来自那里。本机内核未在使用，可在 设置 → 连接 切回本机内核。`
               : isolationOk && process?.ownsProcess
-              ? "当前 Dashboard 由桌面端托管的 managed runtime 子进程提供，内核、gateway runtime 与锁文件都收束在桌面 runtime 目录下。"
+              ? "当前由桌面端自动管理的本机内核提供服务，相关数据都收束在桌面端自己的目录下。"
               : isolationOk
-                ? "当前固定端口上已有兼容 Dashboard，桌面端已连接它；runtime 指针和可执行路径仍位于桌面 managed runtime 目录内。"
-              : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"
+                ? "本机已有兼容的 Hermes 在运行，桌面端已连接它；内核文件仍位于桌面端自己的目录内。"
+              : "用于确认桌面端使用的是自带的独立内核，而不是系统里的其它 Hermes。"
         }
         badge={(
           <span className={s.statusBadge} data-on={isAttachedConnection || isolationOk}>

@@ -52,12 +52,12 @@ describe("gateway restart helpers", () => {
     expect(classifyGatewayActionStatus(status({ running: true, pid: 1234 }))).toEqual({
       done: false,
       ok: false,
-      message: "Gateway 重启中（PID 1234）…",
+      message: "接收服务重启中…",
     });
     expect(classifyGatewayActionStatus(status({ running: false, exit_code: 0 }))).toEqual({
       done: true,
       ok: true,
-      message: "Gateway 重启已完成",
+      message: "接收服务已重启",
     });
   });
 
@@ -65,7 +65,7 @@ describe("gateway restart helpers", () => {
     expect(classifyGatewayActionStatus(status({ running: false, exit_code: null }))).toEqual({
       done: true,
       ok: true,
-      message: "Gateway 重启已完成",
+      message: "接收服务已重启",
     });
   });
 
@@ -73,7 +73,7 @@ describe("gateway restart helpers", () => {
     expect(classifyGatewayActionStatus(status({ running: false, exit_code: 75 }))).toEqual({
       done: true,
       ok: false,
-      message: "Gateway 重启失败（exit 75）",
+      message: "接收服务重启失败",
     });
   });
 

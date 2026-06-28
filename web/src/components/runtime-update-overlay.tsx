@@ -16,11 +16,10 @@ export function RuntimeUpdateOverlay() {
       <div className={s.card}>
         <div className={s.title}>
           <span className={s.spinner} aria-hidden="true" />
-          {isRollback ? "正在回滚 Runtime…" : "正在安装 Runtime 更新…"}
+          {isRollback ? "正在恢复到上一版本…" : "正在更新 Hermes…"}
         </div>
         <div className={s.body}>
-          桌面端正在重启 dashboard 子进程并刷新会话凭证。这会重置内核连接，
-          通常需要几秒，请勿关闭应用。
+          更新期间内核会重启，连接将短暂断开，通常只需几秒。请勿关闭应用。
         </div>
       </div>
     </div>

@@ -121,12 +121,12 @@ export function BackupRoute() {
         icon={<Archive size={24} />}
         eyebrow="Hermes Agent 档案备份"
         title="当前桌面端内核档案备份与恢复"
-        description="备份包会保存当前 profile 下的配置、密钥、技能、记忆、灵魂和会话历史。导入时不会覆盖现有档案，而是恢复成一个新的 profile 并自动切换过去。"
+        description="备份包会保存当前档案下的配置、密钥、技能、记忆、人格和会话历史。导入时不会覆盖现有档案，而是恢复成一个新档案并自动切换过去。"
         badge={<span className={settings.statusBadge} data-on={!busy}>{busy ? "处理中" : "就绪"}</span>}
       />
 
       <Alert tone="warning" size="sm">
-        <AlertTriangle size={14} /> 备份 zip 可能包含 <code>.env</code>、OAuth token、API Key 和聊天历史。请只保存在可信位置，不要直接发给他人。
+        <AlertTriangle size={14} /> 备份文件可能包含 <code>.env</code>、OAuth 令牌、API Key 和聊天历史。请只保存在可信位置，不要直接发给他人。
       </Alert>
 
       <div className={s.actions}>
@@ -154,7 +154,7 @@ export function BackupRoute() {
           </div>
           <div className={s.entryItem}>
             <span>包含内容</span>
-            <span className={s.entryMeta}>配置 / 密钥 / 技能 / 记忆 / 灵魂 / 会话</span>
+            <span className={s.entryMeta}>配置 / 密钥 / 技能 / 记忆 / 人格 / 会话</span>
           </div>
           <div className={s.entryItem}>
             <span>导入方式</span>

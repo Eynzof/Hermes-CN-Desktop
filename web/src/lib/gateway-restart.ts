@@ -9,7 +9,7 @@ export type GatewayRestartPhase = "idle" | "starting" | "running" | "success" | 
 // unsigned frozen runtime. Surface that as actionable guidance next to the retry
 // affordance instead of leaving the user with an opaque failure (issue #224).
 export const GATEWAY_RESTART_ANTIVIRUS_HINT =
-  "若反复失败，网关可能被安全软件（360 / 火绒 / Windows Defender 等）拦截。请将 Hermes 加入信任 / 白名单后重试。";
+  "若反复失败，接收服务可能被安全软件（360 / 火绒 / Windows Defender 等）拦截。请将 Hermes 加入信任 / 白名单后重试。";
 
 /** The antivirus hint, shown only on Windows where it applies; empty elsewhere. */
 export function gatewayRestartAntivirusHint(hostOs: HostOS): string {
@@ -64,10 +64,10 @@ export function gatewayRestartTitle(
   message?: string | null,
 ): string {
   if (message) return message;
-  if (phase === "starting" || phase === "running") return "正在重启 Gateway";
-  if (phase === "success") return "Gateway 重启已完成";
-  if (phase === "error") return "Gateway 重启失败，点击重试";
-  return "重启 Gateway";
+  if (phase === "starting" || phase === "running") return "正在重启接收服务";
+  if (phase === "success") return "接收服务已重启";
+  if (phase === "error") return "接收服务重启失败，点击重试";
+  return "重启接收服务";
 }
 
 export function classifyGatewayActionStatus(
@@ -77,7 +77,7 @@ export function classifyGatewayActionStatus(
     return {
       done: false,
       ok: false,
-      message: status.pid ? `Gateway 重启中（PID ${status.pid}）…` : "Gateway 重启中…",
+      message: "接收服务重启中…",
     };
   }
 
@@ -85,14 +85,14 @@ export function classifyGatewayActionStatus(
     return {
       done: true,
       ok: true,
-      message: "Gateway 重启已完成",
+      message: "接收服务已重启",
     };
   }
 
   return {
     done: true,
     ok: false,
-    message: `Gateway 重启失败（exit ${status.exit_code}）`,
+    message: "接收服务重启失败",
   };
 }
 
@@ -115,5 +115,5 @@ export function isGatewayRestartObservedRunning(
 
 export function gatewayRestartResponseError(response: GatewayRestartResponse): string | null {
   if (response.ok) return null;
-  return response.message || response.error || "Gateway 重启请求失败";
+  return response.message || response.error || "接收服务重启请求失败";
 }
