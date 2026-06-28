@@ -12,10 +12,12 @@ import {
   FsListResponse,
   ProfileCreateResponse,
   ProfileSummary,
+  SearchResponse,
   SessionsResponse,
   SkillsHubSearchResponse,
   SessionCompressResult,
   SessionSummary,
+  StatusResponse,
 } from "./hermes-api";
 
 
@@ -489,5 +491,67 @@ describe("FsListResponse schema", () => {
     });
     expect(parsed.entries[0].is_dir).toBe(true);
     expect(parsed.parent).toBe("/");
+  });
+});
+
+describe("SearchResponse schema", () => {
+  it("tolerates null role/model/source/started from the session-id-match branch", () => {
+    const parsed = SearchResponse.parse({
+      results: [
+        {
+          session_id: "s1",
+          snippet: "Session ID: s1",
+          role: null,
+          source: null,
+          model: null,
+          session_started: null,
+        },
+      ],
+    });
+    // Null wire values normalize to undefined (Zod v3 `.optional()` would throw on null).
+    expect(parsed.results[0].role).toBeUndefined();
+    expect(parsed.results[0].model).toBeUndefined();
+    expect(parsed.results[0].source).toBeUndefined();
+    expect(parsed.results[0].session_started).toBeUndefined();
+    expect(parsed.results[0].session_id).toBe("s1");
+  });
+
+  it("still accepts populated fields", () => {
+    const parsed = SearchResponse.parse({
+      results: [{ session_id: "s2", snippet: "hi", role: "user", model: "gpt", session_started: 123 }],
+    });
+    expect(parsed.results[0].model).toBe("gpt");
+    expect(parsed.results[0].session_started).toBe(123);
+  });
+});
+
+describe("StatusResponse schema", () => {
+  it("parses an auth-gated /api/status that omits gateway_pid/gateway_health_url", () => {
+    const parsed = StatusResponse.parse({
+      version: "0.5.4",
+      release_date: "2026-06-28",
+      gateway_running: false,
+      gateway_exit_reason: null,
+      gateway_updated_at: null,
+      active_sessions: 0,
+    });
+    expect(parsed.gateway_pid).toBeUndefined();
+    expect(parsed.gateway_health_url).toBeUndefined();
+    expect(parsed.gateway_running).toBe(false);
+  });
+
+  it("parses a loopback /api/status that includes them", () => {
+    const parsed = StatusResponse.parse({
+      version: "0.5.4",
+      release_date: "2026-06-28",
+      gateway_running: true,
+      gateway_pid: 4321,
+      gateway_health_url: "http://127.0.0.1:9120/health",
+      gateway_exit_reason: null,
+      gateway_updated_at: null,
+      active_sessions: 2,
+    });
+    expect(parsed.gateway_pid).toBe(4321);
+    expect(parsed.gateway_health_url).toContain("9120");
   });
 });
