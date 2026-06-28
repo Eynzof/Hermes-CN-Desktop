@@ -247,6 +247,10 @@ const tauriBridge = {
     return invokeCommand("open_external_url", { input });
   },
 
+  async toggleDevtools(): Promise<void> {
+    return invokeCommand("toggle_devtools");
+  },
+
   async exportLogSnapshot(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult> {
     return invokeCommand("export_log_snapshot", { input });
   },
@@ -761,6 +765,41 @@ async function waitForBootstrap(
   });
 }
 
+// Developer mode ships enabled in release builds (the `devtools` Cargo feature),
+// so the WebView inspector can be opened at runtime. Bind it to the keyboard
+// shortcuts every browser already uses so users can pop devtools without a menu:
+//   - F12                        (all platforms)
+//   - Cmd + Option + I  on macOS
+//   - Ctrl + Shift + I  on Windows / Linux
+// The matching hint lives on the About page (web/src/routes/settings.tsx).
+function isDevtoolsShortcut(event: KeyboardEvent): boolean {
+  if (event.key === "F12") return true;
+  if (event.key.toLowerCase() !== "i") return false;
+  const macCombo = event.metaKey && event.altKey;
+  const winCombo = event.ctrlKey && event.shiftKey;
+  return macCombo || winCombo;
+}
+
+let devtoolsShortcutBound = false;
+
+function registerDevtoolsShortcut(): void {
+  if (devtoolsShortcutBound || typeof window === "undefined") return;
+  if (typeof window.addEventListener !== "function") return;
+  devtoolsShortcutBound = true;
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isDevtoolsShortcut(event)) return;
+      event.preventDefault();
+      void invokeCommand("toggle_devtools").catch((error) => {
+        console.warn("Failed to toggle devtools", error);
+      });
+    },
+    // Capture phase so app-level key handlers can't swallow the shortcut first.
+    { capture: true },
+  );
+}
+
 export async function installTauriBridge(): Promise<void> {
   let config = await invokeCommand<{
     apiBaseUrl: string;
@@ -823,4 +862,6 @@ export async function installTauriBridge(): Promise<void> {
   };
 
   (window as any).hermesDesktop = tauriBridge;
+
+  registerDevtoolsShortcut();
 }
