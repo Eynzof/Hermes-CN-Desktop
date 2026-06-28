@@ -508,6 +508,18 @@ const tauriBridge = {
       safeUnlisten(unlisten);
     };
   },
+
+  setUiZoom(factor: number): void {
+    // Native webview page zoom (WKWebView setPageZoom / WebView2 ZoomFactor /
+    // WebKitGTK zoom_level). Unlike CSS `zoom`, page zoom reflows the layout and
+    // scales the viewport, so `100vw`/`100vh` keep matching the window and the
+    // interface-scale setting no longer clips the right edge / bottom status bar.
+    import("@tauri-apps/api/webview")
+      .then(({ getCurrentWebview }) => getCurrentWebview().setZoom(factor))
+      .catch((error) => {
+        console.warn("Failed to apply webview zoom", error);
+      });
+  },
 };
 
 // Overlay shown while the Rust side prepares the managed runtime and
