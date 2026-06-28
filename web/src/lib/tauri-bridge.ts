@@ -146,6 +146,38 @@ function safeUnlisten(unlisten: (() => void) | null | undefined): void {
   }
 }
 
+// Tauri's webview onDragDropEvent wraps its unlisten so the actual teardown runs
+// in a detached promise that never reaches safeUnlisten's catch above. When that
+// teardown loses the StrictMode mount→unmount race, its
+// "listeners[eventId].handlerId" TypeError surfaces as an *unhandled* rejection
+// even though the listener is already gone and nothing is broken. Swallow exactly
+// that signature (the Tauri-internal "handlerId" field name — app code never
+// throws it) and let every other rejection propagate untouched.
+let rejectionGuardInstalled = false;
+
+function isTauriListenerTeardownRejection(reason: unknown): boolean {
+  const message =
+    reason instanceof Error
+      ? reason.message
+      : typeof reason === "string"
+        ? reason
+        : "";
+  // WebKit: "undefined is not an object (evaluating 'listeners[eventId].handlerId')"
+  // Chromium: "Cannot read properties of undefined (reading 'handlerId')"
+  return message.includes("handlerId");
+}
+
+function installTauriRejectionGuard(): void {
+  if (rejectionGuardInstalled || typeof window === "undefined") return;
+  if (typeof window.addEventListener !== "function") return;
+  rejectionGuardInstalled = true;
+  window.addEventListener("unhandledrejection", (event) => {
+    if (isTauriListenerTeardownRejection(event.reason)) {
+      event.preventDefault();
+    }
+  });
+}
+
 export interface TauriIpcError extends Error {
   code?: string;
   kind?: string;
@@ -457,14 +489,19 @@ const tauriBridge = {
 
   onTerminalOutput(handler: (event: TerminalEventPayload) => void): () => void {
     let unlisten: (() => void) | null = null;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen<TerminalEventPayload>("terminal-output", (event) => {
-        handler(event.payload);
-      }).then((fn) => {
-        unlisten = fn;
-      });
-    });
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<TerminalEventPayload>("terminal-output", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
     return () => {
+      disposed = true;
       safeUnlisten(unlisten);
     };
   },
@@ -513,14 +550,19 @@ const tauriBridge = {
 
   onPreviewFileChanged(handler: (payload: PreviewFileChangedPayload) => void): () => void {
     let unlisten: (() => void) | null = null;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen<PreviewFileChangedPayload>("preview-file-changed", (event) => {
-        handler(event.payload);
-      }).then((fn) => {
-        unlisten = fn;
-      });
-    });
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<PreviewFileChangedPayload>("preview-file-changed", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
     return () => {
+      disposed = true;
       safeUnlisten(unlisten);
     };
   },
@@ -530,12 +572,16 @@ const tauriBridge = {
     // The watchdog detects sleep/wake within ~5s, which is acceptable.
     // Native power monitoring can be added later via a Tauri event.
     let unlisten: (() => void) | null = null;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen("system-resume", handler).then((fn) => {
-        unlisten = fn;
-      });
-    });
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) => listen("system-resume", handler))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
     return () => {
+      disposed = true;
       safeUnlisten(unlisten);
     };
   },
@@ -863,6 +909,10 @@ function registerDevtoolsShortcut(): void {
 }
 
 export async function installTauriBridge(): Promise<void> {
+  // Install before any React component mounts a Tauri event listener, so the
+  // StrictMode mount→unmount teardown race can't leak an unhandled rejection.
+  installTauriRejectionGuard();
+
   let config = await invokeCommand<{
     apiBaseUrl: string;
     gatewayUrl: string;

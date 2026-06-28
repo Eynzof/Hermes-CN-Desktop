@@ -20,23 +20,46 @@ export interface UseModelChoicesResult {
   error: boolean;
 }
 
-/** 把 model.options（providers[].models）摊平成 {provider, model, label} 列表。 */
+interface ModelChoiceProvider {
+  slug: string;
+  name?: string | null;
+  models?: readonly string[] | null;
+}
+
+/**
+ * 把 model.options（providers[].models）摊平成 {provider, model, label} 列表并去重。
+ * 网关 model.options 可能在同一 provider 下重复返回同一 model，或重复返回同一
+ * provider（同型号横跨多个预设很常见，如 deepseek-v4-flash）。按 key 去重，否则
+ * ProfileModelSelect 会渲染出 key 相同的 <option>，触发 React 重复 key 警告。
+ * 纯函数：测试可直接引入，不必拉起 React / gateway 依赖图。
+ */
+export function flattenModelChoices(
+  providers: readonly ModelChoiceProvider[] | undefined,
+): ModelChoice[] {
+  const flat: ModelChoice[] = [];
+  const seen = new Set<string>();
+  for (const prov of providers ?? []) {
+    for (const m of prov.models ?? []) {
+      const key = modelChoiceKey(prov.slug, m);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      flat.push({
+        provider: prov.slug,
+        model: m,
+        label: `${prov.name ?? prov.slug} · ${m}`,
+        key,
+      });
+    }
+  }
+  return flat;
+}
+
 export function useModelChoices(): UseModelChoicesResult {
   const q = useModelOptions();
-  const choices = useMemo<ModelChoice[]>(() => {
-    const flat: ModelChoice[] = [];
-    for (const prov of q.data?.providers ?? []) {
-      for (const m of prov.models ?? []) {
-        flat.push({
-          provider: prov.slug,
-          model: m,
-          label: `${prov.name ?? prov.slug} · ${m}`,
-          key: modelChoiceKey(prov.slug, m),
-        });
-      }
-    }
-    return flat;
-  }, [q.data]);
+  const choices = useMemo<ModelChoice[]>(
+    () => flattenModelChoices(q.data?.providers),
+    [q.data],
+  );
   return { choices, loading: q.isLoading, error: q.isError };
 }
 
