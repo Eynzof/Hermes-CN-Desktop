@@ -257,6 +257,20 @@ export interface FilePreview {
   truncated: boolean;
 }
 
+export interface WriteWorkspaceFileInput {
+  /** Absolute path, or relative to `root`. Must resolve inside `root`. */
+  path: string;
+  /** Session workspace root; writes are confined to this directory. */
+  root: string;
+  /** New UTF-8 file content. */
+  content: string;
+}
+
+export interface WriteWorkspaceFileResult {
+  /** Canonical path actually written. */
+  path: string;
+}
+
 export interface WatchPreviewFileResult {
   watchId: string;
 }
@@ -349,6 +363,7 @@ declare global {
       terminalClose?(input: { terminalId: string }): Promise<boolean>;
       onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
       readWorkspaceFile?(input: ReadWorkspaceFileInput): Promise<FilePreview>;
+      writeWorkspaceFile?(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult>;
       watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
       stopPreviewFileWatch?(input: { watchId: string }): Promise<boolean>;
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;

@@ -368,6 +368,155 @@
   color: var(--h-text);
 }
 
+/* ── Spot editor (in-place file editing) ─────────────────────────────────── */
+
+/* "modified" dot on the 文件 tab while the editor has unsaved changes. */
+.tabDirtyDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--h-accent);
+  flex: 0 0 auto;
+}
+
+/* Inline "未保存" hint shown in the file meta bar while editing. */
+.dirtyBadge {
+  color: var(--h-warn);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.editButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editButton:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.editControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editAction {
+  padding: 2px 9px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editAction:hover:not(:disabled) {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.editAction[data-variant="primary"] {
+  border-color: var(--h-accent-border);
+  background: var(--h-accent);
+  color: var(--h-accent-contrast);
+}
+
+.editAction[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--h-accent);
+  opacity: 0.9;
+}
+
+.editAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Stale-on-disk conflict banner. */
+.conflictBanner {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-warn-soft);
+  color: var(--h-text);
+  font-size: 11px;
+}
+
+.conflictTitle {
+  font-weight: 600;
+}
+
+.conflictBody {
+  margin-top: 2px;
+  color: var(--h-text-2);
+  line-height: 1.5;
+}
+
+.conflictActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.conflictAction {
+  border: 0;
+  background: transparent;
+  color: var(--h-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.conflictAction:hover {
+  opacity: 0.8;
+}
+
+.saveError {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  color: var(--h-danger);
+  font-size: 11px;
+}
+
+.editorWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
 /* ── Logs ────────────────────────────────────────────────────────────────── */
 
 .segmented {

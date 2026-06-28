@@ -459,6 +459,7 @@ fn main() {
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
             commands::preview::read_workspace_file,
+            commands::preview::write_workspace_file,
             commands::preview::watch_preview_file,
             commands::preview::stop_preview_file_watch,
         ])

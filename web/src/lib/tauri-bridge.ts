@@ -63,6 +63,8 @@ import type {
   UiStoreSnapshot,
   UiTurnStats,
   WatchPreviewFileResult,
+  WriteWorkspaceFileInput,
+  WriteWorkspaceFileResult,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
 import hermesLogoSvg from "../../../icons/icon.svg?raw";
@@ -470,6 +472,10 @@ const tauriBridge = {
 
   async readWorkspaceFile(input: ReadWorkspaceFileInput): Promise<FilePreview> {
     return invokeCommand("read_workspace_file", { input });
+  },
+
+  async writeWorkspaceFile(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult> {
+    return invokeCommand("write_workspace_file", { input });
   },
 
   async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {

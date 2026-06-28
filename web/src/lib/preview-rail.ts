@@ -2,6 +2,8 @@
 // so the panel routing, language detection, and content framing are unit
 // testable in isolation.
 
+import type { FilePreview } from "./runtime";
+
 export const PREVIEW_PANELS = ["web", "files", "terminal", "logs"] as const;
 export type PreviewPanel = (typeof PREVIEW_PANELS)[number];
 export const DEFAULT_PREVIEW_PANEL: PreviewPanel = "files";
@@ -186,4 +188,34 @@ export function fsListErrorText(code?: string | null): string {
     default:
       return "无法读取此目录，请稍后重试。";
   }
+}
+
+// ── Spot editor (in-place file editing, issue #326) ──────────────────────────
+
+/**
+ * Whether the spot editor may edit this preview. Only whole, readable text is
+ * editable — never images (`dataUrl`), binaries, or files we only loaded the
+ * first 512 KB of (`truncated`), since saving those would corrupt or drop data.
+ * Mirrors the upstream `canEdit` guard. The caller additionally gates on the
+ * native write bridge being present (absent in the browser fallback).
+ */
+export function canEditPreview(preview: FilePreview | null): boolean {
+  return (
+    preview != null &&
+    !preview.binary &&
+    !preview.dataUrl &&
+    !preview.truncated &&
+    preview.text !== undefined
+  );
+}
+
+/**
+ * Stale-on-disk guard for save: did the file diverge from the snapshot the
+ * editor started from? `current` is a fresh read just before writing; `baseline`
+ * is the text captured when editing began. A binary re-read can't be compared,
+ * so it is never treated as a conflict (the write proceeds). Mirrors the
+ * upstream `saveEdit` pre-write check.
+ */
+export function isStaleOnDisk(current: FilePreview, baseline: string): boolean {
+  return !current.binary && (current.text ?? "") !== baseline;
 }

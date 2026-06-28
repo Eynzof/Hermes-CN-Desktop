@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBreadcrumbs,
+  canEditPreview,
   DEFAULT_PREVIEW_PANEL,
   detectLanguage,
   fileExtension,
@@ -8,10 +9,16 @@ import {
   fsListErrorText,
   isMarkdownPath,
   isPreviewableUrl,
+  isStaleOnDisk,
   normalizePreviewPanel,
   parentDir,
   toFencedMarkdown,
 } from "./preview-rail";
+import type { FilePreview } from "./runtime";
+
+function textPreview(overrides: Partial<FilePreview> = {}): FilePreview {
+  return { text: "hello", byteSize: 5, binary: false, truncated: false, ...overrides };
+}
 
 describe("normalizePreviewPanel", () => {
   it("passes through valid panels", () => {
@@ -151,5 +158,40 @@ describe("fsListErrorText", () => {
   it("falls back for unknown codes and transport failures", () => {
     expect(fsListErrorText(undefined)).toContain("无法读取");
     expect(fsListErrorText("weird")).toContain("无法读取");
+  });
+});
+
+describe("canEditPreview", () => {
+  it("allows whole, readable text files", () => {
+    expect(canEditPreview(textPreview())).toBe(true);
+    expect(canEditPreview(textPreview({ text: "" }))).toBe(true);
+  });
+
+  it("refuses when there is no preview", () => {
+    expect(canEditPreview(null)).toBe(false);
+  });
+
+  it("refuses binaries, images, and truncated reads", () => {
+    expect(canEditPreview(textPreview({ binary: true, text: undefined }))).toBe(false);
+    expect(canEditPreview(textPreview({ dataUrl: "data:image/png;base64,AA", text: undefined }))).toBe(
+      false,
+    );
+    expect(canEditPreview(textPreview({ truncated: true }))).toBe(false);
+  });
+});
+
+describe("isStaleOnDisk", () => {
+  it("flags a conflict when disk diverged from the edit baseline", () => {
+    expect(isStaleOnDisk(textPreview({ text: "changed" }), "hello")).toBe(true);
+  });
+
+  it("is clean when disk still matches the baseline", () => {
+    expect(isStaleOnDisk(textPreview({ text: "hello" }), "hello")).toBe(false);
+    // An empty on-disk file is represented as text "" — equal to an empty baseline.
+    expect(isStaleOnDisk(textPreview({ text: undefined }), "")).toBe(false);
+  });
+
+  it("never blocks the save when the re-read came back binary", () => {
+    expect(isStaleOnDisk(textPreview({ binary: true, text: undefined }), "hello")).toBe(false);
   });
 });

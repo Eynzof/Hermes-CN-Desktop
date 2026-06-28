@@ -38,6 +38,10 @@ const TEXT_PREVIEW_MAX_BYTES: u64 = 512 * 1024;
 const IMAGE_PREVIEW_MAX_BYTES: u64 = 8 * 1024 * 1024;
 /// Bytes sampled from the head of a file to decide text vs binary.
 const BINARY_SNIFF_BYTES: usize = 4096;
+/// Match the upstream `hermes:fs:writeText` cap (1 MB). The spot editor's save
+/// is the only writer, so this is a hard ceiling that keeps the command from
+/// being abused as a bulk-write primitive.
+const TEXT_WRITE_MAX_BYTES: usize = 1_000_000;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +67,24 @@ pub struct FilePreview {
     pub binary: bool,
     /// True when `text` was cut at `TEXT_PREVIEW_MAX_BYTES`.
     pub truncated: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteWorkspaceFileInput {
+    /// File to write. Absolute or relative to `root`; must resolve inside `root`.
+    pub path: String,
+    /// Session workspace root. Writes are confined to this directory.
+    pub root: String,
+    /// New UTF-8 file content.
+    pub content: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WriteWorkspaceFileResult {
+    /// Canonical path actually written.
+    pub path: String,
 }
 
 #[derive(Deserialize)]
@@ -230,6 +252,32 @@ fn read_file_preview(root: &str, path: &str) -> AppResult<FilePreview> {
 #[tauri::command]
 pub fn read_workspace_file(input: ReadWorkspaceFileInput) -> AppResult<FilePreview> {
     read_file_preview(&input.root, &input.path)
+}
+
+/// Core, AppHandle-free write logic so it can be unit-tested directly. Mirrors
+/// the Electron `hermes:fs:writeText` hardening: a size cap, the same
+/// workspace-containment guard the read path uses, and an existing-regular-file
+/// requirement (the spot editor only ever saves a file it already previewed, so
+/// this never creates files or directory trees and never escapes the root).
+/// Stale-on-disk detection is the caller's job (re-read + compare before save).
+fn write_file_text(root: &str, path: &str, content: &str) -> AppResult<WriteWorkspaceFileResult> {
+    if content.len() > TEXT_WRITE_MAX_BYTES {
+        return Err(AppError::InvalidRequest("Content too large".to_string()));
+    }
+    let resolved = resolve_within_root(root, path)?;
+    let meta = fs::metadata(&resolved)?;
+    if !meta.is_file() {
+        return Err(AppError::FileError("Not a regular file".to_string()));
+    }
+    fs::write(&resolved, content)?;
+    Ok(WriteWorkspaceFileResult {
+        path: resolved.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn write_workspace_file(input: WriteWorkspaceFileInput) -> AppResult<WriteWorkspaceFileResult> {
+    write_file_text(&input.root, &input.path, &input.content)
 }
 
 /// Live watcher registry. Keeping the `RecommendedWatcher` alive is what keeps
@@ -403,6 +451,70 @@ mod tests {
 
         let preview = read_file_preview("/no/such/root-xyz-404", &file.to_string_lossy()).unwrap();
         assert_eq!(preview.text.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn writes_text_file_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_string_lossy().to_string();
+        let file = dir.path().join("note.md");
+        std::fs::write(&file, b"old").unwrap();
+
+        let result = write_file_text(&root, "note.md", "new content").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "new content",
+            "the on-disk file should reflect the saved buffer"
+        );
+        assert!(result.path.ends_with("note.md"));
+    }
+
+    #[test]
+    fn write_rejects_path_escaping_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("ws");
+        std::fs::create_dir_all(&root).unwrap();
+        let secret = dir.path().join("secret.txt");
+        std::fs::write(&secret, b"keep").unwrap();
+
+        let err = write_file_text(&root.to_string_lossy(), "../secret.txt", "pwned").unwrap_err();
+        assert!(
+            matches!(err, AppError::OriginViolation(_)),
+            "expected OriginViolation, got {err:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&secret).unwrap(),
+            "keep",
+            "a rejected write must not touch the file"
+        );
+    }
+
+    #[test]
+    fn write_rejects_oversized_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_string_lossy().to_string();
+        let file = dir.path().join("big.txt");
+        std::fs::write(&file, b"small").unwrap();
+
+        let huge = "x".repeat(TEXT_WRITE_MAX_BYTES + 1);
+        let err = write_file_text(&root, "big.txt", &huge).unwrap_err();
+        assert!(matches!(err, AppError::InvalidRequest(_)));
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "small",
+            "an oversized write must be rejected before touching disk"
+        );
+    }
+
+    #[test]
+    fn write_rejects_missing_file() {
+        // The spot editor only saves files it previewed; a path that doesn't
+        // resolve must fail rather than create a new file.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_string_lossy().to_string();
+
+        let err = write_file_text(&root, "does-not-exist.txt", "data").unwrap_err();
+        assert!(matches!(err, AppError::FileError(_)));
     }
 
     #[test]

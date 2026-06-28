@@ -17,3 +17,10 @@ export const EMPTY_PREVIEW_RAIL_SELECTION: PreviewRailSelection = {
 };
 
 export const previewRailSelectionMapAtom = atom<Record<string, PreviewRailSelection>>({});
+
+// True while the Files tab's spot editor holds unsaved changes, so the rail can
+// render a VS Code-style "modified" dot on the 文件 tab without threading editor
+// state up through the pane. Mirrors the upstream `$dirtyPreviewUrls`; one
+// preview rail is visible at a time, so a single boolean is enough. The editor
+// in file-preview-tab.tsx is the sole writer; preview-rail.tsx is the reader.
+export const previewEditorDirtyAtom = atom(false);

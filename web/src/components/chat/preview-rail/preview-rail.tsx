@@ -1,4 +1,4 @@
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useSearchParams } from "react-router-dom";
 import {
   FileText,
@@ -16,6 +16,7 @@ import {
 } from "@/lib/preview-rail";
 import {
   EMPTY_PREVIEW_RAIL_SELECTION,
+  previewEditorDirtyAtom,
   previewRailSelectionMapAtom,
   type PreviewRailSelection,
 } from "@/stores/preview-rail";
@@ -58,6 +59,7 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
     setSearchParams(next, { replace: true });
   };
 
+  const editorDirty = useAtomValue(previewEditorDirtyAtom);
   const [selectionMap, setSelectionMap] = useAtom(previewRailSelectionMapAtom);
   const selection = selectionMap[sessionId] ?? EMPTY_PREVIEW_RAIL_SELECTION;
   const patchSelection = (patch: Partial<PreviewRailSelection>) => {
@@ -83,6 +85,9 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
             >
               <Icon size={13} aria-hidden />
               {label}
+              {key === "files" && editorDirty ? (
+                <span className={s.tabDirtyDot} aria-label="有未保存的修改" title="有未保存的修改" />
+              ) : null}
             </button>
           ))}
           {PENDING_TABS.map(({ key, label, icon: Icon }) => (
