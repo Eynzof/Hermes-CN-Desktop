@@ -2068,6 +2068,41 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
 const MAX_ZIP_FILES: usize = 5_000;
 const MAX_ZIP_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
 
+/// Returns true when a symlink whose target is `target`, living in directory
+/// `link_parent`, resolves to a path that stays inside `dest`. The target is
+/// resolved purely lexically (no filesystem access, so it works before the
+/// target exists): `.` is ignored and `..` pops the last real segment. Absolute
+/// targets, and relative targets that climb above `dest`, are rejected. This
+/// permits the `..`-into-subtree links shipped by Node.js (`bin/corepack` ->
+/// `../lib/node_modules/...`) while still blocking zip-slip via symlink.
+#[cfg(unix)]
+fn symlink_target_within(dest: &Path, link_parent: &Path, target: &Path) -> bool {
+    use std::path::Component;
+
+    if target.is_absolute() {
+        return false;
+    }
+
+    let mut resolved: Vec<Component> = link_parent.components().collect();
+    for component in target.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match resolved.last() {
+                // Only collapse against a real path segment; never climb past
+                // the root we started from.
+                Some(Component::Normal(_)) => {
+                    resolved.pop();
+                }
+                _ => return false,
+            },
+            other => resolved.push(other),
+        }
+    }
+
+    let resolved: PathBuf = resolved.iter().collect();
+    resolved.starts_with(dest)
+}
+
 fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
@@ -2125,8 +2160,6 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
             if is_symlink {
                 #[cfg(unix)]
                 {
-                    use std::path::Component;
-
                     let mut target_bytes = Vec::new();
                     entry
                         .read_to_end(&mut target_bytes)
@@ -2134,12 +2167,16 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
                     let target = String::from_utf8(target_bytes)
                         .map_err(|e| format!("Invalid UTF-8 symlink target: {}", e))?;
                     let target_path = Path::new(&target);
-                    if target_path.components().any(|component| {
-                        matches!(
-                            component,
-                            Component::ParentDir | Component::RootDir | Component::Prefix(_)
-                        )
-                    }) {
+
+                    // Relative symlinks may legitimately use `..` to point at a
+                    // sibling subtree — Node.js ships `bin/corepack` ->
+                    // `../lib/node_modules/corepack/dist/corepack.js` (likewise
+                    // npm/npx), and `Python.framework` is a web of such links.
+                    // Resolve the target lexically against the link's own
+                    // directory and reject only links that climb out of `dest`
+                    // (or are absolute).
+                    let link_parent = out_path.parent().unwrap_or(dest.as_path());
+                    if !symlink_target_within(&dest, link_parent, target_path) {
                         return Err(format!("Refusing unsafe symlink target: {:?}", target));
                     }
                     std::os::unix::fs::symlink(target_path, &out_path)
@@ -3052,6 +3089,76 @@ mod tests {
             err
         );
         assert!(!dest.join("link.txt").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_zip_allows_relative_symlink_into_sibling_subtree() {
+        // Regression: Node.js ships `bin/corepack` ->
+        // `../lib/node_modules/corepack/dist/corepack.js`. The `..` is safe —
+        // it resolves to a file still inside the extraction dir — and must not
+        // be rejected, otherwise the bundled runtime fails to install on first
+        // launch (macOS ships the runtime as a zip).
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("node.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let file_opts = zip::write::SimpleFileOptions::default().unix_permissions(0o644);
+        writer
+            .start_file("lib/node_modules/corepack/dist/corepack.js", file_opts)
+            .unwrap();
+        writer.write_all(b"console.log('corepack')").unwrap();
+        let link_opts = zip::write::SimpleFileOptions::default();
+        writer
+            .add_symlink(
+                "bin/corepack",
+                "../lib/node_modules/corepack/dist/corepack.js",
+                link_opts,
+            )
+            .unwrap();
+        writer.finish().unwrap();
+
+        extract_zip(&zip_path, &dest).unwrap();
+
+        assert_eq!(
+            std::fs::read_link(dest.join("bin/corepack")).unwrap(),
+            PathBuf::from("../lib/node_modules/corepack/dist/corepack.js")
+        );
+        // Reading through the link must reach the real file inside `dest`.
+        assert_eq!(
+            std::fs::read(dest.join("bin/corepack")).unwrap(),
+            b"console.log('corepack')"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_zip_rejects_symlink_climbing_out_via_subtree() {
+        // A nested symlink whose `..` chain still escapes `dest` must be
+        // rejected even though it starts inside a subtree.
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("evil.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        writer
+            .add_symlink("bin/escape", "../../escape.txt", opts)
+            .unwrap();
+        writer.finish().unwrap();
+
+        let err = extract_zip(&zip_path, &dest).unwrap_err();
+        assert!(
+            err.contains("unsafe symlink target"),
+            "unexpected error: {}",
+            err
+        );
+        assert!(!dest.join("bin/escape").exists());
     }
 
     // -------- copy_dir_all --------
