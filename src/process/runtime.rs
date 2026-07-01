@@ -3515,6 +3515,7 @@ mod tests {
             .is_file());
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     #[serial]
     async fn install_bundled_runtime_does_not_overwrite_local_source_runtime() {
@@ -3603,6 +3604,7 @@ mod tests {
         assert_eq!(after.kernel_version, "0.15.2");
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     #[serial]
     async fn install_bundled_runtime_migrates_local_source_when_not_preserved() {

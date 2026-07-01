@@ -50,7 +50,7 @@ export function KanbanRoute() {
   return (
     <SectionShell
       title="看板"
-      sub="官方 Dashboard /kanban"
+      sub="官方 Dashboard 看板"
       right={
         <div className={s.topActions}>
           <CopyButton variant="outline" size="md" className={s.secondaryButton} text={kanbanUrl}>
@@ -74,7 +74,7 @@ export function KanbanRoute() {
             <h2>桌面端只提供入口，看板功能继续使用内核自带 Dashboard。</h2>
             <p>
               Kanban 的任务列、分解、调度和运行状态都由 Hermes Agent 内核的官方 Dashboard 维护。
-              这里不会复刻一个桌面端看板，只会把你带到当前运行时对应的 <code>/kanban</code> 页面。
+              这里不会复刻一个桌面端看板，只会把你带到当前运行时对应的看板页面。
             </p>
           </div>
           <span className={s.statusBadge} data-tone={statusTone}>

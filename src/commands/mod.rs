@@ -19,5 +19,6 @@ pub mod runtime_manager;
 pub mod skills;
 pub mod terminal;
 pub mod ui_store;
+pub mod windows;
 pub mod ws_proxy;
 pub mod yolo;

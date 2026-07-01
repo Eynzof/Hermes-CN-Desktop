@@ -42,10 +42,23 @@ if (!skipInstall) {
   runNodeScript(resolve(repoRoot, "scripts", "install-local-runtime.mjs"), process.argv.slice(2));
 }
 
-const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const child = spawn(pnpm, ["exec", "tauri", "dev"], {
+function pnpmInvocation(args) {
+  const npmExecPath = process.env.npm_execpath;
+  if (npmExecPath && !/[\\/]pnpm\.cmd$/i.test(npmExecPath)) {
+    return { command: process.execPath, args: [npmExecPath, ...args], shell: false };
+  }
+  return {
+    command: process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+    args,
+    shell: process.platform === "win32",
+  };
+}
+
+const pnpm = pnpmInvocation(["exec", "tauri", "dev"]);
+const child = spawn(pnpm.command, pnpm.args, {
   cwd: repoRoot,
   stdio: "inherit",
+  shell: pnpm.shell,
   env: {
     ...process.env,
     // Dev kernels live under dev-runtime/ so they never overwrite the packaged

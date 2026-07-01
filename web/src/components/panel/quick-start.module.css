@@ -11,7 +11,7 @@
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md, 8px);
-  padding: 12px 14px;
+  padding: 14px 14px;
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s;
   font: inherit;
@@ -21,14 +21,6 @@
 .card:hover {
   border-color: var(--h-accent-border);
   background: color-mix(in srgb, var(--h-accent-soft) 35%, var(--h-bg-pane));
-}
-
-.num {
-  font-family: var(--h-font-mono, ui-monospace, "SF Mono", monospace);
-  font-size: 10px;
-  color: var(--h-accent);
-  letter-spacing: 0.06em;
-  margin-bottom: 6px;
 }
 
 .title {

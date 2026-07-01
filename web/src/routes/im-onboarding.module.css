@@ -4,9 +4,7 @@
 .mainCol { min-width: 0; display: grid; gap: 14px; align-content: start; }
 .headBand { display: flex; justify-content: space-between; gap: 18px; padding: 24px; border: 1px solid var(--h-line); background: linear-gradient(135deg, var(--h-bg-pane), var(--h-bg-soft)); border-radius: var(--h-r-lg); box-shadow: var(--h-shadow); }
 .heroCopy { min-width: 0; }
-.heroKicker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--h-text-3); font-family: var(--h-font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
-.heroKicker span { color: var(--h-accent); border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent); padding: 2px 6px; border-radius: var(--h-r-sm); background: color-mix(in srgb, var(--h-accent) 8%, transparent); }
-.heroKicker em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--h-text-2); }
+.heroKicker { color: var(--h-text-3); font-family: var(--h-font-cn); font-size: 12px; font-weight: 650; letter-spacing: 0; }
 .headBand h1 { margin: 14px 0 10px; color: var(--h-text); font-family: var(--h-font-display-cn); font-style: normal; font-weight: 400; font-size: clamp(34px, 5vw, 58px); line-height: 1.05; letter-spacing: -.015em; }
 .headBand h1 em { color: var(--h-accent); font-style: normal; font-weight: 650; }
 .sub { max-width: 720px; margin: 0; color: var(--h-text-2); line-height: 1.8; font-size: 13px; }
@@ -47,7 +45,6 @@
 .step[data-done="true"] span { background: var(--h-ok-soft); color: var(--h-ok); }
 .step[data-active="true"] { border-color: color-mix(in srgb, var(--h-accent) 35%, var(--h-line)); }
 .sectionTitle { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
-.sectionTitle span { color: var(--h-accent); font-family: var(--h-font-mono); font-size: 10px; }
 .sectionTitle h2 { margin: 0; color: var(--h-text); font-size: 16px; }
 .sectionTitle em { color: var(--h-text-3); font-size: 12px; font-style: normal; }
 .section { border: 1px solid var(--h-line); background: color-mix(in srgb, var(--h-bg-pane) 92%, transparent); border-radius: var(--h-r-lg); padding: 14px; display: grid; gap: 12px; }

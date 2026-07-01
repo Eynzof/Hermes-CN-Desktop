@@ -77,6 +77,7 @@ import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-re
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
+import { PetSettingsPanel } from "@/components/pet/pet-settings";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import { SettingsHero } from "./settings-hero";
 import s from "./settings.module.css";
@@ -367,6 +368,7 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
           }
         />
       </div>
+      <PetSettingsPanel />
     </div>
   );
 }

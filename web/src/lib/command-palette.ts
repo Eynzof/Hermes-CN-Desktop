@@ -6,7 +6,9 @@ import type { WorkspaceProject } from "@/lib/workspaces";
 export type CommandPaletteGroupId = "commands" | "sessions" | "projects" | "skills" | "files";
 
 export type CommandPaletteIconKey =
+  | "agents"
   | "analytics"
+  | "artifacts"
   | "backup"
   | "config"
   | "console"
@@ -24,7 +26,8 @@ export type CommandPaletteIconKey =
   | "project"
   | "settings"
   | "skill"
-  | "soul";
+  | "soul"
+  | "starmap";
 
 export type CommandPaletteAction =
   | { type: "navigate"; to: string }
@@ -93,7 +96,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-history",
     group: "commands",
     label: "对话历史",
-    subtitle: "/history · 搜索、归档和管理会话",
+    subtitle: "搜索、归档和管理会话",
     keywords: ["history", "sessions", "archive", "chat", "conversation", "历史", "会话"],
     icon: "history",
     action: { type: "navigate", to: "/history" },
@@ -104,7 +107,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-projects",
     group: "commands",
     label: "项目 / 工作空间",
-    subtitle: "/projects · 查看已登记项目",
+    subtitle: "查看已登记项目",
     keywords: ["project", "workspace", "folder", "cwd", "工作区", "目录"],
     icon: "project",
     action: { type: "navigate", to: "/projects" },
@@ -115,7 +118,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-kanban",
     group: "commands",
     label: "看板 Kanban",
-    subtitle: "/kanban · 打开官方 Dashboard 看板",
+    subtitle: "打开官方 Dashboard 看板",
     keywords: ["kanban", "board", "dashboard", "official", "看板", "任务板"],
     icon: "project",
     action: { type: "navigate", to: "/kanban" },
@@ -123,10 +126,43 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     priority: 3,
   },
   {
+    id: "command-artifacts",
+    group: "commands",
+    label: "产物库 Artifacts",
+    subtitle: "浏览会话输出里的图片、文件和链接",
+    keywords: ["artifacts", "asset", "image", "file", "link", "产物", "图片", "文件", "链接"],
+    icon: "artifacts",
+    action: { type: "navigate", to: "/artifacts" },
+    defaultVisible: true,
+    priority: 4,
+  },
+  {
+    id: "command-agents",
+    group: "commands",
+    label: "Agents 子代理",
+    subtitle: "查看子代理派生树和实时输出",
+    keywords: ["agents", "subagent", "delegate", "tree", "子代理", "派生", "旁观"],
+    icon: "agents",
+    action: { type: "navigate", to: "/agents" },
+    defaultVisible: true,
+    priority: 5,
+  },
+  {
+    id: "command-starmap",
+    group: "commands",
+    label: "记忆星图 Starmap",
+    subtitle: "查看技能、记忆和关系图谱",
+    keywords: ["starmap", "learning", "memory", "graph", "skill", "星图", "记忆", "图谱"],
+    icon: "starmap",
+    action: { type: "navigate", to: "/starmap" },
+    defaultVisible: true,
+    priority: 6,
+  },
+  {
     id: "command-skills",
     group: "commands",
     label: "Skills 管理",
-    subtitle: "/skills · 启用、禁用和查看 Skill",
+    subtitle: "启用、禁用和查看 Skill",
     keywords: ["skills", "tools", "skill", "能力", "技能"],
     icon: "skill",
     action: { type: "navigate", to: "/skills" },
@@ -137,7 +173,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-models",
     group: "commands",
     label: "模型配置",
-    subtitle: "/models · Provider、模型与上下文",
+    subtitle: "Provider、模型与上下文",
     keywords: ["models", "provider", "llm", "ai", "模型", "供应商"],
     icon: "models",
     action: { type: "navigate", to: "/models" },
@@ -148,7 +184,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-mcp",
     group: "commands",
     label: "MCP 服务",
-    subtitle: "/mcp · 管理工具服务",
+    subtitle: "管理工具服务",
     keywords: ["mcp", "server", "tool", "工具", "服务"],
     icon: "mcp",
     action: { type: "navigate", to: "/mcp" },
@@ -159,7 +195,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-profiles",
     group: "commands",
     label: "档案 Profiles",
-    subtitle: "/profiles · 切换独立配置环境",
+    subtitle: "切换独立配置环境",
     keywords: ["profiles", "profile", "environment", "配置档", "档案"],
     icon: "profiles",
     action: { type: "navigate", to: "/profiles" },
@@ -170,7 +206,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-cron",
     group: "commands",
     label: "定时任务",
-    subtitle: "/cron · 查看和管理自动化任务",
+    subtitle: "查看和管理自动化任务",
     keywords: ["cron", "schedule", "automation", "job", "定时", "自动化"],
     icon: "cron",
     action: { type: "navigate", to: "/cron" },
@@ -181,7 +217,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-health",
     group: "commands",
     label: "健康检查",
-    subtitle: "/health · Dashboard、模型、环境和扩展状态",
+    subtitle: "Dashboard、模型、环境和扩展状态",
     keywords: ["health", "status", "dashboard", "diagnostics", "检查", "状态"],
     icon: "health",
     action: { type: "navigate", to: "/health" },
@@ -192,7 +228,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-analytics",
     group: "commands",
     label: "数据分析",
-    subtitle: "/analytics · Tokens、模型和会话统计",
+    subtitle: "Tokens、模型和会话统计",
     keywords: ["analytics", "usage", "tokens", "cost", "statistics", "统计", "用量"],
     icon: "analytics",
     action: { type: "navigate", to: "/analytics" },
@@ -202,7 +238,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-logs",
     group: "commands",
     label: "日志",
-    subtitle: "/logs · 查看运行日志",
+    subtitle: "查看运行日志",
     keywords: ["logs", "log", "debug", "journal", "日志"],
     icon: "file",
     action: { type: "navigate", to: "/logs" },
@@ -212,7 +248,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-debug",
     group: "commands",
     label: "Debug 面板",
-    subtitle: "/debug · 导出调试包和排查问题",
+    subtitle: "导出调试包和排查问题",
     keywords: ["debug", "diagnostics", "bundle", "troubleshoot", "调试", "排障"],
     icon: "debug",
     action: { type: "navigate", to: "/debug" },
@@ -222,7 +258,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-settings",
     group: "commands",
     label: "常规设置",
-    subtitle: "/common · 通知、主题、配置和连接入口",
+    subtitle: "通知、主题、配置和连接入口",
     keywords: ["settings", "config", "preferences", "common", "设置", "配置"],
     icon: "settings",
     action: { type: "navigate", to: "/common" },
@@ -232,7 +268,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-backup",
     group: "commands",
     label: "备份恢复",
-    subtitle: "/backup · 导入导出 Profile 配置",
+    subtitle: "导入导出 Profile 配置",
     keywords: ["backup", "restore", "export", "import", "备份", "恢复"],
     icon: "backup",
     action: { type: "navigate", to: "/backup" },
@@ -242,7 +278,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-memory",
     group: "commands",
     label: "记忆",
-    subtitle: "/memory · 管理记忆和用户画像",
+    subtitle: "管理记忆和用户画像",
     keywords: ["memory", "profile", "remember", "记忆", "用户画像"],
     icon: "memory",
     action: { type: "navigate", to: "/memory" },
@@ -252,7 +288,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-soul",
     group: "commands",
     label: "灵魂 SOUL.md",
-    subtitle: "/soul · 编辑智能体核心人格",
+    subtitle: "编辑智能体核心人格",
     keywords: ["soul", "prompt", "persona", "system prompt", "灵魂", "人格"],
     icon: "soul",
     action: { type: "navigate", to: "/soul" },
@@ -262,7 +298,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-console",
     group: "commands",
     label: "Hermes Console",
-    subtitle: "/console · 运行 Hermes 命令",
+    subtitle: "运行 Hermes 命令",
     keywords: ["console", "terminal", "command", "shell", "终端", "命令行"],
     icon: "console",
     action: { type: "navigate", to: "/console" },

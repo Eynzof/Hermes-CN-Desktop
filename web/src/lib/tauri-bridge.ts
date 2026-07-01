@@ -51,7 +51,9 @@ import type {
   FilePreview,
   PreviewFileChangedPayload,
   ReadWorkspaceFileInput,
+  PetOverlayBounds,
   SkillMarkdownResult,
+  SessionWindowOpenResult,
   ExportDebugBundleInput,
   ExportDebugBundleResult,
   ExternalTerminalResult,
@@ -296,6 +298,66 @@ const tauriBridge = {
 
   async openExternalUrl(input: { url: string }): Promise<{ ok: boolean; message?: string | null }> {
     return invokeCommand("open_external_url", { input });
+  },
+
+  async openSessionWindow(sessionId: string, opts?: { watch?: boolean }): Promise<SessionWindowOpenResult> {
+    return invokeCommand("open_session_window", {
+      input: { sessionId, watch: opts?.watch ?? false },
+    });
+  },
+
+  async openNewSessionWindow(): Promise<SessionWindowOpenResult> {
+    return invokeCommand("open_new_session_window");
+  },
+
+  petOverlay: {
+    async open(input?: { bounds?: PetOverlayBounds }) {
+      return invokeCommand("pet_overlay_open", { input: input ?? null });
+    },
+
+    async close(): Promise<SessionWindowOpenResult> {
+      return invokeCommand("pet_overlay_close");
+    },
+
+    async pushState(payload: unknown): Promise<SessionWindowOpenResult> {
+      return invokeCommand("pet_overlay_push_state", { payload });
+    },
+
+    async control(payload: unknown): Promise<SessionWindowOpenResult> {
+      return invokeCommand("pet_overlay_control", { input: { payload } });
+    },
+
+    onState(handler: (payload: unknown) => void): () => void {
+      let unlisten: (() => void) | null = null;
+      let disposed = false;
+      import("@tauri-apps/api/event")
+        .then(({ listen }) => listen("pet-overlay-state", (event) => handler(event.payload)))
+        .then((fn) => {
+          if (disposed) safeUnlisten(fn);
+          else unlisten = fn;
+        })
+        .catch(() => {});
+      return () => {
+        disposed = true;
+        safeUnlisten(unlisten);
+      };
+    },
+
+    onControl(handler: (payload: unknown) => void): () => void {
+      let unlisten: (() => void) | null = null;
+      let disposed = false;
+      import("@tauri-apps/api/event")
+        .then(({ listen }) => listen("pet-overlay-control", (event) => handler(event.payload)))
+        .then((fn) => {
+          if (disposed) safeUnlisten(fn);
+          else unlisten = fn;
+        })
+        .catch(() => {});
+      return () => {
+        disposed = true;
+        safeUnlisten(unlisten);
+      };
+    },
   },
 
   async toggleDevtools(): Promise<void> {

@@ -34,6 +34,12 @@ import { DebugRoute } from "@/routes/debug";
 import { AnalyticsRoute } from "@/routes/analytics";
 import { AdvancedRoute, ThemeRoute } from "@/routes/advanced";
 import { ImOnboardingRoute } from "@/routes/im-onboarding";
+import { ArtifactsRoute } from "@/routes/artifacts";
+import { AgentsRoute } from "@/routes/agents";
+import { StarmapRoute } from "@/routes/starmap";
+import { PetOverlayRoute } from "@/components/pet/floating-pet";
+import { isSecondarySessionWindow } from "@/lib/windows";
+import s from "./app.module.css";
 
 function NewTaskRedirect() {
   const { search } = useLocation();
@@ -48,8 +54,67 @@ function withBoundary(node: ReactNode) {
   return <ErrorBoundary>{node}</ErrorBoundary>;
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={withBoundary(<PanelRoute />)} />
+      <Route path="/new" element={<NewTaskRedirect />} />
+      <Route path="/tasks/:taskId" element={withBoundary(<DetailRoute />)} />
+      <Route path="/history" element={withBoundary(<HistoryRoute />)} />
+      <Route path="/projects" element={withBoundary(<ProjectsRoute />)} />
+      <Route path="/projects/:workspacePath" element={withBoundary(<ProjectDetailRoute />)} />
+      <Route path="/kanban" element={withBoundary(<KanbanRoute />)} />
+      <Route path="/artifacts" element={withBoundary(<ArtifactsRoute />)} />
+      <Route path="/agents" element={withBoundary(<AgentsRoute />)} />
+      <Route path="/starmap" element={withBoundary(<StarmapRoute />)} />
+      <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
+      <Route path="/models" element={withBoundary(<ModelsRoute />)} />
+      <Route path="/voice" element={withBoundary(<VoiceRoute />)} />
+      <Route path="/backup" element={withBoundary(<BackupRoute />)} />
+      <Route path="/config-migration" element={withBoundary(<ConfigMigrationRoute />)} />
+      <Route path="/mcp" element={withBoundary(<McpRoute />)} />
+      <Route path="/profiles" element={withBoundary(<ProfilesRoute />)} />
+      <Route path="/profiles/new" element={withBoundary(<ProfileBuilderRoute />)} />
+      <Route path="/memory" element={withBoundary(<MemoryRoute />)} />
+      <Route path="/soul" element={withBoundary(<SoulRoute />)} />
+      <Route path="/cron" element={withBoundary(<CronRoute />)} />
+      <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />
+      <Route path="/console" element={withBoundary(<ConsoleRoute />)} />
+      <Route path="/health" element={withBoundary(<HealthRoute />)} />
+      <Route path="/analytics" element={withBoundary(<AnalyticsRoute />)} />
+      <Route path="/logs" element={withBoundary(<LogsRoute />)} />
+      <Route path="/debug" element={withBoundary(<DebugRoute />)} />
+      <Route path="/theme" element={withBoundary(<ThemeRoute />)} />
+      <Route path="/common" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/notifications" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/config" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/connection" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/kernel" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/env" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
+      <Route path="/settings" element={<Navigate to="/common" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function SecondarySessionWindow() {
+  return (
+    <main className={s.secondaryWindow}>
+      <Routes>
+        <Route path="/" element={withBoundary(<PanelRoute />)} />
+        <Route path="/new" element={<NewTaskRedirect />} />
+        <Route path="/tasks/:taskId" element={withBoundary(<DetailRoute />)} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </main>
+  );
+}
+
 export function App() {
   const platform = usePlatform();
+  const location = useLocation();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
   // 首次启动时让 atom 跟上后端 sticky default；UI SQLite 已在 React 挂载前加载，
   // 所以这里只需要做一次种子。
@@ -58,51 +123,30 @@ export function App() {
     hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
   }, [hydrateTheme]);
 
+  const petOverlay = location.pathname === "/pet-overlay";
+  const secondaryWindow = isSecondarySessionWindow();
+
+  if (petOverlay) {
+    return (
+      <div lang="zh-CN" data-hermes-platform={platform}>
+        <PetOverlayRoute />
+      </div>
+    );
+  }
+
   return (
     <div lang="zh-CN" data-hermes-platform={platform}>
-      <AppShell>
-        <Routes>
-          <Route path="/" element={withBoundary(<PanelRoute />)} />
-          <Route path="/new" element={<NewTaskRedirect />} />
-          <Route path="/tasks/:taskId" element={withBoundary(<DetailRoute />)} />
-          <Route path="/history" element={withBoundary(<HistoryRoute />)} />
-          <Route path="/projects" element={withBoundary(<ProjectsRoute />)} />
-          <Route path="/projects/:workspacePath" element={withBoundary(<ProjectDetailRoute />)} />
-          <Route path="/kanban" element={withBoundary(<KanbanRoute />)} />
-          <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
-          <Route path="/models" element={withBoundary(<ModelsRoute />)} />
-          <Route path="/voice" element={withBoundary(<VoiceRoute />)} />
-          <Route path="/backup" element={withBoundary(<BackupRoute />)} />
-          <Route path="/config-migration" element={withBoundary(<ConfigMigrationRoute />)} />
-          <Route path="/mcp" element={withBoundary(<McpRoute />)} />
-          <Route path="/profiles" element={withBoundary(<ProfilesRoute />)} />
-          <Route path="/profiles/new" element={withBoundary(<ProfileBuilderRoute />)} />
-          <Route path="/memory" element={withBoundary(<MemoryRoute />)} />
-          <Route path="/soul" element={withBoundary(<SoulRoute />)} />
-          <Route path="/cron" element={withBoundary(<CronRoute />)} />
-          <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />
-          <Route path="/console" element={withBoundary(<ConsoleRoute />)} />
-          <Route path="/health" element={withBoundary(<HealthRoute />)} />
-          <Route path="/analytics" element={withBoundary(<AnalyticsRoute />)} />
-          <Route path="/logs" element={withBoundary(<LogsRoute />)} />
-          <Route path="/debug" element={withBoundary(<DebugRoute />)} />
-          <Route path="/theme" element={withBoundary(<ThemeRoute />)} />
-          <Route path="/common" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/notifications" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/config" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/connection" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/kernel" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/env" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/settings" element={<Navigate to="/common" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AppShell>
+      {secondaryWindow ? (
+        <SecondarySessionWindow />
+      ) : (
+        <AppShell>
+          <AppRoutes />
+        </AppShell>
+      )}
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
       <DesktopUpdateNotifier />
-      <CommandPalette />
+      {secondaryWindow ? null : <CommandPalette />}
     </div>
   );
 }

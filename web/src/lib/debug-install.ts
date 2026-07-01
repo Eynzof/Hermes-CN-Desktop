@@ -1,4 +1,5 @@
 import { LogsResponse } from "@hermes/protocol";
+import type { GatewayEvent } from "@hermes/protocol";
 import { debugBus, type DebugEntryLevel } from "./debug-bus";
 import { getGatewayClient } from "./gateway-client";
 import { fetchJSON } from "./transport";
@@ -109,6 +110,53 @@ function isBenignConsoleWarning(summary: string): boolean {
   return BENIGN_CONSOLE_WARNINGS.some((message) => summary.includes(message));
 }
 
+type DebugPushEntry = Parameters<typeof debugBus.push>[0];
+
+function gatewayPayloadObject(event: GatewayEvent): Record<string, unknown> {
+  return event.payload && typeof event.payload === "object"
+    ? event.payload as Record<string, unknown>
+    : {};
+}
+
+function gatewayPayloadText(payload: Record<string, unknown>): string | undefined {
+  for (const key of ["message", "error", "detail", "reason", "text", "code"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number") return String(value);
+  }
+  return undefined;
+}
+
+function hasGatewayErrorDetails(payload: Record<string, unknown>): boolean {
+  if (gatewayPayloadText(payload)) return true;
+  return Object.entries(payload).some(([key, value]) => {
+    if (key === "status" || key === "ok") return false;
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    return true;
+  });
+}
+
+export function gatewayDebugEntryForEvent(event: GatewayEvent): DebugPushEntry | null {
+  const eventType = typeof event.type === "string" ? event.type : "unknown";
+  const payloadObj = gatewayPayloadObject(event);
+  if (eventType === "error" && !hasGatewayErrorDetails(payloadObj)) return null;
+
+  const isError =
+    eventType === "error" ||
+    eventType === "gateway.disconnected" ||
+    payloadObj.status === "error";
+  const payloadText = gatewayPayloadText(payloadObj);
+  const sidText = event.session_id ? ` · sid=${String(event.session_id).slice(0, 8)}` : "";
+  const detailText = payloadText ? ` · ${payloadText.slice(0, 160)}` : "";
+  return {
+    type: "gateway",
+    level: isError ? "error" : "info",
+    summary: `${eventType}${sidText}${detailText}`,
+    payload: event,
+  };
+}
+
 export function installDebugCapture(): void {
   if (installed) return;
   // Skip in vitest / jsdom — patching console.error/warn breaks vi.spyOn(console, "error")
@@ -119,20 +167,8 @@ export function installDebugCapture(): void {
   // 1. Gateway events
   try {
     getGatewayClient().onAny((event) => {
-      const eventType = typeof event.type === "string" ? event.type : "unknown";
-      const payloadObj = event.payload && typeof event.payload === "object"
-        ? event.payload as Record<string, unknown>
-        : {};
-      const isError =
-        eventType === "error" ||
-        eventType === "gateway.disconnected" ||
-        payloadObj.status === "error";
-      debugBus.push({
-        type: "gateway",
-        level: isError ? "error" : "info",
-        summary: eventType + (event.session_id ? ` · sid=${String(event.session_id).slice(0, 8)}` : ""),
-        payload: event,
-      });
+      const entry = gatewayDebugEntryForEvent(event);
+      if (entry) debugBus.push(entry);
     });
   } catch {
     // gateway client may not be ready yet; OK to skip

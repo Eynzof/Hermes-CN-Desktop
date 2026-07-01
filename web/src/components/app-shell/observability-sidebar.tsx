@@ -33,8 +33,7 @@ export function ObservabilitySidebar() {
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§04 · 可观测</span>
-            <span className={s.labelNum}>✕✕</span>
+            <span>可观测</span>
           </div>
           {ITEMS.map((item) => {
             const Icon = item.icon;
@@ -51,7 +50,6 @@ export function ObservabilitySidebar() {
                   <Icon size={14} />
                 </span>
                 <span className={s.itemLabel}>{item.label}</span>
-                <span className={s.itemPath}>{item.path}</span>
               </button>
             );
           })}

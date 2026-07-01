@@ -1,4 +1,4 @@
-/* Workbench main page — restored to prototypes/01-workbench layout.
+/* Workbench main page.
    Structure: .pageWrap (scroll) > .pageContent > .hero / .composeStrip / .section[] */
 
 .pageWrap {
@@ -16,23 +16,8 @@
   user-select: none;
 }
 
-/* Section heading — grid with left num column + title + right meta. */
 .section {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 16px;
-  align-items: start;
   padding: 24px 0 12px;
-}
-
-.sectionNum {
-  font-family: var(--h-font-mono);
-  font-size: 9.5px;
-  line-height: 1.2;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--h-text-3);
-  padding-top: 9px;
 }
 
 .sectionBody {
@@ -50,16 +35,6 @@
 .sectionLh {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-}
-
-.sectionTag {
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  line-height: 1.2;
-  letter-spacing: 0.08em;
-  color: var(--h-text-3);
-  text-transform: uppercase;
 }
 
 .sectionTitle {
@@ -98,19 +73,7 @@
   .pageContent {
     padding: 24px 20px 80px;
   }
-  .section {
-    grid-template-columns: 48px 1fr;
-    gap: 12px;
-  }
   .taskGrid {
     grid-template-columns: 1fr;
   }
-}
-
-.loading {
-  padding: 36px 0;
-  text-align: center;
-  color: var(--h-text-3);
-  font-size: 13px;
-  font-family: var(--h-font-mono);
 }

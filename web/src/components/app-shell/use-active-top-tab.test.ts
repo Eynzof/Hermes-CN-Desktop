@@ -31,7 +31,7 @@ describe("TOP_TABS", () => {
     expect(tabFor("/about")).toBe("advanced");
   });
 
-  it("shows config migration in the 023 backup and restore sidebar section", () => {
+  it("shows config migration in the backup and restore sidebar section", () => {
     expect(BACKUP_ITEMS.some((item) => item.label === "配置迁移" && item.path === "/config-migration")).toBe(true);
   });
 

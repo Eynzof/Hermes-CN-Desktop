@@ -1,0 +1,119 @@
+.wrap {
+  display: grid;
+  gap: 16px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.seg button,
+.btn {
+  border: 0;
+  background: color-mix(in srgb, var(--h-bg-elevated) 94%, transparent);
+  color: var(--h-text);
+  padding: 8px 11px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.seg button[data-active="true"],
+.btn:hover {
+  background: color-mix(in srgb, var(--h-accent) 18%, var(--h-bg-elevated));
+}
+
+.input {
+  min-width: 280px;
+  flex: 1;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: var(--h-bg-elevated);
+  color: var(--h-text);
+  padding: 9px 11px;
+  font: inherit;
+}
+
+.map {
+  height: min(68vh, 720px);
+  min-height: 420px;
+  border: 1px solid var(--h-line-soft);
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--h-accent) 10%, transparent), transparent 58%), var(--h-bg-pane);
+  overflow: hidden;
+}
+
+.map svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.node {
+  cursor: pointer;
+}
+
+.node circle,
+.node rect {
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.node:hover circle,
+.node:hover rect {
+  transform: scale(1.12);
+}
+
+.label {
+  fill: var(--h-text-muted);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.panel {
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--h-bg-elevated);
+  display: grid;
+  gap: 10px;
+}
+
+.panel h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.muted {
+  color: var(--h-text-muted);
+  font-size: 12px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 180px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--h-text);
+  background: var(--h-bg-pane);
+  font: 12px/1.5 var(--h-font-mono);
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.danger {
+  color: #ff6b5f;
+}

@@ -7,6 +7,7 @@ import { Dialog } from "@hermes/shared-ui";
 import {
   Archive,
   BarChart3,
+  Bot,
   Boxes,
   Brain,
   Bug,
@@ -16,7 +17,9 @@ import {
   Folder,
   HeartPulse,
   History,
+  Image,
   MonitorCog,
+  Network,
   Plus,
   Puzzle,
   Search,
@@ -51,7 +54,9 @@ const FILE_ENTRY_LIMIT = 60;
 const GROUP_ITEM_LIMIT = 8;
 
 const ICONS: Record<CommandPaletteIconKey, LucideIcon> = {
+  agents: Bot,
   analytics: BarChart3,
+  artifacts: Image,
   backup: Archive,
   config: MonitorCog,
   console: TerminalSquare,
@@ -70,6 +75,7 @@ const ICONS: Record<CommandPaletteIconKey, LucideIcon> = {
   settings: Settings,
   skill: Sparkles,
   soul: Sparkles,
+  starmap: Network,
 };
 
 function sortProjectsForFileSearch(projects: readonly WorkspaceProject[]): WorkspaceProject[] {

@@ -121,19 +121,109 @@ function groupTone(items: HealthItem[]): Tone {
   return "ok";
 }
 
+function cleanString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function providerBaseUrl(entry: Record<string, unknown>): string {
+  return cleanString(entry.base_url) || cleanString(entry.api) || cleanString(entry.url);
+}
+
+function providerModelName(entry: Record<string, unknown>): string {
+  return cleanString(entry.model) || cleanString(entry.default) || cleanString(entry.default_model);
+}
+
+function providerKey(seed: string, entry: Record<string, unknown>, fallback: string): string {
+  return (
+    cleanString(seed) ||
+    cleanString(entry.id) ||
+    cleanString(entry.name) ||
+    cleanString(entry.provider) ||
+    fallback
+  );
+}
+
+function addProvider(
+  providers: Record<string, unknown>,
+  seed: string,
+  value: unknown,
+  fallback: string,
+) {
+  if (!isRecord(value)) return;
+  const key = providerKey(seed, value, fallback);
+  if (!providers[key]) providers[key] = value;
+}
+
 function providerMap(config: Record<string, unknown> | undefined): Record<string, unknown> {
-  const providers = config?.providers;
-  return isRecord(providers) ? providers : {};
+  const providers: Record<string, unknown> = {};
+  if (isRecord(config?.providers)) {
+    for (const [key, value] of Object.entries(config.providers)) {
+      addProvider(providers, key, value, key);
+    }
+  }
+
+  const customProviders = Array.isArray(config?.custom_providers) ? config.custom_providers : [];
+  customProviders.forEach((provider, index) => {
+    if (!isRecord(provider) || !providerBaseUrl(provider)) return;
+    addProvider(providers, "", provider, `custom:${index + 1}`);
+  });
+
+  const model = isRecord(config?.model) ? config.model : {};
+  if (providerBaseUrl(model) || cleanString(model.api_key) || cleanString(model.key_env) || cleanString(model.api_key_env)) {
+    addProvider(
+      providers,
+      cleanString(model.provider) || "model",
+      { ...model, model: providerModelName(model) },
+      "model",
+    );
+  }
+
+  return providers;
+}
+
+function isLocalProviderBaseUrl(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host === "[::1]" ||
+      host.endsWith(".local");
+  } catch {
+    return false;
+  }
+}
+
+function providerHasCredential(entry: Record<string, unknown>): boolean {
+  const apiKey = cleanString(entry.api_key);
+  if (/^https?:\/\//i.test(apiKey)) return false;
+  if (apiKey) return true;
+  if (cleanString(entry.key_env) || cleanString(entry.api_key_env)) return true;
+  const baseUrl = providerBaseUrl(entry);
+  const model = providerModelName(entry);
+  return Boolean(baseUrl && model && isLocalProviderBaseUrl(baseUrl));
 }
 
 function findInvalidProviderApiKeys(providers: Record<string, unknown>): string[] {
   const invalid: string[] = [];
   for (const [name, cfg] of Object.entries(providers)) {
     if (!isRecord(cfg)) continue;
-    const key = typeof cfg.api_key === "string" ? cfg.api_key.trim() : "";
+    const key = cleanString(cfg.api_key);
     if (key && /^https?:\/\//i.test(key)) invalid.push(name);
   }
   return invalid;
+}
+
+export function summarizeProviderConfig(config: Record<string, unknown> | undefined) {
+  const providers = providerMap(config);
+  const invalidProviders = findInvalidProviderApiKeys(providers);
+  return {
+    providers,
+    providerTotal: Object.keys(providers).length,
+    invalidProviders,
+    hasCredentials: Object.values(providers).some((provider) => isRecord(provider) && providerHasCredential(provider)),
+  };
 }
 
 function formatTokenNames(keys: string[]): string {
@@ -295,7 +385,10 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
     const currentProviderId = modelInfo?.provider || lastUsedModel?.provider || "";
     const currentOAuthProvider = oauthProviders?.find((provider) => provider.id === currentProviderId);
     const currentOAuthLoggedIn = currentOAuthProvider?.status.logged_in === true;
-    const anyModelCredential = anyTokenSet || currentOAuthLoggedIn;
+    const providerSummary = summarizeProviderConfig(config);
+    const { providerTotal, invalidProviders } = providerSummary;
+    const providerCredentials = providerSummary.hasCredentials;
+    const anyModelCredential = anyTokenSet || currentOAuthLoggedIn || providerCredentials;
     const ctxLabel = formatContextLength(
       lastUsedModel?.contextWindow
         ?? modelInfo?.effective_context_length
@@ -307,9 +400,6 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
     const mcpTotal = mcp?.summary.total ?? 0;
     const mcpEnabled = mcp?.summary.enabled ?? 0;
 
-    const providers = providerMap(config);
-    const invalidProviders = findInvalidProviderApiKeys(providers);
-    const providerTotal = Object.keys(providers).length;
     const providersOk = currentOAuthLoggedIn || (providerTotal > 0 && invalidProviders.length === 0);
 
     const items: HealthItem[] = [
@@ -368,11 +458,15 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
           ? `${currentOAuthProvider?.name ?? currentProviderId} OAuth 已连接`
           : anyTokenSet
             ? formatTokenNames(setTokens)
+            : providerCredentials
+              ? "已识别自定义 provider 凭证"
             : "模型调用需要 API Key 或 OAuth 凭证",
         detail: currentOAuthLoggedIn
           ? "当前主模型使用 OAuth 登录凭证，无需额外 API Token。"
           : anyTokenSet
             ? "仅展示已设置的变量名称，不会暴露密钥内容。"
+            : providerCredentials
+              ? "健康检查已识别 providers、custom_providers 或 model.base_url 中的自定义服务商配置。"
             : "可在模型设置里补齐 API Key，或完成支持 OAuth 的模型登录。",
         actionTo: anyModelCredential ? undefined : "/models",
         actionLabel: "配置凭证",

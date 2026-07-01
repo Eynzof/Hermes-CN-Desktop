@@ -18,7 +18,7 @@ export const GATEWAY_SECTIONS: readonly {
   label: string;
   items: readonly GatewayItem[];
 }[] = [
-  { label: "§031 · 消息平台接入", items: IM_ITEMS },
+  { label: "消息平台接入", items: IM_ITEMS },
 ];
 
 export function GatewaySidebar() {
@@ -33,7 +33,6 @@ export function GatewaySidebar() {
           <section key={section.label} className={s.section}>
             <div className={s.label}>
               <span>{section.label}</span>
-              <span className={s.labelNum}>✕✕</span>
             </div>
             {section.items.map((item) => {
               const Icon = item.icon;
@@ -49,7 +48,6 @@ export function GatewaySidebar() {
                     <Icon size={14} />
                   </span>
                   <span className={s.itemLabel}>{item.label}</span>
-                  <span className={s.itemPath}>{item.path}</span>
                 </Link>
               );
             })}

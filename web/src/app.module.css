@@ -1,0 +1,11 @@
+.secondaryWindow {
+  width: 100vw;
+  height: 100vh;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--h-bg-app);
+  color: var(--h-text);
+  font-family: var(--h-font-ui);
+}

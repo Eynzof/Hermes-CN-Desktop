@@ -44,8 +44,8 @@ const SECTIONS: readonly {
   label: string;
   items: readonly AdvancedItem[];
 }[] = [
-  { label: "§041 · 可观测", items: OBSERVABILITY_ITEMS },
-  { label: "§042 · 高级", items: ADVANCED_ITEMS },
+  { label: "可观测", items: OBSERVABILITY_ITEMS },
+  { label: "高级", items: ADVANCED_ITEMS },
 ];
 
 export function AdvancedSidebar() {
@@ -62,7 +62,6 @@ export function AdvancedSidebar() {
           <section key={section.label} className={s.section}>
             <div className={s.label}>
               <span>{section.label}</span>
-              <span className={s.labelNum}>✕✕</span>
             </div>
             {section.items.map((item) => {
               const Icon = item.icon;
@@ -79,7 +78,6 @@ export function AdvancedSidebar() {
                     <Icon size={14} />
                   </span>
                   <span className={s.itemLabel}>{item.label}</span>
-                  <span className={s.itemPath}>{item.path}</span>
                 </button>
               );
             })}

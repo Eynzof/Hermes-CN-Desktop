@@ -266,6 +266,24 @@ export interface PreviewFileChangedPayload {
   path: string;
 }
 
+export interface SessionWindowOpenResult {
+  ok: boolean;
+  error?: string | null;
+}
+
+export interface PetOverlayBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PetOverlayOpenResult {
+  ok: boolean;
+  error?: string | null;
+  bounds?: PetOverlayBounds | null;
+}
+
 export interface DesktopFileDropPayload {
   phase: "enter" | "over" | "drop" | "leave";
   paths: string[];
@@ -354,6 +372,16 @@ declare global {
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;
       onFileDrop?(handler: (payload: DesktopFileDropPayload) => void): () => void;
       onSystemResume?(handler: () => void): () => void;
+      openSessionWindow?(sessionId: string, opts?: { watch?: boolean }): Promise<SessionWindowOpenResult>;
+      openNewSessionWindow?(): Promise<SessionWindowOpenResult>;
+      petOverlay?: {
+        open(input?: { bounds?: PetOverlayBounds }): Promise<PetOverlayOpenResult>;
+        close(): Promise<SessionWindowOpenResult>;
+        pushState(payload: unknown): Promise<SessionWindowOpenResult>;
+        control(payload: unknown): Promise<SessionWindowOpenResult>;
+        onState(handler: (payload: unknown) => void): () => void;
+        onControl(handler: (payload: unknown) => void): () => void;
+      };
       /** Native webview page zoom (reflows layout + viewport) for the interface
        *  scale setting. Fire-and-forget; far better than CSS `zoom`, which leaves
        *  viewport units un-scaled and overflows the fixed window. */

@@ -7,7 +7,7 @@ interface PlaceholderSidebarProps {
 
 export function PlaceholderSidebar({ tab }: PlaceholderSidebarProps) {
   const def = tab ? TOP_TABS.find((t) => t.id === tab) : null;
-  const label = def ? `§ ${def.num} · ${def.label}` : "§ —";
+  const label = def?.label ?? "侧栏";
   return (
     <aside className={s.placeholder} aria-label="侧栏占位">
       <div className={s.label}>{label}</div>
