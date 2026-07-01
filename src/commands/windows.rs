@@ -48,7 +48,13 @@ pub struct PetOverlayControlInput {
 fn sanitize_label_part(value: &str) -> String {
     let out: String = value
         .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' { ch } else { '-' })
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
         .collect();
     out.trim_matches('-').chars().take(80).collect::<String>()
 }
@@ -88,10 +94,16 @@ fn open_window(app: &AppHandle, label: String, url: String, title: &str) -> Resu
 }
 
 #[tauri::command]
-pub async fn open_session_window(app: AppHandle, input: OpenSessionWindowInput) -> WindowCommandResult {
+pub async fn open_session_window(
+    app: AppHandle,
+    input: OpenSessionWindowInput,
+) -> WindowCommandResult {
     let session_id = input.session_id.trim();
     if session_id.is_empty() {
-        return WindowCommandResult { ok: false, error: Some("missing session id".into()) };
+        return WindowCommandResult {
+            ok: false,
+            error: Some("missing session id".into()),
+        };
     }
     match open_window(
         &app,
@@ -99,8 +111,14 @@ pub async fn open_session_window(app: AppHandle, input: OpenSessionWindowInput) 
         session_window_url(session_id, input.watch.unwrap_or(false)),
         "Hermes Session",
     ) {
-        Ok(()) => WindowCommandResult { ok: true, error: None },
-        Err(error) => WindowCommandResult { ok: false, error: Some(error) },
+        Ok(()) => WindowCommandResult {
+            ok: true,
+            error: None,
+        },
+        Err(error) => WindowCommandResult {
+            ok: false,
+            error: Some(error),
+        },
     }
 }
 
@@ -112,13 +130,22 @@ pub async fn open_new_session_window(app: AppHandle) -> WindowCommandResult {
         new_session_window_url().into(),
         "Hermes New Session",
     ) {
-        Ok(()) => WindowCommandResult { ok: true, error: None },
-        Err(error) => WindowCommandResult { ok: false, error: Some(error) },
+        Ok(()) => WindowCommandResult {
+            ok: true,
+            error: None,
+        },
+        Err(error) => WindowCommandResult {
+            ok: false,
+            error: Some(error),
+        },
     }
 }
 
 #[tauri::command]
-pub async fn pet_overlay_open(app: AppHandle, input: Option<PetOverlayOpenInput>) -> PetOverlayOpenResult {
+pub async fn pet_overlay_open(
+    app: AppHandle,
+    input: Option<PetOverlayOpenInput>,
+) -> PetOverlayOpenResult {
     const LABEL: &str = "pet-overlay";
     let bounds = input.and_then(|i| i.bounds).unwrap_or(PetOverlayBounds {
         x: 80.0,
@@ -130,7 +157,11 @@ pub async fn pet_overlay_open(app: AppHandle, input: Option<PetOverlayOpenInput>
     if let Some(existing) = app.get_webview_window(LABEL) {
         let _ = existing.unminimize();
         let _ = existing.set_focus();
-        return PetOverlayOpenResult { ok: true, error: None, bounds: Some(bounds) };
+        return PetOverlayOpenResult {
+            ok: true,
+            error: None,
+            bounds: Some(bounds),
+        };
     }
 
     let result = WebviewWindowBuilder::new(
@@ -149,8 +180,16 @@ pub async fn pet_overlay_open(app: AppHandle, input: Option<PetOverlayOpenInput>
     .build();
 
     match result {
-        Ok(_) => PetOverlayOpenResult { ok: true, error: None, bounds: Some(bounds) },
-        Err(err) => PetOverlayOpenResult { ok: false, error: Some(err.to_string()), bounds: None },
+        Ok(_) => PetOverlayOpenResult {
+            ok: true,
+            error: None,
+            bounds: Some(bounds),
+        },
+        Err(err) => PetOverlayOpenResult {
+            ok: false,
+            error: Some(err.to_string()),
+            bounds: None,
+        },
     }
 }
 
@@ -159,27 +198,48 @@ pub async fn pet_overlay_close(app: AppHandle) -> WindowCommandResult {
     if let Some(window) = app.get_webview_window("pet-overlay") {
         let _ = window.close();
     }
-    WindowCommandResult { ok: true, error: None }
+    WindowCommandResult {
+        ok: true,
+        error: None,
+    }
 }
 
 #[tauri::command]
-pub async fn pet_overlay_push_state(app: AppHandle, payload: serde_json::Value) -> WindowCommandResult {
+pub async fn pet_overlay_push_state(
+    app: AppHandle,
+    payload: serde_json::Value,
+) -> WindowCommandResult {
     if let Some(window) = app.get_webview_window("pet-overlay") {
         if let Err(err) = window.emit("pet-overlay-state", payload) {
-            return WindowCommandResult { ok: false, error: Some(err.to_string()) };
+            return WindowCommandResult {
+                ok: false,
+                error: Some(err.to_string()),
+            };
         }
     }
-    WindowCommandResult { ok: true, error: None }
+    WindowCommandResult {
+        ok: true,
+        error: None,
+    }
 }
 
 #[tauri::command]
-pub async fn pet_overlay_control(app: AppHandle, input: PetOverlayControlInput) -> WindowCommandResult {
+pub async fn pet_overlay_control(
+    app: AppHandle,
+    input: PetOverlayControlInput,
+) -> WindowCommandResult {
     if let Some(window) = app.get_webview_window("main") {
         if let Err(err) = window.emit("pet-overlay-control", input.payload) {
-            return WindowCommandResult { ok: false, error: Some(err.to_string()) };
+            return WindowCommandResult {
+                ok: false,
+                error: Some(err.to_string()),
+            };
         }
     }
-    WindowCommandResult { ok: true, error: None }
+    WindowCommandResult {
+        ok: true,
+        error: None,
+    }
 }
 
 #[cfg(test)]
@@ -192,7 +252,10 @@ mod tests {
             session_window_url("abc 123", true),
             "index.html#/tasks/abc%20123?window=session&watch=1"
         );
-        assert_eq!(new_session_window_url(), "index.html#/?window=session&new=1");
+        assert_eq!(
+            new_session_window_url(),
+            "index.html#/?window=session&new=1"
+        );
     }
 
     #[test]
