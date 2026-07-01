@@ -40,6 +40,7 @@ export interface SubagentProgress {
   filesWritten: string[];
   stream: SubagentStreamEntry[];
   summary?: string;
+  sessionId?: string;
   /** Active tool while running — cleared on terminal status. */
   currentTool?: string;
 }
@@ -187,6 +188,7 @@ function toProgress(
     filesWritten: filesWritten.length ? filesWritten : (prev?.filesWritten ?? []),
     stream,
     summary: str(payload.summary) || prev?.summary,
+    sessionId: str(payload.child_session_id) || prev?.sessionId,
     currentTool: TERMINAL.has(status) ? undefined : tool || prev?.currentTool,
   };
 }

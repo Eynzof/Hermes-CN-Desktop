@@ -75,6 +75,16 @@
   z-index: 1;
 }
 
+.watchNotice {
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: var(--h-bg-input);
+  color: var(--h-text-2);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .approvalCard {
   margin: 14px 0 0;
   border: 1px solid var(--h-warn);

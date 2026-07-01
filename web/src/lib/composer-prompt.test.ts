@@ -11,7 +11,9 @@ class FakeFileReader {
   }
   readAsDataURL(file: { type: string; arrayBuffer: () => Promise<ArrayBuffer> }) {
     void file.arrayBuffer().then((buf) => {
-      this.result = `data:${file.type};base64,${Buffer.from(buf).toString("base64")}`;
+      const bytes = new Uint8Array(buf);
+      const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+      this.result = `data:${file.type};base64,${btoa(binary)}`;
       this.onLoad?.();
     });
   }

@@ -1,27 +1,6 @@
-/* Hero — left ".num" gutter + right big serif title + greet meta row.
-   Mirrors prototypes/.hero */
-
 .hero {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 16px;
-  align-items: end;
   padding: 32px 0 24px;
   border-bottom: 1px solid var(--h-line-soft);
-}
-
-.num {
-  font-family: var(--h-font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--h-text-3);
-  line-height: 1.6;
-}
-
-.numTop {
-  display: block;
-  color: var(--h-text-3);
 }
 
 .body {
@@ -67,10 +46,6 @@
 }
 
 @media (max-width: 900px) {
-  .hero {
-    grid-template-columns: 48px 1fr;
-    gap: 12px;
-  }
   .title {
     font-size: 40px;
   }

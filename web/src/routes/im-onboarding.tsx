@@ -199,7 +199,7 @@ function Hero({ platform, stateSub, onPrimary, primaryBusy }: {
   return (
     <div className={s.headBand}>
       <div className={s.heroCopy}>
-        <div className={s.heroKicker}><span>{isFeishu ? "№ 031A" : "№ 031B"}</span><span>IM ONBOARDING</span><em>消息接入 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
+        <div className={s.heroKicker}>消息接入 · {isFeishu ? "飞书 / Lark" : "微信"}</div>
         <h1>将<em>{isFeishu ? "飞书消息平台" : "微信消息平台"}</em>接入<br />中文社区桌面版</h1>
         <p className={s.sub}>{isFeishu
           ? "跟着向导扫码，保存后再按提示到飞书后台勾选权限并发布即可。"
@@ -274,15 +274,15 @@ function FlowSteps({ platform, status, saved }: { platform: ImPlatform; status?:
     <div className={s.flowSteps} aria-label="消息平台接入步骤">
       {labels.map(([label, sub], index) => (
         <div key={label} className={s.step} data-done={states[index] ? "true" : undefined} data-active={!states[index] ? "true" : undefined}>
-          <span>{states[index] ? "✓" : index + 1}</span><b>{label}</b><em>{sub}</em>
+          <span>{states[index] ? "✓" : "•"}</span><b>{label}</b><em>{sub}</em>
         </div>
       ))}
     </div>
   );
 }
 
-function SectionTitle({ num, title, meta }: { num: string; title: string; meta: string }) {
-  return <div className={s.sectionTitle}><span>{num}</span><h2>{title}</h2><em>{meta}</em></div>;
+function SectionTitle({ title, meta }: { title: string; meta: string }) {
+  return <div className={s.sectionTitle}><h2>{title}</h2><em>{meta}</em></div>;
 }
 
 function ChoiceCard({ active, icon, badge, title, desc, foot, onClick }: {
@@ -919,7 +919,7 @@ function FeishuRoute() {
   };
 
   return (
-    <SectionShell title="消息平台接入 · 飞书" sub="03 消息接入 / 031 消息平台接入" rail={<Rail platform="feishu" />} railLabel="飞书接入诊断边栏">
+    <SectionShell title="消息平台接入 · 飞书" sub="消息接入 · 飞书" rail={<Rail platform="feishu" />} railLabel="飞书接入诊断边栏">
       <div className={s.wrap}>
         <main className={s.mainCol}>
           <Hero platform="feishu" stateSub={`当前档案：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={start} primaryBusy={busy} />
@@ -927,7 +927,7 @@ function FeishuRoute() {
           <MetaStrip platform="feishu" profile={stateQuery.data?.currentProfile ?? "default"} statusData={statusQuery.data} configured={configured} />
           <FlowSteps platform="feishu" status={status} saved={Boolean(result?.restart.ok)} />
           <div ref={qrAnchorRef} className={s.anchorBlock}>
-            <SectionTitle num="[ STEP 01 ]" title="用飞书扫码确认" meta={flow ? `每 ${flow.intervalSeconds} 秒自动检查一次；成功后继续下一步` : "二维码只在当前页面临时使用"} />
+            <SectionTitle title="用飞书扫码确认" meta={flow ? `每 ${flow.intervalSeconds} 秒自动检查一次；成功后继续下一步` : "二维码只在当前页面临时使用"} />
             <QrPanel
               data={pollResult?.qrScanData ?? flow?.qrScanData}
               url={pollResult?.qrUrl ?? flow?.qrUrl}
@@ -940,7 +940,7 @@ function FeishuRoute() {
           </div>
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RefreshCw size={14} />立即检查</button></div>
 
-          <SectionTitle num="[ STEP 02 ]" title="保存设置并启动接收服务" meta="只会更新当前配置档案；飞书后台还需要继续按提示确认" />
+          <SectionTitle title="保存设置并启动接收服务" meta="只会更新当前配置档案；飞书后台还需要继续按提示确认" />
           <section className={s.section}>
             <div className={s.policyGrid}>
               {scannedOpenId && <PolicyCard active={dmPolicy === "scanned"} title="只允许扫码用户" desc={`把本次扫码用户的 open_id（${last(scannedOpenId)}）写入允许列表。`} onClick={() => setDmPolicy("scanned")} />}
@@ -987,14 +987,14 @@ function FeishuRoute() {
             </div>
           </section>
 
-          <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="密钥会自动隐藏；保存后继续去飞书后台确认" />
+          <SectionTitle title="保存前看一眼" meta="密钥会自动隐藏；保存后继续去飞书后台确认" />
           {credential && <div className={s.summaryLine}>扫码结果：应用 ID {last(credential.appId)} · 应用密钥 {last(credential.appSecret)} · 扫码用户 open_id {last(credential.openId)} · 机器人 {credential.botName ?? "未探测"}</div>}
           <ReviewTable rows={rows} />
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !canApplyQr || !allowPolicyReady}><Save size={14} />保存并启动接收服务</button></div>
           <ApplyResult result={result} />
-          <SectionTitle num="[ STEP 03 ]" title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
+          <SectionTitle title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
           <FeishuBackendChecklist groupEnabled={groupEnabled} />
-          <SectionTitle num="[ STEP 04 ]" title="发一条消息试试" meta="私聊机器人，确认真的能回复" />
+          <SectionTitle title="发一条消息试试" meta="私聊机器人，确认真的能回复" />
           <MessagingTestGuide
             result={result}
             platform={messagingPlatformQuery.data}
@@ -1188,20 +1188,20 @@ function WeixinRoute() {
   };
 
   return (
-    <SectionShell title="消息平台接入 · 微信" sub="03 消息接入 / 031 消息平台接入" rail={<Rail platform="weixin" />} railLabel="微信接入诊断边栏">
+    <SectionShell title="消息平台接入 · 微信" sub="消息接入 · 微信" rail={<Rail platform="weixin" />} railLabel="微信接入诊断边栏">
       <div className={s.wrap}>
         <main className={s.mainCol}>
           <Hero platform="weixin" stateSub={`当前档案：${stateQuery.data?.currentProfile ?? "default"}`} onPrimary={start} primaryBusy={busy} />
           <ActionFeedback busy={begin.isPending} error={begin.error} flow={flow} status={status} onJump={jumpToQr} />
           <MetaStrip platform="weixin" profile={stateQuery.data?.currentProfile ?? "default"} statusData={statusQuery.data} configured={configured} />
           <FlowSteps platform="weixin" status={status} saved={Boolean(result?.ok)} />
-          <SectionTitle num="[ STEP 01 ]" title="先检查能不能接收消息" meta="桌面端会检查所需组件和接收服务" />
+          <SectionTitle title="先检查能不能接收消息" meta="桌面端会检查所需组件和接收服务" />
           <section className={s.section}><div className={s.verifyGrid}>
             <div className={s.verifyRow}><ShieldCheck size={16} /><div><b>接收服务状态</b><small>{statusQuery.data?.gateway_running ? "当前接收服务可重启。" : "接收服务还没启动，保存后会自动尝试启动。"}</small></div></div>
             <div className={s.verifyRow}><KeyRound size={16} /><div><b>微信绑定</b><small>{configured.WEIXIN_ACCOUNT_ID?.isSet ? `已保存 ${last(configured.WEIXIN_ACCOUNT_ID)}` : "尚未完成微信扫码绑定。"}</small></div></div>
           </div></section>
           <div ref={qrAnchorRef} className={s.anchorBlock}>
-            <SectionTitle num="[ STEP 02 ]" title="用微信扫码确认" meta="默认 8 分钟有效，过期后会自动刷新几次" />
+            <SectionTitle title="用微信扫码确认" meta="默认 8 分钟有效，过期后会自动刷新几次" />
             <QrPanel
               data={pollResult?.qrScanData ?? flow?.qrScanData}
               url={pollResult?.qrUrl ?? flow?.qrUrl}
@@ -1213,7 +1213,7 @@ function WeixinRoute() {
             />
           </div>
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RotateCw size={14} />立即检查</button></div>
-          <SectionTitle num="[ STEP 03 ]" title="确认扫码结果" meta="无需手填账号、口令或接口地址" />
+          <SectionTitle title="确认扫码结果" meta="无需手填账号、口令或接口地址" />
           <section className={s.section}>
             {credential ? (
               <div className={s.identityNote}>
@@ -1244,7 +1244,7 @@ function WeixinRoute() {
               ) : null}
             </div>
           </section>
-          <SectionTitle num="[ STEP 04 ]" title="设置谁可以使用" meta="默认只允许扫码用户，避免陌生用户直接使用" />
+          <SectionTitle title="设置谁可以使用" meta="默认只允许扫码用户，避免陌生用户直接使用" />
           <section className={s.section}>
             <div className={s.policyGrid}>
               <PolicyCard active={dmPolicy === "allowlist"} title="只允许扫码用户" desc={scannedUserId ? `默认加入本次扫码用户（${last(scannedUserId)}）。` : "扫码完成后会自动加入本次微信用户。"} onClick={() => setDmPolicy("allowlist")} />
@@ -1264,11 +1264,11 @@ function WeixinRoute() {
             )}
             <Field label="默认通知会话" desc={scannedUserId ? "留空会自动使用本次扫码用户；也可以手动指定 filehelper 或微信 user_id。" : "用于定时任务和通知；扫码成功后可自动填，也可以手动填。"} meta="WEIXIN_HOME_CHANNEL"><input value={homeChannel} onChange={(e) => setHomeChannel(e.target.value)} placeholder={scannedUserId ? "留空自动使用扫码用户" : "wxid_xxx / filehelper / user_id"} /></Field>
           </section>
-          <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="口令会自动隐藏" />
+          <SectionTitle title="保存前看一眼" meta="口令会自动隐藏" />
           <ReviewTable rows={rows} />
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual || canApplySaved) || !allowPolicyReady}><Save size={14} />{canApplyQr || canApplyManual ? "保存并启动接收服务" : "重新启动接收服务"}</button></div>
           <ApplyResult result={result} />
-          <SectionTitle num="[ STEP 05 ]" title="发一条消息试试" meta="私聊微信机器人，确认真的能回复" />
+          <SectionTitle title="发一条消息试试" meta="私聊微信机器人，确认真的能回复" />
           <MessagingTestGuide
             result={result}
             platform={messagingPlatformQuery.data}

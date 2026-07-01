@@ -76,7 +76,6 @@ export function AppTopBar() {
               navigate(tab.href);
             }}
           >
-            <span className={s.navNum}>{tab.num}</span>
             {tab.label}
           </a>
         ))}

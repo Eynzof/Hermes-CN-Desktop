@@ -181,6 +181,8 @@ export const SessionSummary = z.object({
   // ?include_archived=true. Absent on the default (active) list — the proxy
   // strips archived sessions there. See src/session_archive.rs.
   archived: z.boolean().optional(),
+  profile: z.string().optional(),
+  is_default_profile: z.boolean().optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
 
@@ -224,6 +226,49 @@ export const SessionsResponse = z.object({
   offset: z.number(),
 });
 export type SessionsResponse = z.infer<typeof SessionsResponse>;
+
+export const StarmapNode = z.object({
+  id: z.string(),
+  label: z.string(),
+  kind: z.enum(["skill", "memory"]),
+  timestamp: z.number().nullable().optional(),
+  category: z.string().optional(),
+  useCount: z.number().optional(),
+  state: z.string().optional(),
+  createdBy: z.string().nullable().optional(),
+  pinned: z.boolean().optional(),
+  memorySource: z.string().optional(),
+}).passthrough();
+export type StarmapNode = z.infer<typeof StarmapNode>;
+
+export const StarmapEdge = z.object({
+  source: z.string(),
+  target: z.string(),
+}).passthrough();
+export type StarmapEdge = z.infer<typeof StarmapEdge>;
+
+export const StarmapCluster = z.object({
+  category: z.string(),
+  count: z.number(),
+}).passthrough();
+export type StarmapCluster = z.infer<typeof StarmapCluster>;
+
+export const StarmapMemoryCard = z.object({
+  source: z.string(),
+  timestamp: z.number().nullable().optional(),
+  title: z.string(),
+  body: z.string(),
+}).passthrough();
+export type StarmapMemoryCard = z.infer<typeof StarmapMemoryCard>;
+
+export const StarmapGraph = z.object({
+  nodes: z.array(StarmapNode),
+  edges: z.array(StarmapEdge),
+  clusters: z.array(StarmapCluster),
+  memory: z.array(StarmapMemoryCard),
+  stats: z.record(z.string(), z.unknown()).optional(),
+}).passthrough();
+export type StarmapGraph = z.infer<typeof StarmapGraph>;
 
 export const SessionMessage = z.object({
   id: z.number(),

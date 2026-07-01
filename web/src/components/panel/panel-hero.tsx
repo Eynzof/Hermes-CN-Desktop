@@ -27,10 +27,6 @@ export function PanelHero({ activeCount, completedToday, needsAttention }: Panel
 
   return (
     <div className={s.hero}>
-      <div className={s.num}>
-        <span className={s.numTop}>NO. 001</span>
-        <span>工作台</span>
-      </div>
       <div className={s.body}>
         <h1 className={s.title}>
           {lead}

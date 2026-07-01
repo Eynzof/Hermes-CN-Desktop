@@ -50,6 +50,7 @@ import {
 } from "@/lib/session-ui-state";
 import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
 import { voiceAutoTtsFromConfig } from "@/lib/voice";
+import { isWatchSessionWindow } from "@/lib/windows";
 import {
   rememberSessionWorkspace,
   rememberWorkspaceProject,
@@ -99,6 +100,7 @@ export function DetailRoute() {
   const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
   const [rightRailVisible, setRightRailVisible] = useAtom(rightRailVisibleAtom);
   const [searchParams] = useSearchParams();
+  const watchOnly = isWatchSessionWindow();
   const taskId = activeSessionId ?? urlTaskId;
   const turnStats = useSessionTurnStats(taskId);
 
@@ -365,7 +367,7 @@ export function DetailRoute() {
     payload: ComposerSubmitPayload,
     updateAttachment: ComposerSubmitControls["updateAttachment"] = () => {},
   ) => {
-    if (!taskId) return;
+    if (!taskId || watchOnly) return;
     const gatewaySessionId = await ensureGatewaySession();
     if (payload.workspacePath) {
       rememberWorkspaceProject(payload.workspacePath);
@@ -401,13 +403,13 @@ export function DetailRoute() {
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
-  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId, watchOnly]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
     controls: ComposerSubmitControls,
   ) => {
-    if (!taskId) return;
+    if (!taskId || watchOnly) return;
     const builtin = parseBuiltinComposerCommand(payload.text);
     if (builtin?.name === "compress") {
       const sessionId = await ensureGatewaySession();
@@ -421,7 +423,7 @@ export function DetailRoute() {
       return;
     }
     await submitPayload(payload, controls.updateAttachment);
-  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId, watchOnly]);
 
   // ---- Send queue (drain on settle, send-now / edit / delete) --------------
   const queuedPrompts = useQueuedPrompts(taskId);
@@ -431,7 +433,7 @@ export function DetailRoute() {
   const userInterruptedRef = useRef(false);
 
   const drainEntry = useCallback(async (entry: QueuedPromptEntry) => {
-    if (!taskId || drainingRef.current) return;
+    if (!taskId || watchOnly || drainingRef.current) return;
     drainingRef.current = true;
     try {
       await submitPayload({
@@ -445,7 +447,7 @@ export function DetailRoute() {
     } finally {
       drainingRef.current = false;
     }
-  }, [enabledSkills, submitPayload, taskId]);
+  }, [enabledSkills, submitPayload, taskId, watchOnly]);
 
   // Auto-drain the next queued prompt when the agent settles (busy → idle),
   // unless an explicit Stop just interrupted the turn.
@@ -505,6 +507,7 @@ export function DetailRoute() {
   );
 
   const onModelSelect = useCallback(async (selection: ComposerModelSelection) => {
+    if (watchOnly) return;
     const gatewaySessionId = await ensureGatewaySession();
     await setSessionModel(gatewaySessionId, selection.model, selection.provider);
     setSelectedModel({
@@ -515,7 +518,7 @@ export function DetailRoute() {
     await getSessionUsage(gatewaySessionId)
       .then(setSessionUsage)
       .catch(() => {});
-  }, [config, ensureGatewaySession, getSessionUsage, setSessionModel, setSessionUsage]);
+  }, [config, ensureGatewaySession, getSessionUsage, setSessionModel, setSessionUsage, watchOnly]);
 
   const onConfigureProvider = useCallback((providerId: string) => {
     navigate(`/models#provider-${providerId}`);
@@ -525,6 +528,7 @@ export function DetailRoute() {
   const reasoningEffort = reasoningEffortOverride ?? configReasoningEffort;
 
   const onReasoningEffortSelect = useCallback(async (effort: ReasoningEffort) => {
+    if (watchOnly) return;
     setReasoningEffortOverride(effort); // 立即反馈，等 config 重新拉到后一致
     try {
       const gatewaySessionId = await ensureGatewaySession();
@@ -534,16 +538,17 @@ export function DetailRoute() {
       setReasoningEffortOverride(null);
       console.error("设置思考强度失败：", error);
     }
-  }, [ensureGatewaySession, setSessionReasoningEffort]);
+  }, [ensureGatewaySession, setSessionReasoningEffort, watchOnly]);
 
   const onStop = useCallback(async () => {
+    if (watchOnly) return;
     const sessionId = runtimeSessionId ?? taskId;
     if (!sessionId || !runtimeIsBusy) return;
     // A deliberate Stop suppresses exactly one auto-drain so the queue doesn't
     // immediately re-fire the turn the user just halted.
     userInterruptedRef.current = true;
     await interruptSession(sessionId);
-  }, [interruptSession, runtimeIsBusy, runtimeSessionId, taskId]);
+  }, [interruptSession, runtimeIsBusy, runtimeSessionId, taskId, watchOnly]);
 
   const title = sessionData || sessionSummary
     ? sessionDisplayTitle({
@@ -694,67 +699,73 @@ export function DetailRoute() {
             autoTts={autoTts}
           />
           <div className={s.composerArea}>
-            {runtimeIsBusy && stall.isStalled ? (
-              <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
-            ) : null}
-            <QueuePanel
-              entries={queuedPrompts}
-              busy={runtimeIsBusy}
-              editingId={null}
-              onSendNow={onQueueSendNow}
-              onEdit={onQueueEdit}
-              onDelete={onQueueDelete}
-            />
-            <GooseComposer
-              key={taskId}
-              initialWorkspacePath={sessionWorkspace}
-              initial={composerPrefill.text}
-              initialNonce={composerPrefill.nonce}
-              onSend={onSend}
-              loadingPlaceholder={composerLoadingPlaceholder}
-              hints={[
-                { kbd: "/skill", label: "选择 Skill" },
-                { kbd: "/", label: "输入指令" },
-                { kbd: "/compress", label: "触发会话压缩" },
-              ]}
-              showMeta={false}
-              loading={runtimeIsBusy}
-              onStop={onStop}
-              voiceConfig={config ?? null}
-              modelPicker={{
-                selected: contextSelection,
-                label: model || modelInfo?.model,
-                loadOptions: loadModelOptions,
-                initialOptions: modelOptionsCache ?? null,
-                onSelect: onModelSelect,
-                onConfigureProvider,
-                disabled: runtimeIsBusy,
-              }}
-              reasoningPicker={{
-                value: reasoningEffort,
-                onSelect: onReasoningEffortSelect,
-                disabled: runtimeIsBusy,
-              }}
-              skillPicker={{
-                skills: enabledSkills,
-                loading: skillsQuery.isLoading || skillsQuery.isFetching,
-                error: skillsQuery.isError
-                  ? (skillsQuery.error instanceof Error ? skillsQuery.error.message : "Skill 加载失败")
-                  : undefined,
-                disabled: runtimeIsBusy,
-              }}
-              mentionPicker={{
-                completePath: (word) =>
-                  completePath(word, {
-                    sessionId: runtimeSessionId ?? undefined,
-                    cwd: sessionWorkspace || undefined,
-                  }),
-                sessions: sessionsData?.sessions,
-                profile: activeProfile,
-                disabled: runtimeIsBusy,
-              }}
-              contextUsage={contextUsage}
-            />
+            {watchOnly ? (
+              <div className={s.watchNotice}>旁观模式：此窗口只显示会话输出，不会向 Core 发送新消息或控制指令。</div>
+            ) : (
+              <>
+                {runtimeIsBusy && stall.isStalled ? (
+                  <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
+                ) : null}
+                <QueuePanel
+                  entries={queuedPrompts}
+                  busy={runtimeIsBusy}
+                  editingId={null}
+                  onSendNow={onQueueSendNow}
+                  onEdit={onQueueEdit}
+                  onDelete={onQueueDelete}
+                />
+                <GooseComposer
+                  key={taskId}
+                  initialWorkspacePath={sessionWorkspace}
+                  initial={composerPrefill.text}
+                  initialNonce={composerPrefill.nonce}
+                  onSend={onSend}
+                  loadingPlaceholder={composerLoadingPlaceholder}
+                  hints={[
+                    { kbd: "/skill", label: "选择 Skill" },
+                    { kbd: "/", label: "输入指令" },
+                    { kbd: "/compress", label: "触发会话压缩" },
+                  ]}
+                  showMeta={false}
+                  loading={runtimeIsBusy}
+                  onStop={onStop}
+                  voiceConfig={config ?? null}
+                  modelPicker={{
+                    selected: contextSelection,
+                    label: model || modelInfo?.model,
+                    loadOptions: loadModelOptions,
+                    initialOptions: modelOptionsCache ?? null,
+                    onSelect: onModelSelect,
+                    onConfigureProvider,
+                    disabled: runtimeIsBusy,
+                  }}
+                  reasoningPicker={{
+                    value: reasoningEffort,
+                    onSelect: onReasoningEffortSelect,
+                    disabled: runtimeIsBusy,
+                  }}
+                  skillPicker={{
+                    skills: enabledSkills,
+                    loading: skillsQuery.isLoading || skillsQuery.isFetching,
+                    error: skillsQuery.isError
+                      ? (skillsQuery.error instanceof Error ? skillsQuery.error.message : "Skill 加载失败")
+                      : undefined,
+                    disabled: runtimeIsBusy,
+                  }}
+                  mentionPicker={{
+                    completePath: (word) =>
+                      completePath(word, {
+                        sessionId: runtimeSessionId ?? undefined,
+                        cwd: sessionWorkspace || undefined,
+                      }),
+                    sessions: sessionsData?.sessions,
+                    profile: activeProfile,
+                    disabled: runtimeIsBusy,
+                  }}
+                  contextUsage={contextUsage}
+                />
+              </>
+            )}
           </div>
         </div>
         {rightRailVisible && taskId ? (

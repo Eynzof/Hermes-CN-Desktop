@@ -1,4 +1,4 @@
-/* Topbar — brand · 01-04 nav · search · actions
+/* Topbar — brand · nav · search · actions
    Inspired by prototypes/.topbar */
 
 .topbar {
@@ -167,28 +167,6 @@
   color: var(--h-text);
   background: color-mix(in srgb, var(--h-accent) 14%, var(--h-bg-chip));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h-accent) 28%, transparent);
-}
-
-.navNum {
-  font-family: var(--h-font-mono);
-  font-size: 9px;
-  color: var(--h-text-3);
-  margin-right: 6px;
-  font-feature-settings: "tnum";
-}
-
-.navLink[data-active="true"] .navNum {
-  color: var(--h-accent);
-}
-
-:global([data-theme="light"]) .navLink[data-active="true"] .navNum {
-  color: var(--persimmon-dim);
-  font-weight: 700;
-}
-
-:global([data-theme="light-modern"]) .navLink[data-active="true"] .navNum {
-  color: var(--h-accent);
-  font-weight: 700;
 }
 
 .search {

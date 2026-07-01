@@ -1,0 +1,55 @@
+.pet {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  z-index: 40;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  user-select: none;
+  cursor: grab;
+}
+
+.pet:active {
+  cursor: grabbing;
+}
+
+.sprite {
+  image-rendering: auto;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.28));
+}
+
+.bubble {
+  max-width: 180px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--h-bg-elevated) 94%, transparent);
+  color: var(--h-text);
+  padding: 6px 8px;
+  font-size: 12px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.overlay {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+
+.overlayInner {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.overlayBtn {
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.58);
+  color: white;
+  padding: 6px 10px;
+  font: 12px var(--h-font-ui);
+  cursor: pointer;
+}

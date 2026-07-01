@@ -4,7 +4,18 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
+function pnpmInvocation(args) {
+  const npmExecPath = process.env.npm_execpath;
+  if (npmExecPath && !/[\\/]pnpm\.cmd$/i.test(npmExecPath)) {
+    return { command: process.execPath, args: [npmExecPath, ...args], shell: false };
+  }
+  return {
+    command: process.platform === "win32" ? "pnpm.cmd" : "pnpm",
+    args,
+    shell: process.platform === "win32",
+  };
+}
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: pnpm tauri:dev:external
@@ -14,9 +25,11 @@ so this now starts the same managed dev path as pnpm tauri:dev.`);
   process.exit(0);
 }
 
-const child = spawn(pnpm, ["exec", "tauri", "dev"], {
+const pnpm = pnpmInvocation(["exec", "tauri", "dev"]);
+const child = spawn(pnpm.command, pnpm.args, {
   cwd: repoRoot,
   stdio: "inherit",
+  shell: pnpm.shell,
   env: {
     ...process.env,
     HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: "0",

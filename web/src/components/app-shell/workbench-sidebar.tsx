@@ -3,7 +3,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Popover } from "@hermes/shared-ui";
-import { Folder, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
+import { Bot, Folder, Image, MessageSquare, MoreHorizontal, Network, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useActiveProfileName } from "@/hooks/use-profiles";
@@ -71,7 +71,7 @@ function modelShort(model: string | null | undefined) {
 }
 
 function sectionLabel(index: number, label: string): string {
-  return `§${index.toString().padStart(2, "0")} · ${label}`;
+  return label;
 }
 
 function KanbanQuickIcon() {
@@ -322,7 +322,6 @@ export function WorkbenchSidebar() {
           </span>
           <span className={s.entryLabel}>新建对话</span>
         </span>
-        <span className={s.newTaskKbd}>⌘ N</span>
       </button>
 
       <div className={s.quickNav}>
@@ -336,7 +335,6 @@ export function WorkbenchSidebar() {
             <MessageSquare size={16} />
           </span>
           <span className={s.entryLabel}>对话历史</span>
-          <span className={s.entryCommand}>/history</span>
         </button>
         <button
           type="button"
@@ -348,7 +346,6 @@ export function WorkbenchSidebar() {
             <Folder size={16} />
           </span>
           <span className={s.entryLabel}>工作空间</span>
-          <span className={s.entryCommand}>/workspace</span>
         </button>
         <button
           type="button"
@@ -360,7 +357,39 @@ export function WorkbenchSidebar() {
             <KanbanQuickIcon />
           </span>
           <span className={s.entryLabel}>看板</span>
-          <span className={s.entryCommand}>/kanban</span>
+        </button>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/artifacts") ? "true" : undefined}
+          onClick={() => navigate("/artifacts")}
+        >
+          <span className={s.entryIcon}>
+            <Image size={16} />
+          </span>
+          <span className={s.entryLabel}>产物库</span>
+        </button>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/agents") ? "true" : undefined}
+          onClick={() => navigate("/agents")}
+        >
+          <span className={s.entryIcon}>
+            <Bot size={16} />
+          </span>
+          <span className={s.entryLabel}>Agents</span>
+        </button>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          data-active={location.pathname.startsWith("/starmap") ? "true" : undefined}
+          onClick={() => navigate("/starmap")}
+        >
+          <span className={s.entryIcon}>
+            <Network size={16} />
+          </span>
+          <span className={s.entryLabel}>星图</span>
         </button>
       </div>
 
@@ -368,7 +397,6 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>{activeSectionLabel}</span>
-            <span className={s.labelNum}>✕✕</span>
           </div>
           {active.length === 0 ? (
             <div className={s.empty}>暂无运行任务</div>
@@ -395,7 +423,6 @@ export function WorkbenchSidebar() {
           <section className={s.section}>
             <div className={s.label}>
               <span>{pinnedSessionSectionLabel}</span>
-              <span className={s.labelNum}>✕✕</span>
             </div>
             {pinned.map((sess) => {
               const running = isSessionRunning(sess, runtimeBySession);
@@ -428,7 +455,6 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>{pinnedProjectSectionLabel}</span>
-            <span className={s.labelNum}>✕✕</span>
           </div>
           {pinnedProjects.length === 0 ? (
             <button
@@ -466,7 +492,6 @@ export function WorkbenchSidebar() {
         <section className={s.section}>
           <div className={s.label}>
             <span>{recentSectionLabel}</span>
-            <span className={s.labelNum}>✕✕</span>
           </div>
           {recent.length === 0 ? (
             <div className={s.empty}>暂无最近会话</div>

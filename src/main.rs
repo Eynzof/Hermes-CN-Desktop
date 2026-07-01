@@ -461,6 +461,12 @@ fn main() {
             commands::preview::read_workspace_file,
             commands::preview::watch_preview_file,
             commands::preview::stop_preview_file_watch,
+            commands::windows::open_session_window,
+            commands::windows::open_new_session_window,
+            commands::windows::pet_overlay_open,
+            commands::windows::pet_overlay_close,
+            commands::windows::pet_overlay_push_state,
+            commands::windows::pet_overlay_control,
         ])
         .on_window_event(move |window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. }
