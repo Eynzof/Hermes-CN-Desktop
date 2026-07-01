@@ -256,6 +256,7 @@ export function GooseComposer({
   const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0);
   const { handle: micRecorder, level: voiceLevel } = useMicRecorder();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
   const valueRef = useRef(initial);
   const voiceStatusRef = useRef(voiceStatus);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -966,7 +967,7 @@ export function GooseComposer({
       shiftKey: event.shiftKey,
       ctrlKey: event.ctrlKey,
       altKey: event.altKey,
-      isComposing: event.nativeEvent.isComposing,
+      isComposing: composingRef.current || event.nativeEvent.isComposing,
     }, effectiveSubmitShortcut);
 
     if (shouldSubmit) {
@@ -1277,6 +1278,8 @@ export function GooseComposer({
           onClick={syncTextareaSelection}
           onSelect={syncTextareaSelection}
           onPaste={handlePaste}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => { setTimeout(() => { composingRef.current = false; }, 0); }}
           placeholder={loading ? (loadingPlaceholder || "Hermes 正在响应...") : resolvedPlaceholder}
           rows={1}
           className={s.textarea}
