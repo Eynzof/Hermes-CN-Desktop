@@ -2,7 +2,7 @@
 // so the panel routing, language detection, and content framing are unit
 // testable in isolation.
 
-export const PREVIEW_PANELS = ["web", "files", "terminal", "logs"] as const;
+export const PREVIEW_PANELS = ["web", "files", "review", "terminal", "logs"] as const;
 export type PreviewPanel = (typeof PREVIEW_PANELS)[number];
 export const DEFAULT_PREVIEW_PANEL: PreviewPanel = "files";
 

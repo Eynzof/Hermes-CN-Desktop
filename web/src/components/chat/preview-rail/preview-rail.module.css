@@ -368,6 +368,442 @@
   color: var(--h-text);
 }
 
+/* ── Review pane (issue #328) ────────────────────────────────────────────── */
+
+.reviewLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.reviewToolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.reviewToolbarTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--h-text-2);
+  padding-left: 2px;
+}
+
+.spin {
+  animation: reviewSpin 1s linear infinite;
+}
+
+@keyframes reviewSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.reviewError {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-warn-soft);
+  color: var(--h-text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.reviewError > span {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.reviewErrorClose {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+}
+
+.reviewTree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+}
+
+.reviewHint {
+  padding: 12px 8px;
+  text-align: center;
+  color: var(--h-text-3);
+  font-size: 12px;
+}
+
+.reviewRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 24px;
+  padding-right: 6px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reviewRow:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.reviewRow[data-selected="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.reviewRowName {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewRowDir {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--h-text-4);
+}
+
+/* Single-letter status badge, tinted by the file's git status. */
+.reviewStatus {
+  flex: 0 0 auto;
+  width: 13px;
+  text-align: center;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.reviewStatus[data-tone="added"] {
+  color: var(--h-ok);
+}
+.reviewStatus[data-tone="removed"] {
+  color: var(--h-danger);
+}
+.reviewStatus[data-tone="modified"] {
+  color: var(--h-warn);
+}
+.reviewStatus[data-tone="renamed"] {
+  color: var(--h-accent);
+}
+.reviewStatus[data-tone="conflict"] {
+  color: var(--h-danger);
+}
+.reviewStatus[data-tone="untracked"] {
+  color: var(--h-text-4);
+}
+
+.reviewRowActions {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+}
+
+.reviewRow:hover .reviewRowActions {
+  display: inline-flex;
+}
+
+.reviewRowBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+}
+
+.reviewRowBtn:hover {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.reviewRowCount {
+  margin-left: auto;
+}
+
+.reviewRow:hover .reviewRowCount {
+  margin-left: 4px;
+}
+
+.reviewStagedDot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--h-ok);
+}
+
+.diffCount {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+.diffCountAdd {
+  color: var(--h-ok);
+}
+
+.diffCountDel {
+  color: var(--h-danger);
+}
+
+/* Selected file's unified diff. */
+.reviewDiffPane {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: 55%;
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.reviewDiffHeader {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.reviewDiffPath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-2);
+}
+
+.reviewDiffBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.diffPre {
+  margin: 0;
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.diffLine {
+  display: block;
+  padding: 0 10px;
+  white-space: pre;
+  color: var(--h-text);
+}
+
+.diffLine[data-kind="add"] {
+  background: var(--h-ok-soft);
+  color: var(--h-ok);
+}
+
+.diffLine[data-kind="del"] {
+  background: var(--h-danger-soft, var(--h-warn-soft));
+  color: var(--h-danger);
+}
+
+.diffLine[data-kind="hunk"] {
+  color: var(--h-accent);
+}
+
+.diffLine[data-kind="meta"] {
+  color: var(--h-text-4);
+}
+
+/* Commit / push / PR action bar. */
+.reviewShip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.reviewCommitInput {
+  width: 100%;
+  min-height: 30px;
+  max-height: 140px;
+  resize: vertical;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  padding: 6px 8px;
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reviewCommitInput:focus {
+  outline: none;
+  border-color: var(--h-accent-border);
+}
+
+.reviewShipActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reviewCommitBtn {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--h-accent-border);
+  border-radius: var(--h-r-sm);
+  background: var(--h-accent);
+  color: var(--h-accent-contrast);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reviewCommitBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.reviewCommitBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.reviewCommitMode {
+  flex: 0 0 auto;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-input);
+  color: var(--h-text-2);
+  font-size: 11px;
+  padding: 4px 4px;
+  cursor: pointer;
+}
+
+/* Destructive revert confirm. */
+.reviewModalBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+.reviewModal {
+  width: 100%;
+  max-width: 320px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-pane);
+  box-shadow: var(--h-shadow-lg);
+  padding: 14px;
+}
+
+.reviewModalTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h-text);
+}
+
+.reviewModalBody {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--h-text-2);
+}
+
+.reviewModalPath {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-3);
+  word-break: break-all;
+}
+
+.reviewModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.reviewModalBtn {
+  padding: 5px 12px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reviewModalBtn:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.reviewModalBtn[data-variant="danger"] {
+  border-color: var(--h-danger);
+  background: var(--h-danger);
+  color: #fff;
+}
+
+.reviewModalBtn[data-variant="danger"]:hover {
+  opacity: 0.9;
+  background: var(--h-danger);
+  color: #fff;
+}
+
 /* ── Logs ────────────────────────────────────────────────────────────────── */
 
 .segmented {

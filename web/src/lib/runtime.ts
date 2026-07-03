@@ -275,6 +275,70 @@ export interface DesktopFileDropPayload {
   };
 }
 
+// ── Git review pane (issue #328) ─────────────────────────────────────────────
+
+export type ReviewScope = "uncommitted" | "branch" | "lastTurn";
+
+export interface ReviewFile {
+  path: string;
+  added: number;
+  removed: number;
+  /** Single-letter git status (`M`/`A`/`D`/`R`/`?` …). */
+  status: string;
+  staged: boolean;
+}
+
+export interface ReviewList {
+  files: ReviewFile[];
+  /** merge-base for `branch` scope, else null. */
+  base: string | null;
+  /** Whether the path is inside a git work tree (backend `rev-parse` verdict). */
+  isRepo: boolean;
+}
+
+export interface ReviewPrInfo {
+  url: string;
+  state: string;
+  number: number;
+}
+
+export interface ReviewShipInfo {
+  /** gh is installed AND authenticated (the PR action can run). */
+  ghReady: boolean;
+  pr: ReviewPrInfo | null;
+}
+
+export interface ReviewCommitContext {
+  diff: string;
+  recent: string;
+}
+
+/** Bridge to the Rust git commands backing the review pane. Reads degrade to
+ *  empty/null on a non-repo / missing tool; mutations reject so the UI can toast. */
+export interface HermesGitReviewBridge {
+  list(input: { repoPath: string; scope: ReviewScope; baseRef: string | null }): Promise<ReviewList>;
+  diff(input: {
+    repoPath: string;
+    filePath: string;
+    scope: ReviewScope;
+    baseRef: string | null;
+    staged: boolean;
+  }): Promise<string>;
+  stage(input: { repoPath: string; filePath: string | null }): Promise<{ ok: boolean }>;
+  unstage(input: { repoPath: string; filePath: string | null }): Promise<{ ok: boolean }>;
+  revert(input: { repoPath: string; filePath: string | null }): Promise<{ ok: boolean }>;
+  revParse(input: { repoPath: string; ref?: string | null }): Promise<string | null>;
+  commit(input: { repoPath: string; message: string; push: boolean }): Promise<{ ok: boolean }>;
+  commitContext(input: { repoPath: string }): Promise<ReviewCommitContext>;
+  push(input: { repoPath: string }): Promise<{ ok: boolean }>;
+  shipInfo(input: { repoPath: string }): Promise<ReviewShipInfo>;
+  createPr(input: { repoPath: string }): Promise<{ url: string }>;
+}
+
+export interface HermesGitBridge {
+  review: HermesGitReviewBridge;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -349,6 +413,8 @@ declare global {
       terminalClose?(input: { terminalId: string }): Promise<boolean>;
       onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
       readWorkspaceFile?(input: ReadWorkspaceFileInput): Promise<FilePreview>;
+      /** Git ops backing the review pane (issue #328). */
+      git?: HermesGitBridge;
       watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
       stopPreviewFileWatch?(input: { watchId: string }): Promise<boolean>;
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;

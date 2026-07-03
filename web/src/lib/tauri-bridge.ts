@@ -63,6 +63,7 @@ import type {
   UiStoreSnapshot,
   UiTurnStats,
   WatchPreviewFileResult,
+  HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
 import hermesLogoSvg from "../../../icons/icon.svg?raw";
@@ -508,6 +509,25 @@ const tauriBridge = {
   async readWorkspaceFile(input: ReadWorkspaceFileInput): Promise<FilePreview> {
     return invokeCommand("read_workspace_file", { input });
   },
+
+  // Git ops backing the review pane (issue #328). Mirrors the upstream
+  // `window.hermesDesktop.git.review.*` shape so the ported review logic reads
+  // naturally; each method forwards to a Rust command that shells `git`/`gh`.
+  git: {
+    review: {
+      list: (input) => invokeCommand("git_review_list", { input }),
+      diff: (input) => invokeCommand("git_review_diff", { input }),
+      stage: (input) => invokeCommand("git_review_stage", { input }),
+      unstage: (input) => invokeCommand("git_review_unstage", { input }),
+      revert: (input) => invokeCommand("git_review_revert", { input }),
+      revParse: (input) => invokeCommand("git_review_rev_parse", { input }),
+      commit: (input) => invokeCommand("git_review_commit", { input }),
+      commitContext: (input) => invokeCommand("git_review_commit_context", { input }),
+      push: (input) => invokeCommand("git_review_push", { input }),
+      shipInfo: (input) => invokeCommand("git_review_ship_info", { input }),
+      createPr: (input) => invokeCommand("git_review_create_pr", { input }),
+    },
+  } satisfies HermesGitBridge,
 
   async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {
     return invokeCommand("watch_preview_file", { input });
