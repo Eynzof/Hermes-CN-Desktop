@@ -462,6 +462,23 @@ fn main() {
             commands::preview::write_workspace_file,
             commands::preview::watch_preview_file,
             commands::preview::stop_preview_file_watch,
+            commands::git::git_review_list,
+            commands::git::git_review_diff,
+            commands::git::git_review_stage,
+            commands::git::git_review_unstage,
+            commands::git::git_review_revert,
+            commands::git::git_review_rev_parse,
+            commands::git::git_review_commit,
+            commands::git::git_review_commit_context,
+            commands::git::git_review_push,
+            commands::git::git_review_ship_info,
+            commands::git::git_review_create_pr,
+            commands::git::git_worktree_list,
+            commands::git::git_worktree_add,
+            commands::git::git_worktree_remove,
+            commands::git::git_branch_list,
+            commands::git::git_branch_switch,
+            commands::git::git_repo_status,
         ])
         .on_window_event(move |window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. }

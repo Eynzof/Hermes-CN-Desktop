@@ -2,7 +2,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { useSearchParams } from "react-router-dom";
 import {
   FileText,
-  GitCompare,
+  GitPullRequest,
   Globe,
   Package,
   ScrollText,
@@ -23,6 +23,7 @@ import {
 } from "@/stores/preview-rail";
 import { WebPreviewTab } from "./web-preview-tab";
 import { FilePreviewTab } from "./file-preview-tab";
+import { ReviewTab } from "./review-tab";
 import { TerminalTab } from "./terminal-tab";
 import { LogsTab } from "./logs-tab";
 import s from "./preview-rail.module.css";
@@ -39,14 +40,14 @@ const TABS: Array<{ key: PreviewPanel; label: string; icon: typeof Globe; hidden
   // 网页预览暂时隐藏（用处不大）。保留代码与 WebPreviewTab，方便后续按需重启用。
   { key: "web", label: "网页", icon: Globe, hidden: true },
   { key: "files", label: "文件", icon: FileText },
+  { key: "review", label: "改动", icon: GitPullRequest },
   { key: "terminal", label: "终端", icon: TerminalSquare },
   { key: "logs", label: "日志", icon: ScrollText },
 ];
 
-// Tabs planned but blocked on backend (PRD §5 P0: session change audit log /
-// artifact manifest). Shown disabled so the layout matches the target spec.
+// Tabs planned but blocked on backend (PRD §5 P0: artifact manifest). Shown
+// disabled so the layout matches the target spec.
 const PENDING_TABS: Array<{ key: string; label: string; icon: typeof Globe }> = [
-  { key: "diff", label: "Diff", icon: GitCompare },
   { key: "artifacts", label: "产物", icon: Package },
 ];
 
@@ -122,6 +123,9 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
             filePath={selection.filePath}
             onSelectFile={(path) => patchSelection({ filePath: path })}
           />
+        ) : null}
+        {active === "review" ? (
+          <ReviewTab workspaceRoot={workspaceRoot} active={active === "review"} />
         ) : null}
         {active === "terminal" ? <TerminalTab /> : null}
         {active === "logs" ? <LogsTab /> : null}
