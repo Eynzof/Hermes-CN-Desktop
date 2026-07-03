@@ -48,6 +48,14 @@ export const StatusResponse = z.object({
   gateway_exit_reason: z.string().nullable(),
   gateway_updated_at: z.string().nullable(),
   active_sessions: z.number(),
+  // v0.18.0 上游新增（scale-to-zero / drain 协调 / dashboard 鉴权）。
+  can_update_hermes: z.boolean().optional(),
+  active_agents: z.number().optional(),
+  gateway_busy: z.boolean().optional(),
+  gateway_drainable: z.boolean().optional(),
+  restart_drain_timeout: z.number().nullable().optional(),
+  auth_required: z.boolean().optional(),
+  auth_providers: z.unknown().optional(),
 });
 export type StatusResponse = z.infer<typeof StatusResponse>;
 
@@ -240,17 +248,22 @@ export const SessionMessage = z.object({
   role: z.string(),
   content: MessageContent,
   images: z.array(HermesImageSource).optional(),
-  tool_call_id: z.string().nullable(),
-  tool_calls: z.any().nullable(),
-  tool_name: z.string().nullable(),
+  // The nullable metadata columns below mirror the backend's `SELECT *` off
+  // the messages table. They are also `.optional()` on purpose: upstream adds
+  // and (rarely) drops columns across releases, and a "required but nullable"
+  // field turns a dropped column into a parse failure on EVERY row — the
+  // whole history blanks out. Missing → treated the same as null.
+  tool_call_id: z.string().nullable().optional(),
+  tool_calls: z.any().nullable().optional(),
+  tool_name: z.string().nullable().optional(),
   timestamp: z.number(),
-  token_count: z.number().nullable(),
-  finish_reason: z.string().nullable(),
-  reasoning: z.string().nullable(),
-  reasoning_details: z.any().nullable(),
-  codex_reasoning_items: z.any().nullable(),
-  reasoning_content: z.string().nullable(),
-});
+  token_count: z.number().nullable().optional(),
+  finish_reason: z.string().nullable().optional(),
+  reasoning: z.string().nullable().optional(),
+  reasoning_details: z.any().nullable().optional(),
+  codex_reasoning_items: z.any().nullable().optional(),
+  reasoning_content: z.string().nullable().optional(),
+}).passthrough();
 export type SessionMessage = z.infer<typeof SessionMessage>;
 
 export const HermesMessageUsage = z
@@ -353,6 +366,17 @@ const HermesNoticeMessagePart = z.object({
   text: z.string(),
 });
 
+// MoA（Mixture of Agents）参考模型输出块：网关在聚合器回答之前，为每个
+// reference 模型 relay 一个完整的带标签文本块（moa.reference 事件）。仅存在
+// 于实时流；重载后的历史由后端持久化决定，不在此重建。
+const HermesMoaReferenceMessagePart = z.object({
+  type: z.literal("moa_reference"),
+  label: z.string(),
+  text: z.string(),
+  index: z.number().optional(),
+  count: z.number().optional(),
+});
+
 export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesTextMessagePart,
   HermesReasoningMessagePart,
@@ -360,6 +384,7 @@ export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesImageMessagePart,
   HermesToolMessagePart,
   HermesNoticeMessagePart,
+  HermesMoaReferenceMessagePart,
 ]);
 export type HermesMessagePart = z.infer<typeof HermesMessagePart>;
 
@@ -452,6 +477,12 @@ export const EnvVarInfo = z.object({
   is_password: z.boolean(),
   tools: z.array(z.string()),
   advanced: z.boolean(),
+  // v0.18.0 上游新增：provider 归属（Keys 页按服务商分组）、渠道托管标记
+  // （channel-managed 的密钥不应在 UI 里直接编辑）、用户自定义 .env 键标记。
+  provider: z.string().nullable().optional(),
+  provider_label: z.string().nullable().optional(),
+  channel_managed: z.boolean().optional(),
+  custom: z.boolean().optional(),
 });
 export type EnvVarInfo = z.infer<typeof EnvVarInfo>;
 
@@ -1363,13 +1394,14 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
       context: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
+  // Core 从不发 "tool.progress"（新旧 runtime 均如此）；真实事件是
+  // "tool.generating"——模型正在流式生成工具调用参数（先于 tool.start），
+  // payload 仅带 {name}。
   z.object({
-    type: z.literal("tool.progress"),
+    type: z.literal("tool.generating"),
     session_id: z.string(),
     payload: z.object({
-      tool_id: z.string().optional(),
       name: z.string().optional(),
-      preview: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
   z.object({
@@ -1399,6 +1431,26 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
     session_id: z.string().optional(),
     payload: z.object({
       message: z.string().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // MoA：每个 reference 模型的完整输出（label=槽位/模型名，text=全文，
+  // index/count=第几个/共几个）。非流式 delta，一个事件一整块。
+  z.object({
+    type: z.literal("moa.reference"),
+    session_id: z.string(),
+    payload: z.object({
+      label: z.string().optional(),
+      text: z.string().optional(),
+      index: z.number().optional(),
+      count: z.number().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // MoA：references 齐了、聚合器开始综合（其回答走普通 message.delta 流）。
+  z.object({
+    type: z.literal("moa.aggregating"),
+    session_id: z.string(),
+    payload: z.object({
+      aggregator: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
 ]);

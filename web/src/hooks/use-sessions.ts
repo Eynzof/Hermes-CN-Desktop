@@ -48,12 +48,23 @@ async function fetchSessionLogMessages(id: string, signal?: AbortSignal): Promis
   }
 }
 
-async function fetchSessionMessages(id: string, signal?: AbortSignal): Promise<MessagesResponse> {
-  const result = await fetchJSON(
-    `/api/sessions/${id}/messages`,
-    { signal },
-    MessagesResponse,
-  );
+export async function fetchSessionMessages(id: string, signal?: AbortSignal): Promise<MessagesResponse> {
+  let result: MessagesResponse;
+  try {
+    result = await fetchJSON(
+      `/api/sessions/${id}/messages`,
+      { signal },
+      MessagesResponse,
+    );
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    // 主端点 404（会话 id 形态与后端不一致 / 尚未落盘等）会让 fetchJSON 直接 throw，
+    // 之前不会触发下面的会话日志兜底，导致历史整段丢失。先退回 /__hermes_session_log，
+    // 拿不到再把原始错误抛给 React Query。
+    const fallback = await fetchSessionLogMessages(id, signal);
+    if (fallback) return fallback;
+    throw error;
+  }
   if (hasAnyMessages(result)) return result;
   return await fetchSessionLogMessages(id, signal) ?? result;
 }
