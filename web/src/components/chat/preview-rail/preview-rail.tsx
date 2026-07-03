@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   PREVIEW_PANEL_QUERY_KEY,
+  UNSAVED_DISCARD_CONFIRM,
   normalizePreviewPanel,
   type PreviewPanel,
 } from "@/lib/preview-rail";
@@ -52,14 +53,17 @@ const PENDING_TABS: Array<{ key: string; label: string; icon: typeof Globe }> = 
 export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const active = normalizePreviewPanel(searchParams.get(PREVIEW_PANEL_QUERY_KEY));
+  const editorDirty = useAtomValue(previewEditorDirtyAtom);
 
   const setActive = (panel: PreviewPanel) => {
+    if (panel === active) return;
+    // Leaving 文件 unmounts FilePreviewTab and drops any unsaved draft —
+    // confirm first instead of losing it silently.
+    if (active === "files" && editorDirty && !window.confirm(UNSAVED_DISCARD_CONFIRM)) return;
     const next = new URLSearchParams(searchParams);
     next.set(PREVIEW_PANEL_QUERY_KEY, panel);
     setSearchParams(next, { replace: true });
   };
-
-  const editorDirty = useAtomValue(previewEditorDirtyAtom);
   const [selectionMap, setSelectionMap] = useAtom(previewRailSelectionMapAtom);
   const selection = selectionMap[sessionId] ?? EMPTY_PREVIEW_RAIL_SELECTION;
   const patchSelection = (patch: Partial<PreviewRailSelection>) => {

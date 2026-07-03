@@ -194,8 +194,9 @@ export function fsListErrorText(code?: string | null): string {
 
 /**
  * Whether the spot editor may edit this preview. Only whole, readable text is
- * editable — never images (`dataUrl`), binaries, or files we only loaded the
- * first 512 KB of (`truncated`), since saving those would corrupt or drop data.
+ * editable — never images (`dataUrl`), binaries, files we only loaded the
+ * first 512 KB of (`truncated`), or non-UTF-8 files whose text is a lossy
+ * rendering (`lossyUtf8`), since saving those would corrupt or drop data.
  * Mirrors the upstream `canEdit` guard. The caller additionally gates on the
  * native write bridge being present (absent in the browser fallback).
  */
@@ -205,6 +206,7 @@ export function canEditPreview(preview: FilePreview | null): boolean {
     !preview.binary &&
     !preview.dataUrl &&
     !preview.truncated &&
+    !preview.lossyUtf8 &&
     preview.text !== undefined
   );
 }
@@ -212,10 +214,54 @@ export function canEditPreview(preview: FilePreview | null): boolean {
 /**
  * Stale-on-disk guard for save: did the file diverge from the snapshot the
  * editor started from? `current` is a fresh read just before writing; `baseline`
- * is the text captured when editing began. A binary re-read can't be compared,
- * so it is never treated as a conflict (the write proceeds). Mirrors the
- * upstream `saveEdit` pre-write check.
+ * is the text captured when editing began. A binary re-read means the file was
+ * replaced with something that is no longer the edited text, so it is always a
+ * conflict. Mirrors the upstream `saveEdit` pre-write check.
  */
 export function isStaleOnDisk(current: FilePreview, baseline: string): boolean {
-  return !current.binary && (current.text ?? "") !== baseline;
+  return current.binary || (current.text ?? "") !== baseline;
+}
+
+/** Shared confirm() copy for every action that would drop an unsaved draft. */
+export const UNSAVED_DISCARD_CONFIRM = "有未保存的修改，确定放弃吗？";
+
+// ── Line-ending preservation ─────────────────────────────────────────────────
+// A <textarea> normalizes CRLF/CR to LF in its `value`, so a CRLF file edited
+// as-is would be silently rewritten to LF on save. These helpers detect the
+// baseline style when editing begins and restore it just before writing.
+
+/** Line-ending style of a text buffer. */
+export type EolStyle = "\n" | "\r\n";
+
+/**
+ * Detect the dominant line-ending style of `text`. Mixed files take the
+ * majority side (ties favor LF); a file without line breaks is LF.
+ */
+export function detectEol(text: string): EolStyle {
+  let crlf = 0;
+  let lf = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== "\n") continue;
+    if (text[i - 1] === "\r") crlf += 1;
+    else lf += 1;
+  }
+  return crlf > lf ? "\r\n" : "\n";
+}
+
+/**
+ * Normalize CRLF / lone-CR line endings to LF — the same normalization a
+ * <textarea> applies — so dirty checks compare both sides on equal footing.
+ */
+export function normalizeEol(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
+/**
+ * Re-apply a detected line-ending style to an (LF-normalized) buffer before
+ * writing. LF passes through untouched; CRLF normalizes first (defensive for
+ * mixed input) and then expands every LF.
+ */
+export function restoreEol(text: string, eol: EolStyle): string {
+  if (eol === "\n") return text;
+  return normalizeEol(text).replace(/\n/g, "\r\n");
 }

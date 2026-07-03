@@ -7,18 +7,23 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { ChevronUp, File as FileIcon, Folder, Pencil, RefreshCw } from "lucide-react";
 import { useFsList } from "@/hooks/use-fs-list";
 import type { FilePreview } from "@/lib/runtime";
 import {
   buildBreadcrumbs,
   canEditPreview,
+  detectEol,
   formatBytes,
   fsListErrorText,
   isMarkdownPath,
   isStaleOnDisk,
+  normalizeEol,
   parentDir,
+  restoreEol,
+  UNSAVED_DISCARD_CONFIRM,
+  type EolStyle,
 } from "@/lib/preview-rail";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import { previewEditorDirtyAtom } from "@/stores/preview-rail";
@@ -46,6 +51,9 @@ const SPLITTER_HEIGHT = 7;
 
 export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePreviewTabProps) {
   const [dir, setDir] = useState(workspaceRoot);
+  // Switching to another file resets the editor and would silently drop an
+  // unsaved draft — confirm first (the atom is written by the editor below).
+  const editorDirty = useAtomValue(previewEditorDirtyAtom);
 
   // Reset the browser to the workspace root whenever the session's workspace changes.
   useEffect(() => {
@@ -216,7 +224,15 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
             type="button"
             className={s.fileEntry}
             data-active={entry.path === filePath ? "true" : undefined}
-            onClick={() => (entry.is_dir ? setDir(entry.path) : onSelectFile(entry.path))}
+            onClick={() => {
+              if (entry.is_dir) {
+                setDir(entry.path);
+                return;
+              }
+              if (entry.path === filePath) return;
+              if (editorDirty && !window.confirm(UNSAVED_DISCARD_CONFIRM)) return;
+              onSelectFile(entry.path);
+            }}
             title={entry.path}
           >
             {entry.is_dir ? (
@@ -343,6 +359,9 @@ function FileViewer({
   const [editorKey, setEditorKey] = useState(0);
   const draftRef = useRef("");
   const baselineRef = useRef("");
+  // EOL style of the baseline. The textarea normalizes CRLF→LF, so saves
+  // restore this style to avoid rewriting a CRLF file wholesale to LF.
+  const baselineEolRef = useRef<EolStyle>("\n");
   const readViewRef = useRef<HTMLDivElement>(null);
   const hoverRef = useRef(false);
 
@@ -355,6 +374,7 @@ function FileViewer({
     setConflict(false);
     draftRef.current = "";
     baselineRef.current = "";
+    baselineEolRef.current = "\n";
   }, [path]);
 
   // Editing is only offered for whole, readable text (see `canEditPreview`), and
@@ -363,10 +383,12 @@ function FileViewer({
     canEditPreview(preview) && typeof window.hermesDesktop?.writeWorkspaceFile === "function";
 
   // Per-keystroke: update the draft ref (no render) and only flip `dirty` when
-  // it actually changes, so a long typing run triggers a single re-render.
+  // it actually changes, so a long typing run triggers a single re-render. Both
+  // sides are LF-normalized so a CRLF baseline never reads as dirty just
+  // because the textarea normalized its value.
   const handleChange = useCallback((value: string) => {
     draftRef.current = value;
-    const next = value !== baselineRef.current;
+    const next = normalizeEol(value) !== normalizeEol(baselineRef.current);
     setDirty((prev) => (prev === next ? prev : next));
   }, []);
 
@@ -380,6 +402,7 @@ function FileViewer({
   const beginEdit = useCallback(() => {
     const text = preview?.text ?? "";
     baselineRef.current = text;
+    baselineEolRef.current = detectEol(text);
     draftRef.current = text;
     setDirty(false);
     setEditorKey((key) => key + 1);
@@ -413,11 +436,13 @@ function FileViewer({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canEdit, editing]);
 
+  // Leaving edit mode (Escape / 取消) drops the draft — confirm when dirty.
   const cancelEdit = useCallback(() => {
+    if (dirty && !window.confirm(UNSAVED_DISCARD_CONFIRM)) return;
     setEditing(false);
     setSaveError(null);
     setConflict(false);
-  }, []);
+  }, [dirty]);
 
   const discardAndReload = useCallback(() => {
     setEditing(false);
@@ -449,15 +474,21 @@ function FileViewer({
             // Couldn't re-read for the check — fall through and attempt the write.
           }
         }
+        // Restore the baseline's EOL style: the textarea normalized CRLF→LF,
+        // and saving must not rewrite the whole file's line endings.
+        const content = restoreEol(draftRef.current, baselineEolRef.current);
         await bridge.writeWorkspaceFile({
           path,
           root: workspaceRoot,
-          content: draftRef.current,
+          content,
         });
-        baselineRef.current = draftRef.current;
+        // The new baseline is what actually landed on disk (EOL restored), so
+        // the next stale-on-disk check compares byte-equal text.
+        baselineRef.current = content;
         setDirty(false);
         setConflict(false);
-        setEditing(false);
+        // Stay in edit mode after a successful save (like a real editor); the
+        // refreshed baseline keeps the buffer clean until the next keystroke.
         onReload();
       } catch (err) {
         setSaveError(err instanceof Error ? err.message : String(err));
@@ -476,6 +507,7 @@ function FileViewer({
         </span>
         {preview ? <span>{formatBytes(preview.byteSize)}</span> : null}
         {preview?.truncated ? <span>· 已截断预览</span> : null}
+        {preview?.lossyUtf8 ? <span>· 非 UTF-8 编码，暂不支持就地编辑</span> : null}
         {editing && dirty ? <span className={s.dirtyBadge}>● 未保存</span> : null}
         {loading && !editing ? <RefreshCw size={12} aria-hidden /> : null}
         {editing ? (

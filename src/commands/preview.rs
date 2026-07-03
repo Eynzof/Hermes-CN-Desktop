@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -55,7 +55,8 @@ pub struct ReadWorkspaceFileInput {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FilePreview {
-    /// UTF-8 (lossy) text content, when the file is textual.
+    /// UTF-8 text content, when the file is textual. Lossy (�-substituted)
+    /// when `lossy_utf8` is set — display-only in that case.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     /// `data:<mime>;base64,...` for previewable images.
@@ -67,6 +68,11 @@ pub struct FilePreview {
     pub binary: bool,
     /// True when `text` was cut at `TEXT_PREVIEW_MAX_BYTES`.
     pub truncated: bool,
+    /// True when the bytes were not valid UTF-8 (e.g. GBK) and `text` was
+    /// produced by a lossy conversion. Such a preview must never be edited and
+    /// written back: saving the � text as UTF-8 would irreversibly corrupt the
+    /// original bytes.
+    pub lossy_utf8: bool,
 }
 
 #[derive(Deserialize)]
@@ -118,6 +124,9 @@ struct PreviewFileChangedPayload {
 /// renderer could browse via the (more lenient) `/api/fs/list` endpoint never
 /// gets a valid file read rejected just because `canonicalize()` is stricter.
 /// Traversal/symlink escapes are still caught when containment applies.
+///
+/// **Read path only.** Writes go through the strict
+/// [`resolve_within_root_strict`], which never skips containment.
 fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
     let raw = path.trim();
     if raw.is_empty() {
@@ -157,6 +166,47 @@ fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
         }
     }
 
+    Ok(real)
+}
+
+/// Strict resolver for the **write** path. Unlike the lenient read-side
+/// [`resolve_within_root`], a write must never proceed without a verified
+/// workspace containment: an empty `root`, a `root` that fails to
+/// canonicalize, or a target that resolves outside the canonical root are all
+/// hard errors — otherwise the command could overwrite any existing file the
+/// process can touch.
+fn resolve_within_root_strict(root: &str, path: &str) -> AppResult<PathBuf> {
+    let raw = path.trim();
+    if raw.is_empty() {
+        return Err(AppError::InvalidRequest("Empty path".to_string()));
+    }
+    let root = root.trim();
+    if root.is_empty() {
+        return Err(AppError::InvalidRequest(
+            "Write requires a workspace root".to_string(),
+        ));
+    }
+    let root_real = PathBuf::from(root)
+        .canonicalize()
+        .map_err(|e| AppError::FileError(format!("Workspace root not accessible: {e}")))?;
+
+    let candidate = {
+        let pb = PathBuf::from(raw);
+        if pb.is_absolute() {
+            pb
+        } else {
+            root_real.join(pb)
+        }
+    };
+    let real = candidate
+        .canonicalize()
+        .map_err(|e| AppError::FileError(format!("Path not accessible: {e}")))?;
+    if !real.starts_with(&root_real) {
+        return Err(AppError::OriginViolation(format!(
+            "Path escapes workspace: {}",
+            real.display()
+        )));
+    }
     Ok(real)
 }
 
@@ -239,12 +289,19 @@ fn read_file_preview(root: &str, path: &str) -> AppResult<FilePreview> {
     }
 
     let keep = buf.len().min(TEXT_PREVIEW_MAX_BYTES as usize);
-    let text = String::from_utf8_lossy(&buf[..keep]).into_owned();
+    // Strict UTF-8 first: only a byte-exact decode may be treated as editable
+    // source. Anything else (GBK, Latin-1, …) still gets a lossy preview for
+    // display, but is flagged so the spot editor refuses to write it back.
+    let (text, lossy_utf8) = match std::str::from_utf8(&buf[..keep]) {
+        Ok(s) => (s.to_owned(), false),
+        Err(_) => (String::from_utf8_lossy(&buf[..keep]).into_owned(), true),
+    };
     Ok(FilePreview {
         text: Some(text),
         byte_size,
         truncated: byte_size > TEXT_PREVIEW_MAX_BYTES,
         binary: false,
+        lossy_utf8,
         ..Default::default()
     })
 }
@@ -255,21 +312,37 @@ pub fn read_workspace_file(input: ReadWorkspaceFileInput) -> AppResult<FilePrevi
 }
 
 /// Core, AppHandle-free write logic so it can be unit-tested directly. Mirrors
-/// the Electron `hermes:fs:writeText` hardening: a size cap, the same
-/// workspace-containment guard the read path uses, and an existing-regular-file
-/// requirement (the spot editor only ever saves a file it already previewed, so
-/// this never creates files or directory trees and never escapes the root).
-/// Stale-on-disk detection is the caller's job (re-read + compare before save).
+/// the Electron `hermes:fs:writeText` hardening: a size cap, a **strict**
+/// workspace-containment guard ([`resolve_within_root_strict`] — unlike reads,
+/// a missing or un-canonicalizable root is a hard error), and an
+/// existing-regular-file requirement (the spot editor only ever saves a file it
+/// already previewed, so this never creates files or directory trees and never
+/// escapes the root). The write itself is atomic: the full content goes to a
+/// sibling temp file which is then renamed over the target, so a crash
+/// mid-write can never leave a half-written file. Stale-on-disk detection is
+/// the caller's job (re-read + compare before save).
 fn write_file_text(root: &str, path: &str, content: &str) -> AppResult<WriteWorkspaceFileResult> {
     if content.len() > TEXT_WRITE_MAX_BYTES {
         return Err(AppError::InvalidRequest("Content too large".to_string()));
     }
-    let resolved = resolve_within_root(root, path)?;
+    let resolved = resolve_within_root_strict(root, path)?;
     let meta = fs::metadata(&resolved)?;
     if !meta.is_file() {
         return Err(AppError::FileError("Not a regular file".to_string()));
     }
-    fs::write(&resolved, content)?;
+
+    let dir = resolved
+        .parent()
+        .ok_or_else(|| AppError::FileError("No parent directory".to_string()))?;
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)
+        .map_err(|e| AppError::FileError(format!("Failed to create temp file: {e}")))?;
+    io::Write::write_all(&mut tmp, content.as_bytes())?;
+    tmp.as_file().sync_all()?;
+    // NamedTempFile creates 0600 on Unix; carry the original mode over so the
+    // rename doesn't silently tighten (or loosen) the file's permissions.
+    tmp.as_file().set_permissions(meta.permissions())?;
+    tmp.persist(&resolved)
+        .map_err(|e| AppError::FileError(format!("Failed to replace file: {e}")))?;
     Ok(WriteWorkspaceFileResult {
         path: resolved.to_string_lossy().to_string(),
     })
@@ -369,7 +442,32 @@ mod tests {
         assert_eq!(preview.text.as_deref(), Some("hello world"));
         assert!(!preview.binary);
         assert!(!preview.truncated);
+        assert!(!preview.lossy_utf8);
         assert_eq!(preview.byte_size, 11);
+    }
+
+    #[test]
+    fn flags_lossy_for_non_utf8_text() {
+        // "你好" in GBK — textual (no NULs / control chars) but invalid UTF-8.
+        // The preview must stay displayable yet be flagged lossy so the spot
+        // editor never writes the �-substituted text back over the GBK bytes.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_string_lossy().to_string();
+        std::fs::write(
+            dir.path().join("gbk.txt"),
+            [b'h', b'i', 0xc4, 0xe3, 0xba, 0xc3],
+        )
+        .unwrap();
+
+        let preview = read_file_preview(&root, "gbk.txt").unwrap();
+        assert!(preview.lossy_utf8, "non-UTF-8 text must be flagged lossy");
+        assert!(!preview.binary);
+        let text = preview.text.expect("lossy preview still carries text");
+        assert!(text.starts_with("hi"));
+        assert!(
+            text.contains('\u{fffd}'),
+            "lossy conversion should substitute replacement chars"
+        );
     }
 
     #[test]
@@ -467,6 +565,80 @@ mod tests {
             "the on-disk file should reflect the saved buffer"
         );
         assert!(result.path.ends_with("note.md"));
+    }
+
+    #[test]
+    fn write_replaces_content_atomically_without_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_string_lossy().to_string();
+        let file = dir.path().join("doc.txt");
+        std::fs::write(&file, b"before").unwrap();
+
+        write_file_text(&root, "doc.txt", "after").unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "after");
+        // The temp file must have been renamed over the target, not left behind.
+        let names: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(names, vec!["doc.txt".to_string()]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_preserves_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_string_lossy().to_string();
+        let file = dir.path().join("script.sh");
+        std::fs::write(&file, b"echo hi").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        write_file_text(&root, "script.sh", "echo bye").unwrap();
+        let mode = std::fs::metadata(&file).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o755, "atomic replace must not reset the mode");
+    }
+
+    #[test]
+    fn write_rejects_empty_root() {
+        // The read path tolerates a blank root for absolute paths; the write
+        // path must not — otherwise any existing file becomes writable.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("target.txt");
+        std::fs::write(&file, b"keep").unwrap();
+
+        let err = write_file_text("", &file.to_string_lossy(), "pwned").unwrap_err();
+        assert!(
+            matches!(err, AppError::InvalidRequest(_)),
+            "expected InvalidRequest, got {err:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "keep",
+            "a rejected write must not touch the file"
+        );
+    }
+
+    #[test]
+    fn write_rejects_uncanonicalizable_root() {
+        // Same story for a root that doesn't exist: reads skip containment,
+        // writes must fail hard instead of falling through to the target.
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("target.txt");
+        std::fs::write(&file, b"keep").unwrap();
+
+        let err =
+            write_file_text("/no/such/root-xyz-404", &file.to_string_lossy(), "pwned").unwrap_err();
+        assert!(
+            matches!(err, AppError::FileError(_)),
+            "expected FileError, got {err:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "keep",
+            "a rejected write must not touch the file"
+        );
     }
 
     #[test]

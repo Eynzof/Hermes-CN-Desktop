@@ -255,6 +255,13 @@ export interface FilePreview {
   binary: boolean;
   /** True when `text` was cut at the 512 KB cap. */
   truncated: boolean;
+  /**
+   * True when the on-disk bytes were not valid UTF-8 and `text` is a lossy
+   * (�-substituted) rendering — display-only, never editable (writing it back
+   * as UTF-8 would corrupt the original encoding). Optional so older bridges
+   * that don't report it stay compatible.
+   */
+  lossyUtf8?: boolean;
 }
 
 export interface WriteWorkspaceFileInput {
