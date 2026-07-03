@@ -48,6 +48,14 @@ export const StatusResponse = z.object({
   gateway_exit_reason: z.string().nullable(),
   gateway_updated_at: z.string().nullable(),
   active_sessions: z.number(),
+  // v0.18.0 上游新增（scale-to-zero / drain 协调 / dashboard 鉴权）。
+  can_update_hermes: z.boolean().optional(),
+  active_agents: z.number().optional(),
+  gateway_busy: z.boolean().optional(),
+  gateway_drainable: z.boolean().optional(),
+  restart_drain_timeout: z.number().nullable().optional(),
+  auth_required: z.boolean().optional(),
+  auth_providers: z.unknown().optional(),
 });
 export type StatusResponse = z.infer<typeof StatusResponse>;
 
@@ -240,17 +248,22 @@ export const SessionMessage = z.object({
   role: z.string(),
   content: MessageContent,
   images: z.array(HermesImageSource).optional(),
-  tool_call_id: z.string().nullable(),
-  tool_calls: z.any().nullable(),
-  tool_name: z.string().nullable(),
+  // The nullable metadata columns below mirror the backend's `SELECT *` off
+  // the messages table. They are also `.optional()` on purpose: upstream adds
+  // and (rarely) drops columns across releases, and a "required but nullable"
+  // field turns a dropped column into a parse failure on EVERY row — the
+  // whole history blanks out. Missing → treated the same as null.
+  tool_call_id: z.string().nullable().optional(),
+  tool_calls: z.any().nullable().optional(),
+  tool_name: z.string().nullable().optional(),
   timestamp: z.number(),
-  token_count: z.number().nullable(),
-  finish_reason: z.string().nullable(),
-  reasoning: z.string().nullable(),
-  reasoning_details: z.any().nullable(),
-  codex_reasoning_items: z.any().nullable(),
-  reasoning_content: z.string().nullable(),
-});
+  token_count: z.number().nullable().optional(),
+  finish_reason: z.string().nullable().optional(),
+  reasoning: z.string().nullable().optional(),
+  reasoning_details: z.any().nullable().optional(),
+  codex_reasoning_items: z.any().nullable().optional(),
+  reasoning_content: z.string().nullable().optional(),
+}).passthrough();
 export type SessionMessage = z.infer<typeof SessionMessage>;
 
 export const HermesMessageUsage = z
@@ -452,6 +465,12 @@ export const EnvVarInfo = z.object({
   is_password: z.boolean(),
   tools: z.array(z.string()),
   advanced: z.boolean(),
+  // v0.18.0 上游新增：provider 归属（Keys 页按服务商分组）、渠道托管标记
+  // （channel-managed 的密钥不应在 UI 里直接编辑）、用户自定义 .env 键标记。
+  provider: z.string().nullable().optional(),
+  provider_label: z.string().nullable().optional(),
+  channel_managed: z.boolean().optional(),
+  custom: z.boolean().optional(),
 });
 export type EnvVarInfo = z.infer<typeof EnvVarInfo>;
 
@@ -1363,13 +1382,14 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
       context: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
+  // Core 从不发 "tool.progress"（新旧 runtime 均如此）；真实事件是
+  // "tool.generating"——模型正在流式生成工具调用参数（先于 tool.start），
+  // payload 仅带 {name}。
   z.object({
-    type: z.literal("tool.progress"),
+    type: z.literal("tool.generating"),
     session_id: z.string(),
     payload: z.object({
-      tool_id: z.string().optional(),
       name: z.string().optional(),
-      preview: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
   z.object({
