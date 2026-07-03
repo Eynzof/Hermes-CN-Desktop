@@ -13,6 +13,8 @@ import {
 // Tests then drive the actual UI exactly as a user would.
 export default defineConfig({
   testDir: "./specs",
+  // 首个 spec 前预热整条链路（Vite 冷转换 + 后端冷端点），见该文件头注释。
+  globalSetup: "./harness/global-warmup.mjs",
   // One backend + shared session store -> keep tests serial and deterministic.
   fullyParallel: false,
   workers: 1,
