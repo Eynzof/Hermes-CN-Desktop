@@ -45,7 +45,8 @@ export type AssistantTurnBlock =
   | { type: "reasoning"; text: string }
   | { type: "progress"; text: string }
   | { type: "image"; image: ImageEntry }
-  | { type: "tool"; tool: ToolEntry };
+  | { type: "tool"; tool: ToolEntry }
+  | { type: "moa_reference"; label: string; text: string; index?: number; count?: number };
 
 export interface PendingApproval {
   requestId: string;
@@ -88,7 +89,13 @@ export const chatRuntimeBySessionAtom = atom<ChatRuntimeBySession>({});
 
 const GENERIC_TURN_FAILURE_TEXT =
   "模型服务调用未成功。常见原因：API Key 失效或不在模型权限范围、网络/服务不可达。请到 设置 → 模型 检查后重试。";
-const PROVIDER_STATUS_KINDS = new Set(["provider_wait", "provider_retry", "provider_stalled"]);
+const PROVIDER_STATUS_KINDS = new Set([
+  "provider_wait",
+  "provider_retry",
+  "provider_stalled",
+  "moa_reference",
+  "moa_aggregating",
+]);
 const OPTIMISTIC_ASSISTANT_PROGRESS = "正在启动Hermes Agent内核...";
 
 export function createEmptyChatRuntime(now = Date.now()): ChatSessionRuntime {
@@ -610,6 +617,59 @@ function reduceGatewayEventInner(
         }),
       );
       return next;
+    }
+
+    case "moa.reference": {
+      // 一个 reference 模型的完整输出块（label + 全文），在聚合器回答之前
+      // 逐个到达。追加为独立的 moa_reference part；同时用 provider-status
+      // 通道提示进度（message.delta 到达时自动清除）。
+      const label = typeof payload.label === "string" ? payload.label : "";
+      const text = typeof payload.text === "string" ? payload.text : "";
+      const index = typeof payload.index === "number" ? payload.index : undefined;
+      const count = typeof payload.count === "number" ? payload.count : undefined;
+      if (!label && !text) return runtime;
+      const id = activeAssistantId(runtime, now);
+      const progressLabel =
+        index !== undefined && count !== undefined
+          ? `参考模型 ${label || "?"} 已完成（${index + 1}/${count}）…`
+          : `参考模型 ${label || "?"} 已完成…`;
+      return updateActiveAssistant(
+        {
+          ...runtime,
+          streamStatus: "streaming",
+          activeAssistantId: id,
+          turnStartedAt: runtime.turnStartedAt ?? now,
+          statusMessage: progressLabel,
+          statusKind: "moa_reference",
+          statusUpdatedAt: now,
+          updatedAt: now,
+        },
+        sessionId,
+        now,
+        (message) => ({
+          ...message,
+          status: "streaming",
+          parts: [
+            ...message.parts,
+            { type: "moa_reference", label: label || "reference", text, index, count },
+          ],
+        }),
+      );
+    }
+
+    case "moa.aggregating": {
+      // references 齐了，聚合器开始综合；它的回答走普通 message.delta 流，
+      // 到达时 clearProviderStatus 会清掉这条状态。
+      const aggregator = typeof payload.aggregator === "string" ? payload.aggregator : "";
+      return {
+        ...runtime,
+        statusMessage: aggregator
+          ? `聚合器 ${aggregator} 正在综合各模型观点…`
+          : "聚合器正在综合各模型观点…",
+        statusKind: "moa_aggregating",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
     }
 
     case "thinking.delta":

@@ -22,6 +22,10 @@ export const CN_BACKEND_PROVIDER_SLUGS = [
   "anthropic",   // ANTHROPIC_API_KEY widely used even in CN edition
   "openai-codex",
   "openrouter",  // kept as an explicit user-requested fallback aggregator
+  // v0.18.0：MoA（Mixture of Agents）虚拟 provider。仅当用户配置了 MoA
+  // preset 时网关才返回该行（models = preset 名列表），选中即把整个混合
+  // 集合当作一个模型使用。
+  "moa",
 ] as const;
 
 export type CnBackendProviderSlug = (typeof CN_BACKEND_PROVIDER_SLUGS)[number];
