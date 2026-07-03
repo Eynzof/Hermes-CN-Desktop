@@ -43,6 +43,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
   const {
     files,
     loading,
+    hasBridge,
     isRepo,
     selectedFile,
     diff,
@@ -71,6 +72,17 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
       <div className={s.empty}>
         <GitPullRequest size={24} aria-hidden />
         <p>本会话还没有关联工作区，无法审查改动。</p>
+      </div>
+    );
+  }
+
+  // Pure-browser web mode has no desktop git bridge — say so instead of the
+  // misleading "not a git repo".
+  if (!hasBridge) {
+    return (
+      <div className={s.empty}>
+        <GitPullRequest size={24} aria-hidden />
+        <p>当前环境没有桌面端 Git 能力，请在桌面应用中使用改动审查。</p>
       </div>
     );
   }

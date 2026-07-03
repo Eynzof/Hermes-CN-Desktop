@@ -292,6 +292,8 @@ export interface ReviewList {
   files: ReviewFile[];
   /** merge-base for `branch` scope, else null. */
   base: string | null;
+  /** Whether the path is inside a git work tree (backend `rev-parse` verdict). */
+  isRepo: boolean;
 }
 
 export interface ReviewPrInfo {
