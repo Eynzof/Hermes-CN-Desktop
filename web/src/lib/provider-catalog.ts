@@ -220,7 +220,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.28.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.03.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -324,6 +324,29 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       transport: "openai_chat",
       apiKeyLabel: "GLM_API_KEY",
       docsUrl: "https://docs.bigmodel.cn/",
+      defaultModel: "glm-5.1",
+      models: [
+        { id: "glm-5.2", supportsTools: true, supportsReasoning: true },
+        { id: "glm-5.1", supportsTools: true, supportsReasoning: true },
+        { id: "glm-4.6", supportsTools: true, supportsReasoning: true },
+        { id: "glm-4.5", supportsTools: true },
+        { id: "glm-4.5v", supportsVision: true },
+      ],
+    },
+    {
+      // 上游 v0.18.0 起 canonical `zai` 指 Global 端点（api.z.ai），本地
+      // `zai` 预设保持中国端点（open.bigmodel.cn）——两者 base_url 均随预设
+      // 显式落盘，不依赖后端默认，语义冲突不影响功能。此条目补齐 Global
+      // 变体，供海外/出海用户选择（对应上游的 Z.AI endpoint picker）。
+      id: "zai-global",
+      name: "Z.AI GLM · 国际版",
+      vendor: "Zhipu AI",
+      region: "global",
+      baseUrl: "https://api.z.ai/api/paas/v4",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "ZAI_API_KEY",
+      docsUrl: "https://docs.z.ai/",
       defaultModel: "glm-5.1",
       models: [
         { id: "glm-5.2", supportsTools: true, supportsReasoning: true },

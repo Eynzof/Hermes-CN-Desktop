@@ -3,21 +3,21 @@
 ## 项目概述
 
 Hermes Agent CN 桌面端 — 用 Tauri v2 + React 构建的独立桌面应用，替代原 Electron 壳。
-对接后端是 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)（CN 核心 runtime，原名 hermes-agent-cn）内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。当前版本 **0.5.4**，bundle identifier 固定为 `cn.org.hermesagent.desktop`（升级安全承重标识，勿改）。版本号由 `pnpm version:sync` 以 `package.json` 为真相，传播到 `tauri.conf.json` / `Cargo.toml` / `Cargo.lock` / 各 workspace `package.json` / README，`pnpm version:check` 校验。
+对接后端是 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)（CN 核心 runtime，原名 hermes-agent-cn）内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。bundle identifier 固定为 `cn.org.hermesagent.desktop`（升级安全承重标识，勿改）。版本号以 `package.json` 为唯一真相（勿在本文件硬编码版本号），由 `pnpm version:sync` 传播到 `tauri.conf.json` / `Cargo.toml` / `Cargo.lock` / 各 workspace `package.json` / README，`pnpm version:check` 校验。
 
 ## 项目结构
 
 ```
 Hermes-CN-Desktop/
 ├── src/                    Rust Tauri 后端（~24,000 行，crate lib 名 hermes_agent_cn）
-│   ├── main.rs               入口：解析 HERMES_HOME、启动 dashboard、注册 60 个命令（generate_handler!）、系统托盘
+│   ├── main.rs               入口：解析 HERMES_HOME、启动 dashboard、注册 61 个命令（generate_handler!）、系统托盘
 │   ├── lib.rs / state.rs     库入口（声明 18 个 module）+ AppState（Mutex<AppStateInner>）
 │   ├── tray.rs               系统托盘菜单
 │   ├── error.rs              AppError 统一错误类型
 │   ├── environment.rs / bootstrap.rs / connection.rs / path_resolver.rs / env_file.rs
 │   ├── supervisor.rs / prevent_sleep.rs / cron_runs.rs / update_stage.rs / util.rs / ui_store.rs
 │   ├── session_archive.rs / session_log.rs   会话归档与日志读取
-│   ├── commands/             60 个 #[tauri::command]（22 个模块，列表见 main.rs 的 generate_handler!）
+│   ├── commands/             61 个 #[tauri::command]（22 个模块，列表见 main.rs 的 generate_handler!）
 │   │   ├── api_proxy.rs         HTTP 代理（api_request / external_request / upload_file）
 │   │   ├── ws_proxy.rs          /api/ws WebSocket 中继（webview 原生 WS 被拦时的兜底）
 │   │   ├── gateway.rs           runtime config + gateway URL 刷新
@@ -27,7 +27,7 @@ Hermes-CN-Desktop/
 │   │   ├── config_migration.rs  配置迁移
 │   │   ├── im_onboarding.rs     飞书/钉钉/企微/微信 接入引导
 │   │   └── connection/memory/skills/terminal/backup/log_export/debug_bundle/notify/
-│   │       preview/environment/file_dialogs/restart/ui_store/yolo/mod.rs
+│   │       preview/environment/file_dialogs/restart/ui_store/yolo/devtools/mod.rs
 │   └── process/
 │       ├── dashboard.rs         dashboard 子进程管理（probe/spawn/port fallback）
 │       ├── gateway.rs           gateway 子进程 / 冲突检测
