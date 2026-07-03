@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +27,11 @@ const COMMIT_CONTEXT_DIFF_MAX_CHARS: usize = 120_000;
 const COMMIT_CONTEXT_UNTRACKED_MAX: usize = 80;
 /// Skip line-counting an untracked file larger than this (matches upstream).
 const UNTRACKED_LINE_COUNT_MAX_BYTES: u64 = 1024 * 1024;
+/// Hard deadline for a git/gh subprocess — a hung child (credential prompt that
+/// slipped through, network stall) is killed instead of wedging the pane.
+const CHILD_TIMEOUT: Duration = Duration::from_secs(30);
+/// `try_wait` polling interval while a child runs under the timeout.
+const CHILD_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 // ── IPC payloads ─────────────────────────────────────────────────────────────
 
@@ -46,6 +52,9 @@ pub struct ReviewList {
     pub files: Vec<ReviewFile>,
     /// merge-base for `branch` scope, else null.
     pub base: Option<String>,
+    /// Whether the path is inside a git work tree; the pane's "not a repo"
+    /// empty state keys off this instead of guessing from an empty list.
+    pub is_repo: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -163,24 +172,101 @@ fn augmented_path() -> Option<String> {
 
 /// A `Command` rooted at `cwd` with PATH augmented and interactive prompts
 /// disabled (`GIT_TERMINAL_PROMPT=0`), so a push that needs credentials fails
-/// fast instead of hanging on a hidden prompt.
+/// fast instead of hanging on a hidden prompt. `LC_ALL=C` pins the child's
+/// locale: error-string matching and porcelain parsing must not depend on a
+/// localized git (a Chinese git emits translated messages).
 fn command(program: &str, cwd: &Path) -> Command {
     let mut cmd = Command::new(program);
     cmd.current_dir(cwd);
     cmd.env("GIT_TERMINAL_PROMPT", "0");
+    cmd.env("LC_ALL", "C");
     if let Some(path) = augmented_path() {
         cmd.env("PATH", path);
     }
+    // The app is a windowed subsystem; without this every git/gh call flashes a
+    // console window on Windows (same as process/dashboard.rs, process/gateway.rs).
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd
+}
+
+/// The single entry for building `git` argv. `-c core.quotepath=false` keeps
+/// non-ASCII paths raw in `--numstat`/diff output so they match the unquoted
+/// paths from `status -z` (a quoted `"\344\270\255..."` row would never join).
+fn git_command(cwd: &Path, args: &[&str]) -> Command {
+    let mut cmd = command("git", cwd);
+    cmd.args(["-c", "core.quotepath=false"]);
+    cmd.args(args);
+    cmd
+}
+
+/// `Command::output()` with a hard timeout. Spawns with piped stdio, drains
+/// stdout/stderr on background threads (draining inline would deadlock once a
+/// pipe fills), and polls `try_wait` until `timeout`, then kills the child and
+/// reports `ErrorKind::TimedOut`. The synchronous API has no native timeout.
+fn output_with_timeout(
+    mut cmd: Command,
+    timeout: Duration,
+) -> std::io::Result<std::process::Output> {
+    use std::io::Read;
+    use std::process::Stdio;
+
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+
+    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            buf
+        })
+    }
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait(); // reap; closes the pipes so the readers finish
+            let _ = stdout.join();
+            let _ = stderr.join();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "命令执行超时，已终止",
+            ));
+        }
+        std::thread::sleep(CHILD_POLL_INTERVAL);
+    };
+
+    Ok(std::process::Output {
+        status,
+        stdout: stdout.join().unwrap_or_default(),
+        stderr: stderr.join().unwrap_or_default(),
+    })
 }
 
 /// Run `git` and require success — stdout on exit 0, else `AppError::Git(stderr)`.
 /// Used by mutations.
 fn run_git(cwd: &Path, args: &[&str]) -> AppResult<String> {
-    let output = command("git", cwd)
-        .args(args)
-        .output()
-        .map_err(|e| AppError::Git(format!("failed to run git: {e}")))?;
+    let output = output_with_timeout(git_command(cwd, args), CHILD_TIMEOUT).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::TimedOut {
+            AppError::Git("git 命令超时".to_string())
+        } else {
+            AppError::Git(format!("failed to run git: {e}"))
+        }
+    })?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
@@ -198,16 +284,18 @@ fn run_git_ok(cwd: &Path, args: &[&str]) -> String {
 /// Run `git` and return stdout regardless of exit code (`git diff --no-index`
 /// exits non-zero by design when files differ, yet still emits the diff).
 fn run_git_capture(cwd: &Path, args: &[&str]) -> String {
-    match command("git", cwd).args(args).output() {
+    match output_with_timeout(git_command(cwd, args), CHILD_TIMEOUT) {
         Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
         Err(_) => String::new(),
     }
 }
 
 /// Run the `gh` CLI. Returns `(ok, stdout)` so callers branch on
-/// availability/auth without a throw. gh missing/unauthed → `(false, "")`.
+/// availability/auth without a throw. gh missing/unauthed/hung → `(false, "")`.
 fn run_gh(cwd: &Path, args: &[&str]) -> (bool, String) {
-    match command("gh", cwd).args(args).output() {
+    let mut cmd = command("gh", cwd);
+    cmd.args(args);
+    match output_with_timeout(cmd, CHILD_TIMEOUT) {
         Ok(output) => (
             output.status.success(),
             String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -232,6 +320,17 @@ fn resolve_repo_dir(repo_path: &str) -> AppResult<PathBuf> {
         ));
     }
     Ok(real)
+}
+
+/// Renderer-supplied refs get spliced into argv before `--`; reject anything
+/// that would parse as an option so `-...` can't smuggle git flags.
+fn ensure_safe_ref(reference: &str) -> AppResult<()> {
+    if reference.trim_start().starts_with('-') {
+        return Err(AppError::InvalidRequest(format!(
+            "非法 git 引用（不能以 '-' 开头）：{reference}"
+        )));
+    }
+    Ok(())
 }
 
 // ── Parsing helpers ──────────────────────────────────────────────────────────
@@ -302,8 +401,10 @@ fn is_staged(x: char) -> bool {
 /// Parse `git status --porcelain=v1 -z` into `(index, worktree, new_path)` rows.
 /// The `-z` format avoids path quoting and puts the rename's NEW path in the
 /// record itself (the following NUL field is the old path, which we skip).
+/// `-uall` expands untracked directories into individual files instead of a
+/// single collapsed `dir/` row.
 fn status_entries(cwd: &Path) -> Vec<(char, char, String)> {
-    let raw = run_git_capture(cwd, &["status", "--porcelain=v1", "-z"]);
+    let raw = run_git_capture(cwd, &["status", "--porcelain=v1", "-z", "-uall"]);
     let mut fields = raw.split('\0');
     let mut entries = Vec::new();
 
@@ -314,7 +415,10 @@ fn status_entries(cwd: &Path) -> Vec<(char, char, String)> {
         let mut chars = field.chars();
         let x = chars.next().unwrap_or(' ');
         let y = chars.next().unwrap_or(' ');
-        let path = field[3..].to_string();
+        // `get` (not slicing) so a multibyte char straddling index 3 can't panic.
+        let Some(path) = field.get(3..).map(str::to_string) else {
+            continue;
+        };
         let is_rename = matches!(x, 'R' | 'C') || matches!(y, 'R' | 'C');
         if is_rename {
             // The next NUL field is the rename's original path; consume it.
@@ -474,12 +578,21 @@ fn push_current(cwd: &Path) -> AppResult<()> {
 // ── Core review ops (AppHandle-free, unit-testable) ──────────────────────────
 
 fn review_list_impl(repo_path: &str, scope: &str, base_ref: Option<&str>) -> ReviewList {
-    let Ok(cwd) = resolve_repo_dir(repo_path) else {
-        return ReviewList {
-            files: Vec::new(),
-            base: None,
-        };
+    let empty = |is_repo: bool| ReviewList {
+        files: Vec::new(),
+        base: None,
+        is_repo,
     };
+
+    let Ok(cwd) = resolve_repo_dir(repo_path) else {
+        return empty(false);
+    };
+
+    // Distinguish "not a repo" from "clean repo" so the pane's empty state is
+    // honest (the frontend renders "不是 git 仓库" only when this is false).
+    if run_git_ok(&cwd, &["rev-parse", "--is-inside-work-tree"]).trim() != "true" {
+        return empty(false);
+    }
 
     if scope == "branch" || scope == "lastTurn" {
         let base = if scope == "branch" {
@@ -488,10 +601,7 @@ fn review_list_impl(repo_path: &str, scope: &str, base_ref: Option<&str>) -> Rev
             base_ref.map(|s| s.to_string())
         };
         let Some(base) = base else {
-            return ReviewList {
-                files: Vec::new(),
-                base: None,
-            };
+            return empty(true);
         };
 
         let range = if scope == "branch" {
@@ -532,6 +642,7 @@ fn review_list_impl(repo_path: &str, scope: &str, base_ref: Option<&str>) -> Rev
         return ReviewList {
             files,
             base: Some(base),
+            is_repo: true,
         };
     }
 
@@ -557,7 +668,11 @@ fn review_list_impl(repo_path: &str, scope: &str, base_ref: Option<&str>) -> Rev
 
     files.sort_by(|a, b| a.path.cmp(&b.path));
     fill_untracked_counts(&cwd, &mut files);
-    ReviewList { files, base: None }
+    ReviewList {
+        files,
+        base: None,
+        is_repo: true,
+    }
 }
 
 fn review_diff_impl(
@@ -693,54 +808,29 @@ fn ship_info_impl(repo_path: &str) -> ShipInfo {
     ShipInfo { gh_ready: true, pr }
 }
 
-// ── Tauri commands ───────────────────────────────────────────────────────────
-
-#[tauri::command]
-pub fn git_review_list(input: ReviewListInput) -> AppResult<ReviewList> {
-    Ok(review_list_impl(
-        &input.repo_path,
-        &input.scope,
-        input.base_ref.as_deref(),
-    ))
-}
-
-#[tauri::command]
-pub fn git_review_diff(input: ReviewDiffInput) -> AppResult<String> {
-    Ok(review_diff_impl(
-        &input.repo_path,
-        &input.file_path,
-        &input.scope,
-        input.base_ref.as_deref(),
-        input.staged,
-    ))
-}
-
-#[tauri::command]
-pub fn git_review_stage(input: ReviewPathInput) -> AppResult<OkFlag> {
-    let cwd = resolve_repo_dir(&input.repo_path)?;
-    match input.file_path.as_deref() {
+fn review_stage_impl(repo_path: &str, file_path: Option<&str>) -> AppResult<OkFlag> {
+    let cwd = resolve_repo_dir(repo_path)?;
+    match file_path {
         Some(path) => run_git(&cwd, &["add", "--", path])?,
         None => run_git(&cwd, &["add", "-A"])?,
     };
     Ok(OkFlag { ok: true })
 }
 
-#[tauri::command]
-pub fn git_review_unstage(input: ReviewPathInput) -> AppResult<OkFlag> {
-    let cwd = resolve_repo_dir(&input.repo_path)?;
-    match input.file_path.as_deref() {
+fn review_unstage_impl(repo_path: &str, file_path: Option<&str>) -> AppResult<OkFlag> {
+    let cwd = resolve_repo_dir(repo_path)?;
+    match file_path {
         Some(path) => run_git(&cwd, &["reset", "-q", "HEAD", "--", path])?,
         None => run_git(&cwd, &["reset", "-q", "HEAD"])?,
     };
     Ok(OkFlag { ok: true })
 }
 
-#[tauri::command]
-pub fn git_review_revert(input: ReviewPathInput) -> AppResult<OkFlag> {
-    let cwd = resolve_repo_dir(&input.repo_path)?;
+fn review_revert_impl(repo_path: &str, file_path: Option<&str>) -> AppResult<OkFlag> {
+    let cwd = resolve_repo_dir(repo_path)?;
     // Destructive: restore tracked files and remove untracked ones. Errors are
     // swallowed (mirrors the upstream `.catch`) so a partial revert still runs.
-    match input.file_path.as_deref() {
+    match file_path {
         Some(path) => {
             let _ = run_git(&cwd, &["checkout", "HEAD", "--", path]);
             let _ = run_git(&cwd, &["clean", "-fd", "--", path]);
@@ -753,51 +843,106 @@ pub fn git_review_revert(input: ReviewPathInput) -> AppResult<OkFlag> {
     Ok(OkFlag { ok: true })
 }
 
-#[tauri::command]
-pub fn git_review_rev_parse(input: ReviewRevParseInput) -> AppResult<Option<String>> {
-    let Ok(cwd) = resolve_repo_dir(&input.repo_path) else {
+fn review_rev_parse_impl(repo_path: &str, reference: Option<&str>) -> AppResult<Option<String>> {
+    let reference = reference.unwrap_or("HEAD");
+    ensure_safe_ref(reference)?;
+    let Ok(cwd) = resolve_repo_dir(repo_path) else {
         return Ok(None);
     };
-    let reference = input.reference.as_deref().unwrap_or("HEAD");
     let sha = run_git(&cwd, &["rev-parse", reference])
         .map(|s| s.trim().to_string())
         .unwrap_or_default();
     Ok(if sha.is_empty() { None } else { Some(sha) })
 }
 
-#[tauri::command]
-pub fn git_review_commit(input: ReviewCommitInput) -> AppResult<OkFlag> {
-    let cwd = resolve_repo_dir(&input.repo_path)?;
+fn review_commit_impl(repo_path: &str, message: &str, push: bool) -> AppResult<OkFlag> {
+    let cwd = resolve_repo_dir(repo_path)?;
     // Mirror VS Code: nothing staged → "commit all" (stage everything first).
     if staged_count(&cwd) == 0 {
         run_git(&cwd, &["add", "-A"])?;
     }
-    run_git(&cwd, &["commit", "-m", &input.message])?;
-    if input.push {
+    run_git(&cwd, &["commit", "-m", message])?;
+    if push {
         push_current(&cwd)?;
     }
     Ok(OkFlag { ok: true })
 }
 
+// ── Tauri commands ───────────────────────────────────────────────────────────
+//
+// All async: Tauri v2 runs async commands on its runtime thread pool, so the
+// blocking subprocess work below never stalls the main (UI) thread.
+
 #[tauri::command]
-pub fn git_review_commit_context(input: RepoPathInput) -> AppResult<CommitContext> {
+pub async fn git_review_list(input: ReviewListInput) -> AppResult<ReviewList> {
+    if let Some(reference) = input.base_ref.as_deref() {
+        ensure_safe_ref(reference)?;
+    }
+    Ok(review_list_impl(
+        &input.repo_path,
+        &input.scope,
+        input.base_ref.as_deref(),
+    ))
+}
+
+#[tauri::command]
+pub async fn git_review_diff(input: ReviewDiffInput) -> AppResult<String> {
+    if let Some(reference) = input.base_ref.as_deref() {
+        ensure_safe_ref(reference)?;
+    }
+    Ok(review_diff_impl(
+        &input.repo_path,
+        &input.file_path,
+        &input.scope,
+        input.base_ref.as_deref(),
+        input.staged,
+    ))
+}
+
+#[tauri::command]
+pub async fn git_review_stage(input: ReviewPathInput) -> AppResult<OkFlag> {
+    review_stage_impl(&input.repo_path, input.file_path.as_deref())
+}
+
+#[tauri::command]
+pub async fn git_review_unstage(input: ReviewPathInput) -> AppResult<OkFlag> {
+    review_unstage_impl(&input.repo_path, input.file_path.as_deref())
+}
+
+#[tauri::command]
+pub async fn git_review_revert(input: ReviewPathInput) -> AppResult<OkFlag> {
+    review_revert_impl(&input.repo_path, input.file_path.as_deref())
+}
+
+#[tauri::command]
+pub async fn git_review_rev_parse(input: ReviewRevParseInput) -> AppResult<Option<String>> {
+    review_rev_parse_impl(&input.repo_path, input.reference.as_deref())
+}
+
+#[tauri::command]
+pub async fn git_review_commit(input: ReviewCommitInput) -> AppResult<OkFlag> {
+    review_commit_impl(&input.repo_path, &input.message, input.push)
+}
+
+#[tauri::command]
+pub async fn git_review_commit_context(input: RepoPathInput) -> AppResult<CommitContext> {
     Ok(commit_context_impl(&input.repo_path))
 }
 
 #[tauri::command]
-pub fn git_review_push(input: RepoPathInput) -> AppResult<OkFlag> {
+pub async fn git_review_push(input: RepoPathInput) -> AppResult<OkFlag> {
     let cwd = resolve_repo_dir(&input.repo_path)?;
     push_current(&cwd)?;
     Ok(OkFlag { ok: true })
 }
 
 #[tauri::command]
-pub fn git_review_ship_info(input: RepoPathInput) -> AppResult<ShipInfo> {
+pub async fn git_review_ship_info(input: RepoPathInput) -> AppResult<ShipInfo> {
     Ok(ship_info_impl(&input.repo_path))
 }
 
 #[tauri::command]
-pub fn git_review_create_pr(input: RepoPathInput) -> AppResult<CreatePrResult> {
+pub async fn git_review_create_pr(input: RepoPathInput) -> AppResult<CreatePrResult> {
     let cwd = resolve_repo_dir(&input.repo_path)?;
     // Push first so gh has a remote ref (best-effort, like upstream).
     let _ = push_current(&cwd);
@@ -1546,6 +1691,7 @@ mod tests {
         let by_path: HashMap<_, _> = list.files.iter().map(|f| (f.path.as_str(), f)).collect();
 
         assert_eq!(list.base, None);
+        assert!(list.is_repo);
         let readme = by_path.get("README.md").expect("README.md present");
         assert_eq!(readme.status, "M");
         assert!(!readme.staged);
@@ -1573,22 +1719,14 @@ mod tests {
         let repo = dir.path().to_string_lossy().to_string();
         fs::write(dir.path().join("README.md"), "hello\nchanged\n").unwrap();
 
-        git_review_stage(ReviewPathInput {
-            repo_path: repo.clone(),
-            file_path: Some("README.md".to_string()),
-        })
-        .unwrap();
+        review_stage_impl(&repo, Some("README.md")).unwrap();
         let staged = review_list_impl(&repo, "uncommitted", None);
         assert!(staged
             .files
             .iter()
             .any(|f| f.path == "README.md" && f.staged));
 
-        git_review_unstage(ReviewPathInput {
-            repo_path: repo.clone(),
-            file_path: Some("README.md".to_string()),
-        })
-        .unwrap();
+        review_unstage_impl(&repo, Some("README.md")).unwrap();
         let unstaged = review_list_impl(&repo, "uncommitted", None);
         assert!(unstaged
             .files
@@ -1602,12 +1740,7 @@ mod tests {
         let repo = dir.path().to_string_lossy().to_string();
         fs::write(dir.path().join("README.md"), "hello\nmore\n").unwrap();
 
-        git_review_commit(ReviewCommitInput {
-            repo_path: repo.clone(),
-            message: "docs: 更新 README".to_string(),
-            push: false,
-        })
-        .unwrap();
+        review_commit_impl(&repo, "docs: 更新 README", false).unwrap();
 
         let list = review_list_impl(&repo, "uncommitted", None);
         assert!(list.files.is_empty(), "tree is clean after commit");
@@ -1638,11 +1771,7 @@ mod tests {
         fs::write(dir.path().join("README.md"), "hello\nedited\n").unwrap();
         fs::write(dir.path().join("scratch.txt"), "temp\n").unwrap();
 
-        git_review_revert(ReviewPathInput {
-            repo_path: repo.clone(),
-            file_path: None,
-        })
-        .unwrap();
+        review_revert_impl(&repo, None).unwrap();
 
         assert_eq!(
             fs::read_to_string(dir.path().join("README.md")).unwrap(),
@@ -1661,6 +1790,7 @@ mod tests {
         let repo = dir.path().to_string_lossy().to_string();
         let list = review_list_impl(&repo, "uncommitted", None);
         assert!(list.files.is_empty());
+        assert!(!list.is_repo, "non-repo dir is flagged");
         assert_eq!(commit_context_impl(&repo).diff, "");
         assert!(review_diff_impl(&repo, "x", "uncommitted", None, false).is_empty());
     }
@@ -1668,23 +1798,12 @@ mod tests {
     #[test]
     fn rev_parse_resolves_head_and_returns_none_off_repo() {
         let dir = init_repo();
-        let head = git_review_rev_parse(ReviewRevParseInput {
-            repo_path: dir.path().to_string_lossy().to_string(),
-            reference: None,
-        })
-        .unwrap();
+        let head = review_rev_parse_impl(&dir.path().to_string_lossy(), None).unwrap();
         assert!(head.is_some());
         assert_eq!(head.unwrap().len(), 40, "full sha");
 
-        let none = git_review_rev_parse(ReviewRevParseInput {
-            repo_path: tempfile::tempdir()
-                .unwrap()
-                .path()
-                .to_string_lossy()
-                .to_string(),
-            reference: None,
-        })
-        .unwrap();
+        let off_repo = tempfile::tempdir().unwrap();
+        let none = review_rev_parse_impl(&off_repo.path().to_string_lossy(), None).unwrap();
         assert!(none.is_none());
     }
 
@@ -1793,6 +1912,73 @@ mod tests {
             read().lines().filter(|l| *l == ".worktrees/").count(),
             1,
             "exclude entry is idempotent"
+        );
+    }
+
+    #[test]
+    fn option_like_refs_are_rejected() {
+        assert!(ensure_safe_ref("main").is_ok());
+        assert!(ensure_safe_ref("origin/HEAD").is_ok());
+        assert!(ensure_safe_ref("--upload-pack=evil").is_err());
+        assert!(ensure_safe_ref("-x").is_err());
+        assert!(ensure_safe_ref("  --flag").is_err());
+
+        // The rev-parse command path refuses before touching git.
+        let dir = init_repo();
+        let err = review_rev_parse_impl(&dir.path().to_string_lossy(), Some("--verify"));
+        assert!(err.is_err(), "option-like ref must be rejected");
+    }
+
+    #[test]
+    fn status_expands_untracked_directories() {
+        let dir = init_repo();
+        let path = dir.path();
+        fs::create_dir_all(path.join("newdir/sub")).unwrap();
+        fs::write(path.join("newdir/sub/a.txt"), "x\n").unwrap();
+        fs::write(path.join("newdir/b.txt"), "y\ny\n").unwrap();
+
+        let list = review_list_impl(&path.to_string_lossy(), "uncommitted", None);
+        let paths: Vec<_> = list.files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"newdir/sub/a.txt"), "got {paths:?}");
+        assert!(paths.contains(&"newdir/b.txt"), "got {paths:?}");
+        assert!(
+            !paths.contains(&"newdir/"),
+            "no collapsed dir row: {paths:?}"
+        );
+    }
+
+    #[test]
+    fn numstat_counts_join_non_ascii_paths() {
+        let dir = init_repo();
+        let path = dir.path();
+        // Committed file with a non-ASCII name; without `-c core.quotepath=false`
+        // numstat quotes it (`"\344\270\255..."`) and never joins the status row.
+        fs::write(path.join("中文 文件.txt"), "一\n").unwrap();
+        git(path, &["add", "-A"]);
+        git(path, &["commit", "-q", "-m", "add non-ascii"]);
+        fs::write(path.join("中文 文件.txt"), "一\n二\n").unwrap();
+
+        let list = review_list_impl(&path.to_string_lossy(), "uncommitted", None);
+        let file = list
+            .files
+            .iter()
+            .find(|f| f.path == "中文 文件.txt")
+            .expect("row keeps the raw path");
+        assert_eq!(file.added, 1, "numstat counts joined onto the status row");
+        assert_eq!(file.status, "M");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_with_timeout_kills_a_hung_child() {
+        let mut cmd = Command::new("sleep");
+        cmd.arg("30");
+        let started = Instant::now();
+        let err = output_with_timeout(cmd, Duration::from_millis(300)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "child was killed at the deadline instead of running out the clock"
         );
     }
 
@@ -1933,5 +2119,17 @@ mod tests {
         })
         .unwrap();
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn output_with_timeout_collects_output_on_normal_exit() {
+        let dir = init_repo();
+        let out = output_with_timeout(
+            git_command(dir.path(), &["rev-parse", "--is-inside-work-tree"]),
+            CHILD_TIMEOUT,
+        )
+        .unwrap();
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "true");
     }
 }

@@ -36,6 +36,9 @@ const EMPTY_SHIP: ReviewShipInfo = { ghReady: false, pr: null };
 export interface UseReview {
   files: ReviewFile[];
   loading: boolean;
+  /** The desktop git bridge is available (false in pure-browser web mode). */
+  hasBridge: boolean;
+  /** Backend verdict: the workspace root is inside a git work tree. */
   isRepo: boolean;
   selectedPath: string | null;
   selectedFile: ReviewFile | undefined;
@@ -93,17 +96,20 @@ export function useReview(workspaceRoot: string, active: boolean): UseReview {
 
     if (!active || !cwd || !bridge) {
       setFiles([]);
-      setIsRepo(Boolean(cwd && bridge));
+      // No backend verdict available — stay neutral so the "not a repo" empty
+      // state never shows for a bridge/cwd gap (those have their own states).
+      setIsRepo(true);
       if (seq === refreshSeq.current) setLoading(false);
       return [];
     }
 
-    setIsRepo(true);
     setLoading(true);
     try {
       const result = await bridge.list({ repoPath: cwd, scope: "uncommitted", baseRef: null });
       if (seq !== refreshSeq.current) return result.files;
       setFiles(result.files);
+      // The backend runs `git rev-parse --is-inside-work-tree`; trust its verdict.
+      setIsRepo(result.isRepo);
 
       // Drop the selection if the file is gone (staged away, reverted) so the
       // diff pane doesn't strand on a ghost.
@@ -317,6 +323,7 @@ export function useReview(workspaceRoot: string, active: boolean): UseReview {
   return {
     files,
     loading,
+    hasBridge: Boolean(bridge),
     isRepo,
     selectedPath,
     selectedFile,
