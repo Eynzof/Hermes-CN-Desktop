@@ -88,7 +88,12 @@ export const chatRuntimeBySessionAtom = atom<ChatRuntimeBySession>({});
 
 const GENERIC_TURN_FAILURE_TEXT =
   "模型服务调用未成功。常见原因：API Key 失效或不在模型权限范围、网络/服务不可达。请到 设置 → 模型 检查后重试。";
-const PROVIDER_STATUS_KINDS = new Set(["provider_wait", "provider_retry", "provider_stalled"]);
+const PROVIDER_STATUS_KINDS = new Set([
+  "provider_wait",
+  "provider_retry",
+  "provider_stalled",
+  "tool_generating",
+]);
 const OPTIMISTIC_ASSISTANT_PROGRESS = "正在启动Hermes Agent内核...";
 
 export function createEmptyChatRuntime(now = Date.now()): ChatSessionRuntime {
@@ -768,24 +773,18 @@ function reduceGatewayEventInner(
       );
     }
 
-    case "tool.progress": {
-      const id = activeAssistantId(runtime, now);
-      return updateActiveAssistant(
-        clearProviderStatus({
-          ...runtime,
-          activeAssistantId: id,
-          updatedAt: now,
-        }),
-        sessionId,
-        now,
-        (message) => ({
-          ...message,
-          parts: updateToolParts(message.parts, payload, (tool) => ({
-            ...tool,
-            preview: typeof payload.preview === "string" ? payload.preview : tool.preview,
-          })),
-        }),
-      );
+    case "tool.generating": {
+      // 模型正在流式生成工具调用参数（先于 tool.start，此刻还没有 tool part）。
+      // 走 provider-status 通道展示轻量提示；tool.start/内容事件到达时由
+      // clearProviderStatus 自然清除。
+      const name = typeof payload.name === "string" ? payload.name : "";
+      return {
+        ...runtime,
+        statusMessage: name ? `正在准备 ${name} 工具调用…` : "正在准备工具调用…",
+        statusKind: "tool_generating",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
     }
 
     case "tool.complete": {
