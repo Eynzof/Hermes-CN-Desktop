@@ -527,6 +527,17 @@ const tauriBridge = {
       shipInfo: (input) => invokeCommand("git_review_ship_info", { input }),
       createPr: (input) => invokeCommand("git_review_create_pr", { input }),
     },
+    // Worktree / branch / status ops backing the projects sidebar (issue #327).
+    worktree: {
+      list: (input) => invokeCommand("git_worktree_list", { input }),
+      add: (input) => invokeCommand("git_worktree_add", { input }),
+      remove: (input) => invokeCommand("git_worktree_remove", { input }),
+    },
+    branch: {
+      list: (input) => invokeCommand("git_branch_list", { input }),
+      switch: (input) => invokeCommand("git_branch_switch", { input }),
+    },
+    repoStatus: (input) => invokeCommand("git_repo_status", { input }),
   } satisfies HermesGitBridge,
 
   async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {

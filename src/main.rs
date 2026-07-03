@@ -472,6 +472,12 @@ fn main() {
             commands::git::git_review_push,
             commands::git::git_review_ship_info,
             commands::git::git_review_create_pr,
+            commands::git::git_worktree_list,
+            commands::git::git_worktree_add,
+            commands::git::git_worktree_remove,
+            commands::git::git_branch_list,
+            commands::git::git_branch_switch,
+            commands::git::git_repo_status,
         ])
         .on_window_event(move |window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. }
