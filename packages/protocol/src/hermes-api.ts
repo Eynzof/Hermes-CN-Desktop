@@ -366,6 +366,17 @@ const HermesNoticeMessagePart = z.object({
   text: z.string(),
 });
 
+// MoA（Mixture of Agents）参考模型输出块：网关在聚合器回答之前，为每个
+// reference 模型 relay 一个完整的带标签文本块（moa.reference 事件）。仅存在
+// 于实时流；重载后的历史由后端持久化决定，不在此重建。
+const HermesMoaReferenceMessagePart = z.object({
+  type: z.literal("moa_reference"),
+  label: z.string(),
+  text: z.string(),
+  index: z.number().optional(),
+  count: z.number().optional(),
+});
+
 export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesTextMessagePart,
   HermesReasoningMessagePart,
@@ -373,6 +384,7 @@ export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesImageMessagePart,
   HermesToolMessagePart,
   HermesNoticeMessagePart,
+  HermesMoaReferenceMessagePart,
 ]);
 export type HermesMessagePart = z.infer<typeof HermesMessagePart>;
 
@@ -1419,6 +1431,26 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
     session_id: z.string().optional(),
     payload: z.object({
       message: z.string().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // MoA：每个 reference 模型的完整输出（label=槽位/模型名，text=全文，
+  // index/count=第几个/共几个）。非流式 delta，一个事件一整块。
+  z.object({
+    type: z.literal("moa.reference"),
+    session_id: z.string(),
+    payload: z.object({
+      label: z.string().optional(),
+      text: z.string().optional(),
+      index: z.number().optional(),
+      count: z.number().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // MoA：references 齐了、聚合器开始综合（其回答走普通 message.delta 流）。
+  z.object({
+    type: z.literal("moa.aggregating"),
+    session_id: z.string(),
+    payload: z.object({
+      aggregator: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
 ]);
