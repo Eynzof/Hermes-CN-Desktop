@@ -9,6 +9,7 @@
     "core:webview:allow-set-webview-zoom",
     "dialog:default",
     "dialog:allow-open",
-    "clipboard-manager:allow-read-image"
+    "clipboard-manager:allow-read-image",
+    "notification:default"
   ]
 }
