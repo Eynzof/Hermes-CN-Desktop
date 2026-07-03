@@ -1087,6 +1087,63 @@ fn unique_dir(base: &Path) -> PathBuf {
     }
 }
 
+/// Keep `.worktrees/` out of the main repo's status (and out of a one-click
+/// review commit, which would record the nested worktree as a gitlink) by
+/// appending it to `<git-common-dir>/info/exclude`. Repo-local — never touches
+/// the user's `.gitignore`. Idempotent and best-effort: the worktree already
+/// exists, so a failure to write the exclude must not fail the add.
+fn ensure_worktrees_excluded(root: &Path) {
+    let out = run_git_ok(root, &["rev-parse", "--git-common-dir"]);
+    let common = out.trim();
+    if common.is_empty() {
+        return;
+    }
+    let common_dir = PathBuf::from(common);
+    let common_dir = if common_dir.is_absolute() {
+        common_dir
+    } else {
+        root.join(common_dir)
+    };
+
+    let exclude = common_dir.join("info").join("exclude");
+    let existing = fs::read_to_string(&exclude).unwrap_or_default();
+    if existing.lines().any(|line| line.trim() == ".worktrees/") {
+        return;
+    }
+    if let Some(parent) = exclude.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let mut content = existing;
+    if !content.is_empty() && !content.ends_with('\n') {
+        content.push('\n');
+    }
+    content.push_str(".worktrees/\n");
+    let _ = fs::write(&exclude, content);
+}
+
+/// `Ok(())` when `refs/heads/<branch>` exists. Locale-independent (probes the
+/// ref instead of sniffing git's translated error strings).
+fn require_local_branch(cwd: &Path, branch: &str) -> AppResult<()> {
+    if local_branch_exists(cwd, branch) {
+        Ok(())
+    } else {
+        Err(AppError::Git(format!("Branch '{branch}' does not exist.")))
+    }
+}
+
+fn local_branch_exists(cwd: &Path, branch: &str) -> bool {
+    run_git(
+        cwd,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
+    .is_ok()
+}
+
 /// A brand-new project folder isn't a git repo — and a freshly-init'd one has no
 /// commit to branch from — so `git worktree add` would fail. Make the dir a repo
 /// with a root commit (no-op for a repo that already has commits). Mirrors
@@ -1126,14 +1183,18 @@ fn ensure_git_repo(dir: &Path) -> AppResult<()> {
 }
 
 fn add_existing_branch_worktree(root: &Path, name: &str) -> AppResult<WorktreeAddResult> {
-    let branch = sanitize_branch(name);
+    // The name comes from `for-each-ref` — already a legal ref. Sanitizing here
+    // would rewrite it (`feat#123` → `feat123`, CJK names → "") and check out
+    // the wrong branch; verify it exists instead.
+    let branch = name.trim().to_string();
     if branch.is_empty() {
         return Err(AppError::Git("Branch name is required.".to_string()));
     }
+    require_local_branch(root, &branch)?;
 
     let root_str = root.to_string_lossy().to_string();
     if branch == default_branch(root) {
-        run_git(root, &["switch", &branch])?;
+        run_git(root, &["switch", "--", &branch])?;
         return Ok(WorktreeAddResult {
             path: root_str.clone(),
             branch,
@@ -1143,7 +1204,8 @@ fn add_existing_branch_worktree(root: &Path, name: &str) -> AppResult<WorktreeAd
 
     let dir = unique_dir(&root.join(".worktrees").join(slugify(&branch)));
     let dir_str = dir.to_string_lossy().to_string();
-    run_git(root, &["worktree", "add", &dir_str, &branch])?;
+    run_git(root, &["worktree", "add", "--", &dir_str, &branch])?;
+    ensure_worktrees_excluded(root);
     Ok(WorktreeAddResult {
         path: dir_str,
         branch,
@@ -1175,23 +1237,31 @@ fn add_worktree_impl(
     } else {
         sanitized
     };
+
+    let base_owned = base.map(|b| b.trim().to_string()).filter(|b| !b.is_empty());
+    if let Some(base) = base_owned.as_deref() {
+        let probe = format!("{base}^{{commit}}");
+        if run_git(&root, &["rev-parse", "--verify", "--quiet", &probe]).is_err() {
+            return Err(AppError::Git(format!("Base ref '{base}' not found.")));
+        }
+    }
+
     let dir = unique_dir(&root.join(".worktrees").join(&slug));
     let dir_str = dir.to_string_lossy().to_string();
 
-    let mut args: Vec<&str> = vec!["worktree", "add", "-b", &branch_name, &dir_str];
-    let base_owned = base.map(|b| b.to_string()).filter(|b| !b.is_empty());
-    if let Some(base) = base_owned.as_deref() {
-        args.push(base);
-    }
-
-    if let Err(err) = run_git(&root, &args) {
-        // Branch may already exist — retry checking it out into the fresh dir.
-        if err.to_string().to_lowercase().contains("already exists") {
-            run_git(&root, &["worktree", "add", &dir_str, &branch_name])?;
-        } else {
-            return Err(err);
+    // Probe the ref up front (locale-independent — never sniff git's translated
+    // error strings): an existing branch is checked out into the fresh dir, a
+    // new one is created with `-b`.
+    if local_branch_exists(&root, &branch_name) {
+        run_git(&root, &["worktree", "add", "--", &dir_str, &branch_name])?;
+    } else {
+        let mut args: Vec<&str> = vec!["worktree", "add", "-b", &branch_name, "--", &dir_str];
+        if let Some(base) = base_owned.as_deref() {
+            args.push(base);
         }
+        run_git(&root, &args)?;
     }
+    ensure_worktrees_excluded(&root);
 
     Ok(WorktreeAddResult {
         path: dir_str,
@@ -1215,6 +1285,7 @@ fn remove_worktree_impl(
     if force {
         args.push("--force");
     }
+    args.push("--");
     args.push(&tree_str);
     run_git(&root, &args)?;
 
@@ -1358,11 +1429,14 @@ pub fn git_branch_list(input: RepoPathInput) -> AppResult<Vec<Branch>> {
 #[tauri::command]
 pub fn git_branch_switch(input: BranchSwitchInput) -> AppResult<BranchSwitchResult> {
     let cwd = resolve_repo_dir(&input.repo_path)?;
-    let target = sanitize_branch(&input.branch);
+    // The target comes from `for-each-ref` — already a legal ref name; don't
+    // sanitize (it would rewrite `feat#123` / strip CJK names). Verify instead.
+    let target = input.branch.trim().to_string();
     if target.is_empty() {
         return Err(AppError::Git("Branch name is required.".to_string()));
     }
-    run_git(&cwd, &["switch", &target])?;
+    require_local_branch(&cwd, &target)?;
+    run_git(&cwd, &["switch", "--", &target])?;
     Ok(BranchSwitchResult { branch: target })
 }
 
@@ -1377,7 +1451,13 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     fn git(dir: &Path, args: &[&str]) {
-        let out = command("git", dir).args(args).output().unwrap();
+        // Isolate test-driven git calls from the host's global/system config.
+        let out = command("git", dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .args(args)
+            .output()
+            .unwrap();
         assert!(
             out.status.success(),
             "git {args:?} failed: {}",
@@ -1386,7 +1466,10 @@ mod tests {
     }
 
     /// A throwaway repo with one committed file and deterministic identity/config
-    /// (no dependence on the host's global git config).
+    /// (no dependence on the host's global git config). The production paths
+    /// under test run git without env isolation, so pin the settings they read
+    /// (e.g. `init.defaultBranch`) in the repo-local config where they win over
+    /// any host value.
     fn init_repo() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path();
@@ -1394,6 +1477,7 @@ mod tests {
         git(path, &["config", "user.email", "test@example.com"]);
         git(path, &["config", "user.name", "Test"]);
         git(path, &["config", "commit.gpgsign", "false"]);
+        git(path, &["config", "init.defaultBranch", "main"]);
         fs::write(path.join("README.md"), "hello\n").unwrap();
         git(path, &["add", "-A"]);
         git(path, &["commit", "-q", "-m", "init"]);
@@ -1684,6 +1768,80 @@ mod tests {
     }
 
     #[test]
+    fn worktree_add_excludes_dot_worktrees_from_main_status() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+
+        add_worktree_impl(&repo, Some("one"), None, None, None).unwrap();
+        let status = run_git_ok(dir.path(), &["status", "--porcelain"]);
+        assert!(
+            !status.contains(".worktrees"),
+            "main repo status stays clean: {status}"
+        );
+
+        let exclude = dir.path().join(".git").join("info").join("exclude");
+        let read = || fs::read_to_string(&exclude).unwrap_or_default();
+        assert_eq!(
+            read().lines().filter(|l| *l == ".worktrees/").count(),
+            1,
+            "exclude gained the entry"
+        );
+
+        // A second add must not duplicate the line.
+        add_worktree_impl(&repo, Some("two"), None, None, None).unwrap();
+        assert_eq!(
+            read().lines().filter(|l| *l == ".worktrees/").count(),
+            1,
+            "exclude entry is idempotent"
+        );
+    }
+
+    #[test]
+    fn worktree_add_existing_branch_keeps_ref_special_chars() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+        // `#` is legal in a ref name; sanitizing would silently retarget feat123.
+        git(dir.path(), &["branch", "feat#123"]);
+
+        let added = add_worktree_impl(&repo, None, None, None, Some("feat#123")).unwrap();
+        assert_eq!(added.branch, "feat#123", "branch name untouched");
+        let tree = PathBuf::from(&added.path);
+        assert!(tree.is_dir());
+        assert_eq!(current_branch(&tree).as_deref(), Some("feat#123"));
+    }
+
+    #[test]
+    fn worktree_add_existing_branch_missing_errors_without_side_effects() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+
+        let err = add_worktree_impl(&repo, None, None, None, Some("nope")).unwrap_err();
+        assert!(
+            err.to_string().contains("does not exist"),
+            "clear error: {err}"
+        );
+        assert!(
+            !dir.path().join(".worktrees").exists(),
+            "nothing written on failure"
+        );
+        assert_eq!(list_worktrees_impl(dir.path()).len(), 1);
+    }
+
+    #[test]
+    fn worktree_add_rejects_unknown_base() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+
+        let err =
+            add_worktree_impl(&repo, Some("thing"), None, Some("no-such-base"), None).unwrap_err();
+        assert!(err.to_string().contains("not found"), "clear error: {err}");
+        assert!(
+            !dir.path().join(".worktrees").exists(),
+            "nothing written on failure"
+        );
+    }
+
+    #[test]
     fn worktree_add_initializes_a_non_repo_folder() {
         // A brand-new project folder isn't a git repo — add should init it first.
         let dir = tempfile::tempdir().unwrap();
@@ -1706,6 +1864,47 @@ mod tests {
         .unwrap();
         assert_eq!(result.branch, "topic");
         assert_eq!(current_branch(dir.path()).as_deref(), Some("topic"));
+    }
+
+    #[test]
+    fn branch_switch_keeps_special_chars_and_rejects_missing() {
+        let dir = init_repo();
+        let repo = dir.path().to_string_lossy().to_string();
+        git(dir.path(), &["branch", "feat#123"]);
+        git(dir.path(), &["branch", "功能/测试"]);
+
+        // Sanitizing would rewrite `feat#123` → `feat123` (a different branch).
+        let hash = git_branch_switch(BranchSwitchInput {
+            repo_path: repo.clone(),
+            branch: "feat#123".to_string(),
+        })
+        .unwrap();
+        assert_eq!(hash.branch, "feat#123");
+        assert_eq!(current_branch(dir.path()).as_deref(), Some("feat#123"));
+
+        // Sanitizing would strip a CJK name to "" ("Branch name is required").
+        let cjk = git_branch_switch(BranchSwitchInput {
+            repo_path: repo.clone(),
+            branch: "功能/测试".to_string(),
+        })
+        .unwrap();
+        assert_eq!(cjk.branch, "功能/测试");
+        assert_eq!(current_branch(dir.path()).as_deref(), Some("功能/测试"));
+
+        let err = git_branch_switch(BranchSwitchInput {
+            repo_path: repo,
+            branch: "missing".to_string(),
+        })
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("does not exist"),
+            "clear error: {err}"
+        );
+        assert_eq!(
+            current_branch(dir.path()).as_deref(),
+            Some("功能/测试"),
+            "HEAD unmoved on failure"
+        );
     }
 
     #[test]
