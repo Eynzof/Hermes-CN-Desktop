@@ -63,6 +63,8 @@ import type {
   UiStoreSnapshot,
   UiTurnStats,
   WatchPreviewFileResult,
+  WriteWorkspaceFileInput,
+  WriteWorkspaceFileResult,
   HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
@@ -510,6 +512,9 @@ const tauriBridge = {
     return invokeCommand("read_workspace_file", { input });
   },
 
+  async writeWorkspaceFile(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult> {
+    return invokeCommand("write_workspace_file", { input });
+  },
   // Git ops backing the review pane (issue #328). Mirrors the upstream
   // `window.hermesDesktop.git.review.*` shape so the ported review logic reads
   // naturally; each method forwards to a Rust command that shells `git`/`gh`.

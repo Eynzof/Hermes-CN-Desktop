@@ -255,6 +255,27 @@ export interface FilePreview {
   binary: boolean;
   /** True when `text` was cut at the 512 KB cap. */
   truncated: boolean;
+  /**
+   * True when the on-disk bytes were not valid UTF-8 and `text` is a lossy
+   * (�-substituted) rendering — display-only, never editable (writing it back
+   * as UTF-8 would corrupt the original encoding). Optional so older bridges
+   * that don't report it stay compatible.
+   */
+  lossyUtf8?: boolean;
+}
+
+export interface WriteWorkspaceFileInput {
+  /** Absolute path, or relative to `root`. Must resolve inside `root`. */
+  path: string;
+  /** Session workspace root; writes are confined to this directory. */
+  root: string;
+  /** New UTF-8 file content. */
+  content: string;
+}
+
+export interface WriteWorkspaceFileResult {
+  /** Canonical path actually written. */
+  path: string;
 }
 
 export interface WatchPreviewFileResult {
@@ -473,6 +494,7 @@ declare global {
       terminalClose?(input: { terminalId: string }): Promise<boolean>;
       onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
       readWorkspaceFile?(input: ReadWorkspaceFileInput): Promise<FilePreview>;
+      writeWorkspaceFile?(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult>;
       /** Git ops backing the review pane (issue #328). */
       git?: HermesGitBridge;
       watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
