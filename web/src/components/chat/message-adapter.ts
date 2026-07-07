@@ -922,6 +922,52 @@ function isReplayDuplicateLiveMessage(
   });
 }
 
+// A normally-completed agent turn is frequently persisted by the backend as
+// SEVERAL assistant rows — leading commentary + a tool call, tool-only middle
+// rows, then the final answer — whereas the live runtime consolidates the whole
+// turn into ONE assistant message (a single `live-assistant-*` id). That single
+// consolidated bubble's canonical text (commentary + final answer, concatenated)
+// then exact-matches NEITHER the stored commentary row NOR the stored answer row,
+// so isSameCanonicalMessage cannot merge it; it is not interrupted, and its tool
+// identity spans the whole turn so it is not a prefix replay of any single stored
+// row either. The un-matched live copy is appended, rendering the turn's text —
+// including the final answer — a second time next to the stored rows.
+//
+// Recognize it: a COMPLETE, non-interrupted live assistant whose tool-call
+// identity (`toolCallId:name`, backend-unique) is a contiguous run of the stored
+// assistant rows' identities, and whose text is contained in those same rows'
+// concatenated text, is already fully persisted — drop the live copy and let the
+// canonical stored rows render (mirrors how completion lets the stored turn win).
+function isSupersededByStoredTurn(
+  live: HermesUIMessage,
+  storedMessages: HermesUIMessage[],
+): boolean {
+  if (live.role !== "assistant" || live.status !== "complete") return false;
+  // Only multi-step (tool-bearing) turns get split across rows; a plain-text
+  // turn is one stored row and already dedupes via isSameCanonicalMessage.
+  const liveTools = canonicalToolIdentityComparable(live);
+  if (!liveTools) return false;
+  // Interrupted replays are handled by isStaleInterruptedLiveMessage / superset.
+  if (hasInterruptedCompletion(live, canonicalText(live))) return false;
+
+  const storedAssistants = storedMessages.filter((message) => message.role === "assistant");
+  const storedTools = storedAssistants
+    .map((message) => canonicalToolIdentityComparable(message))
+    .filter(Boolean)
+    .join("|");
+  // Every live tool call (unique ids) must already be persisted, in order.
+  if (!storedTools.includes(liveTools)) return false;
+
+  const liveText = looseComparableText(canonicalText(live));
+  if (liveText) {
+    const storedText = looseComparableText(
+      storedAssistants.map((message) => canonicalText(message)).join(" "),
+    );
+    if (!storedText.includes(liveText)) return false;
+  }
+  return true;
+}
+
 function isInterruptedLiveSuperset(
   stored: HermesUIMessage,
   live: HermesUIMessage,
@@ -1060,6 +1106,7 @@ export function mergeHermesUIMessages(
     if (usedLiveIndexes.has(index)) return;
     if (isStaleInterruptedLiveMessage(liveMessage, stored)) return;
     if (isReplayDuplicateLiveMessage(liveMessage, stored)) return;
+    if (isSupersededByStoredTurn(liveMessage, stored)) return;
     merged.push(liveMessage);
   });
 

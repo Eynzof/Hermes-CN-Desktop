@@ -651,6 +651,68 @@ describe("message adapter", () => {
     expect(merged).toHaveLength(2);
   });
 
+  it("drops a completed consolidated live turn already persisted across multiple stored assistant rows", () => {
+    // Backend persists ONE agent turn as SEVERAL assistant rows: leading
+    // commentary + a tool call, a tool-only middle row, then the final answer.
+    const stored = [
+      uiMessage({
+        id: "stored-lead",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: "好的，我来做一次全面的代码审查。先从项目结构开始。" },
+          { type: "tool", toolCallId: "call-read", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_200 },
+        ],
+        metadata: { persistedId: 516 },
+      }),
+      uiMessage({
+        id: "stored-mid",
+        createdAt: 1_300,
+        status: "complete",
+        parts: [
+          { type: "tool", toolCallId: "call-term", name: "terminal", state: "done", output: "ok", startedAt: 1_300, completedAt: 1_400 },
+        ],
+        metadata: { persistedId: 540 },
+      }),
+      uiMessage({
+        id: "stored-final",
+        createdAt: 1_500,
+        status: "complete",
+        parts: [{ type: "text", text: "# 代码审查报告\n\n概述：整体质量良好。" }],
+        metadata: { persistedId: 553 },
+      }),
+    ];
+    // The live runtime consolidated the WHOLE turn into ONE assistant bubble
+    // (a single live-assistant client id, all parts, completed). Its text is the
+    // lead + final answer concatenated, so it exact-matches NEITHER stored text
+    // row — the pre-fix duplicate that lands the report twice.
+    const live = [
+      uiMessage({
+        id: "live-assistant-1783430115706",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: "好的，我来做一次全面的代码审查。先从项目结构开始。" },
+          { type: "tool", toolCallId: "call-read", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_200 },
+          { type: "tool", toolCallId: "call-term", name: "terminal", state: "done", output: "ok", startedAt: 1_300, completedAt: 1_400 },
+          { type: "text", text: "# 代码审查报告\n\n概述：整体质量良好。" },
+        ],
+        metadata: { timing: { startedAt: 1_000, firstTokenAt: 1_050, completedAt: 1_600 } },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    // The final report renders exactly once (pre-fix: twice — the stored answer
+    // row plus the un-deduped consolidated live bubble).
+    const reportBubbles = chat.filter((message) => (message.text ?? "").includes("代码审查报告"));
+    expect(reportBubbles).toHaveLength(1);
+    // The consolidated live bubble is dropped; the canonical stored rows win.
+    expect(merged.some((message) => message.id.startsWith("live-assistant"))).toBe(false);
+    expect(merged.map((message) => message.id)).toEqual(["stored-lead", "stored-mid", "stored-final"]);
+  });
+
   it("hides stale interrupted live replies once a later stored assistant answer exists", () => {
     const stored = legacySessionMessagesToHermesUIMessages([
       sessionMessage({
