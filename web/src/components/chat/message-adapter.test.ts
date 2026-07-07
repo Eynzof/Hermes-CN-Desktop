@@ -843,6 +843,49 @@ describe("message adapter", () => {
     expect(chat[1]?.stats?.ttftMs).toBe(500);
   });
 
+  it("attaches a split turn's stats to its final answer row, not the leading commentary", () => {
+    // ui_messages splits ONE agent turn into several assistant rows (leading
+    // commentary + tool, then the final answer). The turn's single stat carries
+    // turnIndex in live space (turn #1) and a whole-turn contentHash that
+    // matches no single stored row, so it falls to the turnIndex pass — which
+    // must land on the final answer row, not the opening commentary row.
+    const messages = [
+      uiMessage({ id: "u", role: "user", createdAt: 1_000, parts: [{ type: "text", text: "审查一下这个项目" }] }),
+      uiMessage({
+        id: "a-lead",
+        createdAt: 1_100,
+        parts: [
+          { type: "text", text: "好的，先从项目结构看起。" },
+          { type: "tool", toolCallId: "call-1", name: "read_file", state: "done", output: "ok" },
+        ],
+      }),
+      uiMessage({
+        id: "a-final",
+        createdAt: 1_500,
+        parts: [{ type: "text", text: "# 审查报告\n\n结论：整体质量良好。" }],
+      }),
+    ];
+
+    const enriched = attachTurnStatsMetadata(messages, [
+      {
+        id: "s1:live-assistant-1",
+        sessionId: "s1",
+        turnIndex: 1,
+        contentHash: stableTextHash("整条合并回合的哈希-对不上任何单行"),
+        ttftMs: 700,
+        durationMs: 61_000,
+        metadata: { usage: { tokensTotal: 4_509 } },
+      },
+    ]);
+    const chat = hermesUIMessagesToChatMessages(enriched);
+
+    const lead = chat.find((message) => (message.text ?? "").includes("先从项目结构"));
+    const final = chat.find((message) => (message.text ?? "").includes("审查报告"));
+    expect(lead?.stats?.ttftMs).toBeUndefined();
+    expect(final?.stats?.ttftMs).toBe(700);
+    expect(final?.stats?.tokensTotal).toBe(4_509);
+  });
+
   it("keeps scalar history stats when no local turn stats match", () => {
     // 非本机流式过的历史会话没有 ui-store 回合统计——服务端历史只有
     // token_count，统计栏应降级为只显示 tokens 而不是整体消失。

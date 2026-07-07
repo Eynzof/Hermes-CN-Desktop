@@ -644,13 +644,9 @@ export function attachTurnStatsMetadata(
   // 就贴错了消息（用户看到的"TTFT 时有时无"成因之一）。
   const used = new Set<number>();
   const statByMessage = new Map<number, number>();
-  const ordinalByMessage = new Map<number, number>();
 
-  let assistantIndex = 0;
   messages.forEach((message, messageIndex) => {
     if (message.role !== "assistant") return;
-    assistantIndex += 1;
-    ordinalByMessage.set(messageIndex, assistantIndex);
     const hash = statsHashFromMessage(message);
     if (!hash) return;
     const statIndex = stats.findIndex(
@@ -662,9 +658,19 @@ export function attachTurnStatsMetadata(
     }
   });
 
+  // turnIndex 兜底按"回合"计数：一个回合 = 一段连续的 assistant 消息（回合之间
+  // 隔着 user 消息）。写入侧 turnIndex 是在 live 空间打的——那里整回合被合并成
+  // 一条 assistant 消息——所以当后端把一个回合拆成多条 stored 行（ui_messages
+  // 路径不做合并）时，该回合的 TTFT/tokens/成本要落到这段的**最后一条**（最终
+  // 答复）行，而不是开场白行；逐条 assistant 序号兜底会把统计贴到开场白上。
+  // contentHash 精确命中仍优先（上一遍已占住）。
+  let turnOrdinal = 0;
   messages.forEach((message, messageIndex) => {
-    if (message.role !== "assistant" || statByMessage.has(messageIndex)) return;
-    const ordinal = ordinalByMessage.get(messageIndex);
+    if (message.role !== "assistant") return;
+    if (messages[messageIndex - 1]?.role !== "assistant") turnOrdinal += 1;
+    const endsTurn = messages[messageIndex + 1]?.role !== "assistant";
+    if (!endsTurn || statByMessage.has(messageIndex)) return;
+    const ordinal = turnOrdinal;
     const statIndex = stats.findIndex(
       (stat, index) => !used.has(index) && stat.turnIndex === ordinal,
     );
