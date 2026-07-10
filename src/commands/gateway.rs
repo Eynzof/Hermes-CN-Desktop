@@ -14,6 +14,9 @@ pub struct RuntimeConfig {
     pub current_profile: String,
     /// "managed", "local" or "remote".
     pub connection_mode: String,
+    /// Running as the portable (unzip-and-run) distribution — the desktop
+    /// update dialog switches to "download the zip and re-extract" guidance.
+    pub portable: bool,
 }
 
 #[tauri::command]
@@ -25,6 +28,7 @@ pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, A
         session_token: inner.session_token.clone(),
         current_profile: inner.current_profile.clone(),
         connection_mode: inner.connection_mode.as_str().to_string(),
+        portable: crate::process::runtime::portable_mode_active(),
     })
 }
 

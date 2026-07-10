@@ -924,6 +924,7 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken?: string;
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
+    portable?: boolean;
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
@@ -976,6 +977,7 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
     connectionMode,
+    portable: config.portable ?? false,
   };
 
   (window as any).hermesDesktop = tauriBridge;
