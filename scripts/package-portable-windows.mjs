@@ -87,7 +87,7 @@ const resourceDests = Object.values(tauriConf.bundle.resources).map((dest) =>
 const archLabel = (target ?? "x86_64").startsWith("aarch64") ? "arm64" : "x64";
 const stagingName = `${productName} Portable`;
 const stagingDir = join(outRoot, stagingName);
-const zipName = `${productName.replaceAll(" ", ".")}_${version}_${archLabel}-portable.zip`;
+const zipName = `${productName.replaceAll(" ", ".")}_${version}_${archLabel}-windows-portable.zip`;
 const zipPath = join(outRoot, zipName);
 
 rmSync(outRoot, { recursive: true, force: true });

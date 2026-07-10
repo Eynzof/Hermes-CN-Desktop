@@ -61,7 +61,7 @@ if (!existsSync(appPath)) {
 const archLabel = (target ?? "aarch64").startsWith("x86_64") ? "x64" : "aarch64";
 const stagingName = `${productName} Portable`;
 const stagingDir = join(outRoot, stagingName);
-const zipName = `${productName.replaceAll(" ", ".")}_${version}_${archLabel}-portable.zip`;
+const zipName = `${productName.replaceAll(" ", ".")}_${version}_${archLabel}-macos-portable.zip`;
 const zipPath = join(outRoot, zipName);
 
 function ditto(args) {
