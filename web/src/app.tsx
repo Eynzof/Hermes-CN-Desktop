@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
 import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
+import { ConnectionAuthBanner } from "@/components/connection-auth-banner";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CommandPalette } from "@/components/command-palette";
 import { PanelRoute } from "@/routes/panel";
@@ -108,6 +109,7 @@ export function App() {
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
       <DesktopUpdateNotifier />
+      <ConnectionAuthBanner />
       <CommandPalette />
     </div>
   );

@@ -12,6 +12,8 @@ import {
   XCircle,
 } from "lucide-react";
 import type {
+  AuthIdentity,
+  AuthProviderInfo,
   ConnectionConfigView,
   ConnectionMode,
   TestConnectionResult,
@@ -107,6 +109,12 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
   const [tokenInput, setTokenInput] = useState("");
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>("idle");
   const probeSeq = useRef(0);
+  // OAuth gate state (populated when a remote probe reports auth_required).
+  const [authProviders, setAuthProviders] = useState<AuthProviderInfo[]>([]);
+  const [identity, setIdentity] = useState<AuthIdentity | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [pwUser, setPwUser] = useState("");
+  const [pwPass, setPwPass] = useState("");
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -149,8 +157,13 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         .then((result) => {
           if (seq !== probeSeq.current) return;
           if (!result.reachable) setProbeStatus("unreachable");
-          else if (result.authRequired) setProbeStatus("authRequired");
-          else setProbeStatus("reachable");
+          else if (result.authRequired) {
+            setProbeStatus("authRequired");
+            setAuthProviders(result.authProviders ?? []);
+          } else {
+            setProbeStatus("reachable");
+            setAuthProviders([]);
+          }
         })
         .catch(() => {
           if (seq !== probeSeq.current) return;
@@ -161,9 +174,88 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, trimmedRemoteUrl, envOverride]);
 
-  const remoteReady = Boolean(trimmedRemoteUrl && (tokenInput.trim() || config?.remoteTokenSet));
+  // A remote that enforces a login gate uses OAuth/cookie auth, not a token.
+  const gated = mode === "remote" && probeStatus === "authRequired";
+
+  // When the URL changes, drop any shown identity (it belonged to the old
+  // gateway); if the new gateway is gated and we have a saved session, restore.
+  useEffect(() => {
+    setIdentity(null);
+    if (mode !== "remote" || !gated || !/^https?:\/\//i.test(trimmedRemoteUrl)) return;
+    let cancelled = false;
+    desktop
+      ?.connectionAuthMe?.(trimmedRemoteUrl)
+      .then((r) => {
+        if (!cancelled && r.ok && r.identity) setIdentity(r.identity);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gated, trimmedRemoteUrl]);
+
+  const handleOauthLogin = async (): Promise<void> => {
+    if (!desktop?.connectionOauthLogin) return;
+    setLoggingIn(true);
+    setMessage(null);
+    try {
+      const r = await desktop.connectionOauthLogin(trimmedRemoteUrl);
+      if (r.ok) {
+        setIdentity(r.identity ?? null);
+        setMessage({ tone: "ok", text: "登录成功" });
+      } else {
+        setMessage({ tone: "error", text: r.error ?? "登录失败" });
+      }
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const handlePasswordLogin = async (provider: string): Promise<void> => {
+    if (!desktop?.connectionPasswordLogin) return;
+    setLoggingIn(true);
+    setMessage(null);
+    try {
+      const r = await desktop.connectionPasswordLogin({
+        remoteUrl: trimmedRemoteUrl,
+        provider,
+        username: pwUser,
+        password: pwPass,
+      });
+      if (r.ok) {
+        setIdentity(r.identity ?? null);
+        setPwPass("");
+        setMessage({ tone: "ok", text: "登录成功" });
+      } else {
+        setMessage({ tone: "error", text: r.error ?? "登录失败" });
+      }
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async (): Promise<void> => {
+    if (!desktop?.connectionOauthLogout) return;
+    try {
+      await desktop.connectionOauthLogout(trimmedRemoteUrl);
+    } catch {}
+    setIdentity(null);
+    setMessage({ tone: "ok", text: "已注销" });
+  };
+
+  const remoteReady = gated
+    ? Boolean(identity) // oauth: must be logged in
+    : Boolean(trimmedRemoteUrl && (tokenInput.trim() || config?.remoteTokenSet));
   const localReady = Boolean(trimmedLocalUrl);
   const canSubmit = mode === "managed" || (mode === "local" ? localReady : remoteReady);
+  const identityLabel = identity
+    ? identity.displayName || identity.email || identity.userId || "已登录"
+    : null;
 
   const handleTest = async () => {
     if (!desktop?.testConnectionConfig || mode === "managed") return;
@@ -174,7 +266,8 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         mode,
         localUrl: mode === "local" ? trimmedLocalUrl : undefined,
         remoteUrl: mode === "remote" ? trimmedRemoteUrl : undefined,
-        remoteToken: mode === "remote" ? tokenInput || undefined : undefined,
+        remoteToken: mode === "remote" && !gated ? tokenInput || undefined : undefined,
+        remoteAuthMode: mode === "remote" ? (gated ? "oauth" : "token") : undefined,
       });
       setMessage(withLocalDashboardHint(testResultSummary(result), mode));
     } catch (error) {
@@ -200,7 +293,8 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         mode,
         localUrl: mode === "local" ? trimmedLocalUrl : undefined,
         remoteUrl: mode === "remote" ? trimmedRemoteUrl : undefined,
-        remoteToken: mode === "remote" ? tokenInput || undefined : undefined,
+        remoteToken: mode === "remote" && !gated ? tokenInput || undefined : undefined,
+        remoteAuthMode: mode === "remote" ? (gated ? ("oauth" as const) : ("token" as const)) : undefined,
       };
       if (apply) {
         const result = await desktop!.applyConnectionConfig!(payload);
@@ -347,7 +441,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
                   {probeStatus === "probing" && "正在检测连接方式…"}
                   {probeStatus === "reachable" && "后端可达"}
                   {probeStatus === "unreachable" && "暂时无法连接，检查地址与网络后会自动重试"}
-                  {probeStatus === "authRequired" && "该后端需要 OAuth 登录，当前远程连接仅支持会话令牌"}
+                  {probeStatus === "authRequired" && "该后端启用了登录门，请在下方登录后再连接"}
                 </div>
               )}
             </div>
@@ -364,26 +458,106 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
             </div>
           </div>
 
-          <div className={s.row}>
-            <div className={s.rowLeft}>
-              <div className={s.rowLabel}>会话令牌</div>
-              <div className={s.rowSub}>
-                连接远程后端时使用的会话令牌，仅保存在本机，留空保持不变。
+          {!gated && (
+            <div className={s.row}>
+              <div className={s.rowLeft}>
+                <div className={s.rowLabel}>会话令牌</div>
+                <div className={s.rowSub}>
+                  连接远程后端时使用的会话令牌，仅保存在本机，留空保持不变。
+                </div>
+              </div>
+              <div className={s.rowRight}>
+                <Input
+                  type="password"
+                  style={{ minWidth: 280 }}
+                  value={tokenInput}
+                  placeholder={tokenPlaceholder}
+                  disabled={disabled}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
               </div>
             </div>
-            <div className={s.rowRight}>
-              <Input
-                type="password"
-                style={{ minWidth: 280 }}
-                value={tokenInput}
-                placeholder={tokenPlaceholder}
-                disabled={disabled}
-                onChange={(e) => setTokenInput(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
+          )}
+
+          {gated && (
+            <div className={s.row}>
+              <div className={s.rowLeft}>
+                <div className={s.rowLabel}>登录</div>
+                <div className={s.rowSub}>
+                  {identityLabel
+                    ? `已登录：${identityLabel}`
+                    : "该网关需要登录后才能连接。选择下方登录方式完成登录。"}
+                </div>
+              </div>
+              <div className={s.rowRight} style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                {identityLabel ? (
+                  <Button type="button" variant="outline" onClick={() => void handleLogout()} disabled={disabled}>
+                    注销
+                  </Button>
+                ) : (
+                  <>
+                    {authProviders
+                      .filter((p) => !p.supportsPassword)
+                      .map((p) => (
+                        <Button
+                          key={p.name}
+                          type="button"
+                          variant="solid"
+                          tone="accent"
+                          onClick={() => void handleOauthLogin()}
+                          disabled={disabled || loggingIn}
+                          aria-busy={loggingIn}
+                        >
+                          {loggingIn && <Loader2 size={13} className={s.connSpin} />}
+                          使用 {p.displayName} 登录
+                        </Button>
+                      ))}
+                    {authProviders
+                      .filter((p) => p.supportsPassword)
+                      .map((p) => (
+                        <div key={p.name} style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 280 }}>
+                          <Input
+                            style={{ minWidth: 280 }}
+                            value={pwUser}
+                            placeholder={`${p.displayName} 用户名`}
+                            disabled={disabled || loggingIn}
+                            onChange={(e) => setPwUser(e.target.value)}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <Input
+                            type="password"
+                            style={{ minWidth: 280 }}
+                            value={pwPass}
+                            placeholder="密码"
+                            disabled={disabled || loggingIn}
+                            onChange={(e) => setPwPass(e.target.value)}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <Button
+                            type="button"
+                            variant="solid"
+                            tone="accent"
+                            onClick={() => void handlePasswordLogin(p.name)}
+                            disabled={disabled || loggingIn || !pwUser || !pwPass}
+                            aria-busy={loggingIn}
+                          >
+                            {loggingIn && <Loader2 size={13} className={s.connSpin} />}
+                            登录
+                          </Button>
+                        </div>
+                      ))}
+                    {authProviders.length === 0 && (
+                      <div className={s.rowSub}>网关未注册任何登录方式，请检查网关配置。</div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 

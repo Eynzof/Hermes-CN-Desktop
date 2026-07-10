@@ -32,6 +32,7 @@ import type {
   ImOnboardingStateInput,
   ImOnboardingStateResult,
   ProbeConnectionResult,
+  OauthLoginResult,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -378,6 +379,27 @@ const tauriBridge = {
 
   async probeConnectionConfig(remoteUrl: string): Promise<ProbeConnectionResult> {
     return invokeCommand("probe_connection_config", { remoteUrl });
+  },
+
+  async connectionOauthLogin(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_oauth_login", { input: { remoteUrl } });
+  },
+
+  async connectionPasswordLogin(input: {
+    remoteUrl: string;
+    provider: string;
+    username: string;
+    password: string;
+  }): Promise<OauthLoginResult> {
+    return invokeCommand("connection_password_login", { input });
+  },
+
+  async connectionAuthMe(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_auth_me", { input: { remoteUrl } });
+  },
+
+  async connectionOauthLogout(remoteUrl: string): Promise<void> {
+    return invokeCommand("connection_oauth_logout", { input: { remoteUrl } });
   },
 
 

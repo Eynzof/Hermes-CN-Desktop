@@ -25,7 +25,15 @@ interface RelayMessagePayload {
 interface RelayClosedPayload {
   connectionId: string;
   message: string;
+  /** WebSocket close code from the peer, when a Close frame was received.
+   * 4401 = auth rejected, 4403 = host/origin rejected. */
+  code?: number;
 }
+
+/** A mint/handshake auth failure is surfaced by Rust as an error string with
+ * this prefix (see AppError::AuthSessionExpired). Map it to close code 4401 so
+ * the client's reconnect-suppression logic treats it like a 4401 Close. */
+const AUTH_EXPIRED_PREFIX = "AUTH_SESSION_EXPIRED";
 
 type UnlistenFn = () => void;
 
@@ -81,7 +89,7 @@ export class GatewayRelaySocket {
       });
       this.unlistenClosed = await listen<RelayClosedPayload>("gateway-ws-closed", (event) => {
         if (event.payload.connectionId !== this.connectionId) return;
-        this.settleClosed(event.payload.message);
+        this.settleClosed(event.payload.message, event.payload.code);
       });
 
       if (this.closedByUs) {
@@ -102,7 +110,12 @@ export class GatewayRelaySocket {
       this.onopen?.({});
     } catch (error) {
       this.onerror?.(error);
-      this.settleClosed(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      // A gateway_ws_open rejection carrying the auth-expired marker is an
+      // authentication failure, not a transient drop — synthesize a 4401 so
+      // the client stops blindly reconnecting and prompts re-login.
+      const code = message.includes(AUTH_EXPIRED_PREFIX) ? 4401 : undefined;
+      this.settleClosed(message, code);
     }
   }
 
@@ -133,11 +146,11 @@ export class GatewayRelaySocket {
     this.settleClosed("closed");
   }
 
-  private settleClosed(reason: string): void {
+  private settleClosed(reason: string, code?: number): void {
     if (this.readyState === GatewayRelaySocket.CLOSED) return;
     this.readyState = GatewayRelaySocket.CLOSED;
     this.detachListeners();
-    this.onclose?.({ reason });
+    this.onclose?.({ reason, code });
   }
 
   private detachListeners(): void {
