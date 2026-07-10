@@ -40,7 +40,10 @@
     "bundle:stage-macos-arm64": "pnpm run runtime:stage-bundled-macos-arm64 && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
     "bundle:stage-macos-intel": "pnpm run runtime:stage-bundled-macos-intel && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
     "tauri:build:bundled-macos-arm64": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-arm64 && pnpm exec tauri build --bundles dmg --target aarch64-apple-darwin",
-    "tauri:build:bundled-macos-intel": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-intel && pnpm exec tauri build --bundles dmg --target x86_64-apple-darwin"
+    "tauri:build:bundled-macos-intel": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-intel && pnpm exec tauri build --bundles dmg --target x86_64-apple-darwin",
+    "portable:package-windows": "node scripts/package-portable-windows.mjs --target x86_64-pc-windows-msvc",
+    "portable:package-macos-arm64": "node scripts/package-portable-macos.mjs --target aarch64-apple-darwin",
+    "portable:package-macos-intel": "node scripts/package-portable-macos.mjs --target x86_64-apple-darwin"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"
