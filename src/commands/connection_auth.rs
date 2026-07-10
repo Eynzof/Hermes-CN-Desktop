@@ -81,7 +81,8 @@ async fn finish_login(
     session: &oauth_session::OauthSession,
 ) -> Result<AuthIdentity, AppError> {
     session.mint_ws_ticket().await?; // 401 → AuthSessionExpired
-    let identity = session.fetch_me().await.unwrap_or_else(|_| AuthIdentity {
+    // Identity is best-effort — a live ticket already proves the session.
+    let identity = session.fetch_me().await.unwrap_or(AuthIdentity {
         user_id: None,
         email: None,
         display_name: None,
