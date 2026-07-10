@@ -61,7 +61,7 @@ import {
 } from "@/stores/ui";
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
 import { openExternalUrl } from "@/lib/external-links";
-import { detectHostOS } from "@/lib/runtime";
+import { detectHostOS, runtime } from "@/lib/runtime";
 import { checkDesktopUpdate, DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import {
@@ -1583,7 +1583,9 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             </Button>
           </div>
           <p className={s.desc}>
-            这里提醒的是桌面壳版本。下载新版安装包后，请按系统提示覆盖安装；应用不会自动下载安装包或替换正在运行的程序。
+            {runtime.isPortable()
+              ? "这里提醒的是桌面壳版本。免安装版请下载新版压缩包，退出应用后覆盖解压到当前目录（data 目录中的数据会保留）；应用不会自动下载或替换正在运行的程序。"
+              : "这里提醒的是桌面壳版本。下载新版安装包后，请按系统提示覆盖安装；应用不会自动下载安装包或替换正在运行的程序。"}
           </p>
         </DebugCard>
 
@@ -1801,7 +1803,9 @@ function formatDesktopUpdateMessage(
   if (!result) return "点击“检查更新”可手动读取官网最新版本。";
   if (!result.ok) return result.error ?? "桌面端更新检查失败。";
   if (result.updateAvailable) {
-    return `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载新版安装包覆盖安装。`;
+    return runtime.isPortable()
+      ? `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载免安装版压缩包，退出应用后覆盖解压（data 目录会保留）。`
+      : `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载新版安装包覆盖安装。`;
   }
   return `当前已是最新版本 ${versionLabel(result.currentVersion)}。`;
 }
