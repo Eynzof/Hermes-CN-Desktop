@@ -8,6 +8,7 @@ import {
   buildProviderOrderUpdate,
   buildProviderSettingsUpdate,
   fetchRemoteProviderCatalog,
+  mergeProviderCatalog,
   getProviderCredentialPreview,
   getProviderEntry,
   getProviderOrder,
@@ -621,6 +622,98 @@ describe("provider catalog config updates", () => {
         },
       ],
     });
+  });
+
+  it("keeps promotion fields from the remote catalog and drops malformed ones", async () => {
+    mockedFetchExternalJSON.mockResolvedValue({
+      version: "remote-v2",
+      providers: [
+        {
+          id: "packycode",
+          name: "PackyCode",
+          baseUrl: "https://www.packyapi.com",
+          defaultModel: "claude-opus-4-8",
+          websiteUrl: "https://www.packyapi.com",
+          icon: " packycode ",
+          promotion: {
+            url: "https://www.packyapi.com/register?aff=our-code",
+            badge: "partner",
+          },
+        },
+        {
+          id: "bad-promo",
+          name: "Bad Promo",
+          baseUrl: "https://bad.example/v1",
+          defaultModel: "m",
+          websiteUrl: "http://insecure.example",
+          promotion: {
+            url: "javascript:alert(1)",
+            badge: "sponsor",
+          },
+        },
+      ],
+    });
+
+    const catalog = await fetchRemoteProviderCatalog("https://cdn.example.com/catalog.json");
+    const packy = catalog.providers.find((provider) => provider.id === "packycode");
+    expect(packy).toMatchObject({
+      icon: "packycode",
+      websiteUrl: "https://www.packyapi.com",
+      promotion: {
+        url: "https://www.packyapi.com/register?aff=our-code",
+        badge: "partner",
+      },
+    });
+
+    const bad = catalog.providers.find((provider) => provider.id === "bad-promo");
+    expect(bad?.promotion).toBeUndefined();
+    expect(bad?.websiteUrl).toBeUndefined();
+  });
+
+  it("never lets a remote entry override wire settings of a built-in provider", () => {
+    const builtin = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "deepseek")!;
+    const merged = mergeProviderCatalog(BUILTIN_PROVIDER_CATALOG, {
+      version: "remote-v3",
+      providers: [
+        {
+          ...builtin,
+          baseUrl: "https://evil.example/v1",
+          apiMode: "anthropic_messages",
+          transport: "anthropic_messages",
+          apiKeyLabel: "EVIL_KEY",
+          promotion: {
+            url: "https://platform.deepseek.com/",
+          },
+        },
+        {
+          id: "new-remote-provider",
+          name: "New Remote",
+          vendor: "Remote",
+          region: "cn",
+          baseUrl: "https://api.new-remote.example/v1",
+          apiMode: "chat_completions",
+          transport: "openai_chat",
+          apiKeyLabel: "NEW_REMOTE_API_KEY",
+          defaultModel: "m1",
+          models: [{ id: "m1" }],
+        },
+      ],
+    });
+
+    const deepseek = merged.providers.find((provider) => provider.id === "deepseek");
+    expect(deepseek).toMatchObject({
+      baseUrl: builtin.baseUrl,
+      apiMode: builtin.apiMode,
+      transport: builtin.transport,
+      apiKeyLabel: builtin.apiKeyLabel,
+      promotion: { url: "https://platform.deepseek.com/" },
+    });
+
+    // Brand-new remote providers keep their own wire settings.
+    expect(merged.providers.find((provider) => provider.id === "new-remote-provider")).toMatchObject({
+      baseUrl: "https://api.new-remote.example/v1",
+    });
+    expect(merged.version).toBe("remote-v3");
   });
 });
 
