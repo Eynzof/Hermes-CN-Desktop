@@ -54,6 +54,66 @@ export interface ProviderCatalog {
   providers: ProviderPreset[];
 }
 
+/**
+ * 用户可读的接口格式名。目录里 Claude Code 中转与 OpenAI 兼容服务混排，
+ * 界面必须把请求格式讲明白，用户才知道一个供应商到底按什么协议被请求。
+ */
+export function apiModeDisplayName(apiMode: ProviderApiMode): string {
+  switch (apiMode) {
+    case "anthropic_messages":
+      return "Anthropic 格式 (Claude Code)";
+    case "codex_responses":
+      return "OpenAI Responses 格式";
+    default:
+      return "OpenAI 兼容格式";
+  }
+}
+
+/** 预设卡片上的协议角标；OpenAI 兼容是默认格式，不标注以降噪。 */
+export function apiModeBadgeLabel(apiMode: ProviderApiMode): string | null {
+  switch (apiMode) {
+    case "anthropic_messages":
+      return "Claude";
+    case "codex_responses":
+      return "Codex";
+    default:
+      return null;
+  }
+}
+
+/**
+ * 该供应商实际会收到请求的完整端点。Base URL 的语义随格式变化（Anthropic
+ * SDK 自动补 /v1/messages，OpenAI SDK 补 /chat/completions），直接把最终
+ * URL 摆出来比解释规则更防呆。
+ */
+export function chatEndpointPreviewUrl(apiMode: ProviderApiMode, baseUrl: string): string {
+  const base = baseUrl.trim().replace(/\/+$/, "");
+  if (!base) return "";
+  switch (apiMode) {
+    case "anthropic_messages":
+      return base.endsWith("/v1") ? `${base}/messages` : `${base}/v1/messages`;
+    case "codex_responses":
+      return `${base}/responses`;
+    default:
+      return `${base}/chat/completions`;
+  }
+}
+
+/**
+ * 自定义供应商 Base URL 的格式启发式，与 Core 端
+ * runtime_provider._detect_api_mode_for_url 的中转站规则对齐：路径以
+ * /anthropic 或 /anthropic/v1 结尾按 Anthropic 格式预选。
+ */
+export function detectCustomApiModeFromUrl(baseUrl: string): "chat_completions" | "anthropic_messages" {
+  try {
+    const path = new URL(baseUrl.trim()).pathname.replace(/\/+$/, "").toLowerCase();
+    if (path.endsWith("/anthropic") || path.endsWith("/anthropic/v1")) return "anthropic_messages";
+  } catch {
+    // 输入中途的半截 URL —— 保持默认。
+  }
+  return "chat_completions";
+}
+
 export type EnvVarPreviewMap = Record<string, {
   is_set?: boolean;
   redacted_value?: string | null;
