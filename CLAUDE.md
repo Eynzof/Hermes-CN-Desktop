@@ -126,9 +126,14 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 pnpm tauri:build:bundled-windows         # NSIS
 pnpm tauri:build:bundled-macos-arm64     # dmg (aarch64)
 pnpm tauri:build:bundled-macos-intel     # dmg (x86_64)
+
+# 免安装（portable）zip：在上面对应平台 bundled 构建之后追加打包（见 docs/portable-mode.md）
+pnpm portable:package-windows            # Windows 上运行
+pnpm portable:package-macos-arm64
+pnpm portable:package-macos-intel
 ```
 
-产物在 `target/release/bundle/` 或 `target/debug/bundle/`。`scripts/stage-bundled-runtime.mjs`、`stage-bundled-skills.mjs`、`stage-bundled-plugins.mjs`、`stage-dashboard-web-dist.mjs` 负责把后端 runtime、dashboard web dist、skills、plugins 拷进 `static/` 打包目录。
+产物在 `target/release/bundle/` 或 `target/debug/bundle/`（portable zip 在 `target/portable/`）。`scripts/stage-bundled-runtime.mjs`、`stage-bundled-skills.mjs`、`stage-bundled-plugins.mjs`、`stage-dashboard-web-dist.mjs` 负责把后端 runtime、dashboard web dist、skills、plugins 拷进 `static/` 打包目录。portable 模式通过解压目录内的 `portable.marker` 把整棵数据树锚定到 `<解压目录>/data`（`src/process/runtime.rs`）。
 
 ## 架构约定
 
