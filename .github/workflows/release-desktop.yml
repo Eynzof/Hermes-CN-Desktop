@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.0`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.1`).
 #
 # Desktop release build runs in parallel for Windows and macOS. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -30,11 +30,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.0)"
+        description: "Tag name to associate the build with (e.g. v0.6.1)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.18.2-cn.1"
+        default: "runtime-v0.18.2-cn.2"
         required: false
 
 permissions:
@@ -90,7 +90,7 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.1' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.2' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -148,7 +148,7 @@ jobs:
           args=(
             scripts/stage-bundled-runtime.mjs
             --repo "Eynzof/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.1' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.2' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
