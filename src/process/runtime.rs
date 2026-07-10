@@ -3517,6 +3517,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    #[cfg(unix)]
     async fn install_bundled_runtime_does_not_overwrite_local_source_runtime() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -3605,6 +3606,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    #[cfg(unix)]
     async fn install_bundled_runtime_migrates_local_source_when_not_preserved() {
         use std::os::unix::fs::PermissionsExt;
 

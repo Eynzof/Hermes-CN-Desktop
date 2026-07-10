@@ -38,6 +38,7 @@ fn external_dev_handle(api_base_url: String) -> DashboardHandle {
         job_handle: None,
         attached_pid: None,
         child: None,
+        port_locks: None,
     }
 }
 

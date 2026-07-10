@@ -20,6 +20,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
+use crate::process::port_lock::{claim_port_set, release_orphaned_port_locks, PortLock};
 use crate::state::{DashboardHandle, DashboardJobHandle};
 
 // A freshly installed onefile runtime can spend tens of seconds on macOS
@@ -73,6 +74,10 @@ pub struct DashboardOwnershipMarker {
     pub started_at_ms: u128,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_version: Option<String>,
+    /// Ports this desktop instance has claimed via the shared lock file.
+    /// Used to break orphaned locks when adopting a stale marker.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claimed_ports: Vec<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +110,26 @@ fn fallback_ports(start: u16) -> Vec<u16> {
         ports.push(port);
     }
     ports
+}
+
+/// The well-known satellite ports that a desktop-managed dashboard tree may
+/// bind (webhook, proxy). These are reserved alongside the dashboard API port.
+const WELL_KNOWN_DASHBOARD_PORTS: &[u16] = &[8644, 8645];
+
+/// Build the full set of ports to claim for a dashboard at ``dashboard_port``.
+fn ports_to_claim(dashboard_port: u16) -> Vec<u16> {
+    let mut ports = Vec::with_capacity(WELL_KNOWN_DASHBOARD_PORTS.len() + 1);
+    ports.push(dashboard_port);
+    ports.extend_from_slice(WELL_KNOWN_DASHBOARD_PORTS);
+    ports
+}
+
+/// Try to claim the full port set for a candidate dashboard port.
+fn try_claim_dashboard_ports(
+    dashboard_port: u16,
+    hermes_home: &str,
+) -> Option<Vec<PortLock>> {
+    claim_port_set(&ports_to_claim(dashboard_port), Path::new(hermes_home))
 }
 
 fn now_millis() -> u128 {
@@ -143,6 +168,7 @@ fn rewrite_ownership_marker_for_current_desktop(
         gateway_runtime_dir: marker.gateway_runtime_dir.clone(),
         started_at_ms: now_millis(),
         runtime_version: marker.runtime_version.clone(),
+        claimed_ports: marker.claimed_ports.clone(),
     };
     write_ownership_marker(&next)?;
     Ok(next)
@@ -736,6 +762,8 @@ struct SpawnedDashboard {
     gateway_lock_dir: String,
     ownership_marker_path: String,
     job_handle: Option<DashboardJobHandle>,
+    /// Ports this desktop instance has claimed via the shared lock file.
+    claimed_ports: Vec<u16>,
 }
 
 fn env_flag(name: &str) -> bool {
@@ -848,7 +876,10 @@ fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<Str
 }
 
 /// Spawn the hermes dashboard subprocess.
-fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard, AppError> {
+fn spawn_dashboard(
+    options: &EnsureDashboardOptions,
+    claimed_ports: Vec<u16>,
+) -> Result<SpawnedDashboard, AppError> {
     let (program, mut prefix_args) = resolve_hermes_command(options.allow_external_agent)?;
 
     let api_args = vec![
@@ -1017,6 +1048,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
         started_at_ms: now_millis(),
         runtime_version,
+        claimed_ports: claimed_ports.clone(),
     };
     if let Err(err) = write_ownership_marker(&marker) {
         log::warn!("Failed to write dashboard ownership marker: {}", err);
@@ -1031,6 +1063,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         gateway_lock_dir: gateway_lock_dir.to_string_lossy().to_string(),
         ownership_marker_path: marker_path,
         job_handle,
+        claimed_ports,
     })
 }
 
@@ -1099,7 +1132,44 @@ async fn wait_for_dashboard(api_base_url: &str, child: &mut Option<std::process:
 pub async fn ensure_hermes_dashboard(
     options: EnsureDashboardOptions,
 ) -> Result<DashboardHandle, AppError> {
-    let api_base_url = dashboard_base_url(&options.host, options.port);
+    // Coordinate port usage with other Hermes instances (desktop, CLI
+    // dashboards, gateways, proxies) before doing any network probes. We claim
+    // the dashboard API port plus the well-known satellite ports (webhook,
+    // proxy) as an atomic set. If the primary set is unavailable, fall back to
+    // the next free set when allowed.
+    let (effective_port, port_locks) = {
+        if let Some(locks) = try_claim_dashboard_ports(options.port, &options.hermes_home) {
+            (options.port, locks)
+        } else if options.allow_port_fallback {
+            let mut found = None;
+            for candidate_port in fallback_ports(options.port) {
+                if let Some(locks) =
+                    try_claim_dashboard_ports(candidate_port, &options.hermes_home)
+                {
+                    found = Some((candidate_port, locks));
+                    break;
+                }
+            }
+            match found {
+                Some(pair) => pair,
+                None => {
+                    return Err(AppError::DashboardStartup(format!(
+                        "No available port from {} to {} — all dashboard ports are claimed by other Hermes instances.",
+                        options.port,
+                        options.port.saturating_add(DASHBOARD_PORT_FALLBACK_LIMIT)
+                    )));
+                }
+            }
+        } else {
+                return Err(AppError::DashboardStartup(format!(
+                    "Port {} (or associated webhook/proxy ports) is already claimed by another Hermes instance. Stop the other instance, or enable port fallback.",
+                    options.port
+                )));
+        }
+    };
+
+    let api_base_url = dashboard_base_url(&options.host, effective_port);
+    let claimed_ports: Vec<u16> = port_locks.iter().map(|lock| lock.port()).collect();
 
     // Reuse an existing dashboard only after the compatibility probe proves it
     // is serving the same isolated runtime HERMES_HOME and supports the
@@ -1131,6 +1201,12 @@ pub async fn ensure_hermes_dashboard(
                             marker.clone()
                         }
                     };
+                    // The previous desktop is dead; break any port locks it left
+                    // behind so the new instance owns them cleanly.
+                    release_orphaned_port_locks(
+                        &adopted_marker.claimed_ports,
+                        Path::new(&options.hermes_home),
+                    );
                     let gateway_runtime_dir = adopted_marker.gateway_runtime_dir.clone();
                     let gateway_lock_dir = PathBuf::from(&gateway_runtime_dir)
                         .join("token-locks")
@@ -1149,6 +1225,7 @@ pub async fn ensure_hermes_dashboard(
                         job_handle: None,
                         attached_pid: Some(adopted_marker.dashboard_pid),
                         child: None,
+                        port_locks: Some(port_locks),
                     });
                 }
 
@@ -1226,69 +1303,29 @@ pub async fn ensure_hermes_dashboard(
             job_handle: None,
             attached_pid: None,
             child: None,
+            port_locks: Some(port_locks),
         });
     }
 
-    // Try port fallbacks if the primary port has an incompatible dashboard
-    let mut spawn_options = EnsureDashboardOptions {
+    // If the effective port is still occupied after the compatibility/reuse
+    // check, something else (non-Hermes service or uncoordinated Hermes) is
+    // bound there despite our lock claim. We cannot safely spawn on it.
+    if primary_occupied {
+        return Err(AppError::DashboardStartup(format!(
+            "{} is already occupied by another service. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
+            api_base_url, effective_port
+        )));
+    }
+
+    // Spawn a new dashboard on the locked effective port.
+    let spawn_options = EnsureDashboardOptions {
         host: options.host.clone(),
-        port: options.port,
+        port: effective_port,
         hermes_home: options.hermes_home.clone(),
         allow_external_agent: options.allow_external_agent,
         allow_port_fallback: options.allow_port_fallback,
     };
-
-    if primary_occupied {
-        if !options.allow_port_fallback {
-            return Err(AppError::DashboardStartup(format!(
-                "{} is already occupied by another dashboard. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
-                api_base_url, options.port
-            )));
-        }
-        log::warn!(
-            "Dashboard at {} is not compatible; trying alternate ports",
-            api_base_url
-        );
-        let mut found = false;
-        for candidate_port in fallback_ports(options.port) {
-            let candidate_url = dashboard_base_url(&options.host, candidate_port);
-            if probe_dashboard_port(&candidate_url) {
-                if options.allow_external_agent
-                    && dashboard_is_compatible(&candidate_url, &options.hermes_home).await
-                {
-                    let session_token = known_session_token_for_existing(&candidate_url).await;
-                    return Ok(DashboardHandle {
-                        api_base_url: candidate_url,
-                        session_token,
-                        owns_process: false,
-                        command_program: None,
-                        command_args: vec![],
-                        gateway_runtime_dir: None,
-                        gateway_lock_dir: None,
-                        ownership_marker_path: Some(ownership_marker_path_display()),
-                        ownership_state: Some("attached-compatible-fallback".to_string()),
-                        job_handle: None,
-                        attached_pid: None,
-                        child: None,
-                    });
-                }
-                continue;
-            }
-            spawn_options.port = candidate_port;
-            found = true;
-            break;
-        }
-        if !found {
-            return Err(AppError::DashboardStartup(format!(
-                "No available port from {} to {}",
-                options.port,
-                options.port.saturating_add(DASHBOARD_PORT_FALLBACK_LIMIT)
-            )));
-        }
-    }
-
-    // Spawn a new dashboard
-    let spawned = spawn_dashboard(&spawn_options)?;
+    let spawned = spawn_dashboard(&spawn_options, claimed_ports)?;
     let child_url = dashboard_base_url(&spawn_options.host, spawn_options.port);
 
     let mut child_opt = Some(spawned.child);
@@ -1319,6 +1356,7 @@ pub async fn ensure_hermes_dashboard(
         job_handle: spawned.job_handle,
         attached_pid: None,
         child: child_opt,
+        port_locks: Some(port_locks),
     })
 }
 
@@ -1458,6 +1496,7 @@ mod tests {
             gateway_runtime_dir: "/tmp/hermes-runtime-test/gateway".to_string(),
             started_at_ms: 1,
             runtime_version: Some("test".to_string()),
+            claimed_ports: vec![],
         }
     }
 
