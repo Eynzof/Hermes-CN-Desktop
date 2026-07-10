@@ -598,11 +598,19 @@ async fn dashboard_supports_uploads(api_base_url: &str) -> bool {
 /// openapi.json — an HTTP GET can't verify it). The connection is dropped
 /// immediately after the handshake; the server reaps the orphan transport.
 pub async fn dashboard_supports_ws(api_base_url: &str, token: Option<&str>) -> bool {
-    let url = build_gateway_url(api_base_url, token);
+    dashboard_supports_ws_url(&build_gateway_url(api_base_url, token)).await
+}
+
+/// WS handshake probe for a gated gateway using a freshly-minted ticket.
+pub async fn dashboard_supports_ws_ticket(api_base_url: &str, ticket: &str) -> bool {
+    dashboard_supports_ws_url(&build_gateway_ws_url_with_ticket(api_base_url, ticket)).await
+}
+
+async fn dashboard_supports_ws_url(url: &str) -> bool {
     matches!(
         tokio::time::timeout(
             std::time::Duration::from_secs(4),
-            tokio_tungstenite::connect_async(url),
+            tokio_tungstenite::connect_async(url.to_string()),
         )
         .await,
         Ok(Ok(_))
@@ -737,6 +745,20 @@ pub fn build_gateway_url(api_base_url: &str, token: Option<&str>) -> String {
         ),
         None => format!("{}/api/ws", ws_url.trim_end_matches('/')),
     }
+}
+
+/// Build the gated `/api/ws?ticket=` URL for an OAuth remote. Mirrors the
+/// official desktop's `buildGatewayWsUrlWithTicket`; the ticket is single-use
+/// and short-lived, so callers mint a fresh one per (re)connect.
+pub fn build_gateway_ws_url_with_ticket(api_base_url: &str, ticket: &str) -> String {
+    let ws_url = api_base_url
+        .replace("http://", "ws://")
+        .replace("https://", "wss://");
+    format!(
+        "{}/api/ws?ticket={}",
+        ws_url.trim_end_matches('/'),
+        urlencoding::encode(ticket)
+    )
 }
 
 pub struct EnsureDashboardOptions {
