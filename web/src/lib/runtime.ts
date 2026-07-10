@@ -434,6 +434,8 @@ declare global {
       currentProfile?: string;
       /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;
+      /** Running as the portable (unzip-and-run) desktop distribution. */
+      portable?: boolean;
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
@@ -564,6 +566,11 @@ export const runtime = {
   /** True for either attached backend where process/profile lifecycle is external. */
   isAttached(): boolean {
     return this.getConnectionMode() !== "managed";
+  },
+
+  /** True when running as the portable (unzip-and-run) desktop distribution. */
+  isPortable(): boolean {
+    return window.__HERMES_RUNTIME__?.portable ?? false;
   },
 
   getApiUrl(path: string): string {
