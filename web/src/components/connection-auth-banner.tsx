@@ -7,6 +7,10 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Alert, Button } from "@hermes/shared-ui";
+import {
+  notifyConnectionAuthRestored,
+  onConnectionAuthRestored,
+} from "@/lib/connection-auth-events";
 import { forceExistingGatewayReconnect, getGatewayClient } from "@/lib/gateway-client";
 
 export function ConnectionAuthBanner() {
@@ -32,10 +36,18 @@ export function ConnectionAuthBanner() {
 
     // Gateway event: a 4401/4403 WS close (no base URL — reuse the saved one).
     const off = getGatewayClient().on("gateway.auth_required", () => setExpired(true));
+    // Settings can complete either an OAuth-window or password-provider login.
+    // Clear the global banner and release gateway-client's auth suspension for
+    // both paths instead of requiring another save/reload cycle.
+    const offRestored = onConnectionAuthRestored(() => {
+      setExpired(false);
+      forceExistingGatewayReconnect("oauth-relogin");
+    });
 
     return () => {
       unlisten?.();
       off?.();
+      offRestored();
     };
   }, []);
 
@@ -51,8 +63,7 @@ export function ConnectionAuthBanner() {
       if (url && desktop?.connectionOauthLogin) {
         const r = await desktop.connectionOauthLogin(url);
         if (r.ok) {
-          setExpired(false);
-          forceExistingGatewayReconnect("oauth-relogin");
+          notifyConnectionAuthRestored();
           return;
         }
       }
