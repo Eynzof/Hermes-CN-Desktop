@@ -17,6 +17,7 @@ use tauri::Emitter;
 
 use crate::connection::{ConnectionMode, LocalBackend, RemoteBackend};
 use crate::environment;
+use crate::error::AppError;
 use crate::process::{dashboard, runtime};
 use crate::state::{AppState, DashboardHandle};
 
@@ -167,7 +168,38 @@ pub async fn connect_remote_backend(
             remote.base_url
         );
     }
-    DashboardHandle::remote(remote.base_url.clone(), remote.token.clone())
+    match &remote.auth {
+        // OAuth: seed the session registry from persisted cookies so REST/WS
+        // work immediately, then verify liveness in the background — a dead
+        // session only pops the re-login banner, never blocks boot.
+        crate::connection::RemoteAuth::Oauth(cookies) => {
+            if let Ok(session) = crate::oauth_session::session_for(&remote.base_url) {
+                session.import_cookies(cookies);
+                let app_bg = app.clone();
+                let base = remote.base_url.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(s) = crate::oauth_session::session_for(&base) {
+                        if let Err(AppError::AuthSessionExpired(_)) = s.mint_ws_ticket().await {
+                            emit_auth_expired(&app_bg, &base);
+                        }
+                    }
+                });
+            }
+            DashboardHandle::remote_oauth(remote.base_url.clone())
+        }
+        crate::connection::RemoteAuth::Token(token) => {
+            DashboardHandle::remote(remote.base_url.clone(), token.clone())
+        }
+    }
+}
+
+/// Emit the re-login banner event from bootstrap's background verify.
+fn emit_auth_expired(app: &tauri::AppHandle, base_url: &str) {
+    use tauri::Emitter;
+    let _ = app.emit(
+        "connection-auth-expired",
+        serde_json::json!({ "baseUrl": base_url, "reason": "session_expired", "loginUrl": null }),
+    );
 }
 
 /// Attach to a local Hermes Agent CLI dashboard. The URL is already validated
@@ -213,18 +245,36 @@ pub async fn finalize_bootstrap(
 ) {
     use tauri::Manager;
 
-    let session_token = match handle.session_token.clone() {
-        Some(token) => Some(token),
-        // Remote handles always carry their token, so this dashboard scrape
-        // fallback is only for managed or loopback-local dashboards.
-        None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
-            .ok()
-            .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
-        {
-            Some(token) => Some(token),
-            None => dashboard::fetch_session_token(&handle.api_base_url).await,
-        },
+    // An OAuth remote authenticates via the cookie session, not a token — the
+    // registry already holds it (seeded in connect_remote_backend).
+    let oauth_session = if mode == ConnectionMode::Remote {
+        matches!(
+            crate::connection::read_config().remote_auth_mode,
+            crate::connection::RemoteAuthMode::Oauth
+        )
+        .then(|| crate::oauth_session::session_for(&handle.api_base_url).ok())
+        .flatten()
+    } else {
+        None
     };
+
+    let session_token = if oauth_session.is_some() {
+        None
+    } else {
+        match handle.session_token.clone() {
+            Some(token) => Some(token),
+            // Remote token handles carry their token, so this dashboard scrape
+            // fallback is only for managed or loopback-local dashboards.
+            None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
+                .ok()
+                .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
+            {
+                Some(token) => Some(token),
+                None => dashboard::fetch_session_token(&handle.api_base_url).await,
+            },
+        }
+    };
+    // OAuth gateway URL carries no token; the relay mints a ticket per connect.
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
     let (effective_home, effective_home_base, effective_profile) = if mode == ConnectionMode::Local
     {
@@ -261,6 +311,7 @@ pub async fn finalize_bootstrap(
             ConnectionMode::Local | ConnectionMode::Remote => false,
         };
         inner.connection_mode = mode;
+        inner.oauth_session = oauth_session;
         inner.dashboard_handle = Some(handle);
     }
 

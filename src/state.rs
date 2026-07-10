@@ -106,6 +106,12 @@ impl DashboardHandle {
         Self::attached(api_base_url, Some(session_token), "remote")
     }
 
+    /// Build a handle for a gated remote Hermes Agent authenticated by an
+    /// OAuth/cookie session (managed by `oauth_session`, not a token here).
+    pub fn remote_oauth(api_base_url: String) -> Self {
+        Self::attached(api_base_url, None, "remote-oauth")
+    }
+
     /// Build a handle for a loopback Hermes Agent CLI dashboard that the
     /// desktop attaches to but does not own.
     pub fn local(api_base_url: String, session_token: Option<String>) -> Self {
@@ -210,6 +216,34 @@ pub struct AppStateInner {
     /// to decide ownership-only behavior (profile switch, YOLO, runtime
     /// updates) and token refresh strategy.
     pub connection_mode: crate::connection::ConnectionMode,
+    /// Live OAuth/cookie session for a gated remote gateway, when
+    /// `connection_mode == Remote` and the backend authenticates via OAuth.
+    /// `None` for token/local/managed. REST and WS both consult this to pick
+    /// the cookie-aware client and mint WS tickets.
+    pub oauth_session: Option<std::sync::Arc<crate::oauth_session::OauthSession>>,
+    /// Debounce marker for `connection-auth-expired` emits (a burst of 401s
+    /// must not storm the UI with re-login banners).
+    pub last_auth_expired_emit: Option<std::time::Instant>,
+}
+
+/// A snapshot of how the currently-connected dashboard authenticates, taken
+/// once inside the state lock so each command can drop the guard before doing
+/// async I/O. Token variant carries the shared session token (loopback/local/
+/// remote-token); Oauth variant carries the shared cookie session.
+#[derive(Clone)]
+pub enum DashboardAuth {
+    Token(Option<String>),
+    Oauth(std::sync::Arc<crate::oauth_session::OauthSession>),
+}
+
+impl AppStateInner {
+    /// Snapshot the current auth strategy for use outside the lock.
+    pub fn dashboard_auth(&self) -> DashboardAuth {
+        match &self.oauth_session {
+            Some(session) => DashboardAuth::Oauth(session.clone()),
+            None => DashboardAuth::Token(self.session_token.clone()),
+        }
+    }
 }
 
 /// Thread-safe wrapper. Tauri manages this via `app.manage(AppState::new())`.
@@ -233,6 +267,8 @@ impl AppState {
                 last_runtime_error: None,
                 yolo_mode: false,
                 connection_mode: crate::connection::ConnectionMode::Managed,
+                oauth_session: None,
+                last_auth_expired_emit: None,
             }),
         }
     }

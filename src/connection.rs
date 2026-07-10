@@ -30,7 +30,39 @@ pub const ENV_REMOTE_URL: &str = "HERMES_DESKTOP_REMOTE_URL";
 pub const ENV_REMOTE_TOKEN: &str = "HERMES_DESKTOP_REMOTE_TOKEN";
 pub const DEFAULT_LOCAL_DASHBOARD_URL: &str = "http://127.0.0.1:9119";
 const CONNECTION_FILE: &str = "connection.json";
-const CONNECTION_FILE_VERSION: u32 = 2;
+const CONNECTION_FILE_VERSION: u32 = 3;
+/// Fixed historical boundary: mode "local" means the local-CLI connection only
+/// from schema v2 onward (v1 used it for the managed runtime). Never tie this
+/// to CONNECTION_FILE_VERSION — bumping the writer must not re-migrate v2 files.
+const LOCAL_MODE_MIN_VERSION: u32 = 2;
+
+use crate::oauth_session::PersistedCookie;
+
+/// How a remote backend authenticates. v1/v2 files (and loopback kernels)
+/// only ever used the legacy session token; v0.18.2+ gated gateways use an
+/// OAuth/cookie session. Absent from a file ⇒ `Token` (backward compatible).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RemoteAuthMode {
+    #[default]
+    Token,
+    Oauth,
+}
+
+impl RemoteAuthMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RemoteAuthMode::Token => "token",
+            RemoteAuthMode::Oauth => "oauth",
+        }
+    }
+
+    pub fn from_str_opt(value: Option<&str>) -> Self {
+        match value.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+            Some("oauth") => RemoteAuthMode::Oauth,
+            _ => RemoteAuthMode::Token,
+        }
+    }
+}
 
 /// Effective connection mode of the running desktop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,14 +116,35 @@ pub enum ConnectionBackend {
     Remote(RemoteBackend),
 }
 
+/// How a resolved remote backend authenticates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteAuth {
+    /// Legacy session token (loopback-style; sent as header/query).
+    Token(String),
+    /// OAuth/cookie session. Cookies may be empty (never logged in, or
+    /// expired) — boot still proceeds and the auth-expired UX takes over.
+    Oauth(Vec<PersistedCookie>),
+}
+
 /// A fully-resolved remote backend the desktop should attach to instead of
 /// spawning the managed runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteBackend {
     /// Normalized base URL (no trailing slash, no query/hash).
     pub base_url: String,
-    pub token: String,
+    pub auth: RemoteAuth,
     pub source: RemoteSource,
+}
+
+impl RemoteBackend {
+    /// Legacy accessor kept for token-mode callers/tests. Returns the token
+    /// string for `Token` auth, empty string for `Oauth`.
+    pub fn token(&self) -> &str {
+        match &self.auth {
+            RemoteAuth::Token(t) => t.as_str(),
+            RemoteAuth::Oauth(_) => "",
+        }
+    }
 }
 
 /// In-memory connection config as read from / written to connection.json.
@@ -101,6 +154,9 @@ pub struct ConnectionConfig {
     pub local_url: Option<String>,
     pub remote_url: Option<String>,
     pub remote_token: Option<String>,
+    pub remote_auth_mode: RemoteAuthMode,
+    /// Persisted OAuth session cookies (oauth mode only).
+    pub remote_session: Option<Vec<PersistedCookie>>,
 }
 
 /// Renderer-facing config: presence/preview signals only, never the token.
@@ -112,6 +168,8 @@ pub struct SanitizedConnectionConfig {
     pub remote_url: String,
     pub remote_token_set: bool,
     pub remote_token_preview: Option<String>,
+    pub remote_auth_mode: String,
+    pub remote_session_set: bool,
     pub env_override: bool,
 }
 
@@ -137,6 +195,12 @@ struct RemoteFileEntry {
     url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     token: Option<TokenFileEntry>,
+    /// "token" (default, back-compat) or "oauth". Absent ⇒ token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auth_mode: Option<String>,
+    /// Persisted OAuth cookie session (oauth mode only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    session: Option<SessionFileEntry>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -144,6 +208,17 @@ struct TokenFileEntry {
     /// "plain" today; reserved for a future keyring-backed encoding.
     encoding: String,
     value: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SessionFileEntry {
+    /// "plain" today; reserved for a future keyring-backed encoding (same tag
+    /// as TokenFileEntry). Non-"plain" sessions are ignored on read.
+    encoding: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    saved_at_ms: Option<u64>,
+    #[serde(default)]
+    cookies: Vec<PersistedCookie>,
 }
 
 pub fn config_path() -> PathBuf {
@@ -178,8 +253,9 @@ fn read_config_from(path: &PathBuf) -> ConnectionConfig {
         "remote" => ConnectionMode::Remote,
         // v1 used "local" for the desktop-managed runtime. Only v2+ can mean
         // the new “local CLI connection” mode, so old files must migrate to
-        // managed to avoid unexpectedly attaching to 127.0.0.1:9119.
-        "local" if file.version >= CONNECTION_FILE_VERSION => ConnectionMode::Local,
+        // managed to avoid unexpectedly attaching to 127.0.0.1:9119. This is a
+        // FIXED historical boundary (2), not the current file version.
+        "local" if file.version >= LOCAL_MODE_MIN_VERSION => ConnectionMode::Local,
         "managed" | "local" => ConnectionMode::Managed,
         _ => ConnectionMode::Managed,
     };
@@ -200,12 +276,22 @@ fn read_config_from(path: &PathBuf) -> ConnectionConfig {
         .filter(|t| t.encoding == "plain")
         .map(|t| t.value.clone())
         .filter(|v| !v.is_empty());
+    let remote_auth_mode =
+        RemoteAuthMode::from_str_opt(file.remote.as_ref().and_then(|r| r.auth_mode.as_deref()));
+    let remote_session = file
+        .remote
+        .as_ref()
+        .and_then(|r| r.session.as_ref())
+        .filter(|s| s.encoding == "plain")
+        .map(|s| s.cookies.clone());
 
     ConnectionConfig {
         mode,
         local_url,
         remote_url,
         remote_token,
+        remote_auth_mode,
+        remote_session,
     }
 }
 
@@ -229,6 +315,16 @@ fn write_config_to(path: &PathBuf, config: &ConnectionConfig) -> AppResult<()> {
                 encoding: "plain".to_string(),
                 value: value.clone(),
             }),
+            auth_mode: Some(config.remote_auth_mode.as_str().to_string()),
+            session: config
+                .remote_session
+                .as_ref()
+                .filter(|_| config.remote_auth_mode == RemoteAuthMode::Oauth)
+                .map(|cookies| SessionFileEntry {
+                    encoding: "plain".to_string(),
+                    saved_at_ms: Some(now_ms()),
+                    cookies: cookies.clone(),
+                }),
         }),
     };
 
@@ -369,9 +465,11 @@ pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
         })?;
         let base_url = normalize_remote_base_url(&raw_url)
             .map_err(|e| format!("{} 无效: {}", ENV_REMOTE_URL, e))?;
+        // Env override stays token-only by design (documented): OAuth sessions
+        // are interactive and cannot be provisioned from a static env var.
         return Ok(ConnectionBackend::Remote(RemoteBackend {
             base_url,
-            token,
+            auth: RemoteAuth::Token(token),
             source: RemoteSource::Env,
         }));
     }
@@ -396,14 +494,30 @@ pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
             }
         }
         ConnectionMode::Remote => {
-            let (Some(raw_url), Some(token)) = (config.remote_url, config.remote_token) else {
-                log::warn!("connection.json 选择了远程模式但缺少 URL 或 token；回退到本机内核");
+            let Some(raw_url) = config.remote_url.clone() else {
+                log::warn!("connection.json 选择了远程模式但缺少 URL；回退到本机内核");
                 return Ok(ConnectionBackend::Managed);
+            };
+            let auth = match config.remote_auth_mode {
+                RemoteAuthMode::Oauth => {
+                    // OAuth only needs the URL; the cookie session (possibly
+                    // empty ⇒ needs login) rides in remote_session.
+                    RemoteAuth::Oauth(config.remote_session.clone().unwrap_or_default())
+                }
+                RemoteAuthMode::Token => {
+                    let Some(token) = config.remote_token.clone() else {
+                        log::warn!(
+                            "connection.json 选择了远程 token 模式但缺少 token；回退到本机内核"
+                        );
+                        return Ok(ConnectionBackend::Managed);
+                    };
+                    RemoteAuth::Token(token)
+                }
             };
             match normalize_remote_base_url(&raw_url) {
                 Ok(base_url) => Ok(ConnectionBackend::Remote(RemoteBackend {
                     base_url,
-                    token,
+                    auth,
                     source: RemoteSource::Settings,
                 })),
                 Err(err) => {
@@ -441,6 +555,8 @@ pub fn sanitize(config: &ConnectionConfig) -> SanitizedConnectionConfig {
             remote_url: url,
             remote_token_set: token.is_some(),
             remote_token_preview: token.as_deref().and_then(token_preview),
+            remote_auth_mode: RemoteAuthMode::Token.as_str().to_string(),
+            remote_session_set: false,
             env_override,
         };
     }
@@ -454,8 +570,21 @@ pub fn sanitize(config: &ConnectionConfig) -> SanitizedConnectionConfig {
         remote_url: config.remote_url.clone().unwrap_or_default(),
         remote_token_set: config.remote_token.is_some(),
         remote_token_preview: config.remote_token.as_deref().and_then(token_preview),
+        remote_auth_mode: config.remote_auth_mode.as_str().to_string(),
+        remote_session_set: config
+            .remote_session
+            .as_ref()
+            .map(|c| !c.is_empty())
+            .unwrap_or(false),
         env_override,
     }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -560,6 +689,8 @@ mod tests {
             local_url: Some(DEFAULT_LOCAL_DASHBOARD_URL.to_string()),
             remote_url: Some("http://host:9221".to_string()),
             remote_token: Some("tok-123".to_string()),
+            remote_auth_mode: RemoteAuthMode::Token,
+            remote_session: None,
         };
         write_config_to(&path, &config).unwrap();
         assert_eq!(read_config_from(&path), config);
@@ -614,6 +745,47 @@ mod tests {
     }
 
     #[test]
+    fn read_v2_remote_without_auth_mode_defaults_to_token() {
+        // A pre-oauth file has no `auth_mode`/`session` — must read as token.
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("connection.json");
+        fs::write(
+            &path,
+            r#"{ "version": 2, "mode": "remote",
+                 "remote": { "url": "https://gw.example.com",
+                             "token": { "encoding": "plain", "value": "T" } } }"#,
+        )
+        .unwrap();
+        let config = read_config_from(&path);
+        assert_eq!(config.remote_auth_mode, RemoteAuthMode::Token);
+        assert_eq!(config.remote_token.as_deref(), Some("T"));
+        assert!(config.remote_session.is_none());
+    }
+
+    #[test]
+    fn v3_oauth_session_roundtrips() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("connection.json");
+        let config = ConnectionConfig {
+            mode: ConnectionMode::Remote,
+            local_url: None,
+            remote_url: Some("https://gw.example.com".to_string()),
+            remote_token: None,
+            remote_auth_mode: RemoteAuthMode::Oauth,
+            remote_session: Some(vec![PersistedCookie {
+                name: "__Host-hermes_session_rt".to_string(),
+                value: "RT".to_string(),
+                expires_at_ms: Some(now_ms() + 86_400_000),
+            }]),
+        };
+        write_config_to(&path, &config).unwrap();
+        let read = read_config_from(&path);
+        assert_eq!(read.remote_auth_mode, RemoteAuthMode::Oauth);
+        assert_eq!(read.remote_session.as_ref().map(|c| c.len()), Some(1));
+        assert_eq!(read.remote_session.unwrap()[0].value, "RT");
+    }
+
+    #[test]
     fn normalize_local_allows_only_loopback() {
         assert_eq!(
             normalize_local_base_url(" http://127.0.0.1:9119/?x=1#frag ").unwrap(),
@@ -656,6 +828,8 @@ mod tests {
                 local_url: None,
                 remote_url: Some("http://h:1".to_string()),
                 remote_token: Some("secret".to_string()),
+                remote_auth_mode: RemoteAuthMode::Token,
+                remote_session: None,
             },
         )
         .unwrap();
@@ -685,7 +859,7 @@ mod tests {
         clear_env();
         let backend = result.unwrap().unwrap();
         assert_eq!(backend.base_url, "http://host:9120");
-        assert_eq!(backend.token, "tok");
+        assert_eq!(backend.token(), "tok");
         assert_eq!(backend.source, RemoteSource::Env);
     }
 
@@ -710,6 +884,8 @@ mod tests {
             local_url: None,
             remote_url: Some("http://h:1".to_string()),
             remote_token: Some("supersecretvalue".to_string()),
+            remote_auth_mode: RemoteAuthMode::Token,
+            remote_session: None,
         };
         let sanitized = sanitize(&config);
         assert_eq!(sanitized.mode, "remote");
