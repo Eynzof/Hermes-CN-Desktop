@@ -320,6 +320,20 @@ jobs:
           set -euo pipefail
           app="target/${{ matrix.target }}/release/bundle/macos/Hermes Agent CN Desktop.app"
 
+          # Tauri's updater bundler compresses the .app into the .app.tar.gz
+          # updater artifact and then REMOVES the plain .app ("Cleaning …"),
+          # so by the time this step runs the bundle dir may only hold the
+          # tarball. Re-extract the .app from the final notarized DMG — the
+          # exact bits users download, covered by the notarization ticket.
+          if [ ! -d "$app" ]; then
+            dmgs=(target/${{ matrix.target }}/release/bundle/dmg/*.dmg)
+            mnt="$(mktemp -d)"
+            hdiutil attach "${dmgs[0]}" -mountpoint "$mnt" -nobrowse -quiet
+            mkdir -p "$(dirname "$app")"
+            ditto "$mnt/Hermes Agent CN Desktop.app" "$app"
+            hdiutil detach "$mnt" -quiet
+          fi
+
           # The DMG notarization above produced a ticket covering the nested
           # .app; staple the .app itself so the portable copy also validates
           # offline. If Apple's ticket lookup ever fails here, the fallback is
