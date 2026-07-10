@@ -56,6 +56,8 @@ import type { EnvVarInfo } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Alert, Button, Field, Input, Select, Textarea } from "@hermes/shared-ui";
 import { OAuthProvidersSection } from "./settings-oauth-section";
+import { MoaPanel } from "./settings-moa-panel";
+import { useMoaConfig } from "@/hooks/use-moa-config";
 import s from "./settings.module.css";
 
 const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
@@ -93,7 +95,7 @@ const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 const PROVIDER_ORDER_SAVE_DEBOUNCE_MS = 320;
 const EMPTY_ENV_VARS: Record<string, EnvVarInfo> = {};
 
-type ModelSettingsTab = "main" | "auxiliary";
+type ModelSettingsTab = "main" | "auxiliary" | "moa";
 type CustomProviderMode = "custom" | "local";
 type ProbeErrorKind = NonNullable<ProviderProbeResult["error_kind"]>;
 
@@ -674,6 +676,9 @@ export function ModelsSection() {
   } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: oauthProviders, isLoading: oauthProvidersLoading } = useOAuthProviders();
+  // MoA tab 徽标用。老后端没有 /api/model/moa 时保持 undefined，徽标隐藏。
+  const { data: moaConfig } = useMoaConfig();
+  const moaPresetCount = Object.keys(moaConfig?.presets ?? {}).length;
   const saveConfig = useSaveConfig();
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
@@ -1579,6 +1584,17 @@ export function ModelsSection() {
           辅助模型
           <span>{configuredAuxiliaryCount} 项已指定</span>
         </button>
+        <button
+          type="button"
+          className={s.modelTopTab}
+          data-active={activeModelTab === "moa"}
+          role="tab"
+          aria-selected={activeModelTab === "moa"}
+          onClick={() => setActiveModelTab("moa")}
+        >
+          MoA 混合
+          {moaPresetCount > 0 && <span>{moaPresetCount} 个预设</span>}
+        </button>
       </div>
 
       {activeModelTab === "main" ? (
@@ -1930,7 +1946,7 @@ export function ModelsSection() {
             </div>
           ))}
         </>
-      ) : (
+      ) : activeModelTab === "auxiliary" ? (
         <AuxiliaryModelsPanel
           config={config}
           modelInfo={modelInfo}
@@ -1952,6 +1968,8 @@ export function ModelsSection() {
           imageInputMode={getImageInputMode(config)}
           onImageInputModeChange={(mode) => void handleImageInputModeChange(mode)}
         />
+      ) : (
+        <MoaPanel />
       )}
 
       {showCustomForm && createPortal(
