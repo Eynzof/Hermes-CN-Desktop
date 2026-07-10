@@ -13,6 +13,8 @@ use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::Notify;
 
+use crate::process::port_lock::PortLock;
+
 /// Handle to the live Rust→runtime `/api/ws` relay (see commands/ws_proxy.rs).
 /// Holds only std/tokio types so this module stays decoupled from the WS crate.
 pub struct GatewayWsHandle {
@@ -91,6 +93,9 @@ pub struct DashboardHandle {
     pub attached_pid: Option<u32>,
     /// The child process, if we own it.
     pub child: Option<Child>,
+    /// Port locks held by this desktop instance for the dashboard API port and
+    /// its associated satellite ports. Released when the handle is dropped.
+    pub port_locks: Option<Vec<PortLock>>,
 }
 
 impl DashboardHandle {
@@ -125,6 +130,7 @@ impl DashboardHandle {
             job_handle: None,
             attached_pid: None,
             child: None,
+            port_locks: None,
         }
     }
 
@@ -158,6 +164,13 @@ impl DashboardHandle {
         crate::process::dashboard::remove_ownership_marker_path(
             self.ownership_marker_path.as_deref(),
         );
+        // Explicitly release port locks so another Hermes instance can claim
+        // the ports immediately instead of waiting for the handle to drop.
+        if let Some(locks) = self.port_locks.take() {
+            for lock in locks {
+                lock.release();
+            }
+        }
         self.ownership_state = Some("stopped".to_string());
     }
 }
