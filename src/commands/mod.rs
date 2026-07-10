@@ -2,6 +2,7 @@ pub mod api_proxy;
 pub mod backup;
 pub mod config_migration;
 pub mod connection;
+pub mod connection_auth;
 pub mod debug_bundle;
 pub mod desktop_update;
 pub mod devtools;

@@ -536,8 +536,9 @@ async fn test_oauth_connection(
         Ok(ticket) => {
             result.ws_ok = dashboard::dashboard_supports_ws_ticket(&base_url, &ticket).await;
             if !result.ws_ok {
-                result.error =
-                    Some("已登录但 WebSocket（/api/ws）握手失败：检查代理/防火墙是否放行 WS".to_string());
+                result.error = Some(
+                    "已登录但 WebSocket（/api/ws）握手失败：检查代理/防火墙是否放行 WS".to_string(),
+                );
             }
         }
         Err(AppError::AuthSessionExpired(_)) => {
@@ -727,7 +728,10 @@ async fn apply_remote_oauth(
     persisted.remote_session = Some(cookies);
     let _ = connection::write_config(&persisted);
 
-    log::info!("Connection switched to OAuth remote Hermes Agent at {}", base_url);
+    log::info!(
+        "Connection switched to OAuth remote Hermes Agent at {}",
+        base_url
+    );
     Ok(ApplyConnectionResult {
         ok: true,
         mode: "remote".to_string(),
