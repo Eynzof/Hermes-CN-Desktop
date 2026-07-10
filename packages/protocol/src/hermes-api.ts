@@ -466,6 +466,41 @@ export const ModelInfo = z.object({
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
+// ── MoA / Mixture of Agents (/api/model/moa) ──────────────────────────
+// 后端事实来源：Core `hermes_cli/moa_config.py`（normalize_moa_config）与
+// `hermes_cli/web_server.py`（GET/PUT /api/model/moa，MoaConfigPayload）。
+
+export const MoaModelSlot = z.object({
+  provider: z.string(),
+  model: z.string(),
+});
+export type MoaModelSlot = z.infer<typeof MoaModelSlot>;
+
+// passthrough 保留后端归一化返回里 UI 不编辑的字段（reference_max_tokens、
+// fanout 等），避免读到什么丢什么。
+export const MoaPresetConfig = z
+  .object({
+    enabled: z.boolean(),
+    reference_models: z.array(MoaModelSlot),
+    aggregator: MoaModelSlot,
+    reference_temperature: z.number().nullable().optional(),
+    aggregator_temperature: z.number().nullable().optional(),
+    max_tokens: z.number(),
+  })
+  .passthrough();
+export type MoaPresetConfig = z.infer<typeof MoaPresetConfig>;
+
+// GET/PUT 共用的归一化配置形状。顶层的 flattened 字段（default preset 的
+// 兼容视图）由 passthrough 透传，UI 只读写 presets 命名视图。
+export const MoaConfigResponse = z
+  .object({
+    default_preset: z.string(),
+    active_preset: z.string().optional().default(""),
+    presets: z.record(z.string(), MoaPresetConfig),
+  })
+  .passthrough();
+export type MoaConfigResponse = z.infer<typeof MoaConfigResponse>;
+
 // ── Environment Variables (/api/env) ──────────────────────────────────
 
 export const EnvVarInfo = z.object({
