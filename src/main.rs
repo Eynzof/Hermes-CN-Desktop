@@ -18,7 +18,7 @@ use hermes_agent_cn::bootstrap::{
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::connection::{self, ConnectionBackend, ConnectionMode};
-use hermes_agent_cn::process::{dashboard, runtime};
+use hermes_agent_cn::process::{dashboard, instance, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use hermes_agent_cn::tray;
 
@@ -119,6 +119,27 @@ fn main() {
         std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", &webview_dir);
     }
 
+    // Single-instance guard per runtime root (issue #366): a second launch
+    // against the SAME data root focuses the incumbent window and exits;
+    // distinct roots (portable copies side by side) keep coexisting. The
+    // guard lives on main's stack so the lock is held until process exit.
+    let _instance_guard = match instance::try_acquire() {
+        instance::SingleInstance::Acquired(guard) => Some(guard),
+        instance::SingleInstance::AlreadyRunning => {
+            log::info!(
+                "another desktop instance owns {}; requesting focus and exiting",
+                runtime::runtime_root().display()
+            );
+            instance::notify_running_instance();
+            return;
+        }
+        instance::SingleInstance::Unavailable(reason) => {
+            // Fail open: the guard must never lock users out of their app.
+            log::warn!("single-instance lock unavailable ({reason}); continuing");
+            None
+        }
+    };
+
     let app_state = AppState::new();
     let quit_requested = Arc::new(AtomicBool::new(false));
     let close_quit_requested = Arc::clone(&quit_requested);
@@ -135,6 +156,13 @@ fn main() {
             use tauri::Manager;
             let state = app.state::<AppState>();
             let bundled_resource_dir = app.path().resource_dir().ok();
+
+            // Focus channel for the single-instance guard: consume any stale
+            // request from a previous run, then watch for new ones. Armed
+            // before dashboard bootstrap so a second launch gets its focus
+            // handoff even while the kernel is still starting.
+            instance::clear_stale_focus_request();
+            instance::spawn_focus_watcher(app.handle().clone());
 
             match tray::install(app) {
                 Ok(()) => {
