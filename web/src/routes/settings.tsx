@@ -56,6 +56,7 @@ import {
   notifySystemAtom,
   profileSwitchingAtom,
   showReasoningAtom,
+  telemetryEnabledAtom,
   normalizeAssistantDisplayName,
   type ConversationFontSizeMode,
 } from "@/stores/ui";
@@ -89,6 +90,7 @@ interface SettingsSectionProps {
 
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
+  const [telemetryEnabled, setTelemetryEnabled] = useAtom(telemetryEnabledAtom);
   const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
   const [assistantDisplayName, setAssistantDisplayName] = useAtom(assistantDisplayNameAtom);
   const [assistantAvatarDataUrl, setAssistantAvatarDataUrl] = useAtom(assistantAvatarDataUrlAtom);
@@ -187,6 +189,9 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       } />
       {assistantProfileError ? <p className={s.assistantProfileError}>{assistantProfileError}</p> : null}
       <p className={s.assistantProfileStorageHint}>名称和头像只改变桌面端显示，不影响模型本身。清空名称、移除头像后即可恢复默认样式。</p>
+      <Row label="匿名使用统计" sub="上报版本号、系统类型、语言等匿名信息帮助改进产品；不含对话内容、密钥或任何可识别个人的信息。" right={
+        <RadioGroup value={telemetryEnabled ? "on" : "off"} options={[{ value: "off", label: "关闭" }, { value: "on", label: "开启" }]} onChange={(v) => setTelemetryEnabled(v === "on")} />
+      } />
       <ApprovalModeSection />
     </div>
   );

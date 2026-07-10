@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import {
   closestCenter,
   DndContext,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -13,10 +12,9 @@ import {
 } from "@dnd-kit/core";
 import {
   arrayMove,
+  rectSortingStrategy,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
@@ -39,11 +37,13 @@ import {
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
 } from "@/lib/provider-catalog";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 import { useProviderCatalog } from "@/hooks/use-provider-catalog";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
+import { reportPromoClick } from "@/lib/telemetry";
 import { fetchExternalJSON } from "@/lib/transport";
 import { openExternalUrl } from "@/lib/external-links";
 import {
@@ -1174,14 +1174,14 @@ export function ModelsSection() {
     }, PROVIDER_ORDER_SAVE_DEBOUNCE_MS);
   }, [config, saveConfig]);
 
+  // 卡片整体即拖拽把手（网格布局没有独立把手的空间），指针位移超过阈值才
+  // 进入拖拽，普通点击仍走 onClick 选中。不注册 KeyboardSensor：Enter/空格
+  // 保留给键盘选中，避免和 dnd-kit 的键盘拖拽抢按键。
   const providerDndSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 6,
       },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
@@ -1197,7 +1197,6 @@ export function ModelsSection() {
   }, [canReorderProviders, config, orderedProviders, saveProviderOrder]);
 
   const handleProviderRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, providerId: string) => {
-    if ((event.target as HTMLElement | null)?.closest("[data-provider-drag-handle='true']")) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     selectProvider(providerId);
@@ -1599,40 +1598,38 @@ export function ModelsSection() {
           </div>
 
           <div className={s.providerPresetLayout}>
-            <div className={s.providerPresetListPane}>
-              <div className={s.providerListToolbar}>
-                <Input
-                  className={s.providerSearchInput}
-                  value={providerSearch}
-                  onChange={(event) => setProviderSearch(event.target.value)}
-                  placeholder="搜索模型平台..."
-                />
-                <div className={s.providerToolbarActions}>
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => openCustomProviderForm("custom")}
-                    title="添加自定义 OpenAI 兼容服务商"
-                  >
-                    + 自定义
-                  </Button>
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => openCustomProviderForm("local")}
-                    title="添加本地部署 OpenAI 兼容服务商"
-                  >
-                    + 本地部署
-                  </Button>
-                  <Button variant="outline" fullWidth onClick={handleCatalogRefresh}>刷新预设</Button>
-                </div>
-                <div className={s.providerListHint}>
-                  {providerSearch.trim()
-                    ? "正在搜索结果中浏览；清空搜索后可拖拽排序。"
-                    : "拖拽左侧把手可调整常用服务商顺序，排序保存到当前 Profile。"}
+            <div className={s.providerGridPane}>
+              <div className={s.providerGridHeader}>
+                <div className={s.providerGridTitle}>预设供应商</div>
+                <div className={s.providerGridTools}>
+                  <Input
+                    className={s.providerSearchInput}
+                    value={providerSearch}
+                    onChange={(event) => setProviderSearch(event.target.value)}
+                    placeholder="搜索模型平台..."
+                  />
+                  <Button variant="outline" onClick={handleCatalogRefresh}>刷新预设</Button>
                 </div>
               </div>
-              <div className={s.providerPresetList}>
+              <div className={s.providerPresetGrid}>
+                <button
+                  type="button"
+                  className={`${s.presetCard} ${s.presetCardAdd}`}
+                  onClick={() => openCustomProviderForm("custom")}
+                  title="添加自定义 OpenAI 兼容服务商"
+                >
+                  <span className={s.presetCardAddIcon} aria-hidden>＋</span>
+                  <span className={s.presetCardName}>自定义配置</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${s.presetCard} ${s.presetCardAdd}`}
+                  onClick={() => openCustomProviderForm("local")}
+                  title="添加本地部署 OpenAI 兼容服务商"
+                >
+                  <span className={s.presetCardAddIcon} aria-hidden>＋</span>
+                  <span className={s.presetCardName}>本地部署</span>
+                </button>
                 {filteredProviders.length > 0 ? (
                   <DndContext
                     sensors={providerDndSensors}
@@ -1641,10 +1638,10 @@ export function ModelsSection() {
                   >
                     <SortableContext
                       items={filteredProviders.map((provider) => provider.id)}
-                      strategy={verticalListSortingStrategy}
+                      strategy={rectSortingStrategy}
                     >
                       {filteredProviders.map((provider) => (
-                        <SortableProviderPresetItem
+                        <SortableProviderPresetCard
                           key={provider.id}
                           provider={provider}
                           active={selectedProvider?.id === provider.id}
@@ -1661,6 +1658,26 @@ export function ModelsSection() {
                   <div className={s.providerPresetEmpty}>没有匹配的模型平台</div>
                 )}
               </div>
+              <div className={s.providerListHint}>
+                {providerSearch.trim()
+                  ? "正在搜索结果中浏览；清空搜索后可拖拽排序。"
+                  : "拖拽卡片可调整常用服务商顺序，排序保存到当前 Profile。"}
+              </div>
+              <div className={s.providerReviewBanner}>
+                想知道哪家中转站或者提供商性价比更好更稳定？
+                <a
+                  href="https://hermesagent.org.cn/transit"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={s.link}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void openExternalUrl("https://hermesagent.org.cn/transit");
+                  }}
+                >
+                  点击此处查看测评
+                </a>
+              </div>
             </div>
 
             {selectedProvider && (
@@ -1674,13 +1691,28 @@ export function ModelsSection() {
                         <div className={s.providerDetailName}>{selectedProvider.name}</div>
                         <div className={s.providerDetailVendor}>
                           {selectedProvider.id} · {selectedProvider.vendor}
-                          {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
                         </div>
                       </div>
                       <div className={s.providerHeaderActions}>
                         <span className={s.statusBadge} data-on={selectedHasCredentials}>
                           {selectedHasCredentials ? "已保存密钥" : "未设置"}
                         </span>
+                        {(selectedProvider.promotion?.url || selectedProvider.websiteUrl) && (
+                          <Button
+                            variant="solid"
+                            tone="accent"
+                            className={s.providerWebsiteButton}
+                            onClick={() => {
+                              reportPromoClick(selectedProvider.id);
+                              void openExternalUrl(
+                                selectedProvider.promotion?.url ?? selectedProvider.websiteUrl!,
+                              );
+                            }}
+                            title={`打开 ${selectedProvider.name} 官网`}
+                          >
+                            前往官网 ↗
+                          </Button>
+                        )}
                         {selectedProvider.isCustom && (
                           <Button
                             type="button"
@@ -2061,7 +2093,7 @@ export function ModelsSection() {
   );
 }
 
-function SortableProviderPresetItem({
+function SortableProviderPresetCard({
   provider,
   active,
   configured,
@@ -2081,7 +2113,6 @@ function SortableProviderPresetItem({
   const {
     attributes,
     listeners,
-    setActivatorNodeRef,
     setNodeRef,
     transform,
     transition,
@@ -2094,41 +2125,69 @@ function SortableProviderPresetItem({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const badge = provider.promotion?.badge;
+  const tooltip = [
+    `${provider.name} · ${provider.vendor}`,
+    provider.isCustom ? provider.vendor : "",
+    configured ? "已保存密钥" : "未设置密钥",
+    canReorder ? "拖拽可排序" : "清空搜索后可拖拽排序",
+  ].filter(Boolean).join(" · ");
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       id={`provider-${provider.id}`}
-      className={s.providerPresetItem}
+      className={s.presetCard}
       data-active={active}
+      data-current={current || undefined}
       data-dragging={isDragging ? "true" : undefined}
       role="button"
       tabIndex={0}
+      title={tooltip}
       onClick={() => onSelect(provider.id)}
       onKeyDown={(event) => onKeyDown(event, provider.id)}
+      {...(canReorder ? listeners : {})}
     >
-      <span
-        ref={setActivatorNodeRef}
-        className={s.providerDragHandle}
-        data-provider-drag-handle="true"
-        title={canReorder ? "拖拽排序" : "清空搜索后可拖拽排序"}
-        onClick={(event) => event.stopPropagation()}
-        {...(canReorder ? attributes : {})}
-        {...(canReorder ? listeners : {})}
-      >
-        ⋮⋮
+      <ProviderCardIcon provider={provider} />
+      <span className={s.presetCardName}>{provider.name}</span>
+      <span className={s.presetCardMeta}>
+        {current
+          ? <span className={s.presetCardCurrent}>当前</span>
+          : configured && <span className={s.presetCardDot} aria-label="已保存密钥" />}
       </span>
-      <span className={s.providerPresetName}>{provider.name}</span>
-      <span className={s.providerPresetVendor}>{provider.vendor}</span>
-      <span className={s.providerPresetBadges}>
-        {current && <span className={s.statusBadge} data-on="true">当前</span>}
-        {provider.isCustom && <span className={s.statusBadge} data-tone="custom">{provider.vendor}</span>}
-        <span className={s.statusBadge} data-on={configured}>
-          {configured ? "已设置" : "未设置"}
+      {badge && (
+        <span className={s.presetCardBadge} data-badge={badge} aria-hidden>
+          {badge === "prime" ? "♥" : "★"}
         </span>
-      </span>
+      )}
     </div>
+  );
+}
+
+function providerInitial(provider: ProviderPreset): string {
+  const source = provider.name.trim() || provider.id;
+  const first = Array.from(source)[0] ?? "?";
+  return /[a-z]/.test(first) ? first.toUpperCase() : first;
+}
+
+function ProviderCardIcon({ provider }: { provider: ProviderPreset }) {
+  const iconUrl = getProviderIconUrl(provider.icon);
+  if (iconUrl) {
+    return (
+      <img
+        className={s.presetCardIconImg}
+        src={iconUrl}
+        alt=""
+        aria-hidden
+        draggable={false}
+      />
+    );
+  }
+  return (
+    <span className={s.presetCardIcon} aria-hidden>
+      {providerInitial(provider)}
+    </span>
   );
 }
 
