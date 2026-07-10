@@ -1642,38 +1642,71 @@
   white-space: nowrap;
 }
 
+/* 预设供应商在上、配置面板在下（对标 cc-switch 的排版）。 */
 .providerPresetLayout {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  gap: 20px;
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   min-width: 0;
   width: 100%;
 }
 
-.providerPresetListPane {
+.providerGridPane {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.providerListToolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+.providerGridHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.providerGridTitle {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--h-text);
+  font-family: var(--h-font-cn);
+}
+
+.providerGridTools {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.providerToolbarActions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+.providerGridTools .providerSearchInput {
+  width: 220px;
 }
 
 .providerListHint {
   color: var(--h-text-3);
   font-size: 11px;
   line-height: 1.5;
+}
+
+/* 中转站测评导流小横幅（网格下方）。 */
+.providerReviewBanner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 26%, var(--h-line));
+  background: color-mix(in srgb, var(--h-accent) 7%, var(--h-bg-pane));
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: var(--h-font-cn);
+}
+.providerReviewBanner .link {
+  font-weight: 650;
+  white-space: nowrap;
 }
 
 .customProviderBackdrop {
@@ -1903,107 +1936,209 @@
   border-color: var(--h-accent);
 }
 
-.providerPresetList {
+/* 供应商卡片网格（对标 cc-switch：圆角填充卡片，无外框容器）。
+   徽章会溢出卡片边缘 6px，四周留内边距避免被滚动容器裁掉。 */
+.providerPresetGrid {
   min-width: 0;
-  max-height: 440px;
-  border: 1px solid var(--h-line);
-  border-radius: 8px;
-  overflow: hidden auto;
-  background: var(--h-bg-pane);
+  max-height: 460px;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  padding: 8px 6px;
   scrollbar-gutter: stable;
 }
 
-.providerPresetItem {
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--h-line-soft);
-  background: transparent;
+/* 注意：类名用 presetCard* 前缀 —— 本文件底部的高级环境变量区块已占用
+   providerCard* 系列类名，CSS Modules 同名规则会互相覆盖。 */
+.presetCard {
+  position: relative;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--h-bg-chip);
   color: var(--h-text);
   cursor: pointer;
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  gap: 2px 10px;
-  padding: 11px 12px;
   text-align: left;
   font-family: var(--h-font-cn);
+  touch-action: manipulation;
+  user-select: none;
+  transition: background 120ms ease, border-color 120ms ease;
 }
-.providerPresetItem:last-child {
-  border-bottom: none;
+.presetCard:hover {
+  background: color-mix(in srgb, var(--h-text) 7%, var(--h-bg-chip));
 }
-.providerPresetItem:hover {
-  background: var(--h-bg-soft);
-}
-.providerPresetItem:focus-visible {
+.presetCard:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--h-accent) 54%, transparent);
   outline-offset: -2px;
 }
-.providerPresetItem[data-active="true"] {
-  background: var(--h-bg-chip);
+.presetCard[data-active="true"] {
+  border-color: var(--h-accent);
+  background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-pane));
 }
-.providerPresetItem[data-dragging="true"] {
+.presetCard[data-current] {
+  border-color: color-mix(in srgb, var(--h-ok, #3c9a5f) 65%, var(--h-line));
+}
+.presetCard[data-dragging="true"] {
   opacity: 0.58;
-}
-
-.providerDragHandle {
-  grid-row: 1 / span 2;
-  grid-column: 1;
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  min-height: 36px;
-  color: var(--h-text-3);
-  cursor: grab;
-  font-size: 13px;
-  letter-spacing: -5px;
-  line-height: 1;
-  touch-action: none;
-  user-select: none;
-}
-
-.providerPresetItem:active .providerDragHandle {
   cursor: grabbing;
 }
 
-.providerDragHandle:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--h-accent) 50%, transparent);
-  outline-offset: 2px;
+.presetCardIcon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px;
+  background: var(--h-bg-soft);
+  color: var(--h-text-2);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.presetCard[data-active="true"] .presetCardIcon {
+  background: color-mix(in srgb, var(--h-accent) 22%, var(--h-bg-pane));
+  color: var(--h-accent);
+}
+
+.presetCardIconImg {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
+/* 名称放不下时折成两行小字（最多两行，超出截断）。 */
+.presetCardName {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.presetCardMeta {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.presetCardDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--h-ok, #3c9a5f);
+}
+
+.presetCardCurrent {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--h-ok, #3c9a5f);
+  white-space: nowrap;
+}
+
+.presetCardBadge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--h-warn, #d4920a);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(31, 30, 27, 0.28);
+  pointer-events: none;
+}
+.presetCardBadge[data-badge="prime"] {
+  background: color-mix(in srgb, var(--h-err, #c44) 82%, var(--h-warn, #d4920a));
+}
+
+.presetCardAdd {
+  border: 1px dashed var(--h-line);
+  background: transparent;
+  color: var(--h-text-2);
+}
+.presetCardAdd:hover {
+  border-color: var(--h-accent);
+  color: var(--h-text);
+}
+
+.presetCardAddIcon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
 }
 
 .providerPresetEmpty {
+  grid-column: 1 / -1;
   padding: 18px 12px;
   color: var(--h-text-3);
   font-size: 12px;
 }
 
-.providerPresetName {
-  min-width: 0;
-  grid-column: 2;
-  font-size: 12.5px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* 配置面板右上角的「前往官网」按钮：主要行动点，流动渐变高亮。
+   用 button.类名 提升特异性，压过 shared-ui Button 的底色。 */
+button.providerWebsiteButton {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 650;
+  border: none;
+  color: #fff;
+  background-image: linear-gradient(
+    100deg,
+    var(--h-accent),
+    color-mix(in srgb, var(--h-accent) 52%, var(--h-warn, #d4920a)),
+    color-mix(in srgb, var(--h-accent) 58%, var(--h-ok, #3c9a5f)),
+    var(--h-accent)
+  );
+  background-size: 220% 100%;
+  background-position: 0% 50%;
+  animation: providerWebsiteFlow 3.6s ease-in-out infinite;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--h-accent) 35%, transparent);
+}
+button.providerWebsiteButton:hover {
+  filter: brightness(1.06);
 }
 
-.providerPresetVendor {
-  min-width: 0;
-  grid-column: 2;
-  font-size: 10.5px;
-  color: var(--h-text-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+@keyframes providerWebsiteFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
-.providerPresetBadges {
-  grid-row: 1 / span 2;
-  grid-column: 3;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+@media (prefers-reduced-motion: reduce) {
+  button.providerWebsiteButton {
+    animation: none;
+  }
 }
 
 .providerPresetPanel {
@@ -2415,10 +2550,6 @@
     column-count: 1;
   }
 
-  .providerPresetLayout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .auxIntroCard,
   .auxLayout {
     grid-template-columns: minmax(0, 1fr);
@@ -2433,9 +2564,8 @@
     justify-content: flex-start;
   }
 
-  .providerPresetList {
+  .providerPresetGrid {
     max-height: 320px;
-    overflow-y: auto;
   }
 
   .providerFormGrid {
@@ -2496,8 +2626,18 @@
     align-self: flex-start;
   }
 
-  .providerListToolbar {
-    grid-template-columns: minmax(0, 1fr);
+  .providerGridHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .providerGridTools {
+    flex-wrap: wrap;
+  }
+
+  .providerGridTools .providerSearchInput {
+    flex: 1 1 160px;
+    width: auto;
   }
 
   .localProviderGuide {
@@ -2758,10 +2898,6 @@
 }
 
 @media (max-width: 980px) {
-  .providerPresetLayout {
-    grid-template-columns: 1fr;
-  }
-
   .providerFormGrid {
     grid-template-columns: 1fr;
   }
