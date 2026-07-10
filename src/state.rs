@@ -208,6 +208,9 @@ pub struct AppStateInner {
     /// `None` for token/local/managed. REST and WS both consult this to pick
     /// the cookie-aware client and mint WS tickets.
     pub oauth_session: Option<std::sync::Arc<crate::oauth_session::OauthSession>>,
+    /// Debounce marker for `connection-auth-expired` emits (a burst of 401s
+    /// must not storm the UI with re-login banners).
+    pub last_auth_expired_emit: Option<std::time::Instant>,
 }
 
 /// A snapshot of how the currently-connected dashboard authenticates, taken
@@ -252,6 +255,7 @@ impl AppState {
                 yolo_mode: false,
                 connection_mode: crate::connection::ConnectionMode::Managed,
                 oauth_session: None,
+                last_auth_expired_emit: None,
             }),
         }
     }

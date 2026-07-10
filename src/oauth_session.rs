@@ -399,6 +399,27 @@ pub fn drop_session(base_url: &str) {
     registry().lock().unwrap().remove(&normalize_key(base_url));
 }
 
+/// Persist a session's current cookies back into connection.json, but only if
+/// it is the active oauth remote for this URL. Called after a request captured
+/// a rotated AT/RT — failing to persist a rotated RT would revoke the session.
+pub fn persist_if_dirty(base_url: &str, session: &OauthSession) {
+    let mut config = crate::connection::read_config();
+    let matches = config.mode == crate::connection::ConnectionMode::Remote
+        && config.remote_auth_mode == crate::connection::RemoteAuthMode::Oauth
+        && config
+            .remote_url
+            .as_deref()
+            .map(|u| normalize_key(u) == normalize_key(base_url))
+            .unwrap_or(false);
+    if !matches {
+        return;
+    }
+    config.remote_session = Some(session.export_cookies());
+    if let Err(err) = crate::connection::write_config(&config) {
+        log::warn!("failed to persist rotated oauth session: {err}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
