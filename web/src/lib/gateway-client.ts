@@ -60,6 +60,10 @@ export class GatewayClient {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
+  /** Set when the gateway closed with an auth code (4401/4403): the session is
+   * dead, so blind reconnecting is pointless. Cleared by an explicit
+   * forceReconnect (issued after the user re-logs in). */
+  private authSuspended = false;
 
   private wakeWatchdogTimer: ReturnType<typeof setInterval> | null = null;
   private lastWakeTickAt = 0;
@@ -169,7 +173,7 @@ export class GatewayClient {
 
       ws.onopen = settleOpen;
 
-      ws.onclose = () => {
+      ws.onclose = (ev?: { code?: number; reason?: string }) => {
         if (!isCurrentSocket()) return;
 
         this.ws = null;
@@ -181,6 +185,21 @@ export class GatewayClient {
         }
 
         rejectPending("WebSocket closed");
+
+        // 4401 = credentials rejected, 4403 = host/origin rejected. Neither is
+        // fixed by reconnecting — suppress the loop and surface an auth event
+        // so the UI prompts re-login (4401) or explains the block (4403).
+        const code = ev?.code;
+        if (code === 4401 || code === 4403) {
+          this.authSuspended = true;
+          this.cancelReconnect();
+          this.emit({
+            type: "gateway.auth_required",
+            payload: { code, reason: ev?.reason ?? null },
+          } as unknown as GatewayEvent);
+          this.emitDisconnect();
+          return;
+        }
 
         if (!this.intentionalClose) {
           this.emitDisconnect();
@@ -232,6 +251,9 @@ export class GatewayClient {
 
   private scheduleReconnect() {
     if (!this.autoReconnect || this.intentionalClose) return;
+    // Auth-suspended: a dead session won't heal by reconnecting. Wait for an
+    // explicit forceReconnect after the user re-authenticates.
+    if (this.authSuspended) return;
     if (this.reconnectTimer) return;
     if (this.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) return;
 
@@ -346,6 +368,8 @@ export class GatewayClient {
   // 主动触发一次"假定连接已死"路径：tear down 当前 ws / 在飞 connect，
   // 重置 backoff，立刻重连。给 powerMonitor.on('resume') 这种外部信号用。
   forceReconnect(reason = "manual"): void {
+    // An explicit reconnect (e.g. after re-login) clears the auth-suspend gate.
+    this.authSuspended = false;
     this.handleWake(reason, true);
   }
 

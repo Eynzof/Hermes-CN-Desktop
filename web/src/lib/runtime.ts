@@ -24,6 +24,7 @@ import type {
   ImOnboardingStateInput,
   ImOnboardingStateResult,
   ProbeConnectionResult,
+  OauthLoginResult,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -467,6 +468,15 @@ declare global {
       applyConnectionConfig?(input: ConnectionConfigInput): Promise<ApplyConnectionResult>;
       testConnectionConfig?(input: ConnectionConfigInput): Promise<TestConnectionResult>;
       probeConnectionConfig?(remoteUrl: string): Promise<ProbeConnectionResult>;
+      connectionOauthLogin?(remoteUrl: string): Promise<OauthLoginResult>;
+      connectionPasswordLogin?(input: {
+        remoteUrl: string;
+        provider: string;
+        username: string;
+        password: string;
+      }): Promise<OauthLoginResult>;
+      connectionAuthMe?(remoteUrl: string): Promise<OauthLoginResult>;
+      connectionOauthLogout?(remoteUrl: string): Promise<void>;
       scanConfigMigration?(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult>;
       importConfigMigration?(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult>;
       getYoloMode?(): Promise<YoloModeStatus>;
