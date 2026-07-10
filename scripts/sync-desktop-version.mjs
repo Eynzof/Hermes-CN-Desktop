@@ -84,7 +84,7 @@ updateText("Cargo.toml", (text) => replaceOrThrow(
 
 updateText("Cargo.lock", (text) => replaceOrThrow(
   text,
-  /(\[\[package\]\]\nname = "hermes-agent-cn-desktop"\nversion = )"[^"]+"/,
+  /(\[\[package\]\]\r?\nname = "hermes-agent-cn-desktop"\r?\nversion = )"[^"]+"/,
   `$1"${desktopVersion}"`,
   "Cargo.lock hermes-agent-cn-desktop package version",
 ));

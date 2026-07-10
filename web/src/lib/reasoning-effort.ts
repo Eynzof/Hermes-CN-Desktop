@@ -1,7 +1,7 @@
 // 思考强度（Reasoning Effort）——与后端 Hermes-CN-Core 的事实来源对齐。
 //
 // 后端常量 `VALID_REASONING_EFFORTS = ("minimal", "low", "medium", "high",
-// "xhigh")`（hermes_constants.py），外加特殊值 "none" 表示关闭推理
+// "xhigh", "max")`（hermes_constants.py），外加特殊值 "none" 表示关闭推理
 // （parse_reasoning_effort("none") → {"enabled": False}）。
 // 配置落在 config.yaml 的 `agent.reasoning_effort`；网关 `config.set`
 // （key="reasoning"）会把字面字符串写进该字段，因此这里直接复用同一组取值。
@@ -13,6 +13,7 @@ export const REASONING_EFFORTS = [
   "medium",
   "high",
   "xhigh",
+  "max",
 ] as const;
 
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
@@ -25,6 +26,7 @@ export const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
   medium: "中",
   high: "高",
   xhigh: "极高",
+  max: "最大",
 };
 
 // 工具栏 trigger 上的紧凑标签（"关闭思考" 在 trigger 里显得啰嗦）。
@@ -35,6 +37,7 @@ export const REASONING_EFFORT_SHORT_LABELS: Record<ReasoningEffort, string> = {
   medium: "中",
   high: "高",
   xhigh: "极高",
+  max: "最大",
 };
 
 // 后端在 `agent.reasoning_effort` 为空时的默认取值（tui_gateway/server.py
