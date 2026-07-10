@@ -84,6 +84,10 @@ pub enum AppError {
     #[error("File operation failed: {0}")]
     FileError(String),
 
+    // --- Git ---
+    #[error("Git operation failed: {0}")]
+    Git(String),
+
     // --- State ---
     #[error("App state lock poisoned")]
     StateLockPoisoned,
@@ -132,6 +136,7 @@ impl AppError {
             AppError::ProxyError(_) => "proxy_error",
             AppError::OriginViolation(_) => "origin_violation",
             AppError::FileError(_) => "file_error",
+            AppError::Git(_) => "git",
             AppError::StateLockPoisoned => "state_lock_poisoned",
             AppError::NotReady => "not_ready",
             AppError::Internal(_) => "internal",
@@ -163,6 +168,7 @@ impl AppError {
             | AppError::ProxyError(_)
             | AppError::OriginViolation(_) => "api_proxy",
             AppError::FileError(_) => "file",
+            AppError::Git(_) => "git",
             AppError::StateLockPoisoned | AppError::NotReady => "state",
             AppError::Internal(_) => "internal",
         }

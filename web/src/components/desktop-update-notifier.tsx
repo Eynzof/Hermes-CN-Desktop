@@ -81,7 +81,9 @@ export function DesktopUpdateNotifier() {
             发现 Hermes Agent 桌面端新版本
           </Dialog.Title>
           <Dialog.Description id="desktop-update-desc" className={s.body}>
-            已发布 {versionLabel(result?.latestVersion)}，建议前往官网下载并安装新版。
+            {runtime.isPortable()
+              ? `已发布 ${versionLabel(result?.latestVersion)}，请前往官网下载免安装版压缩包，退出应用后覆盖解压即可（data 目录中的会话与配置会保留）。`
+              : `已发布 ${versionLabel(result?.latestVersion)}，建议前往官网下载并安装新版。`}
           </Dialog.Description>
           <div className={s.versionPanel} aria-label="桌面端版本信息">
             <div>

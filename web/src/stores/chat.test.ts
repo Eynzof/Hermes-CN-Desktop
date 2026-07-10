@@ -1106,4 +1106,69 @@ describe("lastActivityAt (stall watchdog source)", () => {
     expect(next).toBe(interrupted);
     expect(next.lastActivityAt).toBe(1_000);
   });
+
+  it("appends moa.reference blocks and keeps them ordered before the aggregator text", () => {
+    const ref1 = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "moa.reference",
+        session_id: "s1",
+        payload: { label: "gpt-5", text: "GPT 的分析", index: 0, count: 2 },
+      },
+      10,
+    );
+    expect(ref1.statusKind).toBe("moa_reference");
+    expect(ref1.statusMessage).toContain("gpt-5");
+    expect(ref1.statusMessage).toContain("1/2");
+
+    const ref2 = reduceGatewayEvent(
+      ref1,
+      {
+        type: "moa.reference",
+        session_id: "s1",
+        payload: { label: "claude", text: "Claude 的分析", index: 1, count: 2 },
+      },
+      20,
+    );
+
+    const aggregating = reduceGatewayEvent(
+      ref2,
+      { type: "moa.aggregating", session_id: "s1", payload: { aggregator: "grok-4" } },
+      30,
+    );
+    expect(aggregating.statusKind).toBe("moa_aggregating");
+    expect(aggregating.statusMessage).toContain("grok-4");
+
+    const answered = reduceGatewayEvent(
+      aggregating,
+      { type: "message.delta", session_id: "s1", payload: { text: "综合结论" } },
+      40,
+    );
+    // 聚合器开始输出后，MoA 状态提示被 provider-status 清除逻辑收走。
+    expect(answered.statusKind).toBeUndefined();
+    expect(assistantMessage(answered).parts).toEqual([
+      { type: "moa_reference", label: "gpt-5", text: "GPT 的分析", index: 0, count: 2 },
+      { type: "moa_reference", label: "claude", text: "Claude 的分析", index: 1, count: 2 },
+      { type: "text", text: "综合结论" },
+    ]);
+  });
+
+  it("ignores empty moa.reference payloads and keeps thinking placeholders working", () => {
+    const noop = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      { type: "moa.reference", session_id: "s1", payload: {} },
+      10,
+    );
+    expect(noop.messages).toHaveLength(0);
+
+    // 回归守卫：thinking.delta 仍走 reasoning.delta 的 fallthrough（历史上
+    // 在两者之间插分支会截胡 fallthrough）。
+    const placeholder = "ಠ_ಠ deliberating...";
+    const thinking = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      { type: "thinking.delta", session_id: "s1", payload: { text: placeholder } },
+      10,
+    );
+    expect(assistantMessage(thinking).parts).toEqual([{ type: "progress", text: placeholder }]);
+  });
 });

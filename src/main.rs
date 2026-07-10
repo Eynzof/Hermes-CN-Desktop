@@ -145,6 +145,40 @@ fn main() {
                 }
             }
 
+            // Data-root diagnostics: one line so support logs show where the
+            // tree is anchored and whether the portable marker was honored.
+            log::info!(
+                "runtime root: {} (portable: {})",
+                runtime::runtime_root().display(),
+                runtime::portable_mode_active()
+            );
+
+            // macOS Gatekeeper App Translocation runs a quarantined app from a
+            // randomized read-only path, which hides the portable marker next
+            // to the real .app — a portable unzip would silently fall back to
+            // ~/Library. One non-blocking heads-up tells the user how to fix
+            // it (harmless generic advice for DMG installs too).
+            #[cfg(target_os = "macos")]
+            if std::env::current_exe()
+                .map(|p| p.components().any(|c| c.as_os_str() == "AppTranslocation"))
+                .unwrap_or(false)
+            {
+                use tauri_plugin_dialog::DialogExt;
+                log::warn!(
+                    "running from an App Translocation path; a portable marker (if any) is invisible"
+                );
+                app.dialog()
+                    .message(
+                        "应用正被 macOS 隔离机制（App Translocation）从临时路径运行。\n\n\
+                         如果你使用的是免安装版（portable）：数据将无法保存到解压目录。\n\
+                         请把解压出来的整个文件夹移动到其他位置后重新启动，\n\
+                         或在终端执行：xattr -dr com.apple.quarantine <解压目录>\n\n\
+                         普通安装版用户请将应用拖入「应用程序」文件夹后重新打开。",
+                    )
+                    .title("检测到 macOS 应用隔离")
+                    .show(|_| {});
+            }
+
             // 1. Resolve HERMES_HOME
             let hermes_home_base = resolve_hermes_home();
             let base_str = hermes_home_base.to_string_lossy().to_string();
@@ -459,8 +493,26 @@ fn main() {
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
             commands::preview::read_workspace_file,
+            commands::preview::write_workspace_file,
             commands::preview::watch_preview_file,
             commands::preview::stop_preview_file_watch,
+            commands::git::git_review_list,
+            commands::git::git_review_diff,
+            commands::git::git_review_stage,
+            commands::git::git_review_unstage,
+            commands::git::git_review_revert,
+            commands::git::git_review_rev_parse,
+            commands::git::git_review_commit,
+            commands::git::git_review_commit_context,
+            commands::git::git_review_push,
+            commands::git::git_review_ship_info,
+            commands::git::git_review_create_pr,
+            commands::git::git_worktree_list,
+            commands::git::git_worktree_add,
+            commands::git::git_worktree_remove,
+            commands::git::git_branch_list,
+            commands::git::git_branch_switch,
+            commands::git::git_repo_status,
         ])
         .on_window_event(move |window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. }

@@ -514,6 +514,19 @@ function partsToBlocks(
       blocks.push({ type: "image", image: imagePartToEntry(part) });
       continue;
     }
+    if (part.type === "moa_reference") {
+      const text = normalizeContent(part.text);
+      if (text) {
+        blocks.push({
+          type: "moa_reference",
+          label: part.label,
+          text,
+          index: part.index,
+          count: part.count,
+        });
+      }
+      continue;
+    }
     if (part.type === "tool") {
       blocks.push({ type: "tool", tool: toolPartToToolEntry(part, message) });
     }

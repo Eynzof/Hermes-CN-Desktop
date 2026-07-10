@@ -63,6 +63,9 @@ import type {
   UiStoreSnapshot,
   UiTurnStats,
   WatchPreviewFileResult,
+  WriteWorkspaceFileInput,
+  WriteWorkspaceFileResult,
+  HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
 import hermesLogoSvg from "../../../icons/icon.svg?raw";
@@ -509,6 +512,39 @@ const tauriBridge = {
     return invokeCommand("read_workspace_file", { input });
   },
 
+  async writeWorkspaceFile(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult> {
+    return invokeCommand("write_workspace_file", { input });
+  },
+  // Git ops backing the review pane (issue #328). Mirrors the upstream
+  // `window.hermesDesktop.git.review.*` shape so the ported review logic reads
+  // naturally; each method forwards to a Rust command that shells `git`/`gh`.
+  git: {
+    review: {
+      list: (input) => invokeCommand("git_review_list", { input }),
+      diff: (input) => invokeCommand("git_review_diff", { input }),
+      stage: (input) => invokeCommand("git_review_stage", { input }),
+      unstage: (input) => invokeCommand("git_review_unstage", { input }),
+      revert: (input) => invokeCommand("git_review_revert", { input }),
+      revParse: (input) => invokeCommand("git_review_rev_parse", { input }),
+      commit: (input) => invokeCommand("git_review_commit", { input }),
+      commitContext: (input) => invokeCommand("git_review_commit_context", { input }),
+      push: (input) => invokeCommand("git_review_push", { input }),
+      shipInfo: (input) => invokeCommand("git_review_ship_info", { input }),
+      createPr: (input) => invokeCommand("git_review_create_pr", { input }),
+    },
+    // Worktree / branch / status ops backing the projects sidebar (issue #327).
+    worktree: {
+      list: (input) => invokeCommand("git_worktree_list", { input }),
+      add: (input) => invokeCommand("git_worktree_add", { input }),
+      remove: (input) => invokeCommand("git_worktree_remove", { input }),
+    },
+    branch: {
+      list: (input) => invokeCommand("git_branch_list", { input }),
+      switch: (input) => invokeCommand("git_branch_switch", { input }),
+    },
+    repoStatus: (input) => invokeCommand("git_repo_status", { input }),
+  } satisfies HermesGitBridge,
+
   async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {
     return invokeCommand("watch_preview_file", { input });
   },
@@ -888,6 +924,7 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken?: string;
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
+    portable?: boolean;
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
@@ -940,6 +977,7 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
     connectionMode,
+    portable: config.portable ?? false,
   };
 
   (window as any).hermesDesktop = tauriBridge;

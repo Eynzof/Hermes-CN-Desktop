@@ -255,6 +255,27 @@ export interface FilePreview {
   binary: boolean;
   /** True when `text` was cut at the 512 KB cap. */
   truncated: boolean;
+  /**
+   * True when the on-disk bytes were not valid UTF-8 and `text` is a lossy
+   * (�-substituted) rendering — display-only, never editable (writing it back
+   * as UTF-8 would corrupt the original encoding). Optional so older bridges
+   * that don't report it stay compatible.
+   */
+  lossyUtf8?: boolean;
+}
+
+export interface WriteWorkspaceFileInput {
+  /** Absolute path, or relative to `root`. Must resolve inside `root`. */
+  path: string;
+  /** Session workspace root; writes are confined to this directory. */
+  root: string;
+  /** New UTF-8 file content. */
+  content: string;
+}
+
+export interface WriteWorkspaceFileResult {
+  /** Canonical path actually written. */
+  path: string;
 }
 
 export interface WatchPreviewFileResult {
@@ -275,6 +296,130 @@ export interface DesktopFileDropPayload {
   };
 }
 
+// ── Git review pane (issue #328) ─────────────────────────────────────────────
+
+export type ReviewScope = "uncommitted" | "branch" | "lastTurn";
+
+export interface ReviewFile {
+  path: string;
+  added: number;
+  removed: number;
+  /** Single-letter git status (`M`/`A`/`D`/`R`/`?` …). */
+  status: string;
+  staged: boolean;
+}
+
+export interface ReviewList {
+  files: ReviewFile[];
+  /** merge-base for `branch` scope, else null. */
+  base: string | null;
+  /** Whether the path is inside a git work tree (backend `rev-parse` verdict). */
+  isRepo: boolean;
+}
+
+export interface ReviewPrInfo {
+  url: string;
+  state: string;
+  number: number;
+}
+
+export interface ReviewShipInfo {
+  /** gh is installed AND authenticated (the PR action can run). */
+  ghReady: boolean;
+  pr: ReviewPrInfo | null;
+}
+
+export interface ReviewCommitContext {
+  diff: string;
+  recent: string;
+}
+
+/** Bridge to the Rust git commands backing the review pane. Reads degrade to
+ *  empty/null on a non-repo / missing tool; mutations reject so the UI can toast. */
+export interface HermesGitReviewBridge {
+  list(input: { repoPath: string; scope: ReviewScope; baseRef: string | null }): Promise<ReviewList>;
+  diff(input: {
+    repoPath: string;
+    filePath: string;
+    scope: ReviewScope;
+    baseRef: string | null;
+    staged: boolean;
+  }): Promise<string>;
+  stage(input: { repoPath: string; filePath: string | null }): Promise<{ ok: boolean }>;
+  unstage(input: { repoPath: string; filePath: string | null }): Promise<{ ok: boolean }>;
+  revert(input: { repoPath: string; filePath: string | null }): Promise<{ ok: boolean }>;
+  revParse(input: { repoPath: string; ref?: string | null }): Promise<string | null>;
+  commit(input: { repoPath: string; message: string; push: boolean }): Promise<{ ok: boolean }>;
+  commitContext(input: { repoPath: string }): Promise<ReviewCommitContext>;
+  push(input: { repoPath: string }): Promise<{ ok: boolean }>;
+  shipInfo(input: { repoPath: string }): Promise<ReviewShipInfo>;
+  createPr(input: { repoPath: string }): Promise<{ url: string }>;
+}
+
+// ── Worktree / branch / status (issue #327) ──────────────────────────────────
+
+export interface Worktree {
+  path: string;
+  branch: string | null;
+  isMain: boolean;
+  detached: boolean;
+  locked: boolean;
+}
+
+export interface WorktreeAddResult {
+  path: string;
+  branch: string;
+  repoRoot: string;
+}
+
+export interface GitBranch {
+  name: string;
+  checkedOut: boolean;
+  isDefault: boolean;
+  worktreePath: string | null;
+}
+
+export interface RepoStatus {
+  branch: string | null;
+  defaultBranch: string | null;
+  detached: boolean;
+  ahead: number;
+  behind: number;
+  staged: number;
+  unstaged: number;
+  untracked: number;
+  conflicted: number;
+  changed: number;
+  added: number;
+  removed: number;
+}
+
+export interface HermesGitWorktreeBridge {
+  list(input: { repoPath: string }): Promise<Worktree[]>;
+  add(input: {
+    repoPath: string;
+    name?: string | null;
+    branch?: string | null;
+    base?: string | null;
+    existingBranch?: string | null;
+  }): Promise<WorktreeAddResult>;
+  remove(input: { repoPath: string; worktreePath: string; force?: boolean }): Promise<{
+    removed: string;
+  }>;
+}
+
+export interface HermesGitBranchBridge {
+  list(input: { repoPath: string }): Promise<GitBranch[]>;
+  switch(input: { repoPath: string; branch: string }): Promise<{ branch: string }>;
+}
+
+export interface HermesGitBridge {
+  review: HermesGitReviewBridge;
+  worktree: HermesGitWorktreeBridge;
+  branch: HermesGitBranchBridge;
+  repoStatus(input: { repoPath: string }): Promise<RepoStatus | null>;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -289,6 +434,8 @@ declare global {
       currentProfile?: string;
       /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;
+      /** Running as the portable (unzip-and-run) desktop distribution. */
+      portable?: boolean;
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
@@ -349,6 +496,9 @@ declare global {
       terminalClose?(input: { terminalId: string }): Promise<boolean>;
       onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
       readWorkspaceFile?(input: ReadWorkspaceFileInput): Promise<FilePreview>;
+      writeWorkspaceFile?(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult>;
+      /** Git ops backing the review pane (issue #328). */
+      git?: HermesGitBridge;
       watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
       stopPreviewFileWatch?(input: { watchId: string }): Promise<boolean>;
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;
@@ -416,6 +566,11 @@ export const runtime = {
   /** True for either attached backend where process/profile lifecycle is external. */
   isAttached(): boolean {
     return this.getConnectionMode() !== "managed";
+  },
+
+  /** True when running as the portable (unzip-and-run) desktop distribution. */
+  isPortable(): boolean {
+    return window.__HERMES_RUNTIME__?.portable ?? false;
   },
 
   getApiUrl(path: string): string {

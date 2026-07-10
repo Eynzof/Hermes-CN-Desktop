@@ -24,6 +24,7 @@ import {
   type WorkspaceProject,
 } from "@/lib/workspaces";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
+import { WorktreePanel } from "@/components/projects/worktree-panel";
 import s from "./project-detail.module.css";
 
 const WEEK_SECONDS = 7 * 24 * 60 * 60;
@@ -292,6 +293,10 @@ export function ProjectDetailRoute() {
                 : "暂无会话"}
             </div>
           </div>
+        </section>
+
+        <section className={s.sec}>
+          <WorktreePanel repoPath={project.path} />
         </section>
 
         <section className={s.sec}>
