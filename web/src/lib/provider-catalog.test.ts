@@ -7,6 +7,10 @@ import {
   buildProviderConfigUpdate,
   buildProviderOrderUpdate,
   buildProviderSettingsUpdate,
+  apiModeBadgeLabel,
+  apiModeDisplayName,
+  chatEndpointPreviewUrl,
+  detectCustomApiModeFromUrl,
   fetchRemoteProviderCatalog,
   mergeProviderCatalog,
   getProviderCredentialPreview,
@@ -778,5 +782,62 @@ describe("context window override in config updates", () => {
     expect(config.model_context_length).toBeUndefined();
     // The active model is untouched by a non-current provider save.
     expect(config.model).toEqual({ provider: "kimi-for-coding", default: "kimi-k2.6" });
+  });
+});
+
+describe("api mode display helpers", () => {
+  it("names each api mode for the UI", () => {
+    expect(apiModeDisplayName("anthropic_messages")).toContain("Anthropic");
+    expect(apiModeDisplayName("chat_completions")).toContain("OpenAI");
+    expect(apiModeDisplayName("codex_responses")).toContain("Responses");
+  });
+
+  it("badges only the non-default protocols", () => {
+    expect(apiModeBadgeLabel("anthropic_messages")).toBe("Claude");
+    expect(apiModeBadgeLabel("codex_responses")).toBe("Codex");
+    expect(apiModeBadgeLabel("chat_completions")).toBeNull();
+  });
+});
+
+describe("chatEndpointPreviewUrl", () => {
+  it("appends /v1/messages for anthropic bases (SDK mirror)", () => {
+    expect(chatEndpointPreviewUrl("anthropic_messages", "https://www.packyapi.com")).toBe(
+      "https://www.packyapi.com/v1/messages",
+    );
+    expect(chatEndpointPreviewUrl("anthropic_messages", "https://api.aicodemirror.com/api/claudecode/")).toBe(
+      "https://api.aicodemirror.com/api/claudecode/v1/messages",
+    );
+  });
+
+  it("does not double the /v1 segment for anthropic bases already ending in /v1", () => {
+    expect(chatEndpointPreviewUrl("anthropic_messages", "https://relay.example/v1")).toBe(
+      "https://relay.example/v1/messages",
+    );
+  });
+
+  it("appends /chat/completions for openai-compatible bases", () => {
+    expect(chatEndpointPreviewUrl("chat_completions", "https://api.deepseek.com")).toBe(
+      "https://api.deepseek.com/chat/completions",
+    );
+  });
+
+  it("appends /responses for codex bases and returns empty for empty input", () => {
+    expect(chatEndpointPreviewUrl("codex_responses", "https://api.openai.com/v1")).toBe(
+      "https://api.openai.com/v1/responses",
+    );
+    expect(chatEndpointPreviewUrl("chat_completions", "   ")).toBe("");
+  });
+});
+
+describe("detectCustomApiModeFromUrl", () => {
+  it("pre-selects anthropic for /anthropic-suffixed urls (Core heuristic parity)", () => {
+    expect(detectCustomApiModeFromUrl("https://api.minimaxi.com/anthropic")).toBe("anthropic_messages");
+    expect(detectCustomApiModeFromUrl("https://relay.example/anthropic/v1")).toBe("anthropic_messages");
+  });
+
+  it("defaults to chat_completions for other or partial urls", () => {
+    expect(detectCustomApiModeFromUrl("https://api.deepseek.com/v1")).toBe("chat_completions");
+    expect(detectCustomApiModeFromUrl("not a url")).toBe("chat_completions");
+    expect(detectCustomApiModeFromUrl("")).toBe("chat_completions");
   });
 });

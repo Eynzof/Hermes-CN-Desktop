@@ -512,6 +512,8 @@ export function useGateway() {
       provider: string;
       api_key?: string;
       base_url?: string;
+      /** "anthropic_messages" 让后端用 Anthropic 协议（x-api-key + /v1/models）探测。 */
+      api_mode?: string;
       timeout_ms?: number;
     }): Promise<ProviderProbeResult> => {
       ensureSubscribed();
@@ -532,6 +534,8 @@ export function useGateway() {
       provider: string;
       api_key?: string;
       base_url?: string;
+      /** "anthropic_messages" 让后端用 Anthropic 协议（x-api-key + /v1/models）列模型。 */
+      api_mode?: string;
       timeout_ms?: number;
     }): Promise<ProviderModelsListResult> => {
       ensureSubscribed();
