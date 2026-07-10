@@ -149,11 +149,23 @@ fn coerce_config(
         }
     }
 
+    // OAuth auth-mode handling (accept "oauth", drop session on URL change,
+    // relax the token requirement) lands in a later stage; foundation carries
+    // the existing values so token-mode behavior is unchanged.
+    let url_changed = remote_url != existing.remote_url;
+    let remote_session = if url_changed {
+        None
+    } else {
+        existing.remote_session.clone()
+    };
+
     Ok(ConnectionConfig {
         mode,
         local_url,
         remote_url,
         remote_token,
+        remote_auth_mode: existing.remote_auth_mode,
+        remote_session,
     })
 }
 
@@ -724,6 +736,8 @@ mod tests {
             local_url: Some(connection::DEFAULT_LOCAL_DASHBOARD_URL.to_string()),
             remote_url: Some("http://host:9221".to_string()),
             remote_token: Some("saved-token".to_string()),
+            remote_auth_mode: connection::RemoteAuthMode::Token,
+            remote_session: None,
         }
     }
 

@@ -167,7 +167,9 @@ pub async fn connect_remote_backend(
             remote.base_url
         );
     }
-    DashboardHandle::remote(remote.base_url.clone(), remote.token.clone())
+    // OAuth remote wiring (seed session + non-blocking mint verify) lands in a
+    // later stage; token mode keeps the existing behavior.
+    DashboardHandle::remote(remote.base_url.clone(), remote.token().to_string())
 }
 
 /// Attach to a local Hermes Agent CLI dashboard. The URL is already validated

@@ -21,11 +21,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = [
+    "cookies",
     "json",
     "multipart",
     "rustls-tls",
     "stream",
 ] }
+cookie = "0.18"
 sha2 = "0.10"
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 zip = "2"
