@@ -1,7 +1,7 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.2`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.3`).
 #
-# Desktop release build runs in parallel for Windows and macOS. Each job:
+# Desktop release build runs in parallel for Windows, macOS, and Linux. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
@@ -14,7 +14,7 @@
 #      production fallbacks. Set them only if you fork the project and
 #      want to point the auto-update at a different runtime release
 #      pipeline.
-#   6. tauri-action uploads .exe / .dmg to the GitHub Release
+#   6. tauri-action uploads .exe / .dmg / .deb / .AppImage to the GitHub Release
 #      it creates on first run, or appends to an existing tag's release.
 #   7. Extra portable (unzip-and-run) zip artifacts are packaged from the same
 #      build output and uploaded alongside the installers: Windows collects
@@ -30,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.2)"
+        description: "Tag name to associate the build with (e.g. v0.6.3)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -50,14 +50,22 @@ jobs:
             target: x86_64-pc-windows-msvc
             runtime_platform: win32
             runtime_arch: x64
+            bundles: nsis
           - runner: macos-14
             target: aarch64-apple-darwin
             runtime_platform: darwin
             runtime_arch: arm64
+            bundles: dmg
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             runtime_platform: darwin
             runtime_arch: x64
+            bundles: dmg
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            runtime_platform: linux
+            runtime_arch: x64
+            bundles: deb,appimage
 
     runs-on: ${{ matrix.runner }}
 
@@ -75,6 +83,23 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      - name: Install Linux build dependencies
+        if: matrix.runtime_platform == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            wget
 
       - name: Cargo cache
         uses: Swatinem/rust-cache@v2
@@ -224,17 +249,19 @@ jobs:
             安装包已内置来自 ${{ steps.runtime_manifest.outputs.source_repo }}
             ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端、内置技能和内置插件。
 
-            Windows 和 macOS 安装包同时内置 Hermes-CN-Core runtime
+            Windows、macOS 和 Linux 安装包同时内置 Hermes-CN-Core runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。
 
-            另附免安装（portable）压缩包：解压即用，全部数据保存在解压目录的
-            data 文件夹内，详见压缩包内 README-portable.txt。
+            Linux x64 版本提供 Debian 安装包（.deb）和免安装 AppImage。
+
+            Windows 和 macOS 另附免安装（portable）压缩包：解压即用，全部数据保存在
+            解压目录的 data 文件夹内，详见压缩包内 README-portable.txt。
 
             如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
           releaseDraft: false
           # Mark SemVer prerelease tags as prerelease on GitHub Releases.
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
       - name: Package + upload Windows portable zip
         if: matrix.runtime_platform == 'win32'
