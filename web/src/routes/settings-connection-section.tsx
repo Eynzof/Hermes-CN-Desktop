@@ -19,6 +19,7 @@ import type {
   TestConnectionResult,
 } from "@hermes/protocol";
 import { Alert, Button, Input } from "@hermes/shared-ui";
+import { notifyConnectionAuthRestored } from "@/lib/connection-auth-events";
 import { SettingsHero } from "./settings-hero";
 import s from "./settings.module.css";
 
@@ -204,6 +205,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       if (r.ok) {
         setIdentity(r.identity ?? null);
         setMessage({ tone: "ok", text: "登录成功" });
+        notifyConnectionAuthRestored();
       } else {
         setMessage({ tone: "error", text: r.error ?? "登录失败" });
       }
@@ -229,6 +231,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         setIdentity(r.identity ?? null);
         setPwPass("");
         setMessage({ tone: "ok", text: "登录成功" });
+        notifyConnectionAuthRestored();
       } else {
         setMessage({ tone: "error", text: r.error ?? "登录失败" });
       }

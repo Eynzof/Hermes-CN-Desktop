@@ -158,25 +158,36 @@ pub async fn connection_oauth_login(
         // Read cookies out of the webview (includes HttpOnly). Windows/WebView2
         // deadlocks if this is called from a sync command — we are inside an
         // async task, which is the documented-safe context.
-        if let Ok(cookies) = window.cookies_for_url(probe_url.clone()) {
-            let extracted = extract_session_cookies(&cookies);
-            if extracted.iter().any(|c| is_at_variant(&c.name)) {
-                session.import_cookies(&extracted);
-                match finish_login(&base_url, &session).await {
-                    Ok(identity) => {
-                        let _ = window.destroy();
-                        return Ok(OauthLoginResult {
-                            ok: true,
-                            identity: Some(identity),
-                            error: None,
-                        });
-                    }
-                    // Cookie present but not yet usable (mid-redirect); keep waiting.
-                    Err(AppError::AuthSessionExpired(_)) => {}
-                    Err(other) => {
-                        let _ = window.destroy();
-                        return Err(other);
-                    }
+        let mut extracted = window
+            .cookies_for_url(probe_url.clone())
+            .map(|cookies| extract_session_cookies(&cookies))
+            .unwrap_or_default();
+        // Wry's WKWebView URL filter compares Cookie.domain() with
+        // Url::domain(). The latter is None for IP literals, so an otherwise
+        // valid http://127.0.0.1 gateway returns an empty list. Fall back to
+        // the full webview jar and apply our own exact-origin filter. Session
+        // cookie names are still allowlisted before anything reaches reqwest.
+        if extracted.is_empty() {
+            if let Ok(cookies) = window.cookies() {
+                extracted = extract_session_cookies_for_origin(&cookies, &probe_url);
+            }
+        }
+        if extracted.iter().any(|c| is_at_variant(&c.name)) {
+            session.import_cookies(&extracted);
+            match finish_login(&base_url, &session).await {
+                Ok(identity) => {
+                    let _ = window.destroy();
+                    return Ok(OauthLoginResult {
+                        ok: true,
+                        identity: Some(identity),
+                        error: None,
+                    });
+                }
+                // Cookie present but not yet usable (mid-redirect); keep waiting.
+                Err(AppError::AuthSessionExpired(_)) => {}
+                Err(other) => {
+                    let _ = window.destroy();
+                    return Err(other);
                 }
             }
         }
@@ -347,10 +358,82 @@ fn extract_session_cookies(cookies: &[cookie::Cookie<'static>]) -> Vec<Persisted
         .collect()
 }
 
+/// WKWebView's URL-scoped cookie query drops IP-literal hosts on macOS because
+/// `Url::domain()` is empty for an IP address. This fallback reads the webview
+/// jar and keeps only Hermes session cookies belonging to the gateway host.
+fn extract_session_cookies_for_origin(
+    cookies: &[cookie::Cookie<'static>],
+    origin: &url::Url,
+) -> Vec<PersistedCookie> {
+    let Some(origin_host) = origin.host_str() else {
+        return Vec::new();
+    };
+    let scoped = cookies
+        .iter()
+        .filter(|cookie| {
+            let Some(domain) = cookie.domain() else {
+                return false;
+            };
+            domain
+                .trim_start_matches('.')
+                .eq_ignore_ascii_case(origin_host)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    extract_session_cookies(&scoped)
+}
+
 /// RAII marker clearing the single-flight entry when a login attempt ends.
 struct InFlightGuard(String);
 impl Drop for InFlightGuard {
     fn drop(&mut self) {
         in_flight().lock().unwrap().remove(&self.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cookie(name: &str, value: &str, domain: &str) -> cookie::Cookie<'static> {
+        cookie::Cookie::build((name.to_string(), value.to_string()))
+            .domain(domain.to_string())
+            .path("/")
+            .build()
+    }
+
+    #[test]
+    fn origin_fallback_recovers_ip_literal_session_cookies() {
+        let cookies = vec![
+            cookie("hermes_session_at", "AT", "127.0.0.1"),
+            cookie("hermes_session_rt", "RT", "127.0.0.1"),
+        ];
+        let origin = url::Url::parse("http://127.0.0.1:9131").unwrap();
+
+        let extracted = extract_session_cookies_for_origin(&cookies, &origin);
+
+        assert_eq!(extracted.len(), 2);
+        assert!(extracted
+            .iter()
+            .any(|item| item.name == "hermes_session_at"));
+        assert!(extracted
+            .iter()
+            .any(|item| item.name == "hermes_session_rt"));
+    }
+
+    #[test]
+    fn origin_fallback_rejects_idp_and_unrelated_cookies() {
+        let cookies = vec![
+            cookie("hermes_session_at", "IDP", "login.example.com"),
+            cookie("other", "VALUE", "gateway.example.com"),
+            cookie("__Host-hermes_session_at", "GATEWAY", "gateway.example.com"),
+        ];
+        let origin = url::Url::parse("https://gateway.example.com").unwrap();
+
+        let extracted = extract_session_cookies_for_origin(&cookies, &origin);
+
+        assert_eq!(extracted.len(), 1);
+        assert_eq!(extracted[0].name, "__Host-hermes_session_at");
+        assert_eq!(extracted[0].value, "GATEWAY");
     }
 }

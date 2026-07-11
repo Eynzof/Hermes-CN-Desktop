@@ -234,7 +234,7 @@ impl reqwest::cookie::CookieStore for SessionCookieJar {
 
 /// Identity returned by `GET /api/auth/me` (upstream flat shape).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
 pub struct AuthIdentity {
     #[serde(default)]
     pub user_id: Option<String>,
@@ -510,6 +510,27 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].name, "hermes_session_rt");
         assert!(!j.take_dirty(), "import must not flag dirty");
+    }
+
+    #[test]
+    fn auth_identity_reads_core_snake_case_and_writes_frontend_camel_case() {
+        let identity: AuthIdentity = serde_json::from_value(serde_json::json!({
+            "user_id": "user-1",
+            "display_name": "Alice",
+            "org_id": "org-1",
+            "provider": "basic"
+        }))
+        .unwrap();
+
+        assert_eq!(identity.user_id.as_deref(), Some("user-1"));
+        assert_eq!(identity.display_name.as_deref(), Some("Alice"));
+        assert_eq!(identity.org_id.as_deref(), Some("org-1"));
+
+        let frontend = serde_json::to_value(identity).unwrap();
+        assert_eq!(frontend["userId"], "user-1");
+        assert_eq!(frontend["displayName"], "Alice");
+        assert_eq!(frontend["orgId"], "org-1");
+        assert!(frontend.get("user_id").is_none());
     }
 
     #[test]
