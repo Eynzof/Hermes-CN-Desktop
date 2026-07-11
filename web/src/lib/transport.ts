@@ -152,6 +152,24 @@ export async function fetchJSON<T>(
   return parser ? parser.parse(data) : data as T;
 }
 
+/**
+ * Resolve an image path on the gateway into a browser-safe data URL.
+ *
+ * Chat history stores the path returned by `image.attach(_bytes)`. A webview
+ * cannot load that absolute path directly (and must not be given broad
+ * `file://` access), so route it through Core's authenticated, media-root
+ * confined `/api/media` endpoint.
+ */
+export async function fetchMediaDataUrl(path: string): Promise<string> {
+  const result = await fetchJSON<{ data_url?: unknown }>(
+    `/api/media?path=${encodeURIComponent(path)}`,
+  );
+  if (typeof result.data_url !== "string" || !result.data_url.startsWith("data:image/")) {
+    throw new Error("Media response did not contain an image data URL");
+  }
+  return result.data_url;
+}
+
 const EXTERNAL_FETCH_TIMEOUT_MS = 15_000;
 
 function timeoutSignal(parent?: AbortSignal): AbortSignal {
