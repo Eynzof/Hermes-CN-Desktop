@@ -64,6 +64,14 @@ static EXTERNAL_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .build()
         .expect("valid external HTTP client")
 });
+static EXTERNAL_NO_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(EXTERNAL_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .no_proxy()
+        .build()
+        .expect("valid external no-proxy HTTP client")
+});
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -983,20 +991,56 @@ pub async fn external_request_impl(
 ) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
     let display_url = target_url.as_str().to_string();
-    let mut req =
-        EXTERNAL_HTTP_CLIENT.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
 
-    if let Some(ref headers) = input.headers {
-        for (key, value) in headers {
-            req = req.header(key.as_str(), value.as_str());
+    fn build_request<'a>(
+        client: &'a reqwest::Client,
+        method: &str,
+        target_url: url::Url,
+        headers: &Option<HashMap<String, String>>,
+        body: &Option<String>,
+    ) -> reqwest::RequestBuilder {
+        let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
+        if let Some(ref headers) = headers {
+            for (key, value) in headers {
+                req = req.header(key.as_str(), value.as_str());
+            }
+        }
+        if let Some(ref body) = body {
+            req = req.body(body.clone());
+        }
+        req
+    }
+
+    let mut req = build_request(
+        &EXTERNAL_HTTP_CLIENT,
+        method,
+        target_url.clone(),
+        &input.headers,
+        &input.body,
+    );
+
+    let mut result = req.send().await;
+
+    // If a system proxy is configured and the connection was refused, retry
+    // without using the proxy so the user still gets a clear error or a
+    // successful direct connection.
+    if let Err(ref e) = result {
+        let proxy_env = std::env::var("HTTPS_PROXY")
+            .or_else(|_| std::env::var("HTTP_PROXY"))
+            .unwrap_or_default();
+        if !proxy_env.is_empty() && (e.is_connect() || e.to_string().contains("error sending request")) {
+            let no_proxy_req = build_request(
+                &EXTERNAL_NO_PROXY_HTTP_CLIENT,
+                method,
+                target_url,
+                &input.headers,
+                &input.body,
+            );
+            result = no_proxy_req.send().await;
         }
     }
 
-    if let Some(ref body) = input.body {
-        req = req.body(body.clone());
-    }
-
-    match req.send().await {
+    match result {
         Ok(res) => {
             let status = res.status().as_u16();
             let status_text = res.status().canonical_reason().unwrap_or("").to_string();
