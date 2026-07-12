@@ -4,10 +4,12 @@ import { useEffect, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
 import { readUiValue } from "@/lib/ui-store";
+import { sendTelemetryPingIfDue } from "@/lib/telemetry";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
 import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
+import { ConnectionAuthBanner } from "@/components/connection-auth-banner";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CommandPalette } from "@/components/command-palette";
 import { PanelRoute } from "@/routes/panel";
@@ -57,6 +59,11 @@ export function App() {
   useEffect(() => {
     hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
   }, [hydrateTheme]);
+  // 匿名使用统计：启动时最多发一次 ping（24h 间隔在 lib/telemetry.ts 里判定，
+  // 开关关闭 / 发送失败都静默跳过，不阻塞任何主流程）。
+  useEffect(() => {
+    void sendTelemetryPingIfDue();
+  }, []);
 
   return (
     <div lang="zh-CN" data-hermes-platform={platform}>
@@ -102,6 +109,7 @@ export function App() {
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
       <DesktopUpdateNotifier />
+      <ConnectionAuthBanner />
       <CommandPalette />
     </div>
   );

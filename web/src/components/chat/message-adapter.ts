@@ -657,13 +657,9 @@ export function attachTurnStatsMetadata(
   // 就贴错了消息（用户看到的"TTFT 时有时无"成因之一）。
   const used = new Set<number>();
   const statByMessage = new Map<number, number>();
-  const ordinalByMessage = new Map<number, number>();
 
-  let assistantIndex = 0;
   messages.forEach((message, messageIndex) => {
     if (message.role !== "assistant") return;
-    assistantIndex += 1;
-    ordinalByMessage.set(messageIndex, assistantIndex);
     const hash = statsHashFromMessage(message);
     if (!hash) return;
     const statIndex = stats.findIndex(
@@ -675,9 +671,19 @@ export function attachTurnStatsMetadata(
     }
   });
 
+  // turnIndex 兜底按"回合"计数：一个回合 = 一段连续的 assistant 消息（回合之间
+  // 隔着 user 消息）。写入侧 turnIndex 是在 live 空间打的——那里整回合被合并成
+  // 一条 assistant 消息——所以当后端把一个回合拆成多条 stored 行（ui_messages
+  // 路径不做合并）时，该回合的 TTFT/tokens/成本要落到这段的**最后一条**（最终
+  // 答复）行，而不是开场白行；逐条 assistant 序号兜底会把统计贴到开场白上。
+  // contentHash 精确命中仍优先（上一遍已占住）。
+  let turnOrdinal = 0;
   messages.forEach((message, messageIndex) => {
-    if (message.role !== "assistant" || statByMessage.has(messageIndex)) return;
-    const ordinal = ordinalByMessage.get(messageIndex);
+    if (message.role !== "assistant") return;
+    if (messages[messageIndex - 1]?.role !== "assistant") turnOrdinal += 1;
+    const endsTurn = messages[messageIndex + 1]?.role !== "assistant";
+    if (!endsTurn || statByMessage.has(messageIndex)) return;
+    const ordinal = turnOrdinal;
     const statIndex = stats.findIndex(
       (stat, index) => !used.has(index) && stat.turnIndex === ordinal,
     );
@@ -935,6 +941,52 @@ function isReplayDuplicateLiveMessage(
   });
 }
 
+// A normally-completed agent turn is frequently persisted by the backend as
+// SEVERAL assistant rows — leading commentary + a tool call, tool-only middle
+// rows, then the final answer — whereas the live runtime consolidates the whole
+// turn into ONE assistant message (a single `live-assistant-*` id). That single
+// consolidated bubble's canonical text (commentary + final answer, concatenated)
+// then exact-matches NEITHER the stored commentary row NOR the stored answer row,
+// so isSameCanonicalMessage cannot merge it; it is not interrupted, and its tool
+// identity spans the whole turn so it is not a prefix replay of any single stored
+// row either. The un-matched live copy is appended, rendering the turn's text —
+// including the final answer — a second time next to the stored rows.
+//
+// Recognize it: a COMPLETE, non-interrupted live assistant whose tool-call
+// identity (`toolCallId:name`, backend-unique) is a contiguous run of the stored
+// assistant rows' identities, and whose text is contained in those same rows'
+// concatenated text, is already fully persisted — drop the live copy and let the
+// canonical stored rows render (mirrors how completion lets the stored turn win).
+function isSupersededByStoredTurn(
+  live: HermesUIMessage,
+  storedMessages: HermesUIMessage[],
+): boolean {
+  if (live.role !== "assistant" || live.status !== "complete") return false;
+  // Only multi-step (tool-bearing) turns get split across rows; a plain-text
+  // turn is one stored row and already dedupes via isSameCanonicalMessage.
+  const liveTools = canonicalToolIdentityComparable(live);
+  if (!liveTools) return false;
+  // Interrupted replays are handled by isStaleInterruptedLiveMessage / superset.
+  if (hasInterruptedCompletion(live, canonicalText(live))) return false;
+
+  const storedAssistants = storedMessages.filter((message) => message.role === "assistant");
+  const storedTools = storedAssistants
+    .map((message) => canonicalToolIdentityComparable(message))
+    .filter(Boolean)
+    .join("|");
+  // Every live tool call (unique ids) must already be persisted, in order.
+  if (!storedTools.includes(liveTools)) return false;
+
+  const liveText = looseComparableText(canonicalText(live));
+  if (liveText) {
+    const storedText = looseComparableText(
+      storedAssistants.map((message) => canonicalText(message)).join(" "),
+    );
+    if (!storedText.includes(liveText)) return false;
+  }
+  return true;
+}
+
 function isInterruptedLiveSuperset(
   stored: HermesUIMessage,
   live: HermesUIMessage,
@@ -1073,6 +1125,7 @@ export function mergeHermesUIMessages(
     if (usedLiveIndexes.has(index)) return;
     if (isStaleInterruptedLiveMessage(liveMessage, stored)) return;
     if (isReplayDuplicateLiveMessage(liveMessage, stored)) return;
+    if (isSupersededByStoredTurn(liveMessage, stored)) return;
     merged.push(liveMessage);
   });
 

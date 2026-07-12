@@ -80,6 +80,12 @@ pub enum AppError {
     #[error("Request outside allowed origin: {0}")]
     OriginViolation(String),
 
+    // --- Remote OAuth session ---
+    // Prefix is load-bearing: the frontend string-matches AUTH_SESSION_EXPIRED
+    // to surface the "re-login to the remote gateway" banner. Do not localize.
+    #[error("AUTH_SESSION_EXPIRED: {0}")]
+    AuthSessionExpired(String),
+
     // --- File operations ---
     #[error("File operation failed: {0}")]
     FileError(String),
@@ -135,6 +141,7 @@ impl AppError {
             AppError::InvalidRequest(_) => "invalid_request",
             AppError::ProxyError(_) => "proxy_error",
             AppError::OriginViolation(_) => "origin_violation",
+            AppError::AuthSessionExpired(_) => "auth_session_expired",
             AppError::FileError(_) => "file_error",
             AppError::Git(_) => "git",
             AppError::StateLockPoisoned => "state_lock_poisoned",
@@ -167,6 +174,7 @@ impl AppError {
             AppError::InvalidRequest(_)
             | AppError::ProxyError(_)
             | AppError::OriginViolation(_) => "api_proxy",
+            AppError::AuthSessionExpired(_) => "auth",
             AppError::FileError(_) => "file",
             AppError::Git(_) => "git",
             AppError::StateLockPoisoned | AppError::NotReady => "state",

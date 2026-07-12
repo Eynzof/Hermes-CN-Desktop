@@ -7,7 +7,12 @@ import {
   buildProviderConfigUpdate,
   buildProviderOrderUpdate,
   buildProviderSettingsUpdate,
+  apiModeBadgeLabel,
+  apiModeDisplayName,
+  chatEndpointPreviewUrl,
+  detectCustomApiModeFromUrl,
   fetchRemoteProviderCatalog,
+  mergeProviderCatalog,
   getProviderCredentialPreview,
   getProviderEntry,
   getProviderOrder,
@@ -622,6 +627,98 @@ describe("provider catalog config updates", () => {
       ],
     });
   });
+
+  it("keeps promotion fields from the remote catalog and drops malformed ones", async () => {
+    mockedFetchExternalJSON.mockResolvedValue({
+      version: "remote-v2",
+      providers: [
+        {
+          id: "packycode",
+          name: "PackyCode",
+          baseUrl: "https://www.packyapi.com",
+          defaultModel: "claude-opus-4-8",
+          websiteUrl: "https://www.packyapi.com",
+          icon: " packycode ",
+          promotion: {
+            url: "https://www.packyapi.com/register?aff=our-code",
+            badge: "partner",
+          },
+        },
+        {
+          id: "bad-promo",
+          name: "Bad Promo",
+          baseUrl: "https://bad.example/v1",
+          defaultModel: "m",
+          websiteUrl: "http://insecure.example",
+          promotion: {
+            url: "javascript:alert(1)",
+            badge: "sponsor",
+          },
+        },
+      ],
+    });
+
+    const catalog = await fetchRemoteProviderCatalog("https://cdn.example.com/catalog.json");
+    const packy = catalog.providers.find((provider) => provider.id === "packycode");
+    expect(packy).toMatchObject({
+      icon: "packycode",
+      websiteUrl: "https://www.packyapi.com",
+      promotion: {
+        url: "https://www.packyapi.com/register?aff=our-code",
+        badge: "partner",
+      },
+    });
+
+    const bad = catalog.providers.find((provider) => provider.id === "bad-promo");
+    expect(bad?.promotion).toBeUndefined();
+    expect(bad?.websiteUrl).toBeUndefined();
+  });
+
+  it("never lets a remote entry override wire settings of a built-in provider", () => {
+    const builtin = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "deepseek")!;
+    const merged = mergeProviderCatalog(BUILTIN_PROVIDER_CATALOG, {
+      version: "remote-v3",
+      providers: [
+        {
+          ...builtin,
+          baseUrl: "https://evil.example/v1",
+          apiMode: "anthropic_messages",
+          transport: "anthropic_messages",
+          apiKeyLabel: "EVIL_KEY",
+          promotion: {
+            url: "https://platform.deepseek.com/",
+          },
+        },
+        {
+          id: "new-remote-provider",
+          name: "New Remote",
+          vendor: "Remote",
+          region: "cn",
+          baseUrl: "https://api.new-remote.example/v1",
+          apiMode: "chat_completions",
+          transport: "openai_chat",
+          apiKeyLabel: "NEW_REMOTE_API_KEY",
+          defaultModel: "m1",
+          models: [{ id: "m1" }],
+        },
+      ],
+    });
+
+    const deepseek = merged.providers.find((provider) => provider.id === "deepseek");
+    expect(deepseek).toMatchObject({
+      baseUrl: builtin.baseUrl,
+      apiMode: builtin.apiMode,
+      transport: builtin.transport,
+      apiKeyLabel: builtin.apiKeyLabel,
+      promotion: { url: "https://platform.deepseek.com/" },
+    });
+
+    // Brand-new remote providers keep their own wire settings.
+    expect(merged.providers.find((provider) => provider.id === "new-remote-provider")).toMatchObject({
+      baseUrl: "https://api.new-remote.example/v1",
+    });
+    expect(merged.version).toBe("remote-v3");
+  });
 });
 
 describe("parseContextWindowInput", () => {
@@ -685,5 +782,62 @@ describe("context window override in config updates", () => {
     expect(config.model_context_length).toBeUndefined();
     // The active model is untouched by a non-current provider save.
     expect(config.model).toEqual({ provider: "kimi-for-coding", default: "kimi-k2.6" });
+  });
+});
+
+describe("api mode display helpers", () => {
+  it("names each api mode for the UI", () => {
+    expect(apiModeDisplayName("anthropic_messages")).toContain("Anthropic");
+    expect(apiModeDisplayName("chat_completions")).toContain("OpenAI");
+    expect(apiModeDisplayName("codex_responses")).toContain("Responses");
+  });
+
+  it("badges only the non-default protocols", () => {
+    expect(apiModeBadgeLabel("anthropic_messages")).toBe("Claude");
+    expect(apiModeBadgeLabel("codex_responses")).toBe("Codex");
+    expect(apiModeBadgeLabel("chat_completions")).toBeNull();
+  });
+});
+
+describe("chatEndpointPreviewUrl", () => {
+  it("appends /v1/messages for anthropic bases (SDK mirror)", () => {
+    expect(chatEndpointPreviewUrl("anthropic_messages", "https://www.packyapi.com")).toBe(
+      "https://www.packyapi.com/v1/messages",
+    );
+    expect(chatEndpointPreviewUrl("anthropic_messages", "https://api.aicodemirror.com/api/claudecode/")).toBe(
+      "https://api.aicodemirror.com/api/claudecode/v1/messages",
+    );
+  });
+
+  it("does not double the /v1 segment for anthropic bases already ending in /v1", () => {
+    expect(chatEndpointPreviewUrl("anthropic_messages", "https://relay.example/v1")).toBe(
+      "https://relay.example/v1/messages",
+    );
+  });
+
+  it("appends /chat/completions for openai-compatible bases", () => {
+    expect(chatEndpointPreviewUrl("chat_completions", "https://api.deepseek.com")).toBe(
+      "https://api.deepseek.com/chat/completions",
+    );
+  });
+
+  it("appends /responses for codex bases and returns empty for empty input", () => {
+    expect(chatEndpointPreviewUrl("codex_responses", "https://api.openai.com/v1")).toBe(
+      "https://api.openai.com/v1/responses",
+    );
+    expect(chatEndpointPreviewUrl("chat_completions", "   ")).toBe("");
+  });
+});
+
+describe("detectCustomApiModeFromUrl", () => {
+  it("pre-selects anthropic for /anthropic-suffixed urls (Core heuristic parity)", () => {
+    expect(detectCustomApiModeFromUrl("https://api.minimaxi.com/anthropic")).toBe("anthropic_messages");
+    expect(detectCustomApiModeFromUrl("https://relay.example/anthropic/v1")).toBe("anthropic_messages");
+  });
+
+  it("defaults to chat_completions for other or partial urls", () => {
+    expect(detectCustomApiModeFromUrl("https://api.deepseek.com/v1")).toBe("chat_completions");
+    expect(detectCustomApiModeFromUrl("not a url")).toBe("chat_completions");
+    expect(detectCustomApiModeFromUrl("")).toBe("chat_completions");
   });
 });

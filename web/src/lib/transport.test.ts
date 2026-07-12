@@ -4,6 +4,7 @@ import {
   downloadExternalImageFile,
   fetchExternalJSON,
   fetchJSON,
+  fetchMediaDataUrl,
   uploadAttachmentFile,
 } from "./transport";
 
@@ -83,6 +84,24 @@ describe("transport · debug-bus integration", () => {
 
     const restPushes = restPushesFrom(pushSpy);
     expect(restPushes.length).toBe(0);
+  });
+
+  it("fetchMediaDataUrl loads an encoded gateway image path", async () => {
+    stubFetch(() => makeResponse(200, '{"data_url":"data:image/png;base64,QUJD"}'));
+
+    await expect(fetchMediaDataUrl("/Users/me/Hermes images/a 1.png"))
+      .resolves.toBe("data:image/png;base64,QUJD");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/media?path=%2FUsers%2Fme%2FHermes%20images%2Fa%201.png",
+      expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+    );
+  });
+
+  it("fetchMediaDataUrl rejects a malformed media response", async () => {
+    stubFetch(() => makeResponse(200, '{"data_url":"https://example.com/not-inline.png"}'));
+
+    await expect(fetchMediaDataUrl("/tmp/a.png")).rejects.toThrow(/image data URL/);
   });
 
   it("fetchExternalJSON pushes a REST entry on non-ok response", async () => {

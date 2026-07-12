@@ -94,14 +94,20 @@ const CAPABILITIES: CapDescriptor[] = [
   },
 ];
 
-type GroupKey = "recent" | "configured" | "recommended" | "more";
+type GroupKey = "recent" | "configured" | "recommended" | "moa" | "more";
 
 const GROUP_LABELS: Record<GroupKey, { name: string; subtitle: string }> = {
   recent: { name: "最近用过", subtitle: "按 7 日内调用次数排序" },
   configured: { name: "已配置", subtitle: "填了 Key 但本周未用" },
   recommended: { name: "推荐预设", subtitle: "Top 5 模型平台 · 一键跳设置页填 Key" },
+  moa: { name: "MoA 预设", subtitle: "多模型混合 · 参考模型先行分析，聚合器输出最终回答" },
   more: { name: "更多", subtitle: "全球 / 企业 / OAuth 类" },
 };
+
+// 虚拟 provider：MoA 预设以 `moa` provider 的模型形式出现在 model.options
+// 里。对齐官方桌面端（model-menu-panel），它们不混入常规分桶，而是拆成
+// 独立的「MoA 预设」组；选中即持久切换（"<preset> --provider moa"）。
+export const MOA_PROVIDER_SLUG = "moa";
 
 // Map of catalog id → preset for fast lookup.
 const CATALOG_BY_ID = new Map<string, ProviderPreset>(
@@ -149,13 +155,31 @@ function asRecord(value: unknown): Record<string, unknown> {
 export function buildCandidates(
   modelOptions: ModelOptionsResult | null,
   usageEntries: ModelUsageEntry[],
-): { all: Candidate[]; recent: Candidate[]; configured: Candidate[]; recommended: Candidate[]; more: Candidate[] } {
+): { all: Candidate[]; recent: Candidate[]; configured: Candidate[]; recommended: Candidate[]; moa: Candidate[]; more: Candidate[] } {
   const all: Candidate[] = [];
+  const moa: Candidate[] = [];
   const seenKeys = new Set<string>();
   const gatewayProviderSlugs = new Set<string>();
 
   // 1. From gateway model.options
   for (const provider of modelOptions?.providers ?? []) {
+    // MoA 预设走独立分组，不进常规分桶（对齐官方桌面端把 moa 行从
+    // pickerProviders 里拆出的做法）。
+    if (provider.slug.toLowerCase() === MOA_PROVIDER_SLUG) {
+      for (const presetName of provider.models ?? []) {
+        if (!presetName) continue;
+        moa.push({
+          key: `${MOA_PROVIDER_SLUG}:${presetName}`,
+          providerSlug: MOA_PROVIDER_SLUG,
+          providerName: providerLabel(provider) || "Mixture of Agents",
+          vendor: "MoA",
+          model: presetName,
+          configured: true,
+          caps: null,
+        });
+      }
+      continue;
+    }
     gatewayProviderSlugs.add(provider.slug);
     const preset = findCatalog(provider.slug);
     const extras = asRecord(provider);
@@ -279,7 +303,7 @@ export function buildCandidates(
   ]);
   const more: Candidate[] = all.filter((c) => !placed.has(c.key));
 
-  return { all, recent, configured, recommended, more };
+  return { all, recent, configured, recommended, moa, more };
 }
 
 function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
@@ -428,11 +452,12 @@ function ModelPickerBody({
     const recent = filterGroup(buckets.recent);
     const configured = filterGroup(buckets.configured);
     const recommended = filterGroup(buckets.recommended);
+    const moa = filterGroup(buckets.moa);
     const more = filterGroup(buckets.more);
-    return { recent, configured, recommended, more };
+    return { recent, configured, recommended, moa, more };
   }, [buckets, filterGroup]);
 
-  const totalVisible = visible.recent.length + visible.configured.length + visible.recommended.length + visible.more.length;
+  const totalVisible = visible.recent.length + visible.configured.length + visible.recommended.length + visible.moa.length + visible.more.length;
 
   function toggleCap(cap: CapabilityKey) {
     setActiveCaps((prev) => {
@@ -590,7 +615,7 @@ function ModelPickerBody({
                 全部
                 <span className={s.mpFilterCount}>{totalVisible}</span>
               </button>
-              {(["recent", "configured", "recommended", "more"] as const).map((group) => {
+              {(["recent", "configured", "recommended", "moa", "more"] as const).map((group) => {
                 const count = visible[group].length;
                 return (
                   <button
@@ -656,6 +681,16 @@ function ModelPickerBody({
                       <span className={s.mpGroupSub}>{GROUP_LABELS.recommended.subtitle}</span>
                     </header>
                     {visible.recommended.map(renderCard)}
+                  </section>
+                )}
+
+                {showGroup("moa") && visible.moa.length > 0 && (
+                  <section className={s.mpGroup}>
+                    <header className={s.mpGroupHeader}>
+                      <span>{GROUP_LABELS.moa.name}</span>
+                      <span className={s.mpGroupSub}>{GROUP_LABELS.moa.subtitle}</span>
+                    </header>
+                    {visible.moa.map(renderCard)}
                   </section>
                 )}
 

@@ -23,6 +23,11 @@ const RUNTIME_SUBDIR_RELEASE: &str = "runtime";
 /// poison the packaged app's `current.json`.
 const RUNTIME_SUBDIR_DEV: &str = "dev-runtime";
 const LOCAL_SOURCE_ARCHIVE_FILE: &str = "current.json.local-source.bak";
+/// Marker file shipped inside the portable zip, next to the executable (next
+/// to the `.app` bundle on macOS — it cannot live inside the bundle without
+/// breaking code signing). Its presence — not its content — switches the app
+/// into portable mode: the whole runtime tree anchors to `<anchor>/data`.
+const PORTABLE_MARKER_FILE: &str = "portable.marker";
 const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
@@ -304,6 +309,41 @@ pub fn runtime_root() -> PathBuf {
 static NON_OVERRIDE_RUNTIME_ROOT: LazyLock<PathBuf> =
     LazyLock::new(|| resolve_non_override_runtime_root(cfg!(all(windows, not(debug_assertions)))));
 
+/// Portable anchor, resolved once per process: `Some(unzip dir)` when the
+/// portable marker file sits next to the executable / app bundle. Probing
+/// touches current_exe + the filesystem, so memoize it like
+/// `NON_OVERRIDE_RUNTIME_ROOT` (adding/removing the marker needs a restart,
+/// consistent with the root itself being fixed for the process lifetime).
+static PORTABLE_ANCHOR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+    let exe = std::env::current_exe().ok()?;
+    let anchor = portable_anchor_dir_from_exe(&exe)?;
+    anchor
+        .join(PORTABLE_MARKER_FILE)
+        .is_file()
+        .then_some(anchor)
+});
+
+/// Whether this process runs as the portable (unzip-and-run) distribution.
+pub fn portable_mode_active() -> bool {
+    PORTABLE_ANCHOR.is_some()
+}
+
+/// Directory the portable marker (and the `data` tree) is expected in: the
+/// folder the user unzipped. On macOS the executable lives inside
+/// `<unzip dir>/<name>.app/Contents/MacOS/`, so the anchor is the `.app`'s
+/// parent; everywhere else it is simply the executable's own directory.
+fn portable_anchor_dir_from_exe(exe: &Path) -> Option<PathBuf> {
+    for ancestor in exe.ancestors() {
+        if ancestor
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("app"))
+        {
+            return ancestor.parent().map(Path::to_path_buf);
+        }
+    }
+    exe.parent().map(Path::to_path_buf)
+}
+
 /// The historical anchor: `<OS data dir>/cn.org.hermesagent.desktop/<runtime>`.
 /// Used for existing Windows installs, all non-Windows platforms, and dev.
 fn legacy_appdata_runtime_root() -> PathBuf {
@@ -321,10 +361,30 @@ fn legacy_appdata_runtime_root() -> PathBuf {
 fn resolve_non_override_runtime_root(win_release: bool) -> PathBuf {
     let legacy_root = legacy_appdata_runtime_root();
 
+    // Portable distribution (marker next to the executable / .app): anchor the
+    // whole tree to `<unzip dir>/data` on every platform, debug builds
+    // included, so a portable unzip never touches the installed copy's data.
+    // Without the marker this is zero-side-effect.
+    let portable_data_root: Option<PathBuf> =
+        PORTABLE_ANCHOR.as_deref().map(|anchor| anchor.join("data"));
+    let portable_writable = portable_data_root
+        .as_deref()
+        .map(dir_is_writable)
+        .unwrap_or(false);
+    if let (Some(root), false) = (portable_data_root.as_deref(), portable_writable) {
+        // Read-only media (e.g. running from a mounted archive): portable
+        // intent cannot be honored — fall through to the regular policy.
+        log::warn!(
+            "portable.marker found but portable data dir is not writable, \
+             falling back to the default data location: {}",
+            root.display()
+        );
+    }
+
     // Off the Windows-release path there is nothing to anchor to the install
     // directory — keep the legacy root and avoid any filesystem side effects
     // (byte-for-byte the historic behavior on macOS / Linux / dev).
-    if !win_release {
+    if !win_release && portable_data_root.is_none() {
         return legacy_root;
     }
 
@@ -348,6 +408,8 @@ fn resolve_non_override_runtime_root(win_release: bool) -> PathBuf {
 
     decide_non_override_root(
         win_release,
+        portable_data_root.as_deref(),
+        portable_writable,
         legacy_has_data,
         install_data_root.as_deref(),
         install_writable,
@@ -355,16 +417,26 @@ fn resolve_non_override_runtime_root(win_release: bool) -> PathBuf {
     )
 }
 
-/// Pure runtime-root policy (no I/O). Anchor under the install directory only
+/// Pure runtime-root policy (no I/O). A writable portable anchor wins
+/// unconditionally (explicit opt-in via marker file, every platform, even over
+/// an existing legacy tree — the portable copy must never be diverted to the
+/// installed copy's data). Otherwise anchor under the install directory only
 /// for a fresh Windows-release install whose target dir is writable; otherwise
 /// fall back to the legacy AppData root. Cross-platform & fully unit tested.
 fn decide_non_override_root(
     win_release: bool,
+    portable_data_root: Option<&Path>,
+    portable_writable: bool,
     legacy_has_data: bool,
     install_data_root: Option<&Path>,
     install_writable: bool,
     legacy_root: PathBuf,
 ) -> PathBuf {
+    if portable_writable {
+        if let Some(root) = portable_data_root {
+            return root.to_path_buf();
+        }
+    }
     if win_release && !legacy_has_data && install_writable {
         if let Some(root) = install_data_root {
             return root.to_path_buf();
@@ -2568,7 +2640,9 @@ mod tests {
         let install = PathBuf::from(r"D:\Hermes\data");
         assert_eq!(
             decide_non_override_root(
-                true,  // win_release
+                true, // win_release
+                None, // no portable marker
+                false,
                 false, // legacy_has_data
                 Some(install.as_path()),
                 true, // install_writable
@@ -2585,6 +2659,8 @@ mod tests {
         assert_eq!(
             decide_non_override_root(
                 true,
+                None,
+                false,
                 true, // legacy_has_data
                 Some(Path::new(r"D:\Hermes\data")),
                 true,
@@ -2600,6 +2676,8 @@ mod tests {
         assert_eq!(
             decide_non_override_root(
                 true,
+                None,
+                false,
                 false,
                 Some(Path::new(r"C:\Program Files\Hermes\data")),
                 false, // not writable -> fall back to AppData (no regression)
@@ -2615,6 +2693,8 @@ mod tests {
         assert_eq!(
             decide_non_override_root(
                 false, // not win_release (macOS / Linux / dev)
+                None,
+                false,
                 false,
                 Some(Path::new("/opt/app/data")),
                 true,
@@ -2628,9 +2708,108 @@ mod tests {
     fn decide_root_unresolvable_exe_falls_back_to_appdata() {
         let legacy = PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime");
         assert_eq!(
-            decide_non_override_root(true, false, None, true, legacy.clone()),
+            decide_non_override_root(true, None, false, false, None, true, legacy.clone()),
             legacy,
         );
+    }
+
+    // -------- portable mode (marker file next to the exe / .app) --------
+
+    #[test]
+    fn decide_root_portable_wins_over_existing_legacy_data() {
+        // A portable unzip on a machine that also has an installed copy must
+        // use its own `data` dir, never the installed copy's AppData tree.
+        let portable = PathBuf::from(r"E:\HermesPortable\data");
+        assert_eq!(
+            decide_non_override_root(
+                true,
+                Some(portable.as_path()),
+                true,
+                true, // legacy_has_data — portable still wins
+                Some(Path::new(r"E:\HermesPortable\data")),
+                true,
+                PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime"),
+            ),
+            portable,
+        );
+    }
+
+    #[test]
+    fn decide_root_portable_applies_on_all_platforms() {
+        // macOS / Linux / debug builds: the marker is an explicit opt-in and
+        // overrides the non-Windows legacy-only policy.
+        let portable = PathBuf::from("/Users/u/Desktop/HermesPortable/data");
+        assert_eq!(
+            decide_non_override_root(
+                false, // not win_release
+                Some(portable.as_path()),
+                true,
+                false,
+                None,
+                false,
+                PathBuf::from("/home/u/.local/share/cn.org.hermesagent.desktop/runtime"),
+            ),
+            portable,
+        );
+    }
+
+    #[test]
+    fn decide_root_portable_not_writable_falls_back() {
+        // Read-only media (zip mounted, locked folder): fall back to the
+        // regular policy instead of failing.
+        let legacy = PathBuf::from("/home/u/.local/share/cn.org.hermesagent.desktop/runtime");
+        assert_eq!(
+            decide_non_override_root(
+                false,
+                Some(Path::new("/Volumes/ro/HermesPortable/data")),
+                false, // not writable
+                false,
+                None,
+                false,
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn portable_anchor_plain_exe_uses_exe_dir() {
+        // Separator-parsing test: use `/` paths so it behaves identically on
+        // every host platform (the Windows layout is the same shape).
+        assert_eq!(
+            portable_anchor_dir_from_exe(Path::new(
+                "/unzip/HermesPortable/Hermes Agent CN Desktop.exe"
+            )),
+            Some(PathBuf::from("/unzip/HermesPortable")),
+        );
+    }
+
+    #[test]
+    fn portable_anchor_macos_app_bundle_uses_app_parent() {
+        // The marker cannot live inside the signed .app, so the anchor is the
+        // bundle's parent (the unzip folder).
+        assert_eq!(
+            portable_anchor_dir_from_exe(Path::new(
+                "/Users/u/HermesPortable/Hermes Agent CN Desktop.app/Contents/MacOS/hermes-agent-cn-desktop"
+            )),
+            Some(PathBuf::from("/Users/u/HermesPortable")),
+        );
+    }
+
+    #[test]
+    fn portable_marker_detection_requires_marker_file() {
+        // End-to-end anchor probing logic (mirrors PORTABLE_ANCHOR init): a
+        // marker beside the exe activates the anchor; its absence does not.
+        let tmp = TempDir::new().unwrap();
+        let exe = tmp.path().join("hermes.exe");
+        fs::write(&exe, b"stub").unwrap();
+
+        let anchor = portable_anchor_dir_from_exe(&exe).unwrap();
+        assert!(!anchor.join(PORTABLE_MARKER_FILE).is_file());
+
+        fs::write(anchor.join(PORTABLE_MARKER_FILE), b"portable").unwrap();
+        assert!(anchor.join(PORTABLE_MARKER_FILE).is_file());
+        assert_eq!(anchor, tmp.path());
     }
 
     #[test]

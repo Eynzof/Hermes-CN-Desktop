@@ -18,7 +18,7 @@ use hermes_agent_cn::bootstrap::{
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::connection::{self, ConnectionBackend, ConnectionMode};
-use hermes_agent_cn::process::{dashboard, runtime};
+use hermes_agent_cn::process::{dashboard, instance, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use hermes_agent_cn::tray;
 
@@ -120,6 +120,27 @@ fn main() {
         std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", &webview_dir);
     }
 
+    // Single-instance guard per runtime root (issue #366): a second launch
+    // against the SAME data root focuses the incumbent window and exits;
+    // distinct roots (portable copies side by side) keep coexisting. The
+    // guard lives on main's stack so the lock is held until process exit.
+    let _instance_guard = match instance::try_acquire() {
+        instance::SingleInstance::Acquired(guard) => Some(guard),
+        instance::SingleInstance::AlreadyRunning => {
+            log::info!(
+                "another desktop instance owns {}; requesting focus and exiting",
+                runtime::runtime_root().display()
+            );
+            instance::notify_running_instance();
+            return;
+        }
+        instance::SingleInstance::Unavailable(reason) => {
+            // Fail open: the guard must never lock users out of their app.
+            log::warn!("single-instance lock unavailable ({reason}); continuing");
+            None
+        }
+    };
+
     let app_state = AppState::new();
     let quit_requested = Arc::new(AtomicBool::new(false));
     let close_quit_requested = Arc::clone(&quit_requested);
@@ -137,6 +158,13 @@ fn main() {
             let state = app.state::<AppState>();
             let bundled_resource_dir = app.path().resource_dir().ok();
 
+            // Focus channel for the single-instance guard: consume any stale
+            // request from a previous run, then watch for new ones. Armed
+            // before dashboard bootstrap so a second launch gets its focus
+            // handoff even while the kernel is still starting.
+            instance::clear_stale_focus_request();
+            instance::spawn_focus_watcher(app.handle().clone());
+
             match tray::install(app) {
                 Ok(()) => {
                     setup_tray_available.store(true, Ordering::Relaxed);
@@ -144,6 +172,40 @@ fn main() {
                 Err(err) => {
                     log::warn!("Failed to install system tray: {}", err);
                 }
+            }
+
+            // Data-root diagnostics: one line so support logs show where the
+            // tree is anchored and whether the portable marker was honored.
+            log::info!(
+                "runtime root: {} (portable: {})",
+                runtime::runtime_root().display(),
+                runtime::portable_mode_active()
+            );
+
+            // macOS Gatekeeper App Translocation runs a quarantined app from a
+            // randomized read-only path, which hides the portable marker next
+            // to the real .app — a portable unzip would silently fall back to
+            // ~/Library. One non-blocking heads-up tells the user how to fix
+            // it (harmless generic advice for DMG installs too).
+            #[cfg(target_os = "macos")]
+            if std::env::current_exe()
+                .map(|p| p.components().any(|c| c.as_os_str() == "AppTranslocation"))
+                .unwrap_or(false)
+            {
+                use tauri_plugin_dialog::DialogExt;
+                log::warn!(
+                    "running from an App Translocation path; a portable marker (if any) is invisible"
+                );
+                app.dialog()
+                    .message(
+                        "应用正被 macOS 隔离机制（App Translocation）从临时路径运行。\n\n\
+                         如果你使用的是免安装版（portable）：数据将无法保存到解压目录。\n\
+                         请把解压出来的整个文件夹移动到其他位置后重新启动，\n\
+                         或在终端执行：xattr -dr com.apple.quarantine <解压目录>\n\n\
+                         普通安装版用户请将应用拖入「应用程序」文件夹后重新打开。",
+                    )
+                    .title("检测到 macOS 应用隔离")
+                    .show(|_| {});
             }
 
             // 1. Resolve HERMES_HOME
@@ -408,6 +470,10 @@ fn main() {
             commands::connection::probe_connection_config,
             commands::connection::test_connection_config,
             commands::connection::apply_connection_config,
+            commands::connection_auth::connection_oauth_login,
+            commands::connection_auth::connection_password_login,
+            commands::connection_auth::connection_auth_me,
+            commands::connection_auth::connection_oauth_logout,
             commands::backup::backup_export_profile,
             commands::backup::backup_import_profile,
             commands::config_migration::config_migration_scan,

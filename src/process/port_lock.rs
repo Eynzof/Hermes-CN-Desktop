@@ -39,7 +39,6 @@ pub struct PortLock {
     /// `None` for a no-op lock (same process already holds the real lock, or
     /// the lock file is unavailable). `Some(File)` for the real OS lock.
     file: Option<File>,
-    path: PathBuf,
     /// Whether this handle owns the local bookkeeping entry and should clear
     /// it on release.
     owns_local_claim: bool,
@@ -86,10 +85,7 @@ fn lock_file_path(port: u16, hermes_home: impl AsRef<Path>) -> PathBuf {
 /// Read the owner PID stored in a lock file, if any.
 fn read_lock_owner(path: &Path) -> Option<u32> {
     let mut content = String::new();
-    File::open(path)
-        .ok()?
-        .read_to_string(&mut content)
-        .ok()?;
+    File::open(path).ok()?.read_to_string(&mut content).ok()?;
     content.lines().next()?.trim().parse().ok()
 }
 
@@ -177,7 +173,6 @@ pub fn try_claim_port(port: u16, hermes_home: impl AsRef<Path>) -> Option<PortLo
         return Some(PortLock {
             port,
             file: None,
-            path,
             owns_local_claim: false,
         });
     }
@@ -192,13 +187,17 @@ pub fn try_claim_port(port: u16, hermes_home: impl AsRef<Path>) -> Option<PortLo
             return Some(PortLock {
                 port,
                 file: None,
-                path,
                 owns_local_claim: true,
             });
         }
     }
 
-    let file = match OpenOptions::new().create(true).read(true).write(true).open(&path)
+    let file = match OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&path)
     {
         Ok(f) => f,
         Err(err) => {
@@ -210,7 +209,6 @@ pub fn try_claim_port(port: u16, hermes_home: impl AsRef<Path>) -> Option<PortLo
             return Some(PortLock {
                 port,
                 file: None,
-                path,
                 owns_local_claim: true,
             });
         }
@@ -221,7 +219,6 @@ pub fn try_claim_port(port: u16, hermes_home: impl AsRef<Path>) -> Option<PortLo
         return Some(PortLock {
             port,
             file: Some(file),
-            path,
             owns_local_claim: true,
         });
     }
@@ -237,6 +234,7 @@ pub fn try_claim_port(port: u16, hermes_home: impl AsRef<Path>) -> Option<PortLo
             std::thread::sleep(std::time::Duration::from_millis(10));
             let fresh = OpenOptions::new()
                 .create(true)
+                .truncate(false)
                 .read(true)
                 .write(true)
                 .open(&path)
@@ -246,7 +244,6 @@ pub fn try_claim_port(port: u16, hermes_home: impl AsRef<Path>) -> Option<PortLo
                 return Some(PortLock {
                     port,
                     file: Some(fresh),
-                    path,
                     owns_local_claim: true,
                 });
             }
@@ -262,10 +259,7 @@ pub fn try_claim_port(port: u16, hermes_home: impl AsRef<Path>) -> Option<PortLo
 /// Atomically claim a set of ports, or none at all.
 ///
 /// On failure, any locks already acquired are released and `None` is returned.
-pub fn claim_port_set(
-    ports: &[u16],
-    hermes_home: impl AsRef<Path>,
-) -> Option<Vec<PortLock>> {
+pub fn claim_port_set(ports: &[u16], hermes_home: impl AsRef<Path>) -> Option<Vec<PortLock>> {
     let mut locks = Vec::with_capacity(ports.len());
     for port in ports {
         match try_claim_port(*port, hermes_home.as_ref()) {
@@ -293,6 +287,7 @@ pub fn release_orphaned_port_locks(ports: &[u16], hermes_home: impl AsRef<Path>)
             if !pid_is_running(owner) {
                 if let Ok(file) = OpenOptions::new()
                     .create(true)
+                    .truncate(false)
                     .read(true)
                     .write(true)
                     .open(&path)
@@ -333,7 +328,8 @@ mod tests {
     fn double_claim_in_same_process_succeeds_no_op() {
         let dir = TempDir::new().unwrap();
         let first = try_claim_port(50001, dir.path()).expect("first claim should succeed");
-        let second = try_claim_port(50001, dir.path()).expect("second claim in same process should succeed");
+        let second =
+            try_claim_port(50001, dir.path()).expect("second claim in same process should succeed");
         second.release();
         first.release();
     }
@@ -355,6 +351,7 @@ mod tests {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         let occupying = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(&path)

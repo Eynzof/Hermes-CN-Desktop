@@ -24,6 +24,7 @@ import type {
   ImOnboardingStateInput,
   ImOnboardingStateResult,
   ProbeConnectionResult,
+  OauthLoginResult,
   RuntimeInfo,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
@@ -434,6 +435,8 @@ declare global {
       currentProfile?: string;
       /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;
+      /** Running as the portable (unzip-and-run) desktop distribution. */
+      portable?: boolean;
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
@@ -465,6 +468,15 @@ declare global {
       applyConnectionConfig?(input: ConnectionConfigInput): Promise<ApplyConnectionResult>;
       testConnectionConfig?(input: ConnectionConfigInput): Promise<TestConnectionResult>;
       probeConnectionConfig?(remoteUrl: string): Promise<ProbeConnectionResult>;
+      connectionOauthLogin?(remoteUrl: string): Promise<OauthLoginResult>;
+      connectionPasswordLogin?(input: {
+        remoteUrl: string;
+        provider: string;
+        username: string;
+        password: string;
+      }): Promise<OauthLoginResult>;
+      connectionAuthMe?(remoteUrl: string): Promise<OauthLoginResult>;
+      connectionOauthLogout?(remoteUrl: string): Promise<void>;
       scanConfigMigration?(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult>;
       importConfigMigration?(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult>;
       getYoloMode?(): Promise<YoloModeStatus>;
@@ -564,6 +576,11 @@ export const runtime = {
   /** True for either attached backend where process/profile lifecycle is external. */
   isAttached(): boolean {
     return this.getConnectionMode() !== "managed";
+  },
+
+  /** True when running as the portable (unzip-and-run) desktop distribution. */
+  isPortable(): boolean {
+    return window.__HERMES_RUNTIME__?.portable ?? false;
   },
 
   getApiUrl(path: string): string {

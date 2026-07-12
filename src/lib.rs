@@ -5,6 +5,7 @@ pub mod cron_runs;
 pub mod env_file;
 pub mod environment;
 pub mod error;
+pub mod oauth_session;
 pub mod path_resolver;
 pub mod prevent_sleep;
 pub mod process;

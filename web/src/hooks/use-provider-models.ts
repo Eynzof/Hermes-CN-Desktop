@@ -10,6 +10,8 @@ export type ListProviderModelsFn = (params: {
   provider: string;
   base_url?: string;
   api_key?: string;
+  /** "anthropic_messages" 让后端用 Anthropic 协议（x-api-key）列模型。 */
+  api_mode?: string;
 }) => Promise<ProviderModelsListResult>;
 
 /**
@@ -37,11 +39,12 @@ export function useProviderModels(
   baseUrl: string,
   apiKey: string | undefined,
   listModels: ListProviderModelsFn,
+  apiMode?: string,
 ) {
   return useQuery<UseProviderModelsResult>({
     queryKey: ["provider-models", provider, baseUrl],
     queryFn: async () => {
-      const result = await listModels({ provider, base_url: baseUrl, api_key: apiKey });
+      const result = await listModels({ provider, base_url: baseUrl, api_key: apiKey, api_mode: apiMode });
       return { models: selectProviderModelIds(result), fetchedAt: Date.now() };
     },
     enabled: false,
