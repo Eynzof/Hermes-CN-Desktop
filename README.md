@@ -226,11 +226,15 @@ v0.1.1
 - 打磨 macOS 与 Windows 的打包和安装行为；
 - 完善桌面端与 runtime 边界文档，降低贡献门槛。
 
-## Star Track
+## Star History
 
-可以通过下面的趋势图查看本仓库 GitHub Star 的增长变化。
-
-[![Hermes Agent CN Desktop Star 趋势图](https://api.star-history.com/svg?repos=Eynzof/Hermes-CN-Desktop&type=Date)](https://www.star-history.com/#Eynzof/Hermes-CN-Desktop&Date)
+<a href="https://www.star-history.com/?type=date&repos=Eynzof%2FHermes-CN-Desktop">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&theme=dark&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+ </picture>
+</a>
 
 ## 贡献
 
