@@ -358,6 +358,7 @@ fn signal_process_group(pid: u32, signal: libc::c_int) {
 }
 
 #[cfg(not(unix))]
+#[allow(dead_code)]
 fn signal_process_group(_pid: u32, _signal: i32) {}
 
 #[cfg(windows)]

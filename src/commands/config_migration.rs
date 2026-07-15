@@ -43,6 +43,7 @@ const MIGRATABLE_ENTRIES: &[(&str, CopyEntryKind, bool)] = &[
     ("scripts", CopyEntryKind::Directory, false),
 ];
 
+#[allow(dead_code)]
 const SECRET_FILES: &[&str] = &[".env", "auth.json", ".anthropic_oauth.json"];
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -735,7 +736,7 @@ fn install_staging(staging: &Path, target: &Path, warnings: &mut Vec<String>) ->
     Ok(())
 }
 
-fn harden_secret_permissions(target: &Path) {
+fn harden_secret_permissions(_target: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

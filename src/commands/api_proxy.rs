@@ -1011,7 +1011,7 @@ pub async fn external_request_impl(
         req
     }
 
-    let mut req = build_request(
+    let req = build_request(
         &EXTERNAL_HTTP_CLIENT,
         method,
         target_url.clone(),

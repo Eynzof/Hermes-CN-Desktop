@@ -18,6 +18,7 @@ const BACKUP_KIND: &str = "hermes-profile-backup";
 const MAX_BACKUP_ZIP_FILES: usize = 50_000;
 const MAX_BACKUP_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 const MAX_BACKUP_MANIFEST_BYTES: u64 = 1024 * 1024;
+#[allow(dead_code)]
 const SECRET_FILES: &[&str] = &[".env", "auth.json", ".anthropic_oauth.json"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -255,7 +256,7 @@ fn collect_backup_entries(
     Ok(())
 }
 
-fn zip_options_for_entry(entry: &PlannedBackupEntry) -> SimpleFileOptions {
+fn zip_options_for_entry(_entry: &PlannedBackupEntry) -> SimpleFileOptions {
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     #[cfg(unix)]
     {
@@ -455,9 +456,8 @@ fn extract_profile_backup_to_staging(
             top_level.insert(top);
         }
 
-        let mode = entry.unix_mode();
         #[cfg(unix)]
-        let is_symlink = mode.map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
+        let is_symlink = entry.unix_mode().map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
         #[cfg(not(unix))]
         let is_symlink = false;
         if is_symlink {
@@ -658,7 +658,7 @@ fn install_staging_profile(staging: &Path, target: &Path) -> AppResult<()> {
     }
 }
 
-fn harden_secret_permissions(target: &Path) {
+fn harden_secret_permissions(_target: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
