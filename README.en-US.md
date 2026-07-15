@@ -218,11 +218,15 @@ The short-term roadmap is focused on:
 - polishing macOS and Windows packaging behavior;
 - documenting the desktop/runtime boundary for contributors.
 
-## Star Track
+## Star History
 
-Use the chart below to track this repository's GitHub Star growth over time.
-
-[![Hermes Agent CN Desktop Star History Chart](https://api.star-history.com/svg?repos=Eynzof/Hermes-CN-Desktop&type=Date)](https://www.star-history.com/#Eynzof/Hermes-CN-Desktop&Date)
+<a href="https://www.star-history.com/?type=date&repos=Eynzof%2FHermes-CN-Desktop">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&theme=dark&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+ </picture>
+</a>
 
 ## Contributing
 
