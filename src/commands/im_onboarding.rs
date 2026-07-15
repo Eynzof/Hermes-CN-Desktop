@@ -38,6 +38,22 @@ const WEIXIN_QR_REFRESH_LIMIT: u8 = 3;
 const FEISHU_SCANNED_OPEN_ID_TOKEN: &str = "__HERMES_SCANNED_FEISHU_OPEN_ID__";
 const WEIXIN_SCANNED_USER_ID_TOKEN: &str = "__HERMES_SCANNED_WEIXIN_USER_ID__";
 
+const DINGTALK_BASE_URL: &str = "https://oapi.dingtalk.com";
+const DINGTALK_SECRET_KEYS: &[&str] = &["DINGTALK_CLIENT_SECRET", "DINGTALK_ENCRYPT_KEY"];
+const DINGTALK_ALLOWED_KEYS: &[&str] = &[
+    "DINGTALK_CLIENT_ID",
+    "DINGTALK_CLIENT_SECRET",
+    "DINGTALK_ENCRYPT_KEY",
+    "DINGTALK_WEBHOOK_HOST",
+    "DINGTALK_WEBHOOK_PORT",
+    "DINGTALK_WEBHOOK_PATH",
+    "DINGTALK_ALLOW_ALL_USERS",
+    "DINGTALK_ALLOWED_USERS",
+    "DINGTALK_GROUP_POLICY",
+    "DINGTALK_REQUIRE_MENTION",
+    "DINGTALK_HOME_CHANNEL",
+];
+
 const FEISHU_SECRET_KEYS: &[&str] = &[
     "FEISHU_APP_SECRET",
     "FEISHU_ENCRYPT_KEY",
@@ -79,6 +95,7 @@ const WEIXIN_ALLOWED_KEYS: &[&str] = &[
 pub enum ImPlatform {
     Feishu,
     Weixin,
+    Dingtalk,
 }
 
 impl ImPlatform {
@@ -86,6 +103,7 @@ impl ImPlatform {
         match self {
             ImPlatform::Feishu => "feishu",
             ImPlatform::Weixin => "weixin",
+            ImPlatform::Dingtalk => "dingtalk",
         }
     }
 
@@ -93,6 +111,7 @@ impl ImPlatform {
         match self {
             ImPlatform::Feishu => FEISHU_ALLOWED_KEYS,
             ImPlatform::Weixin => WEIXIN_ALLOWED_KEYS,
+            ImPlatform::Dingtalk => DINGTALK_ALLOWED_KEYS,
         }
     }
 
@@ -100,6 +119,7 @@ impl ImPlatform {
         match self {
             ImPlatform::Feishu => FEISHU_SECRET_KEYS,
             ImPlatform::Weixin => WEIXIN_SECRET_KEYS,
+            ImPlatform::Dingtalk => DINGTALK_SECRET_KEYS,
         }
     }
 }
@@ -134,6 +154,8 @@ pub struct ImManualCredentials {
     pub token: Option<String>,
     pub base_url: Option<String>,
     pub user_id: Option<String>,
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1317,6 +1339,17 @@ fn apply_patch_from_input_with_existing(
                 );
             }
         }
+        ImPlatform::Dingtalk => {
+            // Dingtalk onboarding: populate basic required keys.
+            if let Some(manual) = &input.manual_credentials {
+                if let Some(client_id) = manual.client_id.as_ref().filter(|v| !v.trim().is_empty()) {
+                    patch.insert("DINGTALK_CLIENT_ID".to_string(), client_id.trim().to_string());
+                }
+                if let Some(client_secret) = manual.client_secret.as_ref().filter(|v| !v.trim().is_empty()) {
+                    patch.insert("DINGTALK_CLIENT_SECRET".to_string(), client_secret.trim().to_string());
+                }
+            }
+        }
     }
     merge_existing_platform_values(input.platform, &mut patch, existing_env);
     validate_required(input.platform, &patch)?;
@@ -1417,6 +1450,17 @@ fn validate_required(
             ) {
                 return Err(AppError::InvalidRequest(
                     "WEIXIN_DM_POLICY must be open, allowlist, pairing, or disabled".to_string(),
+                ));
+            }
+        }
+        ImPlatform::Dingtalk => {
+            if patch
+                .get("DINGTALK_CLIENT_ID")
+                .map(|v| v.trim().is_empty())
+                .unwrap_or(true)
+            {
+                return Err(AppError::InvalidRequest(
+                    "DINGTALK_CLIENT_ID is required".to_string(),
                 ));
             }
         }
@@ -1718,6 +1762,9 @@ pub async fn im_onboarding_begin(
     match input.platform {
         ImPlatform::Feishu => begin_feishu(&input).await,
         ImPlatform::Weixin => begin_weixin(&input).await,
+        ImPlatform::Dingtalk => Err(AppError::InvalidRequest(
+            "钉钉接入正在开发中，请使用飞书或微信。".to_string(),
+        )),
     }
 }
 
@@ -1728,6 +1775,9 @@ pub async fn im_onboarding_poll(
     match input.platform {
         ImPlatform::Feishu => poll_feishu(&input.flow_id).await,
         ImPlatform::Weixin => poll_weixin(&input.flow_id).await,
+        ImPlatform::Dingtalk => Err(AppError::InvalidRequest(
+            "钉钉接入正在开发中，请使用飞书或微信。".to_string(),
+        )),
     }
 }
 
@@ -1967,6 +2017,8 @@ mod tests {
             token: None,
             base_url: None,
             user_id: None,
+            client_id: None,
+            client_secret: None,
         };
         let input = ImOnboardingApplyInput {
             platform: ImPlatform::Feishu,
@@ -1992,6 +2044,8 @@ mod tests {
                 token: None,
                 base_url: None,
                 user_id: None,
+                client_id: None,
+                client_secret: None,
             }),
             settings: BTreeMap::from([
                 ("FEISHU_CONNECTION_MODE".to_string(), "Webhook".to_string()),
@@ -2078,6 +2132,8 @@ mod tests {
                 token: Some("token-test".to_string()),
                 base_url: Some(WEIXIN_BASE_URL.to_string()),
                 user_id: None,
+                client_id: None,
+                client_secret: None,
             }),
             settings: BTreeMap::from([("WEIXIN_DM_POLICY".to_string(), "pairing".to_string())]),
             restart_gateway: Some(false),
@@ -2307,5 +2363,110 @@ mod tests {
         assert!(!token.redacted_value.unwrap().contains("token-weixin"));
 
         clear_im_env_overrides();
+    }
+
+    // ── Dingtalk ────────────────────────────────────────────────────────
+
+    #[test]
+    fn dingtalk_apply_patch_populates_credentials() {
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Dingtalk,
+            flow_id: None,
+            manual_credentials: Some(ImManualCredentials {
+                app_id: None,
+                app_secret: None,
+                account_id: None,
+                token: None,
+                base_url: None,
+                user_id: None,
+                client_id: Some("dingtalk-client-id-123".to_string()),
+                client_secret: Some("dingtalk-client-secret-456".to_string()),
+            }),
+            settings: BTreeMap::new(),
+            restart_gateway: Some(false),
+        };
+        let patch = apply_patch_from_input(&input).unwrap();
+        assert_eq!(
+            patch.get("DINGTALK_CLIENT_ID").map(String::as_str),
+            Some("dingtalk-client-id-123")
+        );
+        assert_eq!(
+            patch.get("DINGTALK_CLIENT_SECRET").map(String::as_str),
+            Some("dingtalk-client-secret-456")
+        );
+    }
+
+    #[test]
+    fn dingtalk_apply_patch_rejects_empty_client_id() {
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Dingtalk,
+            flow_id: None,
+            manual_credentials: Some(ImManualCredentials {
+                app_id: None,
+                app_secret: None,
+                account_id: None,
+                token: None,
+                base_url: None,
+                user_id: None,
+                client_id: Some("   ".to_string()),
+                client_secret: None,
+            }),
+            settings: BTreeMap::new(),
+            restart_gateway: Some(false),
+        };
+        let err = apply_patch_from_input(&input).unwrap_err();
+        assert!(
+            err.to_string().contains("DINGTALK_CLIENT_ID"),
+            "should reject empty client_id: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn dingtalk_apply_patch_rejects_missing_client_id() {
+        let input = ImOnboardingApplyInput {
+            platform: ImPlatform::Dingtalk,
+            flow_id: None,
+            manual_credentials: None,
+            settings: BTreeMap::new(),
+            restart_gateway: Some(false),
+        };
+        let err = apply_patch_from_input(&input).unwrap_err();
+        assert!(
+            err.to_string().contains("DINGTALK_CLIENT_ID"),
+            "should reject missing client_id: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn dingtalk_begin_returns_not_available_error() {
+        let input = ImOnboardingBeginInput {
+            platform: ImPlatform::Dingtalk,
+            domain: None,
+            bot_type: None,
+        };
+        let err = im_onboarding_begin(input).await.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("开发中") || msg.contains("飞书") || msg.contains("微信"),
+            "should return a 'coming soon' message: {}",
+            msg
+        );
+    }
+
+    #[tokio::test]
+    async fn dingtalk_poll_returns_not_available_error() {
+        let input = ImOnboardingPollInput {
+            platform: ImPlatform::Dingtalk,
+            flow_id: "nonexistent".to_string(),
+        };
+        let err = im_onboarding_poll(input).await.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("开发中") || msg.contains("飞书") || msg.contains("微信"),
+            "should return a 'coming soon' message: {}",
+            msg
+        );
     }
 }

@@ -377,6 +377,10 @@ const tauriBridge = {
     return invokeCommand("test_connection_config", { input });
   },
 
+  async uninstallBundledRuntime(): Promise<void> {
+    return invokeCommand("uninstall_bundled_runtime");
+  },
+
   async probeConnectionConfig(remoteUrl: string): Promise<ProbeConnectionResult> {
     return invokeCommand("probe_connection_config", { remoteUrl });
   },

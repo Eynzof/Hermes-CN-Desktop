@@ -263,6 +263,8 @@ fn main() {
                 hermes_home: boot_home_str.clone(),
                 allow_external_agent,
                 allow_port_fallback,
+                connection_mode: ConnectionMode::Managed,
+                remote_base_url: None,
             };
 
             // Resolve the backend for this boot: env override → connection.json
@@ -500,6 +502,7 @@ fn main() {
             commands::runtime_manager::runtime_check_update,
             commands::runtime_manager::runtime_install_update,
             commands::runtime_manager::runtime_rollback,
+            commands::runtime_manager::uninstall_bundled_runtime,
             commands::profiles::switch_profile,
             commands::yolo::get_yolo_mode,
             commands::yolo::set_yolo_mode,

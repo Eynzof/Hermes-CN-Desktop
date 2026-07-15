@@ -2895,26 +2895,21 @@ mod tests {
         .unwrap();
         fs::write(
             current_record_path(),
-            format!(
-                r#"{{
-  "version": "{runtime_version}",
-  "platform": "{}",
-  "arch": "{}",
-  "path": "{}",
-  "executablePath": "{}",
-  "source": "local-source",
-  "installedAt": "2026-05-19T00:00:00.000Z",
-  "upstreamRepo": "/repo/hermes-agent-cn",
-  "upstreamCommit": "abcdef1234567890",
-  "localDirtyHash": "deadbeef0000",
-  "artifactSha256": null,
-  "previousVersion": "0.13.0"
-}}"#,
-                current_platform(),
-                current_arch(),
-                runtime_dir.display(),
-                exe.display(),
-            ),
+            serde_json::to_string_pretty(&serde_json::json!({
+                "version": runtime_version,
+                "platform": current_platform(),
+                "arch": current_arch(),
+                "path": runtime_dir.display().to_string(),
+                "executablePath": exe.display().to_string(),
+                "source": "local-source",
+                "installedAt": "2026-05-19T00:00:00.000Z",
+                "upstreamRepo": "/repo/hermes-agent-cn",
+                "upstreamCommit": "abcdef1234567890",
+                "localDirtyHash": "deadbeef0000",
+                "artifactSha256": null,
+                "previousVersion": "0.13.0",
+            }))
+            .unwrap() + "\n",
         )
         .unwrap();
 

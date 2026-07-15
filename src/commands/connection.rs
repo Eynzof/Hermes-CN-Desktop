@@ -902,6 +902,8 @@ async fn apply_managed(
         hermes_home: hermes_home.clone(),
         allow_external_agent: dashboard::external_agent_allowed(),
         allow_port_fallback: true,
+        connection_mode: crate::connection::ConnectionMode::Managed,
+        remote_base_url: None,
     };
     let resource_dir = app.path().resource_dir().ok();
 

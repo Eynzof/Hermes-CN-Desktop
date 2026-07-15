@@ -115,6 +115,183 @@ pub async fn runtime_install_update(
     Ok(result)
 }
 
+#[tauri::command]
+pub async fn uninstall_bundled_runtime() -> Result<(), AppError> {
+    let root = runtime::runtime_root();
+    let current = runtime::read_current_record();
+    if let Some(record) = current {
+        let version_dir = root.join("versions").join(&record.runtime_version);
+        if version_dir.exists() {
+            log::info!("Uninstalling bundled runtime from {}", version_dir.display());
+            if let Err(e) = std::fs::remove_dir_all(&version_dir) {
+                log::warn!("Failed to remove runtime directory {}: {}", version_dir.display(), e);
+            }
+        }
+        // Clear the current record so the dashboard won't try to use this runtime.
+        // Keep the versions directory intact so a reinstall can reuse the manifest.
+        let versions_file = root.join("current.json");
+        if versions_file.exists() {
+            if let Err(e) = std::fs::remove_file(&versions_file) {
+                log::warn!("Failed to remove current.json: {}", e);
+            }
+        }
+        log::info!("Bundled runtime uninstalled successfully");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use tempfile::TempDir;
+
+    fn with_runtime_root<T>(f: impl FnOnce(&std::path::Path) -> T) -> T {
+        let dir = TempDir::new().expect("tempdir");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", dir.path());
+        let out = f(dir.path());
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        out
+    }
+
+    /// Write a minimal current.json so read_current_record() returns Some.
+    fn write_current_record(root: &std::path::Path, version: &str, exe: &std::path::Path) {
+        let versions_dir = root.join("versions").join(version);
+        std::fs::create_dir_all(&versions_dir).unwrap();
+        // Touch the executable file so version_dir.exists() is true.
+        std::fs::write(&exe, "fake").unwrap();
+        // read_current_record validates platform/arch match current_platform() /
+        // current_arch() (private fns). current_platform() returns "win32" on
+        // Windows, "darwin" on macOS, "linux" on Linux.
+        let platform = if cfg!(target_os = "windows") {
+            "win32"
+        } else if cfg!(target_os = "macos") {
+            "darwin"
+        } else {
+            "linux"
+        };
+        let arch = if cfg!(target_arch = "aarch64") {
+            "arm64"
+        } else {
+            "x64"
+        };
+        let record = serde_json::json!({
+            "schemaVersion": 2,
+            "runtimeVersion": version,
+            "kernelVersion": "1.0.0",
+            "runtimeFlavor": "standard",
+            "runtimeRevision": 1,
+            "platform": platform,
+            "arch": arch,
+            "path": versions_dir.to_string_lossy(),
+            "executablePath": exe.to_string_lossy(),
+            "source": "bundled",
+            "installedAt": "2026-01-01T00:00:00.000Z",
+            "sourceRepo": "/repo/hermes-agent-cn",
+            "sourceCommit": "abc123",
+            "localDirtyHash": null,
+            "artifactSha256": null,
+            "previousRuntimeVersion": null,
+        });
+        let current_json = root.join("current.json");
+        std::fs::write(&current_json, serde_json::to_string(&record).unwrap()).unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn uninstall_removes_version_dir_and_current_json() {
+        with_runtime_root(|root| {
+            let exe_path = root.join("versions").join("1.0.0").join(
+                if cfg!(windows) { "hermes.exe" } else { "hermes" },
+            );
+            write_current_record(root, "1.0.0", &exe_path);
+
+            // Pre-conditions
+            assert!(exe_path.exists());
+            assert!(root.join("current.json").exists());
+
+            // Verify read_current_record returns Some
+            let record = runtime::read_current_record();
+            assert!(record.is_some(), "read_current_record must return Some");
+
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(uninstall_bundled_runtime()).unwrap();
+
+            // Post-conditions: version dir gone, current.json gone
+            assert!(!exe_path.exists(), "version executable should be removed");
+            assert!(
+                !root.join("current.json").exists(),
+                "current.json should be removed"
+            );
+            assert!(
+                !root.join("versions").join("1.0.0").exists(),
+                "1.0.0 subdirectory should be removed"
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn uninstall_noop_when_no_current_record() {
+        with_runtime_root(|root| {
+            std::fs::create_dir_all(root).unwrap();
+            // No current.json — should succeed silently.
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(uninstall_bundled_runtime()).unwrap();
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn uninstall_noop_when_version_dir_missing() {
+        with_runtime_root(|root| {
+            // current.json exists but the version directory doesn't
+            let platform = if cfg!(target_os = "windows") {
+                "win32"
+            } else if cfg!(target_os = "macos") {
+                "darwin"
+            } else {
+                "linux"
+            };
+            let arch = if cfg!(target_arch = "aarch64") {
+                "arm64"
+            } else {
+                "x64"
+            };
+            let record = serde_json::json!({
+                "schemaVersion": 2,
+                "runtimeVersion": "2.0.0",
+                "kernelVersion": "2.0.0",
+                "runtimeFlavor": "standard",
+                "runtimeRevision": 1,
+                "platform": platform,
+                "arch": arch,
+                "path": root.join("versions").join("2.0.0").to_string_lossy(),
+                "executablePath": "",
+                "source": "bundled",
+                "installedAt": "2026-01-01T00:00:00.000Z",
+                "sourceRepo": "/repo/hermes-agent-cn",
+                "sourceCommit": "abc123",
+                "localDirtyHash": null,
+                "artifactSha256": null,
+                "previousRuntimeVersion": null,
+            });
+            std::fs::write(
+                root.join("current.json"),
+                serde_json::to_string(&record).unwrap(),
+            )
+            .unwrap();
+
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(uninstall_bundled_runtime()).unwrap();
+
+            // read_current_record returns None when the executable doesn't
+            // exist, so uninstall is a no-op and current.json is untouched.
+            assert!(root.join("current.json").exists());
+        });
+    }
+}
+
 /// Rollback runtime and restart the dashboard.
 #[tauri::command]
 pub async fn runtime_rollback(
@@ -180,6 +357,8 @@ pub(crate) async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(),
         hermes_home,
         allow_external_agent: dashboard::external_agent_allowed(),
         allow_port_fallback: true,
+        connection_mode: crate::connection::ConnectionMode::Managed,
+        remote_base_url: None,
     })
     .await?;
 

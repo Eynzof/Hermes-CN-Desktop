@@ -1597,12 +1597,11 @@ mod tests {
 
     fn git(dir: &Path, args: &[&str]) {
         // Isolate test-driven git calls from the host's global/system config.
-        let out = command("git", dir)
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        let mut cmd = command("git", dir);
+        cmd.env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .args(args)
-            .output()
-            .unwrap();
+            .args(args);
+        let out = cmd.output().unwrap();
         assert!(
             out.status.success(),
             "git {args:?} failed: {}",
@@ -1623,6 +1622,7 @@ mod tests {
         git(path, &["config", "user.name", "Test"]);
         git(path, &["config", "commit.gpgsign", "false"]);
         git(path, &["config", "init.defaultBranch", "main"]);
+        git(path, &["config", "core.autocrlf", "false"]);
         fs::write(path.join("README.md"), "hello\n").unwrap();
         git(path, &["add", "-A"]);
         git(path, &["commit", "-q", "-m", "init"]);
@@ -1862,7 +1862,11 @@ mod tests {
             .find(|b| b.name == "hermes/login-page")
             .expect("branch listed");
         assert!(feat.checked_out);
-        assert_eq!(feat.worktree_path.as_deref(), Some(added.path.as_str()));
+        // On Windows, git porcelain output uses forward slashes while Rust
+        // PathBuf uses backslashes. Normalize both sides for comparison.
+        let expected_path = added.path.replace("\\", "/");
+        let actual_path = feat.worktree_path.as_deref().unwrap_or("").replace("\\", "/");
+        assert_eq!(actual_path, expected_path, "worktree path mismatch");
         assert!(branches.iter().any(|b| b.name == "main" && b.is_default));
 
         let removed = remove_worktree_impl(&repo, &added.path, false).unwrap();

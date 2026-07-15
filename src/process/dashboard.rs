@@ -774,6 +774,13 @@ pub struct EnsureDashboardOptions {
     /// apiBaseUrl. Vite dev proxy is fixed before Rust starts, so managed dev
     /// keeps this false and asks the user to free the port instead.
     pub allow_port_fallback: bool,
+    /// Connection mode ("managed", "local", "remote") that governs how
+    /// loopback URLs in MCP/CDP tools are resolved. Passed to the kernel
+    /// via HERMES_DESKTOP_CONNECTION_MODE env var.
+    pub connection_mode: crate::connection::ConnectionMode,
+    /// When in remote mode, the base URL of the remote dashboard. Passed
+    /// to the kernel via HERMES_DESKTOP_REMOTE_BASE_URL env var.
+    pub remote_base_url: Option<String>,
 }
 
 struct SpawnedDashboard {
@@ -1069,6 +1076,13 @@ fn spawn_dashboard(
         );
     } else {
         cmd.env_remove("HERMES_YOLO_MODE");
+    }
+
+    // Pass connection mode to the kernel so MCP/CDP tools can rewrite
+    // loopback URLs when running in remote connection mode.
+    cmd.env("HERMES_DESKTOP_CONNECTION_MODE", options.connection_mode.as_str());
+    if let Some(ref url) = options.remote_base_url {
+        cmd.env("HERMES_DESKTOP_REMOTE_BASE_URL", url);
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -1519,6 +1533,8 @@ pub async fn ensure_hermes_dashboard(
         hermes_home: options.hermes_home.clone(),
         allow_external_agent: options.allow_external_agent,
         allow_port_fallback: options.allow_port_fallback,
+        connection_mode: options.connection_mode,
+        remote_base_url: options.remote_base_url.clone(),
     };
 
     // Spawn a new dashboard, retrying on a lost bind race. The pre-scan
@@ -1919,6 +1935,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await
         .expect("compatible stale dashboard should be adopted");
@@ -1970,6 +1988,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await;
         let err = match result {
@@ -2117,6 +2137,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await
         .expect("compatible orphan must be adopted");

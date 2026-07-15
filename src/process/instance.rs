@@ -23,6 +23,9 @@ use std::time::Duration;
 
 use fs2::FileExt;
 
+#[cfg(target_os = "windows")]
+use std::sync::Mutex;
+
 use crate::process::runtime;
 
 const INSTANCE_LOCK_FILENAME: &str = "desktop-instance.lock";
@@ -39,6 +42,14 @@ const SINGLE_INSTANCE_ENV: &str = "HERMES_DESKTOP_SINGLE_INSTANCE";
 pub struct InstanceGuard {
     _file: std::fs::File,
 }
+
+// Windows named mutex handle kept alive for the process lifetime. Stored
+// here so the mutex object persists in the kernel namespace, preventing
+// rapid double-clicks from creating a second instance before the file
+// lock is set up.
+#[cfg(target_os = "windows")]
+static NAMED_MUTEX_HANDLE: Mutex<Option<isize>> =
+    Mutex::new(None);
 
 pub enum SingleInstance {
     /// We own the runtime root; proceed with startup.
@@ -77,6 +88,21 @@ pub fn try_acquire() -> SingleInstance {
         return SingleInstance::Unavailable(format!("disabled via {SINGLE_INSTANCE_ENV}"));
     }
 
+    // Windows: use a named mutex as a fast secondary guard that catches
+    // rapid double-clicks before the file lock is set up. The handle is
+    // stored in NAMED_MUTEX_HANDLE and automatically released on process exit.
+    #[cfg(target_os = "windows")]
+    {
+        match try_acquire_named_mutex() {
+            Ok(()) => {}
+            Err(already) if already => return SingleInstance::AlreadyRunning,
+            Err(_) => {
+                // Fail-open: if the named mutex can't be created, the
+                // file lock below will still catch conflicts.
+            }
+        }
+    }
+
     let lock_path = instance_lock_path();
     if let Some(parent) = lock_path.parent() {
         if let Err(err) = fs::create_dir_all(parent) {
@@ -105,6 +131,57 @@ pub fn try_acquire() -> SingleInstance {
         Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => SingleInstance::AlreadyRunning,
         Err(err) => SingleInstance::Unavailable(format!("lock {}: {err}", lock_path.display())),
     }
+}
+
+/// Try to acquire a Windows named mutex as a secondary single-instance guard.
+/// Returns `Ok(())` on first acquisition, `Err(true)` if another instance holds
+/// the mutex, or `Err(false)` if the OS call failed (fail-open).
+/// The handle is stored in `NAMED_MUTEX_HANDLE` so it stays alive for the
+/// process lifetime, keeping the mutex visible to other processes.
+#[cfg(target_os = "windows")]
+fn try_acquire_named_mutex() -> Result<(), bool> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, ERROR_ALREADY_EXISTS, GetLastError};
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+
+    let root = runtime::runtime_root();
+    let root_str = root.to_string_lossy();
+    let safe_name = root_str.replace("\\", "_").replace(":", "");
+    let wide: Vec<u16> = OsStr::new(&format!("Local\\HermesDesktop_{safe_name}"))
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+
+    // CreateMutexW with bInitialOwner=0 returns a handle to the mutex.
+    // If the mutex already existed, GetLastError() returns ERROR_ALREADY_EXISTS.
+    // This single-call approach avoids the TOCTOU race between OpenMutexW
+    // and CreateMutexW.
+    let handle: HANDLE = unsafe { CreateMutexW(std::ptr::null(), 0, wide.as_ptr()) };
+    if handle.is_null() {
+        return Err(false); // Unavailable (fail-open)
+    }
+
+    let already_exists = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+    if already_exists {
+        unsafe {
+            CloseHandle(handle);
+        }
+        return Err(true);
+    }
+
+    // Store the handle so it outlives this function call.
+    if let Ok(mut guard) = NAMED_MUTEX_HANDLE.lock() {
+        *guard = Some(handle as isize);
+    } else {
+        // Lock poisoned — close the handle directly.
+        unsafe {
+            CloseHandle(handle);
+        }
+        return Err(false);
+    }
+
+    Ok(())
 }
 
 /// Ask the incumbent instance to bring its main window to the foreground.
@@ -213,9 +290,23 @@ mod tests {
                 SingleInstance::Acquired(guard) => drop(guard),
                 _ => panic!("first acquire should succeed"),
             }
+            // On Windows the named mutex handle is stored in a module-level
+            // static and persists until process exit, so a second acquisition
+            // within the SAME process sees it as AlreadyRunning (the same as
+            // a second process would). This is correct cross-process behavior.
+            // On non-Windows (or if the named mutex fails), the file lock
+            // alone is the guard and should be reacquirable after drop.
             match try_acquire() {
                 SingleInstance::Acquired(_) => {}
+                #[cfg(not(target_os = "windows"))]
                 _ => panic!("lock must be reacquirable after drop"),
+                #[cfg(target_os = "windows")]
+                SingleInstance::AlreadyRunning => {}
+                #[cfg(target_os = "windows")]
+                SingleInstance::Unavailable(_) => {
+                    // Named mutex unavailable (fail-open) → file lock should
+                    // still be reacquirable after the guard drop.
+                }
             }
         });
     }

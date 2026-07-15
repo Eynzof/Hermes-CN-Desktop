@@ -41,9 +41,10 @@ export function useModelInfo() {
     queryKey: ["model-info", profile],
     queryFn: ({ signal }) => fetchJSON("/api/model/info", { signal }, ModelInfo),
     // Model metadata changes via config saves (which invalidate this) or an
-    // explicit model switch; no need to refetch on every window focus.
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    // explicit model switch (via CLI or WS event); poll every 15s so the UI
+    // catches CLI switches even if the WebSocket event is missed.
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 }
 

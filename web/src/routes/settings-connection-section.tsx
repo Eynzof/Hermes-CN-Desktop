@@ -9,6 +9,7 @@ import {
   Globe2,
   HardDrive,
   Loader2,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import type {
@@ -565,6 +566,24 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       )}
 
       <div className={s.connFooter}>
+        {mode === "managed" && (
+          <Button
+            type="button"
+            className={s.connFooterSpacer}
+            variant="outline"
+            tone="danger"
+            onClick={() => {
+              if (!window.confirm("确定要卸载本机内核吗？卸载后需要重启桌面端或切换到其他连接方式。")) return;
+              desktop?.uninstallBundledRuntime?.()
+                .then(() => setMessage({ tone: "ok", text: "本机内核已卸载，请切换连接方式或重启桌面端。" }))
+                .catch((error: unknown) => setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) }));
+            }}
+            disabled={disabled}
+          >
+            <Trash2 size={13} />
+            卸载本机内核
+          </Button>
+        )}
         {mode !== "managed" && (
           <Button
             type="button"

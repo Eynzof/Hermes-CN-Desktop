@@ -467,6 +467,7 @@ declare global {
       saveConnectionConfig?(input: ConnectionConfigInput): Promise<ConnectionConfigView>;
       applyConnectionConfig?(input: ConnectionConfigInput): Promise<ApplyConnectionResult>;
       testConnectionConfig?(input: ConnectionConfigInput): Promise<TestConnectionResult>;
+      uninstallBundledRuntime?(): Promise<void>;
       probeConnectionConfig?(remoteUrl: string): Promise<ProbeConnectionResult>;
       connectionOauthLogin?(remoteUrl: string): Promise<OauthLoginResult>;
       connectionPasswordLogin?(input: {
