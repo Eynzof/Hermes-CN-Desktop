@@ -992,8 +992,8 @@ pub async fn external_request_impl(
     let method = input.method.as_deref().unwrap_or("GET");
     let display_url = target_url.as_str().to_string();
 
-    fn build_request<'a>(
-        client: &'a reqwest::Client,
+    fn build_request(
+        client: &reqwest::Client,
         method: &str,
         target_url: url::Url,
         headers: &Option<HashMap<String, String>>,
@@ -1028,7 +1028,9 @@ pub async fn external_request_impl(
         let proxy_env = std::env::var("HTTPS_PROXY")
             .or_else(|_| std::env::var("HTTP_PROXY"))
             .unwrap_or_default();
-        if !proxy_env.is_empty() && (e.is_connect() || e.to_string().contains("error sending request")) {
+        if !proxy_env.is_empty()
+            && (e.is_connect() || e.to_string().contains("error sending request"))
+        {
             let no_proxy_req = build_request(
                 &EXTERNAL_NO_PROXY_HTTP_CLIENT,
                 method,

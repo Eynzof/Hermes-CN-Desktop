@@ -48,8 +48,7 @@ pub struct InstanceGuard {
 // rapid double-clicks from creating a second instance before the file
 // lock is set up.
 #[cfg(target_os = "windows")]
-static NAMED_MUTEX_HANDLE: Mutex<Option<isize>> =
-    Mutex::new(None);
+static NAMED_MUTEX_HANDLE: Mutex<Option<isize>> = Mutex::new(None);
 
 pub enum SingleInstance {
     /// We own the runtime root; proceed with startup.
@@ -142,7 +141,7 @@ pub fn try_acquire() -> SingleInstance {
 fn try_acquire_named_mutex() -> Result<(), bool> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, ERROR_ALREADY_EXISTS, GetLastError};
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE};
     use windows_sys::Win32::System::Threading::CreateMutexW;
 
     let root = runtime::runtime_root();

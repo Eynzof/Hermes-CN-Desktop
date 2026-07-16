@@ -1081,7 +1081,10 @@ fn spawn_dashboard(
 
     // Pass connection mode to the kernel so MCP/CDP tools can rewrite
     // loopback URLs when running in remote connection mode.
-    cmd.env("HERMES_DESKTOP_CONNECTION_MODE", options.connection_mode.as_str());
+    cmd.env(
+        "HERMES_DESKTOP_CONNECTION_MODE",
+        options.connection_mode.as_str(),
+    );
     if let Some(ref url) = options.remote_base_url {
         cmd.env("HERMES_DESKTOP_REMOTE_BASE_URL", url);
     }

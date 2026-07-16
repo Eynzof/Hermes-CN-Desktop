@@ -122,9 +122,16 @@ pub async fn uninstall_bundled_runtime() -> Result<(), AppError> {
     if let Some(record) = current {
         let version_dir = root.join("versions").join(&record.runtime_version);
         if version_dir.exists() {
-            log::info!("Uninstalling bundled runtime from {}", version_dir.display());
+            log::info!(
+                "Uninstalling bundled runtime from {}",
+                version_dir.display()
+            );
             if let Err(e) = std::fs::remove_dir_all(&version_dir) {
-                log::warn!("Failed to remove runtime directory {}: {}", version_dir.display(), e);
+                log::warn!(
+                    "Failed to remove runtime directory {}: {}",
+                    version_dir.display(),
+                    e
+                );
             }
         }
         // Clear the current record so the dashboard won't try to use this runtime.
@@ -159,7 +166,7 @@ mod tests {
         let versions_dir = root.join("versions").join(version);
         std::fs::create_dir_all(&versions_dir).unwrap();
         // Touch the executable file so version_dir.exists() is true.
-        std::fs::write(&exe, "fake").unwrap();
+        std::fs::write(exe, "fake").unwrap();
         // read_current_record validates platform/arch match current_platform() /
         // current_arch() (private fns). current_platform() returns "win32" on
         // Windows, "darwin" on macOS, "linux" on Linux.
@@ -201,9 +208,11 @@ mod tests {
     #[serial]
     fn uninstall_removes_version_dir_and_current_json() {
         with_runtime_root(|root| {
-            let exe_path = root.join("versions").join("1.0.0").join(
-                if cfg!(windows) { "hermes.exe" } else { "hermes" },
-            );
+            let exe_path = root.join("versions").join("1.0.0").join(if cfg!(windows) {
+                "hermes.exe"
+            } else {
+                "hermes"
+            });
             write_current_record(root, "1.0.0", &exe_path);
 
             // Pre-conditions

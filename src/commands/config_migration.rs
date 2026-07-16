@@ -740,9 +740,9 @@ fn harden_secret_permissions(_target: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(target, fs::Permissions::from_mode(0o700));
+        let _ = fs::set_permissions(_target, fs::Permissions::from_mode(0o700));
         for rel in SECRET_FILES {
-            let path = target.join(rel);
+            let path = _target.join(rel);
             if path.is_file() {
                 let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
             }

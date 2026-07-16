@@ -260,7 +260,7 @@ fn zip_options_for_entry(_entry: &PlannedBackupEntry) -> SimpleFileOptions {
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     #[cfg(unix)]
     {
-        if let Some(mode) = entry.mode {
+        if let Some(mode) = _entry.mode {
             return options.unix_permissions(mode);
         }
     }
@@ -457,7 +457,9 @@ fn extract_profile_backup_to_staging(
         }
 
         #[cfg(unix)]
-        let is_symlink = entry.unix_mode().map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
+        let mode = entry.unix_mode();
+        #[cfg(unix)]
+        let is_symlink = mode.map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
         #[cfg(not(unix))]
         let is_symlink = false;
         if is_symlink {
@@ -662,9 +664,9 @@ fn harden_secret_permissions(_target: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(target, fs::Permissions::from_mode(0o700));
+        let _ = fs::set_permissions(_target, fs::Permissions::from_mode(0o700));
         for rel in SECRET_FILES {
-            let path = target.join(rel);
+            let path = _target.join(rel);
             if path.is_file() {
                 let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
             }

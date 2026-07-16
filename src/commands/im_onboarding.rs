@@ -1341,11 +1341,22 @@ fn apply_patch_from_input_with_existing(
         ImPlatform::Dingtalk => {
             // Dingtalk onboarding: populate basic required keys.
             if let Some(manual) = &input.manual_credentials {
-                if let Some(client_id) = manual.client_id.as_ref().filter(|v| !v.trim().is_empty()) {
-                    patch.insert("DINGTALK_CLIENT_ID".to_string(), client_id.trim().to_string());
+                if let Some(client_id) = manual.client_id.as_ref().filter(|v| !v.trim().is_empty())
+                {
+                    patch.insert(
+                        "DINGTALK_CLIENT_ID".to_string(),
+                        client_id.trim().to_string(),
+                    );
                 }
-                if let Some(client_secret) = manual.client_secret.as_ref().filter(|v| !v.trim().is_empty()) {
-                    patch.insert("DINGTALK_CLIENT_SECRET".to_string(), client_secret.trim().to_string());
+                if let Some(client_secret) = manual
+                    .client_secret
+                    .as_ref()
+                    .filter(|v| !v.trim().is_empty())
+                {
+                    patch.insert(
+                        "DINGTALK_CLIENT_SECRET".to_string(),
+                        client_secret.trim().to_string(),
+                    );
                 }
             }
         }

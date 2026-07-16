@@ -1598,9 +1598,12 @@ mod tests {
     fn git(dir: &Path, args: &[&str]) {
         // Isolate test-driven git calls from the host's global/system config.
         let mut cmd = command("git", dir);
-        cmd.env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .args(args);
+        cmd.env(
+            "GIT_CONFIG_GLOBAL",
+            if cfg!(windows) { "NUL" } else { "/dev/null" },
+        )
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .args(args);
         let out = cmd.output().unwrap();
         assert!(
             out.status.success(),
@@ -1865,7 +1868,11 @@ mod tests {
         // On Windows, git porcelain output uses forward slashes while Rust
         // PathBuf uses backslashes. Normalize both sides for comparison.
         let expected_path = added.path.replace("\\", "/");
-        let actual_path = feat.worktree_path.as_deref().unwrap_or("").replace("\\", "/");
+        let actual_path = feat
+            .worktree_path
+            .as_deref()
+            .unwrap_or("")
+            .replace("\\", "/");
         assert_eq!(actual_path, expected_path, "worktree path mismatch");
         assert!(branches.iter().any(|b| b.name == "main" && b.is_default));
 

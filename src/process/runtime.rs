@@ -2209,7 +2209,9 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
         }
 
         #[cfg(unix)]
-        let is_symlink = entry.unix_mode().map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
+        let mode = entry.unix_mode();
+        #[cfg(unix)]
+        let is_symlink = mode.map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
         #[cfg(not(unix))]
         let is_symlink = false;
 
@@ -2908,7 +2910,8 @@ mod tests {
                 "artifactSha256": null,
                 "previousVersion": "0.13.0",
             }))
-            .unwrap() + "\n",
+            .unwrap()
+                + "\n",
         )
         .unwrap();
 

@@ -59,9 +59,7 @@ pub async fn install_bundled_runtime_for_bootstrap(
         .map(|v| v == "1")
         .unwrap_or(false)
     {
-        log::info!(
-            "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1; skipping bundled runtime install"
-        );
+        log::info!("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1; skipping bundled runtime install");
         return true;
     }
 
@@ -357,7 +355,10 @@ mod tests {
             .unwrap_or(false);
         std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
 
-        assert!(skip, "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1 should enable skip");
+        assert!(
+            skip,
+            "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1 should enable skip"
+        );
     }
 
     #[tokio::test]
@@ -378,6 +379,9 @@ mod tests {
             .map(|v| v == "1")
             .unwrap_or(false);
         std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
-        assert!(!skip, "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=0 should not skip");
+        assert!(
+            !skip,
+            "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=0 should not skip"
+        );
     }
 }
