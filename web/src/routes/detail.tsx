@@ -72,9 +72,10 @@ import type {
 } from "@/components/chat/composer-types";
 import { MessageTimeline } from "@/components/chat/message-timeline";
 import { StallNotice } from "@/components/chat/stall-notice";
-import { SubagentPanel, useSessionSubagents } from "@/components/chat/subagent-panel";
+import { SubagentPanel, useSessionCliDelegations, useSessionSubagents } from "@/components/chat/subagent-panel";
 import { PreviewRail } from "@/components/chat/preview-rail/preview-rail";
 import { PREVIEW_PANEL_QUERY_KEY } from "@/lib/preview-rail";
+import { activeCliDelegationCount } from "@/stores/cli-delegations";
 import { activeSubagentCount } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
@@ -163,7 +164,15 @@ export function DetailRoute() {
     usageGatewaySessionId,
     taskId,
   ]);
-  const subagentActive = activeSubagentCount(subagents);
+  // 外部 CLI 委派（Claude Code / Codex，P-047）与内部子代理同面板展示。
+  const cliDelegations = useSessionCliDelegations([
+    runtimeSessionId,
+    activeMappedGatewaySessionId,
+    usageGatewaySessionId,
+    taskId,
+  ]);
+  const subagentActive = activeSubagentCount(subagents) + activeCliDelegationCount(cliDelegations);
+  const subagentTotal = subagents.length + cliDelegations.length;
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
   const { data: messagesData, isLoading } = messagesQuery;
@@ -653,9 +662,9 @@ export function DetailRoute() {
             >
               <Bot size={12} aria-hidden="true" />
               <span>子代理</span>
-              {subagents.length > 0 ? (
+              {subagentTotal > 0 ? (
                 <span className={s.subagentBadge} data-active={subagentActive > 0 ? "true" : undefined}>
-                  {subagentActive > 0 ? subagentActive : subagents.length}
+                  {subagentActive > 0 ? subagentActive : subagentTotal}
                 </span>
               ) : null}
             </TopBarActionButton>
@@ -765,7 +774,11 @@ export function DetailRoute() {
           />
         ) : null}
         {subagentPanelOpen ? (
-          <SubagentPanel subagents={subagents} onClose={() => setSubagentPanelOpen(false)} />
+          <SubagentPanel
+            subagents={subagents}
+            cliDelegations={cliDelegations}
+            onClose={() => setSubagentPanelOpen(false)}
+          />
         ) : null}
 
       </div>

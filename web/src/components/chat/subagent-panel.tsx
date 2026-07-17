@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "jotai";
-import { AlertCircle, Bot, CheckCircle2, ChevronRight, Loader2, X } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, ChevronRight, Loader2, SquareTerminal, X } from "lucide-react";
 import { formatCostUsd, formatTokens } from "@/lib/format";
+import {
+  activeCliDelegationCount,
+  cliDelegationsBySessionAtom,
+  type CliDelegationEntry,
+} from "@/stores/cli-delegations";
 import {
   activeSubagentCount,
   buildSubagentTree,
@@ -19,6 +24,19 @@ import s from "./subagent-panel.module.css";
 // we probe the candidate ids detail resolves and take the first non-empty hit.
 export function useSessionSubagents(candidates: (string | undefined)[]): SubagentProgress[] {
   const bySession = useAtomValue(subagentsBySessionAtom);
+  const key = candidates.filter(Boolean).join("|");
+  return useMemo(() => {
+    for (const id of candidates) {
+      if (id && bySession[id]?.length) return bySession[id]!;
+    }
+    return [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bySession, key]);
+}
+
+/** 同 useSessionSubagents：按候选会话 id 读取外部 CLI 委派（P-047）。 */
+export function useSessionCliDelegations(candidates: (string | undefined)[]): CliDelegationEntry[] {
+  const bySession = useAtomValue(cliDelegationsBySessionAtom);
   const key = candidates.filter(Boolean).join("|");
   return useMemo(() => {
     for (const id of candidates) {
@@ -183,6 +201,125 @@ function groupDelegations(roots: readonly SubagentNode[]): RootGroup[] {
   return groups;
 }
 
+// ── 外部 CLI 委派（Claude Code / Codex，P-047）────────────────────────────
+
+const CLI_AGENT_LABELS: Record<CliDelegationEntry["agent"], string> = {
+  "claude-code": "Claude Code",
+  codex: "Codex",
+};
+
+const CLI_MODE_LABELS: Record<string, string> = {
+  print: "单次任务",
+  exec: "执行任务",
+  review: "代码评审",
+  resume: "续写会话",
+  interactive: "交互会话",
+};
+
+const CLI_STATUS_LABELS: Record<CliDelegationEntry["status"], string> = {
+  running: "执行中",
+  completed: "已完成",
+  failed: "失败",
+  killed: "已终止",
+  lost: "状态丢失",
+  detached: "后台运行 · 未跟踪",
+};
+
+function CliStatusIcon({ status }: { status: CliDelegationEntry["status"] }) {
+  if (status === "running") {
+    return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={14} aria-label="执行中" />;
+  }
+  if (status === "failed" || status === "killed" || status === "lost") {
+    return <AlertCircle className={s.statusIcon} data-tone="err" size={14} aria-label="失败" />;
+  }
+  if (status === "detached") {
+    return <SquareTerminal className={s.statusIcon} size={14} aria-label="后台运行" />;
+  }
+  return <CheckCircle2 className={s.statusIcon} data-tone="ok" size={14} aria-label="已完成" />;
+}
+
+function cliStreamEntries(entry: CliDelegationEntry): SubagentStreamEntry[] {
+  const out: SubagentStreamEntry[] = [];
+  entry.timeline.forEach((event, index) => {
+    let text = "";
+    let kind: SubagentStreamEntry["kind"] = "progress";
+    if (event.kind === "tool_use") {
+      kind = "tool";
+      const snippet = event.text ? `("${event.text.slice(0, 96)}")` : "";
+      text = `${event.toolName ?? "工具"}${snippet}`;
+    } else if (event.kind === "result") {
+      kind = "summary";
+      text = [
+        event.isError ? "子任务出错" : "子任务完成",
+        event.numTurns !== undefined ? `${event.numTurns} 轮` : "",
+        event.totalCostUsd !== undefined ? `$${event.totalCostUsd.toFixed(4)}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    } else if (event.kind === "init") {
+      text = `已连接${event.sessionId ? ` · 会话 ${event.sessionId}` : ""}`;
+    } else {
+      text = event.text ?? "";
+    }
+    if (text) out.push({ at: index, isError: event.isError, kind, text });
+  });
+  return out;
+}
+
+function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: number }) {
+  const running = entry.status === "running";
+  const [open, setOpen] = useState(running);
+
+  useEffect(() => {
+    if (running) setOpen(true);
+  }, [running]);
+
+  const durationSeconds =
+    typeof entry.durationS === "number"
+      ? Math.max(0, Math.round(entry.durationS))
+      : entry.startedAt > 0
+        ? Math.max(0, Math.round((now - entry.startedAt) / 1000))
+        : 0;
+
+  const subtitle = [
+    CLI_AGENT_LABELS[entry.agent],
+    entry.mode ? CLI_MODE_LABELS[entry.mode] : "",
+    entry.execution === "background" ? "后台" : "",
+    running ? "" : CLI_STATUS_LABELS[entry.status],
+    fmtDuration(durationSeconds),
+    entry.result?.sessionId ? `会话 ${entry.result.sessionId}` : "",
+    entry.result?.totalCostUsd !== undefined ? `$${entry.result.totalCostUsd.toFixed(4)}` : "",
+  ].filter(Boolean);
+
+  const stream = cliStreamEntries(entry);
+  const visibleRows = open ? stream.slice(-10) : stream.slice(-2);
+
+  return (
+    <div className={s.row} data-running={running ? "true" : undefined}>
+      <button className={s.rowHead} type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={13} aria-hidden />
+        <CliStatusIcon status={entry.status} />
+        <span className={s.cliBrandDot} data-agent={entry.agent} aria-hidden />
+        <span className={s.rowMain}>
+          <span className={s.goal} data-running={running ? "true" : undefined}>
+            {entry.promptExcerpt || CLI_AGENT_LABELS[entry.agent]}
+          </span>
+          {subtitle.length > 0 ? <span className={s.subtitle}>{subtitle.join(" · ")}</span> : null}
+        </span>
+        {running ? <span className={s.timer}>{fmtDuration(durationSeconds) || "0s"}</span> : null}
+      </button>
+
+      {visibleRows.length > 0 ? (
+        <div className={s.stream}>
+          {visibleRows.map((line, i) => (
+            <StreamLine key={`${line.kind}:${line.at}:${i}`} entry={line} active={running && i === visibleRows.length - 1} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function DelegationGroup({ group, now }: { group: RootGroup; now: number }) {
   if (group.nodes.length === 1 && group.taskCount <= 1) {
     return <SubagentRow node={group.nodes[0]!} depth={0} now={now} />;
@@ -206,15 +343,17 @@ function DelegationGroup({ group, now }: { group: RootGroup; now: number }) {
 
 export function SubagentPanel({
   subagents,
+  cliDelegations = [],
   onClose,
 }: {
   subagents: SubagentProgress[];
+  cliDelegations?: CliDelegationEntry[];
   onClose: () => void;
 }) {
   const tree = useMemo(() => buildSubagentTree(subagents), [subagents]);
   const flat = useMemo(() => flattenSubagents(tree), [tree]);
   const groups = useMemo(() => groupDelegations(tree), [tree]);
-  const active = activeSubagentCount(flat);
+  const active = activeSubagentCount(flat) + activeCliDelegationCount(cliDelegations);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -251,16 +390,34 @@ export function SubagentPanel({
         </button>
       </header>
 
-      {flat.length === 0 ? (
+      {flat.length === 0 && cliDelegations.length === 0 ? (
         <div className={s.empty}>
           <Bot size={26} className={s.emptyIcon} aria-hidden />
           <p className={s.emptyTitle}>暂无子代理活动</p>
-          <p className={s.emptyDesc}>当本会话派生子代理（委派/并行任务）时，这里会实时展示它们的层级、状态与流式输出。</p>
+          <p className={s.emptyDesc}>
+            当本会话派生子代理（委派/并行任务）或调度 Claude Code / Codex 等外部编码代理时，
+            这里会实时展示它们的层级、状态与流式输出。
+          </p>
         </div>
       ) : (
         <>
-          <p className={s.summary}>{summary.join(" · ")}</p>
+          {flat.length > 0 ? <p className={s.summary}>{summary.join(" · ")}</p> : null}
           <div className={s.scroll}>
+            {cliDelegations.length > 0 ? (
+              <section className={s.group}>
+                <p className={s.groupLabel}>
+                  外部 CLI 委派 · {cliDelegations.length} 个
+                  {activeCliDelegationCount(cliDelegations) > 0 ? (
+                    <span className={s.groupActive}> · {activeCliDelegationCount(cliDelegations)} 个运行中</span>
+                  ) : null}
+                </p>
+                <div className={s.groupBody}>
+                  {cliDelegations.map((entry) => (
+                    <CliDelegationRow key={entry.id} entry={entry} now={now} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
             {groups.map((group) => (
               <DelegationGroup key={group.id} group={group} now={now} />
             ))}

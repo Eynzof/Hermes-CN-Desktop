@@ -171,6 +171,24 @@
   color: var(--h-err);
 }
 
+/* 外部 CLI 委派（P-047）的品牌点：Claude=accent 橙、Codex=ok 绿。 */
+.cliBrandDot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  align-self: center;
+  background: var(--h-text-3);
+}
+
+.cliBrandDot[data-agent="claude-code"] {
+  background: var(--h-accent);
+}
+
+.cliBrandDot[data-agent="codex"] {
+  background: var(--h-ok);
+}
+
 .rowMain {
   display: flex;
   flex-direction: column;
