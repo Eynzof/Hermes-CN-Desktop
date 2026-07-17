@@ -1,0 +1,259 @@
+/* CLI 委派卡片（Claude Code / Codex）。视觉语汇对齐 message-timeline 的
+   ToolCard（12px、soft hover、状态点），但带边框容器让委派在工具链里
+   一眼可辨。颜色一律走 tokens，品牌点：Claude=accent 橙、Codex=ok 绿。 */
+
+.card {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--h-line);
+  border-radius: 8px;
+  background: var(--h-bg-soft);
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card[data-status="failed"],
+.card[data-status="killed"] {
+  border-color: color-mix(in srgb, var(--h-err) 45%, var(--h-line));
+}
+
+.header {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  min-height: 24px;
+  max-width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.header:disabled {
+  cursor: default;
+}
+
+.header:not(:disabled):hover {
+  background: color-mix(in srgb, var(--h-line-soft) 60%, transparent);
+}
+
+.brandDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+.brandDot[data-agent="claude-code"] {
+  background: var(--h-accent);
+}
+
+.brandDot[data-agent="codex"] {
+  background: var(--h-ok);
+}
+
+.brandDot[data-dot="running"] {
+  animation: cliDelegationPulse 1.6s ease-in-out infinite;
+}
+
+.brandDot[data-dot="error"] {
+  background: var(--h-err);
+}
+
+.brandDot[data-dot="neutral"] {
+  background: var(--h-text-3);
+}
+
+.brandName {
+  color: var(--h-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--h-line);
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.statusText {
+  color: var(--h-text-3);
+  white-space: nowrap;
+}
+
+.statusText[data-status="running"] {
+  color: var(--h-ok);
+}
+
+.statusText[data-status="failed"],
+.statusText[data-status="killed"],
+.statusText[data-status="lost"] {
+  color: var(--h-err);
+}
+
+.elapsed {
+  margin-left: auto;
+  color: var(--h-text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.prompt {
+  padding: 0 4px;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 4px 4px;
+}
+
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.timelineRow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 12px;
+  position: relative;
+  color: var(--h-text-2);
+  line-height: 1.5;
+}
+
+.timelineRow::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--h-text-3);
+}
+
+.timelineRow[data-kind="tool_use"]::before {
+  background: var(--h-warn);
+}
+
+.timelineRow[data-kind="result"]::before {
+  background: var(--h-ok);
+}
+
+.timelineRow[data-error="true"]::before,
+.timelineRow[data-error="true"] .timelineText {
+  background-color: transparent;
+  color: var(--h-err);
+}
+
+.timelineRow[data-error="true"]::before {
+  background: var(--h-err);
+}
+
+.timelineTool {
+  flex: 0 0 auto;
+  color: var(--h-text);
+  font-weight: 500;
+  font-family: var(--h-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+
+.timelineText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tail {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--h-bg);
+  border: 1px solid var(--h-line-soft);
+  color: var(--h-text-2);
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.resultRow {
+  color: var(--h-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.truncatedNote,
+.errorNote {
+  font-size: 11px;
+  color: var(--h-text-3);
+}
+
+.errorNote {
+  color: var(--h-err);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actionButton {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--h-text-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.actionButton:hover {
+  color: var(--h-text);
+}
+
+@keyframes cliDelegationPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

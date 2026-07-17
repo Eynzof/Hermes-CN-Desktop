@@ -4,6 +4,8 @@ import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
 import { assistantAvatarDataUrlAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
+import { CliDelegationCard, entryFromChatTool } from "./cli-delegation-card";
+import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
 import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
@@ -453,6 +455,7 @@ interface MessageBlocksProps {
 
 function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progressModel }: MessageBlocksProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
+  const cliDelegations = useAtomValue(cliDelegationsByToolIdAtom);
   const blocks = message.blocks ?? [];
   const items: ReactNode[] = [];
   let pendingTools: ChatToolItem[] = [];
@@ -465,6 +468,16 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
 
   blocks.forEach((block, index) => {
     if (block.type === "tool") {
+      // CLI 委派（Claude Code / Codex）升级为品牌化卡片：live store 命中
+      // 优先（P-047 事件或旧内核回退），历史重载走渲染时按需重建。委派卡
+      // 不进 ToolChain 聚合——它是多 Agent 协作的一等公民，不该被折叠进
+      // "运行了 N 个工具"。
+      const delegation = cliDelegations.get(block.tool.tool_id) ?? entryFromChatTool(block.tool);
+      if (delegation) {
+        flushTools(`tools-${index}`);
+        items.push(<CliDelegationCard key={`cli-delegation-${index}`} entry={delegation} />);
+        return;
+      }
       pendingTools.push(block.tool);
       return;
     }
