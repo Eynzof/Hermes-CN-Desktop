@@ -313,3 +313,52 @@ describe("assistant display profile atoms (persisted)", () => {
     expect(uiStore.readUiValue("hermes.assistant-avatar-data-url", "fallback")).toBe("");
   });
 });
+
+// issue #294 问题B：stores/ui 经 main.tsx → debug-install → transport 的静态
+// import 链在 initUiStore() hydrate SQLite 之前就被求值，持久化 atom 把默认值
+// 烙进 init 且从不重读——Ctrl+Enter / 聊天宽度等设置重启后回落默认。这组测试
+// 复现"模块先求值、快照后到达"的真实时序。
+describe("persisted atoms follow late ui-store hydration (#294)", () => {
+  it("re-reads mounted atoms when the snapshot lands after module evaluation", async () => {
+    // 模块在空缓存（未 hydrate）状态下求值——复现真实启动时序。
+    const { composerSubmitShortcutAtom, conversationWidthModeAtom, uiStore } = await loadUi();
+    const store = createStore();
+    const unsubs = [
+      store.sub(composerSubmitShortcutAtom, () => {}),
+      store.sub(conversationWidthModeAtom, () => {}),
+    ];
+    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+
+    // 模拟 initUiStore() 完成：SQLite 快照落进 kv 缓存并 notify。
+    uiStore.__resetUiStoreForTests({
+      "hermes.composer-submit-shortcut": "ctrl-enter",
+      "hermes.conversation-width": "large",
+    });
+
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
+    unsubs.forEach((unsub) => unsub());
+  });
+
+  it("reads the hydrated value on first mount without an extra notify", async () => {
+    const { conversationWidthModeAtom, uiStore } = await loadUi();
+    // hydrate 发生在模块求值之后、组件首次挂载之前。
+    uiStore.__resetUiStoreForTests({ "hermes.conversation-width": "small" });
+
+    const store = createStore();
+    const unsub = store.sub(conversationWidthModeAtom, () => {});
+    expect(store.get(conversationWidthModeAtom)).toBe("small");
+    unsub();
+  });
+
+  it("keeps user writes authoritative over a later identical notify", async () => {
+    const { conversationWidthModeAtom, uiStore } = await loadUi();
+    const store = createStore();
+    const unsub = store.sub(conversationWidthModeAtom, () => {});
+    store.set(conversationWidthModeAtom, "full");
+    expect(store.get(conversationWidthModeAtom)).toBe("full");
+    expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("full");
+    unsub();
+  });
+});

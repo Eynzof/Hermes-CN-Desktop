@@ -1,6 +1,22 @@
 import { atom } from "jotai";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
-import { readUiValue, writeUiValue } from "@/lib/ui-store";
+import { readUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
+
+// 持久化 base atom 工厂（issue #294 问题B）。这些 atom 的初始值在**模块求值时**
+// 同步读 ui-store 的 kv 缓存，而本模块经 main.tsx → debug-install → transport
+// 的静态 import 链在 initUiStore() hydrate SQLite **之前**就被求值——此时缓存
+// 为空，默认值被烙进 atom，且此前从不重读，导致 Ctrl+Enter / 聊天宽度等设置
+// 重启后"回落默认"。挂载时重读一次并订阅 ui-store 通知（hydrate、reloadUiStore、
+// profile 切换、备份恢复），保证 atom 始终跟随持久层。
+function persistedUiBaseAtom<T>(key: string, fallback: T, normalize: (value: unknown) => T) {
+  const read = () => normalize(readUiValue<unknown>(key, fallback));
+  const base = atom<T>(read());
+  base.onMount = (set) => {
+    set(read());
+    return subscribeUiStore(() => set(read()));
+  };
+  return base;
+}
 
 export const activeSessionIdAtom = atom<string | null>(null);
 
@@ -78,8 +94,10 @@ export function normalizeAssistantAvatarDataUrl(value: unknown): string {
   return /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(text) ? text : "";
 }
 
-const conversationWidthModeBaseAtom = atom<ConversationWidthMode>(
-  normalizeConversationWidthMode(readUiValue(CONVERSATION_WIDTH_KEY, DEFAULT_CONVERSATION_WIDTH_MODE)),
+const conversationWidthModeBaseAtom = persistedUiBaseAtom<ConversationWidthMode>(
+  CONVERSATION_WIDTH_KEY,
+  DEFAULT_CONVERSATION_WIDTH_MODE,
+  normalizeConversationWidthMode,
 );
 export const conversationWidthModeAtom = atom(
   (get) => get(conversationWidthModeBaseAtom),
@@ -90,8 +108,10 @@ export const conversationWidthModeAtom = atom(
   },
 );
 
-const conversationFontSizeBaseAtom = atom<ConversationFontSizeMode>(
-  normalizeConversationFontSizeMode(readUiValue(CONVERSATION_FONT_SIZE_KEY, DEFAULT_CONVERSATION_FONT_SIZE_MODE)),
+const conversationFontSizeBaseAtom = persistedUiBaseAtom<ConversationFontSizeMode>(
+  CONVERSATION_FONT_SIZE_KEY,
+  DEFAULT_CONVERSATION_FONT_SIZE_MODE,
+  normalizeConversationFontSizeMode,
 );
 export const conversationFontSizeAtom = atom(
   (get) => get(conversationFontSizeBaseAtom),
@@ -112,7 +132,11 @@ export const conversationFontSizeAtom = atom(
 // Desktop 模式 (Electron) 下主进程 own dashboard 子进程，切换走 IPC →
 // stop + spawn，真正即时生效（direction B）。X-Hermes-Profile header 是给
 // 未来 fork 改造支持 per-request 路由用的占位（direction C）。
-const activeProfileBaseAtom = atom<string>(readUiValue("hermes.active-profile", "default"));
+const activeProfileBaseAtom = persistedUiBaseAtom<string>(
+  "hermes.active-profile",
+  "default",
+  (value) => (typeof value === "string" && value ? value : "default"),
+);
 export const activeProfileAtom = atom(
   (get) => get(activeProfileBaseAtom),
   (_get, set, next: string) => {
@@ -127,8 +151,10 @@ export const activeProfileAtom = atom(
 // 切换活跃档案时清空。对齐官方 dashboard 的 management-profile scope。
 export const managementProfileAtom = atom<string | null>(null);
 
-const assistantDisplayNameBaseAtom = atom<string>(
-  normalizeAssistantDisplayName(readUiValue(ASSISTANT_DISPLAY_NAME_KEY, DEFAULT_ASSISTANT_DISPLAY_NAME)),
+const assistantDisplayNameBaseAtom = persistedUiBaseAtom<string>(
+  ASSISTANT_DISPLAY_NAME_KEY,
+  DEFAULT_ASSISTANT_DISPLAY_NAME,
+  normalizeAssistantDisplayName,
 );
 export const assistantDisplayNameAtom = atom(
   (get) => get(assistantDisplayNameBaseAtom),
@@ -143,8 +169,10 @@ export const assistantDisplayNameAtom = atom(
   },
 );
 
-const assistantAvatarDataUrlBaseAtom = atom<string>(
-  normalizeAssistantAvatarDataUrl(readUiValue(ASSISTANT_AVATAR_KEY, "")),
+const assistantAvatarDataUrlBaseAtom = persistedUiBaseAtom<string>(
+  ASSISTANT_AVATAR_KEY,
+  "",
+  normalizeAssistantAvatarDataUrl,
 );
 export const assistantAvatarDataUrlAtom = atom(
   (get) => get(assistantAvatarDataUrlBaseAtom),
@@ -155,7 +183,11 @@ export const assistantAvatarDataUrlAtom = atom(
   },
 );
 
-const showReasoningBaseAtom = atom<boolean>(readUiValue("hermes.show-reasoning", false));
+const showReasoningBaseAtom = persistedUiBaseAtom<boolean>(
+  "hermes.show-reasoning",
+  false,
+  (value) => value === true,
+);
 export const showReasoningAtom = atom(
   (get) => get(showReasoningBaseAtom),
   (_get, set, next: boolean) => {
@@ -180,7 +212,11 @@ export const telemetryEnabledAtom = atom(
 // so the user's last choice survives reload; ⌘B toggles it. The active tab
 // lives in the `?panel=` query, not here (see lib/preview-rail.ts).
 const RIGHT_RAIL_VISIBLE_KEY = "hermes.right-rail-visible";
-const rightRailVisibleBaseAtom = atom<boolean>(readUiValue<unknown>(RIGHT_RAIL_VISIBLE_KEY, false) === true);
+const rightRailVisibleBaseAtom = persistedUiBaseAtom<boolean>(
+  RIGHT_RAIL_VISIBLE_KEY,
+  false,
+  (value) => value === true,
+);
 export const rightRailVisibleAtom = atom(
   (get) => get(rightRailVisibleBaseAtom),
   (_get, set, next: boolean) => {
@@ -195,8 +231,10 @@ function normalizeComposerSubmitShortcut(value: unknown): ComposerSubmitShortcut
   return value === "ctrl-enter" ? "ctrl-enter" : "enter";
 }
 
-const composerSubmitShortcutBaseAtom = atom<ComposerSubmitShortcut>(
-  normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "enter")),
+const composerSubmitShortcutBaseAtom = persistedUiBaseAtom<ComposerSubmitShortcut>(
+  COMPOSER_SUBMIT_SHORTCUT_KEY,
+  "enter",
+  normalizeComposerSubmitShortcut,
 );
 export const composerSubmitShortcutAtom = atom(
   (get) => get(composerSubmitShortcutBaseAtom),
@@ -221,7 +259,7 @@ function readNotifyFlag(key: string): boolean {
 }
 
 function makeNotifyFlagAtom(key: string) {
-  const baseAtom = atom<boolean>(readNotifyFlag(key));
+  const baseAtom = persistedUiBaseAtom<boolean>(key, true, (value) => value !== false);
   return atom(
     (get) => get(baseAtom),
     (_get, set, next: boolean) => {
