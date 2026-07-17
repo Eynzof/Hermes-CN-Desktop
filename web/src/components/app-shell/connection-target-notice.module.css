@@ -1,4 +1,15 @@
-.notice { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 5px 14px; border-bottom: 1px solid var(--h-accent-border); color: var(--h-accent); background: var(--h-accent-soft); font-size: 10px; }
-.notice strong { color: var(--h-text); }
-.notice span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--h-text-2); font-family: var(--h-font-mono); }
-.notice em { margin-left: auto; color: var(--h-text-2); font-style: normal; white-space: nowrap; }
+.notice { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 5px 14px; border-bottom: 1px solid var(--h-accent-border); color: var(--h-accent); background: var(--h-accent-soft); font-size: 10px; }
+.notice[data-tone="error"] { min-height: 46px; border-color: color-mix(in srgb, var(--h-danger) 40%, transparent); color: var(--h-danger); background: color-mix(in srgb, var(--h-danger) 9%, var(--h-bg-pane)); }
+.copy { flex: 1; min-width: 0; }
+.heading { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.heading strong { flex: 0 0 auto; color: var(--h-text); }
+.heading span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--h-text-2); font-family: var(--h-font-mono); }
+.detail { margin-top: 2px; overflow: hidden; color: var(--h-danger); font-size: 9px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin-left: auto; }
+.actions em { color: var(--h-text-2); font-style: normal; white-space: nowrap; }
+.actions button { padding: 4px 7px; border: 1px solid color-mix(in srgb, var(--h-danger) 35%, transparent); border-radius: 6px; color: var(--h-danger); background: var(--h-bg-pane); font: 600 9px/1.2 inherit; cursor: pointer; }
+.actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--h-danger) 8%, var(--h-bg-pane)); }
+.actions button:disabled { cursor: default; opacity: .55; }
+.actions .iconButton { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; border-color: color-mix(in srgb, currentColor 24%, transparent); color: inherit; background: transparent; }
+.spin { animation: notice-spin .8s linear infinite; }
+@keyframes notice-spin { to { transform: rotate(360deg); } }

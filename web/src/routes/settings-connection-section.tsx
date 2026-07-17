@@ -74,7 +74,7 @@ function ModeCard({
       <span className={s.approvalModeOptionTitle}>
         <Icon size={14} aria-hidden="true" />
         {title}
-        {current && <span className={s.approvalModeBadge}>当前连接</span>}
+        {current && <span className={s.approvalModeBadge}>当前目标</span>}
         {active && <CheckCircle2 size={14} style={{ marginLeft: "auto" }} aria-hidden="true" />}
       </span>
       <span className={s.approvalModeOptionDesc}>{description}</span>
@@ -350,10 +350,14 @@ export function ConnectionSection({
     ? "正在读取连接状态"
     : envOverride
       ? "连接由环境变量覆盖"
-      : `已连接${modeLabel(effectiveMode)}`;
+      : effectiveMode === "managed"
+        ? "正在使用内置内核"
+        : `当前连接目标：${modeLabel(effectiveMode)}`;
   const connectionDescription = envOverride
     ? `当前会话由环境变量强制连接到远程端（${config?.remoteUrl ?? "远程地址"}），需取消环境变量后才能在此修改。`
-    : "软件分为两种顶层使用模式：使用桌面端内置内核，或连接本机其他 / 远端服务器上的外部 Hermes。";
+    : effectiveMode === "managed"
+      ? "软件分为两种顶层使用模式：使用桌面端内置内核，或连接本机其他 / 远端服务器上的外部 Hermes。"
+      : "这里显示的是当前连接目标，不代表目标一定可用；请以上方的外部 Hermes Agent 实时检测结果为准。";
   const connectionBadge = !connectionLoaded ? "读取中" : envOverride ? "环境变量" : modeLabel(effectiveMode);
 
   return (
