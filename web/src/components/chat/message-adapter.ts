@@ -1050,6 +1050,19 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
   const liveImages = canonicalImages(live);
 
   if (stored.role === "assistant") {
+    // 工具身份守卫：toolCallId 是后端唯一的。两边都带工具调用而 id 集不同，
+    // 必然是不同的回合——不能再进入下面的纯文本匹配。否则当多个回合的
+    // assistant 文本完全相同时（委派/确认类模板化回复），早先回合的 stored
+    // 行会吃掉后面回合的 live 消息：live 行顶替到早先位置（那一轮的工具卡
+    // 凭空消失），真正对应的 stored 行落空后又整行追加（同一张工具卡双份）。
+    // 只在双方都有工具身份时否决——live 流式早期还没有 tool part 的前缀
+    // 匹配场景不受影响。
+    const storedToolIdentity = canonicalToolIdentityComparable(stored);
+    const liveToolIdentity = canonicalToolIdentityComparable(live);
+    if (storedToolIdentity && liveToolIdentity && storedToolIdentity !== liveToolIdentity) {
+      return false;
+    }
+
     if (storedText || liveText) {
       if (storedText === liveText) return true;
 
