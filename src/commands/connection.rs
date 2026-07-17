@@ -598,7 +598,11 @@ fn detach_current_backend(state: &State<'_, AppState>) -> Result<(), AppError> {
     }
     let session_token = inner.session_token.clone();
     if let Some(ref mut handle) = inner.dashboard_handle {
-        handle.stop_with_token(session_token.as_deref());
+        if handle.owns_process && !handle.stop_with_token(session_token.as_deref()) {
+            return Err(AppError::RuntimeUnavailable(
+                "未能确认当前内置内核已经停止，连接模式未切换".to_string(),
+            ));
+        }
     }
     inner.dashboard_handle = None;
     Ok(())
@@ -846,7 +850,7 @@ async fn apply_local_connection(
 /// Switch back to the desktop managed runtime. Runs the full bootstrap acquire
 /// path — a remote-first install may not even have a managed runtime on disk
 /// yet, so this can download one (with runtime-status progress events).
-async fn apply_managed(
+pub(crate) async fn apply_managed(
     app: &tauri::AppHandle,
     state: &State<'_, AppState>,
 ) -> Result<ApplyConnectionResult, AppError> {
@@ -860,6 +864,9 @@ async fn apply_managed(
         )
     };
     if already_managed {
+        crate::desktop_control::set_managed_runtime_desired_state(
+            crate::desktop_control::ManagedRuntimeDesiredState::Running,
+        )?;
         return Ok(ApplyConnectionResult {
             ok: true,
             mode: "managed".to_string(),
@@ -948,6 +955,9 @@ async fn apply_managed(
     }
 
     log::info!("Connection switched back to desktop managed runtime");
+    crate::desktop_control::set_managed_runtime_desired_state(
+        crate::desktop_control::ManagedRuntimeDesiredState::Running,
+    )?;
     Ok(ApplyConnectionResult {
         ok: true,
         mode: "managed".to_string(),

@@ -137,3 +137,25 @@ describe("runtime.applyBackupImportResult", () => {
     });
   });
 });
+
+describe("managed runtime control state", () => {
+  it("adopts guide and lifecycle changes without inventing a backend URL", () => {
+    runtime.applyRuntimeControlResult({
+      ok: true,
+      guideState: "deferred",
+      desiredState: "uninstalled",
+      lifecycleState: "uninstalled",
+      installed: false,
+      running: false,
+      backendReady: false,
+    });
+
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      backendReady: false,
+      guideState: "deferred",
+      managedRuntimeDesiredState: "uninstalled",
+      managedRuntimeLifecycleState: "uninstalled",
+    });
+    expect(window.__HERMES_RUNTIME__?.apiBaseUrl).toBe("http://old");
+  });
+});

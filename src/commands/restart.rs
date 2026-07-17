@@ -96,7 +96,11 @@ pub async fn respawn_managed_dashboard(
         }
         let session_token = inner.session_token.clone();
         if let Some(ref mut handle) = inner.dashboard_handle {
-            handle.stop_with_token(session_token.as_deref());
+            if handle.owns_process && !handle.stop_with_token(session_token.as_deref()) {
+                return Err(AppError::RuntimeUnavailable(
+                    "未能确认旧内核进程已退出，已取消重启以避免两个内核并存".to_string(),
+                ));
+            }
         }
         inner.dashboard_handle = None;
     }

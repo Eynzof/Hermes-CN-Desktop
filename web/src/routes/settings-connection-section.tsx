@@ -9,7 +9,6 @@ import {
   Globe2,
   HardDrive,
   Loader2,
-  Trash2,
   XCircle,
 } from "lucide-react";
 import type {
@@ -22,6 +21,7 @@ import type {
 import { Alert, Button, Input } from "@hermes/shared-ui";
 import { notifyConnectionAuthRestored } from "@/lib/connection-auth-events";
 import { SettingsHero } from "./settings-hero";
+import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
 
 interface SettingsSectionProps {
@@ -37,9 +37,9 @@ const LOCAL_DASHBOARD_RECOVERY_HINT =
   "如果确认本机已安装 Hermes，请先运行 hermes dashboard 启动后端，确认 http://127.0.0.1:9119/ 能在浏览器打开，再试一次。";
 
 function modeLabel(mode: ConnectionMode | undefined): string {
-  if (mode === "remote") return "远程连接";
-  if (mode === "local") return "本地连接";
-  return "本机内核";
+  if (mode === "remote") return "外部 Hermes · 远端服务器";
+  if (mode === "local") return "外部 Hermes · 本机其他实例";
+  return "内置内核";
 }
 
 function ModeCard({
@@ -105,6 +105,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
   const [config, setConfig] = useState<ConnectionConfigView | null>(null);
   const [loadError, setLoadError] = useState("");
   const [mode, setMode] = useState<ConnectionMode>("managed");
+  const [externalKind, setExternalKind] = useState<Exclude<ConnectionMode, "managed">>("local");
   const [localUrl, setLocalUrl] = useState(DEFAULT_LOCAL_URL);
   const [remoteUrl, setRemoteUrl] = useState("");
   // The saved token never round-trips; this holds only what the user types.
@@ -129,6 +130,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       .then((view) => {
         setConfig(view);
         setMode(view.mode);
+        if (view.mode !== "managed") setExternalKind(view.mode);
         setLocalUrl(view.localUrl || DEFAULT_LOCAL_URL);
         setRemoteUrl(view.remoteUrl);
       })
@@ -341,7 +343,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       : `已连接${modeLabel(effectiveMode)}`;
   const connectionDescription = envOverride
     ? `当前会话由环境变量强制连接到远程端（${config?.remoteUrl ?? "远程地址"}），需取消环境变量后才能在此修改。`
-    : "桌面端支持三种连接方式：本机内核由桌面端自动管理；本地连接接入你已运行的 Hermes；远程连接接入另一台机器上的 Hermes。";
+    : "软件分为两种顶层使用模式：使用桌面端内置内核，或连接本机其他 / 远端服务器上的外部 Hermes。";
   const connectionBadge = !connectionLoaded ? "读取中" : envOverride ? "环境变量" : modeLabel(effectiveMode);
 
   return (
@@ -377,30 +379,46 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           active={mode === "managed"}
           current={effectiveMode === "managed"}
           icon={HardDrive}
-          title="本机内核"
-          description="桌面端自动启动并管理本机内核，适合离线和独立使用。"
+          title="内置内核"
+          description="由桌面端安装、启动和维护，数据与系统中的其他 Hermes 隔离。"
           disabled={disabled}
           onSelect={() => setMode("managed")}
         />
         <ModeCard
-          active={mode === "local"}
-          current={effectiveMode === "local"}
-          icon={Cable}
-          title="本地连接"
-          description="连接你在本机已运行的 Hermes，默认地址 http://127.0.0.1:9119。"
-          disabled={disabled}
-          onSelect={() => setMode("local")}
-        />
-        <ModeCard
-          active={mode === "remote"}
-          current={effectiveMode === "remote"}
+          active={mode !== "managed"}
+          current={effectiveMode !== "managed"}
           icon={Globe2}
-          title="远程连接"
-          description="连接另一台机器上的 Hermes，使用会话令牌登录。"
+          title="外部 Hermes"
+          description="连接本机另一个 Hermes，或连接远端服务器上的 Hermes。"
           disabled={disabled}
-          onSelect={() => setMode("remote")}
+          onSelect={() => setMode(externalKind)}
         />
       </div>
+
+      {mode !== "managed" && (
+        <div className={s.connModeGrid} role="radiogroup" aria-label="外部 Hermes 位置" style={{ marginTop: 10 }}>
+          <ModeCard
+            active={mode === "local"}
+            current={effectiveMode === "local"}
+            icon={Cable}
+            title="本机其他 Hermes"
+            description="接入本机已经运行的 Hermes Dashboard，默认使用 127.0.0.1:9119。"
+            disabled={disabled}
+            onSelect={() => { setExternalKind("local"); setMode("local"); }}
+          />
+          <ModeCard
+            active={mode === "remote"}
+            current={effectiveMode === "remote"}
+            icon={Globe2}
+            title="远端服务器 Hermes"
+            description="通过地址和 Token / OAuth 连接另一台机器上的 Hermes。"
+            disabled={disabled}
+            onSelect={() => { setExternalKind("remote"); setMode("remote"); }}
+          />
+        </div>
+      )}
+
+      {mode === "managed" && <ManagedRuntimePanel compact />}
 
       {mode === "local" && (
         <div className={s.row}>
@@ -566,24 +584,6 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       )}
 
       <div className={s.connFooter}>
-        {mode === "managed" && (
-          <Button
-            type="button"
-            className={s.connFooterSpacer}
-            variant="outline"
-            tone="danger"
-            onClick={() => {
-              if (!window.confirm("确定要卸载本机内核吗？卸载后需要重启桌面端或切换到其他连接方式。")) return;
-              desktop?.uninstallBundledRuntime?.()
-                .then(() => setMessage({ tone: "ok", text: "本机内核已卸载，请切换连接方式或重启桌面端。" }))
-                .catch((error: unknown) => setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) }));
-            }}
-            disabled={disabled}
-          >
-            <Trash2 size={13} />
-            卸载本机内核
-          </Button>
-        )}
         {mode !== "managed" && (
           <Button
             type="button"
@@ -597,6 +597,14 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
             测试连接
           </Button>
         )}
+        <Button
+          type="button"
+          className={mode === "managed" ? s.connFooterSpacer : undefined}
+          variant="ghost"
+          onClick={() => { window.location.hash = "#/guide"; }}
+        >
+          重新运行使用引导
+        </Button>
         <Button
           type="button"
           variant="outline"

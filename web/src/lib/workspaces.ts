@@ -1,5 +1,6 @@
 import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 import { resolveSessionIdAliases } from "@/lib/session-map";
+import { runtime } from "@/lib/runtime";
 export interface WorkspaceProject {
   path: string;
   name: string;
@@ -13,6 +14,21 @@ const WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.workspaceProjects";
 const SESSION_WORKSPACE_STORAGE_KEY = "hermes-cn-ui.sessionWorkspaces";
 const PINNED_WORKSPACE_PROJECTS_STORAGE_KEY = "hermes-cn-ui.pinnedWorkspaceProjects";
 const WORKSPACE_CHANGED_EVENT = "hermes-cn-ui.workspaces.changed";
+
+export function workspaceStorageScope(): string {
+  if (typeof window === "undefined") return "managed";
+  const mode = runtime.getConnectionMode();
+  if (mode === "managed") return "managed";
+  const target = window.__HERMES_RUNTIME__?.dashboardApiBaseUrl
+    ?? window.__HERMES_RUNTIME__?.apiBaseUrl
+    ?? "unknown";
+  return `${mode}:${encodeURIComponent(target)}`;
+}
+
+function scopedKey(key: string): string {
+  const scope = workspaceStorageScope();
+  return scope === "managed" ? key : `${key}::${scope}`;
+}
 
 export function normalizeWorkspacePath(path: unknown): string {
   return typeof path === "string" ? path.trim().replace(/\/+$/, "") : "";
@@ -30,11 +46,11 @@ function emitWorkspaceChange(): void {
 }
 
 function readJSON<T>(key: string, fallback: T): T {
-  return readUiValue<T>(key, fallback);
+  return readUiValue<T>(scopedKey(key), fallback);
 }
 
 function writeJSON(key: string, value: unknown): void {
-  writeUiValue(key, value);
+  writeUiValue(scopedKey(key), value);
   emitWorkspaceChange();
 }
 
@@ -54,15 +70,15 @@ function normalizeWorkspacePathList(value: unknown): string[] {
 }
 
 export function readWorkspacePath(): string {
-  return normalizeWorkspacePath(readUiValue(WORKSPACE_STORAGE_KEY, ""));
+  return normalizeWorkspacePath(readUiValue(scopedKey(WORKSPACE_STORAGE_KEY), ""));
 }
 
 export function writeWorkspacePath(path: string): void {
   const normalized = normalizeWorkspacePath(path);
   if (normalized) {
-    writeUiValue(WORKSPACE_STORAGE_KEY, normalized);
+    writeUiValue(scopedKey(WORKSPACE_STORAGE_KEY), normalized);
   } else {
-    removeUiValue(WORKSPACE_STORAGE_KEY);
+    removeUiValue(scopedKey(WORKSPACE_STORAGE_KEY));
   }
   emitWorkspaceChange();
 }

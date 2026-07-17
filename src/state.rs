@@ -141,28 +141,32 @@ impl DashboardHandle {
     }
 
     /// Stop the dashboard process tree if we own it.
-    pub fn stop(&mut self) {
-        self.stop_with_token(None);
+    pub fn stop(&mut self) -> bool {
+        self.stop_with_token(None)
     }
 
     /// Stop the dashboard process tree if we own it, first trying the
     /// dashboard's protected shutdown endpoint when a session token is known.
-    pub fn stop_with_token(&mut self, session_token: Option<&str>) {
+    pub fn stop_with_token(&mut self, session_token: Option<&str>) -> bool {
         if !self.owns_process {
             self.child = None;
-            return;
+            return true;
         }
         let fallback_pid = self
             .child
             .as_ref()
             .map(|child| child.id())
             .or(self.attached_pid);
-        crate::process::dashboard::terminate_owned_dashboard_tree(
+        let stopped = crate::process::dashboard::terminate_owned_dashboard_tree(
             &self.api_base_url,
             self.child.as_mut(),
             fallback_pid,
             session_token,
         );
+        if !stopped {
+            self.ownership_state = Some("stop-failed".to_string());
+            return false;
+        }
         self.child = None;
         self.job_handle = None;
         self.attached_pid = None;
@@ -178,12 +182,13 @@ impl DashboardHandle {
             }
         }
         self.ownership_state = Some("stopped".to_string());
+        true
     }
 }
 
 impl Drop for DashboardHandle {
     fn drop(&mut self) {
-        self.stop();
+        let _ = self.stop();
     }
 }
 

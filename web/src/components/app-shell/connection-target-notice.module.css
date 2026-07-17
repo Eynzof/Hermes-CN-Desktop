@@ -1,0 +1,4 @@
+.notice { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 5px 14px; border-bottom: 1px solid var(--h-accent-border); color: var(--h-accent); background: var(--h-accent-soft); font-size: 10px; }
+.notice strong { color: var(--h-text); }
+.notice span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--h-text-2); font-family: var(--h-font-mono); }
+.notice em { margin-left: auto; color: var(--h-text-2); font-style: normal; white-space: nowrap; }

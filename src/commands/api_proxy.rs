@@ -64,14 +64,6 @@ static EXTERNAL_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .build()
         .expect("valid external HTTP client")
 });
-static EXTERNAL_NO_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-    reqwest::Client::builder()
-        .timeout(EXTERNAL_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::none())
-        .no_proxy()
-        .build()
-        .expect("valid external no-proxy HTTP client")
-});
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -989,6 +981,14 @@ pub async fn external_request_impl(
     input: ApiRequestInput,
     target_url: url::Url,
 ) -> Result<ApiRequestResult, AppError> {
+    external_request_impl_with_client(input, target_url, &EXTERNAL_HTTP_CLIENT).await
+}
+
+async fn external_request_impl_with_client(
+    input: ApiRequestInput,
+    target_url: url::Url,
+    client: &reqwest::Client,
+) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
     let display_url = target_url.as_str().to_string();
 
@@ -1011,36 +1011,13 @@ pub async fn external_request_impl(
         req
     }
 
-    let req = build_request(
-        &EXTERNAL_HTTP_CLIENT,
-        method,
-        target_url.clone(),
-        &input.headers,
-        &input.body,
-    );
-
-    let mut result = req.send().await;
-
-    // If a system proxy is configured and the connection was refused, retry
-    // without using the proxy so the user still gets a clear error or a
-    // successful direct connection.
-    if let Err(ref e) = result {
-        let proxy_env = std::env::var("HTTPS_PROXY")
-            .or_else(|_| std::env::var("HTTP_PROXY"))
-            .unwrap_or_default();
-        if !proxy_env.is_empty()
-            && (e.is_connect() || e.to_string().contains("error sending request"))
-        {
-            let no_proxy_req = build_request(
-                &EXTERNAL_NO_PROXY_HTTP_CLIENT,
-                method,
-                target_url,
-                &input.headers,
-                &input.body,
-            );
-            result = no_proxy_req.send().await;
-        }
-    }
+    // A credentialed request must be sent exactly once. In particular, never
+    // bypass a configured system proxy after a connect failure: doing so both
+    // violates the user's network policy and can replay API keys/request bodies
+    // to a second network path.
+    let result = build_request(client, method, target_url, &input.headers, &input.body)
+        .send()
+        .await;
 
     match result {
         Ok(res) => {
@@ -1160,4 +1137,76 @@ pub struct UploadFileInput {
     pub r#type: Option<String>,
     /// Base64-encoded file content.
     pub data: String,
+}
+
+#[cfg(test)]
+mod external_request_tests {
+    use super::*;
+    use std::io::Read;
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+    use std::thread;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn credentialed_post_is_not_replayed_without_the_proxy() {
+        let target = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/secret"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&target)
+            .await;
+
+        let proxy = TcpListener::bind(("127.0.0.1", 0)).expect("bind proxy");
+        let proxy_addr = proxy.local_addr().expect("proxy address");
+        let (captured_tx, captured_rx) = mpsc::channel();
+        let proxy_thread = thread::spawn(move || {
+            let (mut stream, _) = proxy.accept().expect("accept proxied request");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set read timeout");
+            let mut buf = vec![0_u8; 8192];
+            let count = stream.read(&mut buf).unwrap_or(0);
+            captured_tx
+                .send(String::from_utf8_lossy(&buf[..count]).to_string())
+                .expect("send captured request");
+            // Drop without a response to emulate a proxy connection failure.
+        });
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .proxy(reqwest::Proxy::all(format!("http://{}", proxy_addr)).expect("valid proxy URL"))
+            .build()
+            .expect("build proxied client");
+        let target_url: url::Url = format!("{}/secret", target.uri())
+            .parse()
+            .expect("valid target URL");
+
+        let result = external_request_impl_with_client(
+            ApiRequestInput {
+                path: target_url.to_string(),
+                method: Some("POST".to_string()),
+                headers: Some(HashMap::from([(
+                    "Authorization".to_string(),
+                    "Bearer sk-sensitive".to_string(),
+                )])),
+                body: Some("{\"prompt\":\"hello\"}".to_string()),
+            },
+            target_url,
+            &client,
+        )
+        .await
+        .expect("network errors are returned as a result envelope");
+
+        assert!(!result.ok);
+        assert_eq!(result.status, 0);
+        let captured = captured_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("proxy should receive exactly one request");
+        assert!(captured.contains("Bearer sk-sensitive"));
+        proxy_thread.join().expect("proxy thread");
+        target.verify().await;
+    }
 }

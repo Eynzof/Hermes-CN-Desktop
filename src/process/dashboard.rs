@@ -258,6 +258,17 @@ fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> bool {
     false
 }
 
+fn wait_for_pid_exit(pid: u32, timeout: Duration) -> bool {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if !pid_is_running(pid) {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(80));
+    }
+    !pid_is_running(pid)
+}
+
 fn request_dashboard_shutdown(api_base_url: &str, session_token: Option<&str>) -> bool {
     let shutdown_url = format!("{}/api/shutdown", api_base_url.trim_end_matches('/'));
     let parsed = match url::Url::parse(&shutdown_url) {
@@ -421,26 +432,25 @@ pub fn terminate_owned_dashboard_tree(
     child: Option<&mut Child>,
     fallback_pid: Option<u32>,
     session_token: Option<&str>,
-) {
+) -> bool {
     let _ = request_dashboard_shutdown(api_base_url, session_token);
 
     if let Some(child) = child {
         if wait_for_child_exit(child, GRACEFUL_SHUTDOWN_TIMEOUT) {
-            return;
+            return true;
         }
         let pid = child.id();
         #[cfg(unix)]
         signal_process_group(pid, libc::SIGTERM);
         if wait_for_child_exit(child, FORCE_SHUTDOWN_TIMEOUT) {
-            return;
+            return true;
         }
         #[cfg(unix)]
         signal_process_group(pid, libc::SIGKILL);
         #[cfg(windows)]
         force_kill_process_tree(pid);
         let _ = child.kill();
-        let _ = child.wait();
-        return;
+        return child.wait().is_ok() || wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT);
     }
 
     if let Some(pid) = fallback_pid {
@@ -456,7 +466,10 @@ pub fn terminate_owned_dashboard_tree(
         {
             force_kill_process_tree(pid);
         }
+        return wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT);
     }
+
+    true
 }
 
 fn probe_dashboard_port(api_base_url: &str) -> bool {

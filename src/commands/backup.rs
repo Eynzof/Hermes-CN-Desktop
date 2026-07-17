@@ -716,6 +716,7 @@ pub async fn backup_export_profile(
 ) -> Result<BackupExportResult, AppError> {
     let (profile_name, hermes_home) = {
         let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机 Profile 备份")?;
         if inner.hermes_home.trim().is_empty() {
             return Err(AppError::NotReady);
         }
@@ -776,6 +777,10 @@ pub async fn backup_import_profile(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<BackupImportResult, AppError> {
+    {
+        let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机 Profile 备份恢复")?;
+    }
     let Some(zip_path) = choose_backup_zip(app).await? else {
         return Ok(BackupImportResult {
             ok: false,

@@ -404,6 +404,15 @@ function ConfigMigrationAssistantRoute() {
 
 export function ConfigMigrationRoute() {
   const [searchParams] = useSearchParams();
+  if (runtime.isAttached()) {
+    return (
+      <SectionShell title="配置迁移" sub="本机迁移仅适用于内置内核">
+        <Alert tone="info" size="sm">
+          当前正在使用外部 Hermes。桌面端不会扫描或复制本机配置到外部目标；请在目标端完成迁移，或先切回内置内核。
+        </Alert>
+      </SectionShell>
+    );
+  }
   if (searchParams.get("legacy") === "1") return <LegacyConfigMigrationRoute />;
   return <ConfigMigrationAssistantRoute />;
 }

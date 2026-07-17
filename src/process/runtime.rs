@@ -156,6 +156,9 @@ pub struct RuntimeInfo {
     pub process: Option<RuntimeProcessInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
+    pub guide_state: String,
+    pub managed_runtime_desired_state: String,
+    pub managed_runtime_lifecycle_state: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -812,6 +815,16 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         .as_ref()
         .and_then(|record| file_sha256(Path::new(&record.executable_path)));
     let source = current.as_ref().and_then(runtime_source_info);
+    let control = crate::desktop_control::read();
+    let lifecycle = if current.is_some() {
+        "stopped"
+    } else if control.managed_runtime_desired_state
+        == crate::desktop_control::ManagedRuntimeDesiredState::Uninstalled
+    {
+        "uninstalled"
+    } else {
+        "stopped"
+    };
     RuntimeInfo {
         mode: mode.to_string(),
         packaged: false, // Tauri's `is_packaged` equivalent checked at runtime
@@ -829,6 +842,9 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         source,
         process: None,
         last_error,
+        guide_state: control.guide_state.as_str().to_string(),
+        managed_runtime_desired_state: control.managed_runtime_desired_state.as_str().to_string(),
+        managed_runtime_lifecycle_state: lifecycle.to_string(),
     }
 }
 

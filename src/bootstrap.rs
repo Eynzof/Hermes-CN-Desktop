@@ -49,6 +49,27 @@ pub fn record_bootstrap_error(app: &tauri::AppHandle, message: String) -> String
     message
 }
 
+/// Finish a shell-only bootstrap when the managed runtime is intentionally
+/// stopped or uninstalled. The renderer still needs the profile/home metadata
+/// and a ready event so it can mount `/guide` and the recovery surfaces, but no
+/// backend URL is invented and no runtime payload is installed.
+pub fn finalize_offline_bootstrap(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    let state = app.state::<AppState>();
+    if let Ok(mut inner) = state.inner.lock() {
+        inner.connection_mode = ConnectionMode::Managed;
+        inner.api_base_url.clear();
+        inner.gateway_url.clear();
+        inner.session_token = None;
+        inner.oauth_session = None;
+        inner.dashboard_handle = None;
+        inner.last_runtime_error = None;
+    }
+    emit_runtime_status(app, "ready-offline", "内核未启动，已进入桌面引导");
+    log::info!("Hermes Agent 中文社区桌面版 ready (managed runtime offline)");
+}
+
 pub async fn install_bundled_runtime_for_bootstrap(
     app: &tauri::AppHandle,
     resource_dir: Option<&Path>,

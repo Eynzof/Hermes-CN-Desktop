@@ -14,6 +14,11 @@ pub struct RuntimeConfig {
     pub current_profile: String,
     /// "managed", "local" or "remote".
     pub connection_mode: String,
+    /// Whether REST/Gateway requests can currently reach a configured backend.
+    pub backend_ready: bool,
+    pub guide_state: String,
+    pub managed_runtime_desired_state: String,
+    pub managed_runtime_lifecycle_state: String,
     /// Running as the portable (unzip-and-run) distribution — the desktop
     /// update dialog switches to "download the zip and re-extract" guidance.
     pub portable: bool,
@@ -22,12 +27,33 @@ pub struct RuntimeConfig {
 #[tauri::command]
 pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, AppError> {
     let inner = state.inner.lock()?;
+    let control = crate::desktop_control::read();
+    let installed = crate::process::runtime::read_current_record().is_some();
+    let managed_running = inner.connection_mode == crate::connection::ConnectionMode::Managed
+        && inner
+            .dashboard_handle
+            .as_ref()
+            .is_some_and(|handle| handle.owns_process);
+    let lifecycle = if managed_running {
+        "running"
+    } else if !installed
+        && control.managed_runtime_desired_state
+            == crate::desktop_control::ManagedRuntimeDesiredState::Uninstalled
+    {
+        "uninstalled"
+    } else {
+        "stopped"
+    };
     Ok(RuntimeConfig {
         api_base_url: inner.api_base_url.clone(),
         gateway_url: inner.gateway_url.clone(),
         session_token: inner.session_token.clone(),
         current_profile: inner.current_profile.clone(),
         connection_mode: inner.connection_mode.as_str().to_string(),
+        backend_ready: inner.dashboard_handle.is_some() && !inner.api_base_url.trim().is_empty(),
+        guide_state: control.guide_state.as_str().to_string(),
+        managed_runtime_desired_state: control.managed_runtime_desired_state.as_str().to_string(),
+        managed_runtime_lifecycle_state: lifecycle.to_string(),
         portable: crate::process::runtime::portable_mode_active(),
     })
 }

@@ -83,6 +83,30 @@ impl ConnectionMode {
     }
 }
 
+/// Process/filesystem capabilities owned by the desktop must never be applied
+/// to an attached local or remote Hermes target.
+pub fn require_managed_mode(mode: ConnectionMode, capability: &str) -> AppResult<()> {
+    if mode == ConnectionMode::Managed {
+        Ok(())
+    } else {
+        Err(AppError::InvalidRequest(format!(
+            "{} 仅适用于桌面端内置内核；当前正在使用外部 Hermes",
+            capability
+        )))
+    }
+}
+
+pub fn require_local_filesystem(mode: ConnectionMode, capability: &str) -> AppResult<()> {
+    if mode != ConnectionMode::Remote {
+        Ok(())
+    } else {
+        Err(AppError::InvalidRequest(format!(
+            "{} 依赖桌面端本机文件或进程，远端 Hermes 模式下已禁用",
+            capability
+        )))
+    }
+}
+
 /// Where a resolved remote backend came from, for logging/diagnostics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteSource {
@@ -909,5 +933,17 @@ mod tests {
         assert_eq!(sanitized.mode, "remote");
         assert_eq!(sanitized.remote_url, "http://env-host:9120");
         assert!(sanitized.remote_token_set);
+    }
+
+    #[test]
+    fn desktop_owned_capabilities_reject_external_modes() {
+        assert!(require_managed_mode(ConnectionMode::Managed, "backup").is_ok());
+        let local = require_managed_mode(ConnectionMode::Local, "backup").unwrap_err();
+        let remote = require_managed_mode(ConnectionMode::Remote, "migration").unwrap_err();
+        assert!(local.to_string().contains("外部 Hermes"));
+        assert!(remote.to_string().contains("外部 Hermes"));
+        assert!(require_local_filesystem(ConnectionMode::Managed, "files").is_ok());
+        assert!(require_local_filesystem(ConnectionMode::Local, "files").is_ok());
+        assert!(require_local_filesystem(ConnectionMode::Remote, "files").is_err());
     }
 }

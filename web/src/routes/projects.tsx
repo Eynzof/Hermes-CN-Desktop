@@ -26,6 +26,7 @@ import {
   togglePinnedWorkspaceProject,
   type WorkspaceProject,
 } from "@/lib/workspaces";
+import { runtime } from "@/lib/runtime";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
 import s from "./projects.module.css";
 
@@ -180,7 +181,9 @@ export function ProjectsRoute() {
   const handleAddProject = useCallback(async () => {
     try {
       let nextPath = "";
-      if (desktopAvailable && window.hermesDesktop?.pickDirectory) {
+      if (runtime.isRemote()) {
+        nextPath = window.prompt("输入远端服务器上的项目绝对路径", "") ?? "";
+      } else if (desktopAvailable && window.hermesDesktop?.pickDirectory) {
         const result = await window.hermesDesktop.pickDirectory();
         if (!result.canceled) nextPath = result.paths[0] ?? "";
       } else {
@@ -198,7 +201,7 @@ export function ProjectsRoute() {
   const handleOpenInFinder = useCallback(async (project: WorkspaceProject) => {
     setOpenMenuPath(null);
     try {
-      if (window.hermesDesktop?.openWorkspacePath) {
+      if (!runtime.isRemote() && window.hermesDesktop?.openWorkspacePath) {
         const result = await window.hermesDesktop.openWorkspacePath({ path: project.path });
         if (!result.ok) console.error("Failed to open project:", result.body);
       }

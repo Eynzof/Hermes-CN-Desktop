@@ -538,6 +538,7 @@ pub async fn config_migration_scan(
 ) -> Result<ConfigMigrationScanResult, AppError> {
     let (desktop_hermes_home, current_profile, current_home) = {
         let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机配置迁移")?;
         (
             inner.hermes_home_base.clone(),
             inner.current_profile.clone(),
@@ -793,6 +794,10 @@ pub async fn config_migration_import(
     input: ConfigMigrationImportInput,
     state: State<'_, AppState>,
 ) -> Result<ConfigMigrationImportResult, AppError> {
+    {
+        let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机配置迁移")?;
+    }
     let source = PathBuf::from(input.source_path.trim());
     if !source.is_dir() || !has_migratable_content(&source) {
         return Ok(ConfigMigrationImportResult {
