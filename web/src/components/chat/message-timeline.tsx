@@ -1181,7 +1181,11 @@ export function MessageTimeline({
     const container = containerRef.current;
     if (!container || !nearBottomRef.current) return;
     const initialHistoryRender = previousMessageCount === 0 || sessionChanged;
-    scrollToBottom(initialHistoryRender ? "auto" : "smooth");
+    // Bottom-follow must move synchronously. A smooth scroll targets the current
+    // scrollHeight, but streaming can grow the message again before the animation
+    // arrives; the intermediate scroll event then looks far from the bottom and
+    // disables its own ResizeObserver follow-up even though the user never scrolled.
+    scrollToBottom("auto");
 
     // 长会话里 Markdown、表格、代码块等内容会在本次提交后继续改变实际高度。
     // 初次进入历史会话时不要依赖一次平滑滚动，否则 WebKit/Tauri 里可能先滚到

@@ -271,7 +271,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 9545,
+    port: Number(process.env.E2E_VITE_PORT || 9545),
     strictPort: true,
     proxy: {
       "/api": {
