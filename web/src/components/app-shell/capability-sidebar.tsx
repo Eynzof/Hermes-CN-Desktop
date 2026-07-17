@@ -10,6 +10,7 @@ import {
   Mic,
   Puzzle,
   Sparkles,
+  SquareCode,
   TerminalSquare,
   type LucideIcon,
 } from "lucide-react";
@@ -46,6 +47,12 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
     icon: Ghost,
     title: "SOUL.md：智能体的核心人格设定",
     prefetch: prefetchSoul,
+  },
+  {
+    label: "编程Agent",
+    path: "/coding-agents",
+    icon: SquareCode,
+    title: "检测 Claude Code / Codex CLI 并配置委派可视化",
   },
 ];
 

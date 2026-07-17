@@ -13,7 +13,7 @@ function hasCodingAgentsBridge(): boolean {
   );
 }
 
-/** 编码代理 CLI（Claude Code / Codex）检测；比照 use-environment-check。 */
+/** 编程Agent CLI（Claude Code / Codex）检测；比照 use-environment-check。 */
 export function useCodingAgentsCheck() {
   return useQuery<CodingAgentsCheckResult>({
     queryKey: CODING_AGENTS_CHECK_KEY,

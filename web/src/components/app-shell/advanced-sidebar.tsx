@@ -10,7 +10,6 @@ import {
   HeartPulse,
   Info,
   MonitorCog,
-  SquareTerminal,
   Palette,
   SlidersHorizontal,
   type LucideIcon,
@@ -38,7 +37,6 @@ const ADVANCED_ITEMS: readonly AdvancedItem[] = [
   { label: "连接", path: "/connection", icon: Cable },
   { label: "内核", path: "/kernel", icon: Cpu },
   { label: "环境", path: "/env", icon: MonitorCog },
-  { label: "编码代理", path: "/coding-agents", icon: SquareTerminal },
   { label: "关于", path: "/about", icon: Info },
 ];
 

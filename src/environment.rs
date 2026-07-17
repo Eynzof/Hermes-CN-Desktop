@@ -447,8 +447,8 @@ pub async fn collect_environment_check(input: EnvironmentCheckInput) -> Environm
     });
     agent_browser.category = EnvironmentCheckCategory::Browser;
     items.push(agent_browser);
-    // 编码代理 CLI（P-047 委派可视化的检测基本盘）。这里只做 PATH 快检；
-    // 额外安装点与登录态的深度检测在 coding_agents.rs（「编码代理」设置页）。
+    // 编程Agent CLI（P-047 委派可视化的检测基本盘）。这里只做 PATH 快检；
+    // 额外安装点与登录态的深度检测在 coding_agents.rs（「编程Agent」设置页）。
     items.push(tool_item(ToolCheck {
         id: "claude-code",
         label: "Claude Code CLI",

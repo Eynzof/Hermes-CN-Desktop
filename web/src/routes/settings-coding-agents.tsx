@@ -1,4 +1,4 @@
-// 「编码代理」设置分区（P-047 委派可视化的检测与指引面）。
+// 「编程Agent」设置分区（P-047 委派可视化的检测与指引面）。
 //
 // 检测 Claude Code / Codex CLI 的安装、版本与登录态（Rust coding_agents.rs，
 // 不读任何 token 密文），联动 hermes 侧委派技能的启停（/api/skills）。
@@ -126,7 +126,7 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
         </div>
         <div>
           <h3>{agent.label}</h3>
-          <p>{agent.id === "claude-code" ? "Anthropic 自主编码代理 CLI" : "OpenAI 自主编码代理 CLI"}</p>
+          <p>{agent.id === "claude-code" ? "Anthropic 自主编程Agent CLI" : "OpenAI 自主编程Agent CLI"}</p>
         </div>
       </div>
 
@@ -216,7 +216,7 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
 
   return (
     <div>
-      {showHeading && <h2 className={s.heading}>编码代理</h2>}
+      {showHeading && <h2 className={s.heading}>编程Agent</h2>}
       <div className={s.aboutHero} data-ok={allReady && data ? "true" : undefined}>
         <div className={s.aboutHeroMark}>
           <SquareTerminal size={24} />
@@ -226,9 +226,9 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
           <h3>
             {data
               ? allReady
-                ? "编码代理就绪，hermes 可以调度它们干活"
-                : "部分编码代理未就绪"
-              : "正在检测编码代理"}
+                ? "编程Agent 就绪，hermes 可以调度它们干活"
+                : "部分编程Agent 未就绪"
+              : "正在检测编程Agent"}
           </h3>
           <p>
             hermes 可以通过内置技能把编码任务委派给本机的 Claude Code 与 Codex CLI，
@@ -262,7 +262,7 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
 
       {!hasBridge && (
         <div className={s.runtimeMessage} data-tone="error">
-          当前运行环境不支持编码代理检测（需要桌面端）。
+          当前运行环境不支持编程Agent 检测（需要桌面端）。
         </div>
       )}
       {query.isError && (
@@ -286,7 +286,7 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
         </div>
       )}
 
-      {!data && query.isLoading && <p className={s.desc}>正在检测本机编码代理…</p>}
+      {!data && query.isLoading && <p className={s.desc}>正在检测本机编程Agent…</p>}
     </div>
   );
 }

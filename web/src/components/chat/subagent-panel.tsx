@@ -433,7 +433,7 @@ export function SubagentPanel({
           <Bot size={26} className={s.emptyIcon} aria-hidden />
           <p className={s.emptyTitle}>暂无子Agent 活动</p>
           <p className={s.emptyDesc}>
-            当本会话派生子Agent（委派/并行任务）或调度 Claude Code / Codex 等外部编码代理时，
+            当本会话派生子Agent（委派/并行任务）或调度 Claude Code / Codex 等外部编程Agent 时，
             这里会实时展示它们的层级、状态与流式输出。
           </p>
         </div>

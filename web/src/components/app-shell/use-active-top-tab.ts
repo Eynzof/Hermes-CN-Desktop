@@ -23,7 +23,6 @@ const ADVANCED_ROUTES = [
   "/connection",
   "/kernel",
   "/env",
-  "/coding-agents",
   "/about",
   "/advanced",
   "/settings",
@@ -59,7 +58,8 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/soul") ||
       path.startsWith("/memory") ||
       path.startsWith("/cron") ||
-      path.startsWith("/console"),
+      path.startsWith("/console") ||
+      path.startsWith("/coding-agents"),
   },
   {
     id: "gateway",

@@ -1,7 +1,7 @@
-//! 编码代理 CLI（Claude Code / Codex）的深度检测：安装状态、版本、登录态。
+//! 编程Agent CLI（Claude Code / Codex）的深度检测：安装状态、版本、登录态。
 //!
 //! 与 environment.rs 的声明式工具体检互补：那边只做 PATH 快检行，这里为
-//! 「编码代理」设置页提供更完整的状态——覆盖 PATH 之外的常见安装点
+//! 「编程Agent」设置页提供更完整的状态——覆盖 PATH 之外的常见安装点
 //! （~/.claude/local/claude、~/.local/bin），并探测登录态（凭据文件优先，
 //! macOS 兜底查钥匙串条目的存在性）。
 //!
