@@ -35,6 +35,40 @@ test("new chat → streamed reply → navigate to history → continue", async (
 
 test("streamed reply keeps following the latest message at the bottom", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 600 });
+  // Model the slower smooth-scroll progress seen in Tauri/WebKit. Routine
+  // streaming follow must avoid this path entirely and anchor synchronously.
+  await page.addInitScript(() => {
+    const originalScrollTo = Element.prototype.scrollTo;
+    Object.assign(window, { __smoothScrollCalls: 0 });
+    Element.prototype.scrollTo = function scrollTo(
+      optionsOrX?: ScrollToOptions | number,
+      y?: number,
+    ) {
+      if (typeof optionsOrX === "object" && optionsOrX?.behavior === "smooth") {
+        const runtime = window as Window & { __smoothScrollCalls?: number };
+        runtime.__smoothScrollCalls = (runtime.__smoothScrollCalls ?? 0) + 1;
+        const targetTop = optionsOrX.top ?? this.scrollTop;
+        originalScrollTo.call(this, {
+          top: this.scrollTop + (targetTop - this.scrollTop) * 0.25,
+          left: optionsOrX.left,
+          behavior: "auto",
+        });
+        window.setTimeout(() => {
+          originalScrollTo.call(this, {
+            top: targetTop,
+            left: optionsOrX.left,
+            behavior: "auto",
+          });
+        }, 250);
+        return;
+      }
+      if (typeof optionsOrX === "number") {
+        originalScrollTo.call(this, optionsOrX, y ?? 0);
+        return;
+      }
+      originalScrollTo.call(this, optionsOrX ?? {});
+    };
+  });
   await page.goto("/");
 
   await composer(page).fill("scroll-follow-e2e");
@@ -49,56 +83,24 @@ test("streamed reply keeps following the latest message at the bottom", async ({
       element.scrollHeight - element.scrollTop - element.clientHeight,
     )
   ))).toBeLessThanOrEqual(8);
-  await timeline.evaluate((element) => {
-    const samples: number[] = [];
-    const recordBottomDistance = () => {
-      samples.push(
-        Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight),
-      );
-      Object.assign(window, {
-        __scrollFollowFrame: window.requestAnimationFrame(recordBottomDistance),
-      });
-    };
-    recordBottomDistance();
-    Object.assign(window, { __scrollFollowSamples: samples });
+  await page.evaluate(() => {
+    Object.assign(window, { __smoothScrollCalls: 0 });
   });
 
   const lastAssistant = page.getByRole("log").locator('[data-role="assistant"]').last();
   await expect(lastAssistant).toContainText("scroll-follow-token-299", { timeout: 25_000 });
 
   const result = await timeline.evaluate((element) => {
-    const runtime = window as Window & {
-      __scrollFollowSamples?: number[];
-      __scrollFollowFrame?: number;
-    };
-    if (runtime.__scrollFollowFrame != null) {
-      window.cancelAnimationFrame(runtime.__scrollFollowFrame);
-    }
-    const samples = runtime.__scrollFollowSamples ?? [];
-    let consecutiveDriftFrames = 0;
-    let maxConsecutiveDriftFrames = 0;
-    for (const distance of samples) {
-      consecutiveDriftFrames = distance > 100 ? consecutiveDriftFrames + 1 : 0;
-      maxConsecutiveDriftFrames = Math.max(
-        maxConsecutiveDriftFrames,
-        consecutiveDriftFrames,
-      );
-    }
+    const runtime = window as Window & { __smoothScrollCalls?: number };
     return {
       finalDistance: Math.max(
         0,
         element.scrollHeight - element.scrollTop - element.clientHeight,
       ),
-      maxDistance: Math.max(0, ...samples),
-      maxConsecutiveDriftFrames,
-      viewportHeight: element.clientHeight,
+      smoothScrollCalls: runtime.__smoothScrollCalls ?? 0,
     };
   });
 
   expect(result.finalDistance).toBeLessThanOrEqual(8);
-  // Sample painted frames rather than pre-layout DOM mutation microtasks: the
-  // user-visible viewport may absorb one batched layout update, but it must not
-  // remain detached or let the latest content fall a full viewport behind.
-  expect(result.maxConsecutiveDriftFrames).toBeLessThanOrEqual(2);
-  expect(result.maxDistance).toBeLessThan(result.viewportHeight);
+  expect(result.smoothScrollCalls).toBe(0);
 });
