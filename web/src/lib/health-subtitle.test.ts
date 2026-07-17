@@ -20,6 +20,6 @@ describe("formatHealthSubtitle", () => {
   it("keeps clear labels for loading, offline, and running states", () => {
     expect(formatHealthSubtitle(undefined, false)).toBe("加载中…");
     expect(formatHealthSubtitle(status(), true)).toBe("内核离线");
-    expect(formatHealthSubtitle(status({ gateway_running: true }), false)).toBe("接收服务运行中 · v0.15.2");
+    expect(formatHealthSubtitle(status({ gateway_running: true }), false)).toBe("网关运行中 · v0.15.2");
   });
 });

@@ -296,7 +296,7 @@ export function ProfileDeleteDialog({
       </p>
       {p.gateway_running && (
         <p className={s.deleteWarn}>
-          该档案的接收服务正在运行，删除时会一并停止。
+          该档案的网关正在运行，删除时会一并停止。
         </p>
       )}
       {error && <div className={s.formError}>{error}</div>}

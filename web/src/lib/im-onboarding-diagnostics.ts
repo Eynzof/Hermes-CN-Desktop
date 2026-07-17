@@ -123,7 +123,7 @@ function platformStateLabel(state?: string | null): string {
     case "disabled": return "未启用";
     case "not_configured": return "配置不完整";
     case "pending_restart": return "等待重启";
-    case "gateway_stopped": return "接收服务未运行";
+    case "gateway_stopped": return "网关未运行";
     case "error": return "连接错误";
     default: return state || "暂无状态";
   }
@@ -166,18 +166,18 @@ export function explainMessagingFailure(platform: ImPlatform, rawMessage?: strin
     return {
       level: "error",
       title: "另一个 Hermes 正在运行",
-      detail: "接收服务没能启动，通常是已经有另一个 Hermes 在运行、占用了同一通道。",
+      detail: "网关没能启动，通常是已经有另一个 Hermes 在运行、占用了同一通道。",
       nextStep: "先关闭另一个 Hermes，再回到本页点击「保存并重启」。",
       evidence: raw,
     };
   }
 
-  if (/gateway|接收服务|not running|stopped|未运行|停止/.test(message)) {
+  if (/gateway|网关|not running|stopped|未运行|停止/.test(message)) {
     return {
       level: "error",
-      title: "接收服务未运行",
-      detail: "消息无法送达 Hermes，问题出在本机接收服务。",
-      nextStep: "点击「保存并启动接收服务」，再重新检测一次。",
+      title: "网关未运行",
+      detail: "消息无法送达 Hermes，问题出在本机网关。",
+      nextStep: "点击「保存并启动网关」，再重新检测一次。",
       evidence: raw,
     };
   }
@@ -293,9 +293,9 @@ export function buildImDiagnosticBundle(input: BuildImDiagnosticInput): ImDiagno
   if (input.statusData && !input.statusData.gateway_running) {
     addIssue(issues, {
       level: "error",
-      title: "接收服务未运行",
-      detail: "接收服务当前没有运行，消息无法送达。",
-      nextStep: "点击「保存并启动接收服务」；如果仍然失败，复制诊断信息让 Hermes 帮你排查。",
+      title: "网关未运行",
+      detail: "网关当前没有运行，消息无法送达。",
+      nextStep: "点击「保存并启动网关」；如果仍然失败，复制诊断信息让 Hermes 帮你排查。",
       evidence: input.statusData.gateway_exit_reason ?? input.statusData.gateway_state ?? null,
     });
   }
@@ -303,8 +303,8 @@ export function buildImDiagnosticBundle(input: BuildImDiagnosticInput): ImDiagno
   if (input.applyResult && !input.applyResult.restart.ok) {
     addIssue(issues, {
       level: "error",
-      title: "保存后重启接收服务失败",
-      detail: "配置已保存，但正在运行的接收服务还没有加载新配置。",
+      title: "保存后重启网关失败",
+      detail: "配置已保存，但正在运行的网关还没有加载新配置。",
       nextStep: "按提示处理后再次点击保存；常见原因是已有另一个 Hermes 在运行。",
       evidence: input.applyResult.restart.message ?? null,
     });
@@ -319,12 +319,12 @@ export function buildImDiagnosticBundle(input: BuildImDiagnosticInput): ImDiagno
       detail: officialState === "not_configured"
         ? "这个平台的必填配置还不完整。"
         : officialState === "gateway_stopped"
-          ? "接收服务还没有启动。"
+          ? "网关还没有启动。"
           : officialState === "disabled"
             ? "这个平台还没有启用。"
             : "还没有成功连接。",
       nextStep: officialState === "pending_restart"
-        ? "先保存并重启接收服务，再重新检测。"
+        ? "先保存并重启网关，再重新检测。"
         : `按照本页 ${platformLabel} 接入步骤补齐配置后重新检测。`,
       evidence: input.platformInfo?.error_message ?? statusPlatform?.error_message ?? officialState,
     });
@@ -440,7 +440,7 @@ export function buildImDiagnosticPrompt(bundle: ImDiagnosticBundle): string {
 1. 不要展示、索要或还原 token、secret、cookie、完整 user_id/open_id 等敏感信息。
 2. 先判断最可能的阻断点，再给出最多 3 个下一步操作，每一步都要能在桌面端或平台后台完成。
 3. 如果是飞书，优先检查应用发布、机器人能力、消息事件订阅、收发消息权限和允许用户列表。
-4. 如果是微信，优先检查二维码是否过期、扫码是否确认、iLink 服务是否可用、扫码用户是否写入允许列表、接收服务是否已重启。
+4. 如果是微信，优先检查二维码是否过期、扫码是否确认、iLink 服务是否可用、扫码用户是否写入允许列表、网关是否已重启。
 5. 如果证据不足，请让用户回到接入页点击“检测连接”或“重新扫码”，不要让用户执行复杂命令。
 
 诊断信息 JSON：
