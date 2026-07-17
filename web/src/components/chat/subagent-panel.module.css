@@ -1,7 +1,9 @@
 .panel {
+  /* 宽度由 usePanelWidth 的 inline style 驱动（默认 360，可拖 280–640）。 */
   width: 360px;
   flex: 0 0 360px;
   min-height: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--h-line);
@@ -165,7 +167,9 @@
 
 .chevron {
   flex: 0 0 auto;
-  margin-top: 2px;
+  /* 3px 让图标视觉中心贴住 goal 首行中线（12.5px×1.4 行高）；lucide 图形
+     在盒内内缩，2px 时中文行看着图标偏上。 */
+  margin-top: 3px;
   color: var(--h-text-4);
   transition: transform 0.12s ease;
 }
@@ -176,7 +180,7 @@
 
 .statusIcon {
   flex: 0 0 auto;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .statusIcon[data-tone="run"] {
@@ -191,23 +195,6 @@
   color: var(--h-err);
 }
 
-/* 外部 CLI 委派（P-047）的品牌点：Claude=accent 橙、Codex=ok 绿。 */
-.cliBrandDot {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  align-self: center;
-  background: var(--h-text-3);
-}
-
-.cliBrandDot[data-agent="claude-code"] {
-  background: var(--h-accent);
-}
-
-.cliBrandDot[data-agent="codex"] {
-  background: var(--h-ok);
-}
 
 .rowMain {
   display: flex;
@@ -255,7 +242,10 @@
 
 .streamLine {
   display: flex;
-  align-items: baseline;
+  /* baseline 对齐时 glyphWrap（无文本的 flex 盒）的 baseline 取点的底边，
+     点会相对文字偏上。改为首行锚定：flex-start + 点容器高度锁一行文字高
+     （1.5em = line-height），内部居中 → 点中心恰在首行文字中线。 */
+  align-items: flex-start;
   gap: 6px;
   min-width: 0;
   font-size: 11px;
@@ -266,7 +256,7 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  height: 0.95rem;
+  height: 1.5em;
 }
 
 .streamGlyph[data-tone="ok"] {

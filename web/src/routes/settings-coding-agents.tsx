@@ -232,7 +232,7 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
           </h3>
           <p>
             hermes 可以通过内置技能把编码任务委派给本机的 Claude Code 与 Codex CLI，
-            聊天中会以「委派卡片」实时展示它们的执行过程；侧栏「子代理」面板可总览全部委派。
+            聊天中会以「委派卡片」实时展示它们的执行过程；侧栏「子Agent」面板可总览全部委派。
             本页只做检测与指引，不会改写 CLI 自身的配置文件（多账号/中转切换请使用 cc-switch）。
           </p>
         </div>

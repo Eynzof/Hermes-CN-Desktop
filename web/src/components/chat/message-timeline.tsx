@@ -261,6 +261,40 @@ function MoaReferenceBlock({
   );
 }
 
+// 系统通知超过此长度默认折叠——后台进程通知（notify_on_complete）会携带
+// 完整命令与输出尾部（stream-json 委派动辄数 KB），对 agent 是必要输入，
+// 对人只需首行摘要（"后台进程通知：proc_x completed normally (exit 0)"）。
+const SYSTEM_NOTICE_COLLAPSE_THRESHOLD = 280;
+const SYSTEM_NOTICE_SUMMARY_MAX = 160;
+
+function formatNoticeLength(length: number): string {
+  return length > 1000 ? `${(length / 1000).toFixed(1)}k 字符` : `${length} 字符`;
+}
+
+function SystemNoticeText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  if (text.length <= SYSTEM_NOTICE_COLLAPSE_THRESHOLD) {
+    return <div className={s.systemNoticeText}>{text}</div>;
+  }
+  const firstLine = text.split("\n")[0] ?? text;
+  const summary =
+    firstLine.length > SYSTEM_NOTICE_SUMMARY_MAX
+      ? `${firstLine.slice(0, SYSTEM_NOTICE_SUMMARY_MAX)}…`
+      : firstLine;
+  return (
+    <>
+      <div className={s.systemNoticeText}>{open ? text : summary}</div>
+      <button
+        type="button"
+        className={s.systemNoticeToggle}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open ? "收起" : `展开全文（${formatNoticeLength(text.length)}）`}
+      </button>
+    </>
+  );
+}
+
 function formatToolElapsed(ms: number | undefined): string | null {
   if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return null;
   if (ms < 100) return "<0.1s";
@@ -775,7 +809,11 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
           />
           <div className={s.systemNoticeBody}>
             {message.error ? <div className={s.systemNoticeTitle}>请求失败</div> : null}
-            <div className={s.systemNoticeText}>{text}</div>
+            {message.error ? (
+              <div className={s.systemNoticeText}>{text}</div>
+            ) : (
+              <SystemNoticeText text={text} />
+            )}
           </div>
         </div>
       </div>

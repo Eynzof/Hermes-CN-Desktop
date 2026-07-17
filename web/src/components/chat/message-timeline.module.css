@@ -158,6 +158,23 @@
   color: var(--h-text-2);
   line-height: var(--conversation-line-height, 1.6);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 长系统通知的「展开全文 / 收起」轻量动作。 */
+.systemNoticeToggle {
+  align-self: flex-start;
+  margin-top: 2px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.systemNoticeToggle:hover {
+  color: var(--h-text);
 }
 
 .messageContent {

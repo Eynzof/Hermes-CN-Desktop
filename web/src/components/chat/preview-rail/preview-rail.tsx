@@ -26,6 +26,7 @@ import { FilePreviewTab } from "./file-preview-tab";
 import { ReviewTab } from "./review-tab";
 import { TerminalTab } from "./terminal-tab";
 import { LogsTab } from "./logs-tab";
+import { PanelResizeHandle, usePanelWidth } from "../panel-resize";
 import s from "./preview-rail.module.css";
 
 interface PreviewRailProps {
@@ -74,8 +75,11 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
     }));
   };
 
+  const { width, onResizeStart } = usePanelWidth(460, 360, 840);
+
   return (
-    <aside className={s.panel} aria-label="预览面板">
+    <aside className={s.panel} aria-label="预览面板" style={{ width, flexBasis: width }}>
+      <PanelResizeHandle ariaLabel="调整预览面板宽度" onPointerDown={onResizeStart} />
       <header className={s.header}>
         <div className={s.tabs} role="tablist">
           {TABS.filter((tab) => !tab.hidden).map(({ key, label, icon: Icon }) => (

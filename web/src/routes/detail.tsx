@@ -670,12 +670,12 @@ export function DetailRoute() {
             <TopBarActionButton
               onClick={() => setSubagentPanelOpen((v) => !v)}
               data-active={subagentPanelOpen ? "true" : undefined}
-              title="子代理监视"
-              aria-label="子代理监视"
+              title="子Agent 监视"
+              aria-label="子Agent 监视"
               aria-pressed={subagentPanelOpen}
             >
               <Bot size={12} aria-hidden="true" />
-              <span>子代理</span>
+              <span>子Agent</span>
               {subagentTotal > 0 ? (
                 <span className={s.subagentBadge} data-active={subagentActive > 0 ? "true" : undefined}>
                   {subagentActive > 0 ? subagentActive : subagentTotal}

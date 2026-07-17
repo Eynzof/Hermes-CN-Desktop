@@ -17,6 +17,7 @@ import {
   type SubagentStatus,
   type SubagentStreamEntry,
 } from "@/stores/subagents";
+import { PanelResizeHandle, usePanelWidth } from "./panel-resize";
 import s from "./subagent-panel.module.css";
 
 // One persistent session id can surface under several gateway-session ids across
@@ -309,7 +310,6 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
       <button className={s.rowHead} type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={13} aria-hidden />
         <CliStatusIcon status={entry.status} />
-        <span className={s.cliBrandDot} data-agent={entry.agent} aria-hidden />
         <span className={s.rowMain}>
           <span className={s.goal} data-running={running ? "true" : undefined}>
             {entry.promptExcerpt || CLI_AGENT_LABELS[entry.agent]}
@@ -346,7 +346,7 @@ function DelegationGroup({ group, now }: { group: RootGroup; now: number }) {
     <section className={s.group}>
       <p className={s.groupLabel}>
         {group.delegationIndex > 0 ? `委派 #${group.delegationIndex} · ` : ""}
-        {group.nodes.length} 个并行子代理
+        {group.nodes.length} 个并行子Agent
         {activeWorkers > 0 ? <span className={s.groupActive}> · {activeWorkers} 个运行中</span> : null}
       </p>
       <div className={s.groupBody}>
@@ -391,7 +391,7 @@ export function SubagentPanel({
   const tokens = flat.reduce((sum, nd) => sum + (nd.inputTokens ?? 0) + (nd.outputTokens ?? 0), 0);
 
   const summary = [
-    `${flat.length} 个子代理`,
+    `${flat.length} 个子Agent`,
     active > 0 ? `${active} 活跃` : "",
     failed > 0 ? `${failed} 失败` : "",
     tools > 0 ? `${tools} 工具` : "",
@@ -399,24 +399,31 @@ export function SubagentPanel({
     tokens > 0 ? `${formatTokens(tokens)} tok` : "",
   ].filter(Boolean);
 
+  const { width, onResizeStart } = usePanelWidth(360, 280, 640);
+
   return (
-    <aside className={s.panel} aria-label="子代理监视">
+    <aside
+      className={s.panel}
+      aria-label="子Agent 监视"
+      style={{ width, flexBasis: width }}
+    >
+      <PanelResizeHandle ariaLabel="调整子Agent 面板宽度" onPointerDown={onResizeStart} />
       <header className={s.header}>
         <span className={s.headerTitle}>
           <Bot size={14} aria-hidden />
-          子代理监视
+          子Agent 监视
         </span>
         {onClearFinished && finishedCount > 0 ? (
           <button
             className={s.clearFinished}
             type="button"
             onClick={onClearFinished}
-            title="移除已结束的子代理与委派记录"
+            title="移除已结束的子Agent 与委派记录"
           >
             清空已结束
           </button>
         ) : null}
-        <button className={s.close} type="button" onClick={onClose} aria-label="关闭子代理监视">
+        <button className={s.close} type="button" onClick={onClose} aria-label="关闭子Agent 监视">
           <X size={14} aria-hidden />
         </button>
       </header>
@@ -424,9 +431,9 @@ export function SubagentPanel({
       {flat.length === 0 && cliDelegations.length === 0 ? (
         <div className={s.empty}>
           <Bot size={26} className={s.emptyIcon} aria-hidden />
-          <p className={s.emptyTitle}>暂无子代理活动</p>
+          <p className={s.emptyTitle}>暂无子Agent 活动</p>
           <p className={s.emptyDesc}>
-            当本会话派生子代理（委派/并行任务）或调度 Claude Code / Codex 等外部编码代理时，
+            当本会话派生子Agent（委派/并行任务）或调度 Claude Code / Codex 等外部编码代理时，
             这里会实时展示它们的层级、状态与流式输出。
           </p>
         </div>

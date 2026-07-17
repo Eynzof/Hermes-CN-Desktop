@@ -5,10 +5,13 @@
 .card {
   width: 100%;
   max-width: 100%;
+  /* 与时间线相邻块的 10px 节奏对齐——卡片是独立 css module，吃不到
+     timeline 的邻接选择器，间距自带。 */
+  margin: 10px 0;
   border: 1px solid var(--h-line);
   border-radius: 8px;
   background: var(--h-bg-soft);
-  padding: 4px 6px;
+  padding: 6px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -21,7 +24,9 @@
 
 .header {
   display: inline-flex;
-  align-items: baseline;
+  /* 行内有胶囊徽标（badge）会把 flex line 撑高，baseline 对齐下品牌点的
+     align-self:center 会相对文字偏上——header 单行不换行，直接整体居中。 */
+  align-items: center;
   gap: 7px;
   min-height: 24px;
   max-width: 100%;
@@ -48,7 +53,6 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  align-self: center;
   flex: 0 0 auto;
 }
 
