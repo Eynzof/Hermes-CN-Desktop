@@ -10,7 +10,7 @@ repeatable, so it can gate every PR.
 
 | Loop | Spec | Asserts |
 |------|------|---------|
-| New chat → streamed reply → navigate to history → continue | `specs/chat-loop.spec.ts` | a session is created, the URL moves to `/tasks/:id`, the assistant reply streams in, and a follow-up turn works |
+| New chat → long streamed reply → navigate to history → continue | `specs/chat-loop.spec.ts` | a session is created, the URL moves to `/tasks/:id`, every delta lands before completion, persisted/live rows render once, and a follow-up turn works |
 | Paste an image → the model reads it | `specs/image-paste.spec.ts` | the pasted image attaches, and the model's reply embeds the **decoded image byte count** (proof the bytes really reached the model) |
 
 ## Architecture
@@ -85,7 +85,7 @@ e2e/
 ├── harness/
 │   ├── config.mjs              shared paths/ports + the Core config.yaml it writes
 │   ├── start-backend.mjs       spawns fake model + Core dashboard, waits for ready
-│   ├── protocol-smoke.mjs      browserless WS proof of all three loops
+│   ├── protocol-smoke.mjs      browserless WS proof of all four loops
 │   └── wait.mjs                tiny poll/readiness helpers
 ├── fixtures/red-square.mjs     the 1×1 PNG shared by smoke + image spec
 └── specs/

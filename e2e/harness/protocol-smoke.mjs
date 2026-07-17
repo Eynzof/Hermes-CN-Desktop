@@ -83,25 +83,46 @@ function connect() {
           }, 30_000);
         });
       },
-      // Collect streamed text for a turn until message.complete.
-      waitForTurn(timeoutMs = 30_000) {
+      eventCursor: () => events.length,
+      // Collect one session turn and briefly observe the socket after
+      // message.complete so a late, overtaken delta cannot escape detection.
+      waitForTurn(sessionId, start, timeoutMs = 30_000) {
         return new Promise((res, rej) => {
-          const start = events.length;
           const timer = setTimeout(() => rej(new Error("turn timeout")), timeoutMs);
           const tick = () => {
-            const since = events.slice(start);
+            const since = events.slice(start).filter((event) => event.session_id === sessionId);
             if (since.some((e) => e.type === "error")) {
               clearTimeout(timer);
               const e = since.find((x) => x.type === "error");
               return rej(new Error(`gateway error: ${JSON.stringify(e.payload)}`));
             }
-            if (since.some((e) => e.type === "message.complete")) {
+            const completeIndex = since.findIndex((e) => e.type === "message.complete");
+            if (completeIndex !== -1) {
               clearTimeout(timer);
-              const text = since
-                .filter((e) => e.type === "message.delta")
-                .map((e) => e.payload?.text ?? "")
-                .join("");
-              return res(text);
+              setTimeout(() => {
+                const settled = events
+                  .slice(start)
+                  .filter((event) => event.session_id === sessionId);
+                const settledCompleteIndex = settled.findIndex(
+                  (event) => event.type === "message.complete",
+                );
+                const streamedText = settled
+                  .filter((event) => event.type === "message.delta")
+                  .map((event) => event.payload?.text ?? "")
+                  .join("");
+                const finalText = settled[settledCompleteIndex]?.payload?.text ?? "";
+                const lateStreamEvents = settled
+                  .slice(settledCompleteIndex + 1)
+                  .filter((event) => event.type.endsWith(".delta"))
+                  .map((event) => event.type);
+                res({
+                  streamedText,
+                  finalText,
+                  lateStreamEvents,
+                  eventTypes: settled.map((event) => event.type),
+                });
+              }, 150);
+              return;
             }
             setTimeout(tick, 100);
           };
@@ -126,18 +147,41 @@ async function main() {
   assert(session_id, "session.create returned a session_id");
   console.log("session:", session_id);
 
+  let cursor = api.eventCursor();
   await api.submit({ session_id, text: "ping" });
-  const reply1 = await api.waitForTurn();
+  const turn1 = await api.waitForTurn(session_id, cursor);
+  const reply1 = turn1.streamedText;
   console.log("text reply:", JSON.stringify(reply1));
   assert(reply1.includes("PONG"), `text reply should contain PONG, got: ${reply1}`);
 
   // --- Loop 2: continue in same session ---
+  cursor = api.eventCursor();
   await api.submit({ session_id, text: "again" });
-  const reply2 = await api.waitForTurn();
+  const turn2 = await api.waitForTurn(session_id, cursor);
+  const reply2 = turn2.streamedText;
   assert(reply2.includes("PONG"), `follow-up reply should contain PONG, got: ${reply2}`);
   console.log("continue-conversation reply OK");
 
-  // --- Loop 3: vision (image bytes must reach the fake model) ---
+  // --- Loop 3: long stream ordering across many coalescing windows ---
+  cursor = api.eventCursor();
+  await api.submit({ session_id, text: "stream-order-marker" });
+  const orderedTurn = await api.waitForTurn(session_id, cursor);
+  assert(
+    orderedTurn.lateStreamEvents.length === 0,
+    `stream deltas arrived after completion: ${orderedTurn.eventTypes.join(" -> ")}`,
+  );
+  assert(
+    orderedTurn.streamedText === orderedTurn.finalText,
+    "concatenated message.delta text must exactly match message.complete.text",
+  );
+  assert(
+    orderedTurn.finalText.startsWith("STREAM-ORDER-BEGIN|") &&
+      orderedTurn.finalText.endsWith("STREAM-ORDER-END"),
+    `stream-order reply markers missing: ${orderedTurn.finalText}`,
+  );
+  console.log("long stream ordering OK — completion stayed behind every delta");
+
+  // --- Loop 4: vision (image bytes must reach the fake model) ---
   mkdirSync(UPLOAD_DIR, { recursive: true });
   const imgPath = resolve(UPLOAD_DIR, "smoke.png");
   writeFileSync(imgPath, Buffer.from(PNG_BASE64, "base64"));
@@ -145,21 +189,23 @@ async function main() {
   console.log("image.attach:", JSON.stringify(attach));
   assert(attach.attached !== false, "image.attach should succeed");
 
+  cursor = api.eventCursor();
   await api.submit({ session_id, text: "图里是什么？" });
-  const reply3 = await api.waitForTurn(40_000);
-  console.log("vision reply:", JSON.stringify(reply3));
+  const turn4 = await api.waitForTurn(session_id, cursor, 40_000);
+  const reply4 = turn4.streamedText;
+  console.log("vision reply:", JSON.stringify(reply4));
   assert(
-    reply3.includes("我看到一张图片"),
-    `vision reply should acknowledge the image, got: ${reply3}`,
+    reply4.includes("我看到一张图片"),
+    `vision reply should acknowledge the image, got: ${reply4}`,
   );
   assert(
-    reply3.includes(String(PNG_BYTE_LENGTH)),
-    `vision reply should report ${PNG_BYTE_LENGTH} decoded bytes (proves bytes reached the model), got: ${reply3}`,
+    reply4.includes(String(PNG_BYTE_LENGTH)),
+    `vision reply should report ${PNG_BYTE_LENGTH} decoded bytes (proves bytes reached the model), got: ${reply4}`,
   );
   console.log("vision round-trip OK — model received", PNG_BYTE_LENGTH, "bytes");
 
   api.close();
-  console.log("\n✅ ALL THREE LOOPS PASSED at the protocol level");
+  console.log("\n✅ ALL FOUR LOOPS PASSED at the protocol level");
 }
 
 main().catch((err) => {
