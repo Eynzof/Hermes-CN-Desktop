@@ -785,6 +785,8 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   if (isToolOnly) {
     return (
       <div className={s.messageRow} data-role="assistant">
+        {/* 与带头像的行保持左缘对齐的占位列。 */}
+        <div className={s.avatarCol} aria-hidden />
         <div className={s.messageContent}>
           <ToolChain tools={message.tools ?? []} />
         </div>
@@ -822,12 +824,20 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
 
   return (
     <div className={s.messageRow} data-role={isUser ? "user" : "assistant"}>
+      {/* IM 式布局：Hermes 头像独立于气泡左侧一列；用户侧不显示头像与昵称，
+          气泡右贴。 */}
+      {!isUser ? (
+        <div className={s.avatarCol}>
+          <img
+            className={s.rowAvatar}
+            src={assistantAvatarDataUrl}
+            alt={`${assistantDisplayName} 头像`}
+          />
+        </div>
+      ) : null}
       <div className={s.messageContent}>
         {!isUser ? (
-          <div className={assistantAvatarDataUrl ? s.assistantIdentity : s.assistantName}>
-            {assistantAvatarDataUrl ? (
-              <img className={s.assistantAvatar} src={assistantAvatarDataUrl} alt={`${assistantDisplayName} 头像`} />
-            ) : null}
+          <div className={s.assistantName}>
             <span>{assistantDisplayName}</span>
           </div>
         ) : null}

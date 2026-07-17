@@ -88,14 +88,33 @@
   display: flex;
   width: 100%;
   margin: 10px 0;
+  gap: 10px;
   animation: fadeIn 0.18s ease-out;
 }
 
-/* Both user and assistant rows are left-aligned and full-width inside the
-   centered .messages column. We don't pull user messages to the right —
-   that breaks the visual axis between the chat column and the composer
-   below, and makes the page feel asymmetric. User messages still get a
-   subtle background fill to set them apart from assistant output. */
+/* IM 式头像列：头像独立在气泡左侧；无头像的行（工具行）用同宽占位
+   保持左缘对齐。 */
+.avatarCol {
+  flex: 0 0 48px;
+  width: 48px;
+}
+
+.rowAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-chip);
+  object-fit: cover;
+  display: block;
+}
+
+/* IM 式（微信参考）：assistant 靠左（头像列在左），user 靠右——
+   row-reverse 把头像列翻到右侧，气泡按内容收缩右贴。 */
+.messageRow[data-role="user"] {
+  flex-direction: row-reverse;
+}
+
 .messageRow[data-role="user"],
 .messageRow[data-role="assistant"] {
   justify-content: flex-start;
@@ -218,7 +237,9 @@
 }
 
 .bubble[data-role="user"] {
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
   padding: 12px 16px;
   border-radius: 12px;
   background: var(--h-bg-chip);
