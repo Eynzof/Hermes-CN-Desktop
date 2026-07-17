@@ -767,7 +767,7 @@ describe("startPromptAtom", () => {
         id: "live-assistant-5",
         role: "assistant",
         status: "streaming",
-        parts: [{ type: "progress", text: "正在启动Hermes Agent内核..." }],
+        parts: [{ type: "progress", text: "正在唤醒Hermes..." }],
       }),
     ]);
     expect(runtime.activeAssistantId).toBe("live-assistant-5");

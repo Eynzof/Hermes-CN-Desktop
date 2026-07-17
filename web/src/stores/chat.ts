@@ -97,7 +97,7 @@ const PROVIDER_STATUS_KINDS = new Set([
   "moa_reference",
   "moa_aggregating",
 ]);
-const OPTIMISTIC_ASSISTANT_PROGRESS = "正在启动Hermes Agent内核...";
+const OPTIMISTIC_ASSISTANT_PROGRESS = "正在唤醒Hermes...";
 
 export function createEmptyChatRuntime(now = Date.now()): ChatSessionRuntime {
   return {
