@@ -166,3 +166,71 @@
   --moss: #89d185;
   --rust: #f48771;
 }
+
+[data-theme="dracula"] {
+  /* Dracula: deep violet surfaces with its familiar pink and purple accents. */
+  --h-bg-app: #282a36;
+  --h-bg-pane: #282a36;
+  --h-bg-soft: #44475a;
+  --h-bg-input: #44475a;
+  --h-bg-chip: #44475a;
+  --h-bg-code: #21222c;
+  --h-line: #6272a4;
+  --h-line-soft: #44475a;
+  --h-text: #f8f8f2;
+  --h-text-2: #e7e7df;
+  --h-text-3: #c2c4d2;
+  --h-text-4: #a2a5bb;
+  --h-ok: #50fa7b;
+  --h-ok-soft: rgba(80, 250, 123, 0.12);
+  --h-warn: #f1fa8c;
+  --h-warn-soft: rgba(241, 250, 140, 0.12);
+  --h-err: #ff5555;
+  --h-danger: #ff5555;
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.48);
+  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.64);
+  --h-sidebar-stripe: #282a36;
+  --h-accent: #bd93f9;
+  --h-accent-contrast: #282a36;
+  --h-accent-soft: rgba(189, 147, 249, 0.16);
+  --h-accent-border: rgba(189, 147, 249, 0.44);
+  --sky: #8be9fd;
+  --plum: #ff79c6;
+  --amber: #ffb86c;
+  --moss: #50fa7b;
+  --rust: #ff5555;
+}
+
+[data-theme="catppuccin-mocha"] {
+  /* Catppuccin Mocha: layered blue-grey neutrals with muted pastel accents. */
+  --h-bg-app: #1e1e2e;
+  --h-bg-pane: #181825;
+  --h-bg-soft: #313244;
+  --h-bg-input: #313244;
+  --h-bg-chip: #45475a;
+  --h-bg-code: #11111b;
+  --h-line: #45475a;
+  --h-line-soft: #313244;
+  --h-text: #cdd6f4;
+  --h-text-2: #bac2de;
+  --h-text-3: #a6adc8;
+  --h-text-4: #9399b2;
+  --h-ok: #a6e3a1;
+  --h-ok-soft: rgba(166, 227, 161, 0.12);
+  --h-warn: #f9e2af;
+  --h-warn-soft: rgba(249, 226, 175, 0.12);
+  --h-err: #f38ba8;
+  --h-danger: #f38ba8;
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.46);
+  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.62);
+  --h-sidebar-stripe: #181825;
+  --h-accent: #cba6f7;
+  --h-accent-contrast: #1e1e2e;
+  --h-accent-soft: rgba(203, 166, 247, 0.16);
+  --h-accent-border: rgba(203, 166, 247, 0.44);
+  --sky: #89dceb;
+  --plum: #f5c2e7;
+  --amber: #fab387;
+  --moss: #a6e3a1;
+  --rust: #f38ba8;
+}

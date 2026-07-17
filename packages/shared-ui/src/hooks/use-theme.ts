@@ -1,6 +1,12 @@
 import { atom, useAtom } from "jotai";
 
-export type ThemeVariant = "light" | "light-modern" | "dark" | "dark-modern";
+export type ThemeVariant =
+  | "light"
+  | "light-modern"
+  | "dark"
+  | "dark-modern"
+  | "dracula"
+  | "catppuccin-mocha";
 export type DensityVariant = "comfortable" | "compact";
 /** Global interface scale steps. Maps to a single CSS `zoom` on the document
  *  root so text, spacing and icons enlarge together — see {@link SCALE_FACTORS}. */
@@ -33,7 +39,14 @@ export const SCALE_FACTORS: Record<ScaleVariant, number> = {
   "2xl": 1.5,
 };
 
-const THEME_VARIANTS = new Set<ThemeVariant>(["light", "light-modern", "dark", "dark-modern"]);
+const THEME_VARIANTS = new Set<ThemeVariant>([
+  "light",
+  "light-modern",
+  "dark",
+  "dark-modern",
+  "dracula",
+  "catppuccin-mocha",
+]);
 const SCALE_VARIANTS = new Set<ScaleVariant>(["sm", "md", "lg", "xl", "2xl"]);
 
 function isThemeVariant(value: unknown): value is ThemeVariant {
