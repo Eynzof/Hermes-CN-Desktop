@@ -10,6 +10,7 @@ import {
   apiModeBadgeLabel,
   apiModeDisplayName,
   chatEndpointPreviewUrl,
+  customProviderPresetsFromConfig,
   detectCustomApiModeFromUrl,
   fetchRemoteProviderCatalog,
   mergeProviderCatalog,
@@ -20,6 +21,7 @@ import {
   parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
+  resolveSelectedProvider,
   sortProvidersForCnEdition,
   sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
@@ -37,6 +39,124 @@ beforeEach(() => {
 });
 
 describe("provider catalog config updates", () => {
+  it("shows CLI custom_providers and uses the active model when the entry has no model", () => {
+    const config = {
+      model: "claude-opus-4-8",
+      providers: {},
+      custom_providers: [
+        {
+          name: "zijian",
+          base_url: "https://example.test/anthropic",
+          api_key: "test-key",
+          api_mode: "anthropic_messages",
+        },
+      ],
+    };
+
+    const presets = customProviderPresetsFromConfig(
+      config,
+      BUILTIN_PROVIDER_CATALOG.providers,
+      { provider: "custom:zijian", model: "claude-opus-4-8" },
+    );
+
+    expect(presets).toHaveLength(1);
+    expect(presets[0]).toMatchObject({
+      id: "custom:zijian",
+      name: "zijian",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      defaultModel: "claude-opus-4-8",
+      isCustom: true,
+    });
+    expect(getProviderEntry(config, "custom:zijian")).toMatchObject({
+      name: "zijian",
+      api_key: "test-key",
+    });
+    expect(providerHasSavedCredentials(config, "custom:zijian", {}, presets[0])).toBe(true);
+  });
+
+  it("normalizes bare providers keys to the runtime custom slug and deduplicates legacy entries", () => {
+    const presets = customProviderPresetsFromConfig(
+      {
+        providers: {
+          zijian: {
+            name: "Zijian New",
+            base_url: "https://example.test/v1",
+            default_model: "new-model",
+          },
+        },
+        custom_providers: [
+          {
+            name: "zijian",
+            base_url: "https://legacy.example.test/v1",
+            model: "legacy-model",
+          },
+        ],
+      },
+      BUILTIN_PROVIDER_CATALOG.providers,
+    );
+
+    expect(presets).toHaveLength(1);
+    expect(presets[0]).toMatchObject({
+      id: "custom:zijian",
+      name: "Zijian New",
+      defaultModel: "new-model",
+    });
+  });
+
+  it("prefers the runtime provider until the user explicitly selects a card", () => {
+    const custom = customProviderPresetsFromConfig(
+      {
+        custom_providers: [{ name: "zijian", base_url: "https://example.test/v1" }],
+      },
+      BUILTIN_PROVIDER_CATALOG.providers,
+      { provider: "custom:zijian", model: "claude-opus-4-8" },
+    )[0]!;
+    const providers = [...BUILTIN_PROVIDER_CATALOG.providers, custom];
+
+    expect(resolveSelectedProvider(providers, "", "custom:zijian")?.id).toBe("custom:zijian");
+    expect(resolveSelectedProvider(providers, "deepseek", "custom:zijian")?.id).toBe("deepseek");
+  });
+
+  it("updates and deletes a legacy custom provider without creating a duplicate providers entry", () => {
+    const config = {
+      model: "claude-opus-4-8",
+      providers: {},
+      custom_providers: [
+        {
+          name: "zijian",
+          base_url: "https://old.example.test/anthropic",
+          api_key: "existing-key",
+          api_mode: "anthropic_messages",
+        },
+      ],
+    };
+    const preset = customProviderPresetsFromConfig(
+      config,
+      BUILTIN_PROVIDER_CATALOG.providers,
+      { provider: "custom:zijian", model: "claude-opus-4-8" },
+    )[0]!;
+
+    const updated = buildProviderSettingsUpdate(config, preset, {
+      apiKey: "",
+      baseUrl: "https://new.example.test/anthropic",
+      model: "claude-opus-4-8",
+    });
+
+    expect(updated.providers).toEqual({});
+    expect(updated.custom_providers).toHaveLength(1);
+    expect(updated.custom_providers[0]).toMatchObject({
+      name: "zijian",
+      base_url: "https://new.example.test/anthropic",
+      api_key: "existing-key",
+      model: "claude-opus-4-8",
+    });
+
+    const removed = buildCustomProviderDeleteUpdate(updated, "custom:zijian");
+    expect(removed.custom_providers).toEqual([]);
+    expect(removed.providers).toEqual({});
+  });
+
   it("writes catalog providers as canonical providers instead of custom slugs", () => {
     const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "cp.compshare.cn");
     expect(preset).toBeTruthy();
