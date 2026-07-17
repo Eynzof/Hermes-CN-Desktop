@@ -526,13 +526,7 @@ fn downloads_root() -> PathBuf {
 
 fn create_runtime_staging_dir() -> Result<tempfile::TempDir, String> {
     let versions = versions_root();
-    fs::create_dir_all(&versions).map_err(|e| {
-        format!(
-            "Failed to create versions dir {}: {}",
-            versions.display(),
-            e
-        )
-    })?;
+    ensure_managed_subdir(&versions, "versions")?;
     tempfile::Builder::new()
         .prefix(".installing-")
         .tempdir_in(&versions)
@@ -1180,7 +1174,9 @@ pub fn bundled_runtime_available(resource_dir: Option<&Path>) -> bool {
             || bundled_expanded_runtime_dir(&runtime_dir).is_dir())
 }
 
-fn validate_manifest_for_current_platform(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
+fn validate_manifest_for_current_platform(
+    manifest: &RuntimeUpdateManifest,
+) -> Result<String, String> {
     if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
         return Err(format!(
             "Manifest schemaVersion is {}, expected {}",
@@ -1196,7 +1192,7 @@ fn validate_manifest_for_current_platform(manifest: &RuntimeUpdateManifest) -> R
             current_arch()
         ));
     }
-    Ok(())
+    safe_version_segment(&manifest.runtime_version)
 }
 
 fn runtime_source_info(record: &RuntimeInstallRecord) -> Option<RuntimeSourceInfo> {
@@ -1416,23 +1412,134 @@ fn verify_signature_with_key(
         .map_err(|_| "Signature verification failed".to_string())
 }
 
-fn safe_version_segment(version: &str) -> String {
-    let cleaned: String = version
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '_' || *c == '+' || *c == '-')
-        .take(120)
-        .collect();
-    if cleaned.is_empty() {
-        format!(
-            "{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-        )
-    } else {
-        cleaned
+fn safe_version_segment(version: &str) -> Result<String, String> {
+    const MAX_VERSION_SEGMENT_LEN: usize = 120;
+
+    if version.is_empty() {
+        return Err("runtimeVersion must not be empty".to_string());
     }
+    if version == "." || version == ".." {
+        return Err(format!(
+            "runtimeVersion must be a normal path segment, got {version:?}"
+        ));
+    }
+    if version.len() > MAX_VERSION_SEGMENT_LEN {
+        return Err(format!(
+            "runtimeVersion exceeds {MAX_VERSION_SEGMENT_LEN} bytes"
+        ));
+    }
+    if !version
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '+' | '-'))
+    {
+        return Err(
+            "runtimeVersion may only contain ASCII letters, digits, '.', '_', '+' and '-'"
+                .to_string(),
+        );
+    }
+
+    Ok(version.to_string())
+}
+
+fn ensure_managed_subdir(path: &Path, label: &str) -> Result<PathBuf, String> {
+    fs::create_dir_all(path).map_err(|error| {
+        format!(
+            "Failed to create managed {label} directory {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    let canonical_root = runtime_root().canonicalize().map_err(|error| {
+        format!(
+            "Failed to validate runtime root {}: {}",
+            runtime_root().display(),
+            error
+        )
+    })?;
+    let canonical_path = path.canonicalize().map_err(|error| {
+        format!(
+            "Failed to validate managed {label} directory {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    if canonical_path == canonical_root || !canonical_path.starts_with(&canonical_root) {
+        return Err(format!(
+            "Managed {label} directory escapes runtime root: {}",
+            canonical_path.display()
+        ));
+    }
+    Ok(canonical_path)
+}
+
+fn prepare_runtime_cache_target(target: &Path) -> Result<(), String> {
+    ensure_managed_subdir(&downloads_root(), "downloads")?;
+    match fs::symlink_metadata(target) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(format!(
+            "Refusing to overwrite symlinked runtime cache file {}",
+            target.display()
+        )),
+        Ok(metadata) if !metadata.is_file() => Err(format!(
+            "Runtime cache target is not a regular file: {}",
+            target.display()
+        )),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "Failed to inspect runtime cache target {}: {}",
+            target.display(),
+            error
+        )),
+    }
+}
+
+fn remove_existing_runtime_target(target: &Path) -> Result<(), String> {
+    let metadata = match fs::symlink_metadata(target) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!(
+                "Failed to inspect existing runtime target {}: {}",
+                target.display(),
+                error
+            ));
+        }
+    };
+    if metadata.file_type().is_symlink() {
+        return Err(format!(
+            "Refusing to replace symlinked runtime target {}",
+            target.display()
+        ));
+    }
+    if !metadata.is_dir() {
+        return Err(format!(
+            "Existing runtime target is not a directory: {}",
+            target.display()
+        ));
+    }
+
+    let versions = ensure_managed_subdir(&versions_root(), "versions")?;
+    let canonical_target = target.canonicalize().map_err(|error| {
+        format!(
+            "Failed to validate existing runtime target {}: {}",
+            target.display(),
+            error
+        )
+    })?;
+    if canonical_target == versions || !canonical_target.starts_with(&versions) {
+        return Err(format!(
+            "Refusing to remove runtime target outside versions root: {}",
+            canonical_target.display()
+        ));
+    }
+
+    fs::remove_dir_all(target).map_err(|error| {
+        format!(
+            "Failed to remove existing runtime target {}: {}",
+            target.display(),
+            error
+        )
+    })
 }
 
 async fn wait_for_smoke_child(
@@ -1544,14 +1651,17 @@ async fn install_runtime_zip(
     zip_path: &Path,
     source: &str,
 ) -> RuntimeInstallUpdateResult {
-    if let Err(e) = validate_manifest_for_current_platform(&resolved) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
+    let version_segment = match validate_manifest_for_current_platform(&resolved) {
+        Ok(version_segment) => version_segment,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
 
     let digest = match file_sha256(zip_path) {
         Some(digest) => digest,
@@ -1579,9 +1689,15 @@ async fn install_runtime_zip(
         };
     }
 
-    let _ = fs::create_dir_all(downloads_root());
-    let _ = fs::create_dir_all(versions_root());
-    let cached_zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
+    let cached_zip_path = downloads_root().join(format!("{version_segment}.zip"));
+    if let Err(e) = prepare_runtime_cache_target(&cached_zip_path) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if zip_path != cached_zip_path {
         if let Err(e) = fs::copy(zip_path, &cached_zip_path) {
             return RuntimeInstallUpdateResult {
@@ -1641,8 +1757,15 @@ async fn install_runtime_zip(
         };
     }
 
-    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
-    let _ = fs::remove_dir_all(&target);
+    let target = versions_root().join(&version_segment);
+    if let Err(e) = remove_existing_runtime_target(&target) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if let Err(e) = fs::rename(staging.path(), &target) {
         if let Err(e2) = copy_dir_all(staging.path(), &target) {
             return RuntimeInstallUpdateResult {
@@ -1691,14 +1814,17 @@ async fn install_runtime_tree(
     runtime_tree_path: &Path,
     source: &str,
 ) -> RuntimeInstallUpdateResult {
-    if let Err(e) = validate_manifest_for_current_platform(&resolved) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
+    let version_segment = match validate_manifest_for_current_platform(&resolved) {
+        Ok(version_segment) => version_segment,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
 
     if !runtime_tree_path.is_dir() {
         return RuntimeInstallUpdateResult {
@@ -1759,9 +1885,15 @@ async fn install_runtime_tree(
         };
     }
 
-    let _ = fs::create_dir_all(versions_root());
-    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
-    let _ = fs::remove_dir_all(&target);
+    let target = versions_root().join(&version_segment);
+    if let Err(e) = remove_existing_runtime_target(&target) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if let Err(e) = fs::rename(staging.path(), &target) {
         if let Err(e2) = copy_dir_all(staging.path(), &target) {
             return RuntimeInstallUpdateResult {
@@ -1991,6 +2123,18 @@ pub async fn install_runtime_update(
         };
     }
 
+    let version_segment = match validate_manifest_for_current_platform(&resolved) {
+        Ok(version_segment) => version_segment,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
+
     // Validate URL scheme before downloading
     match url::Url::parse(&resolved.artifact_url) {
         Ok(u) if u.scheme() == "https" => {}
@@ -2049,9 +2193,15 @@ pub async fn install_runtime_update(
 
     // Write zip to downloads dir; the shared installer path verifies,
     // extracts, smoke-tests, and records it.
-    let _ = fs::create_dir_all(downloads_root());
-    let _ = fs::create_dir_all(versions_root());
-    let zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
+    let zip_path = downloads_root().join(format!("{version_segment}.zip"));
+    if let Err(e) = prepare_runtime_cache_target(&zip_path) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if let Err(e) = fs::write(&zip_path, &artifact) {
         return RuntimeInstallUpdateResult {
             ok: false,
@@ -2090,7 +2240,26 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
         }
     };
 
-    let prev_path = versions_root().join(safe_version_segment(&prev_runtime_version));
+    let prev_version_segment = match safe_version_segment(&prev_runtime_version) {
+        Ok(version_segment) => version_segment,
+        Err(error) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: Some(current),
+                error: Some(format!("Invalid previous runtime version: {error}")),
+            };
+        }
+    };
+    if let Err(error) = ensure_managed_subdir(&versions_root(), "versions") {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: Some(current),
+            error: Some(error),
+        };
+    }
+    let prev_path = versions_root().join(prev_version_segment);
     let executable = match find_executable_in(&prev_path, 2) {
         Some(e) => e,
         None => {
@@ -2855,36 +3024,182 @@ mod tests {
 
     #[test]
     fn safe_version_passes_normal_semver() {
-        assert_eq!(safe_version_segment("1.2.3"), "1.2.3");
+        assert_eq!(safe_version_segment("1.2.3").unwrap(), "1.2.3");
     }
 
     #[test]
     fn safe_version_keeps_prerelease_and_build_metadata() {
         assert_eq!(
-            safe_version_segment("1.2.3-alpha+build.5"),
+            safe_version_segment("1.2.3-alpha+build.5").unwrap(),
             "1.2.3-alpha+build.5"
         );
     }
 
     #[test]
-    fn safe_version_strips_path_traversal_attempt() {
-        assert_eq!(safe_version_segment("../etc/passwd"), "..etcpasswd");
+    fn safe_version_rejects_path_traversal_and_dot_segments() {
+        for version in ["../etc/passwd", "..\\etc\\passwd", ".", "..", "a/b", "a\\b"] {
+            assert!(
+                safe_version_segment(version).is_err(),
+                "must reject unsafe runtimeVersion {version:?}"
+            );
+        }
     }
 
     #[test]
-    fn safe_version_truncates_to_120_chars() {
+    fn safe_version_rejects_values_longer_than_120_bytes() {
         let huge = "a".repeat(200);
-        let out = safe_version_segment(&huge);
-        assert_eq!(out.len(), 120);
-        assert!(out.chars().all(|c| c == 'a'));
+        assert!(safe_version_segment(&huge).is_err());
     }
 
     #[test]
-    fn safe_version_falls_back_to_timestamp_when_empty() {
-        let out = safe_version_segment("$$$///");
-        // After filtering, only nothing remains → timestamp fallback (digits, non-empty)
-        assert!(!out.is_empty());
-        assert!(out.chars().all(|c| c.is_ascii_digit()));
+    fn safe_version_rejects_empty_non_ascii_and_invalid_characters() {
+        for version in ["", "$$$///", "版本-1", "1.0.0 beta"] {
+            assert!(
+                safe_version_segment(version).is_err(),
+                "must reject invalid runtimeVersion {version:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn manifest_validation_rejects_unsafe_runtime_version() {
+        let mut manifest = fixture_manifest();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        manifest.runtime_version = "..".to_string();
+
+        let error = validate_manifest_for_current_platform(&manifest).unwrap_err();
+        assert!(error.contains("normal path segment"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn runtime_update_rejects_unsafe_version_before_download() {
+        let (key, pem) = test_keypair();
+        let mut manifest = fixture_manifest();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        manifest.runtime_version = "../../outside".to_string();
+        sign_manifest(&key, &mut manifest);
+        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
+
+        let result = install_runtime_update(Some(manifest)).await;
+
+        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
+        assert!(!result.ok);
+        assert!(result
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("runtimeVersion")));
+    }
+
+    #[test]
+    #[serial]
+    fn rollback_rejects_unsafe_previous_runtime_version() {
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let current_dir = runtime_root.join("versions/current");
+        let current_executable = current_dir.join(primary_runtime_name());
+        std::fs::create_dir_all(&current_dir).unwrap();
+        std::fs::write(&current_executable, b"current").unwrap();
+        // With the old `versions.join("..")` behavior, this file made the
+        // escaped runtime root look like a valid rollback target.
+        std::fs::write(runtime_root.join(primary_runtime_name()), b"outside").unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let current = RuntimeInstallRecord {
+            schema_version: MANIFEST_SCHEMA_VERSION,
+            runtime_version: "current".to_string(),
+            kernel_version: "1.0.0".to_string(),
+            runtime_flavor: "cn".to_string(),
+            runtime_revision: 1,
+            platform: current_platform().to_string(),
+            arch: current_arch().to_string(),
+            path: current_dir.to_string_lossy().to_string(),
+            executable_path: current_executable.to_string_lossy().to_string(),
+            source: "update".to_string(),
+            installed_at: chrono_now(),
+            source_repo: None,
+            source_commit: None,
+            local_dirty_hash: None,
+            artifact_sha256: None,
+            previous_runtime_version: Some("..".to_string()),
+        };
+        write_json_file(&current_record_path(), &current).unwrap();
+
+        let result = rollback_runtime();
+        let after = read_current_record();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(!result.ok);
+        assert!(result
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("Invalid previous runtime version")));
+        assert_eq!(
+            after.map(|record| record.runtime_version),
+            Some("current".to_string())
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn existing_runtime_target_must_stay_inside_versions_root() {
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let versions = runtime_root.join("versions");
+        std::fs::create_dir_all(&versions).unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let error = remove_existing_runtime_target(&versions).unwrap_err();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(error.contains("outside versions root"));
+        assert!(versions.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn managed_runtime_subdirs_must_not_be_symlinked_outside_root() {
+        use std::os::unix::fs::symlink;
+
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let outside = temp.path().join("outside-versions");
+        std::fs::create_dir_all(&runtime_root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, runtime_root.join("versions")).unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let error = ensure_managed_subdir(&versions_root(), "versions").unwrap_err();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(error.contains("escapes runtime root"));
+        assert!(outside.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn runtime_cache_must_not_overwrite_symlink_target() {
+        use std::os::unix::fs::symlink;
+
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let downloads = runtime_root.join("downloads");
+        let outside = temp.path().join("outside.zip");
+        std::fs::create_dir_all(&downloads).unwrap();
+        std::fs::write(&outside, b"preserve").unwrap();
+        let cache_target = downloads.join("1.2.3.zip");
+        symlink(&outside, &cache_target).unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let error = prepare_runtime_cache_target(&cache_target).unwrap_err();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(error.contains("symlinked runtime cache"));
+        assert_eq!(std::fs::read(outside).unwrap(), b"preserve");
     }
 
     #[test]
