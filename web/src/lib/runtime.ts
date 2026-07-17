@@ -106,13 +106,6 @@ export interface MemoryMutationResult {
   error?: string | null;
 }
 
-export interface SkillMarkdownResult {
-  name: string;
-  path: string;
-  content: string;
-  sizeBytes: number;
-}
-
 export interface UiStoreSnapshot {
   kv: Record<string, unknown>;
 }
@@ -497,7 +490,6 @@ declare global {
       imOnboardingBegin?(input: ImOnboardingBeginInput): Promise<ImOnboardingBeginResult>;
       imOnboardingPoll?(input: ImOnboardingPollInput): Promise<ImOnboardingPollResult>;
       imOnboardingApply?(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult>;
-      readSkillMarkdown?(input: { name: string }): Promise<SkillMarkdownResult>;
       readMemory?(): Promise<MemoryInfo>;
       addMemoryEntry?(content: string): Promise<MemoryMutationResult>;
       updateMemoryEntry?(index: number, content: string): Promise<MemoryMutationResult>;
