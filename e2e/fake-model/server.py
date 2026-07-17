@@ -22,6 +22,7 @@ Run: uvicorn server:app --host 127.0.0.1 --port 8099
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import time
@@ -85,6 +86,8 @@ def _reply_for(messages: list[dict[str, Any]]) -> str:
     if image_bytes > 0:
         return f"我看到一张图片，共 {image_bytes} 字节。"
     text = _text_of(last_user.get("content")).strip()
+    if text == "scroll-follow-e2e":
+        return " ".join(f"scroll-follow-token-{index}" for index in range(120))
     # Echo a stable marker plus the prompt so specs can assert on either.
     return f"PONG: 收到「{text}」"
 
@@ -126,6 +129,8 @@ async def chat_completions(request: Request):
             # Stream by token so the UI exercises its streaming render path.
             for token in reply.split(" "):
                 yield _chunk({"content": token + " "})
+                if reply.startswith("scroll-follow-token-0"):
+                    await asyncio.sleep(0.015)
             yield _chunk({}, finish="stop")
             yield "data: [DONE]\n\n"
 

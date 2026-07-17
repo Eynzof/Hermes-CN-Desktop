@@ -32,3 +32,51 @@ test("new chat → streamed reply → navigate to history → continue", async (
   await sendButton(page).click();
   await expect(lastAssistant()).toContainText("bravo-marker", { timeout: 25_000 });
 });
+
+test("streamed reply keeps following the latest message at the bottom", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.goto("/");
+
+  await composer(page).fill("scroll-follow-e2e");
+  await sendButton(page).click();
+  await expect(page).toHaveURL(/\/tasks\/.+/, { timeout: 20_000 });
+
+  const timeline = page.getByRole("log");
+  await expect(timeline).toBeVisible();
+  await timeline.evaluate((element) => {
+    const samples: number[] = [];
+    const recordBottomDistance = () => {
+      samples.push(
+        Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight),
+      );
+    };
+    const observer = new MutationObserver(recordBottomDistance);
+    observer.observe(element, { childList: true, characterData: true, subtree: true });
+    recordBottomDistance();
+    Object.assign(window, { __scrollFollowSamples: samples, __scrollFollowObserver: observer });
+  });
+
+  const lastAssistant = page.getByRole("log").locator('[data-role="assistant"]').last();
+  await expect(lastAssistant).toContainText("scroll-follow-token-119", { timeout: 25_000 });
+
+  const result = await timeline.evaluate((element) => {
+    const runtime = window as Window & {
+      __scrollFollowSamples?: number[];
+      __scrollFollowObserver?: MutationObserver;
+    };
+    runtime.__scrollFollowObserver?.disconnect();
+    const samples = runtime.__scrollFollowSamples ?? [];
+    return {
+      finalDistance: Math.max(
+        0,
+        element.scrollHeight - element.scrollTop - element.clientHeight,
+      ),
+      maxDistance: Math.max(0, ...samples),
+    };
+  });
+
+  expect(result.finalDistance).toBeLessThanOrEqual(8);
+  // One line can be observed between the DOM mutation and React's layout
+  // effect, but the viewport must never drift by multiple rendered lines.
+  expect(result.maxDistance).toBeLessThanOrEqual(32);
+});
