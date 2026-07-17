@@ -4,6 +4,7 @@ import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
 import { assistantAvatarEffectiveAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
+import { AssistantProfileCard } from "./assistant-profile-card";
 import { CliDelegationCard, entryFromChatTool } from "./cli-delegation-card";
 import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
@@ -824,14 +825,21 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
 
   return (
     <div className={s.messageRow} data-role={isUser ? "user" : "assistant"}>
-      {/* IM 式布局：Hermes 头像独立于气泡左侧一列；用户侧不显示头像与昵称，
-          气泡右贴。 */}
+      {/* IM 式布局：Hermes 头像独立于气泡左侧一列（点击弹资料卡）；用户侧
+          不显示头像与昵称，气泡右贴。 */}
       {!isUser ? (
         <div className={s.avatarCol}>
-          <img
-            className={s.rowAvatar}
-            src={assistantAvatarDataUrl}
-            alt={`${assistantDisplayName} 头像`}
+          <AssistantProfileCard
+            model={progressModel || sessionUsage?.model}
+            trigger={
+              <button type="button" className={s.avatarButton} title={`查看 ${assistantDisplayName} 资料`}>
+                <img
+                  className={s.rowAvatar}
+                  src={assistantAvatarDataUrl}
+                  alt={`${assistantDisplayName} 头像`}
+                />
+              </button>
+            }
           />
         </div>
       ) : null}

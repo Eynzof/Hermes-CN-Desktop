@@ -95,14 +95,28 @@
 /* IM 式头像列：头像独立在气泡左侧；无头像的行（工具行）用同宽占位
    保持左缘对齐。 */
 .avatarCol {
-  flex: 0 0 48px;
-  width: 48px;
+  flex: 0 0 36px;
+  width: 36px;
+}
+
+
+.avatarButton {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: block;
+  border-radius: 8px;
+}
+
+.avatarButton:hover .rowAvatar {
+  filter: brightness(0.96);
 }
 
 .rowAvatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
   object-fit: cover;
@@ -204,7 +218,7 @@
 }
 
 .assistantName {
-  margin: 0 0 4px 2px;
+  margin: 0 0 4px 1px;
   color: var(--h-text-2);
   font-size: 12px;
 }
