@@ -201,8 +201,8 @@
 }
 
 .assistantAvatar {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   border-radius: 50%;
   border: 1px solid var(--h-line);

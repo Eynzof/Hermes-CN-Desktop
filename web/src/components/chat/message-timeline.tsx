@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
-import { assistantAvatarDataUrlAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
+import { assistantAvatarEffectiveAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { CliDelegationCard, entryFromChatTool } from "./cli-delegation-card";
 import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
@@ -768,7 +768,7 @@ interface MessageBubbleProps {
 function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
   const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
-  const assistantAvatarDataUrl = useAtomValue(assistantAvatarDataUrlAtom);
+  const assistantAvatarDataUrl = useAtomValue(assistantAvatarEffectiveAtom);
   const isUser = message.role === "user";
   const isToolOnly = message.role === "tool";
   const isSystem = message.role === "system";

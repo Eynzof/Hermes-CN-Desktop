@@ -1,6 +1,7 @@
 import { atom } from "jotai";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
+import hermesDefaultAvatar from "@/assets/hermes-default-avatar.png";
 
 export const activeSessionIdAtom = atom<string | null>(null);
 
@@ -153,6 +154,12 @@ export const assistantAvatarDataUrlAtom = atom(
     set(assistantAvatarDataUrlBaseAtom, value);
     writeUiValue(ASSISTANT_AVATAR_KEY, value);
   },
+);
+
+/** 展示用头像：用户未自定义（存储为空）时回退到内置默认头像。
+ *  设置页请继续用 assistantAvatarDataUrlAtom（空=未设置 的原语义）。 */
+export const assistantAvatarEffectiveAtom = atom(
+  (get) => get(assistantAvatarDataUrlBaseAtom) || hermesDefaultAvatar,
 );
 
 const showReasoningBaseAtom = atom<boolean>(readUiValue("hermes.show-reasoning", false));
