@@ -735,11 +735,6 @@ export function DetailRoute() {
               initialNonce={composerPrefill.nonce}
               onSend={onSend}
               loadingPlaceholder={composerLoadingPlaceholder}
-              hints={[
-                { kbd: "/skill", label: "选择 Skill" },
-                { kbd: "/", label: "输入指令" },
-                { kbd: "/compress", label: "触发会话压缩" },
-              ]}
               showMeta={false}
               loading={runtimeIsBusy}
               onStop={onStop}

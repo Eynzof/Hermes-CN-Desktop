@@ -212,11 +212,6 @@ export function PanelComposer() {
         placeholder={`描述你想完成的任务，${submitShortcutHint}…`}
         variant="big"
         headerLabel="新任务"
-        hints={[
-          { kbd: "/skill", label: "选择 Skill" },
-          { kbd: "/", label: "输入指令" },
-          { label: "把文件拖入此处直接附加" },
-        ]}
         showCompressCommand={false}
         showMeta={false}
         loading={sending}

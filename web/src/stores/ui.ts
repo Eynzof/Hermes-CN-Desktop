@@ -17,9 +17,11 @@ export const sidebarSearchAtom = atom("");
 export const commandPaletteOpenAtom = atom(false);
 
 export const CONVERSATION_WIDTH_OPTIONS = [
-  { value: "small", label: "小", title: "小宽度", maxWidth: "640px" },
-  { value: "medium", label: "中", title: "中等宽度", maxWidth: "780px" },
-  { value: "large", label: "大", title: "大宽度", maxWidth: "960px" },
+  // 档位整体上调一档（用户反馈原「小/中」过窄）：大 = 960 + 头像列
+  // 46px（36px 头像 + 10px gap），正文有效宽度与原「大」一致。
+  { value: "small", label: "小", title: "小宽度", maxWidth: "780px" },
+  { value: "medium", label: "中", title: "中等宽度", maxWidth: "960px" },
+  { value: "large", label: "大", title: "大宽度", maxWidth: "1006px" },
   { value: "full", label: "满", title: "铺满宽度", maxWidth: "100%" },
 ] as const;
 
@@ -38,7 +40,7 @@ export const ASSISTANT_DISPLAY_NAME_KEY = "hermes.assistant-display-name";
 export const ASSISTANT_AVATAR_KEY = "hermes.assistant-avatar-data-url";
 const MAX_ASSISTANT_DISPLAY_NAME_LENGTH = 40;
 
-const DEFAULT_CONVERSATION_WIDTH_MODE: ConversationWidthMode = "medium";
+const DEFAULT_CONVERSATION_WIDTH_MODE: ConversationWidthMode = "large";
 const CONVERSATION_WIDTH_KEY = "hermes.conversation-width";
 const CONVERSATION_WIDTH_VALUES = CONVERSATION_WIDTH_OPTIONS.map((option) => option.value);
 const DEFAULT_CONVERSATION_FONT_SIZE_MODE: ConversationFontSizeMode = "standard";

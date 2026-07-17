@@ -1516,6 +1516,10 @@ export function GooseComposer({
                 disabled={controlsDisabled || reasoningPicker.disabled}
               />
             ) : null}
+            {/* 空态 hint 行已移除（压缩输入框高度），指令入口提示收敛到这里。 */}
+            <span className={s.toolbarHint} aria-hidden>
+              <span className={s.hintKbd}>/</span> 输入指令
+            </span>
             {showMeta && (
               <>
                 <span className={s.pill}>本地模式</span>
