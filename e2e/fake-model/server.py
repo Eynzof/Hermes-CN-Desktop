@@ -22,6 +22,7 @@ Run: uvicorn server:app --host 127.0.0.1 --port 8099
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import time
@@ -34,6 +35,12 @@ from fastapi.responses import JSONResponse, StreamingResponse
 app = FastAPI()
 
 MODEL_ID = "fake-model"
+STREAM_ORDER_MARKER = "stream-order-marker"
+STREAM_ORDER_REPLY = (
+    "STREAM-ORDER-BEGIN|"
+    + "".join(f"{index:02d}|" for index in range(64))
+    + "STREAM-ORDER-END"
+)
 
 
 def _extract_image_bytes(content: Any) -> int:
@@ -85,6 +92,10 @@ def _reply_for(messages: list[dict[str, Any]]) -> str:
     if image_bytes > 0:
         return f"我看到一张图片，共 {image_bytes} 字节。"
     text = _text_of(last_user.get("content")).strip()
+    if STREAM_ORDER_MARKER in text:
+        return STREAM_ORDER_REPLY
+    if text == "scroll-follow-e2e":
+        return " ".join(f"scroll-follow-token-{index}" for index in range(300))
     # Echo a stable marker plus the prompt so specs can assert on either.
     return f"PONG: 收到「{text}」"
 
@@ -122,10 +133,24 @@ async def chat_completions(request: Request):
     if body.get("stream"):
 
         async def gen():
+            if reply.startswith("scroll-follow-token-0"):
+                await asyncio.sleep(0.25)
             yield _chunk({"role": "assistant"})
+            if reply == STREAM_ORDER_REPLY:
+                # Span many 33ms Core coalescing windows. Two-character chunks
+                # plus a small delay make overlapping timer/completion batches
+                # likely in the real gateway while keeping the test fast.
+                for offset in range(0, len(reply), 2):
+                    yield _chunk({"content": reply[offset : offset + 2]})
+                    await asyncio.sleep(0.004)
+                yield _chunk({}, finish="stop")
+                yield "data: [DONE]\n\n"
+                return
             # Stream by token so the UI exercises its streaming render path.
             for token in reply.split(" "):
                 yield _chunk({"content": token + " "})
+                if reply.startswith("scroll-follow-token-0"):
+                    await asyncio.sleep(0.005)
             yield _chunk({}, finish="stop")
             yield "data: [DONE]\n\n"
 

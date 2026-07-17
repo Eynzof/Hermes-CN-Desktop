@@ -65,6 +65,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_JobObjects",
+    "Win32_System_Threading",
 ] }
 # Read-only registry access for live PATH/PATHEXT resolution (path_resolver.rs).
 winreg = "0.55"

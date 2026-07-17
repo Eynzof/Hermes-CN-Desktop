@@ -2,6 +2,7 @@ pub mod bootstrap;
 pub mod commands;
 pub mod connection;
 pub mod cron_runs;
+pub mod desktop_control;
 pub mod env_file;
 pub mod environment;
 pub mod error;

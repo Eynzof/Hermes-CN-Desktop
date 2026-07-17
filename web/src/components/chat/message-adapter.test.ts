@@ -450,6 +450,44 @@ describe("message adapter", () => {
     });
   });
 
+  it("lets the persisted completion replace a corrupt live prefix plus final duplicate", () => {
+    const finalText = "这是数据库中唯一正确的最终回复。";
+    const reasoning = "同一段完整推理";
+    const stored = [
+      uiMessage({
+        id: "stored-assistant-5874",
+        createdAt: 10_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: finalText },
+          { type: "reasoning", text: reasoning },
+        ],
+        metadata: { persistedId: 5_874 },
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-assistant-corrupt",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "reasoning", text: reasoning },
+          { type: "text", text: `乱序流式前缀${finalText}` },
+        ],
+        metadata: {
+          timing: { startedAt: 1_000, firstTokenAt: 1_100, completedAt: 10_100 },
+        },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("stored-assistant-5874");
+    expect(merged[0]?.parts).toEqual(stored[0]?.parts);
+    expect(merged[0]?.metadata?.timing).toEqual(live[0]?.metadata?.timing);
+  });
+
   // Regression for issue #98: once a reply completes the stored refetch carries
   // the persisted assistant turn, but the live user prompt can fail to match a
   // stored row (its canonical text diverged), so it was appended *after* the

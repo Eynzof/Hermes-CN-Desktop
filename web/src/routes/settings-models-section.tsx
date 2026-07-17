@@ -31,12 +31,14 @@ import {
   buildProviderOrderUpdate,
   buildProviderSettingsUpdate,
   chatEndpointPreviewUrl,
+  customProviderPresetsFromConfig,
   detectCustomApiModeFromUrl,
   getProviderCredentialPreview,
   getProviderEntry,
   parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
+  resolveSelectedProvider,
   sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
@@ -627,7 +629,9 @@ export function ModelsSection() {
   const initialProvider =
     BUILTIN_PROVIDER_CATALOG.providers.find((p) => p.id === TOP5_PROVIDER_IDS[0]) ??
     BUILTIN_PROVIDER_CATALOG.providers[0];
-  const [selectedProviderId, setSelectedProviderId] = useState(initialProvider?.id ?? "");
+  // Empty means "follow the runtime's current provider". A concrete id is
+  // stored only after the user explicitly opens a different card.
+  const [selectedProviderId, setSelectedProviderId] = useState("");
   const [providerPanelLoading, setProviderPanelLoading] = useState(false);
   const selectedProviderIdRef = useRef(selectedProviderId);
   const [providerForm, setProviderForm] = useState({
@@ -720,35 +724,17 @@ export function ModelsSection() {
     return () => window.removeEventListener("keydown", handler);
   }, [showCustomForm, closeCustomForm]);
 
-  const customProviders = useMemo<ProviderPreset[]>(() => {
-    const providers = config && typeof config === "object" && !Array.isArray(config)
-      ? (config as Record<string, any>).providers
-      : null;
-    if (!providers || typeof providers !== "object") return [];
-    const knownIds = new Set(catalog.providers.map((p) => p.id));
-    const customs: ProviderPreset[] = [];
-    for (const [id, raw] of Object.entries(providers)) {
-      if (knownIds.has(id) || !id.startsWith("custom:")) continue;
-      const v = raw && typeof raw === "object" ? raw as Record<string, any> : {};
-      const model = typeof v.model === "string" ? v.model : "";
-      customs.push({
-        id,
-        name: typeof v.name === "string" && v.name ? v.name : id.replace(/^custom:/, ""),
-        vendor: isLocalProviderBaseUrl(typeof v.base_url === "string" ? v.base_url : "") ? "本地部署" : "自定义",
-        region: "cn",
-        baseUrl: typeof v.base_url === "string" ? v.base_url : "",
-        apiMode: v.api_mode === "anthropic_messages" || v.api_mode === "codex_responses"
-          ? v.api_mode : "chat_completions",
-        transport: v.transport === "anthropic_messages" || v.transport === "codex_responses"
-          ? v.transport : "openai_chat",
-        apiKeyLabel: "API Key",
-        defaultModel: model,
-        models: model ? [{ id: model, supportsTools: true }] : [],
-        isCustom: true,
-      });
-    }
-    return customs;
-  }, [config, catalog.providers]);
+  const currentProviderId = modelInfo?.provider ||
+    (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
+      ? String((config.model as Record<string, unknown>).provider ?? "")
+      : "");
+  const customProviders = useMemo(
+    () => customProviderPresetsFromConfig(config, catalog.providers, {
+      provider: currentProviderId,
+      model: modelInfo?.model,
+    }),
+    [catalog.providers, config, currentProviderId, modelInfo?.model],
+  );
 
   const allProviders = useMemo(
     () => [...catalog.providers, ...customProviders],
@@ -777,8 +763,8 @@ export function ModelsSection() {
     return Array.from(options.values());
   }, [allProviders, auxForm.provider]);
   const selectedProvider = useMemo<ProviderPreset | undefined>(
-    () => allProviders.find((provider) => provider.id === selectedProviderId) ?? allProviders[0],
-    [allProviders, selectedProviderId],
+    () => resolveSelectedProvider(allProviders, selectedProviderId, currentProviderId),
+    [allProviders, currentProviderId, selectedProviderId],
   );
   const providerOrderConfig = useMemo(
     () => providerOrderOverride && config
@@ -825,10 +811,6 @@ export function ModelsSection() {
     if (!normalized) return undefined;
     return allProviders.find((provider) => normalizeProviderBaseUrl(provider.baseUrl) === normalized);
   }, [allProviders, customBaseUrl]);
-  const currentProviderId = modelInfo?.provider ||
-    (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
-      ? String((config.model as Record<string, unknown>).provider ?? "")
-      : "");
   const configuredAuxiliaryCount = useMemo(
     () => AUXILIARY_TASKS.filter((task) => {
       const slot = getAuxiliarySlot(config, task.id);

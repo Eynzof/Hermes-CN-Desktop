@@ -104,12 +104,23 @@ import { UrlDialog } from "@/components/composer/url-dialog";
 import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
 import { imageFileFromClipboardData, readClipboardImageAsFile } from "@/lib/clipboard-image";
 import { downloadExternalImageFile } from "@/lib/transport";
+import { runtime } from "@/lib/runtime";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
 import s from "./goose-composer.module.css";
 
 export interface ComposerHint {
   kbd?: string;
   label: string;
+}
+
+export function isComposerComposing({
+  tracked,
+  native,
+}: {
+  tracked: boolean;
+  native: boolean;
+}): boolean {
+  return tracked || native;
 }
 
 interface GooseComposerProps {
@@ -256,6 +267,7 @@ export function GooseComposer({
   const [voiceElapsedSeconds, setVoiceElapsedSeconds] = useState(0);
   const { handle: micRecorder, level: voiceLevel } = useMicRecorder();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false);
   const valueRef = useRef(initial);
   const voiceStatusRef = useRef(voiceStatus);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -730,6 +742,13 @@ export function GooseComposer({
     if (controlsDisabled) return;
     setSubmitError("");
     try {
+      if (runtime.isRemote()) {
+        // A native folder picker can only see this Mac/PC. In remote mode the
+        // workspace is a server path, so use the target-backed browser/manual
+        // path dialog instead.
+        setWorkspacePickerOpen(true);
+        return;
+      }
       if (window.hermesDesktop?.pickDirectory) {
         const result = await window.hermesDesktop.pickDirectory();
         if (!result.canceled) applyWorkspacePath(result.paths[0] ?? "");
@@ -888,19 +907,24 @@ export function GooseComposer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const isComposing = isComposerComposing({
+      tracked: composingRef.current,
+      native: event.nativeEvent.isComposing,
+    });
+    if (isComposing) return;
+
     if (
       selectedSkill &&
       event.key === "Backspace" &&
       selectionStart === 0 &&
-      selectionEnd === 0 &&
-      !event.nativeEvent.isComposing
+      selectionEnd === 0
     ) {
       event.preventDefault();
       clearSelectedSkill();
       return;
     }
 
-    if (mentionPanelOpen && !event.nativeEvent.isComposing) {
+    if (mentionPanelOpen) {
       if (event.key === "Escape") {
         event.preventDefault();
         setDismissedMentionToken(mentionTokenKey);
@@ -929,7 +953,7 @@ export function GooseComposer({
       }
     }
 
-    if (skillPanelOpen && !event.nativeEvent.isComposing) {
+    if (skillPanelOpen) {
       if (event.key === "Escape") {
         event.preventDefault();
         setDismissedSlashToken(activeToken?.token ?? "");
@@ -966,7 +990,7 @@ export function GooseComposer({
       shiftKey: event.shiftKey,
       ctrlKey: event.ctrlKey,
       altKey: event.altKey,
-      isComposing: event.nativeEvent.isComposing,
+      isComposing,
     }, effectiveSubmitShortcut);
 
     if (shouldSubmit) {
@@ -1277,6 +1301,8 @@ export function GooseComposer({
           onClick={syncTextareaSelection}
           onSelect={syncTextareaSelection}
           onPaste={handlePaste}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => { setTimeout(() => { composingRef.current = false; }, 0); }}
           placeholder={loading ? (loadingPlaceholder || "Hermes 正在响应...") : resolvedPlaceholder}
           rows={1}
           className={s.textarea}

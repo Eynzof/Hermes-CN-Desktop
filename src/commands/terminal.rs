@@ -127,6 +127,8 @@ pub async fn terminal_start(
 ) -> Result<TerminalStartResult, String> {
     let context = {
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        crate::connection::require_local_filesystem(inner.connection_mode, "本机终端")
+            .map_err(|e| e.to_string())?;
         TerminalContext {
             hermes_home: inner.hermes_home.clone(),
             hermes_home_base: inner.hermes_home_base.clone(),
@@ -220,6 +222,8 @@ pub fn terminal_open_external(
 ) -> Result<TerminalOpenExternalResult, String> {
     let context = {
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        crate::connection::require_local_filesystem(inner.connection_mode, "本机外部终端")
+            .map_err(|e| e.to_string())?;
         TerminalContext {
             hermes_home: inner.hermes_home.clone(),
             hermes_home_base: inner.hermes_home_base.clone(),

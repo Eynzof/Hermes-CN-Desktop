@@ -32,9 +32,11 @@ const MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(20);
 
 /// Marker printed right before the PATH value so profile noise (echo in
 /// .zprofile etc.) cannot corrupt parsing.
+#[allow(dead_code)]
 const PATH_MARKER: &str = "__HERMES_PATH_MARKER__";
 
 /// Escape hatch: set to "1" to skip the login-shell probe entirely.
+#[allow(dead_code)]
 const DISABLE_SHELL_PATH_ENV: &str = "HERMES_DESKTOP_DISABLE_SHELL_PATH";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -262,6 +264,7 @@ fn probe_login_shell_path(shell: &str, timeout: Duration) -> Result<String, RunE
 /// block on prompts (powerlevel10k instant prompt, mesg, ...). `printenv`
 /// reads the exported variable through an external binary, which sidesteps
 /// fish's list-typed `$PATH` expansion.
+#[allow(dead_code)]
 fn login_shell_invocation(shell: &str) -> (String, Vec<String>) {
     (
         shell.to_string(),
@@ -276,6 +279,7 @@ fn login_shell_invocation(shell: &str) -> (String, Vec<String>) {
 /// Extract the PATH from the probe stdout: everything on the marker's line
 /// after its LAST occurrence (profile noise printed before the command runs
 /// is discarded; the marker itself is printed without a trailing newline).
+#[allow(dead_code)]
 fn parse_login_shell_path_output(stdout: &str) -> Option<String> {
     let idx = stdout.rfind(PATH_MARKER)?;
     let after = &stdout[idx + PATH_MARKER.len()..];
@@ -288,6 +292,7 @@ fn parse_login_shell_path_output(stdout: &str) -> Option<String> {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum RunError {
     Timeout,
     Failed(String),
@@ -296,6 +301,7 @@ enum RunError {
 /// Run a command with stdin detached, killing it at the deadline. Polling
 /// `try_wait` keeps this dependency-free; the probe output is far below pipe
 /// buffer capacity, so a successful child never blocks on writes.
+#[allow(dead_code)]
 fn run_with_timeout(mut cmd: Command, timeout: Duration) -> Result<std::process::Output, RunError> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -385,6 +391,7 @@ fn dedupe_key(path: &Path, case_insensitive: bool) -> String {
 
 /// Common install locations GUI processes routinely miss. Only existing
 /// directories are returned. `home` is injected for testability.
+#[allow(dead_code)]
 fn well_known_unix_dirs(home: &Path) -> Vec<PathBuf> {
     let mut candidates = vec![
         PathBuf::from("/opt/homebrew/bin"),
@@ -402,6 +409,7 @@ fn well_known_unix_dirs(home: &Path) -> Vec<PathBuf> {
 
 /// Resolve nvm's active node bin dir: the `alias/default` target when it
 /// exists, otherwise the highest installed version.
+#[allow(dead_code)]
 fn nvm_current_bin(nvm_dir: &Path) -> Option<PathBuf> {
     let versions = nvm_dir.join("versions").join("node");
     if let Ok(alias) = fs::read_to_string(nvm_dir.join("alias").join("default")) {
@@ -420,6 +428,7 @@ fn nvm_current_bin(nvm_dir: &Path) -> Option<PathBuf> {
     best_version_bin(&versions, None)
 }
 
+#[allow(dead_code)]
 fn best_version_bin(versions: &Path, prefix: Option<&str>) -> Option<PathBuf> {
     let mut best: Option<(Vec<u64>, PathBuf)> = None;
     for entry in fs::read_dir(versions).ok()?.flatten() {
@@ -444,6 +453,7 @@ fn best_version_bin(versions: &Path, prefix: Option<&str>) -> Option<PathBuf> {
     best.map(|(_, bin)| bin)
 }
 
+#[allow(dead_code)]
 fn parse_version(value: &str) -> Option<Vec<u64>> {
     let parts: Vec<u64> = value
         .split('.')

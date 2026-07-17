@@ -1,0 +1,7 @@
+.banner { position: absolute; z-index: 30; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; width: min(640px, calc(100% - 32px)); padding: 9px 10px 9px 12px; border: 1px solid var(--h-accent-border); border-radius: var(--h-r-md); color: var(--h-accent); background: color-mix(in srgb, var(--h-bg-pane) 94%, var(--h-accent) 6%); box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+.banner div { flex: 1; min-width: 0; }
+.banner strong, .banner span { display: block; }
+.banner strong { color: var(--h-text); font-size: 11px; }
+.banner span { margin-top: 2px; color: var(--h-text-2); font-size: 9px; }
+.banner button { padding: 5px 8px; border: 0; border-radius: 7px; color: var(--h-accent-contrast); background: var(--h-accent); font: 700 10px/1.2 inherit; cursor: pointer; }
+.banner .close { display: grid; padding: 4px; place-items: center; color: var(--h-text-3); background: transparent; }

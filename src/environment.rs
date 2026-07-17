@@ -1060,7 +1060,16 @@ mod tests {
             "mytool",
             &[PathBuf::from("/nonexistent"), dir.path().to_path_buf()],
         );
+        // On Windows the returned path may use PATHEXT-case (.EXE vs .exe).
+        #[cfg(not(target_os = "windows"))]
         assert_eq!(found, Some(dir.path().join(name)));
+        #[cfg(target_os = "windows")]
+        assert!(
+            found.is_some() && found.as_ref().unwrap().parent() == Some(dir.path()),
+            "expected file in {} found {:?}",
+            dir.path().display(),
+            found
+        );
         assert_eq!(
             find_in_entries("missing-tool", &[dir.path().to_path_buf()]),
             None
