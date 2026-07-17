@@ -190,7 +190,7 @@ export function CliDelegationCard({ entry }: { entry: CliDelegationEntry }) {
         {entry.execution === "background" ? <span className={s.badge}>后台</span> : null}
         <span className={s.statusText} data-status={entry.status}>
           {STATUS_LABELS[entry.status]}
-          {entry.status === "detached" ? " · 旧内核不跟踪" : ""}
+          {entry.status === "detached" ? " · 结果未跟踪" : ""}
         </span>
         {elapsedLabel ? <span className={s.elapsed}>{elapsedLabel}</span> : null}
       </button>

@@ -222,7 +222,7 @@ const CLI_STATUS_LABELS: Record<CliDelegationEntry["status"], string> = {
   failed: "失败",
   killed: "已终止",
   lost: "状态丢失",
-  detached: "后台运行 · 未跟踪",
+  detached: "后台运行 · 结果未跟踪",
 };
 
 function CliStatusIcon({ status }: { status: CliDelegationEntry["status"] }) {
