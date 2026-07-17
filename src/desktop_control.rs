@@ -172,6 +172,20 @@ pub fn should_start_managed_runtime(
         || state.managed_runtime_desired_state == ManagedRuntimeDesiredState::Running
 }
 
+/// Report the actual managed-runtime lifecycle from files/process state.
+/// Desired state is intent only: when no valid runtime record exists, the
+/// runtime is uninstalled even if a previous control file still says stopped
+/// or running.
+pub fn managed_runtime_lifecycle_state(installed: bool, running: bool) -> &'static str {
+    if running {
+        "running"
+    } else if installed {
+        "stopped"
+    } else {
+        "uninstalled"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,5 +242,12 @@ mod tests {
             ManagedRuntimeDesiredState::Uninstalled
         );
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    #[test]
+    fn lifecycle_uses_actual_installation_before_desired_intent() {
+        assert_eq!(managed_runtime_lifecycle_state(false, false), "uninstalled");
+        assert_eq!(managed_runtime_lifecycle_state(true, false), "stopped");
+        assert_eq!(managed_runtime_lifecycle_state(true, true), "running");
     }
 }

@@ -34,16 +34,8 @@ pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, A
             .dashboard_handle
             .as_ref()
             .is_some_and(|handle| handle.owns_process);
-    let lifecycle = if managed_running {
-        "running"
-    } else if !installed
-        && control.managed_runtime_desired_state
-            == crate::desktop_control::ManagedRuntimeDesiredState::Uninstalled
-    {
-        "uninstalled"
-    } else {
-        "stopped"
-    };
+    let lifecycle =
+        crate::desktop_control::managed_runtime_lifecycle_state(installed, managed_running);
     Ok(RuntimeConfig {
         api_base_url: inner.api_base_url.clone(),
         gateway_url: inner.gateway_url.clone(),

@@ -114,15 +114,7 @@ fn runtime_control_snapshot(
             inner.dashboard_handle.is_some() && !inner.api_base_url.trim().is_empty(),
         )
     };
-    let lifecycle_state = if running {
-        "running"
-    } else if !installed
-        && control.managed_runtime_desired_state == ManagedRuntimeDesiredState::Uninstalled
-    {
-        "uninstalled"
-    } else {
-        "stopped"
-    };
+    let lifecycle_state = desktop_control::managed_runtime_lifecycle_state(installed, running);
     Ok(RuntimeControlResult {
         ok: error.is_none(),
         guide_state: control.guide_state.as_str().to_string(),

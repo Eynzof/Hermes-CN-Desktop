@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, Loader2, Play, RefreshCw, RotateCcw, Square, Trash2 } from "lucide-react";
+import { Download, Loader2, PackageX, Play, RefreshCw, RotateCcw, Square, Trash2 } from "lucide-react";
 import type { RuntimeControlResult } from "@hermes/protocol";
 import { Alert, Button } from "@hermes/shared-ui";
+import { resolveManagedRuntimePresentation } from "@/lib/managed-runtime-presentation";
 import { runtime } from "@/lib/runtime";
 import s from "./managed-runtime-panel.module.css";
 
@@ -13,17 +14,6 @@ type RuntimeAction =
   | "uninstall"
   | "reinstall"
   | "switch";
-
-const LIFECYCLE_LABELS: Record<string, string> = {
-  running: "运行中",
-  stopped: "已停止",
-  uninstalled: "未安装",
-  installing: "安装中",
-  starting: "启动中",
-  stopping: "停止中",
-  uninstalling: "卸载中",
-  error: "异常",
-};
 
 export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) {
   const desktop = typeof window === "undefined" ? undefined : window.hermesDesktop;
@@ -98,9 +88,17 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
     }
   };
 
-  const installed = control?.installed ?? false;
-  const running = control?.running ?? false;
   const lifecycle = control?.lifecycleState ?? window.__HERMES_RUNTIME__?.managedRuntimeLifecycleState ?? "stopped";
+  const installed = control?.installed ?? lifecycle !== "uninstalled";
+  const running = control?.running ?? lifecycle === "running";
+  const desiredState = control?.desiredState ?? window.__HERMES_RUNTIME__?.managedRuntimeDesiredState ?? "stopped";
+  const presentation = resolveManagedRuntimePresentation({
+    installed,
+    running,
+    attached,
+    lifecycleState: lifecycle,
+    desiredState,
+  });
   const anyBusy = busy !== null;
 
   return (
@@ -113,19 +111,39 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             停止状态会跨桌面重启保留；卸载只删除内核文件与缓存，不会删除模型配置、会话、档案或连接设置。
           </p>
         </div>
-        <span className={s.status} data-running={running ? "true" : undefined}>
-          {LIFECYCLE_LABELS[lifecycle] ?? lifecycle}
+        <span
+          className={s.status}
+          data-running={running ? "true" : undefined}
+          data-lifecycle={presentation.lifecycleState}
+        >
+          {presentation.statusLabel}
         </span>
       </div>
 
-      {attached && (
+      {presentation.unavailable && (
+        <div className={s.uninstalledState} role="status">
+          <span className={s.uninstalledIcon} aria-hidden="true">
+            <PackageX size={22} />
+          </span>
+          <div>
+            <strong>{presentation.explicitlyUninstalled ? "内置内核已卸载" : "内置内核尚未安装"}</strong>
+            <span>
+              {presentation.explicitlyUninstalled
+                ? "内核文件已从本机移除，模型配置、会话、档案和外部连接设置仍然保留。"
+                : "安装完成后才能启动或切换到内置内核。"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {attached && !presentation.unavailable && (
         <Alert tone="info" size="sm">
           当前使用外部 Hermes。安装或重装只准备本机文件，不会启动第二个内核；需要使用时再执行“启动并切换”。
         </Alert>
       )}
 
       <div className={s.actions}>
-        {!installed && (
+        {presentation.showInstall && (
           <Button
             variant="solid"
             tone="accent"
@@ -133,10 +151,10 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             disabled={anyBusy}
           >
             {busy === "install" ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
-            安装内核
+            {presentation.installLabel}
           </Button>
         )}
-        {installed && !running && !attached && (
+        {presentation.showStart && (
           <Button
             variant="solid"
             tone="accent"
@@ -147,7 +165,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             启动内核
           </Button>
         )}
-        {running && !attached && (
+        {presentation.showStop && (
           <Button
             variant="outline"
             onClick={() => void run("stop", desktop?.stopManagedRuntime?.bind(desktop), "内置内核已停止。")}
@@ -157,13 +175,13 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             停止内核
           </Button>
         )}
-        {attached && (
+        {presentation.showSwitch && (
           <Button variant="solid" tone="accent" onClick={() => void switchToManaged()} disabled={anyBusy}>
             {busy === "switch" ? <Loader2 size={13} className={s.spin} /> : <Play size={13} />}
             启动并切换到内置内核
           </Button>
         )}
-        {installed && (
+        {presentation.showReinstall && (
           <Button
             variant="outline"
             onClick={() => void run("reinstall", desktop?.reinstallManagedRuntime?.bind(desktop), attached ? "内核文件已重装，未启动。" : "内置内核已重装。")}
@@ -173,7 +191,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             重装内核
           </Button>
         )}
-        {installed && (
+        {presentation.showUninstall && (
           <Button
             variant="outline"
             tone="danger"

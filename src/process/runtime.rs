@@ -816,15 +816,8 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         .and_then(|record| file_sha256(Path::new(&record.executable_path)));
     let source = current.as_ref().and_then(runtime_source_info);
     let control = crate::desktop_control::read();
-    let lifecycle = if current.is_some() {
-        "stopped"
-    } else if control.managed_runtime_desired_state
-        == crate::desktop_control::ManagedRuntimeDesiredState::Uninstalled
-    {
-        "uninstalled"
-    } else {
-        "stopped"
-    };
+    let lifecycle =
+        crate::desktop_control::managed_runtime_lifecycle_state(current.is_some(), false);
     RuntimeInfo {
         mode: mode.to_string(),
         packaged: false, // Tauri's `is_packaged` equivalent checked at runtime
