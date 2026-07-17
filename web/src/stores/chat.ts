@@ -18,6 +18,7 @@ import {
 import { notifyFromGatewayEvent } from "@/lib/notifications";
 import { resolvePersistentSessionId } from "@/lib/session-map";
 import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
+import { routeCliDelegationGatewayEventAtom } from "@/stores/cli-delegations";
 import { routeSubagentGatewayEventAtom } from "@/stores/subagents";
 
 export interface ToolEntry {
@@ -1258,6 +1259,8 @@ export const applyGatewayEventAtom = atom(null, (get, set, event: GatewayEvent) 
   // Route subagent activity into its own store (issue #238). Self-contained in
   // stores/subagents.ts; chat timeline reduction is untouched.
   set(routeSubagentGatewayEventAtom, event);
+  // Route CLI delegation activity (Claude Code / Codex, P-047) the same way.
+  set(routeCliDelegationGatewayEventAtom, event);
 });
 
 export const setSessionErrorAtom = atom(

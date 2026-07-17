@@ -104,7 +104,7 @@ function groupTitle(group: HealthGroup): string {
 }
 
 function groupSub(group: HealthGroup): string {
-  if (group === "runtime") return "内核、接收服务与本地数据目录。";
+  if (group === "runtime") return "内核、网关与本地数据目录。";
   if (group === "model") return "默认模型、模型密钥与服务商字段校验。";
   return "技能、MCP 以及会话扩展能力。";
 }
@@ -323,12 +323,12 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
           ? "服务未响应"
           : dashboardReachable
             ? daemonRunning
-              ? "接收服务运行中"
+              ? "网关运行中"
               : "内核就绪"
             : "正在连接",
         detail: dashboardReachable
           ? "聊天通过本机内核传输；gateway_state=stopped 不代表不可用。"
-          : "如果长时间停留在连接中，请确认本机内核已启动，或在状态栏重启接收服务。",
+          : "如果长时间停留在连接中，请确认本机内核已启动，或在状态栏重启网关。",
         mono: true,
         title: `dashboardReachable=${dashboardReachable}; gateway_state=${gatewayState}. /api/ws 在 dashboard 进程内 dispatch，gateway_state=stopped 是预期值。`,
       },

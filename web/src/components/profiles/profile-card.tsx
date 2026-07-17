@@ -89,7 +89,7 @@ export function ProfileCard({
 
       <span className={s.gatewayRow} data-running={p.gateway_running ? "true" : undefined}>
         <StatusDot tone={p.gateway_running ? "success" : "neutral"} size="sm" />
-        {p.gateway_running ? "接收服务运行中" : "接收服务已停止"}
+        {p.gateway_running ? "网关运行中" : "网关已停止"}
       </span>
 
       <div className={s.descRow}>

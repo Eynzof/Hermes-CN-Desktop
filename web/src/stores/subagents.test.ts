@@ -5,9 +5,12 @@ import {
   __resetNativeSubagentSessions,
   activeSubagentCount,
   buildSubagentTree,
+  clearFinishedSubagentsAtom,
   delegateTaskPayloads,
+  dropFinishedSubagents,
   flattenSubagents,
   idOf,
+  markUnfinishedInterrupted,
   pruneDelegateFallback,
   reduceSubagentList,
   routeSubagentGatewayEventAtom,
@@ -145,6 +148,24 @@ describe("pruneDelegateFallback / activeSubagentCount", () => {
     ];
     expect(activeSubagentCount(list)).toBe(2);
   });
+
+  it("markUnfinishedInterrupted flips only non-terminal rows (same ref when none)", () => {
+    const done = [progress({ id: "1", status: "completed" })];
+    expect(markUnfinishedInterrupted(done)).toBe(done);
+    const mixed = [progress({ id: "1", status: "running" }), progress({ id: "2", status: "failed" })];
+    expect(markUnfinishedInterrupted(mixed).map((n) => n.status)).toEqual(["interrupted", "failed"]);
+  });
+
+  it("dropFinishedSubagents keeps running/queued only (same ref when nothing to drop)", () => {
+    const activeOnly = [progress({ id: "1", status: "running" })];
+    expect(dropFinishedSubagents(activeOnly)).toBe(activeOnly);
+    const mixed = [
+      progress({ id: "1", status: "running" }),
+      progress({ id: "2", status: "completed" }),
+      progress({ id: "3", status: "queued" }),
+    ];
+    expect(dropFinishedSubagents(mixed).map((n) => n.id)).toEqual(["1", "3"]);
+  });
 });
 
 describe("routeSubagentGatewayEventAtom", () => {
@@ -159,11 +180,44 @@ describe("routeSubagentGatewayEventAtom", () => {
     expect(store.get(subagentsBySessionAtom).s1![0]).toMatchObject({ id: "a", goal: "Build" });
   });
 
-  it("clears the session tree on message.start", () => {
+  it("keeps finished rows across turns; unfinished rows become interrupted on message.start", () => {
+    const store = createStore();
+    store.set(
+      routeSubagentGatewayEventAtom,
+      event("subagent.start", "s1", { subagent_id: "done", goal: "g" }),
+      NOW,
+    );
+    store.set(
+      routeSubagentGatewayEventAtom,
+      event("subagent.complete", "s1", { subagent_id: "done", status: "completed" }),
+      NOW + 1,
+    );
+    store.set(
+      routeSubagentGatewayEventAtom,
+      event("subagent.start", "s1", { subagent_id: "hanging", goal: "g2" }),
+      NOW + 2,
+    );
+    store.set(routeSubagentGatewayEventAtom, event("message.start", "s1", {}), NOW + 3);
+
+    const list = store.get(subagentsBySessionAtom).s1!;
+    expect(list.map((n) => [n.id, n.status])).toEqual([
+      ["done", "completed"],
+      ["hanging", "interrupted"],
+    ]);
+  });
+
+  it("clearFinishedSubagentsAtom drops terminal rows only", () => {
     const store = createStore();
     store.set(routeSubagentGatewayEventAtom, event("subagent.start", "s1", { subagent_id: "a", goal: "g" }), NOW);
-    store.set(routeSubagentGatewayEventAtom, event("message.start", "s1", {}), NOW + 1);
-    expect(store.get(subagentsBySessionAtom).s1).toBeUndefined();
+    store.set(
+      routeSubagentGatewayEventAtom,
+      event("subagent.complete", "s1", { subagent_id: "a", status: "completed" }),
+      NOW + 1,
+    );
+    store.set(routeSubagentGatewayEventAtom, event("subagent.start", "s1", { subagent_id: "b", goal: "g2" }), NOW + 2);
+
+    store.set(clearFinishedSubagentsAtom, ["s1", undefined, "missing"]);
+    expect(store.get(subagentsBySessionAtom).s1!.map((n) => n.id)).toEqual(["b"]);
   });
 
   it("synthesizes delegate fallback rows, then prunes them when native events arrive", () => {

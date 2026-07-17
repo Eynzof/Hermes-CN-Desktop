@@ -21,7 +21,10 @@
 
 .turnRail {
   position: absolute;
-  right: max(12px, calc((100% - var(--conversation-max-width, 780px)) / 2 - 30px));
+  /* 会话列宽被 detail 注入的 min(档位, 100% - 64px) 约束，列外两侧至少各余
+     32px；rail 自身约 20px 宽，right 下限 6px 让它落在这条出血带内、不再
+     悬浮压住右对齐的用户气泡。余量更大时仍跟随列右缘外 30px。 */
+  right: max(6px, calc((100% - var(--conversation-max-width, 780px)) / 2 - 30px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -88,14 +91,47 @@
   display: flex;
   width: 100%;
   margin: 10px 0;
+  gap: 10px;
   animation: fadeIn 0.18s ease-out;
 }
 
-/* Both user and assistant rows are left-aligned and full-width inside the
-   centered .messages column. We don't pull user messages to the right —
-   that breaks the visual axis between the chat column and the composer
-   below, and makes the page feel asymmetric. User messages still get a
-   subtle background fill to set them apart from assistant output. */
+/* IM 式头像列：头像独立在气泡左侧；无头像的行（工具行）用同宽占位
+   保持左缘对齐。 */
+.avatarCol {
+  flex: 0 0 36px;
+  width: 36px;
+}
+
+
+.avatarButton {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: block;
+  border-radius: 8px;
+}
+
+.avatarButton:hover .rowAvatar {
+  filter: brightness(0.96);
+}
+
+.rowAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-chip);
+  object-fit: cover;
+  display: block;
+}
+
+/* IM 式（微信参考）：assistant 靠左（头像列在左），user 靠右——
+   row-reverse 把头像列翻到右侧，气泡按内容收缩右贴。 */
+.messageRow[data-role="user"] {
+  flex-direction: row-reverse;
+}
+
 .messageRow[data-role="user"],
 .messageRow[data-role="assistant"] {
   justify-content: flex-start;
@@ -158,6 +194,23 @@
   color: var(--h-text-2);
   line-height: var(--conversation-line-height, 1.6);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 长系统通知的「展开全文 / 收起」轻量动作。 */
+.systemNoticeToggle {
+  align-self: flex-start;
+  margin-top: 2px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.systemNoticeToggle:hover {
+  color: var(--h-text);
 }
 
 .messageContent {
@@ -168,7 +221,7 @@
 }
 
 .assistantName {
-  margin: 0 0 4px 2px;
+  margin: 0 0 4px 1px;
   color: var(--h-text-2);
   font-size: 12px;
 }
@@ -184,8 +237,8 @@
 }
 
 .assistantAvatar {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
   border-radius: 50%;
   border: 1px solid var(--h-line);
@@ -201,7 +254,9 @@
 }
 
 .bubble[data-role="user"] {
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
   padding: 12px 16px;
   border-radius: 12px;
   background: var(--h-bg-chip);

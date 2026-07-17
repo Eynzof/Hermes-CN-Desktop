@@ -72,10 +72,11 @@ import type {
 } from "@/components/chat/composer-types";
 import { MessageTimeline } from "@/components/chat/message-timeline";
 import { StallNotice } from "@/components/chat/stall-notice";
-import { SubagentPanel, useSessionSubagents } from "@/components/chat/subagent-panel";
+import { SubagentPanel, useSessionCliDelegations, useSessionSubagents } from "@/components/chat/subagent-panel";
 import { PreviewRail } from "@/components/chat/preview-rail/preview-rail";
 import { PREVIEW_PANEL_QUERY_KEY } from "@/lib/preview-rail";
-import { activeSubagentCount } from "@/stores/subagents";
+import { activeCliDelegationCount, clearFinishedCliDelegationsAtom } from "@/stores/cli-delegations";
+import { activeSubagentCount, clearFinishedSubagentsAtom } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
   hermesUIMessagesToChatMessages,
@@ -163,7 +164,29 @@ export function DetailRoute() {
     usageGatewaySessionId,
     taskId,
   ]);
-  const subagentActive = activeSubagentCount(subagents);
+  // 外部 CLI 委派（Claude Code / Codex，P-047）与内部子代理同面板展示。
+  const cliDelegations = useSessionCliDelegations([
+    runtimeSessionId,
+    activeMappedGatewaySessionId,
+    usageGatewaySessionId,
+    taskId,
+  ]);
+  const subagentActive = activeSubagentCount(subagents) + activeCliDelegationCount(cliDelegations);
+  const subagentTotal = subagents.length + cliDelegations.length;
+  const clearFinishedSubagents = useSetAtom(clearFinishedSubagentsAtom);
+  const clearFinishedCliDelegations = useSetAtom(clearFinishedCliDelegationsAtom);
+  const clearFinishedDelegationRows = useCallback(() => {
+    const candidates = [runtimeSessionId, activeMappedGatewaySessionId, usageGatewaySessionId, taskId];
+    clearFinishedSubagents(candidates);
+    clearFinishedCliDelegations(candidates);
+  }, [
+    activeMappedGatewaySessionId,
+    clearFinishedCliDelegations,
+    clearFinishedSubagents,
+    runtimeSessionId,
+    taskId,
+    usageGatewaySessionId,
+  ]);
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
   const { data: messagesData, isLoading } = messagesQuery;
@@ -605,7 +628,10 @@ export function DetailRoute() {
     () => {
       const font = conversationFontSizeVars(conversationFontSizeMode);
       return {
-        "--conversation-max-width": conversationWidthMaxWidth(conversationWidthMode),
+        // min(档位, 100% - 64px)：窗口不够宽（或"满"档）时整条会话列（时间线 +
+        // composer + stall-notice 共用此变量）两侧各让出 32px，给右侧轮次定位条
+        // (turnRail) 一条不压内容的专属出血带；余量充足时与档位宽完全一致。
+        "--conversation-max-width": `min(${conversationWidthMaxWidth(conversationWidthMode)}, 100% - 64px)`,
         "--conversation-font-size": font.fontSize,
         "--conversation-line-height": font.lineHeight,
       } as CSSProperties;
@@ -647,15 +673,15 @@ export function DetailRoute() {
             <TopBarActionButton
               onClick={() => setSubagentPanelOpen((v) => !v)}
               data-active={subagentPanelOpen ? "true" : undefined}
-              title="子代理监视"
-              aria-label="子代理监视"
+              title="子Agent 监视"
+              aria-label="子Agent 监视"
               aria-pressed={subagentPanelOpen}
             >
               <Bot size={12} aria-hidden="true" />
-              <span>子代理</span>
-              {subagents.length > 0 ? (
+              <span>子Agent</span>
+              {subagentTotal > 0 ? (
                 <span className={s.subagentBadge} data-active={subagentActive > 0 ? "true" : undefined}>
-                  {subagentActive > 0 ? subagentActive : subagents.length}
+                  {subagentActive > 0 ? subagentActive : subagentTotal}
                 </span>
               ) : null}
             </TopBarActionButton>
@@ -712,11 +738,6 @@ export function DetailRoute() {
               initialNonce={composerPrefill.nonce}
               onSend={onSend}
               loadingPlaceholder={composerLoadingPlaceholder}
-              hints={[
-                { kbd: "/skill", label: "选择 Skill" },
-                { kbd: "/", label: "输入指令" },
-                { kbd: "/compress", label: "触发会话压缩" },
-              ]}
               showMeta={false}
               loading={runtimeIsBusy}
               onStop={onStop}
@@ -765,7 +786,12 @@ export function DetailRoute() {
           />
         ) : null}
         {subagentPanelOpen ? (
-          <SubagentPanel subagents={subagents} onClose={() => setSubagentPanelOpen(false)} />
+          <SubagentPanel
+            subagents={subagents}
+            cliDelegations={cliDelegations}
+            onClose={() => setSubagentPanelOpen(false)}
+            onClearFinished={clearFinishedDelegationRows}
+          />
         ) : null}
 
       </div>

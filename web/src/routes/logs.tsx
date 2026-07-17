@@ -28,7 +28,7 @@ import s from "./logs.module.css";
 const LOG_FILE_LABELS: Record<LogFileOption, string> = {
   agent: "智能体",
   errors: "错误",
-  gateway: "接收服务",
+  gateway: "网关",
 };
 
 const LOG_LEVEL_LABELS: Record<LogLevelOption, string> = {
@@ -41,7 +41,7 @@ const LOG_LEVEL_LABELS: Record<LogLevelOption, string> = {
 
 const LOG_COMPONENT_LABELS: Record<LogComponentOption, string> = {
   all: "全部",
-  gateway: "接收服务",
+  gateway: "网关",
   agent: "智能体",
   tools: "工具",
   cli: "CLI",
@@ -221,7 +221,7 @@ export function LogsRoute() {
   return (
     <SectionShell
       title="日志"
-      sub="查看桌面端的智能体、接收服务与错误日志；支持选中复制、批量复制和导出当前结果。"
+      sub="查看桌面端的智能体、网关与错误日志；支持选中复制、批量复制和导出当前结果。"
     >
       <div className={s.page}>
         <section className={s.toolbar} aria-label="日志筛选">

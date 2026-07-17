@@ -83,7 +83,7 @@ export function AppStatusBar() {
     (analytics?.daily?.[0]?.input_tokens ?? 0) + (analytics?.daily?.[0]?.output_tokens ?? 0);
   const restartTitle = gatewayOnline || gatewayRestart.phase !== "idle"
     ? gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)
-    : "当前连接状态未知，仍会尝试重启接收服务";
+    : "当前连接状态未知，仍会尝试重启网关";
 
   return (
     <footer className={s.statusbar} role="status" aria-label="运行状态">
@@ -118,7 +118,7 @@ export function AppStatusBar() {
         {gatewayRestart.phase === "error" && (
           <span className={s.gatewayError} role="alert">
             <span className={s.gatewayErrorMsg}>
-              <strong>{gatewayRestart.message ?? "接收服务重启失败"}</strong>
+              <strong>{gatewayRestart.message ?? "网关重启失败"}</strong>
               {(() => {
                 const hint = gatewayRestartAntivirusHint(detectHostOS());
                 return hint ? <span className={s.gatewayErrorHint}>{hint}</span> : null;

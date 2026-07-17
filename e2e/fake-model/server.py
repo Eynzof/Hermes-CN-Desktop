@@ -78,6 +78,48 @@ def _text_of(content: Any) -> str:
     return ""
 
 
+DELEGATE_MARKER = "delegate-cli-e2e:"
+
+
+def _delegate_request(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """CLI 委派冒烟边门（P-047）。
+
+    最后一条 user 文本形如 `delegate-cli-e2e:{"command": "claude -p ...", ...}`
+    时，第一轮回一个 terminal tool_call（让真 Core 真正执行该命令，从而驱动
+    delegation.cli.* 事件链路）；工具结果回来的第二轮走普通文本总结。
+    """
+    if messages and messages[-1].get("role") == "tool":
+        return None  # 第二轮：工具已执行，回总结文本。
+    last_user = next(
+        (m for m in reversed(messages) if m.get("role") == "user"),
+        None,
+    )
+    if last_user is None:
+        return None
+    text = _text_of(last_user.get("content")).strip()
+    if not text.startswith(DELEGATE_MARKER):
+        return None
+    try:
+        spec = json.loads(text[len(DELEGATE_MARKER):])
+    except Exception:
+        return None
+    if not isinstance(spec, dict) or not spec.get("command"):
+        return None
+    args: dict[str, Any] = {"command": spec["command"]}
+    for key in ("background", "pty", "workdir", "timeout", "notify_on_complete"):
+        if spec.get(key) is not None:
+            args[key] = spec[key]
+    return args
+
+
+def _tool_call_payload(args: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": f"call_e2e_{uuid.uuid4().hex[:12]}",
+        "type": "function",
+        "function": {"name": "terminal", "arguments": json.dumps(args, ensure_ascii=False)},
+    }
+
+
 def _reply_for(messages: list[dict[str, Any]]) -> str:
     """Deterministic reply derived from the last user message.
 
@@ -128,7 +170,54 @@ async def models() -> dict[str, Any]:
 async def chat_completions(request: Request):
     body = await request.json()
     messages = body.get("messages") or []
-    reply = _reply_for(messages)
+
+    delegate_args = _delegate_request(messages)
+    if delegate_args is not None:
+        tool_call = _tool_call_payload(delegate_args)
+        if body.get("stream"):
+
+            async def tool_gen():
+                yield _chunk({"role": "assistant"})
+                yield _chunk({
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": tool_call["id"],
+                        "type": "function",
+                        "function": {
+                            "name": "terminal",
+                            "arguments": tool_call["function"]["arguments"],
+                        },
+                    }],
+                })
+                yield _chunk({}, finish="tool_calls")
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(tool_gen(), media_type="text/event-stream")
+        return JSONResponse(
+            {
+                "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": MODEL_ID,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [tool_call],
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            }
+        )
+
+    if messages and messages[-1].get("role") == "tool":
+        reply = "DELEGATION-E2E-DONE：外部编码代理已完成任务。"
+    else:
+        reply = _reply_for(messages)
 
     if body.get("stream"):
 

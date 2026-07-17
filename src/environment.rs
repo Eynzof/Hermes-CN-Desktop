@@ -84,11 +84,11 @@ impl EnvironmentCheckInput {
 }
 
 #[derive(Debug, Clone)]
-struct CommandProbe {
-    found: bool,
-    path: Option<PathBuf>,
-    version: Option<String>,
-    error: Option<String>,
+pub(crate) struct CommandProbe {
+    pub(crate) found: bool,
+    pub(crate) path: Option<PathBuf>,
+    pub(crate) version: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 trait EnvironmentPathValue {
@@ -447,6 +447,32 @@ pub async fn collect_environment_check(input: EnvironmentCheckInput) -> Environm
     });
     agent_browser.category = EnvironmentCheckCategory::Browser;
     items.push(agent_browser);
+    // 编程Agent CLI（P-047 委派可视化的检测基本盘）。这里只做 PATH 快检；
+    // 额外安装点与登录态的深度检测在 coding_agents.rs（「编程Agent」设置页）。
+    items.push(tool_item(ToolCheck {
+        id: "claude-code",
+        label: "Claude Code CLI",
+        commands: &["claude"],
+        version_args: &["--version"],
+        required: false,
+        ok_summary: "Claude Code 可用，hermes 可通过 claude-code 技能委派编码任务",
+        missing_summary: "Claude Code 未找到；hermes 无法把编码任务委派给 Claude Code",
+        recommendation: Some(
+            "安装 Claude Code：npm install -g @anthropic-ai/claude-code，安装后运行 claude 完成登录",
+        ),
+    }));
+    items.push(tool_item(ToolCheck {
+        id: "codex",
+        label: "Codex CLI",
+        commands: &["codex"],
+        version_args: &["--version"],
+        required: false,
+        ok_summary: "Codex CLI 可用，hermes 可通过 codex 技能委派编码任务",
+        missing_summary: "Codex CLI 未找到；hermes 无法把编码任务委派给 Codex",
+        recommendation: Some(
+            "安装 Codex CLI：npm install -g @openai/codex，安装后运行 codex login 完成登录",
+        ),
+    }));
     items.push(browser_executable_item(Path::new(&hermes_home)));
     items.push(managed_env_file_item(Path::new(&hermes_home)));
     items.push(effective_path_item(
@@ -814,7 +840,7 @@ fn find_env_value(path: &Path, key: &str) -> Option<String> {
     None
 }
 
-fn probe_commands(commands: &[&str], version_args: &[&str]) -> CommandProbe {
+pub(crate) fn probe_commands(commands: &[&str], version_args: &[&str]) -> CommandProbe {
     let mut missing = Vec::new();
     for command in commands {
         match find_on_path(command) {
@@ -981,7 +1007,7 @@ fn parse_semverish(version: &str) -> Option<(u64, u64, u64)> {
     Some((major, minor, patch))
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)

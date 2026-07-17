@@ -99,10 +99,10 @@ describe("composerSubmitShortcutAtom (persisted)", () => {
 });
 
 describe("conversationWidthModeAtom (persisted)", () => {
-  it("defaults to medium when nothing is stored", async () => {
+  it("defaults to large when nothing is stored", async () => {
     const { conversationWidthModeAtom } = await loadUi();
     const store = createStore();
-    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
   });
 
   it("restores a supported width from the UI store", async () => {
@@ -113,26 +113,26 @@ describe("conversationWidthModeAtom (persisted)", () => {
     expect(store.get(conversationWidthModeAtom)).toBe("large");
   });
 
-  it("normalizes unsupported stored and written values back to medium", async () => {
+  it("normalizes unsupported stored and written values back to large", async () => {
     const { conversationWidthModeAtom, uiStore } = await loadUi({
       "hermes.conversation-width": "wide",
     });
     const store = createStore();
-    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
 
     store.set(conversationWidthModeAtom, "full");
     expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("full");
 
     store.set(conversationWidthModeAtom, "tiny" as never);
-    expect(store.get(conversationWidthModeAtom)).toBe("medium");
-    expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("medium");
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
+    expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("large");
   });
 
   it("maps the four width modes to concrete CSS max-width values", async () => {
     const { conversationWidthMaxWidth } = await loadUi();
-    expect(conversationWidthMaxWidth("small")).toBe("640px");
-    expect(conversationWidthMaxWidth("medium")).toBe("780px");
-    expect(conversationWidthMaxWidth("large")).toBe("960px");
+    expect(conversationWidthMaxWidth("small")).toBe("780px");
+    expect(conversationWidthMaxWidth("medium")).toBe("960px");
+    expect(conversationWidthMaxWidth("large")).toBe("1006px");
     expect(conversationWidthMaxWidth("full")).toBe("100%");
   });
 });

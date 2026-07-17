@@ -295,6 +295,16 @@
   white-space: nowrap;
 }
 
+/* 底部工具条内的常驻小提示（思考按钮右侧）。 */
+.toolbarHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--h-text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .hintKbd {
   font-family: var(--h-font-mono, ui-monospace, "SF Mono", monospace);
   font-size: 10.5px;

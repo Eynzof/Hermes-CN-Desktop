@@ -1,9 +1,15 @@
 import ReactDOMServer from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { MarkdownText } from "./markdown-renderer";
 import { MessageTimeline, resolveBottomFollowState, shouldDetachOnScroll } from "./message-timeline";
 import type { ChatMessage } from "./chat-types";
+
+// MessageTimeline 内部的资料卡用到 useNavigate，SSR 渲染需要 Router 上下文。
+const renderTimeline = (node: ReactElement) =>
+  ReactDOMServer.renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>);
 
 describe("MessageTimeline", () => {
   it("keeps bottom auto-follow disabled after an explicit upward scroll", () => {
@@ -45,7 +51,7 @@ describe("MessageTimeline", () => {
       },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline
         messages={messages}
         turnStartedAt={1}
@@ -69,7 +75,7 @@ describe("MessageTimeline", () => {
       },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline
         messages={messages}
         turnStartedAt={1}
@@ -221,7 +227,7 @@ describe("MessageTimeline", () => {
       },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 
@@ -238,7 +244,7 @@ describe("MessageTimeline", () => {
       { id: "assistant-2", role: "assistant", createdAt: 4, text: "第二轮回答" },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 
@@ -253,7 +259,7 @@ describe("MessageTimeline", () => {
       { id: "assistant-1", role: "assistant", createdAt: 2, text: "回答" },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 
@@ -265,7 +271,7 @@ describe("MessageTimeline", () => {
       { id: "assistant-1", role: "assistant", createdAt: 2, status: "complete", text: "回答" },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline
         messages={messages}
         sessionUsage={{
@@ -289,7 +295,7 @@ describe("MessageTimeline", () => {
       { id: "assistant-1", role: "assistant", createdAt: 2, status: "complete", text: "回答" },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 
@@ -303,7 +309,7 @@ describe("MessageTimeline", () => {
       { id: "assistant-1", role: "assistant", createdAt: 2, status: "streaming", text: "回答中" },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 

@@ -255,7 +255,7 @@ function MetaStrip({ platform, profile, statusData, configured }: {
     <div className={s.metaStrip}>
       <div><span>连接方式</span><b>{connectionLabel}</b></div>
       <div><span>档案</span><b>{profile || "default"}</b></div>
-      <div><span>接收服务</span><b data-tone={statusData?.gateway_running ? "ok" : "warn"}>{statusData?.gateway_running ? "已运行" : "未运行"}</b></div>
+      <div><span>网关</span><b data-tone={statusData?.gateway_running ? "ok" : "warn"}>{statusData?.gateway_running ? "已运行" : "未运行"}</b></div>
       <div><span>密钥</span><b data-tone={credentialSet ? "ok" : "warn"}>{credentialSet ? "已保存" : "未保存"}</b></div>
       <div><span>平台连接</span><b data-tone={runtime?.state === "connected" ? "ok" : undefined}>{runtime?.state === "connected" ? "已连接" : "待连接"}</b></div>
     </div>
@@ -361,7 +361,7 @@ function FeishuBackendChecklist({ groupEnabled }: { groupEnabled: boolean }) {
         <div className={s.consoleStep}>
           <span>1</span>
           <b>先点上面的保存</b>
-          <p>保存后桌面端会启动接收服务，飞书才能把消息发送过来。</p>
+          <p>保存后桌面端会启动网关，飞书才能把消息发送过来。</p>
         </div>
         <div className={s.consoleStep}>
           <span>2</span>
@@ -402,7 +402,7 @@ function platformStateText(state?: string | null): string {
     case "disabled": return "未启用";
     case "not_configured": return "配置不完整";
     case "pending_restart": return "等待重启";
-    case "gateway_stopped": return "接收服务未运行";
+    case "gateway_stopped": return "网关未运行";
     case "error": return "连接错误";
     default: return state || "暂无状态";
   }
@@ -428,7 +428,7 @@ function DiagnosticAssistant({
         <div>
           <div className={s.miniEyebrow}>HERMES CHECK</div>
           <h4>{hasIssue ? "接入失败时，让 Hermes 帮你排查" : "接入已就绪，可按需继续检查"}</h4>
-          <p>{hasIssue ? "这里会汇总当前配置、接收服务状态、检测结果和最近一次扫码/保存情况，不含密钥明文。" : "当前状态没有明显问题；如果之后收不到回复，可以复制诊断信息继续排查。"}</p>
+          <p>{hasIssue ? "这里会汇总当前配置、网关状态、检测结果和最近一次扫码/保存情况，不含密钥明文。" : "当前状态没有明显问题；如果之后收不到回复，可以复制诊断信息继续排查。"}</p>
         </div>
         <div className={s.diagnosticActions}>
           <CopyButton className={s.btn} text={() => JSON.stringify(bundle, null, 2)}>
@@ -494,7 +494,7 @@ function MessagingTestGuide({
         <div className={s.miniEyebrow}>LIVE TEST</div>
         <h3>最后发消息试一下</h3>
         <p>{restartOk
-          ? readyCopy ?? `接收服务已经按当前档案重启。先点一次检测确认连接，再去${platformLabel}里私聊机器人发送 hi。`
+          ? readyCopy ?? `网关已经按当前档案重启。先点一次检测确认连接，再去${platformLabel}里私聊机器人发送 hi。`
           : notReadyCopy ?? `先保存、完成${platformLabel}后台设置，再回来私聊机器人验证。`}</p>
       </div>
 
@@ -505,7 +505,7 @@ function MessagingTestGuide({
             ? "正在读取官方消息平台状态。"
             : officialAvailable
               ? `当前状态：${platformStateText(platform?.state)}${platform?.error_message ? `，${platform.error_message}` : ""}`
-              : "当前内核版本暂不支持官方平台检测，已改用接收服务状态判断。"}</span></div>
+              : "当前内核版本暂不支持官方平台检测，已改用网关状态判断。"}</span></div>
         </div>
 
         <div className={s.statusGrid}>
@@ -646,11 +646,11 @@ export function railPanels(platform: ImPlatform): RailPanelConfig[] {
       sections: [
         {
           title: "快速排查",
-          items: ["提示组件缺失：重新安装或更新桌面端", "提示未绑定：重新扫码或手动恢复账号", "提示已被占用：先停止另一个接收服务"],
+          items: ["提示组件缺失：重新安装或更新桌面端", "提示未绑定：重新扫码或手动恢复账号", "提示已被占用：先停止另一个网关"],
         },
         {
           title: "日志关键词",
-          chips: ["微信连接状态", "消息拉取", "接收服务占用"],
+          chips: ["微信连接状态", "消息拉取", "网关占用"],
         },
       ],
     },
@@ -941,7 +941,7 @@ function FeishuRoute() {
           </div>
           <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RefreshCw size={14} />立即检查</button></div>
 
-          <SectionTitle num="[ STEP 02 ]" title="保存设置并启动接收服务" meta="只会更新当前配置档案；飞书后台还需要继续按提示确认" />
+          <SectionTitle num="[ STEP 02 ]" title="保存设置并启动网关" meta="只会更新当前配置档案；飞书后台还需要继续按提示确认" />
           <section className={s.section}>
             <div className={s.policyGrid}>
               {scannedOpenId && <PolicyCard active={dmPolicy === "scanned"} title="只允许扫码用户" desc={`把本次扫码用户的 open_id（${last(scannedOpenId)}）写入允许列表。`} onClick={() => setDmPolicy("scanned")} />}
@@ -991,7 +991,7 @@ function FeishuRoute() {
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="密钥会自动隐藏；保存后继续去飞书后台确认" />
           {credential && <div className={s.summaryLine}>扫码结果：应用 ID {last(credential.appId)} · 应用密钥 {last(credential.appSecret)} · 扫码用户 open_id {last(credential.openId)} · 机器人 {credential.botName ?? "未探测"}</div>}
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !canApplyQr || !allowPolicyReady}><Save size={14} />保存并启动接收服务</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !canApplyQr || !allowPolicyReady}><Save size={14} />保存并启动网关</button></div>
           <ApplyResult result={result} />
           <SectionTitle num="[ STEP 03 ]" title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
           <FeishuBackendChecklist groupEnabled={groupEnabled} />
@@ -1005,7 +1005,7 @@ function FeishuRoute() {
             testPending={testPlatform.isPending}
             onTest={() => testPlatform.mutate()}
             platformLabel="飞书"
-            readyCopy="接收服务已经按当前档案重启。先点一次检测确认连接，再去飞书里私聊机器人发送 hi。"
+            readyCopy="网关已经按当前档案重启。先点一次检测确认连接，再去飞书里私聊机器人发送 hi。"
             notReadyCopy="先保存、完成飞书后台设置并发布，再回来私聊机器人验证。"
           />
           <DiagnosticAssistant
@@ -1196,9 +1196,9 @@ function WeixinRoute() {
           <ActionFeedback busy={begin.isPending} error={begin.error} flow={flow} status={status} onJump={jumpToQr} />
           <MetaStrip platform="weixin" profile={stateQuery.data?.currentProfile ?? "default"} statusData={statusQuery.data} configured={configured} />
           <FlowSteps platform="weixin" status={status} saved={Boolean(result?.ok)} />
-          <SectionTitle num="[ STEP 01 ]" title="先检查能不能接收消息" meta="桌面端会检查所需组件和接收服务" />
+          <SectionTitle num="[ STEP 01 ]" title="先检查能不能接收消息" meta="桌面端会检查所需组件和网关" />
           <section className={s.section}><div className={s.verifyGrid}>
-            <div className={s.verifyRow}><ShieldCheck size={16} /><div><b>接收服务状态</b><small>{statusQuery.data?.gateway_running ? "当前接收服务可重启。" : "接收服务还没启动，保存后会自动尝试启动。"}</small></div></div>
+            <div className={s.verifyRow}><ShieldCheck size={16} /><div><b>网关状态</b><small>{statusQuery.data?.gateway_running ? "当前网关可重启。" : "网关还没启动，保存后会自动尝试启动。"}</small></div></div>
             <div className={s.verifyRow}><KeyRound size={16} /><div><b>微信绑定</b><small>{configured.WEIXIN_ACCOUNT_ID?.isSet ? `已保存 ${last(configured.WEIXIN_ACCOUNT_ID)}` : "尚未完成微信扫码绑定。"}</small></div></div>
           </div></section>
           <div ref={qrAnchorRef} className={s.anchorBlock}>
@@ -1267,7 +1267,7 @@ function WeixinRoute() {
           </section>
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="口令会自动隐藏" />
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual || canApplySaved) || !allowPolicyReady}><Save size={14} />{canApplyQr || canApplyManual ? "保存并启动接收服务" : "重新启动接收服务"}</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual || canApplySaved) || !allowPolicyReady}><Save size={14} />{canApplyQr || canApplyManual ? "保存并启动网关" : "重新启动网关"}</button></div>
           <ApplyResult result={result} />
           <SectionTitle num="[ STEP 05 ]" title="发一条消息试试" meta="私聊微信机器人，确认真的能回复" />
           <MessagingTestGuide
@@ -1279,8 +1279,8 @@ function WeixinRoute() {
             testPending={testPlatform.isPending}
             onTest={() => testPlatform.mutate()}
             platformLabel="微信"
-            readyCopy="接收服务已经按当前档案重启。先点一次检测确认连接，再去微信里私聊机器人发送 hi。"
-            notReadyCopy="先扫码保存并启动接收服务，再回来私聊机器人验证。"
+            readyCopy="网关已经按当前档案重启。先点一次检测确认连接，再去微信里私聊机器人发送 hi。"
+            notReadyCopy="先扫码保存并启动网关，再回来私聊机器人验证。"
           />
           <DiagnosticAssistant
             bundle={diagnosticBundle}

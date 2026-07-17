@@ -662,6 +662,9 @@ export function ModelsSection() {
   const [editVal, setEditVal] = useState("");
   const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
   const [showEnvAdvanced, setShowEnvAdvanced] = useState(false);
+  // 工具密钥 / 消息平台等非供应商分区的展开态（默认全部收起，与「高级环境
+  // 变量」一致，避免模型页过长）。key 为分区 category。
+  const [expandedEnvGroups, setExpandedEnvGroups] = useState<Record<string, boolean>>({});
   const [providerSearch, setProviderSearch] = useState("");
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customProviderMode, setCustomProviderMode] = useState<CustomProviderMode>("custom");
@@ -1883,14 +1886,32 @@ export function ModelsSection() {
             )}
           </div>
 
-          {nonProviderGroups.map((group) => (
-            <div key={group.category} style={{ marginTop: 24 }}>
-              <div className={s.modelsLabel}>{group.label} ({group.entries.length})</div>
-              {group.entries.map(([key, info]) => (
-                <EnvRow key={key} {...envRowProps(key, info)} />
-              ))}
-            </div>
-          ))}
+          {nonProviderGroups.map((group) => {
+            const expanded = expandedEnvGroups[group.category] === true;
+            return (
+              <div key={group.category} className={s.advancedEnvBlock}>
+                <button
+                  className={s.providerCardHeader}
+                  onClick={() =>
+                    setExpandedEnvGroups((prev) => ({ ...prev, [group.category]: !expanded }))
+                  }
+                >
+                  <span className={s.providerCardName}>
+                    <span className={s.providerCardArrow}>{expanded ? "▾" : "▸"}</span>
+                    {group.label}
+                  </span>
+                  <span className={s.providerCardCount}>{group.entries.length} 项</span>
+                </button>
+                {expanded && (
+                  <div className={s.providerCardBody}>
+                    {group.entries.map(([key, info]) => (
+                      <EnvRow key={key} {...envRowProps(key, info)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </>
       ) : activeModelTab === "auxiliary" ? (
         <AuxiliaryModelsPanel

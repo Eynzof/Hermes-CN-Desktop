@@ -2,8 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
-import { assistantAvatarDataUrlAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
+import { assistantAvatarEffectiveAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
+import { AssistantProfileCard } from "./assistant-profile-card";
+import { CliDelegationCard, entryFromChatTool } from "./cli-delegation-card";
+import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
 import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
@@ -259,6 +262,40 @@ function MoaReferenceBlock({
   );
 }
 
+// 系统通知超过此长度默认折叠——后台进程通知（notify_on_complete）会携带
+// 完整命令与输出尾部（stream-json 委派动辄数 KB），对 agent 是必要输入，
+// 对人只需首行摘要（"后台进程通知：proc_x completed normally (exit 0)"）。
+const SYSTEM_NOTICE_COLLAPSE_THRESHOLD = 280;
+const SYSTEM_NOTICE_SUMMARY_MAX = 160;
+
+function formatNoticeLength(length: number): string {
+  return length > 1000 ? `${(length / 1000).toFixed(1)}k 字符` : `${length} 字符`;
+}
+
+function SystemNoticeText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  if (text.length <= SYSTEM_NOTICE_COLLAPSE_THRESHOLD) {
+    return <div className={s.systemNoticeText}>{text}</div>;
+  }
+  const firstLine = text.split("\n")[0] ?? text;
+  const summary =
+    firstLine.length > SYSTEM_NOTICE_SUMMARY_MAX
+      ? `${firstLine.slice(0, SYSTEM_NOTICE_SUMMARY_MAX)}…`
+      : firstLine;
+  return (
+    <>
+      <div className={s.systemNoticeText}>{open ? text : summary}</div>
+      <button
+        type="button"
+        className={s.systemNoticeToggle}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open ? "收起" : `展开全文（${formatNoticeLength(text.length)}）`}
+      </button>
+    </>
+  );
+}
+
 function formatToolElapsed(ms: number | undefined): string | null {
   if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return null;
   if (ms < 100) return "<0.1s";
@@ -453,6 +490,7 @@ interface MessageBlocksProps {
 
 function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progressModel }: MessageBlocksProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
+  const cliDelegations = useAtomValue(cliDelegationsByToolIdAtom);
   const blocks = message.blocks ?? [];
   const items: ReactNode[] = [];
   let pendingTools: ChatToolItem[] = [];
@@ -465,6 +503,16 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
 
   blocks.forEach((block, index) => {
     if (block.type === "tool") {
+      // CLI 委派（Claude Code / Codex）升级为品牌化卡片：live store 命中
+      // 优先（P-047 事件或旧内核回退），历史重载走渲染时按需重建。委派卡
+      // 不进 ToolChain 聚合——它是多 Agent 协作的一等公民，不该被折叠进
+      // "运行了 N 个工具"。
+      const delegation = cliDelegations.get(block.tool.tool_id) ?? entryFromChatTool(block.tool);
+      if (delegation) {
+        flushTools(`tools-${index}`);
+        items.push(<CliDelegationCard key={`cli-delegation-${index}`} entry={delegation} />);
+        return;
+      }
       pendingTools.push(block.tool);
       return;
     }
@@ -721,7 +769,7 @@ interface MessageBubbleProps {
 function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
   const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
-  const assistantAvatarDataUrl = useAtomValue(assistantAvatarDataUrlAtom);
+  const assistantAvatarDataUrl = useAtomValue(assistantAvatarEffectiveAtom);
   const isUser = message.role === "user";
   const isToolOnly = message.role === "tool";
   const isSystem = message.role === "system";
@@ -738,6 +786,8 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   if (isToolOnly) {
     return (
       <div className={s.messageRow} data-role="assistant">
+        {/* 与带头像的行保持左缘对齐的占位列。 */}
+        <div className={s.avatarCol} aria-hidden />
         <div className={s.messageContent}>
           <ToolChain tools={message.tools ?? []} />
         </div>
@@ -762,7 +812,11 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
           />
           <div className={s.systemNoticeBody}>
             {message.error ? <div className={s.systemNoticeTitle}>请求失败</div> : null}
-            <div className={s.systemNoticeText}>{text}</div>
+            {message.error ? (
+              <div className={s.systemNoticeText}>{text}</div>
+            ) : (
+              <SystemNoticeText text={text} />
+            )}
           </div>
         </div>
       </div>
@@ -771,12 +825,27 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
 
   return (
     <div className={s.messageRow} data-role={isUser ? "user" : "assistant"}>
+      {/* IM 式布局：Hermes 头像独立于气泡左侧一列（点击弹资料卡）；用户侧
+          不显示头像与昵称，气泡右贴。 */}
+      {!isUser ? (
+        <div className={s.avatarCol}>
+          <AssistantProfileCard
+            model={progressModel || sessionUsage?.model}
+            trigger={
+              <button type="button" className={s.avatarButton} title={`查看 ${assistantDisplayName} 资料`}>
+                <img
+                  className={s.rowAvatar}
+                  src={assistantAvatarDataUrl}
+                  alt={`${assistantDisplayName} 头像`}
+                />
+              </button>
+            }
+          />
+        </div>
+      ) : null}
       <div className={s.messageContent}>
         {!isUser ? (
-          <div className={assistantAvatarDataUrl ? s.assistantIdentity : s.assistantName}>
-            {assistantAvatarDataUrl ? (
-              <img className={s.assistantAvatar} src={assistantAvatarDataUrl} alt={`${assistantDisplayName} 头像`} />
-            ) : null}
+          <div className={s.assistantName}>
             <span>{assistantDisplayName}</span>
           </div>
         ) : null}

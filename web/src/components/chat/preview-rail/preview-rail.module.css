@@ -1,7 +1,9 @@
 .panel {
+  /* 宽度由 usePanelWidth 的 inline style 驱动（默认 460，可拖 360–840）。 */
   width: 460px;
   flex: 0 0 460px;
   min-height: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--h-line);

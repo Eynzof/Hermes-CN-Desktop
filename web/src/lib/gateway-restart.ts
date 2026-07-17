@@ -9,7 +9,7 @@ export type GatewayRestartPhase = "idle" | "starting" | "running" | "success" | 
 // unsigned frozen runtime. Surface that as actionable guidance next to the retry
 // affordance instead of leaving the user with an opaque failure (issue #224).
 export const GATEWAY_RESTART_ANTIVIRUS_HINT =
-  "若反复失败，接收服务可能被安全软件（360 / 火绒 / Windows Defender 等）拦截。请将 Hermes 加入信任 / 白名单后重试。";
+  "若反复失败，网关可能被安全软件（360 / 火绒 / Windows Defender 等）拦截。请将 Hermes 加入信任 / 白名单后重试。";
 
 /** The antivirus hint, shown only on Windows where it applies; empty elsewhere. */
 export function gatewayRestartAntivirusHint(hostOs: HostOS): string {
@@ -64,10 +64,10 @@ export function gatewayRestartTitle(
   message?: string | null,
 ): string {
   if (message) return message;
-  if (phase === "starting" || phase === "running") return "正在重启接收服务";
-  if (phase === "success") return "接收服务已重启";
-  if (phase === "error") return "接收服务重启失败，点击重试";
-  return "重启接收服务";
+  if (phase === "starting" || phase === "running") return "正在重启网关";
+  if (phase === "success") return "网关已重启";
+  if (phase === "error") return "网关重启失败，点击重试";
+  return "重启网关";
 }
 
 export function classifyGatewayActionStatus(
@@ -77,7 +77,7 @@ export function classifyGatewayActionStatus(
     return {
       done: false,
       ok: false,
-      message: "接收服务重启中…",
+      message: "网关重启中…",
     };
   }
 
@@ -85,14 +85,14 @@ export function classifyGatewayActionStatus(
     return {
       done: true,
       ok: true,
-      message: "接收服务已重启",
+      message: "网关已重启",
     };
   }
 
   return {
     done: true,
     ok: false,
-    message: "接收服务重启失败",
+    message: "网关重启失败",
   };
 }
 
@@ -115,5 +115,5 @@ export function isGatewayRestartObservedRunning(
 
 export function gatewayRestartResponseError(response: GatewayRestartResponse): string | null {
   if (response.ok) return null;
-  return response.message || response.error || "接收服务重启请求失败";
+  return response.message || response.error || "网关重启请求失败";
 }

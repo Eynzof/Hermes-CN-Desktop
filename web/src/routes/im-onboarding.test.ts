@@ -100,7 +100,7 @@ describe("im onboarding routing helpers", () => {
     const prompt = buildImDiagnosticPrompt(bundle);
 
     expect(prompt).toContain("消息平台接入排障助手");
-    expect(prompt).toContain("接收服务未运行");
+    expect(prompt).toContain("网关未运行");
     expect(prompt).not.toContain("raw-token-that-should-not-leak");
     expect(JSON.stringify(bundle)).toContain("已设置（已隐藏）");
   });

@@ -1,4 +1,5 @@
 pub mod bootstrap;
+pub mod coding_agents;
 pub mod commands;
 pub mod connection;
 pub mod cron_runs;

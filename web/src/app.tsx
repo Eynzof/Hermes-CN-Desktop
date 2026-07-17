@@ -35,6 +35,7 @@ import { LogsRoute } from "@/routes/logs";
 import { DebugRoute } from "@/routes/debug";
 import { AnalyticsRoute } from "@/routes/analytics";
 import { AdvancedRoute, ThemeRoute } from "@/routes/advanced";
+import { CodingAgentsRoute } from "@/routes/coding-agents";
 import { ImOnboardingRoute } from "@/routes/im-onboarding";
 import { GuideRoute } from "@/routes/guide";
 import { OfflineShell } from "@/routes/offline-shell";
@@ -90,6 +91,7 @@ function BackendApp() {
           <Route path="/connection" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/kernel" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/env" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/coding-agents" element={withBoundary(<CodingAgentsRoute />)} />
           <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/settings" element={<Navigate to="/common" replace />} />
