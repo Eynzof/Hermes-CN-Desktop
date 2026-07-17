@@ -492,6 +492,7 @@ fn main() {
             commands::desktop_update::desktop_check_update,
             commands::devtools::toggle_devtools,
             commands::environment::environment_check,
+            commands::coding_agents::coding_agents_check,
             commands::api_proxy::api_request,
             commands::api_proxy::external_request,
             commands::api_proxy::upload_file,

@@ -1,5 +1,6 @@
 pub mod api_proxy;
 pub mod backup;
+pub mod coding_agents;
 pub mod config_migration;
 pub mod connection;
 pub mod connection_auth;
