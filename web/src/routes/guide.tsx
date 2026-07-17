@@ -13,7 +13,8 @@ import {
   Radio,
   Server,
 } from "lucide-react";
-import { Alert, Button, Input } from "@hermes/shared-ui";
+import { Alert, Button, Input, useTheme } from "@hermes/shared-ui";
+import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useStatus } from "@/hooks/use-status";
 import { useGateway } from "@/hooks/use-gateway";
@@ -53,6 +54,7 @@ function HealthItem({ ok, label, detail }: { ok: boolean; label: string; detail:
 
 export function GuideRoute() {
   const navigate = useNavigate();
+  const { config: themeConfig } = useTheme();
   const backendReady = runtime.isBackendReady();
   const currentMode = runtime.getConnectionMode();
   const [mode, setMode] = useState<ProductMode>(productModeForConnection(currentMode));
@@ -163,9 +165,18 @@ export function GuideRoute() {
   };
 
   return (
-    <main className={s.page}>
+    <main className={s.page} data-testid="guide-scroll-container">
       <header className={s.header}>
-        <div className={s.brandMark}>H</div>
+        <HermesLogoMark
+          className={s.brandMark}
+          size={40}
+          title="Hermes Agent 品牌 Logo"
+          tone={
+            themeConfig.theme === "light" || themeConfig.theme === "light-modern"
+              ? "dark"
+              : "light"
+          }
+        />
         <div>
           <p>Hermes Agent 中文社区桌面版</p>
           <h1>选择最适合你的 Hermes 使用方式</h1>
