@@ -113,6 +113,16 @@ export interface ComposerHint {
   label: string;
 }
 
+export function isComposerComposing({
+  tracked,
+  native,
+}: {
+  tracked: boolean;
+  native: boolean;
+}): boolean {
+  return tracked || native;
+}
+
 interface GooseComposerProps {
   onSend?: (
     payload: ComposerSubmitPayload,
@@ -897,19 +907,24 @@ export function GooseComposer({
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const isComposing = isComposerComposing({
+      tracked: composingRef.current,
+      native: event.nativeEvent.isComposing,
+    });
+    if (isComposing) return;
+
     if (
       selectedSkill &&
       event.key === "Backspace" &&
       selectionStart === 0 &&
-      selectionEnd === 0 &&
-      !event.nativeEvent.isComposing
+      selectionEnd === 0
     ) {
       event.preventDefault();
       clearSelectedSkill();
       return;
     }
 
-    if (mentionPanelOpen && !event.nativeEvent.isComposing) {
+    if (mentionPanelOpen) {
       if (event.key === "Escape") {
         event.preventDefault();
         setDismissedMentionToken(mentionTokenKey);
@@ -938,7 +953,7 @@ export function GooseComposer({
       }
     }
 
-    if (skillPanelOpen && !event.nativeEvent.isComposing) {
+    if (skillPanelOpen) {
       if (event.key === "Escape") {
         event.preventDefault();
         setDismissedSlashToken(activeToken?.token ?? "");
@@ -975,7 +990,7 @@ export function GooseComposer({
       shiftKey: event.shiftKey,
       ctrlKey: event.ctrlKey,
       altKey: event.altKey,
-      isComposing: composingRef.current || event.nativeEvent.isComposing,
+      isComposing,
     }, effectiveSubmitShortcut);
 
     if (shouldSubmit) {
