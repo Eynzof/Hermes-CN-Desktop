@@ -10,7 +10,6 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
-  Plus,
   Search,
   Trash2,
 } from "lucide-react";
@@ -595,15 +594,12 @@ export function HistoryRoute() {
               <Trash2 size={13} />
               批量删除
             </TopBarActionButton>
-            <TopBarActionButton onClick={() => navigate("/")}>
-              <Plus size={13} />
-              新对话
-            </TopBarActionButton>
           </>
         }
       />
 
       <div className={s.filters}>
+        <div className={s.filtersRow}>
         <div className={s.seg} role="tablist" aria-label="状态筛选">
           {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((key) => (
             <button
@@ -686,7 +682,10 @@ export function HistoryRoute() {
             onChange={(event) => setSearchQuery(event.target.value)}
           />
         </div>
+        </div>
 
+        {/* 第二行：活跃/归档范围切换（用户反馈：与状态筛选分行，别挤在搜索框旁）。 */}
+        <div className={s.filtersRow}>
         <div className={s.seg} role="tablist" aria-label="归档筛选">
           <button
             type="button"
@@ -711,6 +710,7 @@ export function HistoryRoute() {
             已归档
             <span className={s.segCount}>{archivedCount}</span>
           </button>
+        </div>
         </div>
       </div>
 
