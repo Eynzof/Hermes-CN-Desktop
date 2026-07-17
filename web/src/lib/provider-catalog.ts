@@ -54,6 +54,11 @@ export interface ProviderCatalog {
   providers: ProviderPreset[];
 }
 
+export interface CurrentProviderSelection {
+  provider?: string;
+  model?: string;
+}
+
 /**
  * 用户可读的接口格式名。目录里 Claude Code 中转与 OpenAI 兼容服务混排，
  * 界面必须把请求格式讲明白，用户才知道一个供应商到底按什么协议被请求。
@@ -237,11 +242,21 @@ export function buildCustomProviderDeleteUpdate(
   const providers = asRecord(config.providers);
   const nextProviders = { ...providers };
   delete nextProviders[providerId];
+  delete nextProviders[providerId.replace(/^custom:/i, "")];
+
+  const legacyProviders = Array.isArray(config.custom_providers)
+    ? config.custom_providers
+    : [];
+  const nextLegacyProviders = legacyProviders.filter((raw) => {
+    const entry = asRecord(raw);
+    return normalizeCustomProviderId(entry.provider_key ?? entry.name) !== providerId;
+  });
 
   let nextConfig = buildProviderOrderUpdate(
     {
       ...config,
       providers: nextProviders,
+      ...(legacyProviders.length > 0 ? { custom_providers: nextLegacyProviders } : {}),
     },
     getProviderOrder(config).filter((id) => id !== providerId),
   );
@@ -1042,6 +1057,124 @@ function asRecord(value: unknown): Record<string, any> {
     : {};
 }
 
+function normalizeCustomProviderId(value: unknown): string {
+  const name = String(value ?? "")
+    .trim()
+    .replace(/^custom:/i, "")
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+  return name ? `custom:${name}` : "";
+}
+
+function configuredProviderApiMode(entry: Record<string, any>): ProviderApiMode {
+  const mode = String(entry.api_mode ?? entry.transport ?? "").trim();
+  if (mode === "anthropic_messages" || mode === "codex_responses") return mode;
+  return "chat_completions";
+}
+
+function configuredProviderModels(entry: Record<string, any>): ProviderCatalogModel[] {
+  const models = asRecord(entry.models);
+  return Object.entries(models).map(([id, raw]) => {
+    const metadata = asRecord(raw);
+    const contextWindow = Number(metadata.context_length ?? metadata.contextWindow ?? 0);
+    return {
+      id,
+      ...(Number.isFinite(contextWindow) && contextWindow > 0 ? { contextWindow } : {}),
+      ...(typeof metadata.supports_vision === "boolean" ? { supportsVision: metadata.supports_vision } : {}),
+      ...(typeof metadata.supports_tools === "boolean" ? { supportsTools: metadata.supports_tools } : {}),
+      ...(typeof metadata.supports_reasoning === "boolean" ? { supportsReasoning: metadata.supports_reasoning } : {}),
+    };
+  });
+}
+
+function configuredProviderBaseUrl(entry: Record<string, any>): string {
+  return String(entry.base_url ?? entry.url ?? entry.api ?? "").trim();
+}
+
+function customProviderPreset(
+  id: string,
+  entry: Record<string, any>,
+  current: CurrentProviderSelection | undefined,
+): ProviderPreset {
+  const models = configuredProviderModels(entry);
+  const currentModel = current?.provider === id ? String(current.model ?? "").trim() : "";
+  const defaultModel = String(entry.model ?? entry.default_model ?? "").trim()
+    || currentModel
+    || models[0]?.id
+    || "";
+  if (defaultModel && !models.some((model) => model.id === defaultModel)) {
+    models.unshift({ id: defaultModel, supportsTools: true });
+  }
+  const apiMode = configuredProviderApiMode(entry);
+  const baseUrl = configuredProviderBaseUrl(entry);
+
+  return {
+    id,
+    name: String(entry.name ?? "").trim() || id.replace(/^custom:/, ""),
+    vendor: isLocalProviderBaseUrl(baseUrl) ? "本地部署" : "自定义",
+    region: "cn",
+    baseUrl,
+    apiMode,
+    transport: apiMode === "anthropic_messages"
+      ? "anthropic_messages"
+      : apiMode === "codex_responses"
+        ? "codex_responses"
+        : "openai_chat",
+    apiKeyLabel: "API Key",
+    defaultModel,
+    models,
+    isCustom: true,
+  };
+}
+
+/**
+ * Build the Models-page custom cards from both Core config generations.
+ *
+ * CLI-created endpoints still live in the list-shaped `custom_providers`, while
+ * newer dashboard saves use the keyed `providers` map. Core deliberately reads
+ * both; the desktop must do the same or a working CLI endpoint disappears here.
+ */
+export function customProviderPresetsFromConfig(
+  config: Record<string, any> | undefined,
+  catalogProviders: ProviderPreset[],
+  current?: CurrentProviderSelection,
+): ProviderPreset[] {
+  const knownIds = new Set(catalogProviders.map((provider) => provider.id));
+  const result = new Map<string, ProviderPreset>();
+
+  for (const [key, raw] of Object.entries(asRecord(config?.providers))) {
+    if (knownIds.has(key)) continue;
+    const entry = asRecord(raw);
+    if (!configuredProviderBaseUrl(entry)) continue;
+    const id = normalizeCustomProviderId(key);
+    if (!id || knownIds.has(id)) continue;
+    result.set(id, customProviderPreset(id, entry, current));
+  }
+
+  const legacyProviders = Array.isArray(config?.custom_providers)
+    ? config.custom_providers
+    : [];
+  for (const raw of legacyProviders) {
+    const entry = asRecord(raw);
+    if (!configuredProviderBaseUrl(entry)) continue;
+    const id = normalizeCustomProviderId(entry.provider_key ?? entry.name);
+    if (!id || knownIds.has(id) || result.has(id)) continue;
+    result.set(id, customProviderPreset(id, entry, current));
+  }
+
+  return Array.from(result.values());
+}
+
+export function resolveSelectedProvider(
+  providers: ProviderPreset[],
+  selectedProviderId: string,
+  currentProviderId: string,
+): ProviderPreset | undefined {
+  return providers.find((provider) => provider.id === selectedProviderId)
+    ?? providers.find((provider) => provider.id === currentProviderId)
+    ?? providers[0];
+}
+
 function cleanModels(models: ProviderCatalogModel[]): Record<string, Record<string, unknown>> {
   return Object.fromEntries(
     models.map((model) => [
@@ -1056,8 +1189,27 @@ function cleanModels(models: ProviderCatalogModel[]): Record<string, Record<stri
   );
 }
 
+function providerConfigKey(config: Record<string, any> | undefined, providerId: string): string | undefined {
+  const providers = asRecord(config?.providers);
+  if (Object.hasOwn(providers, providerId)) return providerId;
+  const bareId = providerId.replace(/^custom:/i, "");
+  if (bareId !== providerId && Object.hasOwn(providers, bareId)) return bareId;
+  return undefined;
+}
+
+function legacyCustomProviderIndex(config: Record<string, any> | undefined, providerId: string): number {
+  const providers = Array.isArray(config?.custom_providers) ? config.custom_providers : [];
+  return providers.findIndex((raw) => {
+    const entry = asRecord(raw);
+    return normalizeCustomProviderId(entry.provider_key ?? entry.name) === providerId;
+  });
+}
+
 export function getProviderEntry(config: Record<string, any> | undefined, providerId: string): Record<string, any> {
-  return asRecord(asRecord(config?.providers)[providerId]);
+  const configKey = providerConfigKey(config, providerId);
+  if (configKey) return asRecord(asRecord(config?.providers)[configKey]);
+  const legacyIndex = legacyCustomProviderIndex(config, providerId);
+  return legacyIndex >= 0 ? asRecord(config?.custom_providers[legacyIndex]) : {};
 }
 
 export function maskSecretPreview(value: string): string {
@@ -1146,7 +1298,9 @@ export function buildProviderSettingsUpdate(
   input: ProviderConfigInput,
 ): Record<string, any> {
   const providers = asRecord(config.providers);
-  const existingProvider = asRecord(providers[preset.id]);
+  const configKey = providerConfigKey(config, preset.id);
+  const legacyIndex = configKey ? -1 : legacyCustomProviderIndex(config, preset.id);
+  const existingProvider = getProviderEntry(config, preset.id);
   const existingModel = asRecord(config.model);
   const nextApiKey =
     input.apiKey.trim() ||
@@ -1166,11 +1320,20 @@ export function buildProviderSettingsUpdate(
   if (nextApiKey) providerEntry.api_key = nextApiKey;
   else delete providerEntry.api_key;
 
+  if (legacyIndex >= 0) {
+    const customProviders = [...config.custom_providers];
+    customProviders[legacyIndex] = providerEntry;
+    return {
+      ...config,
+      custom_providers: customProviders,
+    };
+  }
+
   return {
     ...config,
     providers: {
       ...providers,
-      [preset.id]: providerEntry,
+      [configKey ?? preset.id]: providerEntry,
     },
   };
 }
@@ -1180,8 +1343,7 @@ export function buildCurrentModelConfigUpdate(
   preset: ProviderPreset,
   input: ProviderConfigInput,
 ): Record<string, any> {
-  const providers = asRecord(config.providers);
-  const existingProvider = asRecord(providers[preset.id]);
+  const existingProvider = getProviderEntry(config, preset.id);
   const existingModel = asRecord(config.model);
   const nextApiKey =
     input.apiKey.trim() ||
