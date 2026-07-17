@@ -339,7 +339,7 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
 
         <AppearanceRow
           label="主题"
-          sub="选择桌面端皮肤。现代主题采用更克制的工作台配色和蓝色主操作。"
+          sub="选择桌面端皮肤，包含现代工作台、Dracula 与 Catppuccin Mocha 色板。"
           right={
             <ThemeSkinPicker
               value={config.theme}
@@ -426,6 +426,26 @@ const THEME_SKINS: Array<{
     soft: "#252526",
     text: "#d4d4d4",
     accent: "#0078d4",
+  },
+  {
+    value: "dracula",
+    label: "Dracula",
+    sub: "紫粉高对比",
+    bg: "#282a36",
+    pane: "#44475a",
+    soft: "#21222c",
+    text: "#f8f8f2",
+    accent: "#bd93f9",
+  },
+  {
+    value: "catppuccin-mocha",
+    label: "Catppuccin Mocha",
+    sub: "柔和蓝灰",
+    bg: "#1e1e2e",
+    pane: "#181825",
+    soft: "#313244",
+    text: "#cdd6f4",
+    accent: "#cba6f7",
   },
 ];
 

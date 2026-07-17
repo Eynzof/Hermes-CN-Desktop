@@ -602,7 +602,9 @@
 }
 
 :global([data-theme="dark"]) .messageText :global([data-streamdown="mermaid"] svg),
-:global([data-theme="dark-modern"]) .messageText :global([data-streamdown="mermaid"] svg) {
+:global([data-theme="dark-modern"]) .messageText :global([data-streamdown="mermaid"] svg),
+:global([data-theme="dracula"]) .messageText :global([data-streamdown="mermaid"] svg),
+:global([data-theme="catppuccin-mocha"]) .messageText :global([data-streamdown="mermaid"] svg) {
   color-scheme: light;
 }
 
@@ -654,12 +656,16 @@
 }
 
 :global([data-theme="dark"]) .messageText :global(.shiki),
-:global([data-theme="dark-modern"]) .messageText :global(.shiki) {
+:global([data-theme="dark-modern"]) .messageText :global(.shiki),
+:global([data-theme="dracula"]) .messageText :global(.shiki),
+:global([data-theme="catppuccin-mocha"]) .messageText :global(.shiki) {
   color: var(--shiki-dark) !important;
 }
 
 :global([data-theme="dark"]) .messageText :global(.shiki span),
-:global([data-theme="dark-modern"]) .messageText :global(.shiki span) {
+:global([data-theme="dark-modern"]) .messageText :global(.shiki span),
+:global([data-theme="dracula"]) .messageText :global(.shiki span),
+:global([data-theme="catppuccin-mocha"]) .messageText :global(.shiki span) {
   color: var(--shiki-dark) !important;
 }
 

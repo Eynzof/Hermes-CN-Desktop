@@ -269,7 +269,9 @@
   color: var(--amber);
 }
 
-.iconBtn[data-theme-mode="dark-modern"] {
+.iconBtn[data-theme-mode="dark-modern"],
+.iconBtn[data-theme-mode="dracula"],
+.iconBtn[data-theme-mode="catppuccin-mocha"] {
   color: var(--h-accent);
 }
 
