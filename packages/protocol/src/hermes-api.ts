@@ -1488,6 +1488,53 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
       aggregator: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
+  // P-047：CLI 委派（Claude Code / Codex）。后端识别出 terminal 命令是一次
+  // 外部编码代理委派时发出；delegation_id == tool.start 的 tool_id，前端据此
+  // 把同一张工具卡升级为品牌化委派卡（stores/cli-delegations.ts）。旧内核不发
+  // 这些事件，前端回退为命令模式识别。
+  z.object({
+    type: z.literal("delegation.cli.started"),
+    session_id: z.string(),
+    payload: z.object({
+      delegation_id: z.string().optional(),
+      tool_id: z.string().optional(),
+      agent: z.string().optional(),
+      mode: z.string().optional(),
+      execution: z.string().optional(),
+      command_redacted: z.string().optional(),
+      prompt_excerpt: z.string().optional(),
+      workdir: z.string().nullable().optional(),
+      flags: z.record(z.unknown()).optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // 仅后台委派：≤2Hz 合并的实时输出（chunk 已脱敏/去 ANSI），events 是后端
+  // 归一化出的子事件（init/text/tool_use/result，snake_case 字段）。
+  z.object({
+    type: z.literal("delegation.cli.output"),
+    session_id: z.string(),
+    payload: z.object({
+      delegation_id: z.string().optional(),
+      process_session_id: z.string().nullable().optional(),
+      chunk: z.string().optional(),
+      truncated: z.boolean().optional(),
+      events: z.array(z.record(z.unknown())).optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // 终态一次成型（不设单独 failed 事件）：status ∈ completed|failed|killed|lost。
+  z.object({
+    type: z.literal("delegation.cli.completed"),
+    session_id: z.string(),
+    payload: z.object({
+      delegation_id: z.string().optional(),
+      agent: z.string().optional(),
+      execution: z.string().optional(),
+      status: z.string().optional(),
+      exit_code: z.number().nullable().optional(),
+      duration_s: z.number().optional(),
+      output_tail: z.string().optional(),
+      result: z.record(z.unknown()).nullable().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
 ]);
 export type GatewayKnownEvent = z.infer<typeof GatewayKnownEvent>;
 
