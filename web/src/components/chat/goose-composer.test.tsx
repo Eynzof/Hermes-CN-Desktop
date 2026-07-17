@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import { ComposerErrorMessage, GooseComposer } from "./goose-composer";
+import { ComposerErrorMessage, GooseComposer, isComposerComposing } from "./goose-composer";
 
 function renderComposer(element: ReactElement): string {
   return ReactDOMServer.renderToStaticMarkup(
@@ -33,6 +33,14 @@ describe("ComposerErrorMessage", () => {
 
     expect(html).toContain("发送失败");
     expect(html).not.toContain("去配置语音");
+  });
+});
+
+describe("GooseComposer IME guard", () => {
+  it("keeps keydown handlers suspended until the delayed composition state resets", () => {
+    expect(isComposerComposing({ tracked: true, native: false })).toBe(true);
+    expect(isComposerComposing({ tracked: false, native: true })).toBe(true);
+    expect(isComposerComposing({ tracked: false, native: false })).toBe(false);
   });
 });
 
