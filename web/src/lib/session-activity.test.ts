@@ -132,7 +132,7 @@ describe("session activity", () => {
             role: "assistant",
             createdAt: now,
             status: "streaming",
-            parts: [{ type: "progress", text: "正在启动Hermes Agent内核..." }],
+            parts: [{ type: "progress", text: "正在唤醒Hermes..." }],
           },
         ],
       },
