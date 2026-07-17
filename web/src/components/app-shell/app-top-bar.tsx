@@ -2,7 +2,6 @@ import type { MouseEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Moon, Palette, Search, Sun } from "lucide-react";
 import { DEFAULT_THEME_CONFIG, useTheme, type ThemeConfig } from "@hermes/shared-ui";
-import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { useCommandPalette } from "@/components/command-palette";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
@@ -47,15 +46,8 @@ export function AppTopBar() {
         onClick={openBrandSite}
         data-no-drag
       >
-        <HermesLogoMark
-          className={s.brandMark}
-          size={30}
-          tone={themeConfig.theme === "light" || themeConfig.theme === "light-modern" ? "dark" : "light"}
-        />
         <span className={s.brandText}>
-          <span className={s.wordmark}>
-            Hermes <em>Agent</em>
-          </span>
+          <span className={s.wordmark}>Hermes Agent</span>
           <span className={s.brandMeta}>
             <span className={s.edition}>中文社区桌面版</span>
             <span className={s.metaDot} aria-hidden="true">·</span>

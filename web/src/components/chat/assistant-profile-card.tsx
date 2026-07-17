@@ -1,5 +1,8 @@
 // 点击 Hermes 头像弹出的资料卡（微信联系人卡形态）：大头像 + 名称 +
 // 身份副行、当前模型信息，底部「发消息 / 编辑人格 / 更换头像」快捷入口。
+// 卡内大头像可再次点击，弹出全屏遮罩放大查看（点击遮罩或 Esc 关闭）。
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useAtomValue } from "jotai";
 import { MessageCircle, Ghost, ImageUp } from "lucide-react";
@@ -18,9 +21,10 @@ export function AssistantProfileCard({ trigger, model }: AssistantProfileCardPro
   const navigate = useNavigate();
   const displayName = useAtomValue(assistantDisplayNameAtom);
   const avatarUrl = useAtomValue(assistantAvatarEffectiveAtom);
+  const [avatarZoomOpen, setAvatarZoomOpen] = useState(false);
 
   return (
-    <Popover.Root>
+    <Popover.Root onOpenChange={(open) => { if (!open) setAvatarZoomOpen(false); }}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
@@ -31,14 +35,44 @@ export function AssistantProfileCard({ trigger, model }: AssistantProfileCardPro
           collisionPadding={12}
           role="dialog"
           aria-label={`${displayName} 资料卡`}
+          onEscapeKeyDown={(event) => {
+            if (avatarZoomOpen) {
+              event.preventDefault();
+              setAvatarZoomOpen(false);
+            }
+          }}
+          onInteractOutside={(event) => {
+            if (avatarZoomOpen) event.preventDefault();
+          }}
         >
           <div className={s.head}>
-            <img className={s.bigAvatar} src={avatarUrl} alt={`${displayName} 头像`} />
+            <button
+              type="button"
+              className={s.bigAvatarButton}
+              onClick={() => setAvatarZoomOpen(true)}
+              aria-label="放大查看头像"
+              title="点击放大查看"
+            >
+              <img className={s.bigAvatar} src={avatarUrl} alt={`${displayName} 头像`} />
+            </button>
             <div className={s.headText}>
               <div className={s.name}>{displayName}</div>
               <div className={s.sub}>爱为何物?</div>
             </div>
           </div>
+
+          {avatarZoomOpen
+            ? createPortal(
+                <div
+                  className={s.avatarZoomOverlay}
+                  role="presentation"
+                  onClick={() => setAvatarZoomOpen(false)}
+                >
+                  <img className={s.avatarZoomImage} src={avatarUrl} alt={`${displayName} 头像大图`} />
+                </div>,
+                document.body,
+              )
+            : null}
 
           {model ? (
             <>

@@ -628,7 +628,10 @@ export function DetailRoute() {
     () => {
       const font = conversationFontSizeVars(conversationFontSizeMode);
       return {
-        "--conversation-max-width": conversationWidthMaxWidth(conversationWidthMode),
+        // min(档位, 100% - 64px)：窗口不够宽（或"满"档）时整条会话列（时间线 +
+        // composer + stall-notice 共用此变量）两侧各让出 32px，给右侧轮次定位条
+        // (turnRail) 一条不压内容的专属出血带；余量充足时与档位宽完全一致。
+        "--conversation-max-width": `min(${conversationWidthMaxWidth(conversationWidthMode)}, 100% - 64px)`,
         "--conversation-font-size": font.fontSize,
         "--conversation-line-height": font.lineHeight,
       } as CSSProperties;

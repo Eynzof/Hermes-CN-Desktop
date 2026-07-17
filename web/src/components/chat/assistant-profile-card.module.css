@@ -16,6 +16,16 @@
   gap: 14px;
 }
 
+.bigAvatarButton {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  line-height: 0;
+  cursor: zoom-in;
+}
+
 .bigAvatar {
   width: 64px;
   height: 64px;
@@ -23,7 +33,26 @@
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
   object-fit: cover;
-  flex: 0 0 auto;
+  display: block;
+}
+
+.avatarZoomOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 9, 8, 0.62);
+  cursor: zoom-out;
+}
+
+.avatarZoomImage {
+  width: min(440px, 80vw);
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 16px;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.42);
 }
 
 .headText {
@@ -78,6 +107,8 @@
 }
 
 .action {
+  /* flex: 1 让三个按钮等宽均分整行（文案字数不同，交给弹性布局对齐）。 */
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -86,7 +117,7 @@
   background: transparent;
   color: var(--h-accent);
   font-size: 12px;
-  padding: 8px 10px;
+  padding: 8px 6px;
   border-radius: 8px;
   cursor: pointer;
 }

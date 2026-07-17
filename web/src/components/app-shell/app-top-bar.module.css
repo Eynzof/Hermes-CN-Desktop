@@ -46,12 +46,6 @@
   transition: none;
 }
 
-.brandMark {
-  display: block;
-  flex-shrink: 0;
-  border-radius: 8px;
-}
-
 .brandText {
   min-width: 0;
   flex: 1;
@@ -69,11 +63,6 @@
   line-height: 1.18;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.wordmark em {
-  color: var(--h-accent);
-  font-style: normal;
 }
 
 .brandMeta {

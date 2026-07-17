@@ -1967,18 +1967,15 @@
 }
 
 /* 供应商卡片网格（对标 cc-switch：圆角填充卡片，无外框容器）。
-   徽章会溢出卡片边缘 6px，四周留内边距避免被滚动容器裁掉。 */
+   不设内部滚动：全部卡片直接展示、随页面整体滚动，避免双重滚动条。 */
 .providerPresetGrid {
   min-width: 0;
-  max-height: 460px;
-  overflow-y: auto;
   display: grid;
   /* 最小卡宽 160→210：常规窗口宽下约 6 列（原来挤到 8 列太密），保持
      随宽度自适应。 */
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 12px;
   padding: 8px 6px;
-  scrollbar-gutter: stable;
 }
 
 /* 注意：类名用 presetCard* 前缀 —— 本文件底部的高级环境变量区块已占用
@@ -2607,10 +2604,6 @@ button.providerWebsiteButton:hover {
 
   .catalogMeta {
     justify-content: flex-start;
-  }
-
-  .providerPresetGrid {
-    max-height: 320px;
   }
 
   .providerFormGrid {

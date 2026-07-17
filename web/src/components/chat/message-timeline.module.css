@@ -21,7 +21,10 @@
 
 .turnRail {
   position: absolute;
-  right: max(12px, calc((100% - var(--conversation-max-width, 780px)) / 2 - 30px));
+  /* 会话列宽被 detail 注入的 min(档位, 100% - 64px) 约束，列外两侧至少各余
+     32px；rail 自身约 20px 宽，right 下限 6px 让它落在这条出血带内、不再
+     悬浮压住右对齐的用户气泡。余量更大时仍跟随列右缘外 30px。 */
+  right: max(6px, calc((100% - var(--conversation-max-width, 780px)) / 2 - 30px));
   display: flex;
   flex-direction: column;
   align-items: center;
