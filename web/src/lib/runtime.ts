@@ -10,6 +10,7 @@ import type {
   ConnectionConfigView,
   ConnectionMode,
   DesktopUpdateManifestFetchResult,
+  CodingAgentsCheckResult,
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
   ExportLogSnapshotResult,
@@ -453,6 +454,7 @@ declare global {
       exportLogSnapshot?(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult>;
       exportDebugBundle?(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult>;
       environmentCheck?(): Promise<EnvironmentCheckResult>;
+      codingAgentsCheck?(): Promise<CodingAgentsCheckResult>;
       checkDesktopUpdate?(): Promise<DesktopUpdateManifestFetchResult>;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
       refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;

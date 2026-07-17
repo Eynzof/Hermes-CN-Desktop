@@ -100,6 +100,7 @@ export function App() {
           <Route path="/connection" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/kernel" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/env" element={withBoundary(<AdvancedRoute />)} />
+          <Route path="/coding-agents" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/settings" element={<Navigate to="/common" replace />} />

@@ -18,6 +18,7 @@ import type {
   ConnectionConfigInput,
   ConnectionConfigView,
   DesktopUpdateManifestFetchResult,
+  CodingAgentsCheckResult,
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
   ExportLogSnapshotResult,
@@ -317,6 +318,10 @@ const tauriBridge = {
 
   async environmentCheck(): Promise<EnvironmentCheckResult> {
     return invokeCommand("environment_check");
+  },
+
+  async codingAgentsCheck(): Promise<CodingAgentsCheckResult> {
+    return invokeCommand("coding_agents_check");
   },
 
   async checkDesktopUpdate(): Promise<DesktopUpdateManifestFetchResult> {

@@ -181,6 +181,29 @@ export interface EnvironmentCheckResult {
   items: EnvironmentCheckItem[];
 }
 
+// 编码代理 CLI（Claude Code / Codex）深度检测（Rust coding_agents.rs，P-047）。
+export type CodingAgentLoginState = "logged_in" | "expired" | "not_logged_in" | "unknown";
+
+export interface CodingAgentStatus {
+  id: string;
+  label: string;
+  installed: boolean;
+  version?: string;
+  path?: string;
+  loginState: CodingAgentLoginState;
+  loginDetail?: string;
+  configDir: string;
+  skillName: string;
+  installHint: string;
+  loginHint: string;
+}
+
+export interface CodingAgentsCheckResult {
+  generatedAtMs: number;
+  platform: string;
+  agents: CodingAgentStatus[];
+}
+
 
 export interface DesktopUpdateAsset {
   label?: string;

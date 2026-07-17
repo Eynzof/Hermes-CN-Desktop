@@ -23,6 +23,7 @@ const ADVANCED_ROUTES = [
   "/connection",
   "/kernel",
   "/env",
+  "/coding-agents",
   "/about",
   "/advanced",
   "/settings",
