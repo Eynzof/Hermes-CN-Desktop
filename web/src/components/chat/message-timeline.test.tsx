@@ -41,7 +41,7 @@ describe("MessageTimeline", () => {
         role: "assistant",
         createdAt: 1,
         status: "streaming",
-        blocks: [{ type: "progress", text: "正在启动Hermes Agent内核..." }],
+        blocks: [{ type: "progress", text: "正在唤醒Hermes..." }],
       },
     ];
 

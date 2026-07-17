@@ -970,7 +970,7 @@ export async function installTauriBridge(): Promise<void> {
   // the React app from racing the managed dashboard startup.
   if (!config.apiBaseUrl) {
     const result = await waitForBootstrap(
-      "正在启动Hermes Agent内核...",
+      "正在唤醒Hermes...",
       () => invokeCommand("get_runtime_config"),
       () => invokeCommand("runtime_info"),
     );
