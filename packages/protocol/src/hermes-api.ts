@@ -536,6 +536,10 @@ export const SkillInfo = z.object({
   description: z.string(),
   category: z.string().nullable(),
   enabled: z.boolean(),
+  provenance: z.enum(["bundled", "hub", "agent"]).optional(),
+  usage: z.number().int().nonnegative().optional(),
+  // Legacy CN Desktop fields. Current Core reports provenance and exposes
+  // the authenticated /api/skills/content endpoint for source + markdown.
   origin: z.enum(["builtin", "user", "external"]).optional(),
   source_path: z.string().optional(),
   skill_file: z.string().optional(),
@@ -544,6 +548,13 @@ export type SkillInfo = z.infer<typeof SkillInfo>;
 
 export const SkillsResponse = z.array(SkillInfo);
 export type SkillsResponse = z.infer<typeof SkillsResponse>;
+
+export const SkillContentResponse = z.object({
+  name: z.string(),
+  content: z.string(),
+  path: z.string(),
+});
+export type SkillContentResponse = z.infer<typeof SkillContentResponse>;
 
 // 技能 hub 搜索（GET /api/skills/hub/search?q=&source=&limit=&profile=）。
 // profile builder 的「从 hub 添加」用它；identifier 是安装时的唯一键。

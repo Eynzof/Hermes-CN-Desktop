@@ -32,6 +32,12 @@ import {
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import { TopBarActions } from "@/components/top-bar/top-bar";
 import { CopyButton } from "@/components/ui/copy-button";
+import {
+  isUserSkill,
+  resolveSkillOrigin,
+  skillDirectory,
+  type SkillOrigin,
+} from "@/lib/skill-origin";
 import s from "./skills.module.css";
 
 type Tab = "builtin" | "user" | "market";
@@ -82,15 +88,7 @@ const marketplaces: Marketplace[] = [
   },
 ];
 
-function skillOrigin(skill: SkillInfo): "builtin" | "user" | "external" {
-  return skill.origin ?? (skill.name.startsWith("user/") ? "user" : "builtin");
-}
-
-function isUserSkill(skill: SkillInfo): boolean {
-  return skillOrigin(skill) !== "builtin";
-}
-
-function sourceLabel(origin: ReturnType<typeof skillOrigin>): string {
+function sourceLabel(origin: SkillOrigin): string {
   if (origin === "builtin") return "Hermes 内置";
   if (origin === "external") return "外部目录";
   return "用户自建";
@@ -275,7 +273,7 @@ export function SkillsRoute() {
             : tab === "user"
               ? "自建 Skill 保存在"
               : "精选 Skill 市场与目录，点击卡片会在外部浏览器打开"}
-          {tab === "user" && <code>~/.hermes/skills/user/</code>}
+          {tab === "user" && <code>~/.hermes/skills/</code>}
         </span>
       </div>
 
@@ -370,6 +368,7 @@ export function SkillsRoute() {
               tab={tab}
               lang={lang}
               setLang={setLang}
+              profileOverride={scope}
               onToggle={() =>
                 toggleSkill.mutate({ name: selected.name, enabled: !selected.enabled })
               }
@@ -445,19 +444,29 @@ interface SkillDetailProps {
   tab: Tab;
   lang: Lang;
   setLang: (l: Lang) => void;
+  profileOverride?: string | null;
   onToggle: () => void;
 }
 
-function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) {
+function SkillDetail({
+  skill,
+  tab,
+  lang,
+  setLang,
+  profileOverride,
+  onToggle,
+}: SkillDetailProps) {
   const tr = translateSkill(skill.name, skill.description);
   const isTranslated = skill.name in skillTranslations;
   const cnCategory = translateCategory(skill.category);
-  const origin = skillOrigin(skill);
-  const sourcePath = skill.source_path || "后端未返回来源目录";
-  const skillFile = skill.skill_file || "";
-  const markdownQuery = useSkillMarkdown(skill.name);
+  const origin = resolveSkillOrigin(skill);
+  const markdownQuery = useSkillMarkdown(skill.name, profileOverride);
   const markdown = markdownQuery.data;
-  const canReadMarkdown = Boolean(window.hermesDesktop?.readSkillMarkdown);
+  const skillFile = markdown?.path || skill.skill_file || "";
+  const resolvedSourcePath =
+    skill.source_path || (markdown?.path ? skillDirectory(markdown.path) : "");
+  const sourcePath =
+    resolvedSourcePath || (markdownQuery.isError ? "后端未返回来源目录" : "正在读取来源目录…");
 
   return (
     <section className={s.detail}>
@@ -594,9 +603,7 @@ function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) 
             </div>
           </div>
           <div className={s.markdownCard} aria-busy={markdownQuery.isFetching}>
-            {!canReadMarkdown ? (
-              <div className={s.markdownState}>当前运行环境不支持读取本地 SKILL.md，请在桌面端查看。</div>
-            ) : markdownQuery.isLoading ? (
+            {markdownQuery.isLoading ? (
               <div className={s.markdownState}>正在读取 SKILL.md…</div>
             ) : markdownQuery.isError ? (
               <div className={s.markdownState} data-tone="error">
@@ -623,8 +630,8 @@ function SkillDetail({ skill, tab, lang, setLang, onToggle }: SkillDetailProps) 
                 <span className={s.sourceLabel}>实际安装目录</span>
                 <code>{sourcePath}</code>
               </div>
-              {skill.source_path && (
-                <CopyButton text={skill.source_path} className={s.btn}>
+              {resolvedSourcePath && (
+                <CopyButton text={resolvedSourcePath} className={s.btn}>
                   <Copy size={13} />
                   复制
                 </CopyButton>
@@ -665,7 +672,7 @@ function UserEmptyState() {
       <h2 className={s.emptyStateTitle}>还没有自建 Skill</h2>
       <p className={s.emptyStateBody}>
         在 Hermes Agent 中沉淀你自己的工作流：写一份 <code>SKILL.md</code>，
-        放到 <code>~/.hermes/skills/user/</code> 目录下，
+        放到 <code>~/.hermes/skills/&lt;分类&gt;/&lt;名称&gt;/</code> 目录下，
         刷新就会出现在这里。
         <br />
         在线编辑器规划中——目前请通过文件系统手动管理。

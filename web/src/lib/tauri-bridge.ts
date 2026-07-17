@@ -52,7 +52,6 @@ import type {
   FilePreview,
   PreviewFileChangedPayload,
   ReadWorkspaceFileInput,
-  SkillMarkdownResult,
   ExportDebugBundleInput,
   ExportDebugBundleResult,
   ExternalTerminalResult,
@@ -433,10 +432,6 @@ const tauriBridge = {
 
   async imOnboardingApply(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult> {
     return invokeCommand("im_onboarding_apply", { input });
-  },
-
-  async readSkillMarkdown(input: { name: string }): Promise<SkillMarkdownResult> {
-    return invokeCommand("read_skill_markdown", { input });
   },
 
   async readMemory() {

@@ -503,7 +503,6 @@ fn main() {
             commands::profiles::switch_profile,
             commands::yolo::get_yolo_mode,
             commands::yolo::set_yolo_mode,
-            commands::skills::read_skill_markdown,
             commands::memory::read_memory,
             commands::memory::add_memory_entry,
             commands::memory::update_memory_entry,

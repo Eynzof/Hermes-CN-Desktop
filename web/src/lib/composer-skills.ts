@@ -1,4 +1,5 @@
 import type { SkillInfo } from "@hermes/protocol";
+import { resolveSkillOrigin } from "@/lib/skill-origin";
 import { translateCategory, translateSkill } from "@/lib/skill-translations";
 
 /**
@@ -45,7 +46,7 @@ function lower(value: string): string {
 }
 
 function skillOriginLabel(skill: SkillInfo): string {
-  const origin = skill.origin ?? (skill.name.startsWith("user/") ? "user" : "builtin");
+  const origin = resolveSkillOrigin(skill);
   if (origin === "external") return "外部";
   if (origin === "user") return "自建";
   return "内置";

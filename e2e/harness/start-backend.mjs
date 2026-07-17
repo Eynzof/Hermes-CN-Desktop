@@ -71,6 +71,26 @@ async function main() {
   mkdirSync(UPLOAD_DIR, { recursive: true });
   writeFileSync(resolve(HERMES_HOME, "config.yaml"), configYaml());
 
+  // A deterministic agent-owned skill proves the desktop classifies skills
+  // from the connected Core instead of falling back to its bundled runtime.
+  const agentSkillDir = resolve(HERMES_HOME, "skills", "user", "e2e-agent-skill");
+  mkdirSync(agentSkillDir, { recursive: true });
+  writeFileSync(
+    resolve(agentSkillDir, "SKILL.md"),
+    [
+      "---",
+      "name: e2e-agent-skill",
+      "description: E2E marker owned by the connected Core.",
+      "category: testing",
+      "---",
+      "",
+      "# Connected Core Skill",
+      "",
+      "E2E connected-Core markdown marker.",
+      "",
+    ].join("\n"),
+  );
+
   // Stub SPA dist: index.html (token injected at `</head>`) + an assets dir the
   // dashboard StaticFiles mount requires to exist.
   mkdirSync(resolve(WEB_DIST, "assets"), { recursive: true });
