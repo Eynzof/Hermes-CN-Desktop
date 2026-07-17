@@ -1,0 +1,7 @@
+# Enforce LF for files touched by version/license sync scripts
+Cargo.lock text eol=lf
+Cargo.toml text eol=lf
+tauri.conf.json text eol=lf
+web/package.json text eol=lf
+packages/*/package.json text eol=lf
+legal/EULA.zh-CN.rtf text eol=lf

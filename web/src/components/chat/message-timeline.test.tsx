@@ -41,7 +41,7 @@ describe("MessageTimeline", () => {
         role: "assistant",
         createdAt: 1,
         status: "streaming",
-        blocks: [{ type: "progress", text: "正在启动Hermes Agent内核..." }],
+        blocks: [{ type: "progress", text: "正在唤醒Hermes..." }],
       },
     ];
 
@@ -211,7 +211,7 @@ describe("MessageTimeline", () => {
     expect(html).toContain("\\(x_1\\)");
   });
 
-  it("shows a readable fallback for unsupported local image URLs", () => {
+  it("starts resolving local image URLs through the gateway media endpoint", () => {
     const messages: ChatMessage[] = [
       {
         id: "user-image",
@@ -225,7 +225,7 @@ describe("MessageTimeline", () => {
       <MessageTimeline messages={messages} />,
     );
 
-    expect(html).toContain("图片暂不能直接预览");
+    expect(html).toContain("图片加载中");
     expect(html).toContain("chart.png");
     expect(html).toContain("/Users/enzo/Downloads/chart.png");
   });

@@ -17,7 +17,7 @@ import {
   gatewayRestartButtonLabel,
   gatewayRestartTitle,
 } from "@/lib/gateway-restart";
-import { detectHostOS } from "@/lib/runtime";
+import { detectHostOS, runtime } from "@/lib/runtime";
 import { buildSidebarVersionRows } from "./sidebar-version-tag";
 import s from "./app-status-bar.module.css";
 
@@ -49,6 +49,11 @@ export function AppStatusBar() {
   });
   const port = dashboardPortFromUrl(dashboardUrl);
   const gatewayOnline = !!status && !statusError;
+  const modeLabel = runtime.isRemote()
+    ? "远端 Hermes"
+    : runtime.isLocalConnection()
+      ? "本机外部 Hermes"
+      : "内置内核";
 
   const modelLabel = formatModelShort(modelInfo?.model);
   const contextLabel = formatContext(
@@ -91,7 +96,7 @@ export function AppStatusBar() {
           aria-label={`在浏览器打开 ${dashboardUrl}`}
         >
           <span className={s.dot} data-state={gatewayOnline ? "running" : "offline"} />
-          <span className={s.lbl}>接收服务</span>
+          <span className={s.lbl}>{modeLabel}</span>
           <span className={s.val}>{port}</span>
         </button>
         <button
@@ -99,9 +104,9 @@ export function AppStatusBar() {
           className={s.restartButton}
           data-state={gatewayRestart.phase}
           onClick={() => void gatewayRestart.restart()}
-          disabled={gatewayRestart.locked}
-          title={restartTitle}
-          aria-label={restartTitle}
+          disabled={gatewayRestart.locked || runtime.isAttached()}
+          title={runtime.isAttached() ? "外部 Hermes 的 Gateway 由目标端管理" : restartTitle}
+          aria-label={runtime.isAttached() ? "外部 Hermes 的 Gateway 由目标端管理" : restartTitle}
           aria-busy={gatewayRestart.busy}
         >
           <RotateCcw size={11} aria-hidden="true" />

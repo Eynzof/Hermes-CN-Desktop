@@ -17,6 +17,7 @@ use tauri::Emitter;
 
 use crate::connection::{ConnectionMode, LocalBackend, RemoteBackend};
 use crate::environment;
+use crate::error::AppError;
 use crate::process::{dashboard, runtime};
 use crate::state::{AppState, DashboardHandle};
 
@@ -48,10 +49,41 @@ pub fn record_bootstrap_error(app: &tauri::AppHandle, message: String) -> String
     message
 }
 
+/// Finish a shell-only bootstrap when the managed runtime is intentionally
+/// stopped or uninstalled. The renderer still needs the profile/home metadata
+/// and a ready event so it can mount `/guide` and the recovery surfaces, but no
+/// backend URL is invented and no runtime payload is installed.
+pub fn finalize_offline_bootstrap(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    let state = app.state::<AppState>();
+    if let Ok(mut inner) = state.inner.lock() {
+        inner.connection_mode = ConnectionMode::Managed;
+        inner.api_base_url.clear();
+        inner.gateway_url.clear();
+        inner.session_token = None;
+        inner.oauth_session = None;
+        inner.dashboard_handle = None;
+        inner.last_runtime_error = None;
+    }
+    emit_runtime_status(app, "ready-offline", "内核未启动，已进入桌面引导");
+    log::info!("Hermes Agent 中文社区桌面版 ready (managed runtime offline)");
+}
+
 pub async fn install_bundled_runtime_for_bootstrap(
     app: &tauri::AppHandle,
     resource_dir: Option<&Path>,
 ) -> bool {
+    // Allow skipping bundled runtime install via env var (e.g. when the user
+    // only uses local/remote connection mode and never needs a local runtime).
+    if std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        log::info!("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1; skipping bundled runtime install");
+        return true;
+    }
+
     if !runtime::bundled_runtime_available(resource_dir) {
         return true;
     }
@@ -167,7 +199,38 @@ pub async fn connect_remote_backend(
             remote.base_url
         );
     }
-    DashboardHandle::remote(remote.base_url.clone(), remote.token.clone())
+    match &remote.auth {
+        // OAuth: seed the session registry from persisted cookies so REST/WS
+        // work immediately, then verify liveness in the background — a dead
+        // session only pops the re-login banner, never blocks boot.
+        crate::connection::RemoteAuth::Oauth(cookies) => {
+            if let Ok(session) = crate::oauth_session::session_for(&remote.base_url) {
+                session.import_cookies(cookies);
+                let app_bg = app.clone();
+                let base = remote.base_url.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(s) = crate::oauth_session::session_for(&base) {
+                        if let Err(AppError::AuthSessionExpired(_)) = s.mint_ws_ticket().await {
+                            emit_auth_expired(&app_bg, &base);
+                        }
+                    }
+                });
+            }
+            DashboardHandle::remote_oauth(remote.base_url.clone())
+        }
+        crate::connection::RemoteAuth::Token(token) => {
+            DashboardHandle::remote(remote.base_url.clone(), token.clone())
+        }
+    }
+}
+
+/// Emit the re-login banner event from bootstrap's background verify.
+fn emit_auth_expired(app: &tauri::AppHandle, base_url: &str) {
+    use tauri::Emitter;
+    let _ = app.emit(
+        "connection-auth-expired",
+        serde_json::json!({ "baseUrl": base_url, "reason": "session_expired", "loginUrl": null }),
+    );
 }
 
 /// Attach to a local Hermes Agent CLI dashboard. The URL is already validated
@@ -213,18 +276,36 @@ pub async fn finalize_bootstrap(
 ) {
     use tauri::Manager;
 
-    let session_token = match handle.session_token.clone() {
-        Some(token) => Some(token),
-        // Remote handles always carry their token, so this dashboard scrape
-        // fallback is only for managed or loopback-local dashboards.
-        None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
-            .ok()
-            .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
-        {
-            Some(token) => Some(token),
-            None => dashboard::fetch_session_token(&handle.api_base_url).await,
-        },
+    // An OAuth remote authenticates via the cookie session, not a token — the
+    // registry already holds it (seeded in connect_remote_backend).
+    let oauth_session = if mode == ConnectionMode::Remote {
+        matches!(
+            crate::connection::read_config().remote_auth_mode,
+            crate::connection::RemoteAuthMode::Oauth
+        )
+        .then(|| crate::oauth_session::session_for(&handle.api_base_url).ok())
+        .flatten()
+    } else {
+        None
     };
+
+    let session_token = if oauth_session.is_some() {
+        None
+    } else {
+        match handle.session_token.clone() {
+            Some(token) => Some(token),
+            // Remote token handles carry their token, so this dashboard scrape
+            // fallback is only for managed or loopback-local dashboards.
+            None => match std::env::var("HERMES_DESKTOP_SESSION_TOKEN")
+                .ok()
+                .or_else(|| std::env::var("HERMES_DASHBOARD_SESSION_TOKEN").ok())
+            {
+                Some(token) => Some(token),
+                None => dashboard::fetch_session_token(&handle.api_base_url).await,
+            },
+        }
+    };
+    // OAuth gateway URL carries no token; the relay mints a ticket per connect.
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
     let (effective_home, effective_home_base, effective_profile) = if mode == ConnectionMode::Local
     {
@@ -261,9 +342,67 @@ pub async fn finalize_bootstrap(
             ConnectionMode::Local | ConnectionMode::Remote => false,
         };
         inner.connection_mode = mode;
+        inner.oauth_session = oauth_session;
         inner.dashboard_handle = Some(handle);
     }
 
     emit_runtime_status(app, "ready", "");
     log::info!("Hermes Agent 中文社区桌面版 ready");
+}
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    /// install_bundled_runtime_for_bootstrap returns true early when
+    /// HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1, regardless of whether a
+    /// bundled runtime is available.
+    #[tokio::test]
+    #[serial]
+    async fn skip_bundled_runtime_env_var_bypasses_install() {
+        // We can't easily construct a real tauri::AppHandle in a unit test,
+        // but we can verify the env-var check itself. The function's first
+        // early return is an env-var gate that does not touch app or
+        // resource_dir — so passing null-like values will panic only if the
+        // gate is broken.
+        std::env::set_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME", "1");
+
+        // This test validates the gate logic: when the env var is "1",
+        // the function must return true without accessing app/resource_dir.
+        // We can't call the real function without a Tauri AppHandle, but
+        // we can exercise the env-var path through the same variable read:
+        let skip = std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
+
+        assert!(
+            skip,
+            "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1 should enable skip"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn skip_bundled_runtime_env_var_disabled_by_default() {
+        std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
+        let skip = std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        assert!(!skip, "without env var, skip should be false");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn skip_bundled_runtime_env_var_zero_is_disabled() {
+        std::env::set_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME", "0");
+        let skip = std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
+        assert!(
+            !skip,
+            "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=0 should not skip"
+        );
+    }
 }

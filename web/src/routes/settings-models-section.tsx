@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import {
   closestCenter,
   DndContext,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -13,10 +12,9 @@ import {
 } from "@dnd-kit/core";
 import {
   arrayMove,
+  rectSortingStrategy,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
@@ -25,26 +23,37 @@ import { useGateway } from "@/hooks/use-gateway";
 import { useProviderModels } from "@/hooks/use-provider-models";
 import type { ModelInfo, ProviderProbeResult } from "@hermes/protocol";
 import {
+  apiModeBadgeLabel,
+  apiModeDisplayName,
   BUILTIN_PROVIDER_CATALOG,
   buildCustomProviderDeleteUpdate,
   buildProviderConfigUpdate,
   buildProviderOrderUpdate,
   buildProviderSettingsUpdate,
+  chatEndpointPreviewUrl,
+  customProviderPresetsFromConfig,
+  detectCustomApiModeFromUrl,
   getProviderCredentialPreview,
   getProviderEntry,
   parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
+  resolveSelectedProvider,
   sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
 } from "@/lib/provider-catalog";
+import {
+  probeAnthropicMessagesProvider,
+  probeChatCompletionsProvider,
+} from "@/lib/provider-probe";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 import { useProviderCatalog } from "@/hooks/use-provider-catalog";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
-import { fetchExternalJSON } from "@/lib/transport";
+import { reportPromoClick } from "@/lib/telemetry";
 import { openExternalUrl } from "@/lib/external-links";
 import {
   getLocalContextWarning,
@@ -56,6 +65,8 @@ import type { EnvVarInfo } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Alert, Button, Field, Input, Select, Textarea } from "@hermes/shared-ui";
 import { OAuthProvidersSection } from "./settings-oauth-section";
+import { MoaPanel } from "./settings-moa-panel";
+import { useMoaConfig } from "@/hooks/use-moa-config";
 import s from "./settings.module.css";
 
 const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
@@ -93,9 +104,9 @@ const PROVIDER_SWITCH_LOADING_MIN_MS = 280;
 const PROVIDER_ORDER_SAVE_DEBOUNCE_MS = 320;
 const EMPTY_ENV_VARS: Record<string, EnvVarInfo> = {};
 
-type ModelSettingsTab = "main" | "auxiliary";
+type ModelSettingsTab = "main" | "auxiliary" | "moa";
 type CustomProviderMode = "custom" | "local";
-type ProbeErrorKind = NonNullable<ProviderProbeResult["error_kind"]>;
+type CustomProviderApiMode = "chat_completions" | "anthropic_messages";
 
 type AuxiliaryTaskId =
   | "vision"
@@ -143,87 +154,10 @@ function initialCustomProviderForm(mode: CustomProviderMode) {
     apiKey: "",
     model: "",
     contextWindow: mode === "local" ? String(RECOMMENDED_LOCAL_CONTEXT_LENGTH) : "",
+    apiMode: "chat_completions" as CustomProviderApiMode,
+    // 用户手动选过格式后，Base URL 启发式不再覆盖选择。
+    apiModeTouched: false,
   };
-}
-
-function buildChatCompletionsUrl(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
-}
-
-function statusCodeFromErrorMessage(message: string): number | null {
-  const match = message.match(/\bHTTP\s+(\d{3})\b/i);
-  return match ? Number(match[1]) : null;
-}
-
-function probeErrorKind(statusCode: number | null, message: string): ProbeErrorKind {
-  const lower = message.toLowerCase();
-  if (statusCode === 401 || statusCode === 403 || /unauthor|api key|token|credential/.test(lower)) {
-    return "auth";
-  }
-  if (/timeout|timed out/.test(lower)) return "timeout";
-  if (statusCode != null) return "http";
-  if (/network|failed to fetch|cors|connection/.test(lower)) return "network";
-  return "unknown";
-}
-
-async function probeChatCompletionsProvider(input: {
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-}): Promise<ProviderProbeResult> {
-  const apiKey = input.apiKey.trim();
-  const baseUrl = input.baseUrl.trim();
-  const model = input.model.trim();
-  if (!baseUrl || !model) {
-    return {
-      ok: false,
-      latency_ms: 0,
-      model_count: 0,
-      sample_models: [],
-      status_code: null,
-      error: !baseUrl ? "base_url is required" : "model is required",
-      error_kind: "unknown",
-    };
-  }
-
-  const start = performance.now();
-  try {
-    await fetchExternalJSON<unknown>(buildChatCompletionsUrl(baseUrl), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        ...(apiKey ? { "Authorization": `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 1,
-        stream: false,
-      }),
-    });
-    return {
-      ok: true,
-      latency_ms: Math.max(0, Math.round(performance.now() - start)),
-      model_count: 1,
-      sample_models: [model],
-      status_code: 200,
-      error: null,
-      error_kind: null,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const statusCode = statusCodeFromErrorMessage(message);
-    return {
-      ok: false,
-      latency_ms: Math.max(0, Math.round(performance.now() - start)),
-      model_count: 0,
-      sample_models: [],
-      status_code: statusCode,
-      error: message,
-      error_kind: probeErrorKind(statusCode, message),
-    };
-  }
 }
 
 const AUXILIARY_TASKS: AuxiliaryTaskDefinition[] = [
@@ -674,6 +608,9 @@ export function ModelsSection() {
   } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: oauthProviders, isLoading: oauthProvidersLoading } = useOAuthProviders();
+  // MoA tab 徽标用。老后端没有 /api/model/moa 时保持 undefined，徽标隐藏。
+  const { data: moaConfig } = useMoaConfig();
+  const moaPresetCount = Object.keys(moaConfig?.presets ?? {}).length;
   const saveConfig = useSaveConfig();
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
@@ -692,7 +629,9 @@ export function ModelsSection() {
   const initialProvider =
     BUILTIN_PROVIDER_CATALOG.providers.find((p) => p.id === TOP5_PROVIDER_IDS[0]) ??
     BUILTIN_PROVIDER_CATALOG.providers[0];
-  const [selectedProviderId, setSelectedProviderId] = useState(initialProvider?.id ?? "");
+  // Empty means "follow the runtime's current provider". A concrete id is
+  // stored only after the user explicitly opens a different card.
+  const [selectedProviderId, setSelectedProviderId] = useState("");
   const [providerPanelLoading, setProviderPanelLoading] = useState(false);
   const selectedProviderIdRef = useRef(selectedProviderId);
   const [providerForm, setProviderForm] = useState({
@@ -785,35 +724,17 @@ export function ModelsSection() {
     return () => window.removeEventListener("keydown", handler);
   }, [showCustomForm, closeCustomForm]);
 
-  const customProviders = useMemo<ProviderPreset[]>(() => {
-    const providers = config && typeof config === "object" && !Array.isArray(config)
-      ? (config as Record<string, any>).providers
-      : null;
-    if (!providers || typeof providers !== "object") return [];
-    const knownIds = new Set(catalog.providers.map((p) => p.id));
-    const customs: ProviderPreset[] = [];
-    for (const [id, raw] of Object.entries(providers)) {
-      if (knownIds.has(id) || !id.startsWith("custom:")) continue;
-      const v = raw && typeof raw === "object" ? raw as Record<string, any> : {};
-      const model = typeof v.model === "string" ? v.model : "";
-      customs.push({
-        id,
-        name: typeof v.name === "string" && v.name ? v.name : id.replace(/^custom:/, ""),
-        vendor: isLocalProviderBaseUrl(typeof v.base_url === "string" ? v.base_url : "") ? "本地部署" : "自定义",
-        region: "cn",
-        baseUrl: typeof v.base_url === "string" ? v.base_url : "",
-        apiMode: v.api_mode === "anthropic_messages" || v.api_mode === "codex_responses"
-          ? v.api_mode : "chat_completions",
-        transport: v.transport === "anthropic_messages" || v.transport === "codex_responses"
-          ? v.transport : "openai_chat",
-        apiKeyLabel: "API Key",
-        defaultModel: model,
-        models: model ? [{ id: model, supportsTools: true }] : [],
-        isCustom: true,
-      });
-    }
-    return customs;
-  }, [config, catalog.providers]);
+  const currentProviderId = modelInfo?.provider ||
+    (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
+      ? String((config.model as Record<string, unknown>).provider ?? "")
+      : "");
+  const customProviders = useMemo(
+    () => customProviderPresetsFromConfig(config, catalog.providers, {
+      provider: currentProviderId,
+      model: modelInfo?.model,
+    }),
+    [catalog.providers, config, currentProviderId, modelInfo?.model],
+  );
 
   const allProviders = useMemo(
     () => [...catalog.providers, ...customProviders],
@@ -842,8 +763,8 @@ export function ModelsSection() {
     return Array.from(options.values());
   }, [allProviders, auxForm.provider]);
   const selectedProvider = useMemo<ProviderPreset | undefined>(
-    () => allProviders.find((provider) => provider.id === selectedProviderId) ?? allProviders[0],
-    [allProviders, selectedProviderId],
+    () => resolveSelectedProvider(allProviders, selectedProviderId, currentProviderId),
+    [allProviders, currentProviderId, selectedProviderId],
   );
   const providerOrderConfig = useMemo(
     () => providerOrderOverride && config
@@ -890,10 +811,6 @@ export function ModelsSection() {
     if (!normalized) return undefined;
     return allProviders.find((provider) => normalizeProviderBaseUrl(provider.baseUrl) === normalized);
   }, [allProviders, customBaseUrl]);
-  const currentProviderId = modelInfo?.provider ||
-    (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
-      ? String((config.model as Record<string, unknown>).provider ?? "")
-      : "");
   const configuredAuxiliaryCount = useMemo(
     () => AUXILIARY_TASKS.filter((task) => {
       const slot = getAuxiliarySlot(config, task.id);
@@ -935,6 +852,7 @@ export function ModelsSection() {
     providerForm.baseUrl,
     liveApiKey || undefined,
     listProviderModels,
+    selectedProvider?.apiMode,
   );
   const liveModelIds = supportsModelListing ? modelsQuery.data?.models ?? [] : [];
   const mergedModelOptions = useMemo(() => {
@@ -1018,21 +936,29 @@ export function ModelsSection() {
       // tencent-hunyuan — not in CANONICAL_PROVIDERS), we pass the catalog
       // id; the backend handler tolerates unknown slugs as long as api_key
       // + base_url are supplied explicitly.
+      //
+      // 不提供 /models 端点的供应商改发一次极小的真实请求，按协议分流：
+      // Anthropic 格式（Claude Code 中转基本不带 /models，且严格网关拒绝
+      // Bearer-only）POST /v1/messages；OpenAI 格式 POST /chat/completions。
+      // 其余走后端 probe，并带上 api_mode 让后端用对应协议探测。
+      const probeModel = providerForm.model.trim() || selectedProvider.defaultModel;
+      const shouldProbeAnthropicMessages =
+        selectedProvider.apiMode === "anthropic_messages" &&
+        selectedProvider.supportsModelListing !== true;
       const shouldProbeChatCompletions =
         selectedProvider.apiMode === "chat_completions" &&
         selectedProvider.supportsModelListing === false;
-      const result = shouldProbeChatCompletions
-        ? await probeChatCompletionsProvider({
-          apiKey,
-          baseUrl,
-          model: providerForm.model.trim() || selectedProvider.defaultModel,
-        })
-        : await probeProvider({
-          provider: selectedProvider.id,
-          api_key: apiKey || undefined,
-          base_url: baseUrl || undefined,
-          timeout_ms: 8000,
-        });
+      const result = shouldProbeAnthropicMessages
+        ? await probeAnthropicMessagesProvider({ apiKey, baseUrl, model: probeModel })
+        : shouldProbeChatCompletions
+          ? await probeChatCompletionsProvider({ apiKey, baseUrl, model: probeModel })
+          : await probeProvider({
+            provider: selectedProvider.id,
+            api_key: apiKey || undefined,
+            base_url: baseUrl || undefined,
+            api_mode: selectedProvider.apiMode,
+            timeout_ms: 8000,
+          });
       setProbeState({
         providerId: selectedProvider.id,
         status: result.ok ? "ok" : "error",
@@ -1061,6 +987,11 @@ export function ModelsSection() {
   const showSavedFlash = !isFormDirty && savedFlashFor === selectedProvider?.id;
   const selectedProviderModel = selectedProvider
     ? (providerForm.model.trim() || selectedProvider.defaultModel)
+    : "";
+  // Base URL 的语义随接口格式变化（Anthropic 自动补 /v1/messages，OpenAI 补
+  // /chat/completions），把最终请求端点直接摆给用户看，避免手改 URL 踩坑。
+  const selectedProviderEndpointPreview = selectedProvider
+    ? chatEndpointPreviewUrl(selectedProvider.apiMode, providerForm.baseUrl.trim() || selectedProvider.baseUrl)
     : "";
   const selectedProviderIsCurrent = Boolean(
     selectedProvider &&
@@ -1174,14 +1105,14 @@ export function ModelsSection() {
     }, PROVIDER_ORDER_SAVE_DEBOUNCE_MS);
   }, [config, saveConfig]);
 
+  // 卡片整体即拖拽把手（网格布局没有独立把手的空间），指针位移超过阈值才
+  // 进入拖拽，普通点击仍走 onClick 选中。不注册 KeyboardSensor：Enter/空格
+  // 保留给键盘选中，避免和 dnd-kit 的键盘拖拽抢按键。
   const providerDndSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 6,
       },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
@@ -1197,7 +1128,6 @@ export function ModelsSection() {
   }, [canReorderProviders, config, orderedProviders, saveProviderOrder]);
 
   const handleProviderRowKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, providerId: string) => {
-    if ((event.target as HTMLElement | null)?.closest("[data-provider-drag-handle='true']")) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     selectProvider(providerId);
@@ -1356,14 +1286,18 @@ export function ModelsSection() {
     while (existingIds.has(candidate)) {
       candidate = `custom:${slug || "endpoint"}-${suffix++}`;
     }
+    // 本地部署（LM Studio / Ollama / vLLM …）只有 OpenAI 兼容接口；
+    // 自定义模式跟随用户在「接口格式」里的选择。
+    const apiMode: CustomProviderApiMode =
+      customProviderMode === "local" ? "chat_completions" : customForm.apiMode;
     const preset: ProviderPreset = {
       id: candidate,
       name,
       vendor: customProviderMode === "local" ? "本地部署" : "自定义",
       region: "cn",
       baseUrl,
-      apiMode: "chat_completions",
-      transport: "openai_chat",
+      apiMode,
+      transport: apiMode === "anthropic_messages" ? "anthropic_messages" : "openai_chat",
       apiKeyLabel: "API Key",
       defaultModel: model,
       models: [{ id: model, supportsTools: true }],
@@ -1509,10 +1443,11 @@ export function ModelsSection() {
     !modelInfo?.provider?.trim() ||
     (!currentProviderOAuthLoggedIn && configuredCount === 0 && !oauthProvidersLoading);
   const customProviderIsLocal = customProviderMode === "local";
+  const customProviderIsAnthropic = !customProviderIsLocal && customForm.apiMode === "anthropic_messages";
   const customProviderTitle = customProviderIsLocal ? "添加本地部署服务商" : "添加自定义服务商";
   const customProviderHint = customProviderIsLocal
     ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务、加载模型并把上下文窗口设到至少 64K，再选择下面的端点或手动填写。"
-    : "添加任意 OpenAI Chat Completions 兼容服务（百度千帆 / 腾讯混元 / SiliconFlow / 私有部署等）。提交后可在左侧列表里随时切换。";
+    : "支持 OpenAI Chat Completions 兼容服务（百度千帆 / SiliconFlow / 私有部署等）与 Anthropic 格式的 Claude Code 中转站，请求协议在「接口格式」里选择。提交后可在网格里随时切换。";
   const customProviderPlaceholders = customProviderIsLocal
     ? {
         name: "例如：LM Studio",
@@ -1521,13 +1456,21 @@ export function ModelsSection() {
         apiKey: "本地服务一般可留空，启用鉴权时再填写",
         contextWindow: String(RECOMMENDED_LOCAL_CONTEXT_LENGTH),
       }
-    : {
-        name: "例如：Deepseek",
-        baseUrl: "https://api.example.com/v1",
-        model: "deepseek-v4-flash",
-        apiKey: "可选，先建后填也可以",
-        contextWindow: "自动",
-      };
+    : customProviderIsAnthropic
+      ? {
+          name: "例如：某 Claude Code 中转",
+          baseUrl: "https://api.example.com（通常无需以 /v1 结尾）",
+          model: "claude-sonnet-5",
+          apiKey: "可选，先建后填也可以",
+          contextWindow: "自动",
+        }
+      : {
+          name: "例如：Deepseek",
+          baseUrl: "https://api.example.com/v1",
+          model: "deepseek-v4-flash",
+          apiKey: "可选，先建后填也可以",
+          contextWindow: "自动",
+        };
   const customLocalContextWarning = getLocalContextWarning({
     isLocalProvider: customProviderIsLocal,
     configuredContextWindow: customForm.contextWindow,
@@ -1580,6 +1523,17 @@ export function ModelsSection() {
           辅助模型
           <span>{configuredAuxiliaryCount} 项已指定</span>
         </button>
+        <button
+          type="button"
+          className={s.modelTopTab}
+          data-active={activeModelTab === "moa"}
+          role="tab"
+          aria-selected={activeModelTab === "moa"}
+          onClick={() => setActiveModelTab("moa")}
+        >
+          MoA 混合
+          {moaPresetCount > 0 && <span>{moaPresetCount} 个预设</span>}
+        </button>
       </div>
 
       {activeModelTab === "main" ? (
@@ -1599,40 +1553,38 @@ export function ModelsSection() {
           </div>
 
           <div className={s.providerPresetLayout}>
-            <div className={s.providerPresetListPane}>
-              <div className={s.providerListToolbar}>
-                <Input
-                  className={s.providerSearchInput}
-                  value={providerSearch}
-                  onChange={(event) => setProviderSearch(event.target.value)}
-                  placeholder="搜索模型平台..."
-                />
-                <div className={s.providerToolbarActions}>
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => openCustomProviderForm("custom")}
-                    title="添加自定义 OpenAI 兼容服务商"
-                  >
-                    + 自定义
-                  </Button>
-                  <Button
-                    variant="outline"
-                    fullWidth
-                    onClick={() => openCustomProviderForm("local")}
-                    title="添加本地部署 OpenAI 兼容服务商"
-                  >
-                    + 本地部署
-                  </Button>
-                  <Button variant="outline" fullWidth onClick={handleCatalogRefresh}>刷新预设</Button>
-                </div>
-                <div className={s.providerListHint}>
-                  {providerSearch.trim()
-                    ? "正在搜索结果中浏览；清空搜索后可拖拽排序。"
-                    : "拖拽左侧把手可调整常用服务商顺序，排序保存到当前 Profile。"}
+            <div className={s.providerGridPane}>
+              <div className={s.providerGridHeader}>
+                <div className={s.providerGridTitle}>预设供应商</div>
+                <div className={s.providerGridTools}>
+                  <Input
+                    className={s.providerSearchInput}
+                    value={providerSearch}
+                    onChange={(event) => setProviderSearch(event.target.value)}
+                    placeholder="搜索模型平台..."
+                  />
+                  <Button variant="outline" onClick={handleCatalogRefresh}>刷新预设</Button>
                 </div>
               </div>
-              <div className={s.providerPresetList}>
+              <div className={s.providerPresetGrid}>
+                <button
+                  type="button"
+                  className={`${s.presetCard} ${s.presetCardAdd}`}
+                  onClick={() => openCustomProviderForm("custom")}
+                  title="添加自定义服务商（OpenAI 兼容 / Anthropic Claude Code 中转）"
+                >
+                  <span className={s.presetCardAddIcon} aria-hidden>＋</span>
+                  <span className={s.presetCardName}>自定义配置</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${s.presetCard} ${s.presetCardAdd}`}
+                  onClick={() => openCustomProviderForm("local")}
+                  title="添加本地部署 OpenAI 兼容服务商"
+                >
+                  <span className={s.presetCardAddIcon} aria-hidden>＋</span>
+                  <span className={s.presetCardName}>本地部署</span>
+                </button>
                 {filteredProviders.length > 0 ? (
                   <DndContext
                     sensors={providerDndSensors}
@@ -1641,10 +1593,10 @@ export function ModelsSection() {
                   >
                     <SortableContext
                       items={filteredProviders.map((provider) => provider.id)}
-                      strategy={verticalListSortingStrategy}
+                      strategy={rectSortingStrategy}
                     >
                       {filteredProviders.map((provider) => (
-                        <SortableProviderPresetItem
+                        <SortableProviderPresetCard
                           key={provider.id}
                           provider={provider}
                           active={selectedProvider?.id === provider.id}
@@ -1661,6 +1613,26 @@ export function ModelsSection() {
                   <div className={s.providerPresetEmpty}>没有匹配的模型平台</div>
                 )}
               </div>
+              <div className={s.providerListHint}>
+                {providerSearch.trim()
+                  ? "正在搜索结果中浏览；清空搜索后可拖拽排序。"
+                  : "拖拽卡片可调整常用服务商顺序，排序保存到当前 Profile。"}
+              </div>
+              <div className={s.providerReviewBanner}>
+                想知道哪家中转站或者提供商性价比更好更稳定？
+                <a
+                  href="https://hermesagent.org.cn/transit"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={s.link}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void openExternalUrl("https://hermesagent.org.cn/transit");
+                  }}
+                >
+                  点击此处查看测评
+                </a>
+              </div>
             </div>
 
             {selectedProvider && (
@@ -1673,14 +1645,29 @@ export function ModelsSection() {
                       <div>
                         <div className={s.providerDetailName}>{selectedProvider.name}</div>
                         <div className={s.providerDetailVendor}>
-                          {selectedProvider.id} · {selectedProvider.vendor}
-                          {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
+                          {selectedProvider.id} · {selectedProvider.vendor} · {apiModeDisplayName(selectedProvider.apiMode)}
                         </div>
                       </div>
                       <div className={s.providerHeaderActions}>
                         <span className={s.statusBadge} data-on={selectedHasCredentials}>
                           {selectedHasCredentials ? "已保存密钥" : "未设置"}
                         </span>
+                        {(selectedProvider.promotion?.url || selectedProvider.websiteUrl) && (
+                          <Button
+                            variant="solid"
+                            tone="accent"
+                            className={s.providerWebsiteButton}
+                            onClick={() => {
+                              reportPromoClick(selectedProvider.id);
+                              void openExternalUrl(
+                                selectedProvider.promotion?.url ?? selectedProvider.websiteUrl!,
+                              );
+                            }}
+                            title={`打开 ${selectedProvider.name} 官网`}
+                          >
+                            前往官网 ↗
+                          </Button>
+                        )}
                         {selectedProvider.isCustom && (
                           <Button
                             type="button"
@@ -1723,6 +1710,11 @@ export function ModelsSection() {
                           onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
                         />
                       </Field>
+                      {selectedProviderEndpointPreview && (
+                        <div className={s.modelPickerHint}>
+                          请求将发送到 <code>{selectedProviderEndpointPreview}</code>
+                        </div>
+                      )}
                       <label className={s.fieldRow}>
                         <div className={s.fieldLabel}>模型</div>
                         <div className={s.modelPickerRow}>
@@ -1848,9 +1840,11 @@ export function ModelsSection() {
                         }
                         onClick={() => void handleProbe()}
                         title={
-                          selectedProvider?.apiMode === "chat_completions" && selectedProvider.supportsModelListing === false
-                            ? "向 /chat/completions 发一次极小请求，验证 API Key + Base URL + 模型"
-                            : "向 /models 端点发一次 GET，验证 API Key + 网络通"
+                          selectedProvider?.apiMode === "anthropic_messages" && selectedProvider.supportsModelListing !== true
+                            ? "向 /v1/messages 发一次极小请求（Anthropic 格式），验证 API Key + Base URL + 模型"
+                            : selectedProvider?.apiMode === "chat_completions" && selectedProvider.supportsModelListing === false
+                              ? "向 /chat/completions 发一次极小请求，验证 API Key + Base URL + 模型"
+                              : "向 /models 端点发一次 GET，验证 API Key + 网络通"
                         }
                       >
                         {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
@@ -1898,7 +1892,7 @@ export function ModelsSection() {
             </div>
           ))}
         </>
-      ) : (
+      ) : activeModelTab === "auxiliary" ? (
         <AuxiliaryModelsPanel
           config={config}
           modelInfo={modelInfo}
@@ -1920,6 +1914,8 @@ export function ModelsSection() {
           imageInputMode={getImageInputMode(config)}
           onImageInputModeChange={(mode) => void handleImageInputModeChange(mode)}
         />
+      ) : (
+        <MoaPanel />
       )}
 
       {showCustomForm && createPortal(
@@ -1980,16 +1976,56 @@ export function ModelsSection() {
                   onChange={(e) => setCustomForm((p) => ({ ...p, name: e.target.value }))}
                 />
               </Field>
+              {!customProviderIsLocal && (
+                <Field label="接口格式" className={s.fieldRow}>
+                  <div className={s.apiModeToggle} role="radiogroup" aria-label="接口格式">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={customForm.apiMode === "chat_completions"}
+                      data-active={customForm.apiMode === "chat_completions"}
+                      onClick={() => setCustomForm((p) => ({ ...p, apiMode: "chat_completions", apiModeTouched: true }))}
+                    >
+                      OpenAI 兼容
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={customForm.apiMode === "anthropic_messages"}
+                      data-active={customForm.apiMode === "anthropic_messages"}
+                      onClick={() => setCustomForm((p) => ({ ...p, apiMode: "anthropic_messages", apiModeTouched: true }))}
+                    >
+                      Anthropic (Claude Code)
+                    </button>
+                  </div>
+                </Field>
+              )}
               <Field label="Base URL" className={s.fieldRow}>
                 <Input
                   mono
                   value={customForm.baseUrl}
                   placeholder={customProviderPlaceholders.baseUrl}
-                  onChange={(e) => setCustomForm((p) => ({ ...p, baseUrl: e.target.value }))}
+                  onChange={(e) => {
+                    const baseUrl = e.target.value;
+                    setCustomForm((p) => ({
+                      ...p,
+                      baseUrl,
+                      // 未手动选过格式时，按 URL 特征（/anthropic 后缀）自动预选，
+                      // 与 Core 端 _detect_api_mode_for_url 的中转站规则一致。
+                      ...(customProviderIsLocal || p.apiModeTouched
+                        ? {}
+                        : { apiMode: detectCustomApiModeFromUrl(baseUrl) }),
+                    }));
+                  }}
                 />
               </Field>
               {!customBaseUrlValid && (
                 <div className={s.modelPickerError}>Base URL 必须是 http 或 https 地址。</div>
+              )}
+              {customBaseUrlValid && !customProviderIsLocal && customBaseUrl && (
+                <div className={s.modelPickerHint}>
+                  请求将发送到 <code>{chatEndpointPreviewUrl(customForm.apiMode, customBaseUrl)}</code>
+                </div>
               )}
               {customBaseUrlValid && duplicateBaseUrlProvider && (
                 <div className={s.modelPickerHint}>
@@ -2061,7 +2097,7 @@ export function ModelsSection() {
   );
 }
 
-function SortableProviderPresetItem({
+function SortableProviderPresetCard({
   provider,
   active,
   configured,
@@ -2081,7 +2117,6 @@ function SortableProviderPresetItem({
   const {
     attributes,
     listeners,
-    setActivatorNodeRef,
     setNodeRef,
     transform,
     transition,
@@ -2094,41 +2129,76 @@ function SortableProviderPresetItem({
     transform: CSS.Transform.toString(transform),
     transition,
   };
+  const badge = provider.promotion?.badge;
+  const protoTag = apiModeBadgeLabel(provider.apiMode);
+  const tooltip = [
+    `${provider.name} · ${provider.vendor}`,
+    provider.isCustom ? provider.vendor : "",
+    apiModeDisplayName(provider.apiMode),
+    configured ? "已保存密钥" : "未设置密钥",
+    canReorder ? "拖拽可排序" : "清空搜索后可拖拽排序",
+  ].filter(Boolean).join(" · ");
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       id={`provider-${provider.id}`}
-      className={s.providerPresetItem}
+      className={s.presetCard}
       data-active={active}
+      data-current={current || undefined}
       data-dragging={isDragging ? "true" : undefined}
       role="button"
       tabIndex={0}
+      title={tooltip}
       onClick={() => onSelect(provider.id)}
       onKeyDown={(event) => onKeyDown(event, provider.id)}
+      {...(canReorder ? listeners : {})}
     >
-      <span
-        ref={setActivatorNodeRef}
-        className={s.providerDragHandle}
-        data-provider-drag-handle="true"
-        title={canReorder ? "拖拽排序" : "清空搜索后可拖拽排序"}
-        onClick={(event) => event.stopPropagation()}
-        {...(canReorder ? attributes : {})}
-        {...(canReorder ? listeners : {})}
-      >
-        ⋮⋮
+      <ProviderCardIcon provider={provider} />
+      <span className={s.presetCardName}>{provider.name}</span>
+      <span className={s.presetCardMeta}>
+        {protoTag && (
+          <span className={s.presetCardProtoTag} title={apiModeDisplayName(provider.apiMode)}>
+            {protoTag}
+          </span>
+        )}
+        {current
+          ? <span className={s.presetCardCurrent}>当前</span>
+          : configured && <span className={s.presetCardDot} aria-label="已保存密钥" />}
       </span>
-      <span className={s.providerPresetName}>{provider.name}</span>
-      <span className={s.providerPresetVendor}>{provider.vendor}</span>
-      <span className={s.providerPresetBadges}>
-        {current && <span className={s.statusBadge} data-on="true">当前</span>}
-        {provider.isCustom && <span className={s.statusBadge} data-tone="custom">{provider.vendor}</span>}
-        <span className={s.statusBadge} data-on={configured}>
-          {configured ? "已设置" : "未设置"}
+      {badge && (
+        <span className={s.presetCardBadge} data-badge={badge} aria-hidden>
+          {badge === "prime" ? "♥" : "★"}
         </span>
-      </span>
+      )}
     </div>
+  );
+}
+
+function providerInitial(provider: ProviderPreset): string {
+  const source = provider.name.trim() || provider.id;
+  const first = Array.from(source)[0] ?? "?";
+  return /[a-z]/.test(first) ? first.toUpperCase() : first;
+}
+
+function ProviderCardIcon({ provider }: { provider: ProviderPreset }) {
+  const iconUrl = getProviderIconUrl(provider.icon);
+  if (iconUrl) {
+    return (
+      <img
+        className={s.presetCardIconImg}
+        src={iconUrl}
+        alt=""
+        aria-hidden
+        draggable={false}
+      />
+    );
+  }
+  return (
+    <span className={s.presetCardIcon} aria-hidden>
+      {providerInitial(provider)}
+    </span>
   );
 }
 

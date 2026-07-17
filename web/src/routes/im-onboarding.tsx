@@ -49,7 +49,7 @@ import {
 import { SectionShell } from "./section-shell";
 import s from "./im-onboarding.module.css";
 
-type ImSection = "feishu" | "weixin";
+type ImSection = "feishu" | "weixin" | "dingtalk";
 type DmPolicy = "scanned" | "pairing" | "allowlist" | "open" | "disabled";
 
 const FEISHU_DEVELOPER_URL = "https://open.feishu.cn/app";
@@ -71,6 +71,7 @@ export function sectionFromPath(pathname: string): ImSection | null {
   if (pathname === "/im" || pathname === "/im/") return "feishu";
   if (pathname === "/im/feishu") return "feishu";
   if (pathname === "/im/weixin") return "weixin";
+  if (pathname === "/im/dingtalk") return "dingtalk";
   return null;
 }
 
@@ -1294,9 +1295,27 @@ function WeixinRoute() {
   );
 }
 
+function DingtalkRoute() {
+  return (
+    <SectionShell title="钉钉接入" sub="03 消息接入 / 031 消息平台接入">
+      <div className={s.container}>
+        <main className={s.main}>
+          <div className={s.emptyState}>
+            <h2>钉钉接入正在开发中</h2>
+            <p>目前支持飞书和微信接入，钉钉接入即将推出。敬请期待。</p>
+          </div>
+        </main>
+      </div>
+    </SectionShell>
+  );
+}
+
 export function ImOnboardingRoute() {
   const { pathname } = useLocation();
   const section = sectionFromPath(pathname);
   if (!section) return <Navigate to="/im/feishu" replace />;
-  return section === "feishu" ? <FeishuRoute /> : <WeixinRoute />;
+  if (section === "feishu") return <FeishuRoute />;
+  if (section === "weixin") return <WeixinRoute />;
+  // Dingtalk route — show a "coming soon" placeholder for now.
+  return <DingtalkRoute />;
 }

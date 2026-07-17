@@ -229,6 +229,36 @@ function ReasoningBlock({ text, streaming }: { text: string; streaming?: boolean
   );
 }
 
+function MoaReferenceBlock({
+  label,
+  text,
+  index,
+  count,
+}: {
+  label: string;
+  text: string;
+  index?: number;
+  count?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const position = index !== undefined && count !== undefined ? `（${index + 1}/${count}）` : "";
+
+  return (
+    <div className={s.reasoning}>
+      <button
+        type="button"
+        className={s.disclosure}
+        onClick={() => setOpen((value) => !value)}
+        data-open={open}
+      >
+        <span className={s.chevron}>›</span>
+        <span>{`参考模型 ${label}${position}`}</span>
+      </button>
+      {open ? <pre className={s.reasoningBody}>{text}</pre> : null}
+    </div>
+  );
+}
+
 function formatToolElapsed(ms: number | undefined): string | null {
   if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return null;
   if (ms < 100) return "<0.1s";
@@ -459,6 +489,21 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
         <div key={`image-${index}`} className={s.imageBlock}>
           <MessageImage image={block.image} />
         </div>,
+      );
+      return;
+    }
+
+    if (block.type === "moa_reference") {
+      // MoA 参考模型输出块——不受 showReasoning 门控：它是委员会成员的
+      // 实际回答（MoA 的核心卖点），不是模型的内心独白；默认折叠不扰。
+      items.push(
+        <MoaReferenceBlock
+          key={`moa-ref-${index}`}
+          label={block.label}
+          text={block.text}
+          index={block.index}
+          count={block.count}
+        />,
       );
       return;
     }
@@ -1136,7 +1181,11 @@ export function MessageTimeline({
     const container = containerRef.current;
     if (!container || !nearBottomRef.current) return;
     const initialHistoryRender = previousMessageCount === 0 || sessionChanged;
-    scrollToBottom(initialHistoryRender ? "auto" : "smooth");
+    // Bottom-follow must move synchronously. A smooth scroll targets the current
+    // scrollHeight, but streaming can grow the message again before the animation
+    // arrives; the intermediate scroll event then looks far from the bottom and
+    // disables its own ResizeObserver follow-up even though the user never scrolled.
+    scrollToBottom("auto");
 
     // 长会话里 Markdown、表格、代码块等内容会在本次提交后继续改变实际高度。
     // 初次进入历史会话时不要依赖一次平滑滚动，否则 WebKit/Tauri 里可能先滚到

@@ -4,10 +4,12 @@ import { useEffect, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
 import { readUiValue } from "@/lib/ui-store";
+import { sendTelemetryPingIfDue } from "@/lib/telemetry";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
 import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
+import { ConnectionAuthBanner } from "@/components/connection-auth-banner";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CommandPalette } from "@/components/command-palette";
 import { PanelRoute } from "@/routes/panel";
@@ -34,6 +36,9 @@ import { DebugRoute } from "@/routes/debug";
 import { AnalyticsRoute } from "@/routes/analytics";
 import { AdvancedRoute, ThemeRoute } from "@/routes/advanced";
 import { ImOnboardingRoute } from "@/routes/im-onboarding";
+import { GuideRoute } from "@/routes/guide";
+import { OfflineShell } from "@/routes/offline-shell";
+import { runtime } from "@/lib/runtime";
 
 function NewTaskRedirect() {
   const { search } = useLocation();
@@ -48,18 +53,10 @@ function withBoundary(node: ReactNode) {
   return <ErrorBoundary>{node}</ErrorBoundary>;
 }
 
-export function App() {
-  const platform = usePlatform();
-  const hydrateTheme = useSetAtom(hydrateThemeAtom);
-  // 首次启动时让 atom 跟上后端 sticky default；UI SQLite 已在 React 挂载前加载，
-  // 所以这里只需要做一次种子。
+function BackendApp() {
   useBootstrapActiveProfile();
-  useEffect(() => {
-    hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
-  }, [hydrateTheme]);
-
   return (
-    <div lang="zh-CN" data-hermes-platform={platform}>
+    <>
       <AppShell>
         <Routes>
           <Route path="/" element={withBoundary(<PanelRoute />)} />
@@ -102,7 +99,35 @@ export function App() {
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
       <DesktopUpdateNotifier />
+      <ConnectionAuthBanner />
       <CommandPalette />
-    </div>
+    </>
   );
+}
+
+export function App() {
+  const platform = usePlatform();
+  const hydrateTheme = useSetAtom(hydrateThemeAtom);
+  const location = useLocation();
+  useEffect(() => {
+    hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
+  }, [hydrateTheme]);
+  useEffect(() => {
+    void sendTelemetryPingIfDue();
+  }, []);
+
+  const guideState = runtime.getGuideState();
+  const isGuide = location.pathname === "/guide";
+  let content: ReactNode;
+  if (guideState === "pending" && !isGuide) {
+    content = <Navigate to="/guide" replace />;
+  } else if (isGuide) {
+    content = withBoundary(<GuideRoute />);
+  } else if (!runtime.isBackendReady()) {
+    content = <OfflineShell />;
+  } else {
+    content = <BackendApp />;
+  }
+
+  return <div lang="zh-CN" data-hermes-platform={platform}>{content}</div>;
 }

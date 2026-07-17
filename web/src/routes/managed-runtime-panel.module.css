@@ -1,0 +1,121 @@
+.panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-lg);
+  background: var(--h-bg-soft);
+}
+
+.panel[data-compact="true"] {
+  padding: 15px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.header h3,
+.header p {
+  margin: 0;
+}
+
+.header h3 {
+  color: var(--h-text);
+  font-size: 16px;
+}
+
+.header p:not(.eyebrow) {
+  max-width: 720px;
+  margin-top: 6px;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.eyebrow {
+  margin-bottom: 5px !important;
+  color: var(--h-accent);
+  font: 700 10px/1.2 var(--h-font-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.status {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--h-line);
+  border-radius: 999px;
+  color: var(--h-text-2);
+  background: var(--h-bg-pane);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status[data-running="true"] {
+  border-color: color-mix(in srgb, var(--h-ok) 38%, var(--h-line));
+  color: var(--h-ok);
+}
+
+.status[data-lifecycle="uninstalled"] {
+  padding: 7px 12px;
+  border-color: var(--h-accent-border);
+  color: var(--h-accent);
+  background: var(--h-accent-soft);
+  font-size: 12px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 8%, transparent);
+}
+
+.uninstalledState {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--h-accent-border);
+  border-radius: var(--h-r-md);
+  color: var(--h-accent);
+  background: color-mix(in srgb, var(--h-accent-soft) 72%, var(--h-bg-pane));
+}
+
+.uninstalledIcon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--h-bg-pane);
+  place-items: center;
+}
+
+.uninstalledState div {
+  display: grid;
+  gap: 3px;
+}
+
+.uninstalledState strong {
+  color: var(--h-text);
+  font-size: 14px;
+}
+
+.uninstalledState span:not(.uninstalledIcon) {
+  color: var(--h-text-2);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

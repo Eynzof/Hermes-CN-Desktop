@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ImageOff } from "lucide-react";
-import { safeImageSrc } from "@/lib/message-images";
+import { isLikelyLocalFilePath, safeImageSrc } from "@/lib/message-images";
+import { fetchMediaDataUrl } from "@/lib/transport";
 import type { ChatImageItem } from "./chat-types";
 import s from "./message-timeline.module.css";
 
@@ -22,7 +23,7 @@ function ImagePlaceholder({
   reason,
 }: {
   image: ChatImageItem;
-  reason: "unsupported" | "failed";
+  reason: "loading" | "unsupported" | "failed";
 }) {
   const label = imageLabel(image);
   const source = image.url?.trim();
@@ -33,7 +34,11 @@ function ImagePlaceholder({
       <ImageOff size={18} strokeWidth={1.8} aria-hidden="true" />
       <span className={s.imageFallbackBody}>
         <span className={s.imageFallbackTitle}>
-          {reason === "failed" ? "图片加载失败" : "图片暂不能直接预览"}
+          {reason === "loading"
+            ? "图片加载中"
+            : reason === "failed"
+              ? "图片加载失败"
+              : "图片暂不能直接预览"}
         </span>
         <span className={s.imageFallbackMeta}>{label}</span>
         {source ? (
@@ -51,12 +56,49 @@ function ImagePlaceholder({
 }
 
 export function MessageImage({ image }: MessageImageProps) {
-  const [failed, setFailed] = useState(false);
-  const src = useMemo(() => safeImageSrc(image.url), [image.url]);
+  const [failedSrc, setFailedSrc] = useState<string>();
+  const [localImage, setLocalImage] = useState<{
+    path: string;
+    src?: string;
+    failed?: boolean;
+  }>();
+  const directSrc = useMemo(() => safeImageSrc(image.url), [image.url]);
+  const localPath = useMemo(() => {
+    const source = image.url?.trim();
+    return !directSrc && source && isLikelyLocalFilePath(source) ? source : undefined;
+  }, [directSrc, image.url]);
   const label = imageLabel(image);
 
-  if (!src) return <ImagePlaceholder image={image} reason="unsupported" />;
-  if (failed) return <ImagePlaceholder image={image} reason="failed" />;
+  useEffect(() => {
+    if (!localPath) {
+      setLocalImage(undefined);
+      return;
+    }
+
+    let active = true;
+    setLocalImage({ path: localPath });
+    void fetchMediaDataUrl(localPath).then((dataUrl) => {
+      if (!active) return;
+      const src = safeImageSrc(dataUrl);
+      setLocalImage(src ? { path: localPath, src } : { path: localPath, failed: true });
+    }).catch(() => {
+      if (active) setLocalImage({ path: localPath, failed: true });
+    });
+    return () => {
+      active = false;
+    };
+  }, [localPath]);
+
+  const resolvedLocal = localImage?.path === localPath ? localImage : undefined;
+  const src = directSrc || resolvedLocal?.src;
+
+  if (localPath && !resolvedLocal?.failed && !src) {
+    return <ImagePlaceholder image={image} reason="loading" />;
+  }
+  if (!src) {
+    return <ImagePlaceholder image={image} reason={resolvedLocal?.failed ? "failed" : "unsupported"} />;
+  }
+  if (failedSrc === src) return <ImagePlaceholder image={image} reason="failed" />;
 
   return (
     <a
@@ -71,7 +113,7 @@ export function MessageImage({ image }: MessageImageProps) {
         alt={label}
         loading="lazy"
         decoding="async"
-        onError={() => setFailed(true)}
+        onError={() => setFailedSrc(src)}
       />
     </a>
   );

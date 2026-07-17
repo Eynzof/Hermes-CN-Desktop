@@ -12,7 +12,7 @@ Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese commun
 
 Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn). The desktop app is part of the [Hermes Agent Chinese Community](https://hermesagent.org.cn) ecosystem, where the main site links to Chinese docs, practice guides, community entry points, and more ecosystem projects.
 
-> Current release: `v0.5.8`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
+> Current release: `v0.6.3`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
 
 ## Hermes Agent Chinese Community
 
@@ -95,9 +95,9 @@ Installers are available from the [desktop website](https://desktop.hermesagent.
 
 The current release includes:
 
-- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.5.8_aarch64.dmg`
-- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.5.8_x64.dmg`
-- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.5.8_x64-setup.exe`
+- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.6.3_aarch64.dmg`
+- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.6.3_x64.dmg`
+- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.6.3_x64-setup.exe`
 
 Both the Windows and macOS installers include a bundled `Hermes-CN-Core` runtime. On first launch, the app initializes the local core from the bundled runtime first; managed runtime download/update is only used for upgrades or fallback repair.
 
@@ -218,11 +218,15 @@ The short-term roadmap is focused on:
 - polishing macOS and Windows packaging behavior;
 - documenting the desktop/runtime boundary for contributors.
 
-## Star Track
+## Star History
 
-Use the chart below to track this repository's GitHub Star growth over time.
-
-[![Hermes Agent CN Desktop Star History Chart](https://api.star-history.com/svg?repos=Eynzof/Hermes-CN-Desktop&type=Date)](https://www.star-history.com/#Eynzof/Hermes-CN-Desktop&Date)
+<a href="https://www.star-history.com/?type=date&repos=Eynzof%2FHermes-CN-Desktop">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&theme=dark&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+ </picture>
+</a>
 
 ## Contributing
 

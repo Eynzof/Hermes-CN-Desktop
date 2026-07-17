@@ -12,6 +12,19 @@ export interface ProviderCatalogModel {
   supportsReasoning?: boolean;
 }
 
+/**
+ * Partner promotion slot: the config panel's "前往官网" button opens this URL
+ * (it carries our invite/aff code). Referral links change far more often than
+ * API endpoints, so they are expected to be updated through the remote
+ * catalog (no app release needed).
+ */
+export interface ProviderPromotion {
+  /** Referral link (carries our invite/aff code). Opened via openExternalUrl. */
+  url: string;
+  /** Badge on the preset card: partner = star, prime = heart. */
+  badge?: "partner" | "prime";
+}
+
 export interface ProviderPreset {
   id: string;
   name: string;
@@ -24,6 +37,11 @@ export interface ProviderPreset {
   /** Backward-compatible env names that should still be recognized as saved credentials. */
   apiKeyAliases?: string[];
   docsUrl?: string;
+  /** Provider homepage (may carry a referral code). */
+  websiteUrl?: string;
+  /** Key into the provider icon registry; falls back to an initial-letter tile. */
+  icon?: string;
+  promotion?: ProviderPromotion;
   defaultModel: string;
   models: ProviderCatalogModel[];
   supportsModelListing?: boolean;
@@ -34,6 +52,71 @@ export interface ProviderPreset {
 export interface ProviderCatalog {
   version: string;
   providers: ProviderPreset[];
+}
+
+export interface CurrentProviderSelection {
+  provider?: string;
+  model?: string;
+}
+
+/**
+ * 用户可读的接口格式名。目录里 Claude Code 中转与 OpenAI 兼容服务混排，
+ * 界面必须把请求格式讲明白，用户才知道一个供应商到底按什么协议被请求。
+ */
+export function apiModeDisplayName(apiMode: ProviderApiMode): string {
+  switch (apiMode) {
+    case "anthropic_messages":
+      return "Anthropic 格式 (Claude Code)";
+    case "codex_responses":
+      return "OpenAI Responses 格式";
+    default:
+      return "OpenAI 兼容格式";
+  }
+}
+
+/** 预设卡片上的协议角标；OpenAI 兼容是默认格式，不标注以降噪。 */
+export function apiModeBadgeLabel(apiMode: ProviderApiMode): string | null {
+  switch (apiMode) {
+    case "anthropic_messages":
+      return "Claude";
+    case "codex_responses":
+      return "Codex";
+    default:
+      return null;
+  }
+}
+
+/**
+ * 该供应商实际会收到请求的完整端点。Base URL 的语义随格式变化（Anthropic
+ * SDK 自动补 /v1/messages，OpenAI SDK 补 /chat/completions），直接把最终
+ * URL 摆出来比解释规则更防呆。
+ */
+export function chatEndpointPreviewUrl(apiMode: ProviderApiMode, baseUrl: string): string {
+  const base = baseUrl.trim().replace(/\/+$/, "");
+  if (!base) return "";
+  switch (apiMode) {
+    case "anthropic_messages":
+      return base.endsWith("/v1") ? `${base}/messages` : `${base}/v1/messages`;
+    case "codex_responses":
+      return `${base}/responses`;
+    default:
+      return `${base}/chat/completions`;
+  }
+}
+
+/**
+ * 自定义供应商 Base URL 的格式启发式，与 Core 端
+ * runtime_provider._detect_api_mode_for_url 的中转站规则对齐：路径以
+ * /anthropic 或 /anthropic/v1 结尾按 Anthropic 格式预选。
+ */
+export function detectCustomApiModeFromUrl(baseUrl: string): "chat_completions" | "anthropic_messages" {
+  try {
+    const path = new URL(baseUrl.trim()).pathname.replace(/\/+$/, "").toLowerCase();
+    if (path.endsWith("/anthropic") || path.endsWith("/anthropic/v1")) return "anthropic_messages";
+  } catch {
+    // 输入中途的半截 URL —— 保持默认。
+  }
+  return "chat_completions";
 }
 
 export type EnvVarPreviewMap = Record<string, {
@@ -159,11 +242,21 @@ export function buildCustomProviderDeleteUpdate(
   const providers = asRecord(config.providers);
   const nextProviders = { ...providers };
   delete nextProviders[providerId];
+  delete nextProviders[providerId.replace(/^custom:/i, "")];
+
+  const legacyProviders = Array.isArray(config.custom_providers)
+    ? config.custom_providers
+    : [];
+  const nextLegacyProviders = legacyProviders.filter((raw) => {
+    const entry = asRecord(raw);
+    return normalizeCustomProviderId(entry.provider_key ?? entry.name) !== providerId;
+  });
 
   let nextConfig = buildProviderOrderUpdate(
     {
       ...config,
       providers: nextProviders,
+      ...(legacyProviders.length > 0 ? { custom_providers: nextLegacyProviders } : {}),
     },
     getProviderOrder(config).filter((id) => id !== providerId),
   );
@@ -220,7 +313,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.06.28.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.11.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -234,7 +327,13 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "COMPSHARE_API_KEY",
+      icon: "compshare",
       docsUrl: "https://www.compshare.cn/",
+      websiteUrl: "https://www.compshare.cn/",
+      promotion: {
+        url: "https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn",
+        badge: "partner",
+      },
       defaultModel: "deepseek-v4-flash",
       models: [
         { id: "deepseek-v4-flash", supportsTools: true },
@@ -250,7 +349,13 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "COMPSHARE_API_KEY",
+      icon: "compshare",
       docsUrl: "https://www.compshare.cn/",
+      websiteUrl: "https://www.compshare.cn/",
+      promotion: {
+        url: "https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn",
+        badge: "partner",
+      },
       defaultModel: "deepseek-v4-flash",
       models: [
         { id: "deepseek-v4-flash", supportsTools: true },
@@ -265,6 +370,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "DASHSCOPE_API_KEY",
+      icon: "bailian",
+      websiteUrl: "https://bailian.console.aliyun.com",
       docsUrl: "https://help.aliyun.com/zh/model-studio/",
       defaultModel: "qwen3-coder-plus",
       models: [
@@ -286,6 +393,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "DASHSCOPE_CODING_API_KEY",
+      icon: "bailian",
+      websiteUrl: "https://bailian.console.aliyun.com",
       docsUrl: "https://qwenlm.github.io/qwen-code-docs/zh/users/configuration/auth/",
       defaultModel: "qwen3-coder-plus",
       models: [
@@ -307,6 +416,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "DEEPSEEK_API_KEY",
+      icon: "deepseek",
+      websiteUrl: "https://platform.deepseek.com",
       docsUrl: "https://api-docs.deepseek.com/",
       defaultModel: "deepseek-v4-flash",
       models: [
@@ -323,7 +434,34 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "GLM_API_KEY",
+      icon: "zhipu",
+      websiteUrl: "https://open.bigmodel.cn",
       docsUrl: "https://docs.bigmodel.cn/",
+      defaultModel: "glm-5.1",
+      models: [
+        { id: "glm-5.2", supportsTools: true, supportsReasoning: true },
+        { id: "glm-5.1", supportsTools: true, supportsReasoning: true },
+        { id: "glm-4.6", supportsTools: true, supportsReasoning: true },
+        { id: "glm-4.5", supportsTools: true },
+        { id: "glm-4.5v", supportsVision: true },
+      ],
+    },
+    {
+      // 上游 v0.18.0 起 canonical `zai` 指 Global 端点（api.z.ai），本地
+      // `zai` 预设保持中国端点（open.bigmodel.cn）——两者 base_url 均随预设
+      // 显式落盘，不依赖后端默认，语义冲突不影响功能。此条目补齐 Global
+      // 变体，供海外/出海用户选择（对应上游的 Z.AI endpoint picker）。
+      id: "zai-global",
+      name: "Z.AI GLM · 国际版",
+      vendor: "Zhipu AI",
+      region: "global",
+      baseUrl: "https://api.z.ai/api/paas/v4",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "ZAI_API_KEY",
+      icon: "zhipu",
+      websiteUrl: "https://z.ai",
+      docsUrl: "https://docs.z.ai/",
       defaultModel: "glm-5.1",
       models: [
         { id: "glm-5.2", supportsTools: true, supportsReasoning: true },
@@ -342,6 +480,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "GLM_CODING_API_KEY",
+      icon: "zhipu",
+      websiteUrl: "https://open.bigmodel.cn",
       docsUrl: "https://docs.bigmodel.cn/cn/api/introduction",
       defaultModel: "glm-5.1",
       models: [
@@ -361,6 +501,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "KIMI_API_KEY",
+      icon: "kimi",
+      websiteUrl: "https://www.kimi.com/code",
       docsUrl: "https://platform.moonshot.cn/docs",
       defaultModel: "kimi-k2.6",
       models: [
@@ -381,6 +523,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "STEP_API_KEY",
+      icon: "stepfun",
+      websiteUrl: "https://platform.stepfun.com",
       docsUrl: "https://platform.stepfun.com/docs/zh/guides/developer/openai",
       defaultModel: "step-3.7-flash",
       models: [
@@ -397,6 +541,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "STEP_PLAN_API_KEY",
+      icon: "stepfun",
+      websiteUrl: "https://platform.stepfun.com",
       docsUrl: "https://platform.stepfun.ai/docs/en/step-plan/quick-start",
       defaultModel: "step-3.7-flash",
       models: [
@@ -414,6 +560,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "ARK_API_KEY",
+      icon: "volcengine",
+      websiteUrl: "https://console.volcengine.com/ark",
       docsUrl: "https://www.volcengine.com/docs/82379/1554709",
       defaultModel: "doubao-seed-2-0-lite-260428",
       models: [
@@ -440,6 +588,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "ARK_CODING_API_KEY",
+      icon: "volcengine",
+      websiteUrl: "https://www.volcengine.com/activity/codingplan",
       docsUrl: "https://developer.volcengine.com/articles/7615528054736945158",
       defaultModel: "ark-code-latest",
       models: [
@@ -464,6 +614,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "anthropic_messages",
       transport: "anthropic_messages",
       apiKeyLabel: "MINIMAX_CN_API_KEY",
+      icon: "minimax",
+      websiteUrl: "https://platform.minimaxi.com",
       docsUrl: "https://platform.minimaxi.com/document",
       defaultModel: "MiniMax-M3",
       models: [
@@ -487,6 +639,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "QIANFAN_API_KEY",
+      icon: "baidu",
+      websiteUrl: "https://console.bce.baidu.com/qianfan",
       docsUrl: "https://cloud.baidu.com/doc/WENXINWORKSHOP/index.html",
       defaultModel: "ernie-4.5-turbo-128k",
       models: [
@@ -504,6 +658,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "HUNYUAN_API_KEY",
+      icon: "hunyuan",
+      websiteUrl: "https://cloud.tencent.com/product/hunyuan",
       docsUrl: "https://cloud.tencent.com/document/product/1729",
       defaultModel: "hunyuan-turbos-latest",
       models: [
@@ -514,13 +670,15 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "xiaomi",
-      name: "小米 MiMo",
+      name: "小米 MiMo · API 按量付费",
       vendor: "Xiaomi",
       region: "cn",
       baseUrl: "https://api.xiaomimimo.com/v1",
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "XIAOMI_API_KEY",
+      icon: "xiaomi-mimo",
+      websiteUrl: "https://platform.xiaomimimo.com",
       apiKeyAliases: ["MIMO_API_KEY"],
       docsUrl: "https://platform.xiaomimimo.com/docs/en-US/api/chat/openai-api",
       defaultModel: "mimo-v2.5-pro",
@@ -532,6 +690,25 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       ],
     },
     {
+      id: "xiaomi-token-plan",
+      name: "小米 MiMo · Token Plan",
+      vendor: "Xiaomi",
+      region: "cn",
+      baseUrl: "https://token-plan-cn.xiaomimimo.com/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "XIAOMI_TOKEN_PLAN_API_KEY",
+      icon: "xiaomi-mimo",
+      websiteUrl: "https://platform.xiaomimimo.com/#/token-plan",
+      docsUrl: "https://platform.xiaomimimo.com/#/console/plan-manage",
+      defaultModel: "mimo-v2.5-pro",
+      models: [
+        { id: "mimo-v2.5-pro", label: "MiMo v2.5 Pro", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "mimo-v2.5", label: "MiMo v2.5", supportsTools: true, supportsVision: true, supportsReasoning: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
       id: "siliconflow",
       name: "硅基流动 SiliconFlow",
       vendor: "SiliconFlow",
@@ -540,6 +717,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "SILICONFLOW_API_KEY",
+      icon: "siliconflow",
+      websiteUrl: "https://cloud.siliconflow.cn",
       docsUrl: "https://docs.siliconflow.cn/",
       defaultModel: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
       models: [
@@ -559,6 +738,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "MODELSCOPE_API_KEY",
+      icon: "modelscope",
+      websiteUrl: "https://modelscope.cn",
       docsUrl: "https://modelscope.cn/docs/model-service/API-Inference/intro",
       defaultModel: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
       models: [
@@ -576,11 +757,296 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "OPENROUTER_API_KEY",
+      icon: "openrouter",
+      websiteUrl: "https://openrouter.ai",
       docsUrl: "https://openrouter.ai/docs/api-reference/overview",
       defaultModel: "openrouter/auto",
       models: [
         { id: "openrouter/auto", supportsTools: true, supportsVision: true },
       ],
+    },
+    {
+      id: "longcat",
+      name: "Longcat",
+      vendor: "美团 Longcat",
+      region: "cn",
+      baseUrl: "https://api.longcat.chat/openai/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "LONGCAT_API_KEY",
+      icon: "longcat",
+      websiteUrl: "https://longcat.chat/platform",
+      defaultModel: "LongCat-2.0",
+      models: [
+        { id: "LongCat-2.0", label: "LongCat 2.0", supportsTools: true },
+      ],
+    },
+    {
+      id: "nvidia",
+      name: "Nvidia NIM",
+      vendor: "NVIDIA",
+      region: "global",
+      baseUrl: "https://integrate.api.nvidia.com/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "NVIDIA_API_KEY",
+      icon: "nvidia",
+      websiteUrl: "https://build.nvidia.com",
+      defaultModel: "moonshotai/kimi-k2.5",
+      models: [
+        { id: "moonshotai/kimi-k2.5", label: "Moonshot Kimi K2.5", supportsTools: true },
+      ],
+    },
+    {
+      id: "opencode-go",
+      name: "OpenCode Go",
+      vendor: "OpenCode",
+      region: "global",
+      baseUrl: "https://opencode.ai/zen/go/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "OPENCODE_GO_API_KEY",
+      icon: "opencode-go",
+      websiteUrl: "https://opencode.ai/go",
+      defaultModel: "glm-5.2",
+      models: [
+        { id: "glm-5.2", label: "GLM 5.2", contextWindow: 204800, supportsTools: true },
+        { id: "glm-5.1", label: "GLM 5.1", contextWindow: 204800, supportsTools: true },
+        { id: "kimi-k2.7-code", label: "Kimi K2.7 Code", contextWindow: 262144, supportsTools: true },
+        { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", supportsTools: true },
+        { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", supportsTools: true },
+        { id: "mimo-v2.5-pro", label: "MiMo V2.5 Pro", contextWindow: 1048576, supportsTools: true },
+      ],
+    },
+    {
+      // 中转站类合作伙伴。promotion.url 带我们的邀请码；文案/链接的日常
+      // 更新走远端 catalog 下发覆盖，不必发版。
+      id: "packycode",
+      name: "PackyCode",
+      vendor: "PackyCode",
+      region: "cn",
+      baseUrl: "https://www.packyapi.com",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "PACKYCODE_API_KEY",
+      icon: "packycode",
+      websiteUrl: "https://www.packyapi.com",
+      promotion: {
+        url: "https://www.packyapi.com/register?aff=3lj3",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      id: "ccsub",
+      name: "CCSub",
+      vendor: "CCSub",
+      region: "cn",
+      baseUrl: "https://www.ccsub.net/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "CCSUB_API_KEY",
+      icon: "ccsub",
+      websiteUrl: "https://www.ccsub.net",
+      promotion: {
+        url: "https://www.ccsub.net/register?ref=2QRN9EJ8",
+        badge: "partner",
+      },
+      defaultModel: "gpt-5.5",
+      models: [
+        { id: "gpt-5.5", label: "GPT-5.5", contextWindow: 400000, supportsTools: true },
+      ],
+    },
+    {
+      id: "apikeyfun",
+      name: "APIKEY.FUN",
+      vendor: "APIKEY.FUN",
+      region: "cn",
+      baseUrl: "https://api.apikey.fun",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "APIKEYFUN_API_KEY",
+      icon: "apikeyfun",
+      websiteUrl: "https://apikey.fun",
+      promotion: {
+        url: "https://apikey.fun/register?aff=38U8BP5JSMDX",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", contextWindow: 1000000, supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", contextWindow: 1000000, supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", contextWindow: 200000, supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      // 官网/邀请链接用 aigocode.app（我们的推广链接所在域名），API 端点
+      // 沿用 cc-switch 验证过的 api.aigocode.com。
+      id: "aigocode",
+      name: "AIGoCode",
+      vendor: "AIGoCode",
+      region: "cn",
+      baseUrl: "https://api.aigocode.com",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "AIGOCODE_API_KEY",
+      icon: "aigocode",
+      websiteUrl: "https://aigocode.app",
+      promotion: {
+        url: "https://aigocode.app/invite/VJE7ZWQA",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      id: "rightcode",
+      name: "RightCode",
+      vendor: "RightCode",
+      region: "cn",
+      baseUrl: "https://www.right.codes/claude",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "RIGHTCODE_API_KEY",
+      icon: "rightcode",
+      websiteUrl: "https://www.right.codes",
+      promotion: {
+        url: "https://www.right.codes/register?aff=d7899e4a",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      id: "aicodemirror",
+      name: "AICodeMirror",
+      vendor: "AICodeMirror",
+      region: "cn",
+      baseUrl: "https://api.aicodemirror.com/api/claudecode",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "AICODEMIRROR_API_KEY",
+      icon: "aicodemirror",
+      websiteUrl: "https://www.aicodemirror.com",
+      promotion: {
+        url: "https://www.aicodemirror.com/register?invitecode=JPDYK7",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      // 官网/邀请链接用 sssaicode.com（我们的推广链接所在域名），API 端点
+      // 沿用 cc-switch 验证过的 node-hk.sssaicodeapi.com。
+      id: "sssaicode",
+      name: "SSSAiCode",
+      vendor: "SSSAiCode",
+      region: "cn",
+      baseUrl: "https://node-hk.sssaicodeapi.com/api",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "SSSAICODE_API_KEY",
+      icon: "sssaicode",
+      websiteUrl: "https://sssaicode.com",
+      promotion: {
+        url: "https://sssaicode.com/register?ref=Y687IE",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      id: "micu",
+      name: "Micu",
+      vendor: "Micu",
+      region: "cn",
+      baseUrl: "https://www.micuapi.ai",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "MICU_API_KEY",
+      icon: "micu",
+      websiteUrl: "https://www.micuapi.ai",
+      promotion: {
+        url: "https://www.micuapi.ai/register?aff=9v98",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      id: "nekocode",
+      name: "NekoCode",
+      vendor: "NekoCode",
+      region: "cn",
+      baseUrl: "https://nekocode.ai/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "NEKOCODE_API_KEY",
+      icon: "nekocode",
+      websiteUrl: "https://nekocode.ai",
+      promotion: {
+        url: "https://nekocode.ai?aff=WX7PPCLT",
+        badge: "partner",
+      },
+      defaultModel: "gpt-5.5",
+      models: [
+        { id: "gpt-5.5", label: "GPT-5.5", supportsTools: true },
+      ],
+    },
+    {
+      id: "cubence",
+      name: "Cubence",
+      vendor: "Cubence",
+      region: "cn",
+      baseUrl: "https://api.cubence.com",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "CUBENCE_API_KEY",
+      icon: "cubence",
+      websiteUrl: "https://cubence.com",
+      promotion: {
+        url: "https://cubence.com/signup?code=SCGAKBEG",
+        badge: "partner",
+      },
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", supportsTools: true, supportsVision: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", supportsTools: true, supportsVision: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", supportsTools: true, supportsVision: true },
+      ],
+      supportsModelListing: false,
     },
   ],
 };
@@ -589,6 +1055,124 @@ function asRecord(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, any>
     : {};
+}
+
+function normalizeCustomProviderId(value: unknown): string {
+  const name = String(value ?? "")
+    .trim()
+    .replace(/^custom:/i, "")
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+  return name ? `custom:${name}` : "";
+}
+
+function configuredProviderApiMode(entry: Record<string, any>): ProviderApiMode {
+  const mode = String(entry.api_mode ?? entry.transport ?? "").trim();
+  if (mode === "anthropic_messages" || mode === "codex_responses") return mode;
+  return "chat_completions";
+}
+
+function configuredProviderModels(entry: Record<string, any>): ProviderCatalogModel[] {
+  const models = asRecord(entry.models);
+  return Object.entries(models).map(([id, raw]) => {
+    const metadata = asRecord(raw);
+    const contextWindow = Number(metadata.context_length ?? metadata.contextWindow ?? 0);
+    return {
+      id,
+      ...(Number.isFinite(contextWindow) && contextWindow > 0 ? { contextWindow } : {}),
+      ...(typeof metadata.supports_vision === "boolean" ? { supportsVision: metadata.supports_vision } : {}),
+      ...(typeof metadata.supports_tools === "boolean" ? { supportsTools: metadata.supports_tools } : {}),
+      ...(typeof metadata.supports_reasoning === "boolean" ? { supportsReasoning: metadata.supports_reasoning } : {}),
+    };
+  });
+}
+
+function configuredProviderBaseUrl(entry: Record<string, any>): string {
+  return String(entry.base_url ?? entry.url ?? entry.api ?? "").trim();
+}
+
+function customProviderPreset(
+  id: string,
+  entry: Record<string, any>,
+  current: CurrentProviderSelection | undefined,
+): ProviderPreset {
+  const models = configuredProviderModels(entry);
+  const currentModel = current?.provider === id ? String(current.model ?? "").trim() : "";
+  const defaultModel = String(entry.model ?? entry.default_model ?? "").trim()
+    || currentModel
+    || models[0]?.id
+    || "";
+  if (defaultModel && !models.some((model) => model.id === defaultModel)) {
+    models.unshift({ id: defaultModel, supportsTools: true });
+  }
+  const apiMode = configuredProviderApiMode(entry);
+  const baseUrl = configuredProviderBaseUrl(entry);
+
+  return {
+    id,
+    name: String(entry.name ?? "").trim() || id.replace(/^custom:/, ""),
+    vendor: isLocalProviderBaseUrl(baseUrl) ? "本地部署" : "自定义",
+    region: "cn",
+    baseUrl,
+    apiMode,
+    transport: apiMode === "anthropic_messages"
+      ? "anthropic_messages"
+      : apiMode === "codex_responses"
+        ? "codex_responses"
+        : "openai_chat",
+    apiKeyLabel: "API Key",
+    defaultModel,
+    models,
+    isCustom: true,
+  };
+}
+
+/**
+ * Build the Models-page custom cards from both Core config generations.
+ *
+ * CLI-created endpoints still live in the list-shaped `custom_providers`, while
+ * newer dashboard saves use the keyed `providers` map. Core deliberately reads
+ * both; the desktop must do the same or a working CLI endpoint disappears here.
+ */
+export function customProviderPresetsFromConfig(
+  config: Record<string, any> | undefined,
+  catalogProviders: ProviderPreset[],
+  current?: CurrentProviderSelection,
+): ProviderPreset[] {
+  const knownIds = new Set(catalogProviders.map((provider) => provider.id));
+  const result = new Map<string, ProviderPreset>();
+
+  for (const [key, raw] of Object.entries(asRecord(config?.providers))) {
+    if (knownIds.has(key)) continue;
+    const entry = asRecord(raw);
+    if (!configuredProviderBaseUrl(entry)) continue;
+    const id = normalizeCustomProviderId(key);
+    if (!id || knownIds.has(id)) continue;
+    result.set(id, customProviderPreset(id, entry, current));
+  }
+
+  const legacyProviders = Array.isArray(config?.custom_providers)
+    ? config.custom_providers
+    : [];
+  for (const raw of legacyProviders) {
+    const entry = asRecord(raw);
+    if (!configuredProviderBaseUrl(entry)) continue;
+    const id = normalizeCustomProviderId(entry.provider_key ?? entry.name);
+    if (!id || knownIds.has(id) || result.has(id)) continue;
+    result.set(id, customProviderPreset(id, entry, current));
+  }
+
+  return Array.from(result.values());
+}
+
+export function resolveSelectedProvider(
+  providers: ProviderPreset[],
+  selectedProviderId: string,
+  currentProviderId: string,
+): ProviderPreset | undefined {
+  return providers.find((provider) => provider.id === selectedProviderId)
+    ?? providers.find((provider) => provider.id === currentProviderId)
+    ?? providers[0];
 }
 
 function cleanModels(models: ProviderCatalogModel[]): Record<string, Record<string, unknown>> {
@@ -605,8 +1189,27 @@ function cleanModels(models: ProviderCatalogModel[]): Record<string, Record<stri
   );
 }
 
+function providerConfigKey(config: Record<string, any> | undefined, providerId: string): string | undefined {
+  const providers = asRecord(config?.providers);
+  if (Object.hasOwn(providers, providerId)) return providerId;
+  const bareId = providerId.replace(/^custom:/i, "");
+  if (bareId !== providerId && Object.hasOwn(providers, bareId)) return bareId;
+  return undefined;
+}
+
+function legacyCustomProviderIndex(config: Record<string, any> | undefined, providerId: string): number {
+  const providers = Array.isArray(config?.custom_providers) ? config.custom_providers : [];
+  return providers.findIndex((raw) => {
+    const entry = asRecord(raw);
+    return normalizeCustomProviderId(entry.provider_key ?? entry.name) === providerId;
+  });
+}
+
 export function getProviderEntry(config: Record<string, any> | undefined, providerId: string): Record<string, any> {
-  return asRecord(asRecord(config?.providers)[providerId]);
+  const configKey = providerConfigKey(config, providerId);
+  if (configKey) return asRecord(asRecord(config?.providers)[configKey]);
+  const legacyIndex = legacyCustomProviderIndex(config, providerId);
+  return legacyIndex >= 0 ? asRecord(config?.custom_providers[legacyIndex]) : {};
 }
 
 export function maskSecretPreview(value: string): string {
@@ -695,7 +1298,9 @@ export function buildProviderSettingsUpdate(
   input: ProviderConfigInput,
 ): Record<string, any> {
   const providers = asRecord(config.providers);
-  const existingProvider = asRecord(providers[preset.id]);
+  const configKey = providerConfigKey(config, preset.id);
+  const legacyIndex = configKey ? -1 : legacyCustomProviderIndex(config, preset.id);
+  const existingProvider = getProviderEntry(config, preset.id);
   const existingModel = asRecord(config.model);
   const nextApiKey =
     input.apiKey.trim() ||
@@ -715,11 +1320,20 @@ export function buildProviderSettingsUpdate(
   if (nextApiKey) providerEntry.api_key = nextApiKey;
   else delete providerEntry.api_key;
 
+  if (legacyIndex >= 0) {
+    const customProviders = [...config.custom_providers];
+    customProviders[legacyIndex] = providerEntry;
+    return {
+      ...config,
+      custom_providers: customProviders,
+    };
+  }
+
   return {
     ...config,
     providers: {
       ...providers,
-      [preset.id]: providerEntry,
+      [configKey ?? preset.id]: providerEntry,
     },
   };
 }
@@ -729,8 +1343,7 @@ export function buildCurrentModelConfigUpdate(
   preset: ProviderPreset,
   input: ProviderConfigInput,
 ): Record<string, any> {
-  const providers = asRecord(config.providers);
-  const existingProvider = asRecord(providers[preset.id]);
+  const existingProvider = getProviderEntry(config, preset.id);
   const existingModel = asRecord(config.model);
   const nextApiKey =
     input.apiKey.trim() ||
@@ -757,10 +1370,51 @@ export function buildCurrentModelConfigUpdate(
 
 export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCatalog): ProviderCatalog {
   const byId = new Map(base.providers.map((provider) => [provider.id, provider]));
-  for (const provider of remote.providers) byId.set(provider.id, provider);
+  for (const provider of remote.providers) {
+    const builtin = byId.get(provider.id);
+    // Security guard: a compromised/hijacked catalog response must not be able
+    // to redirect an already-configured provider's traffic (and its API key)
+    // to a different endpoint. Remote entries may update copy, promotion,
+    // models and links for built-in providers, but never their wire settings.
+    // Brand-new providers keep their own settings — the user still has to
+    // opt in by configuring a key for them.
+    byId.set(provider.id, builtin
+      ? {
+        ...provider,
+        baseUrl: builtin.baseUrl,
+        apiMode: builtin.apiMode,
+        transport: builtin.transport,
+        apiKeyLabel: builtin.apiKeyLabel,
+      }
+      : provider);
+  }
   return {
     version: remote.version || base.version,
     providers: Array.from(byId.values()),
+  };
+}
+
+const PROMOTION_BADGES = new Set(["partner", "prime"]);
+
+function isHttpsUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeRemotePromotion(promotion: unknown): ProviderPromotion | undefined {
+  if (!promotion || typeof promotion !== "object" || Array.isArray(promotion)) return undefined;
+  const record = promotion as Record<string, unknown>;
+  if (!isHttpsUrl(record.url)) return undefined;
+  const badge = typeof record.badge === "string" && PROMOTION_BADGES.has(record.badge)
+    ? record.badge as ProviderPromotion["badge"]
+    : undefined;
+  return {
+    url: record.url,
+    ...(badge ? { badge } : {}),
   };
 }
 
@@ -788,6 +1442,8 @@ function normalizeRemoteProvider(provider: Partial<ProviderPreset> | undefined):
     ))
     : [];
 
+  const promotion = normalizeRemotePromotion(provider.promotion);
+
   return {
     id: provider.id,
     name: provider.name,
@@ -799,6 +1455,9 @@ function normalizeRemoteProvider(provider: Partial<ProviderPreset> | undefined):
     apiKeyLabel: provider.apiKeyLabel || "API Key",
     ...(apiKeyAliases.length > 0 ? { apiKeyAliases } : {}),
     docsUrl: provider.docsUrl,
+    ...(isHttpsUrl(provider.websiteUrl) ? { websiteUrl: provider.websiteUrl } : {}),
+    ...(typeof provider.icon === "string" && provider.icon.trim() ? { icon: provider.icon.trim() } : {}),
+    ...(promotion ? { promotion } : {}),
     defaultModel: provider.defaultModel,
     models,
     supportsModelListing: typeof provider.supportsModelListing === "boolean" ? provider.supportsModelListing : undefined,

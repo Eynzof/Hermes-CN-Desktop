@@ -22,6 +22,18 @@ use crate::commands::restart;
 use crate::connection::ConnectionMode;
 use crate::state::AppState;
 
+fn release_dashboard_port_locks(state: &AppState) {
+    if let Ok(mut inner) = state.inner.lock() {
+        if let Some(handle) = inner.dashboard_handle.as_mut() {
+            if let Some(locks) = handle.port_locks.take() {
+                for lock in locks {
+                    lock.release();
+                }
+            }
+        }
+    }
+}
+
 const POLL_INTERVAL: Duration = Duration::from_secs(5);
 /// A respawn is "consecutive" (part of a crash loop) when the previous one was
 /// more recent than this. A dashboard that stays up longer resets the counter.
@@ -52,6 +64,11 @@ pub async fn supervise_managed_dashboard(app: tauri::AppHandle) {
             if inner.connection_mode != ConnectionMode::Managed {
                 continue;
             }
+            if crate::desktop_control::read().managed_runtime_desired_state
+                != crate::desktop_control::ManagedRuntimeDesiredState::Running
+            {
+                continue;
+            }
             if inner.dashboard_restart_in_flight {
                 continue;
             }
@@ -71,6 +88,15 @@ pub async fn supervise_managed_dashboard(app: tauri::AppHandle) {
                 continue;
             }
             inner.dashboard_restart_in_flight = true;
+            // Release port locks held by the dying handle before respawn so
+            // ensure_hermes_dashboard can reclaim the same port set.
+            if let Some(handle) = inner.dashboard_handle.as_mut() {
+                if let Some(locks) = handle.port_locks.take() {
+                    for lock in locks {
+                        lock.release();
+                    }
+                }
+            }
             inner.hermes_home.clone()
         };
 
@@ -92,6 +118,9 @@ pub async fn supervise_managed_dashboard(app: tauri::AppHandle) {
                         .to_string(),
                 );
             }
+            // Crash-loop abort: release port locks so a manual restart can
+            // reclaim the ports without waiting for the desktop to exit.
+            release_dashboard_port_locks(&state);
             return;
         }
 

@@ -373,7 +373,7 @@ export const routeSubagentGatewayEventAtom = atom(
     // Fallback: synthesize rows from the delegate_task tool lifecycle when the
     // backend isn't emitting native subagent.* events for this session.
     if (
-      (type === "tool.start" || type === "tool.progress" || type === "tool.complete") &&
+      (type === "tool.start" || type === "tool.generating" || type === "tool.complete") &&
       payload.name === "delegate_task" &&
       !nativeSubagentSessions.has(sid)
     ) {

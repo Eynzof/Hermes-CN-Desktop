@@ -1,6 +1,6 @@
 [package]
 name = "hermes-agent-cn-desktop"
-version = "0.5.8"
+version = "0.6.3"
 edition = "2021"
 description = "Hermes Agent CN Desktop (Tauri)"
 authors = ["Hermes Agent CN Contributors"]
@@ -21,11 +21,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = [
+    "cookies",
     "json",
     "multipart",
     "rustls-tls",
     "stream",
 ] }
+cookie = "0.18"
 sha2 = "0.10"
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 zip = "2"
@@ -63,6 +65,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_JobObjects",
+    "Win32_System_Threading",
 ] }
 # Read-only registry access for live PATH/PATHEXT resolution (path_resolver.rs).
 winreg = "0.55"

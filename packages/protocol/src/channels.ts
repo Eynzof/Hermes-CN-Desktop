@@ -151,6 +151,9 @@ export interface RuntimeInfo {
   source?: RuntimeSourceInfo;
   process?: RuntimeProcessInfo;
   lastError?: string;
+  guideState?: GuideState;
+  managedRuntimeDesiredState?: ManagedRuntimeDesiredState;
+  managedRuntimeLifecycleState?: ManagedRuntimeLifecycleState;
 }
 
 
@@ -253,6 +256,29 @@ export interface RuntimeInstallUpdateResult {
   ok: boolean;
   installed?: RuntimeInstallRecord;
   previous?: RuntimeInstallRecord;
+  error?: string;
+}
+
+export type GuideState = "pending" | "deferred" | "completed";
+export type ManagedRuntimeDesiredState = "running" | "stopped" | "uninstalled";
+export type ManagedRuntimeLifecycleState =
+  | "installing"
+  | "starting"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "uninstalling"
+  | "uninstalled"
+  | "error";
+
+export interface RuntimeControlResult {
+  ok: boolean;
+  guideState: GuideState;
+  desiredState: ManagedRuntimeDesiredState;
+  lifecycleState: ManagedRuntimeLifecycleState;
+  installed: boolean;
+  running: boolean;
+  backendReady: boolean;
   error?: string;
 }
 
@@ -509,6 +535,9 @@ export interface SetYoloModeResult {
 // value never crosses to the renderer — only presence/preview signals.
 
 export type ConnectionMode = "managed" | "local" | "remote";
+/** How a remote gateway authenticates. "token" = legacy session token;
+ * "oauth" = the v0.18.2 cookie gate (OAuth window or password provider). */
+export type RemoteAuthMode = "token" | "oauth";
 
 export interface ConnectionConfigInput {
   mode?: ConnectionMode;
@@ -517,6 +546,8 @@ export interface ConnectionConfigInput {
   remoteUrl?: string;
   /** Empty/absent keeps the previously saved token. */
   remoteToken?: string;
+  /** "token" (default) or "oauth". Absent keeps the saved mode. */
+  remoteAuthMode?: RemoteAuthMode;
 }
 
 export interface ConnectionConfigView {
@@ -527,17 +558,30 @@ export interface ConnectionConfigView {
   remoteTokenSet: boolean;
   /** "set" or "...XXXXXX" (last 6 chars); absent when no token is saved. */
   remoteTokenPreview?: string | null;
+  /** Remote auth mode of the saved config. */
+  remoteAuthMode: RemoteAuthMode;
+  /** True when a persisted OAuth cookie session exists for the remote. */
+  remoteSessionSet: boolean;
   /** True when HERMES_DESKTOP_REMOTE_URL forces the connection; UI read-only. */
   envOverride: boolean;
   /** What the running desktop is actually attached to right now. */
   effectiveMode: ConnectionMode;
 }
 
+/** A login provider registered on a gated gateway (from /api/auth/providers). */
+export interface AuthProviderInfo {
+  name: string;
+  displayName: string;
+  supportsPassword: boolean;
+}
+
 export interface ProbeConnectionResult {
   reachable: boolean;
-  /** The gateway requires OAuth login, which this desktop does not support yet. */
+  /** The gateway enforces a login gate (OAuth / password). */
   authRequired: boolean;
   version?: string;
+  /** Registered login providers when gated (empty for token gateways). */
+  authProviders?: AuthProviderInfo[];
 }
 
 export interface TestConnectionResult {
@@ -548,6 +592,24 @@ export interface TestConnectionResult {
   wsOk: boolean;
   authRequired: boolean;
   version?: string;
+  /** True when the gated session is missing/expired and the UI should log in. */
+  needsOauthLogin?: boolean;
+  error?: string;
+}
+
+/** Logged-in identity from /api/auth/me (upstream flat shape). */
+export interface AuthIdentity {
+  userId?: string | null;
+  email?: string | null;
+  displayName?: string | null;
+  orgId?: string | null;
+  provider?: string | null;
+  expiresAt?: unknown;
+}
+
+export interface OauthLoginResult {
+  ok: boolean;
+  identity?: AuthIdentity;
   error?: string;
 }
 

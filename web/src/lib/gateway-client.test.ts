@@ -31,9 +31,11 @@ class MockWebSocket {
     this.sent.push(data);
   }
 
-  close() {
+  close(code?: number, reason?: string) {
     this.readyState = MockWebSocket.CLOSED;
-    this.onclose?.();
+    (this.onclose as ((ev?: { code?: number; reason?: string }) => void) | null)?.(
+      code === undefined ? undefined : { code, reason },
+    );
   }
 }
 
@@ -192,6 +194,46 @@ describe("GatewayClient", () => {
 
     expect(events).toEqual(["disconnected"]);
     expect(client.state).toBe("closed");
+  });
+
+  it("suspends reconnect and emits gateway.auth_required on a 4401 close", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const client = new GatewayClient();
+    client.enableAutoReconnect();
+    const events: string[] = [];
+    client.on("gateway.auth_required", () => events.push("auth_required"));
+
+    const connected = client.connect();
+    MockWebSocket.instances[0].open();
+    await connected;
+
+    MockWebSocket.instances[0].close(4401, "unauthenticated");
+
+    expect(events).toContain("auth_required");
+    // No new socket even after well past the backoff — blind reconnect is off.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    // forceReconnect clears the auth-suspend gate and reconnects.
+    client.forceReconnect("relogin");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(MockWebSocket.instances.length).toBeGreaterThan(1);
+  });
+
+  it("keeps normal backoff on a non-auth (1006-like) close", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const client = new GatewayClient();
+    client.enableAutoReconnect();
+    const connected = client.connect();
+    MockWebSocket.instances[0].open();
+    await connected;
+
+    MockWebSocket.instances[0].close(1006, "abnormal");
+    // A transient close schedules a reconnect (new socket after backoff).
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(MockWebSocket.instances).toHaveLength(2);
   });
 
   it("does not emit gateway.disconnected on intentional close", async () => {

@@ -43,6 +43,7 @@ const MIGRATABLE_ENTRIES: &[(&str, CopyEntryKind, bool)] = &[
     ("scripts", CopyEntryKind::Directory, false),
 ];
 
+#[allow(dead_code)]
 const SECRET_FILES: &[&str] = &[".env", "auth.json", ".anthropic_oauth.json"];
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -537,6 +538,7 @@ pub async fn config_migration_scan(
 ) -> Result<ConfigMigrationScanResult, AppError> {
     let (desktop_hermes_home, current_profile, current_home) = {
         let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机配置迁移")?;
         (
             inner.hermes_home_base.clone(),
             inner.current_profile.clone(),
@@ -735,13 +737,13 @@ fn install_staging(staging: &Path, target: &Path, warnings: &mut Vec<String>) ->
     Ok(())
 }
 
-fn harden_secret_permissions(target: &Path) {
+fn harden_secret_permissions(_target: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(target, fs::Permissions::from_mode(0o700));
+        let _ = fs::set_permissions(_target, fs::Permissions::from_mode(0o700));
         for rel in SECRET_FILES {
-            let path = target.join(rel);
+            let path = _target.join(rel);
             if path.is_file() {
                 let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
             }
@@ -792,6 +794,10 @@ pub async fn config_migration_import(
     input: ConfigMigrationImportInput,
     state: State<'_, AppState>,
 ) -> Result<ConfigMigrationImportResult, AppError> {
+    {
+        let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机配置迁移")?;
+    }
     let source = PathBuf::from(input.source_path.trim());
     if !source.is_dir() || !has_migratable_content(&source) {
         return Ok(ConfigMigrationImportResult {

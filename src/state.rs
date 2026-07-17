@@ -13,6 +13,8 @@ use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::Notify;
 
+use crate::process::port_lock::PortLock;
+
 /// Handle to the live Rust→runtime `/api/ws` relay (see commands/ws_proxy.rs).
 /// Holds only std/tokio types so this module stays decoupled from the WS crate.
 pub struct GatewayWsHandle {
@@ -91,6 +93,9 @@ pub struct DashboardHandle {
     pub attached_pid: Option<u32>,
     /// The child process, if we own it.
     pub child: Option<Child>,
+    /// Port locks held by this desktop instance for the dashboard API port and
+    /// its associated satellite ports. Released when the handle is dropped.
+    pub port_locks: Option<Vec<PortLock>>,
 }
 
 impl DashboardHandle {
@@ -99,6 +104,12 @@ impl DashboardHandle {
     /// never try to terminate or `/api/shutdown` the remote agent.
     pub fn remote(api_base_url: String, session_token: String) -> Self {
         Self::attached(api_base_url, Some(session_token), "remote")
+    }
+
+    /// Build a handle for a gated remote Hermes Agent authenticated by an
+    /// OAuth/cookie session (managed by `oauth_session`, not a token here).
+    pub fn remote_oauth(api_base_url: String) -> Self {
+        Self::attached(api_base_url, None, "remote-oauth")
     }
 
     /// Build a handle for a loopback Hermes Agent CLI dashboard that the
@@ -125,32 +136,37 @@ impl DashboardHandle {
             job_handle: None,
             attached_pid: None,
             child: None,
+            port_locks: None,
         }
     }
 
     /// Stop the dashboard process tree if we own it.
-    pub fn stop(&mut self) {
-        self.stop_with_token(None);
+    pub fn stop(&mut self) -> bool {
+        self.stop_with_token(None)
     }
 
     /// Stop the dashboard process tree if we own it, first trying the
     /// dashboard's protected shutdown endpoint when a session token is known.
-    pub fn stop_with_token(&mut self, session_token: Option<&str>) {
+    pub fn stop_with_token(&mut self, session_token: Option<&str>) -> bool {
         if !self.owns_process {
             self.child = None;
-            return;
+            return true;
         }
         let fallback_pid = self
             .child
             .as_ref()
             .map(|child| child.id())
             .or(self.attached_pid);
-        crate::process::dashboard::terminate_owned_dashboard_tree(
+        let stopped = crate::process::dashboard::terminate_owned_dashboard_tree(
             &self.api_base_url,
             self.child.as_mut(),
             fallback_pid,
             session_token,
         );
+        if !stopped {
+            self.ownership_state = Some("stop-failed".to_string());
+            return false;
+        }
         self.child = None;
         self.job_handle = None;
         self.attached_pid = None;
@@ -158,13 +174,21 @@ impl DashboardHandle {
         crate::process::dashboard::remove_ownership_marker_path(
             self.ownership_marker_path.as_deref(),
         );
+        // Explicitly release port locks so another Hermes instance can claim
+        // the ports immediately instead of waiting for the handle to drop.
+        if let Some(locks) = self.port_locks.take() {
+            for lock in locks {
+                lock.release();
+            }
+        }
         self.ownership_state = Some("stopped".to_string());
+        true
     }
 }
 
 impl Drop for DashboardHandle {
     fn drop(&mut self) {
-        self.stop();
+        let _ = self.stop();
     }
 }
 
@@ -197,6 +221,34 @@ pub struct AppStateInner {
     /// to decide ownership-only behavior (profile switch, YOLO, runtime
     /// updates) and token refresh strategy.
     pub connection_mode: crate::connection::ConnectionMode,
+    /// Live OAuth/cookie session for a gated remote gateway, when
+    /// `connection_mode == Remote` and the backend authenticates via OAuth.
+    /// `None` for token/local/managed. REST and WS both consult this to pick
+    /// the cookie-aware client and mint WS tickets.
+    pub oauth_session: Option<std::sync::Arc<crate::oauth_session::OauthSession>>,
+    /// Debounce marker for `connection-auth-expired` emits (a burst of 401s
+    /// must not storm the UI with re-login banners).
+    pub last_auth_expired_emit: Option<std::time::Instant>,
+}
+
+/// A snapshot of how the currently-connected dashboard authenticates, taken
+/// once inside the state lock so each command can drop the guard before doing
+/// async I/O. Token variant carries the shared session token (loopback/local/
+/// remote-token); Oauth variant carries the shared cookie session.
+#[derive(Clone)]
+pub enum DashboardAuth {
+    Token(Option<String>),
+    Oauth(std::sync::Arc<crate::oauth_session::OauthSession>),
+}
+
+impl AppStateInner {
+    /// Snapshot the current auth strategy for use outside the lock.
+    pub fn dashboard_auth(&self) -> DashboardAuth {
+        match &self.oauth_session {
+            Some(session) => DashboardAuth::Oauth(session.clone()),
+            None => DashboardAuth::Token(self.session_token.clone()),
+        }
+    }
 }
 
 /// Thread-safe wrapper. Tauri manages this via `app.manage(AppState::new())`.
@@ -220,6 +272,8 @@ impl AppState {
                 last_runtime_error: None,
                 yolo_mode: false,
                 connection_mode: crate::connection::ConnectionMode::Managed,
+                oauth_session: None,
+                last_auth_expired_emit: None,
             }),
         }
     }

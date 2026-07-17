@@ -164,6 +164,18 @@ export const showReasoningAtom = atom(
   },
 );
 
+// 匿名使用统计开关（默认开启）。发送端在 lib/telemetry.ts 直接读 ui-store，
+// 这个 atom 只服务设置页 UI。key 与 lib/telemetry.ts 的 TELEMETRY_ENABLED_KEY 一致。
+const TELEMETRY_ENABLED_UI_KEY = "hermes.telemetry-enabled";
+const telemetryEnabledBaseAtom = atom<boolean>(readUiValue<unknown>(TELEMETRY_ENABLED_UI_KEY, true) !== false);
+export const telemetryEnabledAtom = atom(
+  (get) => get(telemetryEnabledBaseAtom),
+  (_get, set, next: boolean) => {
+    set(telemetryEnabledBaseAtom, next);
+    writeUiValue(TELEMETRY_ENABLED_UI_KEY, next);
+  },
+);
+
 // Task-detail right rail (issue #233): rich preview panel visibility. Persisted
 // so the user's last choice survives reload; ⌘B toggles it. The active tab
 // lives in the `?panel=` query, not here (see lib/preview-rail.ts).

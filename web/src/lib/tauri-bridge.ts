@@ -32,7 +32,10 @@ import type {
   ImOnboardingStateInput,
   ImOnboardingStateResult,
   ProbeConnectionResult,
+  OauthLoginResult,
   RuntimeInfo,
+  RuntimeControlResult,
+  GuideState,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
   SetYoloModeInput,
@@ -63,6 +66,9 @@ import type {
   UiStoreSnapshot,
   UiTurnStats,
   WatchPreviewFileResult,
+  WriteWorkspaceFileInput,
+  WriteWorkspaceFileResult,
+  HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
 import hermesLogoSvg from "../../../icons/icon.svg?raw";
@@ -373,8 +379,57 @@ const tauriBridge = {
     return invokeCommand("test_connection_config", { input });
   },
 
+  async getDesktopControlState(): Promise<RuntimeControlResult> {
+    return invokeCommand("get_desktop_control_state");
+  },
+
+  async setGuideState(guideState: GuideState): Promise<RuntimeControlResult> {
+    return invokeCommand("set_guide_state", { input: { guideState } });
+  },
+
+  async installManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_install");
+  },
+
+  async startManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_start");
+  },
+
+  async stopManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_stop");
+  },
+
+  async uninstallManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_uninstall");
+  },
+
+  async reinstallManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_reinstall");
+  },
+
   async probeConnectionConfig(remoteUrl: string): Promise<ProbeConnectionResult> {
     return invokeCommand("probe_connection_config", { remoteUrl });
+  },
+
+  async connectionOauthLogin(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_oauth_login", { input: { remoteUrl } });
+  },
+
+  async connectionPasswordLogin(input: {
+    remoteUrl: string;
+    provider: string;
+    username: string;
+    password: string;
+  }): Promise<OauthLoginResult> {
+    return invokeCommand("connection_password_login", { input });
+  },
+
+  async connectionAuthMe(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_auth_me", { input: { remoteUrl } });
+  },
+
+  async connectionOauthLogout(remoteUrl: string): Promise<void> {
+    return invokeCommand("connection_oauth_logout", { input: { remoteUrl } });
   },
 
 
@@ -508,6 +563,39 @@ const tauriBridge = {
   async readWorkspaceFile(input: ReadWorkspaceFileInput): Promise<FilePreview> {
     return invokeCommand("read_workspace_file", { input });
   },
+
+  async writeWorkspaceFile(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult> {
+    return invokeCommand("write_workspace_file", { input });
+  },
+  // Git ops backing the review pane (issue #328). Mirrors the upstream
+  // `window.hermesDesktop.git.review.*` shape so the ported review logic reads
+  // naturally; each method forwards to a Rust command that shells `git`/`gh`.
+  git: {
+    review: {
+      list: (input) => invokeCommand("git_review_list", { input }),
+      diff: (input) => invokeCommand("git_review_diff", { input }),
+      stage: (input) => invokeCommand("git_review_stage", { input }),
+      unstage: (input) => invokeCommand("git_review_unstage", { input }),
+      revert: (input) => invokeCommand("git_review_revert", { input }),
+      revParse: (input) => invokeCommand("git_review_rev_parse", { input }),
+      commit: (input) => invokeCommand("git_review_commit", { input }),
+      commitContext: (input) => invokeCommand("git_review_commit_context", { input }),
+      push: (input) => invokeCommand("git_review_push", { input }),
+      shipInfo: (input) => invokeCommand("git_review_ship_info", { input }),
+      createPr: (input) => invokeCommand("git_review_create_pr", { input }),
+    },
+    // Worktree / branch / status ops backing the projects sidebar (issue #327).
+    worktree: {
+      list: (input) => invokeCommand("git_worktree_list", { input }),
+      add: (input) => invokeCommand("git_worktree_add", { input }),
+      remove: (input) => invokeCommand("git_worktree_remove", { input }),
+    },
+    branch: {
+      list: (input) => invokeCommand("git_branch_list", { input }),
+      switch: (input) => invokeCommand("git_branch_switch", { input }),
+    },
+    repoStatus: (input) => invokeCommand("git_repo_status", { input }),
+  } satisfies HermesGitBridge,
 
   async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {
     return invokeCommand("watch_preview_file", { input });
@@ -888,6 +976,11 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken?: string;
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
+    portable?: boolean;
+    backendReady?: boolean;
+    guideState?: GuideState;
+    managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
+    managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
@@ -909,9 +1002,9 @@ export async function installTauriBridge(): Promise<void> {
   // the populated apiBaseUrl/sessionToken. In Vite dev we still avoid writing
   // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
   // the React app from racing the managed dashboard startup.
-  if (!config.apiBaseUrl) {
+  if (!config.apiBaseUrl && config.backendReady !== false) {
     const result = await waitForBootstrap(
-      "正在启动Hermes Agent内核...",
+      "正在唤醒Hermes...",
       () => invokeCommand("get_runtime_config"),
       () => invokeCommand("runtime_info"),
     );
@@ -940,6 +1033,11 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
     connectionMode,
+    portable: config.portable ?? false,
+    backendReady: config.backendReady ?? Boolean(config.apiBaseUrl),
+    guideState: config.guideState ?? "completed",
+    managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
+    managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",
   };
 
   (window as any).hermesDesktop = tauriBridge;

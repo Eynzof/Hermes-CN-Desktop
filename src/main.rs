@@ -13,12 +13,13 @@ use std::sync::Arc;
 
 use hermes_agent_cn::bootstrap::{
     acquire_managed_dashboard, connect_local_backend, connect_remote_backend, finalize_bootstrap,
-    install_bundled_runtime_for_bootstrap, record_bootstrap_error,
+    finalize_offline_bootstrap, install_bundled_runtime_for_bootstrap, record_bootstrap_error,
 };
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::connection::{self, ConnectionBackend, ConnectionMode};
-use hermes_agent_cn::process::{dashboard, runtime};
+use hermes_agent_cn::desktop_control;
+use hermes_agent_cn::process::{dashboard, instance, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use hermes_agent_cn::tray;
 
@@ -38,6 +39,7 @@ fn external_dev_handle(api_base_url: String) -> DashboardHandle {
         job_handle: None,
         attached_pid: None,
         child: None,
+        port_locks: None,
     }
 }
 
@@ -119,6 +121,27 @@ fn main() {
         std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", &webview_dir);
     }
 
+    // Single-instance guard per runtime root (issue #366): a second launch
+    // against the SAME data root focuses the incumbent window and exits;
+    // distinct roots (portable copies side by side) keep coexisting. The
+    // guard lives on main's stack so the lock is held until process exit.
+    let _instance_guard = match instance::try_acquire() {
+        instance::SingleInstance::Acquired(guard) => Some(guard),
+        instance::SingleInstance::AlreadyRunning => {
+            log::info!(
+                "another desktop instance owns {}; requesting focus and exiting",
+                runtime::runtime_root().display()
+            );
+            instance::notify_running_instance();
+            return;
+        }
+        instance::SingleInstance::Unavailable(reason) => {
+            // Fail open: the guard must never lock users out of their app.
+            log::warn!("single-instance lock unavailable ({reason}); continuing");
+            None
+        }
+    };
+
     let app_state = AppState::new();
     let quit_requested = Arc::new(AtomicBool::new(false));
     let close_quit_requested = Arc::clone(&quit_requested);
@@ -136,6 +159,13 @@ fn main() {
             let state = app.state::<AppState>();
             let bundled_resource_dir = app.path().resource_dir().ok();
 
+            // Focus channel for the single-instance guard: consume any stale
+            // request from a previous run, then watch for new ones. Armed
+            // before dashboard bootstrap so a second launch gets its focus
+            // handoff even while the kernel is still starting.
+            instance::clear_stale_focus_request();
+            instance::spawn_focus_watcher(app.handle().clone());
+
             match tray::install(app) {
                 Ok(()) => {
                     setup_tray_available.store(true, Ordering::Relaxed);
@@ -143,6 +173,40 @@ fn main() {
                 Err(err) => {
                     log::warn!("Failed to install system tray: {}", err);
                 }
+            }
+
+            // Data-root diagnostics: one line so support logs show where the
+            // tree is anchored and whether the portable marker was honored.
+            log::info!(
+                "runtime root: {} (portable: {})",
+                runtime::runtime_root().display(),
+                runtime::portable_mode_active()
+            );
+
+            // macOS Gatekeeper App Translocation runs a quarantined app from a
+            // randomized read-only path, which hides the portable marker next
+            // to the real .app — a portable unzip would silently fall back to
+            // ~/Library. One non-blocking heads-up tells the user how to fix
+            // it (harmless generic advice for DMG installs too).
+            #[cfg(target_os = "macos")]
+            if std::env::current_exe()
+                .map(|p| p.components().any(|c| c.as_os_str() == "AppTranslocation"))
+                .unwrap_or(false)
+            {
+                use tauri_plugin_dialog::DialogExt;
+                log::warn!(
+                    "running from an App Translocation path; a portable marker (if any) is invisible"
+                );
+                app.dialog()
+                    .message(
+                        "应用正被 macOS 隔离机制（App Translocation）从临时路径运行。\n\n\
+                         如果你使用的是免安装版（portable）：数据将无法保存到解压目录。\n\
+                         请把解压出来的整个文件夹移动到其他位置后重新启动，\n\
+                         或在终端执行：xattr -dr com.apple.quarantine <解压目录>\n\n\
+                         普通安装版用户请将应用拖入「应用程序」文件夹后重新打开。",
+                    )
+                    .title("检测到 macOS 应用隔离")
+                    .show(|_| {});
             }
 
             // 1. Resolve HERMES_HOME
@@ -194,12 +258,29 @@ fn main() {
                 inner.current_profile = current_profile.clone();
             }
 
+            // Persist the first-install/migration decision before resolving or
+            // installing any backend. Existing users are marked complete;
+            // genuinely clean installs stay shell-only until `/guide` chooses
+            // a mode.
+            let control = match desktop_control::initialize() {
+                Ok(control) => control,
+                Err(error) => {
+                    record_bootstrap_error(
+                        app.handle(),
+                        format!("无法初始化桌面控制状态: {}", error),
+                    );
+                    return Ok(());
+                }
+            };
+
             let options = dashboard::EnsureDashboardOptions {
                 host: host.clone(),
                 port,
                 hermes_home: boot_home_str.clone(),
                 allow_external_agent,
                 allow_port_fallback,
+                connection_mode: ConnectionMode::Managed,
+                remote_base_url: None,
             };
 
             // Resolve the backend for this boot: env override → connection.json
@@ -212,6 +293,16 @@ fn main() {
                     return Ok(());
                 }
             };
+
+            if matches!(backend, ConnectionBackend::Managed)
+                && !desktop_control::should_start_managed_runtime(
+                    &control,
+                    external_dev_dashboard,
+                )
+            {
+                finalize_offline_bootstrap(app.handle());
+                return Ok(());
+            }
 
             // --- Default path: bring the dashboard up in the background. ---
             if async_bootstrap {
@@ -267,6 +358,13 @@ fn main() {
                         mode,
                     )
                     .await;
+                    if mode == ConnectionMode::Managed {
+                        tauri::async_runtime::spawn(
+                            hermes_agent_cn::supervisor::supervise_managed_dashboard(
+                                app_handle.clone(),
+                            ),
+                        );
+                    }
                 });
 
                 log::info!("Hermes Agent 中文社区桌面版 bootstrapping in background");
@@ -407,6 +505,10 @@ fn main() {
             commands::connection::probe_connection_config,
             commands::connection::test_connection_config,
             commands::connection::apply_connection_config,
+            commands::connection_auth::connection_oauth_login,
+            commands::connection_auth::connection_password_login,
+            commands::connection_auth::connection_auth_me,
+            commands::connection_auth::connection_oauth_logout,
             commands::backup::backup_export_profile,
             commands::backup::backup_import_profile,
             commands::config_migration::config_migration_scan,
@@ -433,6 +535,13 @@ fn main() {
             commands::runtime_manager::runtime_check_update,
             commands::runtime_manager::runtime_install_update,
             commands::runtime_manager::runtime_rollback,
+            commands::runtime_manager::get_desktop_control_state,
+            commands::runtime_manager::set_guide_state,
+            commands::runtime_manager::managed_runtime_install,
+            commands::runtime_manager::managed_runtime_start,
+            commands::runtime_manager::managed_runtime_stop,
+            commands::runtime_manager::managed_runtime_uninstall,
+            commands::runtime_manager::managed_runtime_reinstall,
             commands::profiles::switch_profile,
             commands::yolo::get_yolo_mode,
             commands::yolo::set_yolo_mode,
@@ -459,8 +568,26 @@ fn main() {
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
             commands::preview::read_workspace_file,
+            commands::preview::write_workspace_file,
             commands::preview::watch_preview_file,
             commands::preview::stop_preview_file_watch,
+            commands::git::git_review_list,
+            commands::git::git_review_diff,
+            commands::git::git_review_stage,
+            commands::git::git_review_unstage,
+            commands::git::git_review_revert,
+            commands::git::git_review_rev_parse,
+            commands::git::git_review_commit,
+            commands::git::git_review_commit_context,
+            commands::git::git_review_push,
+            commands::git::git_review_ship_info,
+            commands::git::git_review_create_pr,
+            commands::git::git_worktree_list,
+            commands::git::git_worktree_add,
+            commands::git::git_worktree_remove,
+            commands::git::git_branch_list,
+            commands::git::git_branch_switch,
+            commands::git::git_repo_status,
         ])
         .on_window_event(move |window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. }

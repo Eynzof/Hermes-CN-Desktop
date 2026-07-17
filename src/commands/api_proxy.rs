@@ -32,21 +32,28 @@ const MAX_UPLOAD_BYTES: usize = 100 * 1024 * 1024;
 const MAX_UPLOAD_BASE64_LEN: usize = MAX_UPLOAD_BYTES.div_ceil(3) * 4;
 const MAX_EXTERNAL_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 const MAX_EXTERNAL_IMAGE_REDIRECTS: usize = 5;
+// Dashboard-facing clients never follow redirects: a gated dashboard answers
+// unauthenticated requests with 401 JSON, but a misconfigured one could 302 →
+// /login. Following that silently would turn a 401 into a 200 whose body is
+// login-page HTML (and drop auth headers on a cross-host hop). Fail loud.
 static DASHBOARD_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(DASHBOARD_PROXY_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("valid dashboard proxy HTTP client")
 });
 static DASHBOARD_AUDIO_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(DASHBOARD_AUDIO_PROXY_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("valid dashboard audio proxy HTTP client")
 });
 static UPLOAD_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(UPLOAD_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .expect("valid upload HTTP client")
 });
@@ -409,12 +416,56 @@ pub async fn api_request_impl(
         .await
 }
 
+/// How the proxied dashboard request authenticates.
+enum ProxyAuth<'a> {
+    /// Legacy loopback/local/remote-token: inject Bearer + X-Hermes-Session-Token.
+    Token(Option<&'a str>),
+    /// Gated remote: use the cookie-aware session client, inject no headers.
+    Oauth(&'a crate::oauth_session::OauthSession),
+}
+
 /// Core implementation variant used by the Tauri command so local desktop
 /// intercepts can read both the active profile home and the profile root.
+/// Token-auth entry point (loopback/local/remote-token + all existing tests).
 pub async fn api_request_impl_with_home_base(
     input: ApiRequestInput,
     api_base_url: &str,
     session_token: Option<&str>,
+    hermes_home: &str,
+    hermes_home_base: &str,
+) -> Result<ApiRequestResult, AppError> {
+    api_request_impl_inner(
+        input,
+        api_base_url,
+        ProxyAuth::Token(session_token),
+        hermes_home,
+        hermes_home_base,
+    )
+    .await
+}
+
+/// OAuth-auth entry point for gated remote gateways (cookie session client).
+pub async fn api_request_impl_oauth(
+    input: ApiRequestInput,
+    api_base_url: &str,
+    session: &crate::oauth_session::OauthSession,
+    hermes_home: &str,
+    hermes_home_base: &str,
+) -> Result<ApiRequestResult, AppError> {
+    api_request_impl_inner(
+        input,
+        api_base_url,
+        ProxyAuth::Oauth(session),
+        hermes_home,
+        hermes_home_base,
+    )
+    .await
+}
+
+async fn api_request_impl_inner(
+    input: ApiRequestInput,
+    api_base_url: &str,
+    auth: ProxyAuth<'_>,
     hermes_home: &str,
     hermes_home_base: &str,
 ) -> Result<ApiRequestResult, AppError> {
@@ -479,19 +530,33 @@ pub async fn api_request_impl_with_home_base(
         format!("{}{}", base, p)
     };
 
-    let dashboard_client = if is_audio_api_path(path) {
-        &*DASHBOARD_AUDIO_PROXY_HTTP_CLIENT
-    } else {
-        &*DASHBOARD_PROXY_HTTP_CLIENT
+    let is_audio = is_audio_api_path(path);
+    let http_method = method.parse().unwrap_or(reqwest::Method::GET);
+    let mut req = match &auth {
+        ProxyAuth::Token(_) => {
+            let client = if is_audio {
+                &*DASHBOARD_AUDIO_PROXY_HTTP_CLIENT
+            } else {
+                &*DASHBOARD_PROXY_HTTP_CLIENT
+            };
+            client.request(http_method, &full_url)
+        }
+        ProxyAuth::Oauth(session) => {
+            // One cookie-aware client (30s default); override per-request for
+            // long-poll audio so streaming TTS/STT is not cut short.
+            let mut b = session.client().request(http_method, &full_url);
+            if is_audio {
+                b = b.timeout(DASHBOARD_AUDIO_PROXY_TIMEOUT);
+            }
+            b
+        }
     };
-    let mut req =
-        dashboard_client.request(method.parse().unwrap_or(reqwest::Method::GET), &full_url);
 
-    // Inject auth headers
-    if let Some(token) = session_token {
+    // Inject auth headers (token mode only; oauth rides the cookie jar).
+    if let ProxyAuth::Token(Some(token)) = &auth {
         req = req
             .header("Authorization", format!("Bearer {}", token))
-            .header("X-Hermes-Session-Token", token);
+            .header("X-Hermes-Session-Token", *token);
     }
 
     // Forward caller headers (don't override auth)
@@ -534,14 +599,15 @@ pub async fn api_request_impl_with_home_base(
 /// to the dashboard for everything else.
 #[tauri::command]
 pub async fn api_request(
+    app: tauri::AppHandle,
     input: ApiRequestInput,
     state: State<'_, AppState>,
 ) -> Result<ApiRequestResult, AppError> {
-    let (api_base_url, session_token, hermes_home, hermes_home_base, mode) = {
+    let (api_base_url, auth, hermes_home, hermes_home_base, mode) = {
         let inner = state.inner.lock()?;
         (
             inner.api_base_url.clone(),
-            inner.session_token.clone(),
+            inner.dashboard_auth(),
             inner.hermes_home.clone(),
             inner.hermes_home_base.clone(),
             inner.connection_mode,
@@ -564,6 +630,31 @@ pub async fn api_request(
         ));
     }
 
+    // OAuth remote: cookie-authed proxy. The server may rotate AT/RT on the
+    // response (captured by the jar) — persist promptly. A 401 with a
+    // session_expired/unauthenticated envelope means re-login is needed.
+    if let crate::state::DashboardAuth::Oauth(session) = &auth {
+        let result = api_request_impl_oauth(
+            input,
+            &api_base_url,
+            session,
+            &hermes_home,
+            &hermes_home_base,
+        )
+        .await?;
+        if session.take_dirty() {
+            crate::oauth_session::persist_if_dirty(&api_base_url, session);
+        }
+        if result.status == 401 && is_auth_expired_body(&result.body) {
+            emit_auth_expired(&app, &state, &api_base_url, &result.body);
+        }
+        return Ok(result);
+    }
+
+    let session_token = match &auth {
+        crate::state::DashboardAuth::Token(t) => t.clone(),
+        crate::state::DashboardAuth::Oauth(_) => None,
+    };
     let first = api_request_impl_with_home_base(
         input.clone(),
         &api_base_url,
@@ -610,6 +701,57 @@ pub async fn api_request(
         &hermes_home_base,
     )
     .await
+}
+
+/// True when a 401 body carries the gated-auth envelope signalling the remote
+/// session is dead (needs re-login), vs a generic loopback `{detail:...}` 401.
+fn is_auth_expired_body(body: &str) -> bool {
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(body) else {
+        return false;
+    };
+    json.get("error")
+        .and_then(|e| e.as_str())
+        .map(|e| e == "session_expired" || e == "unauthenticated")
+        .unwrap_or(false)
+        || json.get("login_url").is_some()
+}
+
+/// Emit `connection-auth-expired` to the frontend so it can surface the
+/// re-login banner. Debounced to 5s (a burst of 401s must not storm the UI).
+fn emit_auth_expired(
+    app: &tauri::AppHandle,
+    state: &State<'_, AppState>,
+    base_url: &str,
+    body: &str,
+) {
+    use tauri::Emitter;
+    {
+        let mut inner = match state.inner.lock() {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        let now = std::time::Instant::now();
+        if let Some(last) = inner.last_auth_expired_emit {
+            if now.duration_since(last) < Duration::from_secs(5) {
+                return;
+            }
+        }
+        inner.last_auth_expired_emit = Some(now);
+    }
+    let json = serde_json::from_str::<serde_json::Value>(body).unwrap_or_default();
+    let reason = json
+        .get("error")
+        .and_then(|e| e.as_str())
+        .unwrap_or("unauthenticated")
+        .to_string();
+    let login_url = json
+        .get("login_url")
+        .and_then(|u| u.as_str())
+        .map(String::from);
+    let _ = app.emit(
+        "connection-auth-expired",
+        serde_json::json!({ "baseUrl": base_url, "reason": reason, "loginUrl": login_url }),
+    );
 }
 
 /// Proxy an HTTP request to an arbitrary external URL (15s timeout).
@@ -839,22 +981,45 @@ pub async fn external_request_impl(
     input: ApiRequestInput,
     target_url: url::Url,
 ) -> Result<ApiRequestResult, AppError> {
+    external_request_impl_with_client(input, target_url, &EXTERNAL_HTTP_CLIENT).await
+}
+
+async fn external_request_impl_with_client(
+    input: ApiRequestInput,
+    target_url: url::Url,
+    client: &reqwest::Client,
+) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
     let display_url = target_url.as_str().to_string();
-    let mut req =
-        EXTERNAL_HTTP_CLIENT.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
 
-    if let Some(ref headers) = input.headers {
-        for (key, value) in headers {
-            req = req.header(key.as_str(), value.as_str());
+    fn build_request(
+        client: &reqwest::Client,
+        method: &str,
+        target_url: url::Url,
+        headers: &Option<HashMap<String, String>>,
+        body: &Option<String>,
+    ) -> reqwest::RequestBuilder {
+        let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
+        if let Some(ref headers) = headers {
+            for (key, value) in headers {
+                req = req.header(key.as_str(), value.as_str());
+            }
         }
+        if let Some(ref body) = body {
+            req = req.body(body.clone());
+        }
+        req
     }
 
-    if let Some(ref body) = input.body {
-        req = req.body(body.clone());
-    }
+    // A credentialed request must be sent exactly once. In particular, never
+    // bypass a configured system proxy after a connect failure: doing so both
+    // violates the user's network policy and can replay API keys/request bodies
+    // to a second network path.
+    let result = build_request(client, method, target_url, &input.headers, &input.body)
+        .send()
+        .await;
 
-    match req.send().await {
+    match result {
         Ok(res) => {
             let status = res.status().as_u16();
             let status_text = res.status().canonical_reason().unwrap_or("").to_string();
@@ -972,4 +1137,76 @@ pub struct UploadFileInput {
     pub r#type: Option<String>,
     /// Base64-encoded file content.
     pub data: String,
+}
+
+#[cfg(test)]
+mod external_request_tests {
+    use super::*;
+    use std::io::Read;
+    use std::net::TcpListener;
+    use std::sync::mpsc;
+    use std::thread;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn credentialed_post_is_not_replayed_without_the_proxy() {
+        let target = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/secret"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(0)
+            .mount(&target)
+            .await;
+
+        let proxy = TcpListener::bind(("127.0.0.1", 0)).expect("bind proxy");
+        let proxy_addr = proxy.local_addr().expect("proxy address");
+        let (captured_tx, captured_rx) = mpsc::channel();
+        let proxy_thread = thread::spawn(move || {
+            let (mut stream, _) = proxy.accept().expect("accept proxied request");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("set read timeout");
+            let mut buf = vec![0_u8; 8192];
+            let count = stream.read(&mut buf).unwrap_or(0);
+            captured_tx
+                .send(String::from_utf8_lossy(&buf[..count]).to_string())
+                .expect("send captured request");
+            // Drop without a response to emulate a proxy connection failure.
+        });
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .proxy(reqwest::Proxy::all(format!("http://{}", proxy_addr)).expect("valid proxy URL"))
+            .build()
+            .expect("build proxied client");
+        let target_url: url::Url = format!("{}/secret", target.uri())
+            .parse()
+            .expect("valid target URL");
+
+        let result = external_request_impl_with_client(
+            ApiRequestInput {
+                path: target_url.to_string(),
+                method: Some("POST".to_string()),
+                headers: Some(HashMap::from([(
+                    "Authorization".to_string(),
+                    "Bearer sk-sensitive".to_string(),
+                )])),
+                body: Some("{\"prompt\":\"hello\"}".to_string()),
+            },
+            target_url,
+            &client,
+        )
+        .await
+        .expect("network errors are returned as a result envelope");
+
+        assert!(!result.ok);
+        assert_eq!(result.status, 0);
+        let captured = captured_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("proxy should receive exactly one request");
+        assert!(captured.contains("Bearer sk-sensitive"));
+        proxy_thread.join().expect("proxy thread");
+        target.verify().await;
+    }
 }

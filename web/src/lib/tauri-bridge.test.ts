@@ -217,4 +217,50 @@ describe("isTauriDevMode", () => {
     expect(mockInvoke).toHaveBeenCalledWith("backup_export_profile");
     expect(mockInvoke).toHaveBeenCalledWith("backup_import_profile");
   });
+
+  it("mounts the renderer without waiting when the managed runtime is intentionally offline", async () => {
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_runtime_config") {
+        return Promise.resolve({
+          apiBaseUrl: "",
+          gatewayUrl: "",
+          currentProfile: "default",
+          connectionMode: "managed",
+          backendReady: false,
+          guideState: "pending",
+          managedRuntimeDesiredState: "stopped",
+          managedRuntimeLifecycleState: "stopped",
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    await installTauriBridge();
+
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      backendReady: false,
+      guideState: "pending",
+      managedRuntimeDesiredState: "stopped",
+      managedRuntimeLifecycleState: "stopped",
+    });
+    expect(mockInvoke).not.toHaveBeenCalledWith("runtime_info", undefined);
+  });
+
+  it("exposes persisted guide and managed runtime lifecycle commands", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.setGuideState?.("deferred");
+    await window.hermesDesktop?.installManagedRuntime?.();
+    await window.hermesDesktop?.startManagedRuntime?.();
+    await window.hermesDesktop?.stopManagedRuntime?.();
+    await window.hermesDesktop?.uninstallManagedRuntime?.();
+    await window.hermesDesktop?.reinstallManagedRuntime?.();
+
+    expect(mockInvoke).toHaveBeenCalledWith("set_guide_state", { input: { guideState: "deferred" } });
+    expect(mockInvoke).toHaveBeenCalledWith("managed_runtime_install", undefined);
+    expect(mockInvoke).toHaveBeenCalledWith("managed_runtime_start", undefined);
+    expect(mockInvoke).toHaveBeenCalledWith("managed_runtime_stop", undefined);
+    expect(mockInvoke).toHaveBeenCalledWith("managed_runtime_uninstall", undefined);
+    expect(mockInvoke).toHaveBeenCalledWith("managed_runtime_reinstall", undefined);
+  });
 });

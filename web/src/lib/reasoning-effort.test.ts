@@ -18,6 +18,7 @@ describe("reasoning-effort", () => {
       "medium",
       "high",
       "xhigh",
+      "max",
     ]);
   });
 
@@ -48,6 +49,8 @@ describe("reasoning-effort", () => {
     it("trims and lowercases known values", () => {
       expect(normalizeReasoningEffort("  High ")).toBe("high");
       expect(normalizeReasoningEffort("XHIGH")).toBe("xhigh");
+      expect(normalizeReasoningEffort("MAX")).toBe("max");
+      expect(normalizeReasoningEffort("  Max ")).toBe("max");
       expect(normalizeReasoningEffort("none")).toBe("none");
     });
 
