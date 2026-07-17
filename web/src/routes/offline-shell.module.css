@@ -1,0 +1,28 @@
+.shell { width: 100vw; height: 100vh; display: grid; grid-template-columns: 220px 1fr; color: var(--h-text); background: var(--h-bg-app); font-family: var(--h-font-ui); overflow: hidden; }
+.shell > aside { display: flex; flex-direction: column; gap: 22px; padding: calc(24px + var(--h-window-control-safe-top, 0px)) 14px 18px; border-right: 1px solid var(--h-line); background: var(--h-bg-pane); }
+.brand { display: flex; align-items: center; gap: 9px; padding: 0 7px; }
+.brand > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; color: var(--h-accent-contrast); background: var(--h-accent); font-weight: 800; }
+.brand strong, .brand small { display: block; }
+.brand strong { font-size: 12px; }
+.brand small { margin-top: 2px; color: var(--h-text-3); font-size: 9px; }
+.shell nav { display: grid; gap: 4px; }
+.shell nav a { display: flex; align-items: center; gap: 9px; padding: 9px 10px; color: var(--h-text-2); border-radius: var(--h-r-sm); text-decoration: none; font-size: 12px; }
+.shell nav a[data-active="true"] { color: var(--h-accent); background: var(--h-accent-soft); }
+.shell > main { min-width: 0; min-height: 0; overflow: hidden; }
+.page { height: 100%; display: flex; flex-direction: column; background: var(--h-bg-pane); }
+.page > header { padding: calc(22px + var(--h-window-control-safe-top, 0px)) 28px 20px; border-bottom: 1px solid var(--h-line-soft); }
+.page > header p, .page > header h1, .page > header span { margin: 0; }
+.page > header p { color: var(--h-accent); font: 700 9px/1.2 var(--h-font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.page > header h1 { margin-top: 5px; font-size: 20px; }
+.page > header span { display: block; margin-top: 4px; color: var(--h-text-2); font-size: 11px; }
+.body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px 28px 60px; }
+.empty { min-height: 360px; display: grid; align-content: center; justify-items: center; gap: 10px; text-align: center; color: var(--h-text-3); }
+.empty h2, .empty p { margin: 0; }
+.empty h2 { color: var(--h-text); font-size: 17px; }
+.empty p { max-width: 480px; color: var(--h-text-2); font-size: 12px; line-height: 1.6; }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cards article { padding: 18px; border: 1px solid var(--h-line); border-radius: var(--h-r-md); background: var(--h-bg-soft); }
+.cards article > svg { color: var(--h-accent); }
+.cards h2 { margin: 10px 0 5px; font-size: 14px; }
+.cards p { margin: 0 0 14px; color: var(--h-text-2); font-size: 11px; line-height: 1.6; }
+@media (max-width: 760px) { .shell { grid-template-columns: 62px 1fr; } .brand div, .shell nav a { font-size: 0; } .shell nav a { justify-content: center; } .cards { grid-template-columns: 1fr; } }

@@ -8,6 +8,7 @@
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+use hermes_agent_cn::connection::ConnectionMode;
 use hermes_agent_cn::process::dashboard::{ensure_hermes_dashboard, EnsureDashboardOptions};
 use hermes_agent_cn::process::runtime::RuntimeInstallRecord;
 use serial_test::serial;
@@ -97,6 +98,8 @@ async fn crash_looping_runtime_retries_then_fails_cleanly() {
         hermes_home: home.to_string_lossy().to_string(),
         allow_external_agent: false,
         allow_port_fallback: true,
+        connection_mode: ConnectionMode::Managed,
+        remote_base_url: None,
     })
     .await;
     let err = match result {
@@ -146,6 +149,8 @@ async fn ready_file_completes_spawn_without_http() {
         hermes_home: home.to_string_lossy().to_string(),
         allow_external_agent: false,
         allow_port_fallback: true,
+        connection_mode: ConnectionMode::Managed,
+        remote_base_url: None,
     })
     .await
     .expect("ready file must complete the spawn");

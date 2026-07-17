@@ -3,6 +3,13 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::error::{AppError, AppResult};
+use crate::state::AppState;
+use tauri::State;
+
+fn require_local_filesystem(state: &State<'_, AppState>, capability: &str) -> AppResult<()> {
+    let inner = state.inner.lock()?;
+    crate::connection::require_local_filesystem(inner.connection_mode, capability)
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,7 +39,11 @@ pub struct SimpleApiResult {
 }
 
 #[tauri::command]
-pub async fn pick_files(app: tauri::AppHandle) -> AppResult<FilePickerResult> {
+pub async fn pick_files(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<FilePickerResult> {
+    require_local_filesystem(&state, "本机文件选择")?;
     use tauri_plugin_dialog::DialogExt;
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -61,7 +72,11 @@ pub async fn pick_files(app: tauri::AppHandle) -> AppResult<FilePickerResult> {
 }
 
 #[tauri::command]
-pub async fn pick_directory(app: tauri::AppHandle) -> AppResult<FilePickerResult> {
+pub async fn pick_directory(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<FilePickerResult> {
+    require_local_filesystem(&state, "本机目录选择")?;
     use tauri_plugin_dialog::DialogExt;
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -90,7 +105,8 @@ pub async fn pick_directory(app: tauri::AppHandle) -> AppResult<FilePickerResult
 }
 
 #[tauri::command]
-pub fn create_workspace_project() -> AppResult<FilePickerResult> {
+pub fn create_workspace_project(state: State<'_, AppState>) -> AppResult<FilePickerResult> {
+    require_local_filesystem(&state, "本机工作区创建")?;
     let documents = dirs::document_dir()
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."));
@@ -206,7 +222,11 @@ fn validate_external_url(raw: &str) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub async fn open_workspace_path(input: WorkspacePathInput) -> AppResult<SimpleApiResult> {
+pub async fn open_workspace_path(
+    input: WorkspacePathInput,
+    state: State<'_, AppState>,
+) -> AppResult<SimpleApiResult> {
+    require_local_filesystem(&state, "本机 Finder / 资源管理器")?;
     let target = validate_open_target(&input.path)?;
 
     open::that(&target).map_err(|e| AppError::FileError(format!("Failed to open: {}", e)))?;

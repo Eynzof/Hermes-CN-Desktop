@@ -80,6 +80,7 @@ import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo,
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import { SettingsHero } from "./settings-hero";
+import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
 
 /* ── General ─────────────────────────────────────────────────────────── */
@@ -1287,6 +1288,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
         )}
       </SettingsHero>
 
+      <ManagedRuntimePanel />
+
       <div className={s.debugActionBar}>
         <Button variant="outline" type="button" onClick={handleRefreshAll} disabled={refreshing}>
           <RefreshCw size={13} />
@@ -1300,7 +1303,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           variant="outline"
           type="button"
           onClick={() => handleOpenPath(hermesHomePath, " HERMES_HOME", setAboutMessage)}
-          disabled={!hermesHomePath || !window.hermesDesktop?.openWorkspacePath}
+          disabled={isRemote || !hermesHomePath || !window.hermesDesktop?.openWorkspacePath}
+          title={isRemote ? "远端 Hermes Home 不属于本机文件系统" : undefined}
         >
           <FolderOpen size={13} />
           打开 HERMES_HOME

@@ -35,6 +35,7 @@ export function ProfilesRoute() {
 
   const [editor, setEditor] = useState<Editor | null>(null);
   const [restartHint, setRestartHint] = useState<string | null>(null);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const profiles = profilesQuery.data ?? [];
   const active = activeQuery.data?.active ?? "default";
@@ -53,6 +54,11 @@ export function ProfilesRoute() {
 
   const handleSetActive = (name: string) => {
     if (name === active) return;
+    if (runtime.isAttached()) {
+      setSwitchError("当前使用外部 Hermes，桌面端不会重启或切换目标端 Profile。");
+      return;
+    }
+    setSwitchError(null);
     setActive.mutate(name, {
       onSuccess: (result) => {
         if (result.mode === "web-sticky") setRestartHint(name);
@@ -97,7 +103,12 @@ export function ProfilesRoute() {
         启动时由当前档案决定加载哪一套数据。
       </p>
 
-      {runtime.platform !== "web" ? (
+      {runtime.isAttached() ? (
+        <div className={s.warning}>
+          <strong>外部 Hermes 由目标端管理 Profile。</strong>
+          <span>可以查看和编辑目标端的档案内容，但桌面端不会主动切换 Profile 或重启外部进程。</span>
+        </div>
+      ) : runtime.platform !== "web" ? (
         <div className={s.warning}>
           <strong>切换会自动重启内核。</strong>
           <span>
@@ -113,6 +124,8 @@ export function ProfilesRoute() {
           </span>
         </div>
       )}
+
+      {switchError && <div className={s.restartHint}><strong>{switchError}</strong></div>}
 
       {!isError && !isLoading && <ActiveCurrentBanner active={active} current={current} />}
 

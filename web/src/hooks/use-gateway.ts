@@ -175,6 +175,7 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
     needsResumeOnReopen = true;
     getDefaultStore().set(markStreamsReconnectingAtom);
   });
+
   gatewayBridge = bridge;
   return bridge;
 }

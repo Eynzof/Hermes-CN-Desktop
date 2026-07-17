@@ -104,6 +104,7 @@ import { UrlDialog } from "@/components/composer/url-dialog";
 import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
 import { imageFileFromClipboardData, readClipboardImageAsFile } from "@/lib/clipboard-image";
 import { downloadExternalImageFile } from "@/lib/transport";
+import { runtime } from "@/lib/runtime";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
 import s from "./goose-composer.module.css";
 
@@ -730,6 +731,13 @@ export function GooseComposer({
     if (controlsDisabled) return;
     setSubmitError("");
     try {
+      if (runtime.isRemote()) {
+        // A native folder picker can only see this Mac/PC. In remote mode the
+        // workspace is a server path, so use the target-backed browser/manual
+        // path dialog instead.
+        setWorkspacePickerOpen(true);
+        return;
+      }
       if (window.hermesDesktop?.pickDirectory) {
         const result = await window.hermesDesktop.pickDirectory();
         if (!result.canceled) applyWorkspacePath(result.paths[0] ?? "");

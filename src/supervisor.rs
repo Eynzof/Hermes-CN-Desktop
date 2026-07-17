@@ -64,6 +64,11 @@ pub async fn supervise_managed_dashboard(app: tauri::AppHandle) {
             if inner.connection_mode != ConnectionMode::Managed {
                 continue;
             }
+            if crate::desktop_control::read().managed_runtime_desired_state
+                != crate::desktop_control::ManagedRuntimeDesiredState::Running
+            {
+                continue;
+            }
             if inner.dashboard_restart_in_flight {
                 continue;
             }
