@@ -75,8 +75,8 @@ import { StallNotice } from "@/components/chat/stall-notice";
 import { SubagentPanel, useSessionCliDelegations, useSessionSubagents } from "@/components/chat/subagent-panel";
 import { PreviewRail } from "@/components/chat/preview-rail/preview-rail";
 import { PREVIEW_PANEL_QUERY_KEY } from "@/lib/preview-rail";
-import { activeCliDelegationCount } from "@/stores/cli-delegations";
-import { activeSubagentCount } from "@/stores/subagents";
+import { activeCliDelegationCount, clearFinishedCliDelegationsAtom } from "@/stores/cli-delegations";
+import { activeSubagentCount, clearFinishedSubagentsAtom } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
   hermesUIMessagesToChatMessages,
@@ -173,6 +173,20 @@ export function DetailRoute() {
   ]);
   const subagentActive = activeSubagentCount(subagents) + activeCliDelegationCount(cliDelegations);
   const subagentTotal = subagents.length + cliDelegations.length;
+  const clearFinishedSubagents = useSetAtom(clearFinishedSubagentsAtom);
+  const clearFinishedCliDelegations = useSetAtom(clearFinishedCliDelegationsAtom);
+  const clearFinishedDelegationRows = useCallback(() => {
+    const candidates = [runtimeSessionId, activeMappedGatewaySessionId, usageGatewaySessionId, taskId];
+    clearFinishedSubagents(candidates);
+    clearFinishedCliDelegations(candidates);
+  }, [
+    activeMappedGatewaySessionId,
+    clearFinishedCliDelegations,
+    clearFinishedSubagents,
+    runtimeSessionId,
+    taskId,
+    usageGatewaySessionId,
+  ]);
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
   const { data: messagesData, isLoading } = messagesQuery;
@@ -778,6 +792,7 @@ export function DetailRoute() {
             subagents={subagents}
             cliDelegations={cliDelegations}
             onClose={() => setSubagentPanelOpen(false)}
+            onClearFinished={clearFinishedDelegationRows}
           />
         ) : null}
 

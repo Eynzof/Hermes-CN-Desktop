@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "jotai";
 import { AlertCircle, Bot, CheckCircle2, ChevronRight, Loader2, SquareTerminal, X } from "lucide-react";
-import { formatCostUsd, formatTokens } from "@/lib/format";
+import { formatTokens } from "@/lib/format";
 import {
   activeCliDelegationCount,
   cliDelegationsBySessionAtom,
@@ -216,13 +216,13 @@ const CLI_MODE_LABELS: Record<string, string> = {
   interactive: "交互会话",
 };
 
-const CLI_STATUS_LABELS: Record<CliDelegationEntry["status"], string> = {
-  running: "执行中",
-  completed: "已完成",
+// 只给异常/特殊态配文字——completed/running 由状态图标表达，副标题不再
+// 重复「已完成」字样（用户反馈：信息堆叠混乱）。
+const CLI_ABNORMAL_STATUS_LABELS: Partial<Record<CliDelegationEntry["status"], string>> = {
   failed: "失败",
   killed: "已终止",
   lost: "状态丢失",
-  detached: "后台运行 · 结果未跟踪",
+  detached: "结果未跟踪",
 };
 
 function CliStatusIcon({ status }: { status: CliDelegationEntry["status"] }) {
@@ -252,12 +252,12 @@ function cliStreamEntries(entry: CliDelegationEntry): SubagentStreamEntry[] {
       text = [
         event.isError ? "子任务出错" : "子任务完成",
         event.numTurns !== undefined ? `${event.numTurns} 轮` : "",
-        event.totalCostUsd !== undefined ? `$${event.totalCostUsd.toFixed(4)}` : "",
+        event.outputTokens !== undefined ? `输出 ${formatTokens(event.outputTokens)} tok` : "",
       ]
         .filter(Boolean)
         .join(" · ");
     } else if (event.kind === "init") {
-      text = `已连接${event.sessionId ? ` · 会话 ${event.sessionId}` : ""}`;
+      text = "已连接";
     } else {
       text = event.text ?? "";
     }
@@ -281,18 +281,28 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
         ? Math.max(0, Math.round((now - entry.startedAt) / 1000))
         : 0;
 
+  // 一行只说必要的话：代理名 ·（后台）·（异常态说明）。completed/running
+  // 由左侧图标表达；时长右置常显；会话 id 等细节收进展开态。
+  const abnormal = CLI_ABNORMAL_STATUS_LABELS[entry.status];
   const subtitle = [
     CLI_AGENT_LABELS[entry.agent],
-    entry.mode ? CLI_MODE_LABELS[entry.mode] : "",
     entry.execution === "background" ? "后台" : "",
-    running ? "" : CLI_STATUS_LABELS[entry.status],
-    fmtDuration(durationSeconds),
-    entry.result?.sessionId ? `会话 ${entry.result.sessionId}` : "",
-    entry.result?.totalCostUsd !== undefined ? `$${entry.result.totalCostUsd.toFixed(4)}` : "",
+    abnormal ?? "",
   ].filter(Boolean);
 
   const stream = cliStreamEntries(entry);
   const visibleRows = open ? stream.slice(-10) : stream.slice(-2);
+  const metaParts = open
+    ? [
+        entry.mode ? (CLI_MODE_LABELS[entry.mode] ?? "") : "",
+        entry.result?.sessionId ? `会话 ${entry.result.sessionId}` : "",
+        entry.result?.numTurns !== undefined ? `${entry.result.numTurns} 轮` : "",
+        entry.workdir ? `目录 ${entry.workdir}` : "",
+        entry.exitCode !== undefined && entry.exitCode !== null && entry.exitCode !== 0
+          ? `退出码 ${entry.exitCode}`
+          : "",
+      ].filter(Boolean)
+    : [];
 
   return (
     <div className={s.row} data-running={running ? "true" : undefined}>
@@ -306,7 +316,7 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
           </span>
           {subtitle.length > 0 ? <span className={s.subtitle}>{subtitle.join(" · ")}</span> : null}
         </span>
-        {running ? <span className={s.timer}>{fmtDuration(durationSeconds) || "0s"}</span> : null}
+        <span className={s.timer}>{fmtDuration(durationSeconds) || (running ? "0s" : "")}</span>
       </button>
 
       {visibleRows.length > 0 ? (
@@ -314,6 +324,13 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
           {visibleRows.map((line, i) => (
             <StreamLine key={`${line.kind}:${line.at}:${i}`} entry={line} active={running && i === visibleRows.length - 1} />
           ))}
+        </div>
+      ) : null}
+
+      {metaParts.length > 0 ? (
+        <div className={s.files}>
+          <span className={s.filesLabel}>详情</span>
+          <span className={s.fileLine}>{metaParts.join(" · ")}</span>
         </div>
       ) : null}
     </div>
@@ -345,15 +362,21 @@ export function SubagentPanel({
   subagents,
   cliDelegations = [],
   onClose,
+  onClearFinished,
 }: {
   subagents: SubagentProgress[];
   cliDelegations?: CliDelegationEntry[];
   onClose: () => void;
+  onClearFinished?: () => void;
 }) {
   const tree = useMemo(() => buildSubagentTree(subagents), [subagents]);
   const flat = useMemo(() => flattenSubagents(tree), [tree]);
   const groups = useMemo(() => groupDelegations(tree), [tree]);
   const active = activeSubagentCount(flat) + activeCliDelegationCount(cliDelegations);
+  // 已结束的行（内部终态 + 外部非 running）保留在面板里供 debug，可手动清空。
+  const finishedCount =
+    flat.filter((nd) => nd.status !== "running" && nd.status !== "queued").length +
+    cliDelegations.filter((entry) => entry.status !== "running").length;
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -366,7 +389,6 @@ export function SubagentPanel({
   const tools = flat.reduce((sum, nd) => sum + (nd.toolCount ?? 0), 0);
   const files = flat.reduce((sum, nd) => sum + nd.filesRead.length + nd.filesWritten.length, 0);
   const tokens = flat.reduce((sum, nd) => sum + (nd.inputTokens ?? 0) + (nd.outputTokens ?? 0), 0);
-  const cost = flat.reduce((sum, nd) => sum + (nd.costUsd ?? 0), 0);
 
   const summary = [
     `${flat.length} 个子代理`,
@@ -375,7 +397,6 @@ export function SubagentPanel({
     tools > 0 ? `${tools} 工具` : "",
     files > 0 ? `${files} 文件` : "",
     tokens > 0 ? `${formatTokens(tokens)} tok` : "",
-    cost > 0 ? formatCostUsd(cost) : "",
   ].filter(Boolean);
 
   return (
@@ -385,6 +406,16 @@ export function SubagentPanel({
           <Bot size={14} aria-hidden />
           子代理监视
         </span>
+        {onClearFinished && finishedCount > 0 ? (
+          <button
+            className={s.clearFinished}
+            type="button"
+            onClick={onClearFinished}
+            title="移除已结束的子代理与委派记录"
+          >
+            清空已结束
+          </button>
+        ) : null}
         <button className={s.close} type="button" onClick={onClose} aria-label="关闭子代理监视">
           <X size={14} aria-hidden />
         </button>

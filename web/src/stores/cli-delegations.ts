@@ -316,6 +316,12 @@ export function entryFromHistoryToolPart(part: {
 export const activeCliDelegationCount = (items: readonly CliDelegationEntry[]) =>
   items.filter((item) => item.status === "running").length;
 
+/** 面板「清空已结束」：只留仍在运行的委派（detached 视为已结束，可清）。 */
+export function dropFinishedCliDelegations(list: readonly CliDelegationEntry[]): CliDelegationEntry[] {
+  const next = list.filter((item) => item.status === "running");
+  return next.length === list.length ? (list as CliDelegationEntry[]) : next;
+}
+
 // ── Jotai state + gateway routing ───────────────────────────────────────────
 
 export const cliDelegationsBySessionAtom = atom<Record<string, CliDelegationEntry[]>>({});
@@ -382,6 +388,31 @@ export const routeCliDelegationGatewayEventAtom = atom(
           ? applyFallbackToolStart(prevList, payload, now)
           : applyFallbackToolComplete(prevList, payload, now);
       return next === prevList ? state : { ...state, [sid]: next };
+    });
+  },
+);
+
+/** 面板「清空已结束」动作：对给到的候选会话 id 逐个清掉终态/未跟踪的委派。 */
+export const clearFinishedCliDelegationsAtom = atom(
+  null,
+  (_get, set, sessionIds: (string | undefined)[]) => {
+    set(cliDelegationsBySessionAtom, (state) => {
+      let next = state;
+      let changed = false;
+      for (const sid of sessionIds) {
+        if (!sid) continue;
+        const prevList = next[sid];
+        if (!prevList?.length) continue;
+        const filtered = dropFinishedCliDelegations(prevList);
+        if (filtered !== prevList) {
+          if (!changed) {
+            next = { ...next };
+            changed = true;
+          }
+          next[sid] = filtered;
+        }
+      }
+      return next;
     });
   },
 );

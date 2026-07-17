@@ -191,6 +191,9 @@ function toProgress(
   };
 }
 
+// 跨回合保留的行数上限：debug 场景下已结束的子代理留在面板里，防无限累积。
+const MAX_ITEMS = 40;
+
 /** Pure upsert: returns a new list (or the same ref if nothing changed). Terminal
  *  subagents are frozen — late events for a completed/failed branch are ignored. */
 export function reduceSubagentList(
@@ -207,7 +210,24 @@ export function reduceSubagentList(
   const prev = idx >= 0 ? arr[idx] : undefined;
   if (prev && TERMINAL.has(prev.status)) return arr;
   const next = toProgress(payload, prev, eventType, now);
-  return idx >= 0 ? arr.map((item) => (item.id === id ? next : item)) : [...arr, next];
+  if (idx >= 0) return arr.map((item) => (item.id === id ? next : item));
+  const appended = [...arr, next];
+  return appended.length > MAX_ITEMS ? appended.slice(-MAX_ITEMS) : appended;
+}
+
+/** 新回合开始：上一轮仍未收尾的行标记为 interrupted（事件流没走完），
+ *  已终态的行原样保留。返回同引用表示无变化。 */
+export function markUnfinishedInterrupted(list: readonly SubagentProgress[]): SubagentProgress[] {
+  if (!list.some((item) => !TERMINAL.has(item.status))) return list as SubagentProgress[];
+  return list.map((item) =>
+    TERMINAL.has(item.status) ? item : { ...item, status: "interrupted" as const },
+  );
+}
+
+/** 面板「清空已结束」：只留仍在运行/排队的行。 */
+export function dropFinishedSubagents(list: readonly SubagentProgress[]): SubagentProgress[] {
+  const next = list.filter((item) => !TERMINAL.has(item.status));
+  return next.length === list.length ? (list as SubagentProgress[]) : next;
 }
 
 /** Drop synthetic delegate-tool fallback rows (used once native subagent.* events
@@ -346,13 +366,17 @@ export const routeSubagentGatewayEventAtom = atom(
       event.payload && typeof event.payload === "object" ? event.payload : {}
     ) as SubagentPayload;
 
-    // A new turn resets the session's subagent tree.
+    // 新回合不清空子代理树——与官方桌面端的有意分歧：已结束的子代理保留
+    // 在面板里（状态图标标终态）方便 debug，上限 MAX_ITEMS，手动「清空已
+    // 结束」删除。上一轮没收尾的行标 interrupted（原实现直接整树删除，
+    // 跨回合事件同样无法复活它们）；native/fallback 判定仍按轮重置。
     if (type === "message.start") {
       nativeSubagentSessions.delete(sid);
       set(subagentsBySessionAtom, (state) => {
-        if (!(sid in state)) return state;
-        const { [sid]: _drop, ...rest } = state;
-        return rest;
+        const prevList = state[sid];
+        if (!prevList?.length) return state;
+        const next = markUnfinishedInterrupted(prevList);
+        return next === prevList ? state : { ...state, [sid]: next };
       });
       return;
     }
@@ -389,5 +413,30 @@ export const routeSubagentGatewayEventAtom = atom(
         return { ...state, [sid]: list };
       });
     }
+  },
+);
+
+/** 面板「清空已结束」动作：对给到的候选会话 id 逐个清掉终态行。 */
+export const clearFinishedSubagentsAtom = atom(
+  null,
+  (_get, set, sessionIds: (string | undefined)[]) => {
+    set(subagentsBySessionAtom, (state) => {
+      let next = state;
+      let changed = false;
+      for (const sid of sessionIds) {
+        if (!sid) continue;
+        const prevList = next[sid];
+        if (!prevList?.length) continue;
+        const filtered = dropFinishedSubagents(prevList);
+        if (filtered !== prevList) {
+          if (!changed) {
+            next = { ...next };
+            changed = true;
+          }
+          next[sid] = filtered;
+        }
+      }
+      return next;
+    });
   },
 );

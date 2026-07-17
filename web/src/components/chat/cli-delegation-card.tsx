@@ -131,7 +131,6 @@ function TimelineRow({ event }: { event: CliDelegationSubEvent }) {
   if (event.kind === "result") {
     const parts = [
       event.numTurns !== undefined ? `${event.numTurns} 轮` : "",
-      event.totalCostUsd !== undefined ? `$${event.totalCostUsd.toFixed(4)}` : "",
       event.outputTokens !== undefined ? `输出 ${event.outputTokens} tokens` : "",
       event.text ?? "",
     ].filter(Boolean);
@@ -166,11 +165,11 @@ export function CliDelegationCard({ entry }: { entry: CliDelegationEntry }) {
     entry.promptExcerpt || entry.timeline.length || entry.outputTail || entry.result || entry.command,
   );
 
+  // 计费信息不进 UI（CN 用户多走中转套餐，USD 成本无参考意义且添乱）。
   const resultParts = entry.result
     ? [
         sessionId ? `会话 ${sessionId}` : "",
         entry.result.numTurns !== undefined ? `${entry.result.numTurns} 轮` : "",
-        entry.result.totalCostUsd !== undefined ? `$${entry.result.totalCostUsd.toFixed(4)}` : "",
         entry.result.outputTokens !== undefined ? `输出 ${entry.result.outputTokens} tokens` : "",
       ].filter(Boolean)
     : [];

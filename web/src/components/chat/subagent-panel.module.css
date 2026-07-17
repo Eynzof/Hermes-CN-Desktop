@@ -41,6 +41,26 @@
   cursor: pointer;
 }
 
+/* 「清空已结束」——header 里的轻量文字动作，靠右贴着关闭钮（auto margin
+   在 space-between 之前吸收剩余空间，标题独占左侧）。 */
+.clearFinished {
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font-size: 11px;
+  padding: 3px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.clearFinished:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
 .close:hover {
   background: var(--h-bg-soft);
   color: var(--h-text);

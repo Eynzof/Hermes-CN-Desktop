@@ -6,6 +6,7 @@ import type { GatewayEvent } from "@hermes/protocol";
 import {
   __resetNativeCliSessions,
   activeCliDelegationCount,
+  clearFinishedCliDelegationsAtom,
   cliDelegationsBySessionAtom,
   entryFromHistoryToolPart,
   routeCliDelegationGatewayEventAtom,
@@ -230,6 +231,18 @@ describe("回退路径（旧内核）", () => {
     );
     route(ev("message.start", {}));
     expect(list()).toHaveLength(1);
+  });
+
+  it("clearFinishedCliDelegationsAtom 清掉终态与 detached，保留 running", () => {
+    const store = createStore();
+    const route = (event: GatewayEvent, now = 1000) =>
+      store.set(routeCliDelegationGatewayEventAtom, event, now);
+    route(ev("delegation.cli.started", { delegation_id: "run-1", agent: "claude-code", execution: "background" }));
+    route(ev("delegation.cli.started", { delegation_id: "done-1", agent: "codex", execution: "foreground" }));
+    route(ev("delegation.cli.completed", { delegation_id: "done-1", status: "completed" }));
+
+    store.set(clearFinishedCliDelegationsAtom, [SID, undefined]);
+    expect(store.get(cliDelegationsBySessionAtom)[SID]!.map((e) => e.id)).toEqual(["run-1"]);
   });
 
   it("每会话 cap 20 条", () => {
