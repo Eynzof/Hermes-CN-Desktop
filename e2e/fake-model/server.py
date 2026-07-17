@@ -87,7 +87,7 @@ def _reply_for(messages: list[dict[str, Any]]) -> str:
         return f"我看到一张图片，共 {image_bytes} 字节。"
     text = _text_of(last_user.get("content")).strip()
     if text == "scroll-follow-e2e":
-        return " ".join(f"scroll-follow-token-{index}" for index in range(120))
+        return " ".join(f"scroll-follow-token-{index}" for index in range(300))
     # Echo a stable marker plus the prompt so specs can assert on either.
     return f"PONG: 收到「{text}」"
 
@@ -125,12 +125,14 @@ async def chat_completions(request: Request):
     if body.get("stream"):
 
         async def gen():
+            if reply.startswith("scroll-follow-token-0"):
+                await asyncio.sleep(0.25)
             yield _chunk({"role": "assistant"})
             # Stream by token so the UI exercises its streaming render path.
             for token in reply.split(" "):
                 yield _chunk({"content": token + " "})
                 if reply.startswith("scroll-follow-token-0"):
-                    await asyncio.sleep(0.015)
+                    await asyncio.sleep(0.005)
             yield _chunk({}, finish="stop")
             yield "data: [DONE]\n\n"
 

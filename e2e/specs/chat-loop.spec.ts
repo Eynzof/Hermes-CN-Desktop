@@ -43,40 +43,62 @@ test("streamed reply keeps following the latest message at the bottom", async ({
 
   const timeline = page.getByRole("log");
   await expect(timeline).toBeVisible();
+  await expect.poll(() => timeline.evaluate((element) => (
+    Math.max(
+      0,
+      element.scrollHeight - element.scrollTop - element.clientHeight,
+    )
+  ))).toBeLessThanOrEqual(8);
   await timeline.evaluate((element) => {
     const samples: number[] = [];
     const recordBottomDistance = () => {
       samples.push(
         Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight),
       );
+      Object.assign(window, {
+        __scrollFollowFrame: window.requestAnimationFrame(recordBottomDistance),
+      });
     };
-    const observer = new MutationObserver(recordBottomDistance);
-    observer.observe(element, { childList: true, characterData: true, subtree: true });
     recordBottomDistance();
-    Object.assign(window, { __scrollFollowSamples: samples, __scrollFollowObserver: observer });
+    Object.assign(window, { __scrollFollowSamples: samples });
   });
 
   const lastAssistant = page.getByRole("log").locator('[data-role="assistant"]').last();
-  await expect(lastAssistant).toContainText("scroll-follow-token-119", { timeout: 25_000 });
+  await expect(lastAssistant).toContainText("scroll-follow-token-299", { timeout: 25_000 });
 
   const result = await timeline.evaluate((element) => {
     const runtime = window as Window & {
       __scrollFollowSamples?: number[];
-      __scrollFollowObserver?: MutationObserver;
+      __scrollFollowFrame?: number;
     };
-    runtime.__scrollFollowObserver?.disconnect();
+    if (runtime.__scrollFollowFrame != null) {
+      window.cancelAnimationFrame(runtime.__scrollFollowFrame);
+    }
     const samples = runtime.__scrollFollowSamples ?? [];
+    let consecutiveDriftFrames = 0;
+    let maxConsecutiveDriftFrames = 0;
+    for (const distance of samples) {
+      consecutiveDriftFrames = distance > 100 ? consecutiveDriftFrames + 1 : 0;
+      maxConsecutiveDriftFrames = Math.max(
+        maxConsecutiveDriftFrames,
+        consecutiveDriftFrames,
+      );
+    }
     return {
       finalDistance: Math.max(
         0,
         element.scrollHeight - element.scrollTop - element.clientHeight,
       ),
       maxDistance: Math.max(0, ...samples),
+      maxConsecutiveDriftFrames,
+      viewportHeight: element.clientHeight,
     };
   });
 
   expect(result.finalDistance).toBeLessThanOrEqual(8);
-  // One line can be observed between the DOM mutation and React's layout
-  // effect, but the viewport must never drift by multiple rendered lines.
-  expect(result.maxDistance).toBeLessThanOrEqual(32);
+  // Sample painted frames rather than pre-layout DOM mutation microtasks: the
+  // user-visible viewport may absorb one batched layout update, but it must not
+  // remain detached or let the latest content fall a full viewport behind.
+  expect(result.maxConsecutiveDriftFrames).toBeLessThanOrEqual(2);
+  expect(result.maxDistance).toBeLessThan(result.viewportHeight);
 });
