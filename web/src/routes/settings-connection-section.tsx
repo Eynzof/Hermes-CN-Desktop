@@ -26,6 +26,8 @@ import s from "./settings.module.css";
 
 interface SettingsSectionProps {
   showHeading?: boolean;
+  externalOnly?: boolean;
+  onApplied?: (mode: ConnectionMode) => Promise<void> | void;
 }
 
 type ProbeStatus = "idle" | "probing" | "reachable" | "unreachable" | "authRequired";
@@ -98,13 +100,17 @@ function withLocalDashboardHint(message: ConnectionMessage, mode: ConnectionMode
   return { ...message, hint: LOCAL_DASHBOARD_RECOVERY_HINT };
 }
 
-export function ConnectionSection({ showHeading = true }: SettingsSectionProps) {
+export function ConnectionSection({
+  showHeading = true,
+  externalOnly = false,
+  onApplied,
+}: SettingsSectionProps) {
   const desktop = typeof window !== "undefined" ? window.hermesDesktop : undefined;
   const supported = Boolean(desktop?.getConnectionConfig);
 
   const [config, setConfig] = useState<ConnectionConfigView | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [mode, setMode] = useState<ConnectionMode>("managed");
+  const [mode, setMode] = useState<ConnectionMode>(externalOnly ? "local" : "managed");
   const [externalKind, setExternalKind] = useState<Exclude<ConnectionMode, "managed">>("local");
   const [localUrl, setLocalUrl] = useState(DEFAULT_LOCAL_URL);
   const [remoteUrl, setRemoteUrl] = useState("");
@@ -129,7 +135,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       .getConnectionConfig()
       .then((view) => {
         setConfig(view);
-        setMode(view.mode);
+        setMode(externalOnly && view.mode === "managed" ? "local" : view.mode);
         if (view.mode !== "managed") setExternalKind(view.mode);
         setLocalUrl(view.localUrl || DEFAULT_LOCAL_URL);
         setRemoteUrl(view.remoteUrl);
@@ -137,11 +143,11 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
       .catch((error) => {
         setLoadError(error instanceof Error ? error.message : String(error));
       });
-  }, [desktop]);
+  }, [desktop, externalOnly]);
 
   const envOverride = config?.envOverride ?? false;
   const busy = saving || applying;
-  const disabled = !supported || envOverride || busy;
+  const disabled = !supported || envOverride || busy || (externalOnly && !config);
   const trimmedLocalUrl = localUrl.trim() || DEFAULT_LOCAL_URL;
   const trimmedRemoteUrl = remoteUrl.trim();
   const effectiveMode = config?.effectiveMode ?? "managed";
@@ -306,6 +312,10 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         const result = await desktop!.applyConnectionConfig!(payload);
         if (result.ok) {
           setMessage({ tone: "ok", text: "已切换，正在重新加载界面…" });
+          if (onApplied) {
+            await onApplied(mode);
+            return;
+          }
           window.setTimeout(() => window.location.reload(), 600);
           return;
         }
@@ -350,14 +360,16 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
     <div>
       {showHeading && <h2 className={s.heading}>连接</h2>}
 
-      <SettingsHero
-        ok={connectionLoaded}
-        icon={effectiveMode === "remote" || envOverride ? <Globe2 size={24} /> : effectiveMode === "local" ? <Cable size={24} /> : <HardDrive size={24} />}
-        eyebrow="Hermes Agent 连接"
-        title={connectionTitle}
-        description={connectionDescription}
-        badge={<span className={s.statusBadge} data-on={connectionLoaded}>{connectionBadge}</span>}
-      />
+      {!externalOnly && (
+        <SettingsHero
+          ok={connectionLoaded}
+          icon={effectiveMode === "remote" || envOverride ? <Globe2 size={24} /> : effectiveMode === "local" ? <Cable size={24} /> : <HardDrive size={24} />}
+          eyebrow="Hermes Agent 连接"
+          title={connectionTitle}
+          description={connectionDescription}
+          badge={<span className={s.statusBadge} data-on={connectionLoaded}>{connectionBadge}</span>}
+        />
+      )}
 
       {loadError && <div className={s.connResult} data-tone="error">{loadError}</div>}
 
@@ -374,26 +386,28 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         </div>
       )}
 
-      <div className={s.connModeGrid}>
-        <ModeCard
-          active={mode === "managed"}
-          current={effectiveMode === "managed"}
-          icon={HardDrive}
-          title="内置内核"
-          description="由桌面端安装、启动和维护，数据与系统中的其他 Hermes 隔离。"
-          disabled={disabled}
-          onSelect={() => setMode("managed")}
-        />
-        <ModeCard
-          active={mode !== "managed"}
-          current={effectiveMode !== "managed"}
-          icon={Globe2}
-          title="外部 Hermes"
-          description="连接本机另一个 Hermes，或连接远端服务器上的 Hermes。"
-          disabled={disabled}
-          onSelect={() => setMode(externalKind)}
-        />
-      </div>
+      {!externalOnly && (
+        <div className={s.connModeGrid}>
+          <ModeCard
+            active={mode === "managed"}
+            current={effectiveMode === "managed"}
+            icon={HardDrive}
+            title="内置内核"
+            description="由桌面端安装、启动和维护，数据与系统中的其他 Hermes 隔离。"
+            disabled={disabled}
+            onSelect={() => setMode("managed")}
+          />
+          <ModeCard
+            active={mode !== "managed"}
+            current={effectiveMode !== "managed"}
+            icon={Globe2}
+            title="外部 Hermes"
+            description="连接本机另一个 Hermes，或连接远端服务器上的 Hermes。"
+            disabled={disabled}
+            onSelect={() => setMode(externalKind)}
+          />
+        </div>
+      )}
 
       {mode !== "managed" && (
         <div className={s.connModeGrid} role="radiogroup" aria-label="外部 Hermes 位置" style={{ marginTop: 10 }}>
@@ -418,7 +432,7 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
         </div>
       )}
 
-      {mode === "managed" && <ManagedRuntimePanel compact />}
+      {!externalOnly && mode === "managed" && <ManagedRuntimePanel compact />}
 
       {mode === "local" && (
         <div className={s.row}>
@@ -597,23 +611,27 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
             测试连接
           </Button>
         )}
-        <Button
-          type="button"
-          className={mode === "managed" ? s.connFooterSpacer : undefined}
-          variant="ghost"
-          onClick={() => { window.location.hash = "#/guide"; }}
-        >
-          重新运行使用引导
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void submit(false)}
-          disabled={disabled || !canSubmit}
-          aria-busy={saving}
-        >
-          仅保存（下次启动生效）
-        </Button>
+        {!externalOnly && (
+          <>
+            <Button
+              type="button"
+              className={mode === "managed" ? s.connFooterSpacer : undefined}
+              variant="ghost"
+              onClick={() => { window.location.hash = "#/guide"; }}
+            >
+              重新运行使用引导
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void submit(false)}
+              disabled={disabled || !canSubmit}
+              aria-busy={saving}
+            >
+              仅保存（下次启动生效）
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           variant="solid"
@@ -623,7 +641,13 @@ export function ConnectionSection({ showHeading = true }: SettingsSectionProps) 
           aria-busy={applying}
         >
           {applying && <Loader2 size={13} className={s.connSpin} />}
-          {mode === "remote" ? "保存并连接远程" : mode === "local" ? "保存并连接本地" : "保存并切回本机内核"}
+          {externalOnly
+            ? "连接并进入桌面端"
+            : mode === "remote"
+              ? "保存并连接远程"
+              : mode === "local"
+                ? "保存并连接本地"
+                : "保存并切回本机内核"}
         </Button>
       </div>
 
