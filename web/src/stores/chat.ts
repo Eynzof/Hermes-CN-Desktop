@@ -308,16 +308,30 @@ function appendToolPart(parts: HermesMessagePart[], tool: HermesToolPart): Herme
 
 function mergeFinalTextPart(parts: HermesMessagePart[], finalText: string): HermesMessagePart[] {
   if (!finalText) return parts;
-  const existingText = textFromParts(parts);
-  const last = parts[parts.length - 1];
+  const next = withoutProgressParts(parts);
+  let lastToolIndex = -1;
+  next.forEach((part, index) => {
+    if (part.type === "tool") lastToolIndex = index;
+  });
+  const finalSegmentStart = lastToolIndex + 1;
+  const existingFinalSegment = textFromParts(next.slice(finalSegmentStart));
 
-  if (!existingText) return appendTextPart(parts, finalText);
-  if (existingText === finalText) return parts;
-  if (finalText.startsWith(existingText)) {
-    return appendTextPart(parts, finalText.slice(existingText.length));
-  }
-  if (last?.type === "text" && last.text.endsWith(finalText)) return parts;
-  return appendTextPart(parts, finalText);
+  if (existingFinalSegment === finalText) return next;
+
+  // message.complete.text is the authoritative final assistant response. In a
+  // tool-bearing turn it represents only the text after the final tool call;
+  // earlier commentary must remain intact. Replace that trailing text segment
+  // instead of appending when streamed deltas diverge: an out-of-order WS batch
+  // can otherwise produce "corrupt partial + complete final" in one live row.
+  let inserted = false;
+  const reconciled = next.flatMap((part, index) => {
+    if (index < finalSegmentStart || part.type !== "text") return [part];
+    if (inserted) return [];
+    inserted = true;
+    return [{ ...part, text: finalText }];
+  });
+
+  return inserted ? reconciled : [...reconciled, { type: "text", text: finalText }];
 }
 
 function findToolMatch(tool: HermesToolPart, payload: Record<string, any>): boolean {
@@ -525,7 +539,7 @@ function finalizeAssistantParts(
   payload: Record<string, any>,
 ): HermesMessagePart[] {
   let parts = withoutProgressParts(message.parts);
-  const finalText = typeof payload.text === "string" ? payload.text : textFromParts(parts);
+  const finalText = typeof payload.text === "string" ? payload.text : "";
   const finalReasoning = normalizeReasoningText(
     typeof payload.reasoning === "string" ? payload.reasoning : reasoningFromParts(parts),
   );

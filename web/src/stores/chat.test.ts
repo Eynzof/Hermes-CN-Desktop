@@ -70,6 +70,40 @@ describe("chat runtime reducer", () => {
     expect(next.streamStatus).toBe("complete");
   });
 
+  it("replaces a corrupt streamed prefix with the authoritative completion text", () => {
+    let runtime = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "reasoning.delta",
+        session_id: "s1",
+        payload: { text: "同一段推理" },
+      },
+      10,
+    );
+    runtime = reduceGatewayEvent(runtime, {
+      type: "message.delta",
+      session_id: "s1",
+      payload: { text: "乱序流式前缀" },
+    }, 20);
+    runtime = reduceGatewayEvent(runtime, {
+      type: "message.complete",
+      session_id: "s1",
+      payload: {
+        text: "这是唯一正确的最终回复。",
+        reasoning: "同一段推理",
+        status: "complete",
+      },
+    }, 30);
+
+    const message = assistantMessage(runtime);
+    expect(textFromParts(message.parts)).toBe("这是唯一正确的最终回复。");
+    expect(textFromParts(message.parts)).not.toContain("乱序流式前缀");
+    expect(message.parts).toEqual([
+      { type: "reasoning", text: "同一段推理" },
+      { type: "text", text: "这是唯一正确的最终回复。" },
+    ]);
+  });
+
   it("keeps one assistant id from stream start through completion", () => {
     const started = reduceGatewayEvent(
       createEmptyChatRuntime(1),
@@ -364,6 +398,48 @@ describe("chat runtime reducer", () => {
       { type: "text", text: "结论如下。" },
     ]);
     expect(textFromParts(message.parts)).toBe("我先检查。结论如下。");
+  });
+
+  it("preserves pre-tool commentary while replacing a corrupt final segment", () => {
+    let runtime = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "message.delta",
+        session_id: "s1",
+        payload: { text: "我先检查。" },
+      },
+      10,
+    );
+    runtime = reduceGatewayEvent(runtime, {
+      type: "tool.start",
+      session_id: "s1",
+      payload: { tool_id: "read-1", name: "read_file" },
+    }, 20);
+    runtime = reduceGatewayEvent(runtime, {
+      type: "tool.complete",
+      session_id: "s1",
+      payload: { tool_id: "read-1", summary: "ok" },
+    }, 30);
+    runtime = reduceGatewayEvent(runtime, {
+      type: "message.delta",
+      session_id: "s1",
+      payload: { text: "损坏的尾部" },
+    }, 40);
+    runtime = reduceGatewayEvent(runtime, {
+      type: "message.complete",
+      session_id: "s1",
+      payload: { text: "最终结论。", status: "complete" },
+    }, 50);
+
+    expect(assistantMessage(runtime).parts).toEqual([
+      { type: "text", text: "我先检查。" },
+      expect.objectContaining({
+        type: "tool",
+        toolCallId: "read-1",
+        state: "done",
+      }),
+      { type: "text", text: "最终结论。" },
+    ]);
   });
 
   it("records usage and timing metadata on complete", () => {

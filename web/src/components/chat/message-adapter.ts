@@ -1012,9 +1012,35 @@ function hasSamePersistedId(stored: HermesUIMessage, live: HermesUIMessage): boo
   return storedPersisted !== undefined && livePersisted !== undefined && storedPersisted === livePersisted;
 }
 
+function isCorruptedLiveCompletionSupersededByStored(
+  stored: HermesUIMessage,
+  live: HermesUIMessage,
+): boolean {
+  if (stored.role !== "assistant" || live.role !== "assistant") return false;
+  if (stored.status !== "complete" || live.status !== "complete") return false;
+  if (stored.metadata?.persistedId === undefined || live.metadata?.persistedId !== undefined) return false;
+
+  const completedAt = live.metadata?.timing?.completedAt;
+  if (typeof completedAt !== "number" || Math.abs(completedAt - stored.createdAt) > 5_000) return false;
+
+  const storedText = looseComparableText(canonicalText(stored));
+  const liveText = looseComparableText(canonicalText(live));
+  if (!storedText || liveText.length <= storedText.length || !liveText.endsWith(storedText)) return false;
+
+  return canonicalReasoning(stored) === canonicalReasoning(live) &&
+    canonicalImages(stored) === canonicalImages(live) &&
+    canonicalToolIdentityComparable(stored) === canonicalToolIdentityComparable(live);
+}
+
 function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage): boolean {
   if (stored.id === live.id || hasSamePersistedId(stored, live)) return true;
   if (stored.role !== live.role) return false;
+
+  // Older Core runtimes could interleave a token batch with message.complete.
+  // The reducer then appended the authoritative final text behind the corrupt
+  // partial stream. Match that exact artifact to its persisted canonical row;
+  // mergeMatchedMessage deliberately lets the stored text win below.
+  if (isCorruptedLiveCompletionSupersededByStored(stored, live)) return true;
 
   const storedText = canonicalText(stored);
   const liveText = canonicalText(live);
@@ -1078,7 +1104,11 @@ function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMess
 }
 
 function mergeMatchedMessage(storedMessage: HermesUIMessage, liveMessage: HermesUIMessage): HermesUIMessage {
-  const liveWins = !(
+  const storedCompletionWins = isCorruptedLiveCompletionSupersededByStored(
+    storedMessage,
+    liveMessage,
+  );
+  const liveWins = !storedCompletionWins && !(
     storedMessage.role === "assistant" &&
     storedMessage.status === "complete" &&
     liveMessage.status === "streaming"
