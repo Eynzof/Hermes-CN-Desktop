@@ -12,6 +12,7 @@ import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { composerSubmitShortcutHint } from "@/lib/composer-submit-shortcut";
+import { shouldPrewarmDraftSession } from "@/lib/draft-session-prewarm";
 import {
   normalizeWorkspacePath,
   rememberWorkspaceProject,
@@ -87,6 +88,7 @@ export function PanelComposer() {
   // slot. Any failure (e.g. the server's session-slot limit) just leaves
   // draftRef null and send falls back to a normal cold create.
   useEffect(() => {
+    if (!shouldPrewarmDraftSession(window.__HERMES_RUNTIME__?.connectionMode)) return;
     const cwd = initialWorkspacePath || "";
     let cancelled = false;
     void (async () => {

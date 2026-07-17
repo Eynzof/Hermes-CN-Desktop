@@ -1,4 +1,5 @@
 import type { FsEntry, SessionSummary, SkillInfo } from "@hermes/protocol";
+import { resolveSkillOrigin } from "@/lib/skill-origin";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { translateCategory, translateSkill } from "@/lib/skill-translations";
 import type { WorkspaceProject } from "@/lib/workspaces";
@@ -370,7 +371,7 @@ function buildSkillItems(skills: readonly SkillInfo[]): CommandPaletteItem[] {
     .map((skill, index) => {
       const translated = translateSkill(skill.name, skill.description);
       const category = translateCategory(skill.category);
-      const origin = skill.origin ?? (skill.name.startsWith("user/") ? "user" : "builtin");
+      const origin = resolveSkillOrigin(skill);
       return makeNavigateItem({
         id: `skill-${skill.name}`,
         group: "skills",

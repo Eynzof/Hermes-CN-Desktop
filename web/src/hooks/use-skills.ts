@@ -3,6 +3,7 @@ import { fetchJSON, putJSON } from "@/lib/transport";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import {
   MutationOkResponse,
+  SkillContentResponse,
   SkillsHubSearchResponse,
   SkillsResponse,
   type SkillInfo,
@@ -66,19 +67,23 @@ export function useSkillsHubSearch() {
   });
 }
 
-export function useSkillMarkdown(name: string | null | undefined) {
-  const profile = useActiveProfileName();
+export function useSkillMarkdown(
+  name: string | null | undefined,
+  profileOverride?: string | null,
+) {
+  const active = useActiveProfileName();
+  const eff = profileOverride || active;
   return useQuery({
-    queryKey: ["skill-markdown", profile, name],
-    queryFn: async () => {
-      const readSkillMarkdown = window.hermesDesktop?.readSkillMarkdown;
-      if (!readSkillMarkdown) {
-        throw new Error("当前运行环境不支持读取 SKILL.md");
-      }
+    queryKey: ["skill-markdown", eff, name],
+    queryFn: ({ signal }) => {
       if (!name) throw new Error("缺少 Skill 名称");
-      return readSkillMarkdown({ name });
+      const path = scopedPath(
+        `/api/skills/content?name=${encodeURIComponent(name)}`,
+        profileOverride,
+      );
+      return fetchJSON(path, { signal }, SkillContentResponse);
     },
-    enabled: Boolean(name && window.hermesDesktop?.readSkillMarkdown),
+    enabled: Boolean(name),
     staleTime: 30_000,
   });
 }

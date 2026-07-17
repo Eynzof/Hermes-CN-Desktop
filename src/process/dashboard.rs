@@ -258,6 +258,17 @@ fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> bool {
     false
 }
 
+fn wait_for_pid_exit(pid: u32, timeout: Duration) -> bool {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if !pid_is_running(pid) {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(80));
+    }
+    !pid_is_running(pid)
+}
+
 fn request_dashboard_shutdown(api_base_url: &str, session_token: Option<&str>) -> bool {
     let shutdown_url = format!("{}/api/shutdown", api_base_url.trim_end_matches('/'));
     let parsed = match url::Url::parse(&shutdown_url) {
@@ -358,6 +369,7 @@ fn signal_process_group(pid: u32, signal: libc::c_int) {
 }
 
 #[cfg(not(unix))]
+#[allow(dead_code)]
 fn signal_process_group(_pid: u32, _signal: i32) {}
 
 #[cfg(windows)]
@@ -420,26 +432,25 @@ pub fn terminate_owned_dashboard_tree(
     child: Option<&mut Child>,
     fallback_pid: Option<u32>,
     session_token: Option<&str>,
-) {
+) -> bool {
     let _ = request_dashboard_shutdown(api_base_url, session_token);
 
     if let Some(child) = child {
         if wait_for_child_exit(child, GRACEFUL_SHUTDOWN_TIMEOUT) {
-            return;
+            return true;
         }
         let pid = child.id();
         #[cfg(unix)]
         signal_process_group(pid, libc::SIGTERM);
         if wait_for_child_exit(child, FORCE_SHUTDOWN_TIMEOUT) {
-            return;
+            return true;
         }
         #[cfg(unix)]
         signal_process_group(pid, libc::SIGKILL);
         #[cfg(windows)]
         force_kill_process_tree(pid);
         let _ = child.kill();
-        let _ = child.wait();
-        return;
+        return child.wait().is_ok() || wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT);
     }
 
     if let Some(pid) = fallback_pid {
@@ -455,7 +466,10 @@ pub fn terminate_owned_dashboard_tree(
         {
             force_kill_process_tree(pid);
         }
+        return wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT);
     }
+
+    true
 }
 
 fn probe_dashboard_port(api_base_url: &str) -> bool {
@@ -774,6 +788,13 @@ pub struct EnsureDashboardOptions {
     /// apiBaseUrl. Vite dev proxy is fixed before Rust starts, so managed dev
     /// keeps this false and asks the user to free the port instead.
     pub allow_port_fallback: bool,
+    /// Connection mode ("managed", "local", "remote") that governs how
+    /// loopback URLs in MCP/CDP tools are resolved. Passed to the kernel
+    /// via HERMES_DESKTOP_CONNECTION_MODE env var.
+    pub connection_mode: crate::connection::ConnectionMode,
+    /// When in remote mode, the base URL of the remote dashboard. Passed
+    /// to the kernel via HERMES_DESKTOP_REMOTE_BASE_URL env var.
+    pub remote_base_url: Option<String>,
 }
 
 struct SpawnedDashboard {
@@ -1069,6 +1090,16 @@ fn spawn_dashboard(
         );
     } else {
         cmd.env_remove("HERMES_YOLO_MODE");
+    }
+
+    // Pass connection mode to the kernel so MCP/CDP tools can rewrite
+    // loopback URLs when running in remote connection mode.
+    cmd.env(
+        "HERMES_DESKTOP_CONNECTION_MODE",
+        options.connection_mode.as_str(),
+    );
+    if let Some(ref url) = options.remote_base_url {
+        cmd.env("HERMES_DESKTOP_REMOTE_BASE_URL", url);
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -1519,6 +1550,8 @@ pub async fn ensure_hermes_dashboard(
         hermes_home: options.hermes_home.clone(),
         allow_external_agent: options.allow_external_agent,
         allow_port_fallback: options.allow_port_fallback,
+        connection_mode: options.connection_mode,
+        remote_base_url: options.remote_base_url.clone(),
     };
 
     // Spawn a new dashboard, retrying on a lost bind race. The pre-scan
@@ -1919,6 +1952,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await
         .expect("compatible stale dashboard should be adopted");
@@ -1970,6 +2005,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await;
         let err = match result {
@@ -2117,6 +2154,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await
         .expect("compatible orphan must be adopted");

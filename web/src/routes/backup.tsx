@@ -114,6 +114,16 @@ export function BackupRoute() {
 
   const busy = exporting || importing;
 
+  if (runtime.isAttached()) {
+    return (
+      <SectionShell title="备份恢复" sub="本机 Profile 备份仅适用于内置内核">
+        <Alert tone="info" size="sm">
+          当前正在使用外部 Hermes。桌面端不会把本机备份、文件选择或 Profile 重启操作施加到外部目标；请在目标 Hermes 所在机器上执行备份。
+        </Alert>
+      </SectionShell>
+    );
+  }
+
   return (
     <SectionShell title="备份恢复" sub="导出或导入当前 Hermes profile 的完整备份压缩包">
       <SettingsHero

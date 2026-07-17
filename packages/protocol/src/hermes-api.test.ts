@@ -16,6 +16,8 @@ import {
   ProfileSummary,
   SearchResponse,
   SessionsResponse,
+  SkillContentResponse,
+  SkillsResponse,
   SkillsHubSearchResponse,
   SessionCompressResult,
   SessionSummary,
@@ -61,6 +63,44 @@ describe("Audio API schemas", () => {
 
     expect(parsed.available).toBe(true);
     expect(parsed.voices[0]?.voice_id).toBe("voice-1");
+  });
+});
+
+describe("Skills API schemas", () => {
+  it("preserves the canonical Core provenance fields", () => {
+    const [bundled, agent] = SkillsResponse.parse([
+      {
+        name: "apple-reminders",
+        description: "Manage reminders.",
+        category: "apple",
+        enabled: true,
+        provenance: "bundled",
+        usage: 3,
+      },
+      {
+        name: "memory-eval-harness",
+        description: "Evaluate memory providers.",
+        category: "devops",
+        enabled: true,
+        provenance: "agent",
+        usage: 1,
+      },
+    ]);
+
+    expect(bundled?.provenance).toBe("bundled");
+    expect(bundled?.usage).toBe(3);
+    expect(agent?.provenance).toBe("agent");
+  });
+
+  it("parses skill content returned by the connected Core", () => {
+    const parsed = SkillContentResponse.parse({
+      name: "memory-eval-harness",
+      content: "# Memory Eval Harness\n",
+      path: "/remote/.hermes/skills/devops/memory-eval-harness/SKILL.md",
+    });
+
+    expect(parsed.path).toContain("memory-eval-harness/SKILL.md");
+    expect(parsed.content).toContain("Memory Eval Harness");
   });
 });
 

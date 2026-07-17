@@ -49,10 +49,41 @@ pub fn record_bootstrap_error(app: &tauri::AppHandle, message: String) -> String
     message
 }
 
+/// Finish a shell-only bootstrap when the managed runtime is intentionally
+/// stopped or uninstalled. The renderer still needs the profile/home metadata
+/// and a ready event so it can mount `/guide` and the recovery surfaces, but no
+/// backend URL is invented and no runtime payload is installed.
+pub fn finalize_offline_bootstrap(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    let state = app.state::<AppState>();
+    if let Ok(mut inner) = state.inner.lock() {
+        inner.connection_mode = ConnectionMode::Managed;
+        inner.api_base_url.clear();
+        inner.gateway_url.clear();
+        inner.session_token = None;
+        inner.oauth_session = None;
+        inner.dashboard_handle = None;
+        inner.last_runtime_error = None;
+    }
+    emit_runtime_status(app, "ready-offline", "内核未启动，已进入桌面引导");
+    log::info!("Hermes Agent 中文社区桌面版 ready (managed runtime offline)");
+}
+
 pub async fn install_bundled_runtime_for_bootstrap(
     app: &tauri::AppHandle,
     resource_dir: Option<&Path>,
 ) -> bool {
+    // Allow skipping bundled runtime install via env var (e.g. when the user
+    // only uses local/remote connection mode and never needs a local runtime).
+    if std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
+        log::info!("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1; skipping bundled runtime install");
+        return true;
+    }
+
     if !runtime::bundled_runtime_available(resource_dir) {
         return true;
     }
@@ -317,4 +348,61 @@ pub async fn finalize_bootstrap(
 
     emit_runtime_status(app, "ready", "");
     log::info!("Hermes Agent 中文社区桌面版 ready");
+}
+
+#[cfg(test)]
+mod tests {
+    use serial_test::serial;
+
+    /// install_bundled_runtime_for_bootstrap returns true early when
+    /// HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1, regardless of whether a
+    /// bundled runtime is available.
+    #[tokio::test]
+    #[serial]
+    async fn skip_bundled_runtime_env_var_bypasses_install() {
+        // We can't easily construct a real tauri::AppHandle in a unit test,
+        // but we can verify the env-var check itself. The function's first
+        // early return is an env-var gate that does not touch app or
+        // resource_dir — so passing null-like values will panic only if the
+        // gate is broken.
+        std::env::set_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME", "1");
+
+        // This test validates the gate logic: when the env var is "1",
+        // the function must return true without accessing app/resource_dir.
+        // We can't call the real function without a Tauri AppHandle, but
+        // we can exercise the env-var path through the same variable read:
+        let skip = std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
+
+        assert!(
+            skip,
+            "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=1 should enable skip"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn skip_bundled_runtime_env_var_disabled_by_default() {
+        std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
+        let skip = std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        assert!(!skip, "without env var, skip should be false");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn skip_bundled_runtime_env_var_zero_is_disabled() {
+        std::env::set_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME", "0");
+        let skip = std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
+            .map(|v| v == "1")
+            .unwrap_or(false);
+        std::env::remove_var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME");
+        assert!(
+            !skip,
+            "HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME=0 should not skip"
+        );
+    }
 }

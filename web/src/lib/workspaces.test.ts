@@ -13,6 +13,7 @@ import {
   unpinWorkspaceProjects,
   writePinnedWorkspaceProjectPaths,
   workspaceNameFromPath,
+  workspaceStorageScope,
 } from "./workspaces";
 import { rememberSessionMapping } from "./session-map";
 import { __resetUiStoreForTests, writeUiValue } from "./ui-store";
@@ -200,5 +201,23 @@ describe("workspace persistence helpers", () => {
       "session-2": "/Users/claw/Other",
     });
     expect(Array.from(readPinnedWorkspaceProjectPaths())).toEqual(["/Users/claw/Other"]);
+  });
+
+  it("isolates remote project and workspace records by target address", () => {
+    (window as any).__HERMES_RUNTIME__ = {
+      connectionMode: "remote",
+      dashboardApiBaseUrl: "https://one.example/hermes",
+    };
+    expect(workspaceStorageScope()).toContain("one.example");
+    rememberWorkspaceProject("/srv/one");
+    expect(readWorkspaceProjects()).toHaveLength(1);
+
+    (window as any).__HERMES_RUNTIME__.dashboardApiBaseUrl = "https://two.example/hermes";
+    expect(readWorkspaceProjects()).toEqual([]);
+    rememberWorkspaceProject("/srv/two");
+    expect(readWorkspaceProjects()[0]?.path).toBe("/srv/two");
+
+    (window as any).__HERMES_RUNTIME__.dashboardApiBaseUrl = "https://one.example/hermes";
+    expect(readWorkspaceProjects()[0]?.path).toBe("/srv/one");
   });
 });

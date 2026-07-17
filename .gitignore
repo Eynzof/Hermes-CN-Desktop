@@ -42,3 +42,6 @@ __pycache__/
 
 # Agent runtime directory
 .agents/
+
+# AI plan cache
+.kimix_cache/

@@ -27,6 +27,7 @@ import type {
   ProbeConnectionResult,
   OauthLoginResult,
   RuntimeInfo,
+  RuntimeControlResult,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
   SetYoloModeInput,
@@ -104,13 +105,6 @@ export interface MemoryInfo {
 export interface MemoryMutationResult {
   success: boolean;
   error?: string | null;
-}
-
-export interface SkillMarkdownResult {
-  name: string;
-  path: string;
-  content: string;
-  sizeBytes: number;
 }
 
 export interface UiStoreSnapshot {
@@ -436,6 +430,10 @@ declare global {
       currentProfile?: string;
       /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;
+      backendReady?: boolean;
+      guideState?: import("@hermes/protocol").GuideState;
+      managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
+      managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
       /** Running as the portable (unzip-and-run) desktop distribution. */
       portable?: boolean;
     };
@@ -469,6 +467,13 @@ declare global {
       saveConnectionConfig?(input: ConnectionConfigInput): Promise<ConnectionConfigView>;
       applyConnectionConfig?(input: ConnectionConfigInput): Promise<ApplyConnectionResult>;
       testConnectionConfig?(input: ConnectionConfigInput): Promise<TestConnectionResult>;
+      getDesktopControlState?(): Promise<RuntimeControlResult>;
+      setGuideState?(guideState: import("@hermes/protocol").GuideState): Promise<RuntimeControlResult>;
+      installManagedRuntime?(): Promise<RuntimeControlResult>;
+      startManagedRuntime?(): Promise<RuntimeControlResult>;
+      stopManagedRuntime?(): Promise<RuntimeControlResult>;
+      uninstallManagedRuntime?(): Promise<RuntimeControlResult>;
+      reinstallManagedRuntime?(): Promise<RuntimeControlResult>;
       probeConnectionConfig?(remoteUrl: string): Promise<ProbeConnectionResult>;
       connectionOauthLogin?(remoteUrl: string): Promise<OauthLoginResult>;
       connectionPasswordLogin?(input: {
@@ -487,7 +492,6 @@ declare global {
       imOnboardingBegin?(input: ImOnboardingBeginInput): Promise<ImOnboardingBeginResult>;
       imOnboardingPoll?(input: ImOnboardingPollInput): Promise<ImOnboardingPollResult>;
       imOnboardingApply?(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult>;
-      readSkillMarkdown?(input: { name: string }): Promise<SkillMarkdownResult>;
       readMemory?(): Promise<MemoryInfo>;
       addMemoryEntry?(content: string): Promise<MemoryMutationResult>;
       updateMemoryEntry?(index: number, content: string): Promise<MemoryMutationResult>;
@@ -578,6 +582,22 @@ export const runtime = {
   /** True for either attached backend where process/profile lifecycle is external. */
   isAttached(): boolean {
     return this.getConnectionMode() !== "managed";
+  },
+
+  isBackendReady(): boolean {
+    return window.__HERMES_RUNTIME__?.backendReady ?? true;
+  },
+
+  getGuideState(): import("@hermes/protocol").GuideState {
+    return window.__HERMES_RUNTIME__?.guideState ?? "completed";
+  },
+
+  applyRuntimeControlResult(result: RuntimeControlResult): void {
+    if (!window.__HERMES_RUNTIME__) return;
+    window.__HERMES_RUNTIME__.backendReady = result.backendReady;
+    window.__HERMES_RUNTIME__.guideState = result.guideState;
+    window.__HERMES_RUNTIME__.managedRuntimeDesiredState = result.desiredState;
+    window.__HERMES_RUNTIME__.managedRuntimeLifecycleState = result.lifecycleState;
   },
 
   /** True when running as the portable (unzip-and-run) desktop distribution. */

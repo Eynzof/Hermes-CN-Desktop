@@ -13,11 +13,12 @@ use std::sync::Arc;
 
 use hermes_agent_cn::bootstrap::{
     acquire_managed_dashboard, connect_local_backend, connect_remote_backend, finalize_bootstrap,
-    install_bundled_runtime_for_bootstrap, record_bootstrap_error,
+    finalize_offline_bootstrap, install_bundled_runtime_for_bootstrap, record_bootstrap_error,
 };
 use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::connection::{self, ConnectionBackend, ConnectionMode};
+use hermes_agent_cn::desktop_control;
 use hermes_agent_cn::process::{dashboard, instance, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use hermes_agent_cn::tray;
@@ -257,12 +258,29 @@ fn main() {
                 inner.current_profile = current_profile.clone();
             }
 
+            // Persist the first-install/migration decision before resolving or
+            // installing any backend. Existing users are marked complete;
+            // genuinely clean installs stay shell-only until `/guide` chooses
+            // a mode.
+            let control = match desktop_control::initialize() {
+                Ok(control) => control,
+                Err(error) => {
+                    record_bootstrap_error(
+                        app.handle(),
+                        format!("无法初始化桌面控制状态: {}", error),
+                    );
+                    return Ok(());
+                }
+            };
+
             let options = dashboard::EnsureDashboardOptions {
                 host: host.clone(),
                 port,
                 hermes_home: boot_home_str.clone(),
                 allow_external_agent,
                 allow_port_fallback,
+                connection_mode: ConnectionMode::Managed,
+                remote_base_url: None,
             };
 
             // Resolve the backend for this boot: env override → connection.json
@@ -275,6 +293,16 @@ fn main() {
                     return Ok(());
                 }
             };
+
+            if matches!(backend, ConnectionBackend::Managed)
+                && !desktop_control::should_start_managed_runtime(
+                    &control,
+                    external_dev_dashboard,
+                )
+            {
+                finalize_offline_bootstrap(app.handle());
+                return Ok(());
+            }
 
             // --- Default path: bring the dashboard up in the background. ---
             if async_bootstrap {
@@ -330,6 +358,13 @@ fn main() {
                         mode,
                     )
                     .await;
+                    if mode == ConnectionMode::Managed {
+                        tauri::async_runtime::spawn(
+                            hermes_agent_cn::supervisor::supervise_managed_dashboard(
+                                app_handle.clone(),
+                            ),
+                        );
+                    }
                 });
 
                 log::info!("Hermes Agent 中文社区桌面版 bootstrapping in background");
@@ -501,10 +536,16 @@ fn main() {
             commands::runtime_manager::runtime_check_update,
             commands::runtime_manager::runtime_install_update,
             commands::runtime_manager::runtime_rollback,
+            commands::runtime_manager::get_desktop_control_state,
+            commands::runtime_manager::set_guide_state,
+            commands::runtime_manager::managed_runtime_install,
+            commands::runtime_manager::managed_runtime_start,
+            commands::runtime_manager::managed_runtime_stop,
+            commands::runtime_manager::managed_runtime_uninstall,
+            commands::runtime_manager::managed_runtime_reinstall,
             commands::profiles::switch_profile,
             commands::yolo::get_yolo_mode,
             commands::yolo::set_yolo_mode,
-            commands::skills::read_skill_markdown,
             commands::memory::read_memory,
             commands::memory::add_memory_entry,
             commands::memory::update_memory_entry,

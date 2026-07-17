@@ -18,8 +18,15 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 use crate::error::{AppError, AppResult};
+use crate::state::AppState;
+
+fn require_local_git(state: &State<'_, AppState>) -> AppResult<()> {
+    let inner = state.inner.lock()?;
+    crate::connection::require_local_filesystem(inner.connection_mode, "本机 Git / Worktree")
+}
 
 /// Cap the diff handed to commit-message generation so the payload stays bounded.
 const COMMIT_CONTEXT_DIFF_MAX_CHARS: usize = 120_000;
@@ -874,7 +881,11 @@ fn review_commit_impl(repo_path: &str, message: &str, push: bool) -> AppResult<O
 // blocking subprocess work below never stalls the main (UI) thread.
 
 #[tauri::command]
-pub async fn git_review_list(input: ReviewListInput) -> AppResult<ReviewList> {
+pub async fn git_review_list(
+    input: ReviewListInput,
+    state: State<'_, AppState>,
+) -> AppResult<ReviewList> {
+    require_local_git(&state)?;
     if let Some(reference) = input.base_ref.as_deref() {
         ensure_safe_ref(reference)?;
     }
@@ -886,7 +897,11 @@ pub async fn git_review_list(input: ReviewListInput) -> AppResult<ReviewList> {
 }
 
 #[tauri::command]
-pub async fn git_review_diff(input: ReviewDiffInput) -> AppResult<String> {
+pub async fn git_review_diff(
+    input: ReviewDiffInput,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    require_local_git(&state)?;
     if let Some(reference) = input.base_ref.as_deref() {
         ensure_safe_ref(reference)?;
     }
@@ -900,49 +915,85 @@ pub async fn git_review_diff(input: ReviewDiffInput) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub async fn git_review_stage(input: ReviewPathInput) -> AppResult<OkFlag> {
+pub async fn git_review_stage(
+    input: ReviewPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<OkFlag> {
+    require_local_git(&state)?;
     review_stage_impl(&input.repo_path, input.file_path.as_deref())
 }
 
 #[tauri::command]
-pub async fn git_review_unstage(input: ReviewPathInput) -> AppResult<OkFlag> {
+pub async fn git_review_unstage(
+    input: ReviewPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<OkFlag> {
+    require_local_git(&state)?;
     review_unstage_impl(&input.repo_path, input.file_path.as_deref())
 }
 
 #[tauri::command]
-pub async fn git_review_revert(input: ReviewPathInput) -> AppResult<OkFlag> {
+pub async fn git_review_revert(
+    input: ReviewPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<OkFlag> {
+    require_local_git(&state)?;
     review_revert_impl(&input.repo_path, input.file_path.as_deref())
 }
 
 #[tauri::command]
-pub async fn git_review_rev_parse(input: ReviewRevParseInput) -> AppResult<Option<String>> {
+pub async fn git_review_rev_parse(
+    input: ReviewRevParseInput,
+    state: State<'_, AppState>,
+) -> AppResult<Option<String>> {
+    require_local_git(&state)?;
     review_rev_parse_impl(&input.repo_path, input.reference.as_deref())
 }
 
 #[tauri::command]
-pub async fn git_review_commit(input: ReviewCommitInput) -> AppResult<OkFlag> {
+pub async fn git_review_commit(
+    input: ReviewCommitInput,
+    state: State<'_, AppState>,
+) -> AppResult<OkFlag> {
+    require_local_git(&state)?;
     review_commit_impl(&input.repo_path, &input.message, input.push)
 }
 
 #[tauri::command]
-pub async fn git_review_commit_context(input: RepoPathInput) -> AppResult<CommitContext> {
+pub async fn git_review_commit_context(
+    input: RepoPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<CommitContext> {
+    require_local_git(&state)?;
     Ok(commit_context_impl(&input.repo_path))
 }
 
 #[tauri::command]
-pub async fn git_review_push(input: RepoPathInput) -> AppResult<OkFlag> {
+pub async fn git_review_push(
+    input: RepoPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<OkFlag> {
+    require_local_git(&state)?;
     let cwd = resolve_repo_dir(&input.repo_path)?;
     push_current(&cwd)?;
     Ok(OkFlag { ok: true })
 }
 
 #[tauri::command]
-pub async fn git_review_ship_info(input: RepoPathInput) -> AppResult<ShipInfo> {
+pub async fn git_review_ship_info(
+    input: RepoPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<ShipInfo> {
+    require_local_git(&state)?;
     Ok(ship_info_impl(&input.repo_path))
 }
 
 #[tauri::command]
-pub async fn git_review_create_pr(input: RepoPathInput) -> AppResult<CreatePrResult> {
+pub async fn git_review_create_pr(
+    input: RepoPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<CreatePrResult> {
+    require_local_git(&state)?;
     let cwd = resolve_repo_dir(&input.repo_path)?;
     // Push first so gh has a remote ref (best-effort, like upstream).
     let _ = push_current(&cwd);
@@ -1540,7 +1591,11 @@ fn repo_status_impl(repo_path: &str) -> Option<RepoStatus> {
 }
 
 #[tauri::command]
-pub fn git_worktree_list(input: RepoPathInput) -> AppResult<Vec<Worktree>> {
+pub fn git_worktree_list(
+    input: RepoPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<Worktree>> {
+    require_local_git(&state)?;
     let Ok(cwd) = resolve_repo_dir(&input.repo_path) else {
         return Ok(Vec::new());
     };
@@ -1548,7 +1603,11 @@ pub fn git_worktree_list(input: RepoPathInput) -> AppResult<Vec<Worktree>> {
 }
 
 #[tauri::command]
-pub fn git_worktree_add(input: WorktreeAddInput) -> AppResult<WorktreeAddResult> {
+pub fn git_worktree_add(
+    input: WorktreeAddInput,
+    state: State<'_, AppState>,
+) -> AppResult<WorktreeAddResult> {
+    require_local_git(&state)?;
     add_worktree_impl(
         &input.repo_path,
         input.name.as_deref(),
@@ -1559,12 +1618,17 @@ pub fn git_worktree_add(input: WorktreeAddInput) -> AppResult<WorktreeAddResult>
 }
 
 #[tauri::command]
-pub fn git_worktree_remove(input: WorktreeRemoveInput) -> AppResult<WorktreeRemoveResult> {
+pub fn git_worktree_remove(
+    input: WorktreeRemoveInput,
+    state: State<'_, AppState>,
+) -> AppResult<WorktreeRemoveResult> {
+    require_local_git(&state)?;
     remove_worktree_impl(&input.repo_path, &input.worktree_path, input.force)
 }
 
 #[tauri::command]
-pub fn git_branch_list(input: RepoPathInput) -> AppResult<Vec<Branch>> {
+pub fn git_branch_list(input: RepoPathInput, state: State<'_, AppState>) -> AppResult<Vec<Branch>> {
+    require_local_git(&state)?;
     let Ok(cwd) = resolve_repo_dir(&input.repo_path) else {
         return Ok(Vec::new());
     };
@@ -1572,7 +1636,15 @@ pub fn git_branch_list(input: RepoPathInput) -> AppResult<Vec<Branch>> {
 }
 
 #[tauri::command]
-pub fn git_branch_switch(input: BranchSwitchInput) -> AppResult<BranchSwitchResult> {
+pub fn git_branch_switch(
+    input: BranchSwitchInput,
+    state: State<'_, AppState>,
+) -> AppResult<BranchSwitchResult> {
+    require_local_git(&state)?;
+    branch_switch_impl(input)
+}
+
+fn branch_switch_impl(input: BranchSwitchInput) -> AppResult<BranchSwitchResult> {
     let cwd = resolve_repo_dir(&input.repo_path)?;
     // The target comes from `for-each-ref` — already a legal ref name; don't
     // sanitize (it would rewrite `feat#123` / strip CJK names). Verify instead.
@@ -1586,7 +1658,11 @@ pub fn git_branch_switch(input: BranchSwitchInput) -> AppResult<BranchSwitchResu
 }
 
 #[tauri::command]
-pub fn git_repo_status(input: RepoPathInput) -> AppResult<Option<RepoStatus>> {
+pub fn git_repo_status(
+    input: RepoPathInput,
+    state: State<'_, AppState>,
+) -> AppResult<Option<RepoStatus>> {
+    require_local_git(&state)?;
     Ok(repo_status_impl(&input.repo_path))
 }
 
@@ -1597,12 +1673,14 @@ mod tests {
 
     fn git(dir: &Path, args: &[&str]) {
         // Isolate test-driven git calls from the host's global/system config.
-        let out = command("git", dir)
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .args(args)
-            .output()
-            .unwrap();
+        let mut cmd = command("git", dir);
+        cmd.env(
+            "GIT_CONFIG_GLOBAL",
+            if cfg!(windows) { "NUL" } else { "/dev/null" },
+        )
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .args(args);
+        let out = cmd.output().unwrap();
         assert!(
             out.status.success(),
             "git {args:?} failed: {}",
@@ -1623,6 +1701,7 @@ mod tests {
         git(path, &["config", "user.name", "Test"]);
         git(path, &["config", "commit.gpgsign", "false"]);
         git(path, &["config", "init.defaultBranch", "main"]);
+        git(path, &["config", "core.autocrlf", "false"]);
         fs::write(path.join("README.md"), "hello\n").unwrap();
         git(path, &["add", "-A"]);
         git(path, &["commit", "-q", "-m", "init"]);
@@ -1862,7 +1941,15 @@ mod tests {
             .find(|b| b.name == "hermes/login-page")
             .expect("branch listed");
         assert!(feat.checked_out);
-        assert_eq!(feat.worktree_path.as_deref(), Some(added.path.as_str()));
+        // On Windows, git porcelain output uses forward slashes while Rust
+        // PathBuf uses backslashes. Normalize both sides for comparison.
+        let expected_path = added.path.replace("\\", "/");
+        let actual_path = feat
+            .worktree_path
+            .as_deref()
+            .unwrap_or("")
+            .replace("\\", "/");
+        assert_eq!(actual_path, expected_path, "worktree path mismatch");
         assert!(branches.iter().any(|b| b.name == "main" && b.is_default));
 
         let removed = remove_worktree_impl(&repo, &added.path, false).unwrap();
@@ -2043,7 +2130,7 @@ mod tests {
         let repo = dir.path().to_string_lossy().to_string();
         git(dir.path(), &["branch", "topic"]);
 
-        let result = git_branch_switch(BranchSwitchInput {
+        let result = branch_switch_impl(BranchSwitchInput {
             repo_path: repo.clone(),
             branch: "topic".to_string(),
         })
@@ -2060,7 +2147,7 @@ mod tests {
         git(dir.path(), &["branch", "功能/测试"]);
 
         // Sanitizing would rewrite `feat#123` → `feat123` (a different branch).
-        let hash = git_branch_switch(BranchSwitchInput {
+        let hash = branch_switch_impl(BranchSwitchInput {
             repo_path: repo.clone(),
             branch: "feat#123".to_string(),
         })
@@ -2069,7 +2156,7 @@ mod tests {
         assert_eq!(current_branch(dir.path()).as_deref(), Some("feat#123"));
 
         // Sanitizing would strip a CJK name to "" ("Branch name is required").
-        let cjk = git_branch_switch(BranchSwitchInput {
+        let cjk = branch_switch_impl(BranchSwitchInput {
             repo_path: repo.clone(),
             branch: "功能/测试".to_string(),
         })
@@ -2077,7 +2164,7 @@ mod tests {
         assert_eq!(cjk.branch, "功能/测试");
         assert_eq!(current_branch(dir.path()).as_deref(), Some("功能/测试"));
 
-        let err = git_branch_switch(BranchSwitchInput {
+        let err = branch_switch_impl(BranchSwitchInput {
             repo_path: repo,
             branch: "missing".to_string(),
         })
@@ -2100,9 +2187,7 @@ mod tests {
         std::fs::write(dir.path().join("README.md"), "hello\nmore\n").unwrap();
         std::fs::write(dir.path().join("fresh.txt"), "a\nb\n").unwrap();
 
-        let status = git_repo_status(RepoPathInput { repo_path: repo })
-            .unwrap()
-            .expect("a repo reports status");
+        let status = repo_status_impl(&repo).expect("a repo reports status");
         assert_eq!(status.branch.as_deref(), Some("main"));
         assert!(!status.detached);
         assert_eq!(status.untracked, 1, "fresh.txt is untracked");
@@ -2110,14 +2195,7 @@ mod tests {
         assert!(status.added >= 3, "1 added line + 2 untracked lines");
 
         // A non-repo folder reports None.
-        let none = git_repo_status(RepoPathInput {
-            repo_path: tempfile::tempdir()
-                .unwrap()
-                .path()
-                .to_string_lossy()
-                .to_string(),
-        })
-        .unwrap();
+        let none = repo_status_impl(&tempfile::tempdir().unwrap().path().to_string_lossy());
         assert!(none.is_none());
     }
 

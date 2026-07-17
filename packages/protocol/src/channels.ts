@@ -151,6 +151,9 @@ export interface RuntimeInfo {
   source?: RuntimeSourceInfo;
   process?: RuntimeProcessInfo;
   lastError?: string;
+  guideState?: GuideState;
+  managedRuntimeDesiredState?: ManagedRuntimeDesiredState;
+  managedRuntimeLifecycleState?: ManagedRuntimeLifecycleState;
 }
 
 
@@ -276,6 +279,29 @@ export interface RuntimeInstallUpdateResult {
   ok: boolean;
   installed?: RuntimeInstallRecord;
   previous?: RuntimeInstallRecord;
+  error?: string;
+}
+
+export type GuideState = "pending" | "deferred" | "completed";
+export type ManagedRuntimeDesiredState = "running" | "stopped" | "uninstalled";
+export type ManagedRuntimeLifecycleState =
+  | "installing"
+  | "starting"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "uninstalling"
+  | "uninstalled"
+  | "error";
+
+export interface RuntimeControlResult {
+  ok: boolean;
+  guideState: GuideState;
+  desiredState: ManagedRuntimeDesiredState;
+  lifecycleState: ManagedRuntimeLifecycleState;
+  installed: boolean;
+  running: boolean;
+  backendReady: boolean;
   error?: string;
 }
 
