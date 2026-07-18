@@ -951,8 +951,74 @@
 }
 
 .aboutDebugGrid {
-  column-count: 2;
-  column-gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* 关于/环境页共用卡片在 grid 语境下：取消 multicol 时代的块级外边距（gap 已处理
+   间距）、填满单元格。base .debugCard 保持不变，兼容 coding-agents 等 grid 外的
+   独立用法（那里仍靠 inline-block + margin 排布）。 */
+.aboutDebugGrid .debugCard {
+  display: block;
+  margin: 0;
+  width: auto;
+}
+
+/* 关于页「桌面端更新」卡内按钮行：默认 margin-top 18 / bottom 0 偏大且不对称，
+   这里收小并上下对称（仅作用于关于页，不影响共用该类的供应商设置等处）。 */
+.aboutDebugGrid .providerActions {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+/* 「Designed by Wanderminds」署名页脚：居中、克制，logo 单色随 currentColor
+   适配主题；静置取弱化文本色，悬停整体提亮并浮起浅底。 */
+.wandermindsFooter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 14px;
+}
+
+.wandermindsCopyright {
+  margin: 0;
+  color: var(--h-text-3);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.wandermindsCredit {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 18px;
+  border-radius: 12px;
+  color: var(--h-text-3);
+  text-decoration: none;
+  transition: color 0.16s ease, background 0.16s ease;
+}
+
+.wandermindsCredit:hover {
+  color: var(--h-text);
+  background: var(--h-bg-soft);
+}
+
+.wandermindsCreditLabel {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.wandermindsCreditLogo {
+  display: block;
+  height: 30px;
+  width: auto;
+  color: inherit;
 }
 
 .thanksText {
@@ -969,9 +1035,17 @@
 
 .contactLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 184px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: start;
+}
+
+/* 微信 + 飞书两张群二维码并排（飞书在微信右侧）；窄屏可换行。 */
+.contactQrGroup {
+  display: flex;
+  gap: 14px;
+  align-items: start;
+  flex-wrap: wrap;
 }
 
 .wechatQrPanel {
@@ -1092,6 +1166,7 @@
 
 .debugCard[data-wide="true"] {
   display: block;
+  grid-column: 1 / -1;
   -webkit-column-span: all;
   column-span: all;
 }
@@ -2589,7 +2664,7 @@ button.providerWebsiteButton:hover {
   }
 
   .aboutDebugGrid {
-    column-count: 1;
+    grid-template-columns: 1fr;
   }
 
   .auxIntroCard,

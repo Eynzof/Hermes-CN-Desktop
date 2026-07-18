@@ -6,7 +6,7 @@ interface SettingsHeroProps {
   icon: ReactNode;
   eyebrow: ReactNode;
   title: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
   ok?: boolean;
   badge?: ReactNode;
   children?: ReactNode;
@@ -29,7 +29,7 @@ export function SettingsHero({
       <div className={s.aboutHeroBody}>
         <div className={s.aboutEyebrow}>{eyebrow}</div>
         <h3>{title}</h3>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
         {children}
       </div>
       {badge}
