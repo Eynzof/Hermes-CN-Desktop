@@ -305,11 +305,11 @@ describe("provider catalog config updates", () => {
   });
 
   it.each([
-    ["gemini", "https://generativelanguage.googleapis.com/v1beta", "chat_completions", "openai_chat", "GEMINI_API_KEY", "gemini-3.5-flash"],
-    ["openai-api", "https://api.openai.com/v1", "codex_responses", "codex_responses", "OPENAI_API_KEY", "gpt-5.6-sol"],
-    ["anthropic", "https://api.anthropic.com", "anthropic_messages", "anthropic_messages", "ANTHROPIC_API_KEY", "claude-opus-4-8"],
-    ["agnes", "https://apihub.agnes-ai.com/v1", "chat_completions", "openai_chat", "AGNES_API_KEY", "agnes-2.0-flash"],
-    ["xai", "https://api.x.ai/v1", "codex_responses", "codex_responses", "XAI_API_KEY", "grok-build-0.1"],
+    ["gemini", "https://generativelanguage.googleapis.com/v1beta", "chat_completions", "openai_chat", "GEMINI_API_KEY", "gemini-3.5-flash", "gemini"],
+    ["openai-api", "https://api.openai.com/v1", "codex_responses", "codex_responses", "OPENAI_API_KEY", "gpt-5.6-sol", "openai"],
+    ["anthropic", "https://api.anthropic.com", "anthropic_messages", "anthropic_messages", "ANTHROPIC_API_KEY", "claude-opus-4-8", "anthropic"],
+    ["agnes", "https://apihub.agnes-ai.com/v1", "chat_completions", "openai_chat", "AGNES_API_KEY", "agnes-2.0-flash", "agnes"],
+    ["xai", "https://api.x.ai/v1", "codex_responses", "codex_responses", "XAI_API_KEY", "grok-build-0.1", "xai"],
   ])("ships global first-party provider %s with Core-compatible wire settings", (
     id,
     baseUrl,
@@ -317,6 +317,7 @@ describe("provider catalog config updates", () => {
     transport,
     apiKeyLabel,
     defaultModel,
+    icon,
   ) => {
     const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === id);
 
@@ -328,6 +329,7 @@ describe("provider catalog config updates", () => {
       transport,
       apiKeyLabel,
       defaultModel,
+      icon,
     });
     expect(preset!.models.some((model) => model.id === defaultModel)).toBe(true);
 
