@@ -1,6 +1,6 @@
 // 供应商品牌图标注册表。大部分图标文件取自 cc-switch（MIT）的 extracted
-// 图标集；Agnes 使用其官方文档站 favicon。素材按目录 icon key 重命名后
-// 存放在 assets/provider-icons/ 下。
+// 图标集；Agnes 与 SenseNova 使用其官方站点品牌图标。素材按目录 icon key
+// 重命名后存放在 assets/provider-icons/ 下。
 // key 与 ProviderPreset.icon 对应；远端 catalog 下发未知 key 时由调用方
 // 回退到首字母色块。
 import aicodemirror from "@/assets/provider-icons/aicodemirror.svg";
@@ -28,6 +28,7 @@ import openrouter from "@/assets/provider-icons/openrouter.svg";
 import openai from "@/assets/provider-icons/openai.svg";
 import packycode from "@/assets/provider-icons/packycode.svg";
 import rightcode from "@/assets/provider-icons/rightcode.svg";
+import sensenova from "@/assets/provider-icons/sensenova.png";
 import siliconflow from "@/assets/provider-icons/siliconflow.svg";
 import sssaicode from "@/assets/provider-icons/sssaicode.svg";
 import stepfun from "@/assets/provider-icons/stepfun.svg";
@@ -62,6 +63,7 @@ const PROVIDER_ICON_URLS: Record<string, string> = {
   openrouter,
   packycode,
   rightcode,
+  sensenova,
   siliconflow,
   sssaicode,
   stepfun,

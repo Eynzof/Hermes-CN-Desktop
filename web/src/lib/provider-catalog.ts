@@ -320,7 +320,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.3";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.4";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -754,6 +754,25 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
         { id: "Qwen/Qwen3-235B-A22B-Instruct-2507", supportsTools: true },
         { id: "deepseek-ai/DeepSeek-V3.2", supportsTools: true },
       ],
+    },
+    {
+      id: "sensenova",
+      name: "商汤日日新 SenseNova",
+      vendor: "商汤科技",
+      region: "cn",
+      baseUrl: "https://token.sensenova.cn/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "SENSENOVA_API_KEY",
+      icon: "sensenova",
+      websiteUrl: "https://www.sensenova.cn/",
+      docsUrl: "https://platform.sensenova.cn/docs",
+      defaultModel: "sensenova-6.7-flash-lite",
+      models: [
+        { id: "sensenova-6.7-flash-lite", label: "SenseNova 6.7 Flash-Lite", contextWindow: 262_144, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true },
+      ],
+      supportsModelListing: false,
     },
     {
       id: "gemini",

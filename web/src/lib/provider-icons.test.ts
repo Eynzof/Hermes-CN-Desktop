@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getProviderIconUrl } from "./provider-icons";
 
 describe("provider icon registry", () => {
-  it.each(["gemini", "openai", "anthropic", "xai", "agnes"])(
+  it.each(["gemini", "openai", "anthropic", "xai", "agnes", "sensenova"])(
     "resolves the %s brand icon",
     (icon) => {
       expect(getProviderIconUrl(icon)).toEqual(expect.any(String));
