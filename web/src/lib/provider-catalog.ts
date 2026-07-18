@@ -320,7 +320,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.2";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -819,6 +819,24 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
         { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", contextWindow: 200_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
       ],
       supportsModelListing: true,
+    },
+    {
+      id: "agnes",
+      name: "Agnes AI",
+      vendor: "Agnes AI",
+      region: "global",
+      baseUrl: "https://apihub.agnes-ai.com/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "AGNES_API_KEY",
+      websiteUrl: "https://platform.agnes-ai.com/",
+      docsUrl: "https://agnes-ai.com/doc/overview",
+      defaultModel: "agnes-2.0-flash",
+      models: [
+        { id: "agnes-2.0-flash", label: "Agnes 2.0 Flash", contextWindow: 256_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "agnes-1.5-flash", label: "Agnes 1.5 Flash", contextWindow: 256_000, supportsVision: true },
+      ],
+      supportsModelListing: false,
     },
     {
       id: "xai",
