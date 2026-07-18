@@ -17,6 +17,11 @@ export function buildAnthropicMessagesUrl(baseUrl: string): string {
   return base.endsWith("/v1") ? `${base}/messages` : `${base}/v1/messages`;
 }
 
+export function buildGeminiGenerateContentUrl(baseUrl: string, model: string): string {
+  const base = baseUrl.replace(/\/+$/, "");
+  return `${base}/models/${encodeURIComponent(model)}:generateContent`;
+}
+
 export function statusCodeFromErrorMessage(message: string): number | null {
   const match = message.match(/\bHTTP\s+(\d{3})\b/i);
   return match ? Number(match[1]) : null;
@@ -109,6 +114,19 @@ export function probeChatCompletionsProvider(input: DirectProbeInput): Promise<P
       messages: [{ role: "user", content: "ping" }],
       max_tokens: 1,
       stream: false,
+    }),
+  );
+}
+
+/** Google AI Studio 原生 Gemini REST 探测；与 Core 的 GeminiNativeClient 使用同一端点。 */
+export function probeGeminiProvider(input: DirectProbeInput): Promise<ProviderProbeResult> {
+  return probeWithMinimalRequest(
+    input,
+    (baseUrl) => buildGeminiGenerateContentUrl(baseUrl, input.model.trim()),
+    (apiKey): Record<string, string> => (apiKey ? { "x-goog-api-key": apiKey } : {}),
+    () => ({
+      contents: [{ role: "user", parts: [{ text: "ping" }] }],
+      generationConfig: { maxOutputTokens: 1 },
     }),
   );
 }

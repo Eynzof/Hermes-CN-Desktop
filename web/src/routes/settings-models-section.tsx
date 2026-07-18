@@ -46,6 +46,7 @@ import {
 import {
   probeAnthropicMessagesProvider,
   probeChatCompletionsProvider,
+  probeGeminiProvider,
 } from "@/lib/provider-probe";
 import { getProviderIconUrl } from "@/lib/provider-icons";
 import { useProviderCatalog } from "@/hooks/use-provider-catalog";
@@ -941,6 +942,7 @@ export function ModelsSection() {
       // + base_url are supplied explicitly.
       //
       // 不提供 /models 端点的供应商改发一次极小的真实请求，按协议分流：
+      // Gemini 走原生 generateContent + x-goog-api-key；
       // Anthropic 格式（Claude Code 中转基本不带 /models，且严格网关拒绝
       // Bearer-only）POST /v1/messages；OpenAI 格式 POST /chat/completions。
       // 其余走后端 probe，并带上 api_mode 让后端用对应协议探测。
@@ -951,17 +953,19 @@ export function ModelsSection() {
       const shouldProbeChatCompletions =
         selectedProvider.apiMode === "chat_completions" &&
         selectedProvider.supportsModelListing === false;
-      const result = shouldProbeAnthropicMessages
-        ? await probeAnthropicMessagesProvider({ apiKey, baseUrl, model: probeModel })
-        : shouldProbeChatCompletions
-          ? await probeChatCompletionsProvider({ apiKey, baseUrl, model: probeModel })
-          : await probeProvider({
-            provider: selectedProvider.id,
-            api_key: apiKey || undefined,
-            base_url: baseUrl || undefined,
-            api_mode: selectedProvider.apiMode,
-            timeout_ms: 8000,
-          });
+      const result = selectedProvider.id === "gemini"
+        ? await probeGeminiProvider({ apiKey, baseUrl, model: probeModel })
+        : shouldProbeAnthropicMessages
+          ? await probeAnthropicMessagesProvider({ apiKey, baseUrl, model: probeModel })
+          : shouldProbeChatCompletions
+            ? await probeChatCompletionsProvider({ apiKey, baseUrl, model: probeModel })
+            : await probeProvider({
+              provider: selectedProvider.id,
+              api_key: apiKey || undefined,
+              base_url: baseUrl || undefined,
+              api_mode: selectedProvider.apiMode,
+              timeout_ms: 8000,
+            });
       setProbeState({
         providerId: selectedProvider.id,
         status: result.ok ? "ok" : "error",
