@@ -304,6 +304,56 @@ describe("provider catalog config updates", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("ships SenseNova as a fixed OpenAI-compatible chat provider", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "sensenova");
+
+    expect(preset).toMatchObject({
+      id: "sensenova",
+      name: "商汤日日新 SenseNova",
+      vendor: "商汤科技",
+      region: "cn",
+      baseUrl: "https://token.sensenova.cn/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "SENSENOVA_API_KEY",
+      icon: "sensenova",
+      defaultModel: "sensenova-6.7-flash-lite",
+      supportsModelListing: false,
+      models: [
+        expect.objectContaining({
+          id: "sensenova-6.7-flash-lite",
+          contextWindow: 262_144,
+          supportsTools: true,
+          supportsVision: true,
+          supportsReasoning: true,
+        }),
+        expect.objectContaining({
+          id: "deepseek-v4-flash",
+          contextWindow: 1_000_000,
+          supportsTools: true,
+          supportsReasoning: true,
+        }),
+      ],
+    });
+    expect(preset!.models.map((model) => model.id)).not.toContain("sensenova-u1-fast");
+    expect(chatEndpointPreviewUrl(preset!.apiMode, preset!.baseUrl)).toBe(
+      "https://token.sensenova.cn/v1/chat/completions",
+    );
+
+    const updated = buildProviderConfigUpdate({}, preset!, {
+      apiKey: "sensenova-key",
+      baseUrl: preset!.baseUrl,
+      model: preset!.defaultModel,
+    });
+    expect(updated.model).toMatchObject({
+      provider: "sensenova",
+      default: "sensenova-6.7-flash-lite",
+      base_url: "https://token.sensenova.cn/v1",
+      api_mode: "chat_completions",
+      api_key: "sensenova-key",
+    });
+  });
+
   it.each([
     ["gemini", "https://generativelanguage.googleapis.com/v1beta", "chat_completions", "openai_chat", "GEMINI_API_KEY", "gemini-3.5-flash", "gemini"],
     ["openai-api", "https://api.openai.com/v1", "codex_responses", "codex_responses", "OPENAI_API_KEY", "gpt-5.6-sol", "openai"],
