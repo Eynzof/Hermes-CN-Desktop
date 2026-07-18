@@ -79,6 +79,8 @@ import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
+import feishuCommunityQr from "@/assets/feishu-community-qr.png";
+import { WandermindsMark } from "@/components/brand/wanderminds-mark";
 import { SettingsHero } from "./settings-hero";
 import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
@@ -1568,7 +1570,6 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
         icon={<Heart size={24} />}
         eyebrow="Hermes Agent 中文社区桌面版"
         title="联系与致谢"
-        description="致谢，联系方式及项目链接。"
       />
 
       <div className={s.aboutDebugGrid}>
@@ -1611,14 +1612,9 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               去官网下载
             </Button>
           </div>
-          <p className={s.desc}>
-            {runtime.isPortable()
-              ? "这里提醒的是桌面壳版本。免安装版请下载新版压缩包，退出应用后覆盖解压到当前目录（data 目录中的数据会保留）；应用不会自动下载或替换正在运行的程序。"
-              : "这里提醒的是桌面壳版本。下载新版安装包后，请按系统提示覆盖安装；应用不会自动下载安装包或替换正在运行的程序。"}
-          </p>
         </DebugCard>
 
-        <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools" wide>
+        <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools">
           <div className={s.runtimeGrid}>
             <RuntimeField label="开发者模式" value="已默认开启" />
             <RuntimeField label="打开快捷键" value={devtoolsShortcut} mono />
@@ -1629,7 +1625,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           </p>
         </DebugCard>
 
-        <DebugCard icon={<Info size={15} />} title="致谢" sub="感谢支持和贡献" wide>
+        <DebugCard icon={<Heart size={15} />} title="致谢与许可" sub="贡献者、支持方与字体署名">
           <div className={s.thanksText}>
             <p>
               感谢 Hermes Agent 官方
@@ -1643,18 +1639,12 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               <ExternalTextLink href="https://www.compshare.cn/">优云智算</ExternalTextLink>
               的支持。
             </p>
-          </div>
-        </DebugCard>
-
-        <DebugCard icon={<Info size={15} />} title="字体许可" sub="界面字体署名" wide>
-          <div className={s.thanksText}>
             <p>
-              本桌面端内置并使用了华为 HarmonyOS Sans 字体（HarmonyOS Sans SC，Copyright © 2021 Huawei
-              Device Co., Ltd.）。该字体依据
+              界面内置并使用华为 HarmonyOS Sans（SC，© 2021 Huawei Device Co., Ltd.），依据
               <ExternalTextLink href="https://github.com/ajacocks/harmonyos-sans-font/blob/main/LICENSE">
                 《HarmonyOS Sans Fonts License Agreement》
               </ExternalTextLink>
-              免费用于商业用途，以未修改的原始文件随应用一同分发。
+              免费用于商业用途，以未修改的原始文件随应用分发。
             </p>
           </div>
         </DebugCard>
@@ -1678,14 +1668,20 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
                 </div>
               </ContactField>
             </div>
-            <div className={s.wechatQrPanel}>
-              <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
-              <p>这是 Hermes Agent 中文社区微信群入口，微信扫码即可加入。</p>
+            <div className={s.contactQrGroup}>
+              <div className={s.wechatQrPanel}>
+                <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
+                <p>微信扫码即可加入 Hermes Agent 中文社区微信群</p>
+              </div>
+              <div className={s.wechatQrPanel}>
+                <img src={feishuCommunityQr} alt="Hermes Agent 中文社区飞书群二维码" />
+                <p>飞书扫码即可加入 Hermes Agent 中文社区飞书群</p>
+              </div>
             </div>
           </div>
         </DebugCard>
 
-        <DebugCard icon={<GitFork size={15} />} title="项目链接" sub="桌面端与内核项目" wide>
+        <DebugCard icon={<GitFork size={15} />} title="项目链接" sub="桌面端与内核仓库" wide>
           <div className={s.runtimeGrid}>
             <ExternalLinkField
               label="桌面端"
@@ -1700,20 +1696,26 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               wide
             />
           </div>
-          <p className={s.desc}>
-            桌面端会继续围绕中文社区的使用习惯做体验优化，也欢迎通过
-            <ExternalTextLink href="https://github.com/Eynzof/hermes-agent-cn-desktop/issues">仓库反馈问题和建议</ExternalTextLink>。
-          </p>
-        </DebugCard>
-
-        <DebugCard icon={<Globe2 size={15} />} title="中文社区" sub="本地化体验和使用文档" wide>
-          <p className={s.desc}>
-            中文社区桌面版会把常用配置、消息平台接入、运行状态和排障入口收进一个桌面工作台，尽量减少命令行门槛。
-            后续社区入口和使用文档会同步到
-            <ExternalTextLink href="https://hermesagent.org.cn">中文社区官网</ExternalTextLink>。
-          </p>
         </DebugCard>
       </div>
+
+      <footer className={s.wandermindsFooter}>
+        <a
+          className={s.wandermindsCredit}
+          href="https://wanderminds.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => {
+            event.preventDefault();
+            void openExternalUrl("https://wanderminds.ai");
+          }}
+          title="Wanderminds · wanderminds.ai"
+        >
+          <span className={s.wandermindsCreditLabel}>Designed by</span>
+          <WandermindsMark className={s.wandermindsCreditLogo} />
+        </a>
+        <p className={s.wandermindsCopyright}>© 2026 Wanderminds · All rights reserved</p>
+      </footer>
     </div>
   );
 }
