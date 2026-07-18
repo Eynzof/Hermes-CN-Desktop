@@ -307,6 +307,59 @@ export type RuntimeUpdateStage =
 
 export const RUNTIME_UPDATE_STAGE_EVENT = "runtime-update-stage";
 
+/** UI 热更通道（轨道 B）：签名的前端 bundle 清单，镜像 Rust 侧 process/ui_update.rs。 */
+export interface UiUpdateManifest {
+  schemaVersion: number;
+  channel: string;
+  uiVersion: string;
+  /** 该 UI 包要求的最低桌面端版本，签名保护（防 UI↔壳 IPC 契约错位的核心闸门）。 */
+  appVersionFloor: string;
+  platform: string;
+  arch: string;
+  artifactUrl: string;
+  sha256: string;
+  signature: string;
+  sourceRepo: string;
+  sourceCommit: string;
+  createdAt?: string;
+}
+
+export interface UiInstallRecord {
+  schemaVersion: number;
+  uiVersion: string;
+  appVersionFloor: string;
+  channel: string;
+  platform: string;
+  arch: string;
+  path: string;
+  sha256: string;
+  source: string;
+  installedAt: string;
+  previousUiVersion?: string;
+}
+
+export interface UiUpdateCheckResult {
+  ok: boolean;
+  updateAvailable: boolean;
+  downgradeBlocked?: boolean;
+  /** 清单签名的 appVersionFloor 高于当前桌面端版本，安装被阻断。 */
+  floorBlocked?: boolean;
+  requiredAppVersion?: string;
+  currentUiVersion?: string;
+  manifest?: UiUpdateManifest;
+  error?: string;
+}
+
+export interface UiInstallUpdateResult {
+  ok: boolean;
+  installed?: UiInstallRecord;
+  previous?: UiInstallRecord;
+  error?: string;
+}
+
+/** UI 安装/回滚生效后触发（payload 为新的 uiVersion），Rust 侧会随即导航主窗口。 */
+export const UI_UPDATE_READY_EVENT = "ui-update-ready";
+
 export interface RuntimeInstallUpdateResult {
   ok: boolean;
   installed?: RuntimeInstallRecord;

@@ -19,7 +19,7 @@ use hermes_agent_cn::commands;
 use hermes_agent_cn::commands::profiles::read_active_profile_sticky;
 use hermes_agent_cn::connection::{self, ConnectionBackend, ConnectionMode};
 use hermes_agent_cn::desktop_control;
-use hermes_agent_cn::process::{dashboard, instance, runtime};
+use hermes_agent_cn::process::{dashboard, instance, runtime, ui_update};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
 use hermes_agent_cn::tray;
 
@@ -153,11 +153,54 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // UI hot-update channel (Track B): `hermesui://` serves the signed,
+        // gated UI override from the writable tree, falling back per-file to
+        // the embedded bundle (process/ui_update.rs::serve_ui_request). The
+        // window only loads via this scheme when an override is installed, so
+        // default installs behave exactly like the static embedded window.
+        .register_asynchronous_uri_scheme_protocol("hermesui", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            let path = request.uri().path().to_string();
+            tauri::async_runtime::spawn_blocking(move || {
+                let response = ui_update::serve_ui_request(&app, &path);
+                let http_response = tauri::http::Response::builder()
+                    .status(response.status)
+                    .header("content-type", response.mime)
+                    .header("cache-control", response.cache_control)
+                    .body(response.body)
+                    .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()));
+                responder.respond(http_response);
+            });
+        })
         .manage(app_state)
         .setup(move |app| {
             use tauri::Manager;
             let state = app.state::<AppState>();
             let bundled_resource_dir = app.path().resource_dir().ok();
+
+            // The main window is built in code (not tauri.conf.json) so the
+            // startup URL can select the installed UI override. In dev, and
+            // whenever no override passes the gates, WebviewUrl::App keeps
+            // today's behavior exactly (devUrl in dev, embedded dist packed).
+            let window_url = if !cfg!(dev) && ui_update::active_ui_dir().is_some() {
+                commands::ui_update::UI_PROTOCOL_ENTRY_URL
+                    .parse()
+                    .map(tauri::WebviewUrl::CustomProtocol)
+                    .unwrap_or_else(|_| tauri::WebviewUrl::App("index.html".into()))
+            } else {
+                tauri::WebviewUrl::App("index.html".into())
+            };
+            let window_builder = tauri::WebviewWindowBuilder::new(
+                app,
+                crate::tray::MAIN_WINDOW_LABEL,
+                window_url,
+            )
+            .title("Hermes Agent 中文社区桌面版")
+            .inner_size(1240.0, 820.0)
+            .min_inner_size(960.0, 680.0);
+            #[cfg(target_os = "macos")]
+            let window_builder = window_builder.title_bar_style(tauri::TitleBarStyle::Transparent);
+            window_builder.build()?;
 
             // Focus channel for the single-instance guard: consume any stale
             // request from a previous run, then watch for new ones. Armed
@@ -536,6 +579,10 @@ fn main() {
             commands::runtime_manager::runtime_check_update,
             commands::runtime_manager::runtime_install_update,
             commands::runtime_manager::runtime_rollback,
+            commands::ui_update::ui_check_update,
+            commands::ui_update::ui_install_update,
+            commands::ui_update::ui_rollback,
+            commands::ui_update::ui_reset_to_embedded,
             commands::runtime_manager::get_desktop_control_state,
             commands::runtime_manager::set_guide_state,
             commands::runtime_manager::managed_runtime_install,

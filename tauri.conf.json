@@ -10,18 +10,9 @@
     "frontendDist": "./web/dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Hermes Agent 中文社区桌面版",
-        "width": 1240,
-        "height": 820,
-        "minWidth": 960,
-        "minHeight": 680,
-        "titleBarStyle": "Transparent"
-      }
-    ],
+    "windows": [],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:*; img-src 'self' data: blob:; media-src 'self' data: blob:; frame-src 'self' http://localhost:* http://127.0.0.1:*"
+      "csp": "default-src 'self' hermesui: http://hermesui.localhost; script-src 'self' 'unsafe-inline' hermesui: http://hermesui.localhost; style-src 'self' 'unsafe-inline' hermesui: http://hermesui.localhost; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:*; img-src 'self' data: blob: hermesui: http://hermesui.localhost; media-src 'self' data: blob: hermesui: http://hermesui.localhost; frame-src 'self' http://localhost:* http://127.0.0.1:*"
     }
   },
   "bundle": {

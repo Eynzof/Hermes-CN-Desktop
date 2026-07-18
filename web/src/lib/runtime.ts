@@ -460,6 +460,10 @@ declare global {
       checkRuntimeUpdate?(): Promise<RuntimeUpdateCheckResult>;
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
       rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
+      checkUiUpdate?(): Promise<import("@hermes/protocol").UiUpdateCheckResult>;
+      installUiUpdate?(): Promise<import("@hermes/protocol").UiInstallUpdateResult>;
+      rollbackUiUpdate?(): Promise<import("@hermes/protocol").UiInstallUpdateResult>;
+      resetUiToEmbedded?(): Promise<void>;
       exportProfileBackup?(): Promise<BackupExportResult>;
       importProfileBackup?(): Promise<BackupImportResult>;
       switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;

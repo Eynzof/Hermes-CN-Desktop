@@ -43,6 +43,12 @@ import {
   useRuntimeInfo,
 } from "@/hooks/use-runtime-update";
 import {
+  hasUiUpdateBridge,
+  useCheckUiUpdate,
+  useInstallUiUpdate,
+  useRollbackUiUpdate,
+} from "@/hooks/use-ui-update";
+import {
   CONVERSATION_FONT_SIZE_OPTIONS,
   DEFAULT_ASSISTANT_DISPLAY_NAME,
   assistantAvatarDataUrlAtom,
@@ -76,7 +82,7 @@ import { buildNestedConfigUpdate, mergeConfigUpdate } from "@/lib/config-update"
 import { translateConfigField, translateConfigOption } from "@/lib/config-translations";
 import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
-import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
+import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult, UiUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import feishuCommunityQr from "@/assets/feishu-community-qr.png";
@@ -1197,9 +1203,37 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const checkRuntimeUpdate = useCheckRuntimeUpdate();
   const installRuntimeUpdate = useInstallRuntimeUpdate();
   const rollbackRuntime = useRollbackRuntime();
+  const checkUiUpdate = useCheckUiUpdate();
+  const installUiUpdate = useInstallUiUpdate();
+  const rollbackUiUpdate = useRollbackUiUpdate();
   const gatewayRestart = useGatewayRestartAction();
   const [runtimeMessage, setRuntimeMessage] = useState("");
+  const [uiMessage, setUiMessage] = useState("");
   const [aboutMessage, setAboutMessage] = useState("");
+
+  const handleCheckUi = async () => {
+    setUiMessage("");
+    const result = await checkUiUpdate.mutateAsync();
+    setUiMessage(formatUiUpdateResult(result));
+  };
+
+  const handleInstallUi = async () => {
+    setUiMessage("");
+    const result = await installUiUpdate.mutateAsync();
+    // 成功时 Rust 侧会立即把窗口导航到新 bundle，这条消息通常来不及展示；
+    // 失败时留在原界面，把原因说清楚。
+    setUiMessage(result.ok
+      ? `界面已更新到 ${result.installed?.uiVersion ?? ""}`.trim()
+      : result.error ?? "界面更新失败");
+  };
+
+  const handleRollbackUi = async () => {
+    setUiMessage("");
+    const result = await rollbackUiUpdate.mutateAsync();
+    setUiMessage(result.ok
+      ? `已回滚界面到 ${result.installed?.uiVersion ?? ""}`.trim()
+      : result.error ?? "界面回滚失败");
+  };
 
   const handleCheckRuntime = async () => {
     setRuntimeMessage("");
@@ -1479,6 +1513,53 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
             </>
           ) : (
             <p className={s.desc}>当前环境没有桌面 runtime bridge，无法读取独立内核信息。</p>
+          )}
+        </DebugCard>
+
+        <DebugCard icon={<RefreshCw size={15} />} title="界面热更新" sub="仅更新桌面界面（UI bundle），不重启内核，秒级生效">
+          {hasUiUpdateBridge() ? (
+            <>
+              <p className={s.desc}>
+                纯前端修复（文案、样式、界面逻辑）通过此通道下发，签名校验后立即生效；
+                涉及桌面壳/内核能力的更新仍需整包升级。安装后窗口会自动重载。
+              </p>
+              <div className={s.providerActions}>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={handleCheckUi}
+                  disabled={checkUiUpdate.isPending}
+                >
+                  <RefreshCw size={13} />
+                  {checkUiUpdate.isPending ? "检查中" : "检查界面更新"}
+                </Button>
+                <Button
+                  variant="solid"
+                  tone="accent"
+                  type="button"
+                  onClick={handleInstallUi}
+                  disabled={
+                    !checkUiUpdate.data?.ok ||
+                    !checkUiUpdate.data.updateAvailable ||
+                    Boolean(checkUiUpdate.data.floorBlocked) ||
+                    installUiUpdate.isPending
+                  }
+                >
+                  {installUiUpdate.isPending ? "安装中…" : "安装界面更新"}
+                </Button>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={handleRollbackUi}
+                  disabled={rollbackUiUpdate.isPending}
+                >
+                  {rollbackUiUpdate.isPending ? "回滚中…" : "回滚界面"}
+                </Button>
+              </div>
+              {uiMessage && <p className={s.desc}>{uiMessage}</p>}
+            </>
+          ) : (
+            <p className={s.desc}>当前环境没有桌面 UI 更新 bridge。</p>
           )}
         </DebugCard>
 
@@ -1902,6 +1983,20 @@ function formatDateTime(value: string | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function formatUiUpdateResult(result: UiUpdateCheckResult): string {
+  if (!result.ok) return result.error ?? "界面更新检查失败";
+  if (result.floorBlocked) {
+    return `发现新界面 ${result.manifest?.uiVersion ?? ""}，但需要桌面端 ≥ ${result.requiredAppVersion ?? ""}，请先升级桌面应用`.trim();
+  }
+  if (result.downgradeBlocked) {
+    return `更新源提供的界面 ${result.manifest?.uiVersion ?? ""} 低于当前版本，已忽略（防降级保护）`.trim();
+  }
+  if (!result.updateAvailable) {
+    return `界面已是最新${result.currentUiVersion ? `（${result.currentUiVersion}）` : "（内置版本）"}`;
+  }
+  return `发现新界面 ${result.manifest?.uiVersion ?? ""}，点击"安装界面更新"立即生效`.trim();
 }
 
 function formatRuntimeUpdateResult(result: RuntimeUpdateCheckResult): string {

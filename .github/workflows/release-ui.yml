@@ -1,0 +1,155 @@
+# UI hot-update channel release (Track B).
+#
+# Builds the Tauri webview frontend (web/dist), packages it per platform, signs
+# a manifest with the SAME Ed25519 trust key as the runtime channel, and
+# publishes zip + manifest to a GitHub prerelease. The desktop client's UI
+# update channel fetches `{channel}-{platform}-{arch}.json` and installs the
+# signed bundle into its writable ui/ tree without touching the kernel or the
+# shell binary.
+#
+# The UI bundle content is platform-independent (it's web assets); we still key
+# manifests by platform/arch so the file-name scheme matches the runtime
+# channel and a future platform-specific split needs no client change.
+#
+# NOTE: the Desktop repo's `releases/latest` is claimed by the shell release
+# (release-desktop.yml), so UI manifests must NOT rely on a `latest` alias.
+# The artifactUrl is signed to a per-TAG release download URL, and the client's
+# fallback base URL points at the landing mirror's /ui path, not GitHub latest.
+
+name: release-ui
+
+on:
+  push:
+    tags:
+      - "ui-v*"
+  workflow_dispatch:
+    inputs:
+      ui_version:
+        description: "UI bundle version, e.g. 0.7.1"
+        required: true
+      channel:
+        description: "Release channel"
+        default: stable
+        type: choice
+        options: [stable, beta, canary]
+      app_version_floor:
+        description: "Minimum compatible desktop shell version (signed gate)"
+        required: true
+        default: "0.7.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      RUNTIME_SIGN_PRIVATE_KEY_PEM: ${{ secrets.RUNTIME_SIGN_PRIVATE_KEY_PEM }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve UI version + channel + floor
+        id: meta
+        shell: bash
+        run: |
+          if [[ -n "${{ github.event.inputs.ui_version }}" ]]; then
+            UI_VERSION="${{ github.event.inputs.ui_version }}"
+            CHANNEL="${{ github.event.inputs.channel }}"
+            FLOOR="${{ github.event.inputs.app_version_floor }}"
+          else
+            # Tag is `ui-v<version>` (optionally `-<channel>` suffix); strip prefix.
+            RAW="${GITHUB_REF_NAME#ui-v}"
+            if [[ "$RAW" == *-canary* ]]; then CHANNEL="canary";
+            elif [[ "$RAW" == *-beta* ]]; then CHANNEL="beta";
+            else CHANNEL="stable"; fi
+            UI_VERSION="${RAW%%-*}"
+            # Tag-triggered releases fall back to the repo-tracked floor default.
+            FLOOR="0.7.0"
+          fi
+
+          if [[ ! "$UI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid UI version: $UI_VERSION" >&2
+            exit 1
+          fi
+          if [[ ! "$FLOOR" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid app version floor: $FLOOR" >&2
+            exit 1
+          fi
+
+          echo "ui_version=$UI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "app_version_floor=$FLOOR" >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pnpm install --frozen-lockfile
+          python -m pip install --upgrade pip cryptography
+
+      - name: Version sync check
+        run: pnpm version:check
+
+      - name: Build web bundle
+        run: pnpm --filter @hermes/web build:desktop
+
+      - name: Package + sign per platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          CHANNEL="${{ steps.meta.outputs.channel }}"
+          UI_VERSION="${{ steps.meta.outputs.ui_version }}"
+          FLOOR="${{ steps.meta.outputs.app_version_floor }}"
+          # Content is identical across platforms; name per platform/arch so the
+          # client's {channel}-{platform}-{arch}.json scheme resolves.
+          for pa in win32-x64 darwin-arm64 darwin-x64 linux-x64; do
+            PLATFORM="${pa%-*}"
+            ARCH="${pa##*-}"
+            NAME="ui-${pa}"
+            (cd web/dist && zip -r -q "../../out/${NAME}.zip" .)
+
+            # artifactUrl is inside the signed payload; it must equal the exact
+            # per-tag Release download URL the assets will publish at. NOT the
+            # `latest` alias (claimed by the shell release).
+            URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${NAME}.zip"
+
+            if [[ -n "${RUNTIME_SIGN_PRIVATE_KEY_PEM:-}" ]]; then
+              python scripts/sign_ui_manifest.py \
+                --channel "$CHANNEL" \
+                --ui-version "$UI_VERSION" \
+                --app-version-floor "$FLOOR" \
+                --platform "$PLATFORM" \
+                --arch "$ARCH" \
+                --artifact-url "$URL" \
+                --artifact-path "out/${NAME}.zip" \
+                --source-repo "${GITHUB_REPOSITORY}" \
+                --source-commit "${GITHUB_SHA}" \
+                --output "out/${CHANNEL}-${pa}.json"
+            else
+              echo "RUNTIME_SIGN_PRIVATE_KEY_PEM absent — skipping signing (fork / secret-less run)" >&2
+            fi
+          done
+          ls -la out
+
+      - name: Publish prerelease
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          # UI channel releases are marked prerelease so they never become the
+          # repo's `latest` (which the shell installer release owns).
+          prerelease: true
+          files: |
+            out/*.zip
+            out/*.json

@@ -21,5 +21,6 @@ pub mod restart;
 pub mod runtime_manager;
 pub mod terminal;
 pub mod ui_store;
+pub mod ui_update;
 pub mod ws_proxy;
 pub mod yolo;

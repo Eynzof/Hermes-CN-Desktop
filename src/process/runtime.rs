@@ -23,7 +23,7 @@ use crate::update_stage::UpdateStage;
 /// (bundled bootstrap at startup) free of UI events.
 pub type StageSink<'a> = &'a (dyn Fn(UpdateStage) + Send + Sync);
 
-fn emit_stage(sink: Option<StageSink<'_>>, stage: UpdateStage) {
+pub(crate) fn emit_stage(sink: Option<StageSink<'_>>, stage: UpdateStage) {
     if let Some(sink) = sink {
         sink(stage);
     }
@@ -66,8 +66,8 @@ const BUNDLED_SKILLS_DIR: &str = "skills";
 const BUNDLED_PLUGINS_RESOURCE_DIR: &str = "bundled-plugins";
 const BUNDLED_PLUGINS_DIR: &str = "plugins";
 const RUNTIME_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
-const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
-const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+pub(crate) const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+pub(crate) const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 // The release runtime is a PyInstaller-style onefile binary. On a cold macOS
 // launch it has to unpack its embedded Python payload before argparse can even
 // print `dashboard --help`; current arm64 artifacts routinely take ~18s on the
@@ -81,7 +81,7 @@ const SMOKE_TIMEOUT: Duration = Duration::from_secs(60);
 // exits). This hardens both the real post-install path and the smoke-check test
 // under cargo's multi-threaded runner.
 const SMOKE_SPAWN_RETRIES: u32 = 5;
-static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+pub(crate) static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .connect_timeout(RUNTIME_HTTP_CONNECT_TIMEOUT)
         .build()
@@ -293,7 +293,7 @@ pub struct RuntimeInstallUpdateResult {
     pub error: Option<String>,
 }
 
-fn current_platform() -> &'static str {
+pub(crate) fn current_platform() -> &'static str {
     if cfg!(target_os = "windows") {
         "win32"
     } else if cfg!(target_os = "macos") {
@@ -303,7 +303,7 @@ fn current_platform() -> &'static str {
     }
 }
 
-fn current_arch() -> &'static str {
+pub(crate) fn current_arch() -> &'static str {
     if cfg!(target_arch = "x86_64") {
         "x64"
     } else if cfg!(target_arch = "aarch64") {
@@ -316,7 +316,7 @@ fn current_arch() -> &'static str {
 /// Desktop shell version, taken from the crate itself (kept in sync with
 /// `package.json`/`tauri.conf.json` by `pnpm version:sync`). Never accept this
 /// from the webview — the min-app-version gate must not be spoofable.
-fn desktop_app_version() -> &'static str {
+pub(crate) fn desktop_app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
@@ -326,7 +326,7 @@ fn desktop_app_version() -> &'static str {
 /// ever added: `0.18.2-cn.2-canary.3` makes the pre-release `cn.2-canary` an
 /// *alphanumeric* identifier that sorts ABOVE the numeric `cn.2` — canary
 /// version grammar must be designed together with these gates.
-fn parse_runtime_semver(version: &str) -> Option<semver::Version> {
+pub(crate) fn parse_runtime_semver(version: &str) -> Option<semver::Version> {
     semver::Version::parse(version.trim().trim_start_matches('v')).ok()
 }
 
@@ -334,7 +334,7 @@ fn parse_runtime_semver(version: &str) -> Option<semver::Version> {
 /// Only ever true when BOTH sides parse as semver — unparseable versions fall
 /// back to the legacy "any difference is installable" behavior rather than
 /// bricking updates over a formatting quirk.
-fn is_version_downgrade(candidate: &str, current: &str) -> bool {
+pub(crate) fn is_version_downgrade(candidate: &str, current: &str) -> bool {
     match (
         parse_runtime_semver(candidate),
         parse_runtime_semver(current),
@@ -898,7 +898,7 @@ fn configured_manifest_url() -> Option<String> {
     ))
 }
 
-fn configured_public_key() -> Option<String> {
+pub(crate) fn configured_public_key() -> Option<String> {
     // 1. PEM via runtime env (highest precedence)
     if let Ok(direct) = std::env::var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM") {
         let pem = direct.trim().replace("\\n", "\n");
@@ -968,7 +968,7 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
     }
 }
 
-fn file_sha256(path: &Path) -> Option<String> {
+pub(crate) fn file_sha256(path: &Path) -> Option<String> {
     let mut file = fs::File::open(path).ok()?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
@@ -1530,7 +1530,7 @@ fn verify_signature_with_key(
         .map_err(|_| "Signature verification failed".to_string())
 }
 
-fn safe_version_segment(version: &str) -> Result<String, String> {
+pub(crate) fn safe_version_segment(version: &str) -> Result<String, String> {
     const MAX_VERSION_SEGMENT_LEN: usize = 120;
 
     if version.is_empty() {
@@ -2549,7 +2549,7 @@ fn symlink_target_within(dest: &Path, link_parent: &Path, target: &Path) -> bool
     resolved.starts_with(dest)
 }
 
-fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
+pub(crate) fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
 
@@ -2814,7 +2814,7 @@ fn validate_bundled_plugins_tree(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
+pub(crate) fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
     fs::create_dir_all(dst).map_err(|e| e.to_string())?;
     for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -2835,7 +2835,7 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn chrono_now() -> String {
+pub(crate) fn chrono_now() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()

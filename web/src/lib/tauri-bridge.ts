@@ -39,6 +39,8 @@ import type {
   GuideState,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
+  UiInstallUpdateResult,
+  UiUpdateCheckResult,
   SetYoloModeInput,
   SetYoloModeResult,
   SwitchProfileInput,
@@ -351,6 +353,22 @@ const tauriBridge = {
 
   async rollbackRuntime(): Promise<RuntimeInstallUpdateResult> {
     return invokeCommand("runtime_rollback");
+  },
+
+  async checkUiUpdate(): Promise<UiUpdateCheckResult> {
+    return invokeCommand("ui_check_update");
+  },
+
+  async installUiUpdate(): Promise<UiInstallUpdateResult> {
+    return invokeCommand("ui_install_update");
+  },
+
+  async rollbackUiUpdate(): Promise<UiInstallUpdateResult> {
+    return invokeCommand("ui_rollback");
+  },
+
+  async resetUiToEmbedded(): Promise<void> {
+    return invokeCommand("ui_reset_to_embedded");
   },
 
   async exportProfileBackup(): Promise<BackupExportResult> {
