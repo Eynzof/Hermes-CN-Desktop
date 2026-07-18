@@ -304,6 +304,58 @@ describe("provider catalog config updates", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it.each([
+    ["gemini", "https://generativelanguage.googleapis.com/v1beta", "chat_completions", "openai_chat", "GEMINI_API_KEY", "gemini-3.5-flash"],
+    ["openai-api", "https://api.openai.com/v1", "codex_responses", "codex_responses", "OPENAI_API_KEY", "gpt-5.6-sol"],
+    ["anthropic", "https://api.anthropic.com", "anthropic_messages", "anthropic_messages", "ANTHROPIC_API_KEY", "claude-opus-4-8"],
+    ["xai", "https://api.x.ai/v1", "codex_responses", "codex_responses", "XAI_API_KEY", "grok-build-0.1"],
+  ])("ships global first-party provider %s with Core-compatible wire settings", (
+    id,
+    baseUrl,
+    apiMode,
+    transport,
+    apiKeyLabel,
+    defaultModel,
+  ) => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === id);
+
+    expect(preset).toMatchObject({
+      id,
+      region: "global",
+      baseUrl,
+      apiMode,
+      transport,
+      apiKeyLabel,
+      defaultModel,
+    });
+    expect(preset!.models.some((model) => model.id === defaultModel)).toBe(true);
+
+    const updated = buildProviderConfigUpdate({}, preset!, {
+      apiKey: "provider-key",
+      baseUrl,
+      model: defaultModel,
+    });
+    expect(updated.model).toMatchObject({
+      provider: id,
+      default: defaultModel,
+      base_url: baseUrl,
+      api_mode: apiMode,
+    });
+  });
+
+  it("recognizes canonical and compatibility API-key names for Gemini and Anthropic", () => {
+    const byId = new Map(BUILTIN_PROVIDER_CATALOG.providers.map((provider) => [provider.id, provider]));
+
+    expect(providerApiKeyLabels(byId.get("gemini")!)).toEqual(["GEMINI_API_KEY", "GOOGLE_API_KEY"]);
+    expect(providerApiKeyLabels(byId.get("anthropic")!)).toEqual([
+      "ANTHROPIC_API_KEY",
+      "ANTHROPIC_TOKEN",
+      "CLAUDE_CODE_OAUTH_TOKEN",
+    ]);
+    expect(byId.get("gemini")!.supportsModelListing).toBe(false);
+    expect(byId.get("anthropic")!.supportsModelListing).toBe(true);
+  });
+
   it("keeps plan-specific endpoints separate from pay-as-you-go endpoints", () => {
     const byId = new Map(BUILTIN_PROVIDER_CATALOG.providers.map((provider) => [provider.id, provider]));
 
@@ -938,6 +990,12 @@ describe("chatEndpointPreviewUrl", () => {
   it("appends /chat/completions for openai-compatible bases", () => {
     expect(chatEndpointPreviewUrl("chat_completions", "https://api.deepseek.com")).toBe(
       "https://api.deepseek.com/chat/completions",
+    );
+  });
+
+  it("shows the native Gemini generateContent endpoint", () => {
+    expect(chatEndpointPreviewUrl("chat_completions", "https://generativelanguage.googleapis.com/v1beta")).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
     );
   });
 

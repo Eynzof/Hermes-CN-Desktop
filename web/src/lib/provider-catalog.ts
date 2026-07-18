@@ -94,6 +94,13 @@ export function apiModeBadgeLabel(apiMode: ProviderApiMode): string | null {
 export function chatEndpointPreviewUrl(apiMode: ProviderApiMode, baseUrl: string): string {
   const base = baseUrl.trim().replace(/\/+$/, "");
   if (!base) return "";
+  if (
+    apiMode === "chat_completions" &&
+    base.includes("generativelanguage.googleapis.com") &&
+    !base.endsWith("/openai")
+  ) {
+    return `${base}/models/{model}:generateContent`;
+  }
   switch (apiMode) {
     case "anthropic_messages":
       return base.endsWith("/v1") ? `${base}/messages` : `${base}/v1/messages`;
@@ -313,7 +320,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.11.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -746,6 +753,92 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
         { id: "Qwen/Qwen3-Coder-480B-A35B-Instruct", supportsTools: true },
         { id: "Qwen/Qwen3-235B-A22B-Instruct-2507", supportsTools: true },
         { id: "deepseek-ai/DeepSeek-V3.2", supportsTools: true },
+      ],
+    },
+    {
+      id: "gemini",
+      name: "Google Gemini",
+      vendor: "Google",
+      region: "global",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "GEMINI_API_KEY",
+      apiKeyAliases: ["GOOGLE_API_KEY"],
+      websiteUrl: "https://aistudio.google.com/",
+      docsUrl: "https://ai.google.dev/gemini-api/docs/text-generation",
+      defaultModel: "gemini-3.5-flash",
+      models: [
+        { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+      ],
+      supportsModelListing: false,
+    },
+    {
+      id: "openai-api",
+      name: "OpenAI API",
+      vendor: "OpenAI",
+      region: "global",
+      baseUrl: "https://api.openai.com/v1",
+      apiMode: "codex_responses",
+      transport: "codex_responses",
+      apiKeyLabel: "OPENAI_API_KEY",
+      websiteUrl: "https://platform.openai.com/",
+      docsUrl: "https://developers.openai.com/api/docs/models",
+      defaultModel: "gpt-5.6-sol",
+      models: [
+        { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", contextWindow: 1_050_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", contextWindow: 1_050_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", contextWindow: 1_050_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gpt-5.5", label: "GPT-5.5", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gpt-5.5-pro", label: "GPT-5.5 Pro", supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", supportsTools: true, supportsVision: true, supportsReasoning: true },
+      ],
+    },
+    {
+      id: "anthropic",
+      name: "Anthropic Claude",
+      vendor: "Anthropic",
+      region: "global",
+      baseUrl: "https://api.anthropic.com",
+      apiMode: "anthropic_messages",
+      transport: "anthropic_messages",
+      apiKeyLabel: "ANTHROPIC_API_KEY",
+      apiKeyAliases: ["ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
+      websiteUrl: "https://console.anthropic.com/",
+      docsUrl: "https://platform.claude.com/docs/en/about-claude/models/overview",
+      defaultModel: "claude-opus-4-8",
+      models: [
+        { id: "claude-fable-5", label: "Claude Fable 5", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "claude-opus-4-8", label: "Claude Opus 4.8", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "claude-sonnet-5", label: "Claude Sonnet 5", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", contextWindow: 200_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+      ],
+      supportsModelListing: true,
+    },
+    {
+      id: "xai",
+      name: "xAI Grok",
+      vendor: "xAI",
+      region: "global",
+      baseUrl: "https://api.x.ai/v1",
+      apiMode: "codex_responses",
+      transport: "codex_responses",
+      apiKeyLabel: "XAI_API_KEY",
+      websiteUrl: "https://console.x.ai/",
+      docsUrl: "https://docs.x.ai/developers/models",
+      defaultModel: "grok-build-0.1",
+      models: [
+        { id: "grok-build-0.1", label: "Grok Build 0.1", contextWindow: 256_000, supportsTools: true, supportsReasoning: true },
+        { id: "grok-4.5", label: "Grok 4.5", contextWindow: 500_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "grok-4.3", label: "Grok 4.3", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "grok-4.20-0309-reasoning", label: "Grok 4.20 Reasoning", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
+        { id: "grok-4.20-0309-non-reasoning", label: "Grok 4.20 Non-Reasoning", contextWindow: 1_000_000, supportsTools: true, supportsVision: true },
+        { id: "grok-4.20-multi-agent-0309", label: "Grok 4.20 Multi-Agent", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true },
       ],
     },
     {

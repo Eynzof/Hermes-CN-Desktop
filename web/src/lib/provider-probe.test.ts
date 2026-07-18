@@ -3,8 +3,10 @@ import { fetchExternalJSON } from "./transport";
 import {
   buildAnthropicMessagesUrl,
   buildChatCompletionsUrl,
+  buildGeminiGenerateContentUrl,
   probeAnthropicMessagesProvider,
   probeChatCompletionsProvider,
+  probeGeminiProvider,
   probeErrorKind,
   statusCodeFromErrorMessage,
 } from "./provider-probe";
@@ -32,6 +34,15 @@ describe("probe url builders", () => {
     );
     expect(buildAnthropicMessagesUrl("https://relay.example/v1")).toBe(
       "https://relay.example/v1/messages",
+    );
+  });
+
+  it("builds native Gemini generateContent urls", () => {
+    expect(buildGeminiGenerateContentUrl(
+      "https://generativelanguage.googleapis.com/v1beta/",
+      "gemini-3.5-flash",
+    )).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
     );
   });
 });
@@ -74,6 +85,30 @@ describe("probeChatCompletionsProvider", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain("base_url");
     expect(mockedFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("probeGeminiProvider", () => {
+  it("POSTs native generateContent with x-goog-api-key", async () => {
+    mockedFetch.mockResolvedValueOnce({});
+    const result = await probeGeminiProvider({
+      apiKey: "google-key",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-3.5-flash",
+    });
+
+    expect(result.ok).toBe(true);
+    const [url, init] = mockedFetch.mock.calls[0];
+    expect(url).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+    );
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["x-goog-api-key"]).toBe("google-key");
+    expect(headers["Authorization"]).toBeUndefined();
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      contents: [{ role: "user", parts: [{ text: "ping" }] }],
+      generationConfig: { maxOutputTokens: 1 },
+    });
   });
 });
 
