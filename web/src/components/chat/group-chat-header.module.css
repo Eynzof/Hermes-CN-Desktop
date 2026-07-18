@@ -1,0 +1,51 @@
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-soft);
+  font-family: var(--h-font-cn);
+}
+
+.roster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--h-text-2);
+  font-size: 12px;
+}
+
+.count {
+  font-weight: 600;
+  color: var(--h-text);
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+  font-size: 12px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guide {
+  font-size: 12px;
+  color: var(--h-text-3);
+}
+
+.guide b {
+  color: var(--h-text-2);
+  font-weight: 600;
+}

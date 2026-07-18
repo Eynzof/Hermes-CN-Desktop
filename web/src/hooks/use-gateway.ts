@@ -435,6 +435,20 @@ export function useGateway() {
     [ensureChatSession, ensureSubscribed, setSessionError, startPrompt],
   );
 
+  // Group chat (P-048): fetch a room's members (survives reload — the room
+  // lives in the gateway process, not the DB).
+  const groupChatInfo = useCallback(
+    async (roomId: string): Promise<GroupChatCreateResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        GroupChatCreateResult,
+        await getGatewayClient().request("groupchat.info", { room_id: roomId }),
+        "groupchat.info",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const getSessionUsage = useCallback(
     async (sessionId: string): Promise<SessionUsageResult> => {
       ensureSubscribed();
@@ -788,6 +802,7 @@ export function useGateway() {
     sendPrompt,
     createGroupChat,
     sendGroupPrompt,
+    groupChatInfo,
     getSessionUsage,
     compressSession,
     getModelOptions,

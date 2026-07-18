@@ -1,4 +1,5 @@
 import type {
+  GroupChatMember,
   ModelOptionsResult,
   SessionSummary,
   SkillInfo,
@@ -87,6 +88,8 @@ export interface ComposerMentionPickerProps {
   sessions?: SessionSummary[];
   /** Profile prefix baked into `@session:<profile>/<id>` tokens (default "default"). */
   profile?: string;
+  /** Group chat (P-048): room members, so `@` completes to a member or @all. */
+  members?: GroupChatMember[];
   disabled?: boolean;
 }
 

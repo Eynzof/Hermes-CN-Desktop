@@ -1,11 +1,11 @@
-import type { SessionSummary, SlashCompletionItem } from "@hermes/protocol";
+import type { GroupChatMember, SessionSummary, SlashCompletionItem } from "@hermes/protocol";
 
 // `@` inline references. The composer inserts plain-text `@kind:value` tokens;
 // the backend (`preprocess_context_references` in the gateway) expands them into
 // attached context at submit time, so the frontend only needs detection +
 // completion + token insertion — no special send path.
 
-export type MentionKind = "file" | "folder" | "url" | "git" | "session" | "simple";
+export type MentionKind = "file" | "folder" | "url" | "git" | "session" | "simple" | "agent";
 
 export interface MentionToken {
   /** Index of the leading `@`. */
@@ -118,6 +118,34 @@ export interface MentionFetchSource {
   completePath: (word: string) => Promise<{ items: SlashCompletionItem[] }>;
   sessions?: readonly SessionSummary[] | null;
   profile?: string;
+  /** Group chat (P-048): when set, `@` completes to a room member or `@all`. */
+  members?: readonly GroupChatMember[] | null;
+}
+
+// Group chat (P-048): local `@` completion to room members + `@all`. Mirrors
+// studio's buildMentionOptions (name + role description, no avatar; @all first).
+export function filterMemberMentions(
+  members: readonly GroupChatMember[] | null | undefined,
+  query: string,
+): MentionCandidate[] {
+  const q = query.trim().toLowerCase();
+  const out: MentionCandidate[] = [];
+  if (!q || "all".includes(q)) {
+    out.push({ insertText: "@all", display: "@all", meta: "所有成员", kind: "agent", keepOpen: false });
+  }
+  for (const member of members ?? []) {
+    const name = member.name ?? "";
+    if (!name || name.toLowerCase() === "all") continue;
+    if (q && !name.toLowerCase().includes(q)) continue;
+    out.push({
+      insertText: `@${name}`,
+      display: `@${name}`,
+      meta: member.description || undefined,
+      kind: "agent",
+      keepOpen: false,
+    });
+  }
+  return out;
 }
 
 /**
@@ -129,6 +157,10 @@ export async function getMentionCandidates(
   query: string,
   source: MentionFetchSource,
 ): Promise<MentionCandidate[]> {
+  // Group chat: `@` picks a room member or @all — local, no backend completion.
+  if (source.members && source.members.length > 0) {
+    return filterMemberMentions(source.members, query);
+  }
   if (!query) return [...MENTION_STARTERS];
   if (/^session:?/i.test(query)) {
     return filterSessionMentions(source.sessions, query, source.profile);

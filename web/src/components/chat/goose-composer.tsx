@@ -580,6 +580,7 @@ export function GooseComposer({
       completePath: picker.completePath,
       sessions: picker.sessions,
       profile: picker.profile,
+      members: picker.members,
     };
     const timer = setTimeout(() => {
       void getMentionCandidates(query, source).then((candidates) => {
