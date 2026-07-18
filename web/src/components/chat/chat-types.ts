@@ -38,4 +38,9 @@ export interface ChatMessage {
   title?: string;
   error?: boolean;
   stats?: AssistantMessageStats;
+  // Group chat (P-048): sender attribution for multi-agent rooms. Undefined
+  // for single-agent sessions, which fall back to the global assistant identity.
+  senderAgentId?: string;
+  senderName?: string;
+  senderAvatar?: string;
 }

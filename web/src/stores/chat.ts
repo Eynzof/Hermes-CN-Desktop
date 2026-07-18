@@ -389,11 +389,29 @@ function updateMessage(
   return changed ? { ...runtime, messages } : runtime;
 }
 
+// Group chat (P-048): sender attribution carried on a gateway event payload.
+interface GroupSenderFields {
+  senderAgentId?: string;
+  senderName?: string;
+  senderAvatar?: string;
+}
+
+// Pull sender attribution off an event payload; undefined for single-agent
+// sessions (no sender_* fields), which keep the global assistant identity.
+function extractGroupSender(payload: Record<string, unknown>): GroupSenderFields | undefined {
+  const senderAgentId = typeof payload.sender_agent_id === "string" ? payload.sender_agent_id : undefined;
+  const senderName = typeof payload.sender_name === "string" ? payload.sender_name : undefined;
+  const senderAvatar = typeof payload.sender_avatar === "string" ? payload.sender_avatar : undefined;
+  if (!senderAgentId && !senderName && !senderAvatar) return undefined;
+  return { senderAgentId, senderName, senderAvatar };
+}
+
 function ensureAssistantMessage(
   runtime: ChatSessionRuntime,
   sessionId: string,
   id: string,
   now: number,
+  sender?: GroupSenderFields,
 ): ChatSessionRuntime {
   if (runtime.messages.some((message) => message.id === id)) {
     return updateMessage(runtime, id, (message) => ({
@@ -414,6 +432,7 @@ function ensureAssistantMessage(
         createdAt,
         status: "streaming",
         parts: [],
+        ...(sender ?? {}),
       },
     ],
   };
@@ -589,8 +608,12 @@ function reduceGatewayEventInner(
 
   switch (event.type) {
     case "message.start": {
+      // Group chat (P-048): a start carrying a sender opens a NEW bubble per
+      // member reply (each is distinct), even mid-stream; single-agent starts
+      // reuse the active bubble as before.
+      const sender = extractGroupSender(payload);
       const id =
-        isStreamingStatus(runtime.streamStatus) && runtime.activeAssistantId
+        !sender && isStreamingStatus(runtime.streamStatus) && runtime.activeAssistantId
           ? runtime.activeAssistantId
           : assistantClientId(now);
       return ensureAssistantMessage(
@@ -601,13 +624,14 @@ function reduceGatewayEventInner(
           statusKind: undefined,
           statusUpdatedAt: undefined,
           activeAssistantId: id,
-          turnStartedAt: runtime.turnStartedAt ?? now,
+          turnStartedAt: sender ? now : (runtime.turnStartedAt ?? now),
           turnFirstTokenAt: undefined,
           updatedAt: now,
         },
         sessionId,
         id,
         now,
+        sender,
       );
     }
 

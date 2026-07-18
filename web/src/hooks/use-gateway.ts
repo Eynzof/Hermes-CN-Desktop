@@ -7,6 +7,7 @@ import {
   ImageAttachResult,
   InputDetectDropResult,
   ModelOptionsResult,
+  GroupChatCreateResult,
   PromptSubmitParams,
   ProviderModelsListResult,
   ProviderProbeResult,
@@ -396,6 +397,44 @@ export function useGateway() {
     [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt],
   );
 
+  // Group chat (P-048): create a room from profile names and adopt it as the
+  // active session (room_id doubles as the session id, gc_-prefixed by Core).
+  const createGroupChat = useCallback(
+    async (members: string[], title?: string): Promise<GroupChatCreateResult> => {
+      ensureSubscribed();
+      const result = parseGatewayResult(
+        GroupChatCreateResult,
+        await getGatewayClient().request("groupchat.create", {
+          members,
+          ...(title?.trim() ? { title: title.trim() } : {}),
+        }),
+        "groupchat.create",
+      );
+      adoptCreatedSession(result.room_id);
+      return result;
+    },
+    [adoptCreatedSession, ensureSubscribed],
+  );
+
+  // Group chat (P-048): send into a room. Mentioned members reply serially,
+  // each as its own sender-tagged message.* stream over the same session id.
+  const sendGroupPrompt = useCallback(
+    async (roomId: string, text: string, options?: { skipOptimisticStart?: boolean }) => {
+      ensureSubscribed();
+      ensureChatSession(roomId);
+      if (!options?.skipOptimisticStart) {
+        startPrompt({ sessionId: roomId, text });
+      }
+      try {
+        await getGatewayClient().request("groupchat.submit", { room_id: roomId, text });
+      } catch (error) {
+        setSessionError({ sessionId: roomId, message: errorMessage(error) });
+        throw error;
+      }
+    },
+    [ensureChatSession, ensureSubscribed, setSessionError, startPrompt],
+  );
+
   const getSessionUsage = useCallback(
     async (sessionId: string): Promise<SessionUsageResult> => {
       ensureSubscribed();
@@ -747,6 +786,8 @@ export function useGateway() {
     failPrompt,
     resumeSession,
     sendPrompt,
+    createGroupChat,
+    sendGroupPrompt,
     getSessionUsage,
     compressSession,
     getModelOptions,

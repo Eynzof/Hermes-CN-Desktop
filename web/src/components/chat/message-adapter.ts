@@ -377,6 +377,11 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
     status: msg.finish_reason === "error" ? "error" : "complete",
     parts: processNotificationText ? [{ type: "notice", level: "system", text: processNotificationText }] : parts,
     metadata: legacyMetadata(msg),
+    // Group chat (P-048): carry persisted sender attribution into the UI message
+    // so a group room's history renders each member's identity after reload.
+    ...(msg.sender_agent_id ? { senderAgentId: msg.sender_agent_id } : {}),
+    ...(msg.sender_name ? { senderName: msg.sender_name } : {}),
+    ...(msg.sender_avatar ? { senderAvatar: msg.sender_avatar } : {}),
   };
 }
 
@@ -822,6 +827,10 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     status: msg.status,
     error: msg.status === "error" || messageHasErrorNotice(msg),
     stats: deriveAssistantStats(msg),
+    // Group chat (P-048): carry sender attribution through to the renderer.
+    senderAgentId: msg.senderAgentId,
+    senderName: msg.senderName,
+    senderAvatar: msg.senderAvatar,
   };
 }
 
@@ -1103,11 +1112,22 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
   return storedText === liveText && storedReasoning === liveReasoning && storedImages === liveImages;
 }
 
-function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMessage[] {
+// Group chat (P-048): two adjacent assistant messages may merge only when they
+// belong to the same speaker. Distinct group members (both carrying a
+// senderAgentId) must stay as separate bubbles; a sender-less optimistic
+// placeholder or an ordinary single-agent message merges freely.
+function canMergeAssistantSenders(a: HermesUIMessage, b: HermesUIMessage): boolean {
+  const sa = a.senderAgentId;
+  const sb = b.senderAgentId;
+  if (sa && sb) return sa === sb;
+  return true;
+}
+
+export function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMessage[] {
   const result: HermesUIMessage[] = [];
   for (const msg of messages) {
     const last = result[result.length - 1];
-    if (msg.role === "assistant" && last?.role === "assistant") {
+    if (msg.role === "assistant" && last?.role === "assistant" && canMergeAssistantSenders(last, msg)) {
       result[result.length - 1] = {
         ...last,
         status: msg.status === "error" || last.status === "error" ? "error" : msg.status,
@@ -1115,6 +1135,11 @@ function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMess
         metadata: mergeMessageMetadata(last.metadata, msg.metadata, {
           persistedId: last.metadata?.persistedId ?? msg.metadata?.persistedId,
         }),
+        // Keep whichever side carries sender attribution, so a sender-less
+        // optimistic placeholder can't erase the member's identity.
+        senderAgentId: last.senderAgentId ?? msg.senderAgentId,
+        senderName: last.senderName ?? msg.senderName,
+        senderAvatar: last.senderAvatar ?? msg.senderAvatar,
       };
     } else {
       result.push(msg);

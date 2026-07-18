@@ -782,6 +782,12 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   const speechBusy = speechStatus === "preparing" || speechStatus === "speaking";
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
   const messageStats = message.stats ?? sessionUsageFallbackStats(message, sessionUsage);
+  // Group chat (P-048): a message carrying a sender renders that member's own
+  // name / avatar instead of the single global assistant identity. Single-agent
+  // sessions have no sender and fall back to the global identity + profile card.
+  const isGroupMessage = !isUser && Boolean(message.senderName);
+  const senderDisplayName = message.senderName ?? assistantDisplayName;
+  const senderAvatarUrl = message.senderAvatar || assistantAvatarDataUrl;
 
   if (isToolOnly) {
     return (
@@ -829,24 +835,34 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
           不显示头像与昵称，气泡右贴。 */}
       {!isUser ? (
         <div className={s.avatarCol}>
-          <AssistantProfileCard
-            model={progressModel || sessionUsage?.model}
-            trigger={
-              <button type="button" className={s.avatarButton} title={`查看 ${assistantDisplayName} 资料`}>
-                <img
-                  className={s.rowAvatar}
-                  src={assistantAvatarDataUrl}
-                  alt={`${assistantDisplayName} 头像`}
-                />
-              </button>
-            }
-          />
+          {isGroupMessage ? (
+            <div className={s.avatarButton} title={senderDisplayName}>
+              <img
+                className={s.rowAvatar}
+                src={senderAvatarUrl}
+                alt={`${senderDisplayName} 头像`}
+              />
+            </div>
+          ) : (
+            <AssistantProfileCard
+              model={progressModel || sessionUsage?.model}
+              trigger={
+                <button type="button" className={s.avatarButton} title={`查看 ${assistantDisplayName} 资料`}>
+                  <img
+                    className={s.rowAvatar}
+                    src={senderAvatarUrl}
+                    alt={`${senderDisplayName} 头像`}
+                  />
+                </button>
+              }
+            />
+          )}
         </div>
       ) : null}
       <div className={s.messageContent}>
         {!isUser ? (
           <div className={s.assistantName}>
-            <span>{assistantDisplayName}</span>
+            <span>{senderDisplayName}</span>
           </div>
         ) : null}
         <div className={s.bubble} data-role={isUser ? "user" : "assistant"}>

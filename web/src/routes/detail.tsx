@@ -106,6 +106,7 @@ export function DetailRoute() {
   const {
     resumeSession,
     sendPrompt,
+    sendGroupPrompt,
     interruptSession,
     getSessionUsage,
     compressSession,
@@ -420,11 +421,16 @@ export function DetailRoute() {
       uploadFile: uploadAttachmentFile,
       onAttachmentUpdate: updateAttachment,
     }, { transportText });
-    await sendPrompt(gatewaySessionId, prepared.promptText, {
-      displayText: prepared.displayText,
-      displayImages: prepared.displayImages,
-    });
-  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+    if (gatewaySessionId.startsWith("gc_")) {
+      // Group chat (P-048): rooms use gc_-prefixed ids and route to groupchat.submit.
+      await sendGroupPrompt(gatewaySessionId, prepared.promptText);
+    } else {
+      await sendPrompt(gatewaySessionId, prepared.promptText, {
+        displayText: prepared.displayText,
+        displayImages: prepared.displayImages,
+      });
+    }
+  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendGroupPrompt, sendPrompt, taskId]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
