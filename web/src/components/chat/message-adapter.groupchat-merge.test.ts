@@ -7,9 +7,12 @@
 // merge two distinct members into one bubble.
 import { describe, expect, it } from "vitest";
 
-import type { HermesUIMessage } from "@hermes/protocol";
+import type { HermesUIMessage, SessionMessage } from "@hermes/protocol";
 
-import { consolidateAssistantMessages } from "./message-adapter";
+import {
+  consolidateAssistantMessages,
+  legacySessionMessagesToHermesUIMessages,
+} from "./message-adapter";
 
 const SID = "gc_test";
 
@@ -63,5 +66,34 @@ describe("consolidateAssistantMessages — group chat identity (P-048)", () => {
     const out = consolidateAssistantMessages([a, b]);
     expect(out).toHaveLength(1);
     expect(out[0].senderName).toBeUndefined();
+  });
+});
+
+// Persisted transcript path (REST / reload / completed-turn refetch). An @all
+// turn returns two rows with distinct senders; they must NOT collapse into one.
+function storedRow(partial: Partial<SessionMessage> & { role: string }): SessionMessage {
+  return { id: 0, session_id: "gc_x", content: "", timestamp: 1, ...partial } as SessionMessage;
+}
+
+describe("legacySessionMessagesToHermesUIMessages — group chat identity (P-048)", () => {
+  it("distinct-sender assistants stay separate bubbles (@all default + reviewer)", () => {
+    const rows: SessionMessage[] = [
+      storedRow({ id: 1, role: "user", content: "大家好" }),
+      storedRow({ id: 2, role: "assistant", content: "default 的回复", sender_agent_id: "default", sender_name: "default" }),
+      storedRow({ id: 3, role: "assistant", content: "reviewer 的回复", sender_agent_id: "reviewer", sender_name: "reviewer" }),
+    ];
+    const assistants = legacySessionMessagesToHermesUIMessages(rows).filter((m) => m.role === "assistant");
+    expect(assistants).toHaveLength(2);
+    expect(assistants.map((m) => m.senderName)).toEqual(["default", "reviewer"]);
+  });
+
+  it("same-sender assistants still merge", () => {
+    const rows: SessionMessage[] = [
+      storedRow({ id: 1, role: "assistant", content: "第一段", sender_agent_id: "default", sender_name: "default" }),
+      storedRow({ id: 2, role: "assistant", content: "第二段", sender_agent_id: "default", sender_name: "default" }),
+    ];
+    const assistants = legacySessionMessagesToHermesUIMessages(rows).filter((m) => m.role === "assistant");
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].senderName).toBe("default");
   });
 });

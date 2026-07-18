@@ -468,7 +468,15 @@ export function legacySessionMessagesToHermesUIMessages(messages: SessionMessage
     if (!next) continue;
 
     const last = result[result.length - 1];
-    if (next.role === "assistant" && last?.role === "assistant") {
+    // Group chat (P-048): only merge adjacent assistants from the SAME speaker
+    // (or both sender-less). Distinct group members — e.g. an @all turn's
+    // default + reviewer replies in the persisted transcript — must stay as
+    // separate bubbles, otherwise both collapse into the first member's bubble.
+    if (
+      next.role === "assistant" &&
+      last?.role === "assistant" &&
+      canMergeAssistantSenders(last, next)
+    ) {
       result[result.length - 1] = mergeAssistantMessages(last, next);
     } else {
       result.push(next);
