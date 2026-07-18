@@ -320,7 +320,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.2";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.3";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -765,6 +765,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       transport: "openai_chat",
       apiKeyLabel: "GEMINI_API_KEY",
       apiKeyAliases: ["GOOGLE_API_KEY"],
+      icon: "gemini",
       websiteUrl: "https://aistudio.google.com/",
       docsUrl: "https://ai.google.dev/gemini-api/docs/text-generation",
       defaultModel: "gemini-3.5-flash",
@@ -787,6 +788,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "codex_responses",
       transport: "codex_responses",
       apiKeyLabel: "OPENAI_API_KEY",
+      icon: "openai",
       websiteUrl: "https://platform.openai.com/",
       docsUrl: "https://developers.openai.com/api/docs/models",
       defaultModel: "gpt-5.6-sol",
@@ -809,6 +811,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       transport: "anthropic_messages",
       apiKeyLabel: "ANTHROPIC_API_KEY",
       apiKeyAliases: ["ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"],
+      icon: "anthropic",
       websiteUrl: "https://console.anthropic.com/",
       docsUrl: "https://platform.claude.com/docs/en/about-claude/models/overview",
       defaultModel: "claude-opus-4-8",
@@ -829,6 +832,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "chat_completions",
       transport: "openai_chat",
       apiKeyLabel: "AGNES_API_KEY",
+      icon: "agnes",
       websiteUrl: "https://platform.agnes-ai.com/",
       docsUrl: "https://agnes-ai.com/doc/overview",
       defaultModel: "agnes-2.0-flash",
@@ -847,6 +851,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       apiMode: "codex_responses",
       transport: "codex_responses",
       apiKeyLabel: "XAI_API_KEY",
+      icon: "xai",
       websiteUrl: "https://console.x.ai/",
       docsUrl: "https://docs.x.ai/developers/models",
       defaultModel: "grok-build-0.1",
