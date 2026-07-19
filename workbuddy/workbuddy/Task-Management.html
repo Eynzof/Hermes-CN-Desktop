@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>任务管理 ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_Task-Management" data-v-bd9b7757><div><h1 id="任务管理" tabindex="-1">任务管理 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#任务管理" aria-label="Permalink to &quot;任务管理&quot;">​</a></h1><h2 id="任务列表" tabindex="-1">任务列表 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#任务列表" aria-label="Permalink to &quot;任务列表&quot;">​</a></h2><p>左侧边栏会显示您创建过的任务，方便您随时回看、继续处理和切换上下文。</p><p>当前列表分为两个板块：</p><ul><li><strong>任务</strong>：展示最近访问或最近更新的任务</li><li><strong>空间</strong>：按工作空间整理的任务，方便您在同一个项目下集中查看历史任务</li></ul><p>每个任务卡片通常会显示：</p><ul><li>任务标题</li><li>当前状态</li><li>最近更新时间或创建时间</li></ul><img src="../assets/taskmanage-1.InLn2Uzo.png" width="800px"><h2 id="搜索与筛选" tabindex="-1">搜索与筛选 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#搜索与筛选" aria-label="Permalink to &quot;搜索与筛选&quot;">​</a></h2><p>在任务列表顶部，您可以使用搜索和筛选功能快速定位任务：</p><ul><li><strong>搜索</strong>：按任务标题快速查找任务</li><li><strong>筛选</strong>：打开筛选面板，按状态或日期筛选任务</li></ul><p>常见筛选方式包括：</p><ul><li>按状态筛选：例如进行中、已完成、失败等</li><li>按日期筛选：缩小到某一时间范围内的任务</li><li>重置筛选：清空当前筛选条件，恢复查看全部任务</li></ul><img src="../assets/taskmanage-2.C68mO2fO.png" width="800px"><h2 id="任务状态" tabindex="-1">任务状态 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#任务状态" aria-label="Permalink to &quot;任务状态&quot;">​</a></h2><p>任务会随着执行过程在不同状态之间变化。当前界面中常见的状态包括：</p><table tabindex="0"><thead><tr><th>状态</th><th>说明</th></tr></thead><tbody><tr><td><strong>进行中</strong></td><td>WorkBuddy 正在执行任务</td></tr><tr><td><strong>已完成</strong></td><td>任务已经执行完成</td></tr><tr><td><strong>失败</strong></td><td>执行过程中出现问题，任务未能完成</td></tr><tr><td><strong>待处理</strong></td><td>任务等待进一步处理或输入</td></tr><tr><td><strong>规划中</strong></td><td>WorkBuddy 正在分析需求并整理执行思路</td></tr><tr><td><strong>已归档</strong></td><td>任务已被归档，用于后续查阅</td></tr></tbody></table><h2 id="常见管理操作" tabindex="-1">常见管理操作 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#常见管理操作" aria-label="Permalink to &quot;常见管理操作&quot;">​</a></h2><h3 id="任务列表-1" tabindex="-1">任务列表 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#任务列表-1" aria-label="Permalink to &quot;任务列表&quot;">​</a></h3><p>在任务列表中，您可以进行以下操作：</p><ul><li>点击任务卡片，进入该任务的对话和结果页面</li><li>通过搜索或筛选，快速找到特定任务</li><li>在已有任务基础上继续发送消息，让 WorkBuddy 接着之前的上下文继续处理</li><li>对不再需要的任务执行清理操作</li></ul><h3 id="任务" tabindex="-1">任务 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#任务" aria-label="Permalink to &quot;任务&quot;">​</a></h3><p>对每条任务可以进行以下操作：</p><table tabindex="0"><thead><tr><th>操作</th><th>说明</th><th>图示指引</th></tr></thead><tbody><tr><td><strong>置顶</strong></td><td>将任务置于列表顶端</td><td><img src="../assets/taskmanage-3.ClywBkPl.png" width="300px"></td></tr><tr><td><strong>打开文件夹</strong></td><td>打开任务所在文件夹</td><td>-</td></tr><tr><td><strong>重命名</strong></td><td>修改任务名</td><td>-</td></tr><tr><td><strong>保存到工作空间</strong></td><td><ul><li>可开启多个 Agent 同时协作</li><li>在任务列表中持久保存</li><li>随时用 IDE 打开查看</li></ul></td><td>-</td></tr><tr><td><strong>分享任务</strong></td><td>分享到任意渠道后，自动生成公开链接</td><td><img src="../assets/taskmanage-4.DcMPrDn9.png" width="300px"></td></tr><tr><td><strong>删除</strong></td><td>从列表中删除任务，不展示任务</td><td>-</td></tr><tr><td><strong>归档</strong></td><td>任务归档后可在「系统设置-数据管理」中查看已归档任务</td><td><img src="../assets/taskmanage-5.DSS8cmmu.png" width="300px"></td></tr></tbody></table><h3 id="工作空间" tabindex="-1">工作空间 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#工作空间" aria-label="Permalink to &quot;工作空间&quot;">​</a></h3><p>对工作空间可以进行以下操作：</p><table tabindex="0"><thead><tr><th>操作</th><th>说明</th><th>图示指引</th></tr></thead><tbody><tr><td><strong>新建任务</strong></td><td>在同一个工作空间中开启新任务</td><td><img src="../assets/taskmanage-6.C5aeEtSm.png" width="300px"></td></tr><tr><td><strong>打开文件夹</strong></td><td>打开工作空间所在文件夹</td><td>-</td></tr><tr><td><strong>从列表中移除</strong></td><td>从列表中移除工作空间，不展示工作空间</td><td>-</td></tr></tbody></table><h2 id="继续处理已有任务" tabindex="-1">继续处理已有任务 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Task-Management#继续处理已有任务" aria-label="Permalink to &quot;继续处理已有任务&quot;">​</a></h2><p>对于已经完成、失败，或暂时中断的任务，您都可以重新进入任务继续补充消息。这样可以在已有上下文基础上继续推进，而不必重新从头创建。</p><p>适合继续处理的场景包括：</p><ul><li>任务第一次结果还不够完整，想继续细化</li><li>任务执行失败后，需要补充信息再试一次</li><li>您想基于之前的结果继续扩展新的需求</li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/Task-Management">https://www.codebuddy.cn/docs/workbuddy/Task-Management</a></div>
+</body>
+</html>

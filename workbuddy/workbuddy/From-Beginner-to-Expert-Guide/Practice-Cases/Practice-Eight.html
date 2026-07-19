@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实践八：自我进化—创建自己的Skills（技能） ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Practice-Cases_Practice-Eight" data-v-bd9b7757><div><h1 id="实践八-自我进化—创建自己的skills-技能" tabindex="-1">实践八：自我进化—创建自己的Skills（技能） <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight#实践八-自我进化—创建自己的skills-技能" aria-label="Permalink to &quot;实践八：自我进化—创建自己的Skills（技能）&quot;">​</a></h1><h2 id="一、文档说明" tabindex="-1">一、文档说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight#一、文档说明" aria-label="Permalink to &quot;一、文档说明&quot;">​</a></h2><p>本文介绍如何借助 <code>WorkBuddy</code> 创建自定义 <code>Skill</code>，将重复出现的个人工作习惯、知识处理方式和任务逻辑沉淀为可复用能力。</p><h2 id="二、适用场景" tabindex="-1">二、适用场景 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight#二、适用场景" aria-label="Permalink to &quot;二、适用场景&quot;">​</a></h2><ul><li>希望把固定流程沉淀为长期可复用的能力。</li><li>希望让 <code>AI</code> 在任意对话中自动识别某类意图并执行对应动作。</li><li>希望将个人笔记、灵感收集、知识整理流程产品化。</li></ul><h2 id="三、案例说明" tabindex="-1">三、案例说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight#三、案例说明" aria-label="Permalink to &quot;三、案例说明&quot;">​</a></h2><p>基于前文提到的笔记应用场景，可以通过自定义 <code>Skill</code> 让系统自动识别用户的记录意图，并完成整理与保存，而不仅仅是普通的文本记录。</p><h2 id="四、创建方式" tabindex="-1">四、创建方式 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight#四、创建方式" aria-label="Permalink to &quot;四、创建方式&quot;">​</a></h2><p>在对话框中直接说明你想要的能力、触发方式和输出结果。</p><p><strong>示例指令</strong>：</p><blockquote><p>请帮我创建一个用于记录灵感的自定义 <code>Skill</code>。当我输入灵感、想法或待验证创意时，自动识别内容类型，整理成结构化记录，并保存到指定目录。</p></blockquote><p>执行完成后，打开技能栏，在已安装目录下即可查看新创建的 <code>Skill</code>。</p><img src="../../../assets/image-13.IwhnXu0R.png" width="800px"><h2 id="五、使用效果" tabindex="-1">五、使用效果 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight#五、使用效果" aria-label="Permalink to &quot;五、使用效果&quot;">​</a></h2><p>创建完成后，可在任意对话中直接使用自然语言触发该能力。</p><p><strong>示例指令</strong>：</p><blockquote><p>记一条灵感：做一个能自动整理会议纪要并同步到知识库的工具。</p></blockquote><p><code>WorkBuddy</code> 一般会自动完成以下动作：</p><ol><li>识别这是一条灵感类内容。</li><li>将内容整理为结构化记录。</li><li>保存到指定位置，并反馈记录结果。</li></ol><img src="../../../assets/image-14.BImWZjO6.png" width="800px"><img src="../../../assets/image-15.BIdQL4Qa.png" width="800px"><h2 id="六、使用建议" tabindex="-1">六、使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight#六、使用建议" aria-label="Permalink to &quot;六、使用建议&quot;">​</a></h2><ul><li><strong>先定义单一能力</strong>：首个自定义 <code>Skill</code> 建议只解决一个明确问题。</li><li><strong>把触发条件说清楚</strong>：例如何时触发、写入哪里、输出什么结果。</li><li><strong>从高频动作开始</strong>：越高频的重复操作，越值得沉淀成 <code>Skill</code>。</li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Eight</a></div>
+</body>
+</html>

@@ -45,3 +45,6 @@ __pycache__/
 
 # AI plan cache
 .kimix_cache/
+
+# CodeBuddy docs mirror: videos too large for GitHub (100MB limit), kept locally
+workbuddy/assets/*.mp4

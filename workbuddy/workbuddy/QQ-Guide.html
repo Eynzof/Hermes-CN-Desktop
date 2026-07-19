@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WorkBuddy 接入 QQ 指南 ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/QQ-Guide" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_QQ-Guide" data-v-bd9b7757><div><h1 id="workbuddy-接入-qq-指南" tabindex="-1">WorkBuddy 接入 QQ 指南 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/QQ-Guide#workbuddy-接入-qq-指南" aria-label="Permalink to &quot;WorkBuddy 接入 QQ 指南&quot;">​</a></h1><p>本指南将帮助您将 WorkBuddy 接入 QQ，让您可以通过 QQ 随时随地远程操控电脑上的 WorkBuddy 完成任务。</p><h2 id="前提条件" tabindex="-1">前提条件 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/QQ-Guide#前提条件" aria-label="Permalink to &quot;前提条件&quot;">​</a></h2><p>在开始之前，请确保您已满足以下条件：</p><ul><li>已在电脑上安装 WorkBuddy，并开启了 <strong>助理</strong> 远程控制功能</li><li>拥有一个已完成实名认证的 QQ 账号</li></ul><div class="tip custom-block"><p class="custom-block-title">提示</p><p>QQ 开放平台要求账号完成实名认证。如未认证，请先在 QQ 中完成实名认证后再进行后续操作。</p></div><h3 id="_1-注册并登录-qq-开放平台" tabindex="-1">1 注册并登录 QQ 开放平台 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/QQ-Guide#_1-注册并登录-qq-开放平台" aria-label="Permalink to &quot;1 注册并登录 QQ 开放平台&quot;">​</a></h3><p>打开浏览器，访问 <a href="https://q.qq.com/qqbot/openclaw/login.html" target="_blank" rel="noreferrer">QQ 开放平台</a>，使用QQ扫码登录。</p><p><img src="../assets/qq-guide-1.BSmYTk4-.png" alt="登录QQ开放平台" width="800px" data-zoomable="true"></p><h3 id="_2-创建机器人" tabindex="-1">2 创建机器人 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/QQ-Guide#_2-创建机器人" aria-label="Permalink to &quot;2 创建机器人&quot;">​</a></h3><p>点击创建机器人：</p><p><img src="../assets/qq-guide-2.DdeZxWeY.png" alt="创建机器人" width="800px" data-zoomable="true"></p><p>点击后会立刻成功，此时机器人会给你的QQ发一条成功消息，头像昵称可按喜好自定义编辑。</p><h3 id="_3-配置凭证" tabindex="-1">3 配置凭证 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/QQ-Guide#_3-配置凭证" aria-label="Permalink to &quot;3 配置凭证&quot;">​</a></h3><p>复制机器人的 AppID 和 AppSecret :</p><p><img src="../assets/qq-guide-3.B1fiLS6i.png" alt="复制AppID和AppSecret" width="800px" data-zoomable="true"></p><div class="warning custom-block"><p class="custom-block-title">重要提示</p><p>出于安全考虑，AppSecret不支持明文保存，二次查看将会强制重置，请自行妥善保存。</p></div><p>将获取的凭证配置到 WorkBuddy 中：</p><ol><li>打开 WorkBuddy，点击助理的<strong>设置</strong> ⚙️图标后进入 <strong>助理设置</strong></li></ol><p><img src="../assets/qq-guide-4.Bk0lght0.png" alt="打开助理设置" width="400px" data-zoomable="true"></p><ol start="2"><li>配置 <strong>QQ 机器人集成</strong></li></ol><p><img src="../assets/qq-guide-5.BvQUJ5Mx.png" alt="QQ机器人集成配置" width="800px" data-zoomable="true"></p><ol start="3"><li><strong>QQ 扫码</strong>连接已创建的机器人；或选择 WebSocket 长连接 / 使用 URL 回调 填入刚才复制的 AppID 和 AppSecret 后点击<strong>注册</strong>，完成连接：</li></ol><p><img src="../assets/qq-guide-6.wvwumEf6.png" alt="WebSocket长连接注册" width="400px" data-zoomable="true"></p><p><img src="../assets/qq-guide-7.4x4mHzrF.png" alt="URL回调注册" width="400px" data-zoomable="true"></p><ol start="4"><li>配置成功</li></ol><p>在<strong>助理设置中</strong>，<strong>QQ 机器人集成</strong>显示已连接</p><p><img src="../assets/qq-guide-8.BdH1Jyn4.png" alt="配置成功" width="400px" data-zoomable="true"></p><p>在<strong>助理</strong>中可以看到QQ图标</p><p><img src="../assets/qq-guide-9.xHpaPG6L.png" alt="助理QQ图标" width="800px" data-zoomable="true"></p><div class="tip custom-block"><p class="custom-block-title">恭喜</p><p>您已成功将 WorkBuddy 接入 QQ！现在可以通过 QQ 随时随地远程控制 WorkBuddy 完成各种编程任务了。</p></div></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/QQ-Guide">https://www.codebuddy.cn/docs/workbuddy/QQ-Guide</a></div>
+</body>
+</html>

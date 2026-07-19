@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent Browser ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_WorkBuddy-Zero-Cost-Skill-Top-10_Agent-Browser" data-v-bd9b7757><div><h1 id="agent-browser" tabindex="-1">Agent Browser <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser#agent-browser" aria-label="Permalink to &quot;Agent Browser&quot;">​</a></h1><h2 id="一、基本信息" tabindex="-1">一、基本信息 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser#一、基本信息" aria-label="Permalink to &quot;一、基本信息&quot;">​</a></h2><ul><li><strong>安装名</strong>：<code>agent-browser</code></li><li><strong>仓库来源</strong>：<code>SkillHub</code></li></ul><h2 id="二、功能简介" tabindex="-1">二、功能简介 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser#二、功能简介" aria-label="Permalink to &quot;二、功能简介&quot;">​</a></h2><p><code>Agent Browser</code> 用于让 <code>WorkBuddy</code> 直接进入网页并执行浏览器级操作，例如打开页面、滚动、点击、展开内容、截图和读取网页信息。对于必须交互后才能看到内容的页面，这个 <code>Skill</code> 能显著提升可访问性。</p><h2 id="三、适用场景" tabindex="-1">三、适用场景 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser#三、适用场景" aria-label="Permalink to &quot;三、适用场景&quot;">​</a></h2><ul><li>需要滚动、点击或展开后才能读取内容的网页</li><li>需要自动截图指定页面</li><li>需要检查按钮、表单或页面结构</li><li>需要进入网站后抓取指定信息</li></ul><h2 id="四、推荐使用方式" tabindex="-1">四、推荐使用方式 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser#四、推荐使用方式" aria-label="Permalink to &quot;四、推荐使用方式&quot;">​</a></h2><p>直接描述目标页面、需要执行的操作和最终输出结果即可。</p><p><strong>示例指令</strong>：</p><blockquote><p>请打开这个网页，完整阅读需要展开和滚动后才能看到的内容，整理成结构化摘要，并为关键页面截图留档。</p></blockquote><h2 id="五、效果示意" tabindex="-1">五、效果示意 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser#五、效果示意" aria-label="Permalink to &quot;五、效果示意&quot;">​</a></h2><p>可以看到，<code>WorkBuddy</code> 会模拟真实浏览行为，按步骤读取页面内容。</p><p><img src="../../../assets/image.B5Jk5J9x.png" alt="浏览器自动化效果示意" width="800px" data-zoomable="true"></p><p>最终可输出结构化总结或整理后的文档结果。</p><p><img src="../../../assets/image-1.P1Bj-DqB.png" alt="浏览器自动化效果示意" width="800px" data-zoomable="true"></p><h2 id="六、使用建议" tabindex="-1">六、使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser#六、使用建议" aria-label="Permalink to &quot;六、使用建议&quot;">​</a></h2><ul><li><strong>先说明目标页面</strong>：尽量提供明确链接与目标动作。</li><li><strong>指定输出形式</strong>：可要求输出摘要、表格、截图或操作记录。</li><li><strong>适合处理动态网页</strong>：尤其适合普通搜索难以完整获取内容的场景。</li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/WorkBuddy-Zero-Cost-Skill-Top-10/Agent-Browser</a></div>
+</body>
+</html>
