@@ -24,6 +24,8 @@ import {
   type WorkspaceProject,
 } from "@/lib/workspaces";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
+import { WorktreePanel } from "@/components/projects/worktree-panel";
+import { runtime } from "@/lib/runtime";
 import s from "./project-detail.module.css";
 
 const WEEK_SECONDS = 7 * 24 * 60 * 60;
@@ -135,7 +137,7 @@ export function ProjectDetailRoute() {
     };
   }, [projectSessions]);
 
-  const desktopAvailable = typeof window !== "undefined" && !!window.hermesDesktop;
+  const desktopAvailable = typeof window !== "undefined" && !!window.hermesDesktop && !runtime.isRemote();
 
   const goNewTask = useCallback(() => {
     if (!workspacePath) return;
@@ -292,6 +294,14 @@ export function ProjectDetailRoute() {
                 : "暂无会话"}
             </div>
           </div>
+        </section>
+
+        <section className={s.sec}>
+          {runtime.isRemote() ? (
+            <div className={s.emptyHint}>远端模式下已禁用依赖桌面端本机 Git 和文件系统的 Worktree 面板。</div>
+          ) : (
+            <WorktreePanel repoPath={project.path} />
+          )}
         </section>
 
         <section className={s.sec}>

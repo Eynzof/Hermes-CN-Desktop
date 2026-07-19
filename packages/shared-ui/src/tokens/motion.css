@@ -1,0 +1,10 @@
+/* Hermes Design Tokens — Motion */
+
+:root {
+  --h-duration-instant: 80ms;
+  --h-duration-fast: 120ms;
+  --h-duration-normal: 160ms;
+  --h-duration-slow: 220ms;
+  --h-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --h-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.08);
+}

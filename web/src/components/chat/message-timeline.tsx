@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
-import { AlertTriangle, ChevronRight, Info } from "lucide-react";
-import { showReasoningAtom } from "@/stores/ui";
+import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
+import { assistantAvatarEffectiveAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
+import { AssistantProfileCard } from "./assistant-profile-card";
+import { CliDelegationCard, entryFromChatTool } from "./cli-delegation-card";
+import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
 import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
@@ -12,6 +15,7 @@ import s from "./message-timeline.module.css";
 import { summarizeToolActivity } from "./tool-activity";
 import { groupConsecutiveTools, groupElapsedMs } from "./group-tools";
 import { truncateMiddle } from "@/lib/truncate-middle";
+import { sanitizeTextForSpeech, speakText, voiceErrorMessage } from "@/lib/voice";
 import {
   formatDurationMs,
   formatElapsedTimer,
@@ -32,12 +36,32 @@ interface MessageTimelineProps {
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
   progressModel?: string;
+  autoTts?: boolean;
 }
 
 interface TurnAnchor {
   id: string;
   index: number;
   title: string;
+}
+
+type SpeechPlaybackStatus = "idle" | "preparing" | "speaking";
+
+interface SpeechPlaybackState {
+  messageId: string | null;
+  status: SpeechPlaybackStatus;
+}
+
+interface SpeechPlaybackError {
+  message: string;
+  messageId: string;
+}
+
+interface SpeechPlaybackControls {
+  error: SpeechPlaybackError | null;
+  onSpeak: (messageId: string, text: string) => void;
+  onStop: () => void;
+  state: SpeechPlaybackState;
 }
 
 export function resolveBottomFollowState(
@@ -60,6 +84,17 @@ export function resolveBottomFollowState(
 
 function distanceFromBottom(element: HTMLElement): number {
   return Math.max(0, element.scrollHeight - element.scrollTop - element.clientHeight);
+}
+
+// 只有"用户主动上滑"才应脱离贴底跟随。程序触发的轮次跳转平滑滚动同样会让 scrollTop
+// 递减，但绝不能被当成用户手势——否则会把自己的跳转动画硬取消掉。
+export function shouldDetachOnScroll(
+  scrollTop: number,
+  lastScrollTop: number,
+  programmaticScroll: boolean,
+): boolean {
+  if (programmaticScroll) return false;
+  return scrollTop < lastScrollTop - 1;
 }
 
 function formatDay(timestamp: number): string {
@@ -194,6 +229,70 @@ function ReasoningBlock({ text, streaming }: { text: string; streaming?: boolean
       </button>
       {open ? <pre className={s.reasoningBody}>{text}</pre> : null}
     </div>
+  );
+}
+
+function MoaReferenceBlock({
+  label,
+  text,
+  index,
+  count,
+}: {
+  label: string;
+  text: string;
+  index?: number;
+  count?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const position = index !== undefined && count !== undefined ? `（${index + 1}/${count}）` : "";
+
+  return (
+    <div className={s.reasoning}>
+      <button
+        type="button"
+        className={s.disclosure}
+        onClick={() => setOpen((value) => !value)}
+        data-open={open}
+      >
+        <span className={s.chevron}>›</span>
+        <span>{`参考模型 ${label}${position}`}</span>
+      </button>
+      {open ? <pre className={s.reasoningBody}>{text}</pre> : null}
+    </div>
+  );
+}
+
+// 系统通知超过此长度默认折叠——后台进程通知（notify_on_complete）会携带
+// 完整命令与输出尾部（stream-json 委派动辄数 KB），对 agent 是必要输入，
+// 对人只需首行摘要（"后台进程通知：proc_x completed normally (exit 0)"）。
+const SYSTEM_NOTICE_COLLAPSE_THRESHOLD = 280;
+const SYSTEM_NOTICE_SUMMARY_MAX = 160;
+
+function formatNoticeLength(length: number): string {
+  return length > 1000 ? `${(length / 1000).toFixed(1)}k 字符` : `${length} 字符`;
+}
+
+function SystemNoticeText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  if (text.length <= SYSTEM_NOTICE_COLLAPSE_THRESHOLD) {
+    return <div className={s.systemNoticeText}>{text}</div>;
+  }
+  const firstLine = text.split("\n")[0] ?? text;
+  const summary =
+    firstLine.length > SYSTEM_NOTICE_SUMMARY_MAX
+      ? `${firstLine.slice(0, SYSTEM_NOTICE_SUMMARY_MAX)}…`
+      : firstLine;
+  return (
+    <>
+      <div className={s.systemNoticeText}>{open ? text : summary}</div>
+      <button
+        type="button"
+        className={s.systemNoticeToggle}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open ? "收起" : `展开全文（${formatNoticeLength(text.length)}）`}
+      </button>
+    </>
   );
 }
 
@@ -391,6 +490,7 @@ interface MessageBlocksProps {
 
 function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progressModel }: MessageBlocksProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
+  const cliDelegations = useAtomValue(cliDelegationsByToolIdAtom);
   const blocks = message.blocks ?? [];
   const items: ReactNode[] = [];
   let pendingTools: ChatToolItem[] = [];
@@ -403,6 +503,16 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
 
   blocks.forEach((block, index) => {
     if (block.type === "tool") {
+      // CLI 委派（Claude Code / Codex）升级为品牌化卡片：live store 命中
+      // 优先（P-047 事件或旧内核回退），历史重载走渲染时按需重建。委派卡
+      // 不进 ToolChain 聚合——它是多 Agent 协作的一等公民，不该被折叠进
+      // "运行了 N 个工具"。
+      const delegation = cliDelegations.get(block.tool.tool_id) ?? entryFromChatTool(block.tool);
+      if (delegation) {
+        flushTools(`tools-${index}`);
+        items.push(<CliDelegationCard key={`cli-delegation-${index}`} entry={delegation} />);
+        return;
+      }
       pendingTools.push(block.tool);
       return;
     }
@@ -427,6 +537,21 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
         <div key={`image-${index}`} className={s.imageBlock}>
           <MessageImage image={block.image} />
         </div>,
+      );
+      return;
+    }
+
+    if (block.type === "moa_reference") {
+      // MoA 参考模型输出块——不受 showReasoning 门控：它是委员会成员的
+      // 实际回答（MoA 的核心卖点），不是模型的内心独白；默认折叠不扰。
+      items.push(
+        <MoaReferenceBlock
+          key={`moa-ref-${index}`}
+          label={block.label}
+          text={block.text}
+          index={block.index}
+          count={block.count}
+        />,
       );
       return;
     }
@@ -472,6 +597,18 @@ function getCopyableText(message: ChatMessage): string | undefined {
   return message.text || message.reasoning;
 }
 
+function getReadableText(message: ChatMessage): string | undefined {
+  if (message.blocks?.length) {
+    const text = message.blocks
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n\n")
+      .trim();
+    return text || undefined;
+  }
+  return message.text?.trim() || undefined;
+}
+
 const FINISH_REASON_LABEL: Record<string, string> = {
   stop: "正常",
   end_turn: "正常",
@@ -488,6 +625,45 @@ function finishReasonRisk(reason: string | undefined): "warn" | "err" | undefine
   if (reason === "length" || reason === "content_filter") return "warn";
   if (reason === "error") return "err";
   return undefined;
+}
+
+function sessionUsageFallbackStats(
+  message: ChatMessage,
+  sessionUsage: SessionUsageResult | null | undefined,
+): AssistantMessageStats | undefined {
+  if (message.role !== "assistant" || message.status === "streaming" || message.status === "error") return undefined;
+  if (!sessionUsage) return undefined;
+
+  const stats: AssistantMessageStats = {};
+  const tokensInput = sessionUsage.input ?? sessionUsage.prompt;
+  const tokensOutput = sessionUsage.output ?? sessionUsage.completion;
+  const tokensTotal = sessionUsage.total ?? (
+    typeof tokensInput === "number" || typeof tokensOutput === "number"
+      ? (tokensInput ?? 0) + (tokensOutput ?? 0)
+      : undefined
+  );
+
+  if (typeof tokensInput === "number") stats.tokensInput = tokensInput;
+  if (typeof tokensOutput === "number") stats.tokensOutput = tokensOutput;
+  if (typeof tokensTotal === "number") stats.tokensTotal = tokensTotal;
+  if (typeof sessionUsage.cache_read === "number") stats.cacheRead = sessionUsage.cache_read;
+  if (typeof sessionUsage.cache_write === "number") stats.cacheWrite = sessionUsage.cache_write;
+  if (typeof sessionUsage.calls === "number") stats.apiCalls = sessionUsage.calls;
+  if (typeof sessionUsage.model === "string" && sessionUsage.model) stats.model = sessionUsage.model;
+
+  const costStatus = typeof sessionUsage.cost_status === "string"
+    ? sessionUsage.cost_status.toLowerCase()
+    : undefined;
+  if (
+    typeof sessionUsage.cost_usd === "number" &&
+    Number.isFinite(sessionUsage.cost_usd) &&
+    costStatus !== "stale_pricing" &&
+    costStatus !== "unknown"
+  ) {
+    stats.costUsd = sessionUsage.cost_usd;
+  }
+
+  return Object.keys(stats).length > 0 ? stats : undefined;
 }
 
 function MessageStatsFooter({ stats }: { stats: AssistantMessageStats }) {
@@ -587,20 +763,31 @@ interface MessageBubbleProps {
   turnStartedAt?: number;
   sessionUsage?: SessionUsageResult | null;
   progressModel?: string;
+  speech?: SpeechPlaybackControls;
 }
 
-function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: MessageBubbleProps) {
+function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
+  const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
+  const assistantAvatarDataUrl = useAtomValue(assistantAvatarEffectiveAtom);
   const isUser = message.role === "user";
   const isToolOnly = message.role === "tool";
   const isSystem = message.role === "system";
   const streaming = message.status === "streaming";
   const copyable = getCopyableText(message);
+  const readable = !isUser && !isSystem && !isToolOnly && !streaming && message.status !== "error"
+    ? getReadableText(message)
+    : undefined;
+  const speechStatus = speech?.state.messageId === message.id ? speech.state.status : "idle";
+  const speechBusy = speechStatus === "preparing" || speechStatus === "speaking";
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
+  const messageStats = message.stats ?? sessionUsageFallbackStats(message, sessionUsage);
 
   if (isToolOnly) {
     return (
       <div className={s.messageRow} data-role="assistant">
+        {/* 与带头像的行保持左缘对齐的占位列。 */}
+        <div className={s.avatarCol} aria-hidden />
         <div className={s.messageContent}>
           <ToolChain tools={message.tools ?? []} />
         </div>
@@ -625,7 +812,11 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: 
           />
           <div className={s.systemNoticeBody}>
             {message.error ? <div className={s.systemNoticeTitle}>请求失败</div> : null}
-            <div className={s.systemNoticeText}>{text}</div>
+            {message.error ? (
+              <div className={s.systemNoticeText}>{text}</div>
+            ) : (
+              <SystemNoticeText text={text} />
+            )}
           </div>
         </div>
       </div>
@@ -634,8 +825,30 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: 
 
   return (
     <div className={s.messageRow} data-role={isUser ? "user" : "assistant"}>
+      {/* IM 式布局：Hermes 头像独立于气泡左侧一列（点击弹资料卡）；用户侧
+          不显示头像与昵称，气泡右贴。 */}
+      {!isUser ? (
+        <div className={s.avatarCol}>
+          <AssistantProfileCard
+            model={progressModel || sessionUsage?.model}
+            trigger={
+              <button type="button" className={s.avatarButton} title={`查看 ${assistantDisplayName} 资料`}>
+                <img
+                  className={s.rowAvatar}
+                  src={assistantAvatarDataUrl}
+                  alt={`${assistantDisplayName} 头像`}
+                />
+              </button>
+            }
+          />
+        </div>
+      ) : null}
       <div className={s.messageContent}>
-        {!isUser ? <div className={s.assistantName}>Hermes</div> : null}
+        {!isUser ? (
+          <div className={s.assistantName}>
+            <span>{assistantDisplayName}</span>
+          </div>
+        ) : null}
         <div className={s.bubble} data-role={isUser ? "user" : "assistant"}>
           {hasBlocks ? (
             <MessageBlocks
@@ -674,8 +887,35 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel }: 
                 复制
               </CopyButton>
             ) : null}
+            {readable && speech ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (speechBusy) {
+                    speech.onStop();
+                  } else {
+                    speech.onSpeak(message.id, readable);
+                  }
+                }}
+                data-speech-state={speechStatus}
+                aria-pressed={speechBusy}
+                title={speechBusy ? "停止朗读" : "朗读回复"}
+              >
+                {speechStatus === "preparing" ? (
+                  <Loader2 aria-hidden="true" />
+                ) : speechStatus === "speaking" ? (
+                  <VolumeX aria-hidden="true" />
+                ) : (
+                  <Volume2 aria-hidden="true" />
+                )}
+                <span>{speechBusy ? "停止" : "朗读"}</span>
+              </button>
+            ) : null}
+            {speech?.error?.messageId === message.id ? (
+              <span className={s.messageSpeechError}>{speech.error.message}</span>
+            ) : null}
           </span>
-          {message.stats ? <MessageStatsFooter stats={message.stats} /> : null}
+          {messageStats ? <MessageStatsFooter stats={messageStats} /> : null}
         </div>
       </div>
     </div>
@@ -690,6 +930,7 @@ export function MessageTimeline({
   turnStartedAt,
   sessionUsage,
   progressModel,
+  autoTts = false,
 }: MessageTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -699,9 +940,24 @@ export function MessageTimeline({
   const autoAnchorRef = useRef(false);
   const autoAnchorTimerRef = useRef<number | null>(null);
   const lastScrollTopRef = useRef(0);
+  // 程序触发的轮次跳转（平滑滚动）守卫：跳转动画期间 onScroll 会被误判为用户上滑而
+  // 触发 detachFromBottomAutoFollow 硬取消滚动，这里用标记把跳转滚动与用户手势区分开。
+  const programmaticScrollRef = useRef(false);
+  const programmaticTargetRef = useRef(0);
+  const programmaticTimerRef = useRef<number | null>(null);
   const messageCountRef = useRef(0);
   const firstMessageIdRef = useRef<string | undefined>(undefined);
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechStopRef = useRef<(() => void) | null>(null);
+  const speechSequenceRef = useRef(0);
+  const autoTtsSeenRef = useRef<Set<string>>(new Set());
+  const autoTtsSessionKeyRef = useRef<string | undefined>(undefined);
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null);
+  const [speechState, setSpeechState] = useState<SpeechPlaybackState>({
+    messageId: null,
+    status: "idle",
+  });
+  const [speechError, setSpeechError] = useState<SpeechPlaybackError | null>(null);
   const visibleMessages = useMemo(
     () =>
       messages.filter(
@@ -728,6 +984,116 @@ export function MessageTimeline({
     return anchors;
   }, [visibleMessages]);
   const showTurnRail = turnAnchors.length > 1;
+
+  const stopSpeech = useCallback(() => {
+    speechSequenceRef.current += 1;
+    speechStopRef.current?.();
+    speechStopRef.current = null;
+    if (speechAudioRef.current) {
+      speechAudioRef.current.pause();
+      speechAudioRef.current.src = "";
+      speechAudioRef.current.load();
+      speechAudioRef.current = null;
+    }
+    setSpeechState({ messageId: null, status: "idle" });
+  }, []);
+
+  const playSpeech = useCallback(async (messageId: string, text: string) => {
+    const speakableText = sanitizeTextForSpeech(text);
+    if (!speakableText) {
+      setSpeechError({ messageId, message: "没有可朗读的文本。" });
+      return;
+    }
+
+    stopSpeech();
+    const ownSequence = speechSequenceRef.current;
+    setSpeechError(null);
+    setSpeechState({ messageId, status: "preparing" });
+
+    try {
+      const response = await speakText(speakableText);
+      if (speechSequenceRef.current !== ownSequence) return;
+
+      const audio = new Audio(response.data_url);
+      speechAudioRef.current = audio;
+      setSpeechState({ messageId, status: "speaking" });
+
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          audio.removeEventListener("ended", onEnded);
+          audio.removeEventListener("error", onError);
+          if (speechStopRef.current === onStop) speechStopRef.current = null;
+        };
+        const onEnded = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error("音频播放失败"));
+        };
+        const onStop = () => {
+          cleanup();
+          resolve();
+        };
+        speechStopRef.current = onStop;
+        audio.addEventListener("ended", onEnded, { once: true });
+        audio.addEventListener("error", onError, { once: true });
+        void audio.play().catch(reject);
+      });
+
+      if (speechSequenceRef.current !== ownSequence) return;
+      speechAudioRef.current = null;
+      setSpeechState({ messageId: null, status: "idle" });
+    } catch (error) {
+      if (speechSequenceRef.current !== ownSequence) return;
+      speechAudioRef.current = null;
+      speechStopRef.current = null;
+      setSpeechState({ messageId: null, status: "idle" });
+      setSpeechError({ messageId, message: voiceErrorMessage(error, "朗读失败") });
+    }
+  }, [stopSpeech]);
+
+  useEffect(() => () => {
+    speechSequenceRef.current += 1;
+    speechStopRef.current?.();
+    speechStopRef.current = null;
+    if (speechAudioRef.current) {
+      speechAudioRef.current.pause();
+      speechAudioRef.current.src = "";
+      speechAudioRef.current.load();
+      speechAudioRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const completed = messages.filter((message) =>
+      message.role === "assistant" &&
+      message.status === "complete" &&
+      Boolean(getReadableText(message)),
+    );
+    const sessionKey = messages[0]?.id;
+    if (autoTtsSessionKeyRef.current !== sessionKey) {
+      autoTtsSessionKeyRef.current = sessionKey;
+      autoTtsSeenRef.current = new Set(completed.map((message) => message.id));
+      return;
+    }
+
+    const fresh = completed.filter((message) => !autoTtsSeenRef.current.has(message.id));
+    for (const message of completed) autoTtsSeenRef.current.add(message.id);
+    if (!autoTts || fresh.length === 0) return;
+
+    const target = fresh[fresh.length - 1];
+    const text = target ? getReadableText(target) : undefined;
+    if (target && text) void playSpeech(target.id, text);
+  }, [autoTts, messages, playSpeech]);
+
+  const speechControls = useMemo<SpeechPlaybackControls>(() => ({
+    error: speechError,
+    onSpeak: (messageId, text) => void playSpeech(messageId, text),
+    onStop: stopSpeech,
+    state: speechState,
+  }), [playSpeech, speechError, speechState, stopSpeech]);
 
   const setTurnAnchorNode = useCallback((id: string, node: HTMLDivElement | null) => {
     if (node) {
@@ -774,9 +1140,22 @@ export function MessageTimeline({
     const containerRect = container.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     const top = container.scrollTop + nodeRect.top - containerRect.top - 12;
-    nearBottomRef.current = container.scrollHeight - top - container.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
+    const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const targetTop = Math.min(Math.max(0, top), maxTop);
+    nearBottomRef.current = container.scrollHeight - targetTop - container.clientHeight < BOTTOM_FOLLOW_THRESHOLD_PX;
     userDetachedFromBottomRef.current = !nearBottomRef.current;
-    container.scrollTo({ top, behavior: "smooth" });
+    // 标记这是一次程序跳转：handleScroll 在到达目标前不得把它当成用户上滑。
+    // 兜底定时器防止动画因目标 clamp / 内容重排始终差几像素而无法清除标记。
+    programmaticScrollRef.current = true;
+    programmaticTargetRef.current = targetTop;
+    if (programmaticTimerRef.current !== null) {
+      window.clearTimeout(programmaticTimerRef.current);
+    }
+    programmaticTimerRef.current = window.setTimeout(() => {
+      programmaticScrollRef.current = false;
+      programmaticTimerRef.current = null;
+    }, 700);
+    container.scrollTo({ top: targetTop, behavior: "smooth" });
     lastScrollTopRef.current = container.scrollTop;
     setActiveTurnId(id);
   }, []);
@@ -805,6 +1184,12 @@ export function MessageTimeline({
 
   const detachFromBottomAutoFollow = useCallback(() => {
     const container = containerRef.current;
+    // 用户的显式手势（滚轮/拖动）应能中断进行中的轮次跳转并夺回滚动控制。
+    programmaticScrollRef.current = false;
+    if (programmaticTimerRef.current !== null) {
+      window.clearTimeout(programmaticTimerRef.current);
+      programmaticTimerRef.current = null;
+    }
     clearAutoAnchor();
     userDetachedFromBottomRef.current = true;
     nearBottomRef.current = false;
@@ -865,7 +1250,11 @@ export function MessageTimeline({
     const container = containerRef.current;
     if (!container || !nearBottomRef.current) return;
     const initialHistoryRender = previousMessageCount === 0 || sessionChanged;
-    scrollToBottom(initialHistoryRender ? "auto" : "smooth");
+    // Bottom-follow must move synchronously. A smooth scroll targets the current
+    // scrollHeight, but streaming can grow the message again before the animation
+    // arrives; the intermediate scroll event then looks far from the bottom and
+    // disables its own ResizeObserver follow-up even though the user never scrolled.
+    scrollToBottom("auto");
 
     // 长会话里 Markdown、表格、代码块等内容会在本次提交后继续改变实际高度。
     // 初次进入历史会话时不要依赖一次平滑滚动，否则 WebKit/Tauri 里可能先滚到
@@ -909,6 +1298,11 @@ export function MessageTimeline({
       frame = window.requestAnimationFrame(anchorToBottom);
     });
     observer.observe(messagesElement);
+    // composer 增高（多行输入 / 技能面板 / 附件托盘 / 上下文告警 / 队列面板等）会让滚动视口
+    // 从底部变矮，但 .messages 内容高度不变、上面这个 observer 不会触发，导致最新内容被挤到
+    // 视口下沿之外（看起来"藏在输入框后面"）。一并观察滚动容器自身：视口高度变化时也走
+    // anchorToBottom 重新贴底——其守卫（userDetached / nearBottom）保证不会把已上滑的用户拽回。
+    observer.observe(container);
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
@@ -919,6 +1313,9 @@ export function MessageTimeline({
     return () => {
       if (autoAnchorTimerRef.current !== null) {
         window.clearTimeout(autoAnchorTimerRef.current);
+      }
+      if (programmaticTimerRef.current !== null) {
+        window.clearTimeout(programmaticTimerRef.current);
       }
     };
   }, []);
@@ -932,8 +1329,27 @@ export function MessageTimeline({
   const handleScroll = () => {
     const container = containerRef.current;
     if (!container) return;
+
+    // 轮次跳转动画进行中：不要把它当成用户上滑（否则会自取消）。到达目标后解除守卫。
+    if (programmaticScrollRef.current) {
+      lastScrollTopRef.current = container.scrollTop;
+      if (Math.abs(container.scrollTop - programmaticTargetRef.current) <= 2) {
+        programmaticScrollRef.current = false;
+        if (programmaticTimerRef.current !== null) {
+          window.clearTimeout(programmaticTimerRef.current);
+          programmaticTimerRef.current = null;
+        }
+      }
+      updateActiveTurnFromScroll();
+      return;
+    }
+
     const bottomDistance = distanceFromBottom(container);
-    const scrollingUp = container.scrollTop < lastScrollTopRef.current - 1;
+    const scrollingUp = shouldDetachOnScroll(
+      container.scrollTop,
+      lastScrollTopRef.current,
+      programmaticScrollRef.current,
+    );
 
     if (scrollingUp) {
       detachFromBottomAutoFollow();
@@ -1006,6 +1422,7 @@ export function MessageTimeline({
                 turnStartedAt={isLast ? turnStartedAt : undefined}
                 sessionUsage={isLast ? sessionUsage : undefined}
                 progressModel={isLast ? progressModel : undefined}
+                speech={speechControls}
               />
             </div>
           );

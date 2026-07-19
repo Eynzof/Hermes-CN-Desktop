@@ -255,6 +255,9 @@ function hermesSessionArchivePlugin(): Plugin {
 }
 
 export default defineConfig({
+  // Packaged Tauri builds load web/dist through a custom protocol, so asset
+  // URLs must stay relative instead of resolving to tauri://localhost/assets/*.
+  base: "./",
   plugins: [react(), hermesTokenPlugin(), hermesSessionLogPlugin(), hermesSessionArchivePlugin()],
   define: {
     "import.meta.env.VITE_HERMES_BUILD_COMMIT": JSON.stringify(gitShortCommit()),
@@ -268,7 +271,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 9545,
+    port: Number(process.env.E2E_VITE_PORT || 9545),
     strictPort: true,
     proxy: {
       "/api": {

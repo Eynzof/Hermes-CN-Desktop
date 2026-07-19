@@ -12,7 +12,7 @@ Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese commun
 
 Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn). The desktop app is part of the [Hermes Agent Chinese Community](https://hermesagent.org.cn) ecosystem, where the main site links to Chinese docs, practice guides, community entry points, and more ecosystem projects.
 
-> Current release: `v0.3.2`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
+> Current release: `v0.6.3`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
 
 ## Hermes Agent Chinese Community
 
@@ -76,7 +76,7 @@ These screenshots are synced from the landing repository and cover the workbench
 
 ## Why this project exists
 
-Hermes Agent already provides a local Dashboard. This repository focuses on the desktop experience around that Dashboard: native windows, local process management, file dialogs, managed runtime installation, runtime diagnostics, and a safer production transport layer for REST and SSE traffic.
+Hermes Agent already provides a local Dashboard. This repository focuses on the desktop experience around that Dashboard: native windows, local process management, file dialogs, managed runtime installation, runtime diagnostics, and a safer production transport layer for REST traffic plus a WS relay fallback.
 
 This repository is the desktop shell. The agent runtime and Dashboard source live in [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core).
 
@@ -87,7 +87,7 @@ This repository is the desktop shell. The agent runtime and Dashboard source liv
 - **Built-in independent Hermes Agent core**: the desktop app can install, update, verify, health-check, and roll back the local Hermes Agent core.
 - **Agent-first UI**: chat, streaming responses, attachments, MCP tools, skills, memory, profiles, scheduled tasks, LaTeX/Mermaid rendering, and runtime health panels.
 - **Chinese model and platform ecosystem**: support for major cloud model providers plus local deployments such as Ollama, vLLM, LM Studio, and llama.cpp, including Feishu integration setup; see the [Hermes Agent Chinese Community](https://hermesagent.org.cn) for more Chinese ecosystem content.
-- **Production transport bridge**: Rust commands proxy REST requests, uploads, and SSE streams to avoid WebView CORS limitations and centralize auth handling.
+- **Production transport bridge**: Rust commands proxy REST requests and uploads, while the Gateway uses the official `/api/ws` transport with a Rust WS relay fallback when packaged WebViews block native sockets.
 
 ## Download
 
@@ -95,9 +95,9 @@ Installers are available from the [desktop website](https://desktop.hermesagent.
 
 The current release includes:
 
-- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.3.2_aarch64.dmg`
-- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.3.2_x64.dmg`
-- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.3.2_x64-setup.exe`
+- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.6.3_aarch64.dmg`
+- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.6.3_x64.dmg`
+- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.6.3_x64-setup.exe`
 
 Both the Windows and macOS installers include a bundled `Hermes-CN-Core` runtime. On first launch, the app initializes the local core from the bundled runtime first; managed runtime download/update is only used for upgrades or fallback repair.
 
@@ -218,11 +218,15 @@ The short-term roadmap is focused on:
 - polishing macOS and Windows packaging behavior;
 - documenting the desktop/runtime boundary for contributors.
 
-## Star Track
+## Star History
 
-Use the chart below to track this repository's GitHub Star growth over time.
-
-[![Hermes Agent CN Desktop Star History Chart](https://api.star-history.com/svg?repos=Eynzof/Hermes-CN-Desktop&type=Date)](https://www.star-history.com/#Eynzof/Hermes-CN-Desktop&Date)
+<a href="https://www.star-history.com/?type=date&repos=Eynzof%2FHermes-CN-Desktop">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&theme=dark&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+ </picture>
+</a>
 
 ## Contributing
 

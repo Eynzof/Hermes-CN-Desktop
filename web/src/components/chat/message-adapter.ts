@@ -297,6 +297,16 @@ function legacyMetadata(msg: SessionMessage): HermesMessageMetadata | undefined 
   return metadata;
 }
 
+const PROCESS_NOTIFICATION_RE = /^\[IMPORTANT: Background process\s+([\s\S]*?)\]$/;
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+function normalizeProcessNotificationText(text: string): string | null {
+  const clean = text.replace(ANSI_RE, "").trim();
+  const match = clean.match(PROCESS_NOTIFICATION_RE);
+  if (!match) return null;
+  return `后台进程通知：${match[1]}`;
+}
+
 // Roles we know how to render. Hermes integrations (Feishu bridge etc.)
 // emit extra marker roles like "session_meta" into the persisted log —
 // the response schema accepts arbitrary strings so the row doesn't
@@ -332,6 +342,9 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
 
   const content = textAndImagesFromStructuredContent(msg.content);
   const text = normalizeContent(content.text);
+  const processNotificationText = msg.role === "user"
+    ? normalizeProcessNotificationText(text ?? "")
+    : null;
   const reasoning = normalizeContent(
     normalizeReasoningText(msg.reasoning_content ?? msg.reasoning ?? undefined),
   );
@@ -352,10 +365,10 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
   return {
     id: `stored-${msg.id}`,
     sessionId: msg.session_id,
-    role: msg.role as "user" | "assistant" | "system",
+    role: processNotificationText ? "system" : msg.role as "user" | "assistant" | "system",
     createdAt,
     status: msg.finish_reason === "error" ? "error" : "complete",
-    parts,
+    parts: processNotificationText ? [{ type: "notice", level: "system", text: processNotificationText }] : parts,
     metadata: legacyMetadata(msg),
   };
 }
@@ -501,6 +514,19 @@ function partsToBlocks(
       blocks.push({ type: "image", image: imagePartToEntry(part) });
       continue;
     }
+    if (part.type === "moa_reference") {
+      const text = normalizeContent(part.text);
+      if (text) {
+        blocks.push({
+          type: "moa_reference",
+          label: part.label,
+          text,
+          index: part.index,
+          count: part.count,
+        });
+      }
+      continue;
+    }
     if (part.type === "tool") {
       blocks.push({ type: "tool", tool: toolPartToToolEntry(part, message) });
     }
@@ -631,13 +657,9 @@ export function attachTurnStatsMetadata(
   // 就贴错了消息（用户看到的"TTFT 时有时无"成因之一）。
   const used = new Set<number>();
   const statByMessage = new Map<number, number>();
-  const ordinalByMessage = new Map<number, number>();
 
-  let assistantIndex = 0;
   messages.forEach((message, messageIndex) => {
     if (message.role !== "assistant") return;
-    assistantIndex += 1;
-    ordinalByMessage.set(messageIndex, assistantIndex);
     const hash = statsHashFromMessage(message);
     if (!hash) return;
     const statIndex = stats.findIndex(
@@ -649,9 +671,19 @@ export function attachTurnStatsMetadata(
     }
   });
 
+  // turnIndex 兜底按"回合"计数：一个回合 = 一段连续的 assistant 消息（回合之间
+  // 隔着 user 消息）。写入侧 turnIndex 是在 live 空间打的——那里整回合被合并成
+  // 一条 assistant 消息——所以当后端把一个回合拆成多条 stored 行（ui_messages
+  // 路径不做合并）时，该回合的 TTFT/tokens/成本要落到这段的**最后一条**（最终
+  // 答复）行，而不是开场白行；逐条 assistant 序号兜底会把统计贴到开场白上。
+  // contentHash 精确命中仍优先（上一遍已占住）。
+  let turnOrdinal = 0;
   messages.forEach((message, messageIndex) => {
-    if (message.role !== "assistant" || statByMessage.has(messageIndex)) return;
-    const ordinal = ordinalByMessage.get(messageIndex);
+    if (message.role !== "assistant") return;
+    if (messages[messageIndex - 1]?.role !== "assistant") turnOrdinal += 1;
+    const endsTurn = messages[messageIndex + 1]?.role !== "assistant";
+    if (!endsTurn || statByMessage.has(messageIndex)) return;
+    const ordinal = turnOrdinal;
     const statIndex = stats.findIndex(
       (stat, index) => !used.has(index) && stat.turnIndex === ordinal,
     );
@@ -857,6 +889,104 @@ function hasInterruptedCompletion(message: HermesUIMessage, canonicalMessageText
   return canonicalMessageText.toLowerCase().includes("operationinterrupted:");
 }
 
+function isStaleInterruptedLiveMessage(
+  live: HermesUIMessage,
+  storedMessages: HermesUIMessage[],
+): boolean {
+  if (live.role !== "assistant") return false;
+  if (!hasInterruptedCompletion(live, canonicalText(live))) return false;
+  return storedMessages.some((stored) =>
+    stored.role === "assistant" &&
+    stored.createdAt >= live.createdAt &&
+    !hasInterruptedCompletion(stored, canonicalText(stored)),
+  );
+}
+
+// A reconnect / session.resume can re-stream a turn whose canonical copy is
+// already persisted. Gateway events carry no stable turn id (see
+// packages/protocol message.start/complete), so the reducer mints a fresh
+// client id and a *duplicate* assistant bubble appears. While that replay is
+// mid-stream it often has only tool calls and no text yet, so
+// isSameCanonicalMessage (which needs a text match once the stored turn has
+// text) can't match it, and isStaleInterruptedLiveMessage ignores it because a
+// reconnect replay is not "interrupted" — that is the recurring duplicate.
+//
+// Drop it by matching tool-call IDENTITY (`toolCallId:name`) against a stored
+// COMPLETE assistant turn it is a prefix of. toolCallId is a reliable replay
+// discriminator: a replay re-sends the SAME tool ids, whereas a genuinely new
+// turn mints new ones — so this won't drop a real follow-up turn. Mirrors how
+// the official desktop lets the canonical stored turn win after completion.
+function isReplayDuplicateLiveMessage(
+  live: HermesUIMessage,
+  storedMessages: HermesUIMessage[],
+): boolean {
+  if (live.role !== "assistant") return false;
+  const liveTools = canonicalToolIdentityComparable(live);
+  if (!liveTools) return false;
+  const liveText = looseComparableText(canonicalText(live));
+  return storedMessages.some((stored) => {
+    if (stored.role !== "assistant" || stored.status !== "complete") return false;
+    const storedTools = canonicalToolIdentityComparable(stored);
+    if (!storedTools) return false;
+    const toolsArePrefix = storedTools === liveTools || storedTools.startsWith(`${liveTools}|`);
+    if (!toolsArePrefix) return false;
+    // If the replay has already streamed some text, it must be a faithful
+    // prefix of the stored canonical text — otherwise treat it as a genuinely
+    // different turn and keep it.
+    if (liveText) {
+      const storedText = looseComparableText(canonicalText(stored));
+      if (!storedText.startsWith(liveText)) return false;
+    }
+    return true;
+  });
+}
+
+// A normally-completed agent turn is frequently persisted by the backend as
+// SEVERAL assistant rows — leading commentary + a tool call, tool-only middle
+// rows, then the final answer — whereas the live runtime consolidates the whole
+// turn into ONE assistant message (a single `live-assistant-*` id). That single
+// consolidated bubble's canonical text (commentary + final answer, concatenated)
+// then exact-matches NEITHER the stored commentary row NOR the stored answer row,
+// so isSameCanonicalMessage cannot merge it; it is not interrupted, and its tool
+// identity spans the whole turn so it is not a prefix replay of any single stored
+// row either. The un-matched live copy is appended, rendering the turn's text —
+// including the final answer — a second time next to the stored rows.
+//
+// Recognize it: a COMPLETE, non-interrupted live assistant whose tool-call
+// identity (`toolCallId:name`, backend-unique) is a contiguous run of the stored
+// assistant rows' identities, and whose text is contained in those same rows'
+// concatenated text, is already fully persisted — drop the live copy and let the
+// canonical stored rows render (mirrors how completion lets the stored turn win).
+function isSupersededByStoredTurn(
+  live: HermesUIMessage,
+  storedMessages: HermesUIMessage[],
+): boolean {
+  if (live.role !== "assistant" || live.status !== "complete") return false;
+  // Only multi-step (tool-bearing) turns get split across rows; a plain-text
+  // turn is one stored row and already dedupes via isSameCanonicalMessage.
+  const liveTools = canonicalToolIdentityComparable(live);
+  if (!liveTools) return false;
+  // Interrupted replays are handled by isStaleInterruptedLiveMessage / superset.
+  if (hasInterruptedCompletion(live, canonicalText(live))) return false;
+
+  const storedAssistants = storedMessages.filter((message) => message.role === "assistant");
+  const storedTools = storedAssistants
+    .map((message) => canonicalToolIdentityComparable(message))
+    .filter(Boolean)
+    .join("|");
+  // Every live tool call (unique ids) must already be persisted, in order.
+  if (!storedTools.includes(liveTools)) return false;
+
+  const liveText = looseComparableText(canonicalText(live));
+  if (liveText) {
+    const storedText = looseComparableText(
+      storedAssistants.map((message) => canonicalText(message)).join(" "),
+    );
+    if (!storedText.includes(liveText)) return false;
+  }
+  return true;
+}
+
 function isInterruptedLiveSuperset(
   stored: HermesUIMessage,
   live: HermesUIMessage,
@@ -882,9 +1012,35 @@ function hasSamePersistedId(stored: HermesUIMessage, live: HermesUIMessage): boo
   return storedPersisted !== undefined && livePersisted !== undefined && storedPersisted === livePersisted;
 }
 
+function isCorruptedLiveCompletionSupersededByStored(
+  stored: HermesUIMessage,
+  live: HermesUIMessage,
+): boolean {
+  if (stored.role !== "assistant" || live.role !== "assistant") return false;
+  if (stored.status !== "complete" || live.status !== "complete") return false;
+  if (stored.metadata?.persistedId === undefined || live.metadata?.persistedId !== undefined) return false;
+
+  const completedAt = live.metadata?.timing?.completedAt;
+  if (typeof completedAt !== "number" || Math.abs(completedAt - stored.createdAt) > 5_000) return false;
+
+  const storedText = looseComparableText(canonicalText(stored));
+  const liveText = looseComparableText(canonicalText(live));
+  if (!storedText || liveText.length <= storedText.length || !liveText.endsWith(storedText)) return false;
+
+  return canonicalReasoning(stored) === canonicalReasoning(live) &&
+    canonicalImages(stored) === canonicalImages(live) &&
+    canonicalToolIdentityComparable(stored) === canonicalToolIdentityComparable(live);
+}
+
 function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage): boolean {
   if (stored.id === live.id || hasSamePersistedId(stored, live)) return true;
   if (stored.role !== live.role) return false;
+
+  // Older Core runtimes could interleave a token batch with message.complete.
+  // The reducer then appended the authoritative final text behind the corrupt
+  // partial stream. Match that exact artifact to its persisted canonical row;
+  // mergeMatchedMessage deliberately lets the stored text win below.
+  if (isCorruptedLiveCompletionSupersededByStored(stored, live)) return true;
 
   const storedText = canonicalText(stored);
   const liveText = canonicalText(live);
@@ -894,6 +1050,19 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
   const liveImages = canonicalImages(live);
 
   if (stored.role === "assistant") {
+    // 工具身份守卫：toolCallId 是后端唯一的。两边都带工具调用而 id 集不同，
+    // 必然是不同的回合——不能再进入下面的纯文本匹配。否则当多个回合的
+    // assistant 文本完全相同时（委派/确认类模板化回复），早先回合的 stored
+    // 行会吃掉后面回合的 live 消息：live 行顶替到早先位置（那一轮的工具卡
+    // 凭空消失），真正对应的 stored 行落空后又整行追加（同一张工具卡双份）。
+    // 只在双方都有工具身份时否决——live 流式早期还没有 tool part 的前缀
+    // 匹配场景不受影响。
+    const storedToolIdentity = canonicalToolIdentityComparable(stored);
+    const liveToolIdentity = canonicalToolIdentityComparable(live);
+    if (storedToolIdentity && liveToolIdentity && storedToolIdentity !== liveToolIdentity) {
+      return false;
+    }
+
     if (storedText || liveText) {
       if (storedText === liveText) return true;
 
@@ -948,7 +1117,11 @@ function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMess
 }
 
 function mergeMatchedMessage(storedMessage: HermesUIMessage, liveMessage: HermesUIMessage): HermesUIMessage {
-  const liveWins = !(
+  const storedCompletionWins = isCorruptedLiveCompletionSupersededByStored(
+    storedMessage,
+    liveMessage,
+  );
+  const liveWins = !storedCompletionWins && !(
     storedMessage.role === "assistant" &&
     storedMessage.status === "complete" &&
     liveMessage.status === "streaming"
@@ -992,7 +1165,11 @@ export function mergeHermesUIMessages(
   }
 
   consolidatedLive.forEach((liveMessage, index) => {
-    if (!usedLiveIndexes.has(index)) merged.push(liveMessage);
+    if (usedLiveIndexes.has(index)) return;
+    if (isStaleInterruptedLiveMessage(liveMessage, stored)) return;
+    if (isReplayDuplicateLiveMessage(liveMessage, stored)) return;
+    if (isSupersededByStoredTurn(liveMessage, stored)) return;
+    merged.push(liveMessage);
   });
 
   // Issue #98: a live message that fails to match any stored row — typically

@@ -1,14 +1,27 @@
 import { atom } from "jotai";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
+import hermesDefaultAvatar from "@/assets/hermes-default-avatar.png";
 
 export const activeSessionIdAtom = atom<string | null>(null);
+
+// Maps a pre-compression persistent session id to the live continuation "tip"
+// that the backend redirected a `session.resume` to. The detail route watches
+// this so the URL/active id follows the backend's new tip after compression
+// instead of stranding the user on a session whose messages have moved — the
+// "conversation vanished + #2/#3 duplicate" symptom (issue #305). Populated by
+// resumeSession via recordTipRedirect; consumed by the detail route effect.
+export const sessionTipRedirectAtom = atom<Record<string, string>>({});
+
 export const sidebarSearchAtom = atom("");
+export const commandPaletteOpenAtom = atom(false);
 
 export const CONVERSATION_WIDTH_OPTIONS = [
-  { value: "small", label: "小", title: "小宽度", maxWidth: "640px" },
-  { value: "medium", label: "中", title: "中等宽度", maxWidth: "780px" },
-  { value: "large", label: "大", title: "大宽度", maxWidth: "960px" },
+  // 档位整体上调一档（用户反馈原「小/中」过窄）：大 = 960 + 头像列
+  // 46px（36px 头像 + 10px gap），正文有效宽度与原「大」一致。
+  { value: "small", label: "小", title: "小宽度", maxWidth: "780px" },
+  { value: "medium", label: "中", title: "中等宽度", maxWidth: "960px" },
+  { value: "large", label: "大", title: "大宽度", maxWidth: "1006px" },
   { value: "full", label: "满", title: "铺满宽度", maxWidth: "100%" },
 ] as const;
 
@@ -22,7 +35,12 @@ export const CONVERSATION_FONT_SIZE_OPTIONS = [
 
 export type ConversationFontSizeMode = typeof CONVERSATION_FONT_SIZE_OPTIONS[number]["value"];
 
-const DEFAULT_CONVERSATION_WIDTH_MODE: ConversationWidthMode = "medium";
+export const DEFAULT_ASSISTANT_DISPLAY_NAME = "Hermes";
+export const ASSISTANT_DISPLAY_NAME_KEY = "hermes.assistant-display-name";
+export const ASSISTANT_AVATAR_KEY = "hermes.assistant-avatar-data-url";
+const MAX_ASSISTANT_DISPLAY_NAME_LENGTH = 40;
+
+const DEFAULT_CONVERSATION_WIDTH_MODE: ConversationWidthMode = "large";
 const CONVERSATION_WIDTH_KEY = "hermes.conversation-width";
 const CONVERSATION_WIDTH_VALUES = CONVERSATION_WIDTH_OPTIONS.map((option) => option.value);
 const DEFAULT_CONVERSATION_FONT_SIZE_MODE: ConversationFontSizeMode = "standard";
@@ -49,6 +67,18 @@ export function conversationFontSizeVars(mode: ConversationFontSizeMode): { font
   const option = CONVERSATION_FONT_SIZE_OPTIONS.find((item) => item.value === mode)
     ?? CONVERSATION_FONT_SIZE_OPTIONS[1];
   return { fontSize: option.fontSize, lineHeight: option.lineHeight };
+}
+
+export function normalizeAssistantDisplayName(value: unknown): string {
+  const trimmed = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (!trimmed) return DEFAULT_ASSISTANT_DISPLAY_NAME;
+  return Array.from(trimmed).slice(0, MAX_ASSISTANT_DISPLAY_NAME_LENGTH).join("");
+}
+
+export function normalizeAssistantAvatarDataUrl(value: unknown): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return "";
+  return /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(text) ? text : "";
 }
 
 const conversationWidthModeBaseAtom = atom<ConversationWidthMode>(
@@ -94,12 +124,77 @@ export const activeProfileAtom = atom(
   },
 );
 
+// 「管理范围」：UI 当前正在查看/编辑*哪个*档案的 settings（如技能），不切换、不重启
+// 运行中的 dashboard——区别于上面会重启 dashboard 的「活跃档案」。会话级、不持久化
+// （默认 null = 跟随活跃档案），由 /skills?profile= 深链或档案页「管理技能」动作设置，
+// 切换活跃档案时清空。对齐官方 dashboard 的 management-profile scope。
+export const managementProfileAtom = atom<string | null>(null);
+
+const assistantDisplayNameBaseAtom = atom<string>(
+  normalizeAssistantDisplayName(readUiValue(ASSISTANT_DISPLAY_NAME_KEY, DEFAULT_ASSISTANT_DISPLAY_NAME)),
+);
+export const assistantDisplayNameAtom = atom(
+  (get) => get(assistantDisplayNameBaseAtom),
+  (_get, set, next: string) => {
+    const value = normalizeAssistantDisplayName(next);
+    set(assistantDisplayNameBaseAtom, value);
+    if (value === DEFAULT_ASSISTANT_DISPLAY_NAME) {
+      writeUiValue(ASSISTANT_DISPLAY_NAME_KEY, "");
+    } else {
+      writeUiValue(ASSISTANT_DISPLAY_NAME_KEY, value);
+    }
+  },
+);
+
+const assistantAvatarDataUrlBaseAtom = atom<string>(
+  normalizeAssistantAvatarDataUrl(readUiValue(ASSISTANT_AVATAR_KEY, "")),
+);
+export const assistantAvatarDataUrlAtom = atom(
+  (get) => get(assistantAvatarDataUrlBaseAtom),
+  (_get, set, next: string) => {
+    const value = normalizeAssistantAvatarDataUrl(next);
+    set(assistantAvatarDataUrlBaseAtom, value);
+    writeUiValue(ASSISTANT_AVATAR_KEY, value);
+  },
+);
+
+/** 展示用头像：用户未自定义（存储为空）时回退到内置默认头像。
+ *  设置页请继续用 assistantAvatarDataUrlAtom（空=未设置 的原语义）。 */
+export const assistantAvatarEffectiveAtom = atom(
+  (get) => get(assistantAvatarDataUrlBaseAtom) || hermesDefaultAvatar,
+);
+
 const showReasoningBaseAtom = atom<boolean>(readUiValue("hermes.show-reasoning", false));
 export const showReasoningAtom = atom(
   (get) => get(showReasoningBaseAtom),
   (_get, set, next: boolean) => {
     set(showReasoningBaseAtom, next);
     writeUiValue("hermes.show-reasoning", next);
+  },
+);
+
+// 匿名使用统计开关（默认开启）。发送端在 lib/telemetry.ts 直接读 ui-store，
+// 这个 atom 只服务设置页 UI。key 与 lib/telemetry.ts 的 TELEMETRY_ENABLED_KEY 一致。
+const TELEMETRY_ENABLED_UI_KEY = "hermes.telemetry-enabled";
+const telemetryEnabledBaseAtom = atom<boolean>(readUiValue<unknown>(TELEMETRY_ENABLED_UI_KEY, true) !== false);
+export const telemetryEnabledAtom = atom(
+  (get) => get(telemetryEnabledBaseAtom),
+  (_get, set, next: boolean) => {
+    set(telemetryEnabledBaseAtom, next);
+    writeUiValue(TELEMETRY_ENABLED_UI_KEY, next);
+  },
+);
+
+// Task-detail right rail (issue #233): rich preview panel visibility. Persisted
+// so the user's last choice survives reload; ⌘B toggles it. The active tab
+// lives in the `?panel=` query, not here (see lib/preview-rail.ts).
+const RIGHT_RAIL_VISIBLE_KEY = "hermes.right-rail-visible";
+const rightRailVisibleBaseAtom = atom<boolean>(readUiValue<unknown>(RIGHT_RAIL_VISIBLE_KEY, false) === true);
+export const rightRailVisibleAtom = atom(
+  (get) => get(rightRailVisibleBaseAtom),
+  (_get, set, next: boolean) => {
+    set(rightRailVisibleBaseAtom, next === true);
+    writeUiValue(RIGHT_RAIL_VISIBLE_KEY, next === true);
   },
 );
 

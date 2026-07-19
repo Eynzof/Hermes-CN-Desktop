@@ -1,6 +1,6 @@
 import type { SessionSummary } from "@hermes/protocol";
 
-export const RECENT_SESSION_LIMIT = 5;
+export const RECENT_SESSION_LIMIT = 8;
 
 export function lastActivitySec(session: SessionSummary): number {
   return session.ended_at ?? session.started_at;

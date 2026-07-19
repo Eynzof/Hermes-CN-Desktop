@@ -1,4 +1,5 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type ReactNode } from "react";
+import { Button, cn, type ButtonProps } from "@hermes/shared-ui";
 import s from "./top-bar.module.css";
 
 interface TopBarProps {
@@ -7,7 +8,7 @@ interface TopBarProps {
   right?: ReactNode;
 }
 
-type TopBarActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
+type TopBarActionButtonProps = ButtonProps;
 
 export function TopBar({ title, sub, right }: TopBarProps) {
   return (
@@ -22,19 +23,23 @@ export function TopBar({ title, sub, right }: TopBarProps) {
   );
 }
 
-export const TopBarActionButton = forwardRef<
-  HTMLButtonElement,
-  TopBarActionButtonProps
->(function TopBarActionButton({ className, type = "button", ...props }, ref) {
-  return (
-    <button
-      {...props}
-      ref={ref}
-      type={type}
-      className={className ? `${s.chip} ${className}` : s.chip}
-    />
-  );
-});
+export const TopBarActionButton = forwardRef<HTMLButtonElement, TopBarActionButtonProps>(
+  function TopBarActionButton(
+    { className, type = "button", variant = "plain", size = "inherit", ...props },
+    ref,
+  ) {
+    return (
+      <Button
+        {...props}
+        ref={ref}
+        type={type}
+        variant={variant}
+        size={size}
+        className={cn(s.chip, className)}
+      />
+    );
+  },
+);
 
 export function TopBarActions() {
   return null;

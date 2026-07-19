@@ -9,9 +9,14 @@ import { PROFILE_AWARE_QUERY_KEYS } from "@/hooks/use-profiles";
 import type { YoloModeStatus } from "@hermes/protocol";
 
 /** YOLO mode is a desktop-only feature: it depends on (re)launching the managed
- * runtime, which only the Tauri/Electron shell can do. */
+ * runtime, which only the Tauri/Electron shell can do. Attached local/remote
+ * agents decide their own approval policy, so they report unsupported. */
 export function isYoloModeSupported(): boolean {
-  return typeof window !== "undefined" && !!window.hermesDesktop?.setYoloMode;
+  return (
+    typeof window !== "undefined" &&
+    !!window.hermesDesktop?.setYoloMode &&
+    runtime.isManaged()
+  );
 }
 
 export function useYoloMode() {

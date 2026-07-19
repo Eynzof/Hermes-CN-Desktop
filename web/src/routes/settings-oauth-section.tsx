@@ -11,6 +11,7 @@ import {
 } from "@/hooks/use-oauth-providers";
 import { CopyButton } from "@/components/ui/copy-button";
 import { openExternalUrl } from "@/lib/external-links";
+import { Badge, Button, Input } from "@hermes/shared-ui";
 import settings from "./settings.module.css";
 import s from "./settings-oauth-section.module.css";
 
@@ -53,17 +54,27 @@ function badgeLabel(status: ReturnType<typeof badgeStatus>): string {
   }
 }
 
+function badgeTone(status: ReturnType<typeof badgeStatus>): "success" | "warning" | "danger" | "neutral" {
+  switch (status) {
+    case "connected": return "success";
+    case "expired": return "warning";
+    case "error": return "danger";
+    default: return "neutral";
+  }
+}
+
 function flowLabel(flow: string | undefined): string {
   switch (flow) {
     case "pkce": return "浏览器授权";
     case "device_code": return "设备码登录";
+    case "loopback": return "浏览器回调";
     case "external": return "外部管理";
     default: return "";
   }
 }
 
 export function OAuthProvidersSection() {
-  const { data: providers, isLoading, refetch } = useOAuthProviders();
+  const { data: providers, isLoading, isError, error, refetch } = useOAuthProviders();
   const disconnect = useDisconnectOAuth();
   const [loginProvider, setLoginProvider] = useState<OAuthProvider | null>(null);
 
@@ -82,6 +93,19 @@ export function OAuthProvidersSection() {
   );
 
   if (isLoading) return <div className={s.oauthBlock}><span className={settings.desc}>加载 OAuth 状态…</span></div>;
+  if (isError) {
+    return (
+      <div className={s.oauthBlock}>
+        <div className={s.oauthHeader}>
+          <div>
+            <div className={s.oauthTitle}>OAuth 登录</div>
+            <div className={s.oauthDesc}>OAuth 状态加载失败：{error instanceof Error ? error.message : String(error)}</div>
+          </div>
+          <Button variant="outline" onClick={() => void refetch()}>重试</Button>
+        </div>
+      </div>
+    );
+  }
   if (!providers || providers.length === 0) return null;
 
   return (
@@ -93,12 +117,14 @@ export function OAuthProvidersSection() {
             {connectedCount}/{providers.length} 个 OAuth 登录已连接
           </div>
         </div>
-        <button className={settings.btn} onClick={() => refetch()}>刷新</button>
+        <Button variant="outline" onClick={() => void refetch()}>刷新</Button>
       </div>
 
       {providers.map((provider) => {
         const status = badgeStatus(provider);
-        const canLogin = !provider.status.logged_in && (provider.flow === "pkce" || provider.flow === "device_code");
+        const canLogin = !provider.status.logged_in && (
+          provider.flow === "pkce" || provider.flow === "device_code" || provider.flow === "loopback"
+        );
         const canDisconnect = provider.status.logged_in && provider.flow !== "external";
         const expiry = formatExpiry(provider.status.expires_at);
 
@@ -115,36 +141,31 @@ export function OAuthProvidersSection() {
               </div>
             </div>
             <div className={s.providerRight}>
-              <span className={s.badge} data-status={status}>{badgeLabel(status)}</span>
+              <Badge tone={badgeTone(status)} size="sm">{badgeLabel(status)}</Badge>
               {canLogin && (
-                <button className={settings.btnPrimary} onClick={() => setLoginProvider(provider)}>
+                <Button variant="solid" tone="accent" onClick={() => setLoginProvider(provider)}>
                   登录
-                </button>
+                </Button>
               )}
               {!provider.status.logged_in && provider.flow === "external" && provider.cli_command && (
-                <CopyButton className={settings.btn} text={provider.cli_command}>
+                <CopyButton variant="outline" size="md" text={provider.cli_command}>
                   复制命令
                 </CopyButton>
               )}
               {canDisconnect && (
-                <button
-                  className={settings.btnDanger}
+                <Button
+                  variant="outline"
+                  tone="danger"
                   disabled={disconnect.isPending}
                   onClick={() => handleDisconnect(provider)}
                 >
                   断开
-                </button>
+                </Button>
               )}
               {provider.docs_url && (
-                <a
-                  href={provider.docs_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={settings.btn}
-                  style={{ textDecoration: "none" }}
-                >
+                <Button variant="outline" onClick={() => void openExternalUrl(provider.docs_url!)}>
                   文档 ↗
-                </a>
+                </Button>
               )}
             </div>
           </div>
@@ -184,13 +205,20 @@ interface StartResultDeviceCode {
   poll_interval: number;
 }
 
+interface StartResultLoopback {
+  flow: "loopback";
+  session_id: string;
+  auth_url: string;
+  expires_in: number;
+}
+
 function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClose: () => void }) {
   const startLogin = useStartOAuthLogin();
   const submitCode = useSubmitOAuthCode();
   const cancelSession = useCancelOAuthSession();
 
   const [phase, setPhase] = useState<LoginPhase>("starting");
-  const [startResult, setStartResult] = useState<StartResultPkce | StartResultDeviceCode | null>(null);
+  const [startResult, setStartResult] = useState<StartResultPkce | StartResultDeviceCode | StartResultLoopback | null>(null);
   const [code, setCode] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [countdown, setCountdown] = useState(0);
@@ -198,19 +226,22 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
 
   const polling = usePollOAuthSession(
     provider.id,
-    startResult?.flow === "device_code" ? startResult.session_id : null,
+    startResult?.flow === "device_code" || startResult?.flow === "loopback" ? startResult.session_id : null,
     phase === "polling",
   );
 
   useEffect(() => {
     startLogin.mutateAsync(provider.id).then((result) => {
-      setStartResult(result as StartResultPkce | StartResultDeviceCode);
+      setStartResult(result as StartResultPkce | StartResultDeviceCode | StartResultLoopback);
       sessionIdRef.current = result.session_id;
       setCountdown(result.expires_in);
 
       if (result.flow === "pkce") {
         void openExternalUrl(result.auth_url);
         setPhase("awaiting_user");
+      } else if (result.flow === "loopback") {
+        void openExternalUrl(result.auth_url);
+        setPhase("polling");
       } else {
         void openExternalUrl(result.verification_url);
         setPhase("polling");
@@ -296,7 +327,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
       <div className={s.modal} onClick={(e) => e.stopPropagation()}>
         <div className={s.modalHeader}>
           <div className={s.modalTitle}>登录 {provider.name}</div>
-          <button className={s.modalClose} onClick={handleClose}>✕</button>
+          <Button variant="plain" size="inherit" className={s.modalClose} onClick={handleClose} aria-label="关闭">✕</Button>
         </div>
 
         {phase === "starting" && (
@@ -310,8 +341,9 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               <li>授权完成后，复制页面上显示的授权码</li>
               <li>将授权码粘贴到下方输入框</li>
             </ol>
-            <input
+            <Input
               className={s.codeInput}
+              mono
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="粘贴授权码…"
@@ -319,13 +351,14 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               onKeyDown={(e) => { if (e.key === "Enter") handleSubmitCode(); }}
             />
             <div className={s.modalActions}>
-              <button
-                className={settings.btnPrimary}
+              <Button
+                variant="solid"
+                tone="accent"
                 disabled={!code.trim() || submitCode.isPending}
                 onClick={handleSubmitCode}
               >
                 {submitCode.isPending ? "验证中…" : "提交"}
-              </button>
+              </Button>
               <button
                 className={s.linkBtn}
                 onClick={() => void openExternalUrl((startResult as StartResultPkce).auth_url)}
@@ -344,7 +377,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
             </p>
             <div className={s.userCode}>{startResult.user_code}</div>
             <div className={s.modalActions}>
-              <CopyButton className={settings.btn} text={startResult.user_code}>
+              <CopyButton variant="outline" size="md" text={startResult.user_code}>
                 复制验证码
               </CopyButton>
               <button
@@ -359,6 +392,24 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
           </>
         )}
 
+        {phase === "polling" && startResult?.flow === "loopback" && (
+          <>
+            <p style={{ fontSize: 13, color: "var(--h-text)", margin: "0 0 8px" }}>
+              浏览器已打开授权页；授权完成后会自动回到本机回调地址，无需复制验证码。
+            </p>
+            <div className={s.modalActions}>
+              <button
+                className={s.linkBtn}
+                onClick={() => void openExternalUrl(startResult.auth_url)}
+              >
+                重新打开授权页
+              </button>
+            </div>
+            <div className={s.statusMessage} data-type="pending">等待浏览器回调中…</div>
+            {countdown > 0 && <div className={s.countdown}>剩余时间: {formatCountdown(countdown)}</div>}
+          </>
+        )}
+
         {phase === "approved" && (
           <div className={s.statusMessage} data-type="success">已成功连接，正在关闭…</div>
         )}
@@ -367,7 +418,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
           <>
             <div className={s.statusMessage} data-type="error">{errorMsg}</div>
             <div className={s.modalActions}>
-              <button className={settings.btn} onClick={handleClose}>关闭</button>
+              <Button variant="outline" onClick={handleClose}>关闭</Button>
             </div>
           </>
         )}

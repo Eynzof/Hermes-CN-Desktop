@@ -223,6 +223,7 @@
 }
 
 .sessionRow {
+  position: relative;
   padding: 8px 16px 8px 18px;
   border-left: 2px solid transparent;
   cursor: pointer;
@@ -234,7 +235,9 @@
   text-align: left;
   color: inherit;
   font: inherit;
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .sessionRow:hover {
@@ -246,7 +249,49 @@
   border-left-color: var(--h-accent);
 }
 
+.rowMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rowMore {
+  position: absolute;
+  top: 7px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.sessionRow:hover .rowMore,
+.sessionRow:focus-within .rowMore,
+.sessionRow[data-active="true"] .rowMore,
+.rowMore[data-state="open"] {
+  opacity: 1;
+}
+
+.rowMore:hover {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.rowMore:disabled {
+  cursor: default;
+  opacity: 0;
+}
+
 .ttl {
+  box-sizing: border-box;
   font-size: 12.5px;
   color: var(--h-text);
   white-space: nowrap;
@@ -256,6 +301,7 @@
   width: 100%;
   min-width: 0;
   overflow: visible;
+  padding-right: 30px;
 }
 
 .ttlText {

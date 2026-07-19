@@ -127,6 +127,8 @@ pub async fn terminal_start(
 ) -> Result<TerminalStartResult, String> {
     let context = {
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        crate::connection::require_local_filesystem(inner.connection_mode, "本机终端")
+            .map_err(|e| e.to_string())?;
         TerminalContext {
             hermes_home: inner.hermes_home.clone(),
             hermes_home_base: inner.hermes_home_base.clone(),
@@ -220,6 +222,8 @@ pub fn terminal_open_external(
 ) -> Result<TerminalOpenExternalResult, String> {
     let context = {
         let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        crate::connection::require_local_filesystem(inner.connection_mode, "本机外部终端")
+            .map_err(|e| e.to_string())?;
         TerminalContext {
             hermes_home: inner.hermes_home.clone(),
             hermes_home_base: inner.hermes_home_base.clone(),
@@ -494,12 +498,38 @@ fn build_terminal_env(
         );
     }
 
-    if let Some(summary) = runtime_summary {
-        let existing = env::var("PATH").unwrap_or_default();
+    // Effective PATH so the in-app terminal matches the user's real one.
+    // The shell is spawned non-login (no `-l`), so it will not rebuild PATH
+    // from .zprofile itself — inject it even without a managed runtime,
+    // overriding the GUI-truncated process PATH forwarded above.
+    let effective = crate::path_resolver::effective_path_os()
+        .to_string_lossy()
+        .to_string();
+    // Prepend the bundled node bin dir (P-032) so `hermes --tui`, `npx`, and
+    // node-based MCP/lint tools resolve node/npm/npx in the in-app + external
+    // terminal without a host Node install. HERMES_NODE/HERMES_TUI_DIR make
+    // the TUI launcher deterministic and source-checkout-free.
+    let mut path = effective;
+    if let Some(node_bin) = runtime::current_node_bin_dir() {
+        let node_bin = node_bin.to_string_lossy().into_owned();
+        path = prepend_path(&node_bin, &path);
+    }
+    if let Some(node) = runtime::current_node_binary() {
         vars.insert(
-            "PATH".to_string(),
-            prepend_path(&summary.shim_dir, &existing),
+            "HERMES_NODE".to_string(),
+            node.to_string_lossy().into_owned(),
         );
+    }
+    if let Some(tui_dir) = runtime::current_tui_dir() {
+        vars.insert(
+            "HERMES_TUI_DIR".to_string(),
+            tui_dir.to_string_lossy().into_owned(),
+        );
+    }
+    vars.insert("PATH".to_string(), path.clone());
+
+    if let Some(summary) = runtime_summary {
+        vars.insert("PATH".to_string(), prepend_path(&summary.shim_dir, &path));
         vars.insert(
             "HERMES_MANAGED_RUNTIME".to_string(),
             summary.executable_path.clone(),
@@ -1120,5 +1150,25 @@ mod tests {
                 .is_some_and(|path| path.starts_with("/runtime/desktop-bin")),
             "PATH should start with managed runtime shim dir"
         );
+    }
+
+    // 没有 managed runtime 时终端同样要拿到有效 PATH：shell 以非登录方式
+    // 启动，不会自己重建 PATH，缺了注入就只剩 GUI 精简 PATH。
+    #[test]
+    fn build_terminal_env_sets_effective_path_without_managed_runtime() {
+        let context = TerminalContext {
+            hermes_home: "/tmp/hermes-home/default".to_string(),
+            hermes_home_base: "/tmp/hermes-home".to_string(),
+            profile: "default".to_string(),
+            api_base_url: String::new(),
+        };
+
+        let env_vars = build_terminal_env(&context, None, "/bin/zsh");
+
+        let expected = crate::path_resolver::effective_path_os()
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(env_vars.get("PATH"), Some(&expected));
+        assert!(!env_vars.contains_key("HERMES_MANAGED_RUNTIME"));
     }
 }

@@ -1,0 +1,52 @@
+/* Hermes Design Tokens — Component sizing */
+
+:root,
+[data-density="comfortable"] {
+  --h-control-height-xs: 24px;
+  --h-control-height-sm: 28px;
+  --h-control-height-md: 32px;
+  --h-control-height-lg: 36px;
+
+  --h-button-height-xs: var(--h-control-height-xs);
+  --h-button-height-sm: var(--h-control-height-sm);
+  --h-button-height-md: var(--h-control-height-md);
+  --h-button-height-lg: var(--h-control-height-lg);
+  --h-button-padding-x-xs: 8px;
+  --h-button-padding-x-sm: 10px;
+  --h-button-padding-x-md: 12px;
+  --h-button-padding-x-lg: 14px;
+  --h-button-radius: var(--h-r-sm);
+  --h-button-gap: 6px;
+  --h-button-font-size: 12px;
+
+  --h-input-height-sm: var(--h-control-height-sm);
+  --h-input-height-md: var(--h-control-height-md);
+  --h-input-height-lg: var(--h-control-height-lg);
+  --h-input-padding-x: 10px;
+  --h-input-radius: var(--h-r-md);
+  --h-input-font-size: 12px;
+
+  --h-card-radius: var(--h-r-lg);
+  --h-card-padding-sm: 12px;
+  --h-card-padding-md: 16px;
+  --h-card-padding-lg: 20px;
+
+  --h-table-row-height: 36px;
+  --h-dialog-width-md: 560px;
+}
+
+[data-density="compact"] {
+  --h-control-height-xs: 22px;
+  --h-control-height-sm: 26px;
+  --h-control-height-md: 30px;
+  --h-control-height-lg: 34px;
+  --h-button-padding-x-xs: 7px;
+  --h-button-padding-x-sm: 9px;
+  --h-button-padding-x-md: 10px;
+  --h-button-padding-x-lg: 12px;
+  --h-input-padding-x: 9px;
+  --h-card-padding-sm: 10px;
+  --h-card-padding-md: 14px;
+  --h-card-padding-lg: 18px;
+  --h-table-row-height: 32px;
+}

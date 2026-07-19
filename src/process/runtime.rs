@@ -23,6 +23,11 @@ const RUNTIME_SUBDIR_RELEASE: &str = "runtime";
 /// poison the packaged app's `current.json`.
 const RUNTIME_SUBDIR_DEV: &str = "dev-runtime";
 const LOCAL_SOURCE_ARCHIVE_FILE: &str = "current.json.local-source.bak";
+/// Marker file shipped inside the portable zip, next to the executable (next
+/// to the `.app` bundle on macOS — it cannot live inside the bundle without
+/// breaking code signing). Its presence — not its content — switches the app
+/// into portable mode: the whole runtime tree anchors to `<anchor>/data`.
+const PORTABLE_MARKER_FILE: &str = "portable.marker";
 const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
@@ -42,6 +47,13 @@ const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 // first run. Keep the smoke check long enough for the cold path and let normal
 // launches stay fast via the runtime's own cache.
 const SMOKE_TIMEOUT: Duration = Duration::from_secs(60);
+// Spawning a just-written/just-extracted executable can transiently fail with
+// ETXTBSY ("Text file busy"): a concurrent fork in another thread may have
+// inherited a write fd to the file, so exec sees it as still open for writing.
+// A few short retries let that inherited fd close (the racing child execs or
+// exits). This hardens both the real post-install path and the smoke-check test
+// under cargo's multi-threaded runner.
+const SMOKE_SPAWN_RETRIES: u32 = 5;
 static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .connect_timeout(RUNTIME_HTTP_CONNECT_TIMEOUT)
@@ -144,6 +156,9 @@ pub struct RuntimeInfo {
     pub process: Option<RuntimeProcessInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
+    pub guide_state: String,
+    pub managed_runtime_desired_state: String,
+    pub managed_runtime_lifecycle_state: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -272,20 +287,183 @@ fn runtime_binary_names() -> Vec<String> {
 /// files, and the isolated HERMES_HOME all live under this directory.
 /// `HERMES_DESKTOP_RUNTIME_ROOT` may move the whole tree, but individual
 /// subdirectories are intentionally not independently overridable.
+///
+/// On a fresh Windows release install the root is anchored under the
+/// user-chosen install directory (`<install dir>\data`) so that picking another
+/// drive (e.g. D:\) at install time actually keeps the growing data off C:.
+/// Existing installs (whose data already lives under the legacy AppData root)
+/// and every non-Windows / debug build keep the legacy `dirs::data_dir()`
+/// anchor — there is no migration and no surprise relocation.
 pub fn runtime_root() -> PathBuf {
+    // Explicit override always wins (dev / tests / power users / escape hatch).
+    // Read fresh on every call so tooling can redirect the whole tree at will.
     if let Ok(override_path) = std::env::var("HERMES_DESKTOP_RUNTIME_ROOT") {
         let trimmed = override_path.trim();
         if !trimmed.is_empty() {
             return PathBuf::from(trimmed);
         }
     }
+    NON_OVERRIDE_RUNTIME_ROOT.clone()
+}
 
+/// Resolved (non-override) runtime root, computed once. The probing it does
+/// (current_exe + writability + legacy-data check) touches the filesystem, and
+/// `runtime_root()` is called from many hot paths, so memoize the result.
+static NON_OVERRIDE_RUNTIME_ROOT: LazyLock<PathBuf> =
+    LazyLock::new(|| resolve_non_override_runtime_root(cfg!(all(windows, not(debug_assertions)))));
+
+/// Portable anchor, resolved once per process: `Some(unzip dir)` when the
+/// portable marker file sits next to the executable / app bundle. Probing
+/// touches current_exe + the filesystem, so memoize it like
+/// `NON_OVERRIDE_RUNTIME_ROOT` (adding/removing the marker needs a restart,
+/// consistent with the root itself being fixed for the process lifetime).
+static PORTABLE_ANCHOR: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+    let exe = std::env::current_exe().ok()?;
+    let anchor = portable_anchor_dir_from_exe(&exe)?;
+    anchor
+        .join(PORTABLE_MARKER_FILE)
+        .is_file()
+        .then_some(anchor)
+});
+
+/// Whether this process runs as the portable (unzip-and-run) distribution.
+pub fn portable_mode_active() -> bool {
+    PORTABLE_ANCHOR.is_some()
+}
+
+/// Directory the portable marker (and the `data` tree) is expected in: the
+/// folder the user unzipped. On macOS the executable lives inside
+/// `<unzip dir>/<name>.app/Contents/MacOS/`, so the anchor is the `.app`'s
+/// parent; everywhere else it is simply the executable's own directory.
+fn portable_anchor_dir_from_exe(exe: &Path) -> Option<PathBuf> {
+    for ancestor in exe.ancestors() {
+        if ancestor
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("app"))
+        {
+            return ancestor.parent().map(Path::to_path_buf);
+        }
+    }
+    exe.parent().map(Path::to_path_buf)
+}
+
+/// The historical anchor: `<OS data dir>/cn.org.hermesagent.desktop/<runtime>`.
+/// Used for existing Windows installs, all non-Windows platforms, and dev.
+fn legacy_appdata_runtime_root() -> PathBuf {
     let base = resolve_runtime_data_base(dirs::data_dir(), dirs::home_dir()).expect(
         "无法确定可写的数据目录：系统数据目录与用户主目录都不可用。\
          请设置环境变量 HERMES_DESKTOP_RUNTIME_ROOT 指向一个可写目录后重试。",
     );
     base.join("cn.org.hermesagent.desktop")
         .join(runtime_subdir_name())
+}
+
+/// Gather the real inputs (legacy root, install dir, writability) and delegate
+/// the branch policy to the pure `decide_non_override_root` so the decision is
+/// unit testable without touching the real filesystem or executable path.
+fn resolve_non_override_runtime_root(win_release: bool) -> PathBuf {
+    let legacy_root = legacy_appdata_runtime_root();
+
+    // Portable distribution (marker next to the executable / .app): anchor the
+    // whole tree to `<unzip dir>/data` on every platform, debug builds
+    // included, so a portable unzip never touches the installed copy's data.
+    // Without the marker this is zero-side-effect.
+    let portable_data_root: Option<PathBuf> =
+        PORTABLE_ANCHOR.as_deref().map(|anchor| anchor.join("data"));
+    let portable_writable = portable_data_root
+        .as_deref()
+        .map(dir_is_writable)
+        .unwrap_or(false);
+    if let (Some(root), false) = (portable_data_root.as_deref(), portable_writable) {
+        // Read-only media (e.g. running from a mounted archive): portable
+        // intent cannot be honored — fall through to the regular policy.
+        log::warn!(
+            "portable.marker found but portable data dir is not writable, \
+             falling back to the default data location: {}",
+            root.display()
+        );
+    }
+
+    // Off the Windows-release path there is nothing to anchor to the install
+    // directory — keep the legacy root and avoid any filesystem side effects
+    // (byte-for-byte the historic behavior on macOS / Linux / dev).
+    if !win_release && portable_data_root.is_none() {
+        return legacy_root;
+    }
+
+    // Existing-install guard: if the legacy AppData tree already holds data,
+    // keep using it so in-place upgrades never strand sessions/config (we do
+    // not migrate). `current.json` exists once a runtime is installed;
+    // `hermes-home` covers the seeded-but-not-yet-installed case.
+    let legacy_has_data =
+        legacy_root.join(CURRENT_FILE).exists() || legacy_root.join("hermes-home").exists();
+
+    // Fresh install: anchor under `<install dir>\data` when it is writable.
+    let install_data_root = std::env::current_exe()
+        .ok()
+        .as_deref()
+        .and_then(Path::parent)
+        .map(|install_dir| install_dir.join("data"));
+    let install_writable = install_data_root
+        .as_deref()
+        .map(dir_is_writable)
+        .unwrap_or(false);
+
+    decide_non_override_root(
+        win_release,
+        portable_data_root.as_deref(),
+        portable_writable,
+        legacy_has_data,
+        install_data_root.as_deref(),
+        install_writable,
+        legacy_root,
+    )
+}
+
+/// Pure runtime-root policy (no I/O). A writable portable anchor wins
+/// unconditionally (explicit opt-in via marker file, every platform, even over
+/// an existing legacy tree — the portable copy must never be diverted to the
+/// installed copy's data). Otherwise anchor under the install directory only
+/// for a fresh Windows-release install whose target dir is writable; otherwise
+/// fall back to the legacy AppData root. Cross-platform & fully unit tested.
+fn decide_non_override_root(
+    win_release: bool,
+    portable_data_root: Option<&Path>,
+    portable_writable: bool,
+    legacy_has_data: bool,
+    install_data_root: Option<&Path>,
+    install_writable: bool,
+    legacy_root: PathBuf,
+) -> PathBuf {
+    if portable_writable {
+        if let Some(root) = portable_data_root {
+            return root.to_path_buf();
+        }
+    }
+    if win_release && !legacy_has_data && install_writable {
+        if let Some(root) = install_data_root {
+            return root.to_path_buf();
+        }
+    }
+    legacy_root
+}
+
+/// Best-effort writability probe: the directory is usable if we can create it
+/// and then create+remove a probe file inside. Rejects read-only or
+/// permission-locked install locations (e.g. an admin-only Program Files) so
+/// the caller can fall back to AppData instead.
+fn dir_is_writable(dir: &Path) -> bool {
+    if fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(".hermes-write-probe");
+    match fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 fn runtime_subdir_name() -> &'static str {
@@ -344,6 +522,21 @@ fn versions_root() -> PathBuf {
 
 fn downloads_root() -> PathBuf {
     runtime_root().join("downloads")
+}
+
+fn create_runtime_staging_dir() -> Result<tempfile::TempDir, String> {
+    let versions = versions_root();
+    ensure_managed_subdir(&versions, "versions")?;
+    tempfile::Builder::new()
+        .prefix(".installing-")
+        .tempdir_in(&versions)
+        .map_err(|e| {
+            format!(
+                "Failed to create staging dir in {}: {}",
+                versions.display(),
+                e
+            )
+        })
 }
 
 pub fn gateway_runtime_dir() -> PathBuf {
@@ -616,6 +809,9 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         .as_ref()
         .and_then(|record| file_sha256(Path::new(&record.executable_path)));
     let source = current.as_ref().and_then(runtime_source_info);
+    let control = crate::desktop_control::read();
+    let lifecycle =
+        crate::desktop_control::managed_runtime_lifecycle_state(current.is_some(), false);
     RuntimeInfo {
         mode: mode.to_string(),
         packaged: false, // Tauri's `is_packaged` equivalent checked at runtime
@@ -633,6 +829,9 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         source,
         process: None,
         last_error,
+        guide_state: control.guide_state.as_str().to_string(),
+        managed_runtime_desired_state: control.managed_runtime_desired_state.as_str().to_string(),
+        managed_runtime_lifecycle_state: lifecycle.to_string(),
     }
 }
 
@@ -757,6 +956,85 @@ pub fn current_bundled_plugins_dir() -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+// --- Bundled Node.js runtime + prebuilt Ink TUI (P-032) -------------------
+// release-runtime.yml stages a full Node LTS dist and the prebuilt TUI into
+// the runtime payload. Layout (relative to the installed runtime root, i.e.
+// the install record `path`):
+//   POSIX:   node/bin/{node,npm,npx} + node/lib/node_modules/npm
+//   Windows: node/{node.exe,npm.cmd,npx.cmd} + node/node_modules/npm
+//   TUI:     tui/dist/entry.js
+fn runtime_node_bin_dir(runtime_dir: &Path) -> PathBuf {
+    let node = runtime_dir.join("node");
+    if cfg!(target_os = "windows") {
+        node
+    } else {
+        node.join("bin")
+    }
+}
+
+fn runtime_node_binary(runtime_dir: &Path) -> PathBuf {
+    let bin = runtime_node_bin_dir(runtime_dir);
+    if cfg!(target_os = "windows") {
+        bin.join("node.exe")
+    } else {
+        bin.join("node")
+    }
+}
+
+fn runtime_tui_dir(runtime_dir: &Path) -> PathBuf {
+    runtime_dir.join("tui")
+}
+
+fn node_bin_dir_if_present(runtime_dir: &Path) -> Option<PathBuf> {
+    runtime_node_binary(runtime_dir)
+        .is_file()
+        .then(|| runtime_node_bin_dir(runtime_dir))
+}
+
+fn node_binary_if_present(runtime_dir: &Path) -> Option<PathBuf> {
+    let node = runtime_node_binary(runtime_dir);
+    node.is_file().then_some(node)
+}
+
+fn tui_dir_if_present(runtime_dir: &Path) -> Option<PathBuf> {
+    let tui = runtime_tui_dir(runtime_dir);
+    tui.join("dist").join("entry.js").is_file().then_some(tui)
+}
+
+/// Directory holding the bundled `node`/`npm`/`npx`, when the current managed
+/// runtime ships one. Prepend to a spawned child's PATH so `shutil.which`
+/// (TUI launch, node-based MCP servers, playwright, `npx tsc`) resolves them
+/// without a host Node install. See FORK_NOTES P-032.
+pub fn current_node_bin_dir() -> Option<PathBuf> {
+    node_bin_dir_if_present(Path::new(&read_current_record()?.path))
+}
+
+/// Absolute path to the bundled `node` executable, for the `HERMES_NODE` env
+/// var the frozen runtime prefers when launching the Ink TUI (P-032).
+pub fn current_node_binary() -> Option<PathBuf> {
+    node_binary_if_present(Path::new(&read_current_record()?.path))
+}
+
+/// Directory holding the prebuilt Ink TUI bundle (`tui/dist/entry.js`), for
+/// `HERMES_TUI_DIR` so the frozen runtime launches /chat without a ui-tui/
+/// source checkout (P-032).
+pub fn current_tui_dir() -> Option<PathBuf> {
+    tui_dir_if_present(Path::new(&read_current_record()?.path))
+}
+
+/// Prepend the bundled node `bin/` dir (when present) to `base`, so a spawned
+/// child resolves the runtime's `node`/`npm`/`npx` via PATH — for the Ink TUI,
+/// node-based MCP stdio servers, playwright, and `npx tsc`. Returns `base`
+/// unchanged when no bundled node is installed. See FORK_NOTES P-032.
+pub fn prepend_bundled_node_to_path(base: std::ffi::OsString) -> std::ffi::OsString {
+    let Some(node_bin) = current_node_bin_dir() else {
+        return base;
+    };
+    let mut dirs = vec![node_bin];
+    dirs.extend(std::env::split_paths(&base));
+    std::env::join_paths(dirs).unwrap_or(base)
 }
 
 fn sync_dashboard_web_dist_from_resource(
@@ -896,7 +1174,9 @@ pub fn bundled_runtime_available(resource_dir: Option<&Path>) -> bool {
             || bundled_expanded_runtime_dir(&runtime_dir).is_dir())
 }
 
-fn validate_manifest_for_current_platform(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
+fn validate_manifest_for_current_platform(
+    manifest: &RuntimeUpdateManifest,
+) -> Result<String, String> {
     if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
         return Err(format!(
             "Manifest schemaVersion is {}, expected {}",
@@ -912,7 +1192,7 @@ fn validate_manifest_for_current_platform(manifest: &RuntimeUpdateManifest) -> R
             current_arch()
         ));
     }
-    Ok(())
+    safe_version_segment(&manifest.runtime_version)
 }
 
 fn runtime_source_info(record: &RuntimeInstallRecord) -> Option<RuntimeSourceInfo> {
@@ -1132,23 +1412,134 @@ fn verify_signature_with_key(
         .map_err(|_| "Signature verification failed".to_string())
 }
 
-fn safe_version_segment(version: &str) -> String {
-    let cleaned: String = version
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '_' || *c == '+' || *c == '-')
-        .take(120)
-        .collect();
-    if cleaned.is_empty() {
-        format!(
-            "{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-        )
-    } else {
-        cleaned
+fn safe_version_segment(version: &str) -> Result<String, String> {
+    const MAX_VERSION_SEGMENT_LEN: usize = 120;
+
+    if version.is_empty() {
+        return Err("runtimeVersion must not be empty".to_string());
     }
+    if version == "." || version == ".." {
+        return Err(format!(
+            "runtimeVersion must be a normal path segment, got {version:?}"
+        ));
+    }
+    if version.len() > MAX_VERSION_SEGMENT_LEN {
+        return Err(format!(
+            "runtimeVersion exceeds {MAX_VERSION_SEGMENT_LEN} bytes"
+        ));
+    }
+    if !version
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '+' | '-'))
+    {
+        return Err(
+            "runtimeVersion may only contain ASCII letters, digits, '.', '_', '+' and '-'"
+                .to_string(),
+        );
+    }
+
+    Ok(version.to_string())
+}
+
+fn ensure_managed_subdir(path: &Path, label: &str) -> Result<PathBuf, String> {
+    fs::create_dir_all(path).map_err(|error| {
+        format!(
+            "Failed to create managed {label} directory {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    let canonical_root = runtime_root().canonicalize().map_err(|error| {
+        format!(
+            "Failed to validate runtime root {}: {}",
+            runtime_root().display(),
+            error
+        )
+    })?;
+    let canonical_path = path.canonicalize().map_err(|error| {
+        format!(
+            "Failed to validate managed {label} directory {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    if canonical_path == canonical_root || !canonical_path.starts_with(&canonical_root) {
+        return Err(format!(
+            "Managed {label} directory escapes runtime root: {}",
+            canonical_path.display()
+        ));
+    }
+    Ok(canonical_path)
+}
+
+fn prepare_runtime_cache_target(target: &Path) -> Result<(), String> {
+    ensure_managed_subdir(&downloads_root(), "downloads")?;
+    match fs::symlink_metadata(target) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(format!(
+            "Refusing to overwrite symlinked runtime cache file {}",
+            target.display()
+        )),
+        Ok(metadata) if !metadata.is_file() => Err(format!(
+            "Runtime cache target is not a regular file: {}",
+            target.display()
+        )),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "Failed to inspect runtime cache target {}: {}",
+            target.display(),
+            error
+        )),
+    }
+}
+
+fn remove_existing_runtime_target(target: &Path) -> Result<(), String> {
+    let metadata = match fs::symlink_metadata(target) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!(
+                "Failed to inspect existing runtime target {}: {}",
+                target.display(),
+                error
+            ));
+        }
+    };
+    if metadata.file_type().is_symlink() {
+        return Err(format!(
+            "Refusing to replace symlinked runtime target {}",
+            target.display()
+        ));
+    }
+    if !metadata.is_dir() {
+        return Err(format!(
+            "Existing runtime target is not a directory: {}",
+            target.display()
+        ));
+    }
+
+    let versions = ensure_managed_subdir(&versions_root(), "versions")?;
+    let canonical_target = target.canonicalize().map_err(|error| {
+        format!(
+            "Failed to validate existing runtime target {}: {}",
+            target.display(),
+            error
+        )
+    })?;
+    if canonical_target == versions || !canonical_target.starts_with(&versions) {
+        return Err(format!(
+            "Refusing to remove runtime target outside versions root: {}",
+            canonical_target.display()
+        ));
+    }
+
+    fs::remove_dir_all(target).map_err(|error| {
+        format!(
+            "Failed to remove existing runtime target {}: {}",
+            target.display(),
+            error
+        )
+    })
 }
 
 async fn wait_for_smoke_child(
@@ -1170,14 +1561,62 @@ async fn wait_for_smoke_child(
 }
 
 async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
-    let child = Command::new(executable_path)
-        .args(["dashboard", "--help"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| format!("Smoke check spawn failed: {}", e))?;
+    let workdir = executable_path.parent().unwrap_or_else(|| Path::new("."));
+    let executable_display = executable_path.display().to_string();
+    let workdir_display = workdir.display().to_string();
+    let cwd_display = std::env::current_dir()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|e| format!("<unavailable: {}>", e));
+    let size = fs::metadata(executable_path)
+        .map(|metadata| metadata.len().to_string())
+        .unwrap_or_else(|e| format!("<unavailable: {}>", e));
+
+    let mut attempt = 0;
+    let child = loop {
+        match Command::new(executable_path)
+            .current_dir(workdir)
+            .args(["dashboard", "--help"])
+            .env("HERMES_DISABLE_LAZY_INSTALLS", "1")
+            .env("HERMES_DASHBOARD_PREWARM_AGENT", "0")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => break child,
+            Err(e) if is_text_file_busy(&e) && attempt < SMOKE_SPAWN_RETRIES => {
+                attempt += 1;
+                tokio::time::sleep(Duration::from_millis(50 * u64::from(attempt))).await;
+            }
+            Err(e) => {
+                return Err(format!(
+                    "Smoke check spawn failed for {} (exists={}, file_size={}, cwd={}, workdir={}): {}",
+                    executable_display,
+                    executable_path.is_file(),
+                    size,
+                    cwd_display,
+                    workdir_display,
+                    e
+                ));
+            }
+        }
+    };
 
     wait_for_smoke_child(child, SMOKE_TIMEOUT).await
+}
+
+/// True when the spawn error is ETXTBSY ("Text file busy"), which can briefly
+/// occur right after writing/extracting an executable. Unix-only; the kind has
+/// no Windows equivalent here.
+fn is_text_file_busy(e: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        e.raw_os_error() == Some(libc::ETXTBSY)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = e;
+        false
+    }
 }
 
 fn install_record_from_manifest(
@@ -1212,14 +1651,17 @@ async fn install_runtime_zip(
     zip_path: &Path,
     source: &str,
 ) -> RuntimeInstallUpdateResult {
-    if let Err(e) = validate_manifest_for_current_platform(&resolved) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
+    let version_segment = match validate_manifest_for_current_platform(&resolved) {
+        Ok(version_segment) => version_segment,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
 
     let digest = match file_sha256(zip_path) {
         Some(digest) => digest,
@@ -1247,22 +1689,15 @@ async fn install_runtime_zip(
         };
     }
 
-    // Extract to staging directory.
-    let staging = match tempfile::tempdir() {
-        Ok(d) => d,
-        Err(e) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Failed to create temp dir: {}", e)),
-            };
-        }
-    };
-
-    let _ = fs::create_dir_all(downloads_root());
-    let _ = fs::create_dir_all(versions_root());
-    let cached_zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
+    let cached_zip_path = downloads_root().join(format!("{version_segment}.zip"));
+    if let Err(e) = prepare_runtime_cache_target(&cached_zip_path) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if zip_path != cached_zip_path {
         if let Err(e) = fs::copy(zip_path, &cached_zip_path) {
             return RuntimeInstallUpdateResult {
@@ -1273,6 +1708,24 @@ async fn install_runtime_zip(
             };
         }
     }
+
+    // Extract to a staging directory inside the managed runtime tree, not the
+    // system temp directory. Windows endpoint protection commonly applies
+    // stricter rules to executables created under %TEMP%; running the smoke
+    // check from the same tree that will hold the installed runtime avoids a
+    // false first-launch failure while keeping current.json untouched until the
+    // smoke check succeeds.
+    let staging = match create_runtime_staging_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
 
     if let Err(e) = extract_zip(&cached_zip_path, staging.path()) {
         return RuntimeInstallUpdateResult {
@@ -1304,8 +1757,15 @@ async fn install_runtime_zip(
         };
     }
 
-    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
-    let _ = fs::remove_dir_all(&target);
+    let target = versions_root().join(&version_segment);
+    if let Err(e) = remove_existing_runtime_target(&target) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if let Err(e) = fs::rename(staging.path(), &target) {
         if let Err(e2) = copy_dir_all(staging.path(), &target) {
             return RuntimeInstallUpdateResult {
@@ -1354,14 +1814,17 @@ async fn install_runtime_tree(
     runtime_tree_path: &Path,
     source: &str,
 ) -> RuntimeInstallUpdateResult {
-    if let Err(e) = validate_manifest_for_current_platform(&resolved) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
+    let version_segment = match validate_manifest_for_current_platform(&resolved) {
+        Ok(version_segment) => version_segment,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
 
     if !runtime_tree_path.is_dir() {
         return RuntimeInstallUpdateResult {
@@ -1375,14 +1838,14 @@ async fn install_runtime_tree(
         };
     }
 
-    let staging = match tempfile::tempdir() {
+    let staging = match create_runtime_staging_dir() {
         Ok(d) => d,
         Err(e) => {
             return RuntimeInstallUpdateResult {
                 ok: false,
                 installed: None,
                 previous: None,
-                error: Some(format!("Failed to create temp dir: {}", e)),
+                error: Some(e),
             };
         }
     };
@@ -1422,9 +1885,15 @@ async fn install_runtime_tree(
         };
     }
 
-    let _ = fs::create_dir_all(versions_root());
-    let target = versions_root().join(safe_version_segment(&resolved.runtime_version));
-    let _ = fs::remove_dir_all(&target);
+    let target = versions_root().join(&version_segment);
+    if let Err(e) = remove_existing_runtime_target(&target) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if let Err(e) = fs::rename(staging.path(), &target) {
         if let Err(e2) = copy_dir_all(staging.path(), &target) {
             return RuntimeInstallUpdateResult {
@@ -1654,6 +2123,18 @@ pub async fn install_runtime_update(
         };
     }
 
+    let version_segment = match validate_manifest_for_current_platform(&resolved) {
+        Ok(version_segment) => version_segment,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            };
+        }
+    };
+
     // Validate URL scheme before downloading
     match url::Url::parse(&resolved.artifact_url) {
         Ok(u) if u.scheme() == "https" => {}
@@ -1712,9 +2193,15 @@ pub async fn install_runtime_update(
 
     // Write zip to downloads dir; the shared installer path verifies,
     // extracts, smoke-tests, and records it.
-    let _ = fs::create_dir_all(downloads_root());
-    let _ = fs::create_dir_all(versions_root());
-    let zip_path = downloads_root().join(format!("{}.zip", resolved.runtime_version));
+    let zip_path = downloads_root().join(format!("{version_segment}.zip"));
+    if let Err(e) = prepare_runtime_cache_target(&zip_path) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
     if let Err(e) = fs::write(&zip_path, &artifact) {
         return RuntimeInstallUpdateResult {
             ok: false,
@@ -1753,7 +2240,26 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
         }
     };
 
-    let prev_path = versions_root().join(safe_version_segment(&prev_runtime_version));
+    let prev_version_segment = match safe_version_segment(&prev_runtime_version) {
+        Ok(version_segment) => version_segment,
+        Err(error) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: Some(current),
+                error: Some(format!("Invalid previous runtime version: {error}")),
+            };
+        }
+    };
+    if let Err(error) = ensure_managed_subdir(&versions_root(), "versions") {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: Some(current),
+            error: Some(error),
+        };
+    }
+    let prev_path = versions_root().join(prev_version_segment);
     let executable = match find_executable_in(&prev_path, 2) {
         Some(e) => e,
         None => {
@@ -1812,6 +2318,41 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
 const MAX_ZIP_FILES: usize = 5_000;
 const MAX_ZIP_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
 
+/// Returns true when a symlink whose target is `target`, living in directory
+/// `link_parent`, resolves to a path that stays inside `dest`. The target is
+/// resolved purely lexically (no filesystem access, so it works before the
+/// target exists): `.` is ignored and `..` pops the last real segment. Absolute
+/// targets, and relative targets that climb above `dest`, are rejected. This
+/// permits the `..`-into-subtree links shipped by Node.js (`bin/corepack` ->
+/// `../lib/node_modules/...`) while still blocking zip-slip via symlink.
+#[cfg(unix)]
+fn symlink_target_within(dest: &Path, link_parent: &Path, target: &Path) -> bool {
+    use std::path::Component;
+
+    if target.is_absolute() {
+        return false;
+    }
+
+    let mut resolved: Vec<Component> = link_parent.components().collect();
+    for component in target.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => match resolved.last() {
+                // Only collapse against a real path segment; never climb past
+                // the root we started from.
+                Some(Component::Normal(_)) => {
+                    resolved.pop();
+                }
+                _ => return false,
+            },
+            other => resolved.push(other),
+        }
+    }
+
+    let resolved: PathBuf = resolved.iter().collect();
+    resolved.starts_with(dest)
+}
+
 fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
@@ -1845,6 +2386,7 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
             return Err(format!("Path escapes destination: {:?}", relative));
         }
 
+        #[cfg(unix)]
         let mode = entry.unix_mode();
         #[cfg(unix)]
         let is_symlink = mode.map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
@@ -1869,8 +2411,6 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
             if is_symlink {
                 #[cfg(unix)]
                 {
-                    use std::path::Component;
-
                     let mut target_bytes = Vec::new();
                     entry
                         .read_to_end(&mut target_bytes)
@@ -1878,12 +2418,16 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
                     let target = String::from_utf8(target_bytes)
                         .map_err(|e| format!("Invalid UTF-8 symlink target: {}", e))?;
                     let target_path = Path::new(&target);
-                    if target_path.components().any(|component| {
-                        matches!(
-                            component,
-                            Component::ParentDir | Component::RootDir | Component::Prefix(_)
-                        )
-                    }) {
+
+                    // Relative symlinks may legitimately use `..` to point at a
+                    // sibling subtree — Node.js ships `bin/corepack` ->
+                    // `../lib/node_modules/corepack/dist/corepack.js` (likewise
+                    // npm/npx), and `Python.framework` is a web of such links.
+                    // Resolve the target lexically against the link's own
+                    // directory and reject only links that climb out of `dest`
+                    // (or are absolute).
+                    let link_parent = out_path.parent().unwrap_or(dest.as_path());
+                    if !symlink_target_within(&dest, link_parent, target_path) {
                         return Err(format!("Refusing unsafe symlink target: {:?}", target));
                     }
                     std::os::unix::fs::symlink(target_path, &out_path)
@@ -2163,6 +2707,40 @@ mod tests {
     }
 
     #[test]
+    fn node_helpers_gate_on_bundled_binary() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        // Nothing staged → no node.
+        assert!(node_bin_dir_if_present(root).is_none());
+        assert!(node_binary_if_present(root).is_none());
+
+        // Stage the node binary at the platform-correct path (helper decides
+        // node/bin/node on POSIX, node/node.exe on Windows).
+        let node = runtime_node_binary(root);
+        std::fs::create_dir_all(node.parent().unwrap()).unwrap();
+        std::fs::write(&node, b"x").unwrap();
+
+        assert_eq!(node_binary_if_present(root), Some(node));
+        assert_eq!(
+            node_bin_dir_if_present(root),
+            Some(runtime_node_bin_dir(root))
+        );
+    }
+
+    #[test]
+    fn tui_dir_present_only_with_entry_js() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let dist = root.join("tui").join("dist");
+        std::fs::create_dir_all(&dist).unwrap();
+        // Directory exists but entry.js missing → not usable.
+        assert!(tui_dir_if_present(root).is_none());
+
+        std::fs::write(dist.join("entry.js"), b"//tui").unwrap();
+        assert_eq!(tui_dir_if_present(root), Some(root.join("tui")));
+    }
+
+    #[test]
     fn resolve_runtime_data_base_prefers_os_data_dir() {
         let base =
             resolve_runtime_data_base(Some(PathBuf::from("/data")), Some(PathBuf::from("/home/u")));
@@ -2234,6 +2812,191 @@ mod tests {
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 
+    // -------- non-override runtime-root policy (decide_non_override_root) --------
+
+    #[test]
+    fn decide_root_fresh_windows_install_uses_install_dir() {
+        let install = PathBuf::from(r"D:\Hermes\data");
+        assert_eq!(
+            decide_non_override_root(
+                true, // win_release
+                None, // no portable marker
+                false,
+                false, // legacy_has_data
+                Some(install.as_path()),
+                true, // install_writable
+                PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime"),
+            ),
+            install,
+        );
+    }
+
+    #[test]
+    fn decide_root_existing_user_keeps_appdata() {
+        // In-place upgrade: legacy tree already has data -> never migrate.
+        let legacy = PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime");
+        assert_eq!(
+            decide_non_override_root(
+                true,
+                None,
+                false,
+                true, // legacy_has_data
+                Some(Path::new(r"D:\Hermes\data")),
+                true,
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn decide_root_non_writable_install_falls_back_to_appdata() {
+        let legacy = PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime");
+        assert_eq!(
+            decide_non_override_root(
+                true,
+                None,
+                false,
+                false,
+                Some(Path::new(r"C:\Program Files\Hermes\data")),
+                false, // not writable -> fall back to AppData (no regression)
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn decide_root_non_windows_or_debug_always_appdata() {
+        let legacy = PathBuf::from("/home/u/.local/share/cn.org.hermesagent.desktop/runtime");
+        assert_eq!(
+            decide_non_override_root(
+                false, // not win_release (macOS / Linux / dev)
+                None,
+                false,
+                false,
+                Some(Path::new("/opt/app/data")),
+                true,
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn decide_root_unresolvable_exe_falls_back_to_appdata() {
+        let legacy = PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime");
+        assert_eq!(
+            decide_non_override_root(true, None, false, false, None, true, legacy.clone()),
+            legacy,
+        );
+    }
+
+    // -------- portable mode (marker file next to the exe / .app) --------
+
+    #[test]
+    fn decide_root_portable_wins_over_existing_legacy_data() {
+        // A portable unzip on a machine that also has an installed copy must
+        // use its own `data` dir, never the installed copy's AppData tree.
+        let portable = PathBuf::from(r"E:\HermesPortable\data");
+        assert_eq!(
+            decide_non_override_root(
+                true,
+                Some(portable.as_path()),
+                true,
+                true, // legacy_has_data — portable still wins
+                Some(Path::new(r"E:\HermesPortable\data")),
+                true,
+                PathBuf::from(r"C:\AppData\Roaming\cn.org.hermesagent.desktop\runtime"),
+            ),
+            portable,
+        );
+    }
+
+    #[test]
+    fn decide_root_portable_applies_on_all_platforms() {
+        // macOS / Linux / debug builds: the marker is an explicit opt-in and
+        // overrides the non-Windows legacy-only policy.
+        let portable = PathBuf::from("/Users/u/Desktop/HermesPortable/data");
+        assert_eq!(
+            decide_non_override_root(
+                false, // not win_release
+                Some(portable.as_path()),
+                true,
+                false,
+                None,
+                false,
+                PathBuf::from("/home/u/.local/share/cn.org.hermesagent.desktop/runtime"),
+            ),
+            portable,
+        );
+    }
+
+    #[test]
+    fn decide_root_portable_not_writable_falls_back() {
+        // Read-only media (zip mounted, locked folder): fall back to the
+        // regular policy instead of failing.
+        let legacy = PathBuf::from("/home/u/.local/share/cn.org.hermesagent.desktop/runtime");
+        assert_eq!(
+            decide_non_override_root(
+                false,
+                Some(Path::new("/Volumes/ro/HermesPortable/data")),
+                false, // not writable
+                false,
+                None,
+                false,
+                legacy.clone(),
+            ),
+            legacy,
+        );
+    }
+
+    #[test]
+    fn portable_anchor_plain_exe_uses_exe_dir() {
+        // Separator-parsing test: use `/` paths so it behaves identically on
+        // every host platform (the Windows layout is the same shape).
+        assert_eq!(
+            portable_anchor_dir_from_exe(Path::new(
+                "/unzip/HermesPortable/Hermes Agent CN Desktop.exe"
+            )),
+            Some(PathBuf::from("/unzip/HermesPortable")),
+        );
+    }
+
+    #[test]
+    fn portable_anchor_macos_app_bundle_uses_app_parent() {
+        // The marker cannot live inside the signed .app, so the anchor is the
+        // bundle's parent (the unzip folder).
+        assert_eq!(
+            portable_anchor_dir_from_exe(Path::new(
+                "/Users/u/HermesPortable/Hermes Agent CN Desktop.app/Contents/MacOS/hermes-agent-cn-desktop"
+            )),
+            Some(PathBuf::from("/Users/u/HermesPortable")),
+        );
+    }
+
+    #[test]
+    fn portable_marker_detection_requires_marker_file() {
+        // End-to-end anchor probing logic (mirrors PORTABLE_ANCHOR init): a
+        // marker beside the exe activates the anchor; its absence does not.
+        let tmp = TempDir::new().unwrap();
+        let exe = tmp.path().join("hermes.exe");
+        fs::write(&exe, b"stub").unwrap();
+
+        let anchor = portable_anchor_dir_from_exe(&exe).unwrap();
+        assert!(!anchor.join(PORTABLE_MARKER_FILE).is_file());
+
+        fs::write(anchor.join(PORTABLE_MARKER_FILE), b"portable").unwrap();
+        assert!(anchor.join(PORTABLE_MARKER_FILE).is_file());
+        assert_eq!(anchor, tmp.path());
+    }
+
+    #[test]
+    fn dir_is_writable_true_for_creatable_subdir() {
+        let tmp = TempDir::new().unwrap();
+        assert!(dir_is_writable(&tmp.path().join("data")));
+    }
+
     // -------- sha256_hex --------
 
     #[test]
@@ -2261,36 +3024,182 @@ mod tests {
 
     #[test]
     fn safe_version_passes_normal_semver() {
-        assert_eq!(safe_version_segment("1.2.3"), "1.2.3");
+        assert_eq!(safe_version_segment("1.2.3").unwrap(), "1.2.3");
     }
 
     #[test]
     fn safe_version_keeps_prerelease_and_build_metadata() {
         assert_eq!(
-            safe_version_segment("1.2.3-alpha+build.5"),
+            safe_version_segment("1.2.3-alpha+build.5").unwrap(),
             "1.2.3-alpha+build.5"
         );
     }
 
     #[test]
-    fn safe_version_strips_path_traversal_attempt() {
-        assert_eq!(safe_version_segment("../etc/passwd"), "..etcpasswd");
+    fn safe_version_rejects_path_traversal_and_dot_segments() {
+        for version in ["../etc/passwd", "..\\etc\\passwd", ".", "..", "a/b", "a\\b"] {
+            assert!(
+                safe_version_segment(version).is_err(),
+                "must reject unsafe runtimeVersion {version:?}"
+            );
+        }
     }
 
     #[test]
-    fn safe_version_truncates_to_120_chars() {
+    fn safe_version_rejects_values_longer_than_120_bytes() {
         let huge = "a".repeat(200);
-        let out = safe_version_segment(&huge);
-        assert_eq!(out.len(), 120);
-        assert!(out.chars().all(|c| c == 'a'));
+        assert!(safe_version_segment(&huge).is_err());
     }
 
     #[test]
-    fn safe_version_falls_back_to_timestamp_when_empty() {
-        let out = safe_version_segment("$$$///");
-        // After filtering, only nothing remains → timestamp fallback (digits, non-empty)
-        assert!(!out.is_empty());
-        assert!(out.chars().all(|c| c.is_ascii_digit()));
+    fn safe_version_rejects_empty_non_ascii_and_invalid_characters() {
+        for version in ["", "$$$///", "版本-1", "1.0.0 beta"] {
+            assert!(
+                safe_version_segment(version).is_err(),
+                "must reject invalid runtimeVersion {version:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn manifest_validation_rejects_unsafe_runtime_version() {
+        let mut manifest = fixture_manifest();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        manifest.runtime_version = "..".to_string();
+
+        let error = validate_manifest_for_current_platform(&manifest).unwrap_err();
+        assert!(error.contains("normal path segment"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn runtime_update_rejects_unsafe_version_before_download() {
+        let (key, pem) = test_keypair();
+        let mut manifest = fixture_manifest();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        manifest.runtime_version = "../../outside".to_string();
+        sign_manifest(&key, &mut manifest);
+        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
+
+        let result = install_runtime_update(Some(manifest)).await;
+
+        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
+        assert!(!result.ok);
+        assert!(result
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("runtimeVersion")));
+    }
+
+    #[test]
+    #[serial]
+    fn rollback_rejects_unsafe_previous_runtime_version() {
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let current_dir = runtime_root.join("versions/current");
+        let current_executable = current_dir.join(primary_runtime_name());
+        std::fs::create_dir_all(&current_dir).unwrap();
+        std::fs::write(&current_executable, b"current").unwrap();
+        // With the old `versions.join("..")` behavior, this file made the
+        // escaped runtime root look like a valid rollback target.
+        std::fs::write(runtime_root.join(primary_runtime_name()), b"outside").unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let current = RuntimeInstallRecord {
+            schema_version: MANIFEST_SCHEMA_VERSION,
+            runtime_version: "current".to_string(),
+            kernel_version: "1.0.0".to_string(),
+            runtime_flavor: "cn".to_string(),
+            runtime_revision: 1,
+            platform: current_platform().to_string(),
+            arch: current_arch().to_string(),
+            path: current_dir.to_string_lossy().to_string(),
+            executable_path: current_executable.to_string_lossy().to_string(),
+            source: "update".to_string(),
+            installed_at: chrono_now(),
+            source_repo: None,
+            source_commit: None,
+            local_dirty_hash: None,
+            artifact_sha256: None,
+            previous_runtime_version: Some("..".to_string()),
+        };
+        write_json_file(&current_record_path(), &current).unwrap();
+
+        let result = rollback_runtime();
+        let after = read_current_record();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(!result.ok);
+        assert!(result
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("Invalid previous runtime version")));
+        assert_eq!(
+            after.map(|record| record.runtime_version),
+            Some("current".to_string())
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn existing_runtime_target_must_stay_inside_versions_root() {
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let versions = runtime_root.join("versions");
+        std::fs::create_dir_all(&versions).unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let error = remove_existing_runtime_target(&versions).unwrap_err();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(error.contains("outside versions root"));
+        assert!(versions.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn managed_runtime_subdirs_must_not_be_symlinked_outside_root() {
+        use std::os::unix::fs::symlink;
+
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let outside = temp.path().join("outside-versions");
+        std::fs::create_dir_all(&runtime_root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, runtime_root.join("versions")).unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let error = ensure_managed_subdir(&versions_root(), "versions").unwrap_err();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(error.contains("escapes runtime root"));
+        assert!(outside.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn runtime_cache_must_not_overwrite_symlink_target() {
+        use std::os::unix::fs::symlink;
+
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let downloads = runtime_root.join("downloads");
+        let outside = temp.path().join("outside.zip");
+        std::fs::create_dir_all(&downloads).unwrap();
+        std::fs::write(&outside, b"preserve").unwrap();
+        let cache_target = downloads.join("1.2.3.zip");
+        symlink(&outside, &cache_target).unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let error = prepare_runtime_cache_target(&cache_target).unwrap_err();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert!(error.contains("symlinked runtime cache"));
+        assert_eq!(std::fs::read(outside).unwrap(), b"preserve");
     }
 
     #[test]
@@ -2311,26 +3220,22 @@ mod tests {
         .unwrap();
         fs::write(
             current_record_path(),
-            format!(
-                r#"{{
-  "version": "{runtime_version}",
-  "platform": "{}",
-  "arch": "{}",
-  "path": "{}",
-  "executablePath": "{}",
-  "source": "local-source",
-  "installedAt": "2026-05-19T00:00:00.000Z",
-  "upstreamRepo": "/repo/hermes-agent-cn",
-  "upstreamCommit": "abcdef1234567890",
-  "localDirtyHash": "deadbeef0000",
-  "artifactSha256": null,
-  "previousVersion": "0.13.0"
-}}"#,
-                current_platform(),
-                current_arch(),
-                runtime_dir.display(),
-                exe.display(),
-            ),
+            serde_json::to_string_pretty(&serde_json::json!({
+                "version": runtime_version,
+                "platform": current_platform(),
+                "arch": current_arch(),
+                "path": runtime_dir.display().to_string(),
+                "executablePath": exe.display().to_string(),
+                "source": "local-source",
+                "installedAt": "2026-05-19T00:00:00.000Z",
+                "upstreamRepo": "/repo/hermes-agent-cn",
+                "upstreamCommit": "abcdef1234567890",
+                "localDirtyHash": "deadbeef0000",
+                "artifactSha256": null,
+                "previousVersion": "0.13.0",
+            }))
+            .unwrap()
+                + "\n",
         )
         .unwrap();
 
@@ -2372,6 +3277,47 @@ mod tests {
             .await
             .expect_err("hung smoke child should time out");
         assert!(err.contains("timed out"), "unexpected error: {err}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn smoke_check_runs_from_executable_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempDir::new().unwrap();
+        let executable = dir.path().join(primary_runtime_name());
+        std::fs::write(
+            &executable,
+            b"#!/bin/sh\n[ -f smoke-marker.txt ] || exit 42\nexit 0\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("smoke-marker.txt"), b"ok").unwrap();
+        let mut perms = std::fs::metadata(&executable).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&executable, perms).unwrap();
+
+        smoke_check_runtime(&executable)
+            .await
+            .expect("smoke check should use executable parent as cwd");
+    }
+
+    #[test]
+    #[serial]
+    fn runtime_staging_dir_lives_under_versions_root() {
+        let dir = TempDir::new().unwrap();
+        let runtime_root = dir.path().join("runtime-root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let staging = create_runtime_staging_dir().expect("staging dir should be created");
+        let staging_path = staging.path().to_path_buf();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        assert!(
+            staging_path.starts_with(runtime_root.join("versions")),
+            "staging path should stay in runtime versions tree: {}",
+            staging_path.display()
+        );
     }
 
     // -------- signature_payload --------
@@ -2643,6 +3589,76 @@ mod tests {
             err
         );
         assert!(!dest.join("link.txt").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_zip_allows_relative_symlink_into_sibling_subtree() {
+        // Regression: Node.js ships `bin/corepack` ->
+        // `../lib/node_modules/corepack/dist/corepack.js`. The `..` is safe —
+        // it resolves to a file still inside the extraction dir — and must not
+        // be rejected, otherwise the bundled runtime fails to install on first
+        // launch (macOS ships the runtime as a zip).
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("node.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let file_opts = zip::write::SimpleFileOptions::default().unix_permissions(0o644);
+        writer
+            .start_file("lib/node_modules/corepack/dist/corepack.js", file_opts)
+            .unwrap();
+        writer.write_all(b"console.log('corepack')").unwrap();
+        let link_opts = zip::write::SimpleFileOptions::default();
+        writer
+            .add_symlink(
+                "bin/corepack",
+                "../lib/node_modules/corepack/dist/corepack.js",
+                link_opts,
+            )
+            .unwrap();
+        writer.finish().unwrap();
+
+        extract_zip(&zip_path, &dest).unwrap();
+
+        assert_eq!(
+            std::fs::read_link(dest.join("bin/corepack")).unwrap(),
+            PathBuf::from("../lib/node_modules/corepack/dist/corepack.js")
+        );
+        // Reading through the link must reach the real file inside `dest`.
+        assert_eq!(
+            std::fs::read(dest.join("bin/corepack")).unwrap(),
+            b"console.log('corepack')"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_zip_rejects_symlink_climbing_out_via_subtree() {
+        // A nested symlink whose `..` chain still escapes `dest` must be
+        // rejected even though it starts inside a subtree.
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("evil.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        writer
+            .add_symlink("bin/escape", "../../escape.txt", opts)
+            .unwrap();
+        writer.finish().unwrap();
+
+        let err = extract_zip(&zip_path, &dest).unwrap_err();
+        assert!(
+            err.contains("unsafe symlink target"),
+            "unexpected error: {}",
+            err
+        );
+        assert!(!dest.join("bin/escape").exists());
     }
 
     // -------- copy_dir_all --------
@@ -3001,6 +4017,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    #[cfg(unix)]
     async fn install_bundled_runtime_does_not_overwrite_local_source_runtime() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -3089,6 +4106,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    #[cfg(unix)]
     async fn install_bundled_runtime_migrates_local_source_when_not_preserved() {
         use std::os::unix::fs::PermissionsExt;
 

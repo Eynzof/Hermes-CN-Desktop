@@ -1,28 +1,39 @@
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useNavigate, useParams } from "react-router-dom";
-import { Check, Copy } from "lucide-react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Bot, Check, Copy, PanelRight } from "lucide-react";
 import {
   activeSessionIdAtom,
+  assistantDisplayNameAtom,
   conversationFontSizeAtom,
   conversationFontSizeVars,
   conversationWidthMaxWidth,
   conversationWidthModeAtom,
+  rightRailVisibleAtom,
+  sessionTipRedirectAtom,
 } from "@/stores/ui";
+import { pickTipRedirect } from "@/lib/session-tip-redirect";
 import {
+  appendNoticeAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
   removeApprovalAtom,
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
+import { useSkills } from "@/hooks/use-skills";
+import { useActiveProfileName } from "@/hooks/use-profiles";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { useComposerTimer } from "@/hooks/use-composer-timer";
+import { useStallWatchdog } from "@/hooks/use-stall-watchdog";
 import { useSessionResolution } from "@/hooks/use-session-resolution";
 import { useSessionUsagePolling } from "@/hooks/use-session-usage-polling";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
+import { parseBuiltinComposerCommand } from "@/lib/builtin-commands";
+import { resolveComposerSkillCommand } from "@/lib/composer-skills";
+import { formatCompressNotice } from "@/lib/compress-feedback";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
 import { useSessionTurnStats } from "@/hooks/use-session-turn-stats";
@@ -31,21 +42,41 @@ import {
   estimateRenderedContextTokens,
 } from "@/lib/context-usage";
 import { resolveModelContextWindow } from "@/lib/model-context";
+import { reasoningEffortFromConfig, type ReasoningEffort } from "@/lib/reasoning-effort";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
-import { uploadAttachmentFile } from "@/lib/transport";
-import { rememberSessionWorkspace, rememberWorkspaceProject } from "@/lib/workspaces";
+import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
+import { voiceAutoTtsFromConfig } from "@/lib/voice";
+import {
+  rememberSessionWorkspace,
+  rememberWorkspaceProject,
+  resolveSessionWorkspace,
+} from "@/lib/workspaces";
 import { TopBar, TopBarActionButton, TopBarActions } from "@/components/top-bar/top-bar";
 import { GooseComposer } from "@/components/chat/goose-composer";
+import { QueuePanel } from "@/components/composer/queue-panel";
+import {
+  enqueueQueuedPrompt,
+  removeQueuedPrompt,
+  shouldAutoDrainOnSettle,
+  useQueuedPrompts,
+  type QueuedPromptEntry,
+} from "@/stores/composer-queue";
 import type {
   ComposerModelSelection,
   ComposerSubmitControls,
   ComposerSubmitPayload,
 } from "@/components/chat/composer-types";
 import { MessageTimeline } from "@/components/chat/message-timeline";
+import { StallNotice } from "@/components/chat/stall-notice";
+import { SubagentPanel, useSessionCliDelegations, useSessionSubagents } from "@/components/chat/subagent-panel";
+import { PreviewRail } from "@/components/chat/preview-rail/preview-rail";
+import { PREVIEW_PANEL_QUERY_KEY } from "@/lib/preview-rail";
+import { activeCliDelegationCount, clearFinishedCliDelegationsAtom } from "@/stores/cli-delegations";
+import { activeSubagentCount, clearFinishedSubagentsAtom } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
   hermesUIMessagesToChatMessages,
@@ -66,6 +97,9 @@ export function DetailRoute() {
   const [activeSessionId, setActiveId] = useAtom(activeSessionIdAtom);
   const [conversationWidthMode, setConversationWidthMode] = useAtom(conversationWidthModeAtom);
   const conversationFontSizeMode = useAtomValue(conversationFontSizeAtom);
+  const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
+  const [rightRailVisible, setRightRailVisible] = useAtom(rightRailVisibleAtom);
+  const [searchParams] = useSearchParams();
   const taskId = activeSessionId ?? urlTaskId;
   const turnStats = useSessionTurnStats(taskId);
 
@@ -74,19 +108,35 @@ export function DetailRoute() {
     sendPrompt,
     interruptSession,
     getSessionUsage,
+    compressSession,
     getModelOptions,
     setSessionModel,
+    setSessionReasoningEffort,
+    dispatchCommand,
+    completePath,
     attachImage,
+    attachImageBytes,
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
+  const skillsQuery = useSkills();
+  const activeProfile = useActiveProfileName();
+  const enabledSkills = useMemo(
+    () => (skillsQuery.data ?? []).filter((skill) => skill.enabled),
+    [skillsQuery.data],
+  );
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
+  // 思考强度是全局配置（agent.reasoning_effort），不分会话；本地态仅用于
+  // 选中后即时反馈，等 config 重新拉到后两者一致。null 表示尚未本地改过，
+  // 以配置里的值为准（再读不到则回落到后端默认）。
+  const [reasoningEffortOverride, setReasoningEffortOverride] = useState<ReasoningEffort | null>(null);
   const [sessionIdCopyState, setSessionIdCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
   const sessionIdCopyTimer = useRef<number | null>(null);
   const recoverCompletedTurnFromStoredMessages = useSetAtom(recoverCompletedTurnFromStoredMessagesAtom);
+  const appendNotice = useSetAtom(appendNoticeAtom);
 
   const {
     restSessionId,
@@ -103,6 +153,40 @@ export function DetailRoute() {
     runtimeIsBusy,
     getSessionUsage,
   });
+
+  // 子代理监视（issue #238）：面板按会话 id 读取 subagent 树。store 按事件 session_id
+  // (网关会话 id) keyed，故按 detail 解析出的多个候选 id 取首个命中（覆盖 resume 后
+  // 持久 id / 网关 id 的形态差异）。
+  const [subagentPanelOpen, setSubagentPanelOpen] = useState(false);
+  const subagents = useSessionSubagents([
+    runtimeSessionId,
+    activeMappedGatewaySessionId,
+    usageGatewaySessionId,
+    taskId,
+  ]);
+  // 外部 CLI 委派（Claude Code / Codex，P-047）与内部子代理同面板展示。
+  const cliDelegations = useSessionCliDelegations([
+    runtimeSessionId,
+    activeMappedGatewaySessionId,
+    usageGatewaySessionId,
+    taskId,
+  ]);
+  const subagentActive = activeSubagentCount(subagents) + activeCliDelegationCount(cliDelegations);
+  const subagentTotal = subagents.length + cliDelegations.length;
+  const clearFinishedSubagents = useSetAtom(clearFinishedSubagentsAtom);
+  const clearFinishedCliDelegations = useSetAtom(clearFinishedCliDelegationsAtom);
+  const clearFinishedDelegationRows = useCallback(() => {
+    const candidates = [runtimeSessionId, activeMappedGatewaySessionId, usageGatewaySessionId, taskId];
+    clearFinishedSubagents(candidates);
+    clearFinishedCliDelegations(candidates);
+  }, [
+    activeMappedGatewaySessionId,
+    clearFinishedCliDelegations,
+    clearFinishedSubagents,
+    runtimeSessionId,
+    taskId,
+    usageGatewaySessionId,
+  ]);
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
   const { data: messagesData, isLoading } = messagesQuery;
@@ -113,6 +197,14 @@ export function DetailRoute() {
   );
   const copyableSessionId = sessionData?.id ?? sessionSummary?.id ?? restSessionId ?? taskId ?? "";
 
+  // Workspace bound to *this* session (#216): prefer the backend's stored cwd
+  // (source of truth), then the client-side session→workspace map. Empty string
+  // lets the composer fall back to its own default (last-used global workspace).
+  const sessionWorkspace = useMemo(
+    () => resolveSessionWorkspace(sessionData?.cwd ?? sessionSummary?.cwd, [restSessionId, taskId]),
+    [sessionData?.cwd, sessionSummary?.cwd, restSessionId, taskId],
+  );
+
   // Sync URL → atom on mount and whenever URL changes (browser back/forward
   // or a deep-link entry). Sidebar / history clicks already update the atom
   // synchronously *before* navigating, so this only matters for the cases
@@ -120,6 +212,32 @@ export function DetailRoute() {
   useEffect(() => {
     if (urlTaskId && urlTaskId !== activeSessionId) setActiveId(urlTaskId);
   }, [urlTaskId, activeSessionId, setActiveId]);
+
+  // ⌘B / Ctrl+B toggles the rich-preview right rail (issue #233). A ref holds
+  // the latest visibility so the listener stays attached once.
+  const railVisibleRef = useRef(rightRailVisible);
+  railVisibleRef.current = rightRailVisible;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        setRightRailVisible(!railVisibleRef.current);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setRightRailVisible]);
+
+  // Deep link: arriving with ?panel=… opens the rail to that tab. Runs once so
+  // a later manual close isn't fought by this effect.
+  const didAutoOpenRail = useRef(false);
+  useEffect(() => {
+    if (didAutoOpenRail.current) return;
+    didAutoOpenRail.current = true;
+    if (searchParams.has(PREVIEW_PANEL_QUERY_KEY) && !railVisibleRef.current) {
+      setRightRailVisible(true);
+    }
+  }, [searchParams, setRightRailVisible]);
 
 
   // Reset the user-selected model whenever the route changes to a different
@@ -193,6 +311,23 @@ export function DetailRoute() {
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
 
+  // Follow the backend's compression tip (issue #305). When a session.resume is
+  // redirected to a live continuation (recorded in sessionTipRedirectAtom), the
+  // detail route is still pinned to the pre-compression id whose messages have
+  // moved — so the conversation looks like it vanished while a #2/#3 duplicate
+  // surfaces in the sidebar. Re-project onto the tip here, at the route layer
+  // (not inside the async ensureGatewaySession closure, which was the #52
+  // closure-stale hazard): a synchronous effect reacting to atom state, with a
+  // replace navigate. pickTipRedirect never returns the current id, so once the
+  // route reaches the tip this is a no-op (no navigation loop).
+  const tipRedirects = useAtomValue(sessionTipRedirectAtom);
+  useEffect(() => {
+    const tip = pickTipRedirect(tipRedirects, { taskId, restSessionId, activeSessionId });
+    if (!tip) return;
+    setActiveId(tip);
+    navigate(`/tasks/${tip}`, { replace: true });
+  }, [tipRedirects, taskId, restSessionId, activeSessionId, setActiveId, navigate]);
+
   const storedMessages = useMemo(
     () => attachTurnStatsMetadata(messagesResponseToHermesUIMessages(messagesData), turnStats),
     [messagesData, turnStats],
@@ -225,9 +360,33 @@ export function DetailRoute() {
     storedMessages,
   ]);
 
-  const onSend = useCallback(async (
+  // Manual context compaction (/compress). Fire-and-forget so the composer
+  // clears immediately; the backend pins a "正在压缩上下文…" status while it
+  // works and we surface the before/after result as a system notice.
+  const runManualCompress = useCallback(async (sessionId: string, focus: string) => {
+    try {
+      const result = await compressSession(sessionId, focus);
+      appendNotice({ sessionId, text: formatCompressNotice(result, focus), level: "system" });
+      // session.compress also emits session.info, but the composer indicator
+      // reads polled session.usage — refresh it so the bar/count update now.
+      await getSessionUsage(sessionId).then(setSessionUsage).catch(() => {});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const busy = message.toLowerCase().includes("session busy");
+      appendNotice({
+        sessionId,
+        text: busy
+          ? "当前回合正在进行，请先停止后再压缩上下文。"
+          : `压缩上下文失败：${message}`,
+        level: busy ? "info" : "error",
+      });
+    }
+  }, [appendNotice, compressSession, getSessionUsage, setSessionUsage]);
+
+  // The actual send. Shared by direct submits and by draining the queue.
+  const submitPayload = useCallback(async (
     payload: ComposerSubmitPayload,
-    controls: ComposerSubmitControls,
+    updateAttachment: ComposerSubmitControls["updateAttachment"] = () => {},
   ) => {
     if (!taskId) return;
     const gatewaySessionId = await ensureGatewaySession();
@@ -237,17 +396,124 @@ export function DetailRoute() {
       rememberSessionWorkspace(gatewaySessionId, payload.workspacePath);
       rememberSessionWorkspace(restSessionId, payload.workspacePath);
     }
+    // A `/skill <name>` invocation dispatches to the backend skill registry; the
+    // returned payload becomes the transport text while the composer still shows
+    // the literal command. Mirrors the new-task path in use-create-and-send-session.
+    let transportText: string | undefined;
+    const skillCommand = resolveComposerSkillCommand(payload.text, payload.skillCommandNames);
+    if (skillCommand) {
+      const dispatched = await dispatchCommand(
+        gatewaySessionId,
+        skillCommand.name,
+        skillCommand.arg,
+      );
+      if (dispatched.type === "skill" && dispatched.message?.trim()) {
+        transportText = dispatched.message;
+      }
+    }
     const prepared = await prepareComposerPrompt(gatewaySessionId, payload, {
       attachImage,
+      attachImageBytes,
+      remote: isRemoteConnection(),
+      readImageBytes: readImageBytesFromPath,
       detectDroppedPath,
       uploadFile: uploadAttachmentFile,
-      onAttachmentUpdate: controls.updateAttachment,
-    });
+      onAttachmentUpdate: updateAttachment,
+    }, { transportText });
     await sendPrompt(gatewaySessionId, prepared.promptText, {
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
-  }, [attachImage, detectDroppedPath, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+
+  const onSend = useCallback(async (
+    payload: ComposerSubmitPayload,
+    controls: ComposerSubmitControls,
+  ) => {
+    if (!taskId) return;
+    const builtin = parseBuiltinComposerCommand(payload.text);
+    if (builtin?.name === "compress") {
+      const sessionId = await ensureGatewaySession();
+      void runManualCompress(sessionId, builtin.arg);
+      return;
+    }
+    // Park the submission while the agent is busy; the composer clears on resolve
+    // and the queue drains (auto on settle, or manually) when it frees up.
+    if (runtimeIsBusy) {
+      enqueueQueuedPrompt(taskId, { text: payload.text, attachments: payload.attachments }, Date.now());
+      return;
+    }
+    await submitPayload(payload, controls.updateAttachment);
+  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+
+  // ---- Send queue (drain on settle, send-now / edit / delete) --------------
+  const queuedPrompts = useQueuedPrompts(taskId);
+  const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
+  const drainingRef = useRef(false);
+  const previousBusyRef = useRef(runtimeIsBusy);
+  const userInterruptedRef = useRef(false);
+
+  const drainEntry = useCallback(async (entry: QueuedPromptEntry) => {
+    if (!taskId || drainingRef.current) return;
+    drainingRef.current = true;
+    try {
+      await submitPayload({
+        text: entry.text,
+        attachments: entry.attachments,
+        skillCommandNames: enabledSkills.map((skill) => skill.name),
+      });
+      removeQueuedPrompt(taskId, entry.id);
+    } catch (error) {
+      console.error("Failed to drain queued prompt:", error);
+    } finally {
+      drainingRef.current = false;
+    }
+  }, [enabledSkills, submitPayload, taskId]);
+
+  // Auto-drain the next queued prompt when the agent settles (busy → idle),
+  // unless an explicit Stop just interrupted the turn.
+  useEffect(() => {
+    const wasBusy = previousBusyRef.current;
+    previousBusyRef.current = runtimeIsBusy;
+    if (runtimeIsBusy && !wasBusy) {
+      userInterruptedRef.current = false;
+      return;
+    }
+    const interrupted = userInterruptedRef.current;
+    if (!runtimeIsBusy && wasBusy && interrupted) {
+      userInterruptedRef.current = false;
+    }
+    if (shouldAutoDrainOnSettle({
+      isBusy: runtimeIsBusy,
+      wasBusy,
+      queueLength: queuedPrompts.length,
+      userInterrupted: interrupted,
+    })) {
+      void drainEntry(queuedPrompts[0]!);
+    }
+  }, [drainEntry, queuedPrompts, runtimeIsBusy]);
+
+  const onQueueSendNow = useCallback((id: string) => {
+    const entry = queuedPrompts.find((item) => item.id === id);
+    if (entry) void drainEntry(entry);
+  }, [drainEntry, queuedPrompts]);
+
+  const onQueueEdit = useCallback((entry: QueuedPromptEntry) => {
+    setComposerPrefill((prefill) => ({ text: entry.text, nonce: prefill.nonce + 1 }));
+    removeQueuedPrompt(taskId, entry.id);
+  }, [taskId]);
+
+  const onQueueDelete = useCallback((id: string) => {
+    removeQueuedPrompt(taskId, id);
+  }, [taskId]);
+
+  // Switching sessions must not leak one task's edit draft / busy-transition
+  // bookkeeping into another.
+  useEffect(() => {
+    setComposerPrefill({ text: "", nonce: 0 });
+    previousBusyRef.current = false;
+    userInterruptedRef.current = false;
+  }, [taskId]);
 
   // Capability discovery is server-global — don't piggy-back on
   // ensureGatewaySession here. That helper can trigger session.resume, which
@@ -278,9 +544,27 @@ export function DetailRoute() {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
 
+  const configReasoningEffort = useMemo(() => reasoningEffortFromConfig(config), [config]);
+  const reasoningEffort = reasoningEffortOverride ?? configReasoningEffort;
+
+  const onReasoningEffortSelect = useCallback(async (effort: ReasoningEffort) => {
+    setReasoningEffortOverride(effort); // 立即反馈，等 config 重新拉到后一致
+    try {
+      const gatewaySessionId = await ensureGatewaySession();
+      await setSessionReasoningEffort(gatewaySessionId, effort);
+    } catch (error) {
+      // 失败则回退到配置里的实际值（override 置空 → 用 configReasoningEffort）
+      setReasoningEffortOverride(null);
+      console.error("设置思考强度失败：", error);
+    }
+  }, [ensureGatewaySession, setSessionReasoningEffort]);
+
   const onStop = useCallback(async () => {
     const sessionId = runtimeSessionId ?? taskId;
     if (!sessionId || !runtimeIsBusy) return;
+    // A deliberate Stop suppresses exactly one auto-drain so the queue doesn't
+    // immediately re-fire the turn the user just halted.
+    userInterruptedRef.current = true;
     await interruptSession(sessionId);
   }, [interruptSession, runtimeIsBusy, runtimeSessionId, taskId]);
 
@@ -312,9 +596,12 @@ export function DetailRoute() {
   const pendingApproval = runtime.pendingApprovals[0] ?? null;
 
   const composerTick = useComposerTimer(runtimeIsBusy, runtime.turnStartedAt);
+  // Task-level stall watchdog: detects a turn wedged on a dead provider call
+  // (the connection heartbeat can't — the gateway keeps answering pings).
+  const stall = useStallWatchdog(runtime);
 
   const composerLoadingPlaceholder = runtimeIsBusy && runtime.turnStartedAt
-    ? `Hermes 思考中 · ${formatElapsedTimer(composerTick)}`
+    ? `${assistantDisplayName} 思考中 · ${formatElapsedTimer(composerTick)}`
     : undefined;
 
   const timelineStatus =
@@ -336,11 +623,15 @@ export function DetailRoute() {
     selectedContextMax,
     estimatedUsed: estimatedContextUsed,
   });
+  const autoTts = voiceAutoTtsFromConfig(config);
   const pageStyle = useMemo(
     () => {
       const font = conversationFontSizeVars(conversationFontSizeMode);
       return {
-        "--conversation-max-width": conversationWidthMaxWidth(conversationWidthMode),
+        // min(档位, 100% - 64px)：窗口不够宽（或"满"档）时整条会话列（时间线 +
+        // composer + stall-notice 共用此变量）两侧各让出 32px，给右侧轮次定位条
+        // (turnRail) 一条不压内容的专属出血带；余量充足时与档位宽完全一致。
+        "--conversation-max-width": `min(${conversationWidthMaxWidth(conversationWidthMode)}, 100% - 64px)`,
         "--conversation-font-size": font.fontSize,
         "--conversation-line-height": font.lineHeight,
       } as CSSProperties;
@@ -379,45 +670,130 @@ export function DetailRoute() {
                 </span>
               </TopBarActionButton>
             ) : null}
+            <TopBarActionButton
+              onClick={() => setSubagentPanelOpen((v) => !v)}
+              data-active={subagentPanelOpen ? "true" : undefined}
+              title="子Agent 监视"
+              aria-label="子Agent 监视"
+              aria-pressed={subagentPanelOpen}
+            >
+              <Bot size={12} aria-hidden="true" />
+              <span>子Agent</span>
+              {subagentTotal > 0 ? (
+                <span className={s.subagentBadge} data-active={subagentActive > 0 ? "true" : undefined}>
+                  {subagentActive > 0 ? subagentActive : subagentTotal}
+                </span>
+              ) : null}
+            </TopBarActionButton>
+            <TopBarActionButton
+              onClick={() => setRightRailVisible(!rightRailVisible)}
+              data-active={rightRailVisible ? "true" : undefined}
+              title="预览面板（⌘B）"
+              aria-label="预览面板"
+              aria-pressed={rightRailVisible}
+            >
+              <PanelRight size={12} aria-hidden="true" />
+              <span>预览</span>
+            </TopBarActionButton>
             <TopBarActions />
           </>
         }
       />
-      {/* key={taskId}：切会话强制重挂载时间线。layout effect 在首帧绘制前就
-          把滚动定位到底部，避免新会话内容先以上一个会话的滚动位置绘制、再
-          在 650ms 的滚动校正窗口里反复跳动（用户感知为"闪烁两下"）。 */}
-      <MessageTimeline
-        key={taskId}
-        messages={chatMessages}
-        loading={isLoading && runtime.messages.length === 0}
-        statusMessage={timelineStatus}
-        pendingApproval={
-          pendingApproval ? (
-            <ApprovalDialog approval={pendingApproval} />
-          ) : undefined
-        }
-        turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
-        sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
-        progressModel={runtimeIsBusy ? model || undefined : undefined}
-      />
-      <div className={s.composerArea}>
-        <GooseComposer
-          onSend={onSend}
-          loadingPlaceholder={composerLoadingPlaceholder}
-          showMeta={false}
-          loading={runtimeIsBusy}
-          onStop={onStop}
-          modelPicker={{
-            selected: contextSelection,
-            label: model || modelInfo?.model,
-            loadOptions: loadModelOptions,
-            initialOptions: modelOptionsCache ?? null,
-            onSelect: onModelSelect,
-            onConfigureProvider,
-            disabled: runtimeIsBusy,
-          }}
-          contextUsage={contextUsage}
-        />
+      <div className={s.workArea}>
+        <div className={s.chatColumn}>
+          {/* key={taskId}：切会话强制重挂载时间线。layout effect 在首帧绘制前就
+              把滚动定位到底部，避免新会话内容先以上一个会话的滚动位置绘制、再
+              在 650ms 的滚动校正窗口里反复跳动（用户感知为"闪烁两下"）。 */}
+          <MessageTimeline
+            key={taskId}
+            messages={chatMessages}
+            loading={isLoading && runtime.messages.length === 0}
+            statusMessage={timelineStatus}
+            pendingApproval={
+              pendingApproval ? (
+                <ApprovalDialog approval={pendingApproval} />
+              ) : undefined
+            }
+            turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
+            sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
+            progressModel={runtimeIsBusy ? model || undefined : undefined}
+            autoTts={autoTts}
+          />
+          <div className={s.composerArea}>
+            {runtimeIsBusy && stall.isStalled ? (
+              <StallNotice silenceMs={stall.silenceMs} onInterrupt={onStop} />
+            ) : null}
+            <QueuePanel
+              entries={queuedPrompts}
+              busy={runtimeIsBusy}
+              editingId={null}
+              onSendNow={onQueueSendNow}
+              onEdit={onQueueEdit}
+              onDelete={onQueueDelete}
+            />
+            <GooseComposer
+              key={taskId}
+              initialWorkspacePath={sessionWorkspace}
+              initial={composerPrefill.text}
+              initialNonce={composerPrefill.nonce}
+              onSend={onSend}
+              loadingPlaceholder={composerLoadingPlaceholder}
+              showMeta={false}
+              loading={runtimeIsBusy}
+              onStop={onStop}
+              voiceConfig={config ?? null}
+              modelPicker={{
+                selected: contextSelection,
+                label: model || modelInfo?.model,
+                loadOptions: loadModelOptions,
+                initialOptions: modelOptionsCache ?? null,
+                onSelect: onModelSelect,
+                onConfigureProvider,
+                disabled: runtimeIsBusy,
+              }}
+              reasoningPicker={{
+                value: reasoningEffort,
+                onSelect: onReasoningEffortSelect,
+                disabled: runtimeIsBusy,
+              }}
+              skillPicker={{
+                skills: enabledSkills,
+                loading: skillsQuery.isLoading || skillsQuery.isFetching,
+                error: skillsQuery.isError
+                  ? (skillsQuery.error instanceof Error ? skillsQuery.error.message : "Skill 加载失败")
+                  : undefined,
+                disabled: runtimeIsBusy,
+              }}
+              mentionPicker={{
+                completePath: (word) =>
+                  completePath(word, {
+                    sessionId: runtimeSessionId ?? undefined,
+                    cwd: sessionWorkspace || undefined,
+                  }),
+                sessions: sessionsData?.sessions,
+                profile: activeProfile,
+                disabled: runtimeIsBusy,
+              }}
+              contextUsage={contextUsage}
+            />
+          </div>
+        </div>
+        {rightRailVisible && taskId ? (
+          <PreviewRail
+            sessionId={taskId}
+            workspaceRoot={sessionWorkspace}
+            onClose={() => setRightRailVisible(false)}
+          />
+        ) : null}
+        {subagentPanelOpen ? (
+          <SubagentPanel
+            subagents={subagents}
+            cliDelegations={cliDelegations}
+            onClose={() => setSubagentPanelOpen(false)}
+            onClearFinished={clearFinishedDelegationRows}
+          />
+        ) : null}
+
       </div>
     </div>
   );
@@ -464,7 +840,7 @@ function ApprovalDialog({ approval }: { approval: { requestId: string; sessionId
         <button className={s.approvalDeny} onClick={() => respond("deny")} disabled={responding !== null}>
           {responding === "deny" ? "发送中..." : "拒绝"}
         </button>
-        <button className={s.approvalSettings} onClick={() => navigate("/advanced#approval-mode")} disabled={responding !== null}>
+        <button className={s.approvalSettings} onClick={() => navigate("/common#approval-mode")} disabled={responding !== null}>
           调整审批模式
         </button>
       </div>

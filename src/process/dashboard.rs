@@ -6,7 +6,7 @@
 use std::fs;
 use std::io::Write;
 use std::net::{TcpStream, ToSocketAddrs};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::LazyLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -20,6 +20,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
+use crate::process::port_lock::{claim_port_set, release_orphaned_port_locks, PortLock};
 use crate::state::{DashboardHandle, DashboardJobHandle};
 
 // A freshly installed onefile runtime can spend tens of seconds on macOS
@@ -29,13 +30,18 @@ use crate::state::{DashboardHandle, DashboardJobHandle};
 // bootstrap has already failed. Keep a wider production-safe margin.
 const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(120);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(900);
-const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_millis(1200);
+const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_secs(3);
+const ATTACHED_DASHBOARD_TIMEOUT: Duration = Duration::from_secs(5);
 const SHUTDOWN_HTTP_TIMEOUT: Duration = Duration::from_millis(800);
 const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(1800);
 const FORCE_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(1200);
 const OWNERSHIP_MARKER_SCHEMA_VERSION: u32 = 1;
 pub const DEFAULT_DESKTOP_DASHBOARD_PORT: u16 = 9120;
 const DASHBOARD_PORT_FALLBACK_LIMIT: u16 = 20;
+/// How many spawn attempts (initial + retries on a lost bind race) before
+/// giving up — bounds the damage of a crash-looping runtime, which would
+/// otherwise burn the entire fallback range one kernel at a time.
+const SPAWN_ATTEMPT_LIMIT: usize = 3;
 static SESSION_TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"__HERMES_SESSION_TOKEN__="([^"]+)""#).expect("valid session token regex")
 });
@@ -50,6 +56,12 @@ static SESSION_TOKEN_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .timeout(SESSION_TOKEN_TIMEOUT)
         .build()
         .expect("valid dashboard session token HTTP client")
+});
+static ATTACHED_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .timeout(ATTACHED_DASHBOARD_TIMEOUT)
+        .build()
+        .expect("valid attached dashboard HTTP client")
 });
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +78,10 @@ pub struct DashboardOwnershipMarker {
     pub started_at_ms: u128,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_version: Option<String>,
+    /// Ports this desktop instance has claimed via the shared lock file.
+    /// Used to break orphaned locks when adopting a stale marker.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claimed_ports: Vec<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,6 +114,23 @@ fn fallback_ports(start: u16) -> Vec<u16> {
         ports.push(port);
     }
     ports
+}
+
+/// The well-known satellite ports that a desktop-managed dashboard tree may
+/// bind (webhook, proxy). These are reserved alongside the dashboard API port.
+const WELL_KNOWN_DASHBOARD_PORTS: &[u16] = &[8644, 8645];
+
+/// Build the full set of ports to claim for a dashboard at ``dashboard_port``.
+fn ports_to_claim(dashboard_port: u16) -> Vec<u16> {
+    let mut ports = Vec::with_capacity(WELL_KNOWN_DASHBOARD_PORTS.len() + 1);
+    ports.push(dashboard_port);
+    ports.extend_from_slice(WELL_KNOWN_DASHBOARD_PORTS);
+    ports
+}
+
+/// Try to claim the full port set for a candidate dashboard port.
+fn try_claim_dashboard_ports(dashboard_port: u16, hermes_home: &str) -> Option<Vec<PortLock>> {
+    claim_port_set(&ports_to_claim(dashboard_port), Path::new(hermes_home))
 }
 
 fn now_millis() -> u128 {
@@ -136,6 +169,7 @@ fn rewrite_ownership_marker_for_current_desktop(
         gateway_runtime_dir: marker.gateway_runtime_dir.clone(),
         started_at_ms: now_millis(),
         runtime_version: marker.runtime_version.clone(),
+        claimed_ports: marker.claimed_ports.clone(),
     };
     write_ownership_marker(&next)?;
     Ok(next)
@@ -222,6 +256,17 @@ fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> bool {
         }
     }
     false
+}
+
+fn wait_for_pid_exit(pid: u32, timeout: Duration) -> bool {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if !pid_is_running(pid) {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(80));
+    }
+    !pid_is_running(pid)
 }
 
 fn request_dashboard_shutdown(api_base_url: &str, session_token: Option<&str>) -> bool {
@@ -324,6 +369,7 @@ fn signal_process_group(pid: u32, signal: libc::c_int) {
 }
 
 #[cfg(not(unix))]
+#[allow(dead_code)]
 fn signal_process_group(_pid: u32, _signal: i32) {}
 
 #[cfg(windows)]
@@ -386,26 +432,25 @@ pub fn terminate_owned_dashboard_tree(
     child: Option<&mut Child>,
     fallback_pid: Option<u32>,
     session_token: Option<&str>,
-) {
+) -> bool {
     let _ = request_dashboard_shutdown(api_base_url, session_token);
 
     if let Some(child) = child {
         if wait_for_child_exit(child, GRACEFUL_SHUTDOWN_TIMEOUT) {
-            return;
+            return true;
         }
         let pid = child.id();
         #[cfg(unix)]
         signal_process_group(pid, libc::SIGTERM);
         if wait_for_child_exit(child, FORCE_SHUTDOWN_TIMEOUT) {
-            return;
+            return true;
         }
         #[cfg(unix)]
         signal_process_group(pid, libc::SIGKILL);
         #[cfg(windows)]
         force_kill_process_tree(pid);
         let _ = child.kill();
-        let _ = child.wait();
-        return;
+        return child.wait().is_ok() || wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT);
     }
 
     if let Some(pid) = fallback_pid {
@@ -421,7 +466,10 @@ pub fn terminate_owned_dashboard_tree(
         {
             force_kill_process_tree(pid);
         }
+        return wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT);
     }
+
+    true
 }
 
 fn probe_dashboard_port(api_base_url: &str) -> bool {
@@ -463,6 +511,53 @@ pub async fn probe_dashboard(api_base_url: &str) -> bool {
         Ok(res) => res.status().is_success() || res.status().as_u16() == 401,
         Err(_) => false,
     }
+}
+
+/// More tolerant probe for an already-running local/remote dashboard we do not
+/// own. The normal readiness probe is intentionally short so managed startup
+/// loops remain responsive, but a user CLI dashboard can briefly spend more
+/// than 900ms in `/api/status` while spawning TUI sidecars or loading plugins.
+/// Treat that as transient instead of reporting "9119 unreachable".
+pub async fn probe_attached_dashboard(api_base_url: &str) -> bool {
+    let url = format!("{}/api/status", api_base_url);
+
+    for attempt in 0..3 {
+        match ATTACHED_HTTP_CLIENT
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+        {
+            Ok(res) if res.status().is_success() || res.status().as_u16() == 401 => {
+                return true;
+            }
+            Ok(res) => {
+                log::debug!(
+                    "Attached dashboard probe at {} returned HTTP {}",
+                    api_base_url,
+                    res.status()
+                );
+            }
+            Err(err) => {
+                log::debug!(
+                    "Attached dashboard probe attempt {} at {} failed: {}",
+                    attempt + 1,
+                    api_base_url,
+                    err
+                );
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    if probe_dashboard_port(api_base_url) {
+        log::warn!(
+            "Attached dashboard port is listening at {}, but /api/status did not answer within {:?}",
+            api_base_url,
+            ATTACHED_DASHBOARD_TIMEOUT
+        );
+    }
+    false
 }
 
 async fn probe_dashboard_openapi(api_base_url: &str) -> bool {
@@ -517,11 +612,19 @@ async fn dashboard_supports_uploads(api_base_url: &str) -> bool {
 /// openapi.json — an HTTP GET can't verify it). The connection is dropped
 /// immediately after the handshake; the server reaps the orphan transport.
 pub async fn dashboard_supports_ws(api_base_url: &str, token: Option<&str>) -> bool {
-    let url = build_gateway_url(api_base_url, token);
+    dashboard_supports_ws_url(&build_gateway_url(api_base_url, token)).await
+}
+
+/// WS handshake probe for a gated gateway using a freshly-minted ticket.
+pub async fn dashboard_supports_ws_ticket(api_base_url: &str, ticket: &str) -> bool {
+    dashboard_supports_ws_url(&build_gateway_ws_url_with_ticket(api_base_url, ticket)).await
+}
+
+async fn dashboard_supports_ws_url(url: &str) -> bool {
     matches!(
         tokio::time::timeout(
             std::time::Duration::from_secs(4),
-            tokio_tungstenite::connect_async(url),
+            tokio_tungstenite::connect_async(url.to_string()),
         )
         .await,
         Ok(Ok(_))
@@ -549,7 +652,7 @@ async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
 }
 
 /// Get the HERMES_HOME value from a running dashboard.
-async fn get_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
+pub async fn fetch_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
     let url = format!("{}/api/status", api_base_url);
 
     let res = PROBE_HTTP_CLIENT
@@ -564,9 +667,57 @@ async fn get_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Tolerant HERMES_HOME lookup for attached local dashboards. This mirrors
+/// `probe_attached_dashboard` so a busy CLI dashboard does not make the
+/// desktop fall back to its managed runtime data root.
+pub async fn fetch_attached_dashboard_hermes_home(api_base_url: &str) -> Option<String> {
+    let url = format!("{}/api/status", api_base_url);
+
+    for attempt in 0..3 {
+        match ATTACHED_HTTP_CLIENT
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+        {
+            Ok(res) => match res.json::<serde_json::Value>().await {
+                Ok(data) => {
+                    if let Some(home) = data
+                        .get("hermes_home")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                        .filter(|s| !s.trim().is_empty())
+                    {
+                        return Some(home);
+                    }
+                }
+                Err(err) => {
+                    log::debug!(
+                        "Attached dashboard hermes_home parse attempt {} at {} failed: {}",
+                        attempt + 1,
+                        api_base_url,
+                        err
+                    );
+                }
+            },
+            Err(err) => {
+                log::debug!(
+                    "Attached dashboard hermes_home attempt {} at {} failed: {}",
+                    attempt + 1,
+                    api_base_url,
+                    err
+                );
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    None
+}
+
 /// Check whether an existing dashboard's hermes_home matches ours.
 async fn dashboard_matches_hermes_home(api_base_url: &str, hermes_home: &str) -> bool {
-    match get_dashboard_hermes_home(api_base_url).await {
+    match fetch_dashboard_hermes_home(api_base_url).await {
         Some(current) if !current.is_empty() => {
             let left = std::fs::canonicalize(&current).unwrap_or_else(|_| PathBuf::from(&current));
             let right =
@@ -610,6 +761,20 @@ pub fn build_gateway_url(api_base_url: &str, token: Option<&str>) -> String {
     }
 }
 
+/// Build the gated `/api/ws?ticket=` URL for an OAuth remote. Mirrors the
+/// official desktop's `buildGatewayWsUrlWithTicket`; the ticket is single-use
+/// and short-lived, so callers mint a fresh one per (re)connect.
+pub fn build_gateway_ws_url_with_ticket(api_base_url: &str, ticket: &str) -> String {
+    let ws_url = api_base_url
+        .replace("http://", "ws://")
+        .replace("https://", "wss://");
+    format!(
+        "{}/api/ws?ticket={}",
+        ws_url.trim_end_matches('/'),
+        urlencoding::encode(ticket)
+    )
+}
+
 pub struct EnsureDashboardOptions {
     pub host: String,
     pub port: u16,
@@ -623,6 +788,13 @@ pub struct EnsureDashboardOptions {
     /// apiBaseUrl. Vite dev proxy is fixed before Rust starts, so managed dev
     /// keeps this false and asks the user to free the port instead.
     pub allow_port_fallback: bool,
+    /// Connection mode ("managed", "local", "remote") that governs how
+    /// loopback URLs in MCP/CDP tools are resolved. Passed to the kernel
+    /// via HERMES_DESKTOP_CONNECTION_MODE env var.
+    pub connection_mode: crate::connection::ConnectionMode,
+    /// When in remote mode, the base URL of the remote dashboard. Passed
+    /// to the kernel via HERMES_DESKTOP_REMOTE_BASE_URL env var.
+    pub remote_base_url: Option<String>,
 }
 
 struct SpawnedDashboard {
@@ -634,6 +806,59 @@ struct SpawnedDashboard {
     gateway_lock_dir: String,
     ownership_marker_path: String,
     job_handle: Option<DashboardJobHandle>,
+    /// Unique path this spawn's kernel writes `{"port": N}` to once its
+    /// socket is bound (`HERMES_DESKTOP_READY_FILE`). Only this shell and
+    /// this child know the path, so its appearance is an identity-proving
+    /// readiness signal — unlike an HTTP probe of the port, which any
+    /// process that stole the port could answer.
+    ready_file: PathBuf,
+}
+
+/// Ready files live in the runtime root as `dashboard-ready-<pid>-<ms>.json`.
+const READY_FILE_PREFIX: &str = "dashboard-ready-";
+
+fn new_ready_file_path() -> PathBuf {
+    crate::process::runtime::runtime_root().join(format!(
+        "{READY_FILE_PREFIX}{}-{}.json",
+        std::process::id(),
+        now_millis()
+    ))
+}
+
+/// Remove leftover ready files from crashed shells. Called on the ensure
+/// path while holding the single-instance lock, so no sibling shell on this
+/// runtime root can be mid-spawn.
+fn sweep_stale_ready_files() {
+    let root = crate::process::runtime::runtime_root();
+    let Ok(entries) = fs::read_dir(&root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(READY_FILE_PREFIX) && name.ends_with(".json") {
+            if let Err(err) = fs::remove_file(entry.path()) {
+                log::debug!("stale ready-file cleanup {}: {err}", name);
+            }
+        }
+    }
+}
+
+fn remove_ready_file(path: &Path) {
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => log::debug!("ready-file cleanup {}: {err}", path.display()),
+    }
+}
+
+/// Parse the kernel-written ready payload (`{"port": N}`). Written
+/// atomically by Core (`_write_dashboard_ready_file`) after the socket is
+/// bound, so a readable file means the dashboard is serving.
+fn read_ready_file_port(path: &Path) -> Option<u16> {
+    let body = fs::read_to_string(path).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&body).ok()?;
+    value.get("port")?.as_u64()?.try_into().ok()
 }
 
 fn env_flag(name: &str) -> bool {
@@ -680,13 +905,19 @@ async fn known_session_token_for_existing(api_base_url: &str) -> Option<String> 
 /// Whether YOLO mode should be active for a managed dashboard bound to
 /// `hermes_home`.
 ///
-/// Combines the persisted desktop toggle (UI-store KV, see
-/// [`crate::ui_store::yolo_mode_enabled`]) with an explicit `HERMES_YOLO_MODE`
-/// override in the desktop's own environment. The env override keeps the
-/// documented power-user / dev escape hatch working even before the UI toggle
-/// is flipped.
+/// The persisted desktop toggle (UI-store KV, see
+/// [`crate::ui_store::yolo_mode_preference`]) is authoritative: an explicit
+/// preference — including an explicit "off" — wins over any inherited
+/// `HERMES_YOLO_MODE` in the desktop's own environment. So disabling YOLO in
+/// the UI truly disables it, even when the desktop process was launched with
+/// `HERMES_YOLO_MODE=1` (see #287). The env var only acts as the default before
+/// the user has ever touched the toggle, preserving the documented power-user /
+/// dev escape hatch from #78.
 pub fn yolo_mode_effective(hermes_home: &str) -> bool {
-    crate::ui_store::yolo_mode_enabled(hermes_home) || env_flag("HERMES_YOLO_MODE")
+    match crate::ui_store::yolo_mode_preference(hermes_home) {
+        Some(pref) => pref,
+        None => env_flag("HERMES_YOLO_MODE"),
+    }
 }
 
 pub fn external_agent_allowed() -> bool {
@@ -740,7 +971,10 @@ fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<Str
 }
 
 /// Spawn the hermes dashboard subprocess.
-fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard, AppError> {
+fn spawn_dashboard(
+    options: &EnsureDashboardOptions,
+    claimed_ports: Vec<u16>,
+) -> Result<SpawnedDashboard, AppError> {
     let (program, mut prefix_args) = resolve_hermes_command(options.allow_external_agent)?;
 
     let api_args = vec![
@@ -755,11 +989,27 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     prefix_args.extend(api_args);
 
     let mut cmd = Command::new(&program);
+    if let Some(program_dir) = Path::new(&program)
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        cmd.current_dir(program_dir);
+    }
     // User-configured $HERMES_HOME/.env goes in first so every explicit
     // .env(...) below — and the env_remove for HERMES_YOLO_MODE — wins
     // over file contents. Re-read on every respawn so profile switches and
     // .env edits take effect without restarting the desktop. See #197.
     crate::env_file::inject_env_file(&mut cmd, &options.hermes_home, "dashboard");
+    // The effective PATH (login shell / registry merged) is the lifeline for
+    // the whole runtime tree: dashboard → gateway → MCP stdio servers only
+    // see node/npx/rg through it (#190 #196 #197). env_file treats PATH as a
+    // reserved key, so this explicit set is the single source of child PATH.
+    // Prepend the bundled node bin dir (P-032) so /chat's Ink TUI and
+    // node-based MCP servers work without a host Node install.
+    let effective_path = crate::process::runtime::prepend_bundled_node_to_path(
+        crate::path_resolver::effective_path_os(),
+    );
+    cmd.env("PATH", &effective_path);
     let session_token = session_token_for_spawn();
     let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
     let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
@@ -802,16 +1052,37 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     } else {
         log::warn!("Bundled plugins are missing from the managed runtime");
     }
+    // Bundled Node runtime + prebuilt Ink TUI (P-032): HERMES_NODE makes node
+    // resolution deterministic for the /chat PTY launcher; HERMES_TUI_DIR
+    // points it at the prebuilt bundle so it never needs a ui-tui/ checkout.
+    if let Some(node) = crate::process::runtime::current_node_binary() {
+        cmd.env("HERMES_NODE", &node);
+    } else {
+        log::warn!("Bundled node is missing from the managed runtime; /chat will be unavailable");
+    }
+    if let Some(tui_dir) = crate::process::runtime::current_tui_dir() {
+        cmd.env("HERMES_TUI_DIR", &tui_dir);
+    } else {
+        log::warn!("Bundled TUI is missing from the managed runtime; /chat will be unavailable");
+    }
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir)
         .env("HERMES_DESKTOP_MANAGED", "1")
         .env("HERMES_GATEWAY_DETACHED", "1");
+    // Identity-proving readiness channel: the kernel atomically writes
+    // {"port": N} here once its socket is bound (Core:
+    // _write_dashboard_ready_file). The unique path doubles as the identity
+    // check — no other process can know it.
+    let ready_file = new_ready_file_path();
+    cmd.env("HERMES_DESKTOP_READY_FILE", &ready_file);
 
     // YOLO mode: the backend freezes HERMES_YOLO_MODE at import time, so it can
     // only be toggled by (re)launching the runtime. Drive it from the persisted
-    // desktop preference (per HERMES_HOME) and make the decision authoritative:
-    // when off, explicitly clear any inherited HERMES_YOLO_MODE so the runtime
-    // never silently bypasses approval prompts.
+    // desktop preference (per HERMES_HOME) and make that decision authoritative
+    // (an inherited HERMES_YOLO_MODE only seeds the default before the user has
+    // ever set the preference). When the result is off, explicitly clear any
+    // inherited HERMES_YOLO_MODE so the runtime never silently bypasses approval
+    // prompts (see #287).
     if yolo_mode_effective(&options.hermes_home) {
         cmd.env("HERMES_YOLO_MODE", "1");
         log::warn!(
@@ -819,6 +1090,16 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         );
     } else {
         cmd.env_remove("HERMES_YOLO_MODE");
+    }
+
+    // Pass connection mode to the kernel so MCP/CDP tools can rewrite
+    // loopback URLs when running in remote connection mode.
+    cmd.env(
+        "HERMES_DESKTOP_CONNECTION_MODE",
+        options.connection_mode.as_str(),
+    );
+    if let Some(ref url) = options.remote_base_url {
+        cmd.env("HERMES_DESKTOP_REMOTE_BASE_URL", url);
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -844,6 +1125,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
     let mut child = cmd
         .spawn()
         .map_err(|e| AppError::DashboardStartup(e.to_string()))?;
+    crate::path_resolver::mark_applied_to_runtime(&effective_path);
     let job_handle = {
         #[cfg(windows)]
         {
@@ -877,6 +1159,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
         started_at_ms: now_millis(),
         runtime_version,
+        claimed_ports: claimed_ports.clone(),
     };
     if let Err(err) = write_ownership_marker(&marker) {
         log::warn!("Failed to write dashboard ownership marker: {}", err);
@@ -891,14 +1174,15 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<SpawnedDashboard,
         gateway_lock_dir: gateway_lock_dir.to_string_lossy().to_string(),
         ownership_marker_path: marker_path,
         job_handle,
+        ready_file,
     })
 }
 
 async fn dashboard_is_compatible(api_base_url: &str, hermes_home: &str) -> bool {
     // `/api/ws` is upstream-native — every runtime this desktop can manage
     // serves it, so compatibility only needs the fork's upload route and a
-    // matching HERMES_HOME. (The old `/api/v2/*` SSE probe is gone with the
-    // SSE transport.)
+    // matching HERMES_HOME. The legacy `/api/v2/*` transport probe was removed
+    // when the desktop switched to WS-only Gateway traffic.
     probe_dashboard(api_base_url).await
         && dashboard_supports_uploads(api_base_url).await
         && dashboard_matches_hermes_home(api_base_url, hermes_home).await
@@ -933,24 +1217,115 @@ where
         });
 }
 
-/// Wait until the dashboard is ready enough to accept browser/API traffic or
-/// timeout.
-async fn wait_for_dashboard(api_base_url: &str, child: &mut Option<std::process::Child>) -> bool {
-    let start = Instant::now();
-    while start.elapsed() < DASHBOARD_READY_TIMEOUT {
-        if probe_spawned_dashboard_ready(api_base_url).await {
-            return true;
-        }
-        // If the child has exited, bail early
-        if let Some(ref mut c) = child {
-            if let Ok(Some(status)) = c.try_wait() {
-                log::error!("Dashboard process exited before ready: {}", status);
-                return false;
+/// Outcome of waiting for a freshly spawned dashboard.
+#[derive(Debug, PartialEq, Eq)]
+enum WaitOutcome {
+    /// The kernel is serving AND proven to be ours (ready file appeared, or
+    /// the HTML-embedded session token matches the one we minted).
+    Ready {
+        actual_port: Option<u16>,
+    },
+    /// Our child died before becoming ready — the port-bind OSError path
+    /// exits within moments, so this fires fast instead of a 120s stall.
+    ExitedEarly(String),
+    /// Something answers on the port but its session token differs from the
+    /// one we minted: another process won the bind race. Our child cannot
+    /// bind the same port, so give up on it immediately and move on.
+    PortStolen,
+    TimedOut,
+}
+
+/// What the HTTP identity probe saw this tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HttpProbeState {
+    /// `/` served the exact token we minted for this spawn.
+    OursReady,
+    /// `/` served a DIFFERENT token — foreign dashboard owns the port.
+    Foreign,
+    /// Nothing conclusive (connection refused, page not up yet, no token).
+    Silent,
+}
+
+/// Pure per-tick decision, ordered by signal strength: a dead child beats
+/// everything; the ready file is identity-proving and authoritative; the
+/// HTTP token comparison covers runtimes that predate the ready file; only
+/// then does the timeout fire. Returns `None` to keep waiting.
+fn classify_wait_tick(
+    child_exit: Option<String>,
+    ready_port: Option<u16>,
+    http: HttpProbeState,
+    timed_out: bool,
+) -> Option<WaitOutcome> {
+    if let Some(status) = child_exit {
+        return Some(WaitOutcome::ExitedEarly(status));
+    }
+    if let Some(port) = ready_port {
+        return Some(WaitOutcome::Ready {
+            actual_port: Some(port),
+        });
+    }
+    match http {
+        HttpProbeState::OursReady => Some(WaitOutcome::Ready { actual_port: None }),
+        HttpProbeState::Foreign => Some(WaitOutcome::PortStolen),
+        HttpProbeState::Silent => {
+            if timed_out {
+                Some(WaitOutcome::TimedOut)
+            } else {
+                None
             }
+        }
+    }
+}
+
+/// HTTP identity probe: fetch the session token the dashboard embeds in its
+/// loopback index page and compare byte-for-byte with the token this shell
+/// minted for the spawn. 32 random bytes — equality means "our child",
+/// inequality means the port was stolen. With no expected token (getrandom
+/// failure — extreme edge) degrade to the legacy liveness probe.
+async fn http_identity_probe(api_base_url: &str, expected_token: Option<&str>) -> HttpProbeState {
+    let Some(expected) = expected_token.filter(|token| !token.is_empty()) else {
+        return if probe_spawned_dashboard_ready(api_base_url).await {
+            HttpProbeState::OursReady
+        } else {
+            HttpProbeState::Silent
+        };
+    };
+    match fetch_session_token(api_base_url).await {
+        Some(found) if found == expected => HttpProbeState::OursReady,
+        Some(_) => HttpProbeState::Foreign,
+        None => HttpProbeState::Silent,
+    }
+}
+
+/// Wait until the spawned dashboard is ready — with identity verification —
+/// or fails. Replaces the old boolean wait that treated any HTTP answer
+/// (even a 401 from a foreign dashboard) as success.
+async fn wait_for_spawned_dashboard(
+    api_base_url: &str,
+    child: &mut Child,
+    ready_file: &Path,
+    expected_token: Option<&str>,
+) -> WaitOutcome {
+    let start = Instant::now();
+    loop {
+        let child_exit = match child.try_wait() {
+            Ok(Some(status)) => Some(status.to_string()),
+            Ok(None) => None,
+            Err(err) => Some(format!("try_wait failed: {err}")),
+        };
+        let ready_port = read_ready_file_port(ready_file);
+        // Skip the HTTP round-trip when a stronger signal already decides.
+        let http = if child_exit.is_none() && ready_port.is_none() {
+            http_identity_probe(api_base_url, expected_token).await
+        } else {
+            HttpProbeState::Silent
+        };
+        let timed_out = start.elapsed() >= DASHBOARD_READY_TIMEOUT;
+        if let Some(outcome) = classify_wait_tick(child_exit, ready_port, http, timed_out) {
+            return outcome;
         }
         tokio::time::sleep(Duration::from_millis(350)).await;
     }
-    false
 }
 
 /// Ensure a hermes dashboard is running. Probes existing instances first,
@@ -959,12 +1334,51 @@ async fn wait_for_dashboard(api_base_url: &str, child: &mut Option<std::process:
 pub async fn ensure_hermes_dashboard(
     options: EnsureDashboardOptions,
 ) -> Result<DashboardHandle, AppError> {
-    let api_base_url = dashboard_base_url(&options.host, options.port);
+    // Coordinate port usage with other Hermes instances (desktop, CLI
+    // dashboards, gateways, proxies) before doing any network probes. We claim
+    // the dashboard API port plus the well-known satellite ports (webhook,
+    // proxy) as an atomic set. If the primary set is claimed by another live
+    // instance, shift to the next free set when fallback is allowed.
+    let (effective_port, mut port_locks) = {
+        if let Some(locks) = try_claim_dashboard_ports(options.port, &options.hermes_home) {
+            (options.port, locks)
+        } else if options.allow_port_fallback {
+            let mut found = None;
+            for candidate_port in fallback_ports(options.port) {
+                if let Some(locks) = try_claim_dashboard_ports(candidate_port, &options.hermes_home)
+                {
+                    found = Some((candidate_port, locks));
+                    break;
+                }
+            }
+            match found {
+                Some(pair) => pair,
+                None => {
+                    return Err(AppError::DashboardStartup(format!(
+                        "No available port from {} to {} — all dashboard ports are claimed by other Hermes instances.",
+                        options.port,
+                        options.port.saturating_add(DASHBOARD_PORT_FALLBACK_LIMIT)
+                    )));
+                }
+            }
+        } else {
+            return Err(AppError::DashboardStartup(format!(
+                "Port {} (or associated webhook/proxy ports) is already claimed by another Hermes instance. Stop the other instance, or enable port fallback.",
+                options.port
+            )));
+        }
+    };
+    let api_base_url = dashboard_base_url(&options.host, effective_port);
 
     // Reuse an existing dashboard only after the compatibility probe proves it
     // is serving the same isolated runtime HERMES_HOME and supports the
     // desktop-required routes. This keeps hot reload / second launch usable
     // without falling back to a user-installed ~/.hermes or PATH runtime.
+    // Crashed shells can leave ready files behind; while we hold the
+    // per-root single-instance lock no sibling shell can be mid-spawn, so
+    // everything matching the prefix is stale.
+    sweep_stale_ready_files();
+
     let mut primary_occupied = probe_dashboard_port(&api_base_url);
     let ownership_marker = read_ownership_marker();
     let primary_marker_state = marker_owner_state(
@@ -972,6 +1386,28 @@ pub async fn ensure_hermes_dashboard(
         &api_base_url,
         &options.hermes_home,
     );
+    // While this process holds the per-root single-instance lock, no OTHER
+    // live shell can own this runtime root — a marker naming a live foreign
+    // desktop_pid can only be OS PID reuse. Treat it as stale so the orphan
+    // kernel gets adopted or cleaned instead of lingering unmanaged forever.
+    // Our own pid stays Live (legitimate during in-process respawns).
+    let primary_marker_state = if primary_marker_state == MarkerOwnerState::LiveDesktopOwner
+        && ownership_marker
+            .as_ref()
+            .map(|marker| marker.desktop_pid != std::process::id())
+            .unwrap_or(false)
+    {
+        log::warn!(
+            "ownership marker claims a live desktop owner (pid {}) while this process holds the instance lock; treating it as stale — PID reuse suspected",
+            ownership_marker
+                .as_ref()
+                .map(|marker| marker.desktop_pid)
+                .unwrap_or(0)
+        );
+        MarkerOwnerState::StaleDesktopOwner
+    } else {
+        primary_marker_state
+    };
     if primary_occupied && primary_marker_state == MarkerOwnerState::StaleDesktopOwner {
         if let Some(marker) = ownership_marker.as_ref() {
             let stale_dashboard_compatible =
@@ -991,6 +1427,12 @@ pub async fn ensure_hermes_dashboard(
                             marker.clone()
                         }
                     };
+                    // The previous desktop is dead; break any port locks it left
+                    // behind so the new instance owns them cleanly.
+                    release_orphaned_port_locks(
+                        &adopted_marker.claimed_ports,
+                        Path::new(&options.hermes_home),
+                    );
                     let gateway_runtime_dir = adopted_marker.gateway_runtime_dir.clone();
                     let gateway_lock_dir = PathBuf::from(&gateway_runtime_dir)
                         .join("token-locks")
@@ -1009,6 +1451,7 @@ pub async fn ensure_hermes_dashboard(
                         job_handle: None,
                         attached_pid: Some(adopted_marker.dashboard_pid),
                         child: None,
+                        port_locks: Some(port_locks),
                     });
                 }
 
@@ -1086,100 +1529,162 @@ pub async fn ensure_hermes_dashboard(
             job_handle: None,
             attached_pid: None,
             child: None,
+            port_locks: Some(port_locks),
         });
     }
 
-    // Try port fallbacks if the primary port has an incompatible dashboard
-    let mut spawn_options = EnsureDashboardOptions {
-        host: options.host.clone(),
-        port: options.port,
-        hermes_home: options.hermes_home.clone(),
-        allow_external_agent: options.allow_external_agent,
-        allow_port_fallback: options.allow_port_fallback,
-    };
-
+    // The effective port set is lock-claimed by us, yet something incompatible
+    // still answers on it: an uncoordinated process (non-Hermes service, or a
+    // Hermes runtime predating port locks) is bound there. Shifting away
+    // silently would leak such collisions forever, so surface the conflict.
     if primary_occupied {
-        if !options.allow_port_fallback {
-            return Err(AppError::DashboardStartup(format!(
-                "{} is already occupied by another dashboard. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
-                api_base_url, options.port
-            )));
-        }
-        log::warn!(
-            "Dashboard at {} is not compatible; trying alternate ports",
-            api_base_url
-        );
-        let mut found = false;
-        for candidate_port in fallback_ports(options.port) {
-            let candidate_url = dashboard_base_url(&options.host, candidate_port);
-            if probe_dashboard_port(&candidate_url) {
-                if options.allow_external_agent
-                    && dashboard_is_compatible(&candidate_url, &options.hermes_home).await
-                {
-                    let session_token = known_session_token_for_existing(&candidate_url).await;
-                    return Ok(DashboardHandle {
-                        api_base_url: candidate_url,
-                        session_token,
-                        owns_process: false,
-                        command_program: None,
-                        command_args: vec![],
-                        gateway_runtime_dir: None,
-                        gateway_lock_dir: None,
-                        ownership_marker_path: Some(ownership_marker_path_display()),
-                        ownership_state: Some("attached-compatible-fallback".to_string()),
-                        job_handle: None,
-                        attached_pid: None,
-                        child: None,
-                    });
-                }
-                continue;
-            }
-            spawn_options.port = candidate_port;
-            found = true;
-            break;
-        }
-        if !found {
-            return Err(AppError::DashboardStartup(format!(
-                "No available port from {} to {}",
-                options.port,
-                options.port.saturating_add(DASHBOARD_PORT_FALLBACK_LIMIT)
-            )));
-        }
-    }
-
-    // Spawn a new dashboard
-    let spawned = spawn_dashboard(&spawn_options)?;
-    let child_url = dashboard_base_url(&spawn_options.host, spawn_options.port);
-
-    let mut child_opt = Some(spawned.child);
-    let ready = wait_for_dashboard(&child_url, &mut child_opt).await;
-    if !ready {
-        if let Some(ref mut c) = child_opt {
-            terminate_owned_dashboard_tree(&child_url, Some(c), None, None);
-        }
-        remove_ownership_marker_path(Some(&spawned.ownership_marker_path));
         return Err(AppError::DashboardStartup(format!(
-            "Not ready at {} within {}s",
-            child_url,
-            DASHBOARD_READY_TIMEOUT.as_secs()
+            "{} is already occupied by another service. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
+            api_base_url, effective_port
         )));
     }
 
-    log::info!("Dashboard started at {}", child_url);
-    Ok(DashboardHandle {
-        api_base_url: child_url,
-        session_token: spawned.session_token,
-        owns_process: true,
-        command_program: Some(spawned.command_program),
-        command_args: spawned.command_args,
-        gateway_runtime_dir: Some(spawned.gateway_runtime_dir),
-        gateway_lock_dir: Some(spawned.gateway_lock_dir),
-        ownership_marker_path: Some(spawned.ownership_marker_path),
-        ownership_state: Some("owned".to_string()),
-        job_handle: spawned.job_handle,
-        attached_pid: None,
-        child: child_opt,
-    })
+    let mut spawn_options = EnsureDashboardOptions {
+        host: options.host.clone(),
+        port: effective_port,
+        hermes_home: options.hermes_home.clone(),
+        allow_external_agent: options.allow_external_agent,
+        allow_port_fallback: options.allow_port_fallback,
+        connection_mode: options.connection_mode,
+        remote_base_url: options.remote_base_url.clone(),
+    };
+
+    // Spawn a new dashboard, retrying on a lost bind race. The pre-scan
+    // above picked a free port, but between that probe and the child's
+    // bind() another process can win the port (TOCTOU): our child then
+    // exits with a bind error (ExitedEarly), or a foreign dashboard answers
+    // on our port (PortStolen). Either way pick the next free port and
+    // respawn — bounded by SPAWN_ATTEMPT_LIMIT.
+    let mut tried_ports: Vec<u16> = Vec::new();
+    let mut last_failure = String::from("no spawn attempted");
+    for attempt in 1..=SPAWN_ATTEMPT_LIMIT {
+        if attempt > 1 {
+            // Re-scan for the next candidate, skipping burned ports and
+            // anything that became occupied or lock-claimed since the previous
+            // scan. Release the old claim first — the new candidate (possibly
+            // the same port) gets a fresh atomic claim of its full port set.
+            drop(std::mem::take(&mut port_locks));
+            let next = std::iter::once(options.port)
+                .chain(fallback_ports(options.port))
+                .filter(|port| {
+                    !tried_ports.contains(port)
+                        && !probe_dashboard_port(&dashboard_base_url(&options.host, *port))
+                })
+                .find_map(|port| {
+                    try_claim_dashboard_ports(port, &options.hermes_home).map(|locks| (port, locks))
+                });
+            match next {
+                Some((port, locks)) => {
+                    spawn_options.port = port;
+                    port_locks = locks;
+                }
+                None => break,
+            }
+        }
+        tried_ports.push(spawn_options.port);
+
+        let claimed_ports: Vec<u16> = port_locks.iter().map(|lock| lock.port()).collect();
+        let SpawnedDashboard {
+            mut child,
+            session_token,
+            command_program,
+            command_args,
+            gateway_runtime_dir,
+            gateway_lock_dir,
+            ownership_marker_path,
+            job_handle,
+            ready_file,
+        } = spawn_dashboard(&spawn_options, claimed_ports)?;
+        let child_url = dashboard_base_url(&spawn_options.host, spawn_options.port);
+
+        let outcome = wait_for_spawned_dashboard(
+            &child_url,
+            &mut child,
+            &ready_file,
+            session_token.as_deref(),
+        )
+        .await;
+
+        let failure_reason = match outcome {
+            WaitOutcome::Ready { actual_port } => {
+                remove_ready_file(&ready_file);
+                // Trust the kernel-reported bound port when present (today it
+                // always equals the requested one; forward-compatible with
+                // `--port 0`).
+                let final_url = actual_port
+                    .filter(|port| *port != spawn_options.port)
+                    .map(|port| dashboard_base_url(&spawn_options.host, port))
+                    .unwrap_or(child_url);
+                log::info!("Dashboard started at {}", final_url);
+                return Ok(DashboardHandle {
+                    api_base_url: final_url,
+                    session_token,
+                    owns_process: true,
+                    command_program: Some(command_program),
+                    command_args,
+                    gateway_runtime_dir: Some(gateway_runtime_dir),
+                    gateway_lock_dir: Some(gateway_lock_dir),
+                    ownership_marker_path: Some(ownership_marker_path),
+                    ownership_state: Some("owned".to_string()),
+                    job_handle,
+                    attached_pid: None,
+                    child: Some(child),
+                    port_locks: Some(std::mem::take(&mut port_locks)),
+                });
+            }
+            WaitOutcome::TimedOut => {
+                terminate_owned_dashboard_tree(&child_url, Some(&mut child), None, None);
+                remove_ownership_marker_path(Some(&ownership_marker_path));
+                remove_ready_file(&ready_file);
+                // A kernel that is alive but not serving after 120s is not a
+                // bind race — retrying elsewhere would just take another 120s.
+                return Err(AppError::DashboardStartup(format!(
+                    "Not ready at {} within {}s",
+                    child_url,
+                    DASHBOARD_READY_TIMEOUT.as_secs()
+                )));
+            }
+            WaitOutcome::ExitedEarly(status) => {
+                format!("dashboard exited before ready ({status})")
+            }
+            WaitOutcome::PortStolen => {
+                "port answered with a foreign session token (bind race lost)".to_string()
+            }
+        };
+
+        terminate_owned_dashboard_tree(&child_url, Some(&mut child), None, None);
+        remove_ownership_marker_path(Some(&ownership_marker_path));
+        remove_ready_file(&ready_file);
+
+        if !options.allow_port_fallback {
+            // Dev semantics: the Vite proxy target is fixed, so surface the
+            // conflict instead of drifting to another port.
+            return Err(AppError::DashboardStartup(format!(
+                "{} — {}. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
+                child_url, failure_reason, spawn_options.port
+            )));
+        }
+        log::warn!(
+            "Dashboard spawn on {} failed ({}); retrying on another port (attempt {}/{})",
+            child_url,
+            failure_reason,
+            attempt,
+            SPAWN_ATTEMPT_LIMIT
+        );
+        last_failure = failure_reason;
+    }
+
+    Err(AppError::DashboardStartup(format!(
+        "Failed to start the dashboard after {} attempt(s) on ports {:?} — last failure: {}",
+        tried_ports.len(),
+        tried_ports,
+        last_failure
+    )))
 }
 
 #[cfg(test)]
@@ -1220,11 +1725,23 @@ mod tests {
         crate::ui_store::set_yolo_mode(home, false).unwrap();
         assert!(!yolo_mode_effective(home));
 
-        // Env override enables it even when the persisted pref is off.
+        // The persisted preference is authoritative: an explicit "off" wins over
+        // an inherited HERMES_YOLO_MODE=1 (the #287 bug — the UI toggle must
+        // actually disable the runtime).
         std::env::set_var("HERMES_YOLO_MODE", "1");
-        assert!(yolo_mode_effective(home));
-        std::env::remove_var("HERMES_YOLO_MODE");
         assert!(!yolo_mode_effective(home));
+        // An explicit "on" stays on regardless of env.
+        crate::ui_store::set_yolo_mode(home, true).unwrap();
+        assert!(yolo_mode_effective(home));
+
+        // With no persisted preference, the env var seeds the default — the
+        // documented power-user / dev escape hatch before the UI is ever used.
+        // (Use a fresh home so the preference is genuinely unset.)
+        let fresh = TempDir::new().unwrap();
+        let fresh_home = fresh.path().to_str().unwrap();
+        assert!(yolo_mode_effective(fresh_home));
+        std::env::remove_var("HERMES_YOLO_MODE");
+        assert!(!yolo_mode_effective(fresh_home));
     }
 
     #[test]
@@ -1306,6 +1823,7 @@ mod tests {
             gateway_runtime_dir: "/tmp/hermes-runtime-test/gateway".to_string(),
             started_at_ms: 1,
             runtime_version: Some("test".to_string()),
+            claimed_ports: vec![],
         }
     }
 
@@ -1434,6 +1952,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await
         .expect("compatible stale dashboard should be adopted");
@@ -1485,6 +2005,8 @@ mod tests {
             hermes_home: home,
             allow_external_agent: false,
             allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
         })
         .await;
         let err = match result {
@@ -1494,6 +2016,155 @@ mod tests {
 
         assert!(err.contains("incompatible dashboard"));
         assert!(read_ownership_marker().is_none());
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    #[test]
+    fn classify_wait_tick_child_exit_beats_everything() {
+        let out = classify_wait_tick(
+            Some("exit status: 1".into()),
+            Some(9121),
+            HttpProbeState::OursReady,
+            true,
+        );
+        assert_eq!(out, Some(WaitOutcome::ExitedEarly("exit status: 1".into())));
+    }
+
+    #[test]
+    fn classify_wait_tick_ready_file_is_authoritative() {
+        let out = classify_wait_tick(None, Some(9121), HttpProbeState::Foreign, false);
+        assert_eq!(
+            out,
+            Some(WaitOutcome::Ready {
+                actual_port: Some(9121)
+            })
+        );
+    }
+
+    #[test]
+    fn classify_wait_tick_http_token_decides_identity() {
+        assert_eq!(
+            classify_wait_tick(None, None, HttpProbeState::OursReady, false),
+            Some(WaitOutcome::Ready { actual_port: None })
+        );
+        assert_eq!(
+            classify_wait_tick(None, None, HttpProbeState::Foreign, false),
+            Some(WaitOutcome::PortStolen)
+        );
+    }
+
+    #[test]
+    fn classify_wait_tick_silent_keeps_waiting_until_timeout() {
+        assert_eq!(
+            classify_wait_tick(None, None, HttpProbeState::Silent, false),
+            None
+        );
+        assert_eq!(
+            classify_wait_tick(None, None, HttpProbeState::Silent, true),
+            Some(WaitOutcome::TimedOut)
+        );
+    }
+
+    #[tokio::test]
+    async fn http_identity_probe_accepts_our_token_and_rejects_foreign() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(
+                    r#"<script>window.__HERMES_SESSION_TOKEN__="token-A"</script>"#,
+                ),
+            )
+            .mount(&server)
+            .await;
+        let url = server.uri();
+
+        assert_eq!(
+            http_identity_probe(&url, Some("token-A")).await,
+            HttpProbeState::OursReady
+        );
+        assert_eq!(
+            http_identity_probe(&url, Some("token-B")).await,
+            HttpProbeState::Foreign
+        );
+    }
+
+    #[tokio::test]
+    async fn http_identity_probe_is_silent_when_no_token_served() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("<html>booting</html>"))
+            .mount(&server)
+            .await;
+        assert_eq!(
+            http_identity_probe(&server.uri(), Some("token-A")).await,
+            HttpProbeState::Silent
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn ready_file_roundtrip_and_sweep() {
+        let runtime = tempfile::tempdir().expect("runtime root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", runtime.path());
+
+        let path = new_ready_file_path();
+        std::fs::write(&path, r#"{"port": 9123}"#).expect("write ready file");
+        assert_eq!(read_ready_file_port(&path), Some(9123));
+
+        // Torn / invalid payloads read as "not ready", never panic.
+        std::fs::write(&path, "{\"po").expect("write torn file");
+        assert_eq!(read_ready_file_port(&path), None);
+
+        std::fs::write(&path, r#"{"port": 9123}"#).expect("rewrite");
+        sweep_stale_ready_files();
+        assert!(!path.exists(), "sweep must remove stale ready files");
+
+        remove_ready_file(&path); // idempotent on missing files
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    /// A marker naming a live pid that is NOT this process must be treated
+    /// as stale while the single-instance lock is held (PID reuse): the
+    /// compatible orphan gets adopted instead of being attached as if a
+    /// sibling desktop owned it.
+    #[cfg(unix)]
+    #[tokio::test]
+    #[serial]
+    async fn live_foreign_marker_is_collapsed_to_stale_and_adopted() {
+        let runtime = tempfile::tempdir().expect("runtime root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", runtime.path());
+        let home = runtime.path().join("hermes-home");
+        std::fs::create_dir_all(&home).expect("home");
+        let home = home.to_string_lossy().to_string();
+
+        let server = MockServer::start().await;
+        mount_dashboard_mock(&server, &home, true).await;
+        let (host, port) = host_port_from_uri(&server.uri());
+        let api_base_url = dashboard_base_url(&host, port);
+
+        // pid 1 (launchd/init) is always alive and never this process.
+        let marker = test_marker(1, &api_base_url, &home);
+        write_ownership_marker(&marker).expect("write live-foreign marker");
+
+        let handle = ensure_hermes_dashboard(EnsureDashboardOptions {
+            host,
+            port,
+            hermes_home: home,
+            allow_external_agent: false,
+            allow_port_fallback: false,
+            connection_mode: crate::connection::ConnectionMode::Managed,
+            remote_base_url: None,
+        })
+        .await
+        .expect("compatible orphan must be adopted");
+
+        assert_eq!(
+            handle.ownership_state.as_deref(),
+            Some("attached-stale-compatible"),
+            "live-foreign marker must collapse to stale adoption, not live attach"
+        );
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 }

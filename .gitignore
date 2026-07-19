@@ -36,3 +36,12 @@ static/bundled-plugins/*
 
 # Runtime release signing private key (gh secret RUNTIME_SIGN_PRIVATE_KEY_PEM)
 .runtime-keys/
+
+# Python build script cache
+__pycache__/
+
+# Agent runtime directory
+.agents/
+
+# AI plan cache
+.kimix_cache/

@@ -1,7 +1,7 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.3.2`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.3`).
 #
-# Desktop release build runs in parallel for Windows and macOS. Each job:
+# Desktop release build runs in parallel for Windows, macOS, and Linux. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
@@ -14,8 +14,12 @@
 #      production fallbacks. Set them only if you fork the project and
 #      want to point the auto-update at a different runtime release
 #      pipeline.
-#   6. tauri-action uploads .exe / .dmg to the GitHub Release
+#   6. tauri-action uploads .exe / .dmg / .deb / .AppImage to the GitHub Release
 #      it creates on first run, or appends to an existing tag's release.
+#   7. Extra portable (unzip-and-run) zip artifacts are packaged from the same
+#      build output and uploaded alongside the installers: Windows collects
+#      exe + resources from the cargo target dir; macOS staples the already
+#      notarized .app and zips it with ditto. See docs/portable-mode.md.
 
 name: release-desktop
 
@@ -26,11 +30,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.3.2)"
+        description: "Tag name to associate the build with (e.g. v0.6.3)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.16.0-cn.6"
+        default: "runtime-v0.18.2-cn.2"
         required: false
 
 permissions:
@@ -87,14 +91,22 @@ jobs:
             target: x86_64-pc-windows-msvc
             runtime_platform: win32
             runtime_arch: x64
+            bundles: nsis
           - runner: macos-14
             target: aarch64-apple-darwin
             runtime_platform: darwin
             runtime_arch: arm64
+            bundles: dmg
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             runtime_platform: darwin
             runtime_arch: x64
+            bundles: dmg
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            runtime_platform: linux
+            runtime_arch: x64
+            bundles: deb,appimage
 
     runs-on: ${{ matrix.runner }}
 
@@ -113,6 +125,23 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install Linux build dependencies
+        if: matrix.runtime_platform == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            wget
+
       - name: Cargo cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -127,7 +156,7 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.6' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.2' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -185,7 +214,7 @@ jobs:
           args=(
             scripts/stage-bundled-runtime.mjs
             --repo "Eynzof/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.16.0-cn.6' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.2' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
@@ -261,14 +290,30 @@ jobs:
             安装包已内置来自 ${{ steps.runtime_manifest.outputs.source_repo }}
             ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端、内置技能和内置插件。
 
-            Windows 和 macOS 安装包同时内置 Hermes-CN-Core runtime
+            Windows、macOS 和 Linux 安装包同时内置 Hermes-CN-Core runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。
+
+            Linux x64 版本提供 Debian 安装包（.deb）和免安装 AppImage。
+
+            Windows 和 macOS 另附免安装（portable）压缩包：解压即用，全部数据保存在
+            解压目录的 data 文件夹内，详见压缩包内 README-portable.txt。
 
             如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
           releaseDraft: false
           # Mark SemVer prerelease tags as prerelease on GitHub Releases.
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
-          args: --target ${{ matrix.target }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - name: Package + upload Windows portable zip
+        if: matrix.runtime_platform == 'win32'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
+          gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
       - name: Notarize, staple, verify, and reupload macOS DMG
         if: matrix.runtime_platform == 'darwin'
@@ -332,3 +377,88 @@ jobs:
             # final notarized + stapled DMG so the release asset is the one users download.
             gh release upload "$RELEASE_TAG" "$dmg" --clobber
           done
+
+      - name: Package + upload macOS portable zip
+        if: matrix.runtime_platform == 'darwin'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          app="target/${{ matrix.target }}/release/bundle/macos/Hermes Agent CN Desktop.app"
+
+          # Tauri's updater bundler compresses the .app into the .app.tar.gz
+          # updater artifact and then REMOVES the plain .app ("Cleaning …"),
+          # so by the time this step runs the bundle dir may only hold the
+          # tarball. Re-extract the .app from the final notarized DMG — the
+          # exact bits users download, covered by the notarization ticket.
+          if [ ! -d "$app" ]; then
+            dmgs=(target/${{ matrix.target }}/release/bundle/dmg/*.dmg)
+            mnt="$(mktemp -d)"
+            hdiutil attach "${dmgs[0]}" -mountpoint "$mnt" -nobrowse -quiet
+            mkdir -p "$(dirname "$app")"
+            ditto "$mnt/Hermes Agent CN Desktop.app" "$app"
+            hdiutil detach "$mnt" -quiet
+          fi
+
+          # The DMG notarization above produced a ticket covering the nested
+          # .app; staple the .app itself so the portable copy also validates
+          # offline. If Apple's ticket lookup ever fails here, the fallback is
+          # to notarize the portable zip separately:
+          #   ditto -c -k --keepParent "$app" app.zip && xcrun notarytool submit app.zip ...
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          spctl -a -vvv --type exec "$app"
+
+          node scripts/package-portable-macos.mjs --target ${{ matrix.target }}
+          gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
+
+  # Mirror all release assets to Cloudflare R2 so the dl-desktop download
+  # mirror (landing repo workers/release-mirror) serves from R2 instead of
+  # proxying GitHub. Runs after every build leg finishes, i.e. after the
+  # notarized DMG --clobber re-uploads and portable zips are final.
+  #
+  # Failure here never blocks the release: the mirror Worker falls back to
+  # GitHub for any object missing from R2. Re-run this job from the Actions
+  # UI after a failure — every step is idempotent.
+  #
+  # Required repo secrets (R2 API token scoped to the bucket, created in
+  # Cloudflare Dashboard → R2 → Manage API Tokens):
+  #   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ACCOUNT_ID
+  mirror-sync:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      BUCKET: hermes-desktop-releases
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_ENDPOINT_URL: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      # aws cli v2.23+ 默认的数据完整性校验头与 R2 不兼容,必须降级
+      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+    steps:
+      - name: Download all release assets
+        run: |
+          mkdir -p assets && cd assets
+          gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY"
+
+      - name: Generate and upload checksums.txt
+        run: |
+          cd assets
+          rm -f checksums.txt
+          sha256sum * | sort -k2 > checksums.txt
+          gh release upload "$RELEASE_TAG" checksums.txt -R "$GITHUB_REPOSITORY" --clobber
+
+      - name: Sync assets to R2
+        run: aws s3 sync assets/ "s3://$BUCKET/$RELEASE_TAG/"
+
+      - name: Prune old versions from R2 (keep newest 5 tags)
+        run: |
+          aws s3 ls "s3://$BUCKET/" | awk '{print $2}' | tr -d '/' \
+            | sort -V | head -n -5 | while read -r old; do
+              [ -n "$old" ] && aws s3 rm "s3://$BUCKET/$old/" --recursive
+            done

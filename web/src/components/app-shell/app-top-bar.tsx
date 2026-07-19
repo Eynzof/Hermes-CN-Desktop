@@ -2,7 +2,7 @@ import type { MouseEvent } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Moon, Palette, Search, Sun } from "lucide-react";
 import { DEFAULT_THEME_CONFIG, useTheme, type ThemeConfig } from "@hermes/shared-ui";
-import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
+import { useCommandPalette } from "@/components/command-palette";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import { openExternalUrl } from "@/lib/external-links";
@@ -11,22 +11,36 @@ import s from "./app-top-bar.module.css";
 
 const DESKTOP_VERSION_PARAM = versionLabel(DESKTOP_VERSION);
 const BRAND_URL = `https://hermesagent.org.cn?source=cn_desktop&version=${encodeURIComponent(DESKTOP_VERSION_PARAM)}`;
-const THEME_SEQUENCE: ThemeConfig["theme"][] = ["light", "light-modern", "dark", "dark-modern"];
+const THEME_SEQUENCE: ThemeConfig["theme"][] = [
+  "light",
+  "light-modern",
+  "dark",
+  "dark-modern",
+  "dracula",
+  "catppuccin-mocha",
+];
 const THEME_LABELS: Record<ThemeConfig["theme"], string> = {
   light: "浅色模式",
   "light-modern": "现代浅色模式",
   dark: "经典深色模式",
   "dark-modern": "现代深色模式",
+  dracula: "Dracula 主题",
+  "catppuccin-mocha": "Catppuccin Mocha 主题",
 };
 
 export function AppTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { config: themeConfig, update: updateTheme } = useTheme();
+  const { openCommandPalette } = useCommandPalette();
   const currentThemeIndex = THEME_SEQUENCE.indexOf(themeConfig.theme);
   const nextTheme = THEME_SEQUENCE[(currentThemeIndex + 1) % THEME_SEQUENCE.length] ?? DEFAULT_THEME_CONFIG.theme;
   const ThemeIcon =
-    themeConfig.theme === "dark-modern" ? Sun : themeConfig.theme === "dark" || themeConfig.theme === "light" ? Palette : Moon;
+    themeConfig.theme === "dark-modern" || themeConfig.theme === "catppuccin-mocha"
+      ? Sun
+      : themeConfig.theme === "dark" || themeConfig.theme === "dracula" || themeConfig.theme === "light"
+        ? Palette
+        : Moon;
   const themeToggleLabel = `切换到${THEME_LABELS[nextTheme]}`;
   const openBrandSite = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -45,15 +59,8 @@ export function AppTopBar() {
         onClick={openBrandSite}
         data-no-drag
       >
-        <HermesLogoMark
-          className={s.brandMark}
-          size={30}
-          tone={themeConfig.theme === "light" || themeConfig.theme === "light-modern" ? "dark" : "light"}
-        />
         <span className={s.brandText}>
-          <span className={s.wordmark}>
-            Hermes <em>Agent</em>
-          </span>
+          <span className={s.wordmark}>Hermes Agent</span>
           <span className={s.brandMeta}>
             <span className={s.edition}>中文社区桌面版</span>
             <span className={s.metaDot} aria-hidden="true">·</span>
@@ -83,12 +90,12 @@ export function AppTopBar() {
       <button
         type="button"
         className={s.search}
-        onClick={() => navigate("/history")}
-        title="搜索会话 / 文件"
+        onClick={openCommandPalette}
+        title="搜索命令 / 会话 / 文件"
         data-no-drag
       >
         <Search size={12} />
-        <span>搜索会话 / 文件…</span>
+        <span>搜索命令 / 会话 / 文件…</span>
         <span className={s.searchKbd}>⌘ K</span>
       </button>
 

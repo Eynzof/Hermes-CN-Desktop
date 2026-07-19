@@ -8,10 +8,12 @@ import {
   rememberSessionWorkspace,
   rememberWorkspaceProject,
   removeWorkspaceProject,
+  resolveSessionWorkspace,
   togglePinnedWorkspaceProject,
   unpinWorkspaceProjects,
   writePinnedWorkspaceProjectPaths,
   workspaceNameFromPath,
+  workspaceStorageScope,
 } from "./workspaces";
 import { rememberSessionMapping } from "./session-map";
 import { __resetUiStoreForTests, writeUiValue } from "./ui-store";
@@ -54,6 +56,44 @@ describe("workspace persistence helpers", () => {
     expect(readSessionWorkspaceMap()).toEqual({
       "session-2": "/Users/claw/Project",
     });
+  });
+
+  it("resolveSessionWorkspace prefers the backend cwd over the client map", () => {
+    __resetUiStoreForTests({
+      "hermes-cn-ui.sessionWorkspaces": { "sess-1": "/Users/claw/from-map" },
+    });
+
+    // Backend cwd wins, and is normalized (trailing slash stripped).
+    expect(resolveSessionWorkspace("/Users/claw/from-backend/", ["sess-1"])).toBe(
+      "/Users/claw/from-backend",
+    );
+  });
+
+  it("resolveSessionWorkspace falls back to the client map when backend cwd is blank", () => {
+    __resetUiStoreForTests({
+      "hermes-cn-ui.sessionWorkspaces": { "sess-1": "/Users/claw/from-map" },
+    });
+
+    expect(resolveSessionWorkspace(null, ["sess-1"])).toBe("/Users/claw/from-map");
+    expect(resolveSessionWorkspace(undefined, ["sess-1"])).toBe("/Users/claw/from-map");
+    expect(resolveSessionWorkspace("   ", ["sess-1"])).toBe("/Users/claw/from-map");
+  });
+
+  it("resolveSessionWorkspace checks each provided id in order and skips blanks", () => {
+    __resetUiStoreForTests({
+      "hermes-cn-ui.sessionWorkspaces": { "persistent-id": "/Users/claw/proj" },
+    });
+
+    expect(
+      resolveSessionWorkspace(null, [null, "  ", "gateway-id", "persistent-id"]),
+    ).toBe("/Users/claw/proj");
+  });
+
+  it("resolveSessionWorkspace returns empty string when no workspace is known", () => {
+    __resetUiStoreForTests();
+
+    expect(resolveSessionWorkspace(null, ["unknown", null])).toBe("");
+    expect(resolveSessionWorkspace("", [])).toBe("");
   });
 
   it("stores workspace projects without duplicating equivalent paths", () => {
@@ -161,5 +201,23 @@ describe("workspace persistence helpers", () => {
       "session-2": "/Users/claw/Other",
     });
     expect(Array.from(readPinnedWorkspaceProjectPaths())).toEqual(["/Users/claw/Other"]);
+  });
+
+  it("isolates remote project and workspace records by target address", () => {
+    (window as any).__HERMES_RUNTIME__ = {
+      connectionMode: "remote",
+      dashboardApiBaseUrl: "https://one.example/hermes",
+    };
+    expect(workspaceStorageScope()).toContain("one.example");
+    rememberWorkspaceProject("/srv/one");
+    expect(readWorkspaceProjects()).toHaveLength(1);
+
+    (window as any).__HERMES_RUNTIME__.dashboardApiBaseUrl = "https://two.example/hermes";
+    expect(readWorkspaceProjects()).toEqual([]);
+    rememberWorkspaceProject("/srv/two");
+    expect(readWorkspaceProjects()[0]?.path).toBe("/srv/two");
+
+    (window as any).__HERMES_RUNTIME__.dashboardApiBaseUrl = "https://one.example/hermes";
+    expect(readWorkspaceProjects()[0]?.path).toBe("/srv/one");
   });
 });

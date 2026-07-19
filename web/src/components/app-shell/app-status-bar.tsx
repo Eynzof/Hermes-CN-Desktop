@@ -12,7 +12,12 @@ import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-ur
 import { openExternalUrl } from "@/lib/external-links";
 import { isSessionRunning, mergeLiveRuntimeSessions } from "@/lib/session-activity";
 import { formatTokens } from "@/lib/format";
-import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-restart";
+import {
+  gatewayRestartAntivirusHint,
+  gatewayRestartButtonLabel,
+  gatewayRestartTitle,
+} from "@/lib/gateway-restart";
+import { detectHostOS, runtime } from "@/lib/runtime";
 import { buildSidebarVersionRows } from "./sidebar-version-tag";
 import s from "./app-status-bar.module.css";
 
@@ -44,6 +49,11 @@ export function AppStatusBar() {
   });
   const port = dashboardPortFromUrl(dashboardUrl);
   const gatewayOnline = !!status && !statusError;
+  const modeLabel = runtime.isRemote()
+    ? "远端 Hermes"
+    : runtime.isLocalConnection()
+      ? "本机外部 Hermes"
+      : "内置内核";
 
   const modelLabel = formatModelShort(modelInfo?.model);
   const contextLabel = formatContext(
@@ -73,7 +83,7 @@ export function AppStatusBar() {
     (analytics?.daily?.[0]?.input_tokens ?? 0) + (analytics?.daily?.[0]?.output_tokens ?? 0);
   const restartTitle = gatewayOnline || gatewayRestart.phase !== "idle"
     ? gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)
-    : "当前状态接口未确认在线，仍会尝试请求 Dashboard 重启 Gateway";
+    : "当前连接状态未知，仍会尝试重启网关";
 
   return (
     <footer className={s.statusbar} role="status" aria-label="运行状态">
@@ -83,10 +93,10 @@ export function AppStatusBar() {
           className={`${s.stat} ${s.gatewayButton}`}
           onClick={() => void openExternalUrl(dashboardUrl)}
           title={`打开 ${dashboardUrl}`}
-          aria-label={`打开 Dashboard ${dashboardUrl}`}
+          aria-label={`在浏览器打开 ${dashboardUrl}`}
         >
           <span className={s.dot} data-state={gatewayOnline ? "running" : "offline"} />
-          <span className={s.lbl}>网关</span>
+          <span className={s.lbl}>{modeLabel}</span>
           <span className={s.val}>{port}</span>
         </button>
         <button
@@ -94,9 +104,9 @@ export function AppStatusBar() {
           className={s.restartButton}
           data-state={gatewayRestart.phase}
           onClick={() => void gatewayRestart.restart()}
-          disabled={gatewayRestart.locked}
-          title={restartTitle}
-          aria-label={restartTitle}
+          disabled={gatewayRestart.locked || runtime.isAttached()}
+          title={runtime.isAttached() ? "外部 Hermes 的 Gateway 由目标端管理" : restartTitle}
+          aria-label={runtime.isAttached() ? "外部 Hermes 的 Gateway 由目标端管理" : restartTitle}
           aria-busy={gatewayRestart.busy}
         >
           <RotateCcw size={11} aria-hidden="true" />
@@ -105,6 +115,25 @@ export function AppStatusBar() {
         <span className={s.srOnly} aria-live="polite">
           {gatewayRestart.message ?? ""}
         </span>
+        {gatewayRestart.phase === "error" && (
+          <span className={s.gatewayError} role="alert">
+            <span className={s.gatewayErrorMsg}>
+              <strong>{gatewayRestart.message ?? "网关重启失败"}</strong>
+              {(() => {
+                const hint = gatewayRestartAntivirusHint(detectHostOS());
+                return hint ? <span className={s.gatewayErrorHint}>{hint}</span> : null;
+              })()}
+            </span>
+            <button
+              type="button"
+              className={s.gatewayRetry}
+              onClick={() => void gatewayRestart.restart()}
+            >
+              <RotateCcw size={11} aria-hidden="true" />
+              <span>重试</span>
+            </button>
+          </span>
+        )}
       </span>
       <span className={s.sep} />
       <span className={s.stat}>

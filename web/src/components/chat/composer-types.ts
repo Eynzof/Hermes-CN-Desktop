@@ -1,4 +1,10 @@
-import type { ModelOptionsResult, SkillInfo } from "@hermes/protocol";
+import type {
+  ModelOptionsResult,
+  SessionSummary,
+  SkillInfo,
+  SlashCompletionResult,
+} from "@hermes/protocol";
+import type { ReasoningEffort } from "@/lib/reasoning-effort";
 
 export type ComposerAttachmentKind = "image" | "file" | "directory";
 export type ComposerAttachmentSource = "browser" | "path" | "uploaded";
@@ -71,6 +77,23 @@ export interface ComposerSkillPickerProps {
   skills: SkillInfo[];
   loading?: boolean;
   error?: string;
+  disabled?: boolean;
+}
+
+export interface ComposerMentionPickerProps {
+  /** Backend file/folder/url completion for an "@…" word (complete.path RPC). */
+  completePath: (word: string) => Promise<SlashCompletionResult>;
+  /** Past sessions, for `@session:` references. */
+  sessions?: SessionSummary[];
+  /** Profile prefix baked into `@session:<profile>/<id>` tokens (default "default"). */
+  profile?: string;
+  disabled?: boolean;
+}
+
+export interface ComposerReasoningPickerProps {
+  /** 当前思考强度；null 表示配置里未显式设置（后端回落到默认档）。 */
+  value: ReasoningEffort | null;
+  onSelect: (effort: ReasoningEffort) => void | Promise<void>;
   disabled?: boolean;
 }
 

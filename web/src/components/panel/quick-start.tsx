@@ -86,7 +86,7 @@ export function QuickStart({ recipes = RECIPES_PANEL, columns }: QuickStartProps
           type="button"
           className={s.card}
           onClick={() => setPrefill({ text: recipe.prompt, nonce: Date.now() })}
-          title="点击预填到 composer"
+          title="点击填入输入框"
         >
           <div className={s.num}>{recipe.num}</div>
           <div className={s.title}>{recipe.title}</div>

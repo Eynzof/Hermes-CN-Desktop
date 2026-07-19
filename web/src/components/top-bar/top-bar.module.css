@@ -57,6 +57,11 @@
   align-items: center;
   gap: 4px;
 }
+.chip[data-active="true"] {
+  color: var(--h-text);
+  background: var(--h-bg-chip);
+  border-color: var(--h-accent-border);
+}
 .chip:hover {
   background: var(--h-bg-soft);
 }

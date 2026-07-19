@@ -1,20 +1,8 @@
 .soulPage {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   max-width: 1120px;
-}
-
-.desc {
-  margin: 0;
-  color: var(--h-text-2);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.desc strong {
-  color: var(--h-text);
-  font-weight: 650;
 }
 
 .inlineLink {
@@ -44,54 +32,11 @@
   padding: 3px 10px;
 }
 
-/* ── buttons ───────────────────────────────────────────────── */
-.iconButton,
-.primaryButton,
-.secondaryButton {
-  border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
-  height: 30px;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--h-font-ui);
-}
-
-.iconButton,
-.secondaryButton {
-  color: var(--h-text-2);
-  background: var(--h-bg-soft);
-}
-
-.iconButton:hover,
-.secondaryButton:hover {
-  color: var(--h-text);
-  background: var(--h-bg-chip);
-}
-
-.primaryButton {
-  color: #ffffff;
-  background: var(--h-accent);
-  border-color: color-mix(in srgb, var(--h-accent) 75%, var(--h-line));
-}
-
-.primaryButton:disabled,
-.secondaryButton:disabled,
-.iconButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 /* ── panel ─────────────────────────────────────────────────── */
 .panel {
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-lg);
-  background: var(--h-bg-pane);
+  background: var(--h-bg-app);
   overflow: hidden;
 }
 
@@ -99,6 +44,7 @@
   min-height: 52px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-pane);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -178,7 +124,7 @@
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--h-line-soft);
-  background: var(--h-bg-soft);
+  background: var(--h-bg-pane);
 }
 
 .toolbarHint {
@@ -193,7 +139,7 @@
 
 .textarea {
   width: 100%;
-  min-height: 360px;
+  min-height: 340px;
   resize: vertical;
   background: var(--h-bg-input);
   color: var(--h-text);
@@ -212,7 +158,7 @@
 }
 
 .preview {
-  min-height: 360px;
+  min-height: 340px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);

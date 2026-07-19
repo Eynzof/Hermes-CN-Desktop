@@ -18,6 +18,8 @@ import {
 import { notifyFromGatewayEvent } from "@/lib/notifications";
 import { resolvePersistentSessionId } from "@/lib/session-map";
 import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
+import { routeCliDelegationGatewayEventAtom } from "@/stores/cli-delegations";
+import { routeSubagentGatewayEventAtom } from "@/stores/subagents";
 
 export interface ToolEntry {
   tool_id: string;
@@ -44,7 +46,8 @@ export type AssistantTurnBlock =
   | { type: "reasoning"; text: string }
   | { type: "progress"; text: string }
   | { type: "image"; image: ImageEntry }
-  | { type: "tool"; tool: ToolEntry };
+  | { type: "tool"; tool: ToolEntry }
+  | { type: "moa_reference"; label: string; text: string; index?: number; count?: number };
 
 export interface PendingApproval {
   requestId: string;
@@ -63,6 +66,14 @@ export interface ChatSessionRuntime {
   statusKind?: string;
   statusUpdatedAt?: number;
   updatedAt: number;
+  /**
+   * Wall-clock ms of the last *backend* event reduced for this session. Unlike
+   * {@link updatedAt} (also bumped by local atom mutations like manual
+   * interrupt / reset), this only advances when the gateway actually sends
+   * something, so the stall watchdog can tell a live turn apart from a wedged
+   * one where the backend has gone completely silent. See `session-activity.ts`.
+   */
+  lastActivityAt?: number;
   turnStartedAt?: number;
   turnFirstTokenAt?: number;
   activeAssistantId?: string;
@@ -79,8 +90,15 @@ export const chatRuntimeBySessionAtom = atom<ChatRuntimeBySession>({});
 
 const GENERIC_TURN_FAILURE_TEXT =
   "模型服务调用未成功。常见原因：API Key 失效或不在模型权限范围、网络/服务不可达。请到 设置 → 模型 检查后重试。";
-const PROVIDER_STATUS_KINDS = new Set(["provider_wait", "provider_retry", "provider_stalled"]);
-const OPTIMISTIC_ASSISTANT_PROGRESS = "正在启动Hermes Agent内核...";
+const PROVIDER_STATUS_KINDS = new Set([
+  "provider_wait",
+  "provider_retry",
+  "provider_stalled",
+  "tool_generating",
+  "moa_reference",
+  "moa_aggregating",
+]);
+const OPTIMISTIC_ASSISTANT_PROGRESS = "正在唤醒Hermes...";
 
 export function createEmptyChatRuntime(now = Date.now()): ChatSessionRuntime {
   return {
@@ -291,16 +309,30 @@ function appendToolPart(parts: HermesMessagePart[], tool: HermesToolPart): Herme
 
 function mergeFinalTextPart(parts: HermesMessagePart[], finalText: string): HermesMessagePart[] {
   if (!finalText) return parts;
-  const existingText = textFromParts(parts);
-  const last = parts[parts.length - 1];
+  const next = withoutProgressParts(parts);
+  let lastToolIndex = -1;
+  next.forEach((part, index) => {
+    if (part.type === "tool") lastToolIndex = index;
+  });
+  const finalSegmentStart = lastToolIndex + 1;
+  const existingFinalSegment = textFromParts(next.slice(finalSegmentStart));
 
-  if (!existingText) return appendTextPart(parts, finalText);
-  if (existingText === finalText) return parts;
-  if (finalText.startsWith(existingText)) {
-    return appendTextPart(parts, finalText.slice(existingText.length));
-  }
-  if (last?.type === "text" && last.text.endsWith(finalText)) return parts;
-  return appendTextPart(parts, finalText);
+  if (existingFinalSegment === finalText) return next;
+
+  // message.complete.text is the authoritative final assistant response. In a
+  // tool-bearing turn it represents only the text after the final tool call;
+  // earlier commentary must remain intact. Replace that trailing text segment
+  // instead of appending when streamed deltas diverge: an out-of-order WS batch
+  // can otherwise produce "corrupt partial + complete final" in one live row.
+  let inserted = false;
+  const reconciled = next.flatMap((part, index) => {
+    if (index < finalSegmentStart || part.type !== "text") return [part];
+    if (inserted) return [];
+    inserted = true;
+    return [{ ...part, text: finalText }];
+  });
+
+  return inserted ? reconciled : [...reconciled, { type: "text", text: finalText }];
 }
 
 function findToolMatch(tool: HermesToolPart, payload: Record<string, any>): boolean {
@@ -432,6 +464,16 @@ function appendNoticeMessage(
   };
 }
 
+// Map backend status.update lifecycle signals to localized, user-facing text.
+// Returns "" to clear the status line, undefined to leave it unchanged.
+function localizeStatusUpdate(kind: string, text: string): string | undefined {
+  if (kind === "compressing") return "正在压缩上下文…";
+  // session.compress pins a neutral "ready" status when compaction settles —
+  // surface nothing rather than a raw English "ready" string in the timeline.
+  if (kind === "ready" || text === "ready") return "";
+  return text || undefined;
+}
+
 function gatewayUsageMetadata(usage: GatewayMessageUsageT | undefined): HermesMessageMetadata["usage"] | undefined {
   if (!usage) return undefined;
   const next: NonNullable<HermesMessageMetadata["usage"]> = {};
@@ -498,7 +540,7 @@ function finalizeAssistantParts(
   payload: Record<string, any>,
 ): HermesMessagePart[] {
   let parts = withoutProgressParts(message.parts);
-  const finalText = typeof payload.text === "string" ? payload.text : textFromParts(parts);
+  const finalText = typeof payload.text === "string" ? payload.text : "";
   const finalReasoning = normalizeReasoningText(
     typeof payload.reasoning === "string" ? payload.reasoning : reasoningFromParts(parts),
   );
@@ -513,6 +555,20 @@ function finalizeAssistantParts(
 }
 
 export function reduceGatewayEvent(
+  runtime: ChatSessionRuntime,
+  event: GatewayEvent,
+  now = Date.now(),
+): ChatSessionRuntime {
+  const next = reduceGatewayEventInner(runtime, event, now);
+  // Stamp the last time we heard from the backend. `next === runtime` means
+  // the event was a no-op (e.g. a late event from an interrupted turn that was
+  // dropped) — don't count those as activity. Everything the gateway actually
+  // applies resets the stall watchdog's silence timer.
+  if (next === runtime) return next;
+  return { ...next, lastActivityAt: now };
+}
+
+function reduceGatewayEventInner(
   runtime: ChatSessionRuntime,
   event: GatewayEvent,
   now = Date.now(),
@@ -577,6 +633,59 @@ export function reduceGatewayEvent(
         }),
       );
       return next;
+    }
+
+    case "moa.reference": {
+      // 一个 reference 模型的完整输出块（label + 全文），在聚合器回答之前
+      // 逐个到达。追加为独立的 moa_reference part；同时用 provider-status
+      // 通道提示进度（message.delta 到达时自动清除）。
+      const label = typeof payload.label === "string" ? payload.label : "";
+      const text = typeof payload.text === "string" ? payload.text : "";
+      const index = typeof payload.index === "number" ? payload.index : undefined;
+      const count = typeof payload.count === "number" ? payload.count : undefined;
+      if (!label && !text) return runtime;
+      const id = activeAssistantId(runtime, now);
+      const progressLabel =
+        index !== undefined && count !== undefined
+          ? `参考模型 ${label || "?"} 已完成（${index + 1}/${count}）…`
+          : `参考模型 ${label || "?"} 已完成…`;
+      return updateActiveAssistant(
+        {
+          ...runtime,
+          streamStatus: "streaming",
+          activeAssistantId: id,
+          turnStartedAt: runtime.turnStartedAt ?? now,
+          statusMessage: progressLabel,
+          statusKind: "moa_reference",
+          statusUpdatedAt: now,
+          updatedAt: now,
+        },
+        sessionId,
+        now,
+        (message) => ({
+          ...message,
+          status: "streaming",
+          parts: [
+            ...message.parts,
+            { type: "moa_reference", label: label || "reference", text, index, count },
+          ],
+        }),
+      );
+    }
+
+    case "moa.aggregating": {
+      // references 齐了，聚合器开始综合；它的回答走普通 message.delta 流，
+      // 到达时 clearProviderStatus 会清掉这条状态。
+      const aggregator = typeof payload.aggregator === "string" ? payload.aggregator : "";
+      return {
+        ...runtime,
+        statusMessage: aggregator
+          ? `聚合器 ${aggregator} 正在综合各模型观点…`
+          : "聚合器正在综合各模型观点…",
+        statusKind: "moa_aggregating",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
     }
 
     case "thinking.delta":
@@ -735,24 +844,18 @@ export function reduceGatewayEvent(
       );
     }
 
-    case "tool.progress": {
-      const id = activeAssistantId(runtime, now);
-      return updateActiveAssistant(
-        clearProviderStatus({
-          ...runtime,
-          activeAssistantId: id,
-          updatedAt: now,
-        }),
-        sessionId,
-        now,
-        (message) => ({
-          ...message,
-          parts: updateToolParts(message.parts, payload, (tool) => ({
-            ...tool,
-            preview: typeof payload.preview === "string" ? payload.preview : tool.preview,
-          })),
-        }),
-      );
+    case "tool.generating": {
+      // 模型正在流式生成工具调用参数（先于 tool.start，此刻还没有 tool part）。
+      // 走 provider-status 通道展示轻量提示；tool.start/内容事件到达时由
+      // clearProviderStatus 自然清除。
+      const name = typeof payload.name === "string" ? payload.name : "";
+      return {
+        ...runtime,
+        statusMessage: name ? `正在准备 ${name} 工具调用…` : "正在准备工具调用…",
+        statusKind: "tool_generating",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
     }
 
     case "tool.complete": {
@@ -800,9 +903,11 @@ export function reduceGatewayEvent(
 
     case "status.update": {
       const kind = typeof payload.kind === "string" ? payload.kind : "status";
+      const text = typeof payload.text === "string" ? payload.text : "";
+      const localized = localizeStatusUpdate(kind, text);
       return {
         ...runtime,
-        statusMessage: typeof payload.text === "string" ? payload.text : runtime.statusMessage,
+        statusMessage: localized !== undefined ? localized : runtime.statusMessage,
         statusKind: kind,
         statusUpdatedAt: now,
         updatedAt: now,
@@ -1036,6 +1141,29 @@ export const startPromptAtom = atom(
   },
 );
 
+/** Append a standalone system/notice message to a session — used for client-side
+ *  command results (e.g. manual /compress) that aren't part of a model turn. */
+export const appendNoticeAtom = atom(
+  null,
+  (
+    _get,
+    set,
+    params: {
+      sessionId: string;
+      text: string;
+      level?: "info" | "warning" | "error" | "system";
+      now?: number;
+    },
+  ) => {
+    const now = params.now ?? Date.now();
+    set(chatRuntimeBySessionAtom, (state) =>
+      updateSessionRuntime(state, params.sessionId, (runtime) =>
+        appendNoticeMessage(runtime, params.sessionId, now, params.text, params.level ?? "system"),
+      ),
+    );
+  },
+);
+
 function textForStatsHash(message: HermesUIMessage): string {
   return message.parts
     .flatMap((part) => {
@@ -1113,20 +1241,26 @@ function persistCompletedTurnStats(runtime: ChatSessionRuntime, event: GatewayEv
   });
 }
 
-export const applyGatewayEventAtom = atom(null, (_get, set, event: GatewayEvent) => {
+export const applyGatewayEventAtom = atom(null, (get, set, event: GatewayEvent) => {
   if (!event.session_id) return;
+  // 通知决策需要 reduce 前的快照（pendingApprovals / activeAssistantId 是
+  // 防重放依据），在 set 之外读取——jotai 不承诺 updater 恰好执行一次。
+  // 副作用本身 fire-and-forget，绝不影响 reducer。
+  try {
+    notifyFromGatewayEvent(event, get(chatRuntimeBySessionAtom)[event.session_id]);
+  } catch {}
   set(chatRuntimeBySessionAtom, (state) =>
     updateSessionRuntime(state, event.session_id!, (runtime) => {
-      // 通知决策需要 reduce 前的快照（pendingApprovals / activeAssistantId
-      // 是防重放依据），副作用本身 fire-and-forget，绝不影响 reducer。
-      try {
-        notifyFromGatewayEvent(event, runtime);
-      } catch {}
       const next = reduceGatewayEvent(runtime, event);
       persistCompletedTurnStats(next, event);
       return next;
     }),
   );
+  // Route subagent activity into its own store (issue #238). Self-contained in
+  // stores/subagents.ts; chat timeline reduction is untouched.
+  set(routeSubagentGatewayEventAtom, event);
+  // Route CLI delegation activity (Claude Code / Codex, P-047) the same way.
+  set(routeCliDelegationGatewayEventAtom, event);
 });
 
 export const setSessionErrorAtom = atom(

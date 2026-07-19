@@ -1,6 +1,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { debugBus } from "./debug-bus";
-import { fetchExternalJSON, fetchJSON, uploadAttachmentFile } from "./transport";
+import {
+  downloadExternalImageFile,
+  fetchExternalJSON,
+  fetchJSON,
+  fetchMediaDataUrl,
+  uploadAttachmentFile,
+} from "./transport";
 
 type PushArg = Parameters<typeof debugBus.push>[0];
 
@@ -78,6 +84,24 @@ describe("transport · debug-bus integration", () => {
 
     const restPushes = restPushesFrom(pushSpy);
     expect(restPushes.length).toBe(0);
+  });
+
+  it("fetchMediaDataUrl loads an encoded gateway image path", async () => {
+    stubFetch(() => makeResponse(200, '{"data_url":"data:image/png;base64,QUJD"}'));
+
+    await expect(fetchMediaDataUrl("/Users/me/Hermes images/a 1.png"))
+      .resolves.toBe("data:image/png;base64,QUJD");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/media?path=%2FUsers%2Fme%2FHermes%20images%2Fa%201.png",
+      expect.objectContaining({ headers: { "Content-Type": "application/json" } }),
+    );
+  });
+
+  it("fetchMediaDataUrl rejects a malformed media response", async () => {
+    stubFetch(() => makeResponse(200, '{"data_url":"https://example.com/not-inline.png"}'));
+
+    await expect(fetchMediaDataUrl("/tmp/a.png")).rejects.toThrow(/image data URL/);
   });
 
   it("fetchExternalJSON pushes a REST entry on non-ok response", async () => {
@@ -216,5 +240,28 @@ describe("transport · debug-bus integration", () => {
     expect(uploadInput.data).toBeInstanceOf(ArrayBuffer);
     expect(onProgress).toHaveBeenNthCalledWith(1, 0);
     expect(onProgress).toHaveBeenNthCalledWith(2, 100);
+  });
+
+  it("downloadExternalImageFile uses desktop downloadExternalImage capability", async () => {
+    const downloadExternalImage = vi.fn(async () => ({
+      finalUrl: "https://example.com/image.png",
+      filename: "image.png",
+      mimeType: "image/png",
+      dataBase64: btoa("png-bytes"),
+      size: 9,
+    }));
+    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request: vi.fn(),
+      downloadExternalImage,
+    };
+
+    const file = await downloadExternalImageFile("https://example.com/image.png");
+
+    expect(downloadExternalImage).toHaveBeenCalledWith({ url: "https://example.com/image.png" });
+    expect(file.name).toBe("image.png");
+    expect(file.type).toBe("image/png");
+    expect(await file.text()).toBe("png-bytes");
   });
 });

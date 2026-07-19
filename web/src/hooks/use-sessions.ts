@@ -48,21 +48,45 @@ async function fetchSessionLogMessages(id: string, signal?: AbortSignal): Promis
   }
 }
 
-async function fetchSessionMessages(id: string, signal?: AbortSignal): Promise<MessagesResponse> {
-  const result = await fetchJSON(
-    `/api/sessions/${id}/messages`,
-    { signal },
-    MessagesResponse,
-  );
+export async function fetchSessionMessages(id: string, signal?: AbortSignal): Promise<MessagesResponse> {
+  let result: MessagesResponse;
+  try {
+    result = await fetchJSON(
+      `/api/sessions/${id}/messages`,
+      { signal },
+      MessagesResponse,
+    );
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    // 主端点 404（会话 id 形态与后端不一致 / 尚未落盘等）会让 fetchJSON 直接 throw，
+    // 之前不会触发下面的会话日志兜底，导致历史整段丢失。先退回 /__hermes_session_log，
+    // 拿不到再把原始错误抛给 React Query。
+    const fallback = await fetchSessionLogMessages(id, signal);
+    if (fallback) return fallback;
+    throw error;
+  }
   if (hasAnyMessages(result)) return result;
   return await fetchSessionLogMessages(id, signal) ?? result;
 }
 
-export function useSessions(limit = 50, offset = 0) {
+export interface UseSessionsOptions {
+  // When true, ask the Rust proxy to keep archived sessions (annotated with
+  // `archived: true`) instead of stripping them. Defaults to false so the
+  // sidebar and other callers keep the active-only list. See history page.
+  includeArchived?: boolean;
+}
+
+export function useSessions(limit = 50, offset = 0, opts: UseSessionsOptions = {}) {
   const profile = useActiveProfileName();
+  const includeArchived = opts.includeArchived ?? false;
   return useQuery<SessionsResponse>({
-    queryKey: ["sessions", profile, limit, offset],
-    queryFn: ({ signal }) => fetchJSON(`/api/sessions?limit=${limit}&offset=${offset}`, { signal }, SessionsResponse),
+    queryKey: ["sessions", profile, limit, offset, includeArchived ? "all" : "active"],
+    queryFn: ({ signal }) =>
+      fetchJSON(
+        `/api/sessions?limit=${limit}&offset=${offset}${includeArchived ? "&include_archived=true" : ""}`,
+        { signal },
+        SessionsResponse,
+      ),
   });
 }
 
@@ -280,6 +304,49 @@ export function useArchiveSession() {
     },
     onSuccess: (_result, id) => {
       unpinSessions([id]);
+    },
+    onError: (_error, _id, context) => {
+      for (const [queryKey, data] of context?.sessionSnapshots ?? []) {
+        qc.setQueryData(queryKey, data);
+      }
+      for (const [queryKey, data] of context?.searchSnapshots ?? []) {
+        qc.setQueryData(queryKey, data);
+      }
+    },
+    onSettled: () => {
+      invalidateSessionLists(qc);
+    },
+  });
+}
+
+// Inverse of useArchiveSession: DELETE /api/sessions/{id}/archive un-archives a
+// session (see handle_archive_request DELETE branch). The mutation optimistically
+// drops the row from the archived view; onSettled re-fetches so it reappears in
+// the active list. The caller is on the archived scope, so the brief removal is
+// only ever observed where the row should disappear.
+export function useUnarchiveSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      deleteJSON(`/api/sessions/${encodeURIComponent(id)}/archive`, undefined, MutationOkResponse),
+    onMutate: async (id) => {
+      await Promise.all([
+        qc.cancelQueries({ queryKey: ["sessions"] }),
+        qc.cancelQueries({ queryKey: ["sessions-search"] }),
+      ]);
+      const sessionSnapshots = qc.getQueriesData<SessionsResponse>({ queryKey: ["sessions"] });
+      const searchSnapshots = qc.getQueriesData<{ results: SearchResult[] }>({
+        queryKey: ["sessions-search"],
+      });
+
+      qc.setQueriesData<SessionsResponse>({ queryKey: ["sessions"] }, (data) =>
+        withoutSessions(data, [id]),
+      );
+      qc.setQueriesData<{ results: SearchResult[] }>({ queryKey: ["sessions-search"] }, (data) =>
+        withoutSearchResults(data, [id]),
+      );
+
+      return { sessionSnapshots, searchSnapshots };
     },
     onError: (_error, _id, context) => {
       for (const [queryKey, data] of context?.sessionSnapshots ?? []) {

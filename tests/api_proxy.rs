@@ -21,8 +21,9 @@ use std::time::Duration;
 
 use base64::Engine;
 use hermes_agent_cn::commands::api_proxy::{
-    api_request_impl, api_request_impl_with_home_base, external_request, external_request_impl,
-    upload_file_impl, ApiRequestInput, UploadFileInput,
+    api_request_impl, api_request_impl_with_home_base, download_external_image_impl,
+    external_request, external_request_impl, upload_file_impl, ApiRequestInput,
+    DownloadExternalImageInput, UploadFileInput,
 };
 use hermes_agent_cn::error::AppError;
 use hermes_agent_cn::ui_store;
@@ -483,6 +484,159 @@ async fn external_request_command_allows_loopback_http() {
     assert_eq!(result.status, 200);
     assert_eq!(result.body, r#"{"data":[{"id":"local"}]}"#);
     assert!(result.ok);
+}
+
+// --- download_external_image -----------------------------------------------
+
+const TINY_PNG: &[u8] = &[
+    0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n', 0, 0, 0, 0,
+];
+
+#[tokio::test]
+async fn download_external_image_succeeds_against_mock_server() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/img/logo.png"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "image/png")
+                .set_body_bytes(TINY_PNG),
+        )
+        .mount(&server)
+        .await;
+
+    let url = format!("{}/img/logo.png", server.uri());
+    let result = download_external_image_impl(
+        DownloadExternalImageInput { url: url.clone() },
+        url.parse().expect("valid URL"),
+    )
+    .await
+    .expect("ok");
+
+    assert_eq!(result.final_url, url);
+    assert_eq!(result.filename, "logo.png");
+    assert_eq!(result.mime_type, "image/png");
+    assert_eq!(result.size, TINY_PNG.len());
+    assert_eq!(
+        result.data_base64,
+        base64::engine::general_purpose::STANDARD.encode(TINY_PNG)
+    );
+}
+
+#[tokio::test]
+async fn download_external_image_rejects_non_image_content() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/page"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/html")
+                .set_body_string("<html>not image</html>"),
+        )
+        .mount(&server)
+        .await;
+
+    let url = format!("{}/page", server.uri());
+    let err = download_external_image_impl(
+        DownloadExternalImageInput { url: url.clone() },
+        url.parse().expect("valid URL"),
+    )
+    .await
+    .expect_err("non-image should be rejected");
+
+    assert!(
+        matches!(err, AppError::InvalidRequest(ref msg) if msg.contains("image content")),
+        "got {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn download_external_image_rejects_declared_oversize_content() {
+    let server = MockServer::start().await;
+    let mut huge = Vec::with_capacity((20 * 1024 * 1024) + 1);
+    huge.extend_from_slice(TINY_PNG);
+    huge.resize((20 * 1024 * 1024) + 1, 0);
+    Mock::given(method("GET"))
+        .and(path("/huge.png"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "image/png")
+                .set_body_bytes(huge),
+        )
+        .mount(&server)
+        .await;
+
+    let url = format!("{}/huge.png", server.uri());
+    let err = download_external_image_impl(
+        DownloadExternalImageInput { url: url.clone() },
+        url.parse().expect("valid URL"),
+    )
+    .await
+    .expect_err("oversize should be rejected");
+
+    assert!(
+        matches!(err, AppError::InvalidRequest(ref msg) if msg.contains("20 MiB")),
+        "got {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn download_external_image_follows_and_revalidates_redirects() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/start"))
+        .respond_with(ResponseTemplate::new(302).insert_header("location", "/final.webp"))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/final.webp"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "application/octet-stream")
+                .set_body_bytes(b"RIFF\x04\x00\x00\x00WEBP"),
+        )
+        .mount(&server)
+        .await;
+
+    let url = format!("{}/start", server.uri());
+    let result = download_external_image_impl(
+        DownloadExternalImageInput { url },
+        format!("{}/start", server.uri())
+            .parse()
+            .expect("valid URL"),
+    )
+    .await
+    .expect("redirected image should succeed");
+
+    assert_eq!(result.final_url, format!("{}/final.webp", server.uri()));
+    assert_eq!(result.mime_type, "image/webp");
+    assert_eq!(result.filename, "final.webp");
+}
+
+#[tokio::test]
+async fn download_external_image_reports_network_errors_readably() {
+    let port = {
+        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind ephemeral port");
+        let p = l.local_addr().unwrap().port();
+        drop(l);
+        p
+    };
+    let url = format!("http://127.0.0.1:{}/image.png", port);
+
+    let err = download_external_image_impl(
+        DownloadExternalImageInput { url: url.clone() },
+        url.parse().expect("valid URL"),
+    )
+    .await
+    .expect_err("unreachable target should fail");
+
+    assert!(
+        matches!(err, AppError::InvalidRequest(ref msg) if msg.contains("download_external_image failed")),
+        "got {:?}",
+        err
+    );
 }
 
 // --- upload_file -----------------------------------------------------------

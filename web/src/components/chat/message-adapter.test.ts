@@ -450,6 +450,44 @@ describe("message adapter", () => {
     });
   });
 
+  it("lets the persisted completion replace a corrupt live prefix plus final duplicate", () => {
+    const finalText = "这是数据库中唯一正确的最终回复。";
+    const reasoning = "同一段完整推理";
+    const stored = [
+      uiMessage({
+        id: "stored-assistant-5874",
+        createdAt: 10_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: finalText },
+          { type: "reasoning", text: reasoning },
+        ],
+        metadata: { persistedId: 5_874 },
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-assistant-corrupt",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "reasoning", text: reasoning },
+          { type: "text", text: `乱序流式前缀${finalText}` },
+        ],
+        metadata: {
+          timing: { startedAt: 1_000, firstTokenAt: 1_100, completedAt: 10_100 },
+        },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("stored-assistant-5874");
+    expect(merged[0]?.parts).toEqual(stored[0]?.parts);
+    expect(merged[0]?.metadata?.timing).toEqual(live[0]?.metadata?.timing);
+  });
+
   // Regression for issue #98: once a reply completes the stored refetch carries
   // the persisted assistant turn, but the live user prompt can fail to match a
   // stored row (its canonical text diverged), so it was appended *after* the
@@ -589,6 +627,174 @@ describe("message adapter", () => {
     expect(chat[0]?.stats?.finishReason).toBe("interrupted");
   });
 
+  it("drops a reconnect/replay duplicate live turn against the stored canonical turn", () => {
+    // 16:09 canonical turn — persisted with text + a tool call.
+    const stored = [
+      uiMessage({
+        id: "stored-canonical",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: "Now let me dig into the core source files." },
+          { type: "tool", toolCallId: "call-read-1", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_500 },
+        ],
+        metadata: { persistedId: 42 },
+      }),
+    ];
+    // 16:10 reconnect/session.resume replay: a fresh client id, only the SAME
+    // tool call so far (no text streamed yet), still streaming — the recurring
+    // duplicate that text-based matching and the interrupted-only drop miss.
+    const live = [
+      uiMessage({
+        id: "live-replay-2",
+        createdAt: 2_000,
+        status: "streaming",
+        parts: [
+          { type: "tool", toolCallId: "call-read-1", name: "read_file", state: "running", startedAt: 2_000 },
+        ],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("stored-canonical");
+  });
+
+  it("keeps a genuinely new turn whose tool ids differ from the stored turn", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-canonical",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "tool", toolCallId: "call-A", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_500 },
+        ],
+      }),
+    ];
+    // Same tool NAME but a fresh tool id → a real follow-up turn, not a replay.
+    const live = [
+      uiMessage({
+        id: "live-new-turn",
+        createdAt: 2_000,
+        status: "streaming",
+        parts: [
+          { type: "tool", toolCallId: "call-B", name: "read_file", state: "running", startedAt: 2_000 },
+        ],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toHaveLength(2);
+  });
+
+  it("drops a completed consolidated live turn already persisted across multiple stored assistant rows", () => {
+    // Backend persists ONE agent turn as SEVERAL assistant rows: leading
+    // commentary + a tool call, a tool-only middle row, then the final answer.
+    const stored = [
+      uiMessage({
+        id: "stored-lead",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: "好的，我来做一次全面的代码审查。先从项目结构开始。" },
+          { type: "tool", toolCallId: "call-read", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_200 },
+        ],
+        metadata: { persistedId: 516 },
+      }),
+      uiMessage({
+        id: "stored-mid",
+        createdAt: 1_300,
+        status: "complete",
+        parts: [
+          { type: "tool", toolCallId: "call-term", name: "terminal", state: "done", output: "ok", startedAt: 1_300, completedAt: 1_400 },
+        ],
+        metadata: { persistedId: 540 },
+      }),
+      uiMessage({
+        id: "stored-final",
+        createdAt: 1_500,
+        status: "complete",
+        parts: [{ type: "text", text: "# 代码审查报告\n\n概述：整体质量良好。" }],
+        metadata: { persistedId: 553 },
+      }),
+    ];
+    // The live runtime consolidated the WHOLE turn into ONE assistant bubble
+    // (a single live-assistant client id, all parts, completed). Its text is the
+    // lead + final answer concatenated, so it exact-matches NEITHER stored text
+    // row — the pre-fix duplicate that lands the report twice.
+    const live = [
+      uiMessage({
+        id: "live-assistant-1783430115706",
+        createdAt: 1_000,
+        status: "complete",
+        parts: [
+          { type: "text", text: "好的，我来做一次全面的代码审查。先从项目结构开始。" },
+          { type: "tool", toolCallId: "call-read", name: "read_file", state: "done", output: "ok", startedAt: 1_000, completedAt: 1_200 },
+          { type: "tool", toolCallId: "call-term", name: "terminal", state: "done", output: "ok", startedAt: 1_300, completedAt: 1_400 },
+          { type: "text", text: "# 代码审查报告\n\n概述：整体质量良好。" },
+        ],
+        metadata: { timing: { startedAt: 1_000, firstTokenAt: 1_050, completedAt: 1_600 } },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    // The final report renders exactly once (pre-fix: twice — the stored answer
+    // row plus the un-deduped consolidated live bubble).
+    const reportBubbles = chat.filter((message) => (message.text ?? "").includes("代码审查报告"));
+    expect(reportBubbles).toHaveLength(1);
+    // The consolidated live bubble is dropped; the canonical stored rows win.
+    expect(merged.some((message) => message.id.startsWith("live-assistant"))).toBe(false);
+    expect(merged.map((message) => message.id)).toEqual(["stored-lead", "stored-mid", "stored-final"]);
+  });
+
+  it("hides stale interrupted live replies once a later stored assistant answer exists", () => {
+    const stored = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({
+        id: 875,
+        role: "user",
+        content: "爱为何物？",
+        timestamp: 1_000,
+      }),
+      sessionMessage({
+        id: 910,
+        role: "user",
+        content:
+          '[IMPORTANT: Background process proc_99f1ebe876c0 matched watch pattern "Local:".\n' +
+          "Command: pnpm dev:web\n" +
+          "Matched output:\n" +
+          "\x1b[36m@acme/web:dev: \x1b[0m- Local:         http://localhost:3000]",
+        timestamp: 1_054,
+      }),
+      sessionMessage({
+        id: 911,
+        role: "assistant",
+        content: "爱是长期选择。\n\n顺便：你的 web dev server 已起来了，地址是 `http://localhost:3000`。",
+        timestamp: 1_069,
+      }),
+    ]);
+    const live = [
+      uiMessage({
+        id: "live-interrupted-turn",
+        createdAt: 1_025_000,
+        parts: [{ type: "text", text: "Operation interrupted: waiting for model response (45.4s elapsed)." }],
+        metadata: { finishReason: "interrupted" },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    expect(merged.map((message) => message.id)).toEqual(["stored-875", "stored-910", "stored-911"]);
+    expect(chat.map((message) => message.role)).toEqual(["user", "system", "assistant"]);
+    expect(chat.map((message) => message.text).join("\n")).not.toContain("Operation interrupted");
+    expect(chat[1]?.text).toContain("后台进程通知：");
+    expect(chat[1]?.text).not.toContain("\x1b[36m");
+  });
+
   it("keeps persisted stats when a matching live message has no metadata", () => {
     const stored = [
       uiMessage({
@@ -673,6 +879,49 @@ describe("message adapter", () => {
 
     expect(chat[0]?.stats?.ttftMs).toBeUndefined();
     expect(chat[1]?.stats?.ttftMs).toBe(500);
+  });
+
+  it("attaches a split turn's stats to its final answer row, not the leading commentary", () => {
+    // ui_messages splits ONE agent turn into several assistant rows (leading
+    // commentary + tool, then the final answer). The turn's single stat carries
+    // turnIndex in live space (turn #1) and a whole-turn contentHash that
+    // matches no single stored row, so it falls to the turnIndex pass — which
+    // must land on the final answer row, not the opening commentary row.
+    const messages = [
+      uiMessage({ id: "u", role: "user", createdAt: 1_000, parts: [{ type: "text", text: "审查一下这个项目" }] }),
+      uiMessage({
+        id: "a-lead",
+        createdAt: 1_100,
+        parts: [
+          { type: "text", text: "好的，先从项目结构看起。" },
+          { type: "tool", toolCallId: "call-1", name: "read_file", state: "done", output: "ok" },
+        ],
+      }),
+      uiMessage({
+        id: "a-final",
+        createdAt: 1_500,
+        parts: [{ type: "text", text: "# 审查报告\n\n结论：整体质量良好。" }],
+      }),
+    ];
+
+    const enriched = attachTurnStatsMetadata(messages, [
+      {
+        id: "s1:live-assistant-1",
+        sessionId: "s1",
+        turnIndex: 1,
+        contentHash: stableTextHash("整条合并回合的哈希-对不上任何单行"),
+        ttftMs: 700,
+        durationMs: 61_000,
+        metadata: { usage: { tokensTotal: 4_509 } },
+      },
+    ]);
+    const chat = hermesUIMessagesToChatMessages(enriched);
+
+    const lead = chat.find((message) => (message.text ?? "").includes("先从项目结构"));
+    const final = chat.find((message) => (message.text ?? "").includes("审查报告"));
+    expect(lead?.stats?.ttftMs).toBeUndefined();
+    expect(final?.stats?.ttftMs).toBe(700);
+    expect(final?.stats?.tokensTotal).toBe(4_509);
   });
 
   it("keeps scalar history stats when no local turn stats match", () => {

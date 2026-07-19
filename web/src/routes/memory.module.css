@@ -1,11 +1,10 @@
 .memoryPage {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   max-width: 1120px;
 }
 
-.desc,
 .providerHint {
   margin: 0;
   color: var(--h-text-2);
@@ -26,48 +25,6 @@
   padding: 1px 5px;
 }
 
-.iconButton,
-.primaryButton,
-.secondaryButton {
-  border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
-  height: 30px;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--h-font-ui);
-}
-
-.iconButton,
-.secondaryButton {
-  color: var(--h-text-2);
-  background: var(--h-bg-soft);
-}
-
-.iconButton:hover,
-.secondaryButton:hover {
-  color: var(--h-text);
-  background: var(--h-bg-chip);
-}
-
-.primaryButton {
-  color: #ffffff;
-  background: var(--h-accent);
-  border-color: color-mix(in srgb, var(--h-accent) 75%, var(--h-line));
-}
-
-.primaryButton:disabled,
-.secondaryButton:disabled,
-.iconButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -76,9 +33,9 @@
 
 .statCard {
   border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-  border-radius: var(--h-r-md);
-  padding: 14px 16px;
+  background: var(--h-bg-app);
+  border-radius: var(--h-r-lg);
+  padding: 13px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -106,8 +63,8 @@
 
 .capacity {
   border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-  border-radius: var(--h-r-md);
+  background: var(--h-bg-app);
+  border-radius: var(--h-r-lg);
   padding: 12px 14px;
 }
 
@@ -157,7 +114,7 @@
   display: flex;
   gap: 8px;
   border-bottom: 1px solid var(--h-line);
-  padding-bottom: 8px;
+  padding: 4px 0 8px;
 }
 
 .tabs button {
@@ -194,7 +151,7 @@
 .panel {
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-lg);
-  background: var(--h-bg-pane);
+  background: var(--h-bg-app);
   overflow: hidden;
 }
 
@@ -202,6 +159,7 @@
   min-height: 52px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-pane);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -228,7 +186,7 @@
 .formCard {
   padding: 14px 16px;
   border-bottom: 1px solid var(--h-line-soft);
-  background: var(--h-bg-soft);
+  background: var(--h-bg-pane);
 }
 
 .formCard textarea,
@@ -371,8 +329,8 @@
 
 .providerCard {
   border: 1px solid var(--h-line);
-  background: var(--h-bg-soft);
-  border-radius: var(--h-r-md);
+  background: var(--h-bg-pane);
+  border-radius: var(--h-r-lg);
   padding: 14px;
   display: flex;
   flex-direction: column;

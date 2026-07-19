@@ -38,7 +38,7 @@ describe("deriveSidebarSessionLists", () => {
     expect(lists.pinned.map((item) => item.id)).toEqual(["s3", "s1"]);
   });
 
-  it("limits recent sessions to five by last activity time", () => {
+  it("limits recent sessions to eight by last activity time", () => {
     const lists = deriveSidebarSessionLists(
       [
         session("s1", 1),
@@ -47,12 +47,15 @@ describe("deriveSidebarSessionLists", () => {
         session("s4", 4),
         session("s5", 5),
         session("s6", 6),
+        session("s7", 7),
+        session("s8", 8),
+        session("s9", 9),
       ],
       [],
       () => false,
     );
 
-    expect(lists.recent.map((item) => item.id)).toEqual(["s6", "s5", "s4", "s3", "s2"]);
+    expect(lists.recent.map((item) => item.id)).toEqual(["s9", "s8", "s7", "s6", "s5", "s4", "s3", "s2"]);
   });
 
   it("uses started time for active sessions and keeps running sessions out of recent", () => {

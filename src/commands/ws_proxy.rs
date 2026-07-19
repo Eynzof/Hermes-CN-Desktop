@@ -8,9 +8,9 @@
 //! webview over Tauri events + commands. The kernel therefore always sees a
 //! standard official JSON-RPC/WS client, regardless of platform.
 //!
-//! This replaces the fork-only SSE+POST transport (`sse_proxy.rs`, P-009) on the
-//! relay path: one ordered bidirectional channel, no per-RPC HTTP round trip, no
-//! async-ack split, and the session token never leaves Rust (no query-string leak).
+//! This supersedes the removed fork-only SSE+POST relay path (P-009): one
+//! ordered bidirectional channel, no per-RPC HTTP round trip, no async-ack split,
+//! and the session token never leaves Rust (no query-string leak).
 //!
 //! Wire contract with the JS shim (`web/src/lib/gateway-relay-socket.ts`):
 //!   - `gateway_ws_open { connectionId }`  → resolves once the WS handshake succeeds
@@ -32,7 +32,9 @@ use tokio::sync::{mpsc, Notify};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::error::AppError;
-use crate::process::dashboard::{build_gateway_url, fetch_session_token};
+use crate::process::dashboard::{
+    build_gateway_url, build_gateway_ws_url_with_ticket, fetch_session_token,
+};
 use crate::state::{AppState, GatewayWsHandle};
 
 #[derive(Debug, Deserialize)]
@@ -66,6 +68,11 @@ struct WsMessagePayload {
 struct WsClosedPayload {
     connection_id: String,
     message: String,
+    /// WebSocket close code, when the peer sent a Close frame. 4401 = bad
+    /// credentials, 4403 = host/origin rejected. The frontend uses this to
+    /// stop blindly reconnecting and surface a re-login prompt instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<u16>,
 }
 
 /// Tear down whatever connection is currently active (if any). Caller holds no lock.
@@ -82,7 +89,7 @@ fn shutdown_active(state: &State<'_, AppState>) -> Result<(), AppError> {
 ///
 /// Resolves once the handshake completes; the JS shim treats that as `onopen`.
 /// On token rotation (dashboard restart between launches) the first connect can
-/// fail auth — we refresh the session token once and retry, mirroring the SSE path.
+/// fail auth — we refresh the session token once and retry before surfacing the error.
 #[tauri::command]
 pub async fn gateway_ws_open(
     input: GatewayWsOpenInput,
@@ -92,35 +99,86 @@ pub async fn gateway_ws_open(
     let connection_id = input.connection_id;
     shutdown_active(&state)?;
 
-    let (api_base_url, token) = {
+    let (api_base_url, auth, is_remote) = {
         let inner = state.inner.lock()?;
-        (inner.api_base_url.clone(), inner.session_token.clone())
+        (
+            inner.api_base_url.clone(),
+            inner.dashboard_auth(),
+            inner.connection_mode == crate::connection::ConnectionMode::Remote,
+        )
     };
 
-    let stream =
-        match tokio_tungstenite::connect_async(build_gateway_url(&api_base_url, token.as_deref()))
-            .await
-        {
-            Ok((ws, _resp)) => ws,
-            Err(first_err) => {
-                // The token may have rotated (dashboard restarted). Refresh once and retry.
-                match fetch_session_token(&api_base_url).await {
-                    Some(fresh) => {
-                        let fresh_url = build_gateway_url(&api_base_url, Some(&fresh));
-                        {
-                            let mut inner = state.inner.lock()?;
-                            inner.session_token = Some(fresh.clone());
-                            inner.gateway_url = fresh_url.clone();
-                        }
-                        match tokio_tungstenite::connect_async(fresh_url).await {
-                            Ok((ws, _resp)) => ws,
-                            Err(e) => return Err(AppError::GatewayWs(e.to_string())),
-                        }
+    let stream = match &auth {
+        // Gated remote: mint a single-use 30s ticket per connect. A 401 mint
+        // means the session is dead → surface an auth error (frontend prompts
+        // re-login); one retry covers a TTL race between mint and connect.
+        crate::state::DashboardAuth::Oauth(session) => {
+            let ticket = match session.mint_ws_ticket().await {
+                Ok(t) => t,
+                Err(err) => {
+                    if let AppError::AuthSessionExpired(_) = &err {
+                        emit_ws_auth_expired(&app, &api_base_url);
                     }
-                    None => return Err(AppError::GatewayWs(first_err.to_string())),
+                    return Err(err);
+                }
+            };
+            let url = build_gateway_ws_url_with_ticket(&api_base_url, &ticket);
+            match tokio_tungstenite::connect_async(url).await {
+                Ok((ws, _)) => ws,
+                Err(_) => {
+                    // Ticket may have expired (single-use, 30s); mint fresh once.
+                    let ticket2 = match session.mint_ws_ticket().await {
+                        Ok(t) => t,
+                        Err(err) => {
+                            if let AppError::AuthSessionExpired(_) = &err {
+                                emit_ws_auth_expired(&app, &api_base_url);
+                            }
+                            return Err(err);
+                        }
+                    };
+                    let url2 = build_gateway_ws_url_with_ticket(&api_base_url, &ticket2);
+                    match tokio_tungstenite::connect_async(url2).await {
+                        Ok((ws, _)) => ws,
+                        Err(e) => return Err(map_ws_connect_error(e)),
+                    }
                 }
             }
-        };
+        }
+        crate::state::DashboardAuth::Token(token) => {
+            let token = token.clone();
+            match tokio_tungstenite::connect_async(build_gateway_url(
+                &api_base_url,
+                token.as_deref(),
+            ))
+            .await
+            {
+                Ok((ws, _resp)) => ws,
+                // Remote tokens are static; scraping the remote's HTML for a
+                // fresh one would just hammer it with a doomed retry.
+                Err(first_err) if is_remote => {
+                    return Err(AppError::GatewayWs(first_err.to_string()))
+                }
+                Err(first_err) => {
+                    // Token may have rotated (dashboard restarted). Refresh once.
+                    match fetch_session_token(&api_base_url).await {
+                        Some(fresh) => {
+                            let fresh_url = build_gateway_url(&api_base_url, Some(&fresh));
+                            {
+                                let mut inner = state.inner.lock()?;
+                                inner.session_token = Some(fresh.clone());
+                                inner.gateway_url = fresh_url.clone();
+                            }
+                            match tokio_tungstenite::connect_async(fresh_url).await {
+                                Ok((ws, _resp)) => ws,
+                                Err(e) => return Err(AppError::GatewayWs(e.to_string())),
+                            }
+                        }
+                        None => return Err(AppError::GatewayWs(first_err.to_string())),
+                    }
+                }
+            }
+        }
+    };
 
     let (mut sink, mut read) = stream.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -142,12 +200,30 @@ pub async fn gateway_ws_open(
         let abort_w = abort.clone();
         let notify_w = notify.clone();
         tauri::async_runtime::spawn(async move {
+            // The dashboard's uvicorn pings every 20s and closes the socket when it
+            // doesn't see a pong within 20s (ws_ping_timeout). On this split
+            // sink/stream relay, tungstenite's automatic pong only flushes when the
+            // write half is polled — and the writer sits idle between RPCs. So on an
+            // otherwise-quiet gateway the queued pong never goes out, uvicorn drops
+            // the connection, and the desktop reconnects every ~20-40s ("网关经常
+            // 中断，需要重连"). Send our own keepalive ping well under that window:
+            // it keeps the socket warm and, by driving the sink, flushes any pending
+            // pong. The reader already ignores inbound Ping/Pong frames.
+            let mut keepalive = tokio::time::interval(std::time::Duration::from_secs(10));
+            keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 if abort_w.load(Ordering::Relaxed) {
                     break;
                 }
                 tokio::select! {
                     _ = notify_w.notified() => break,
+                    _ = keepalive.tick() => {
+                        // Empty payload; uvicorn just needs the frame to keep the
+                        // socket alive (and the send flushes any pending pong).
+                        if sink.send(Message::Ping(Default::default())).await.is_err() {
+                            break;
+                        }
+                    }
                     out = rx.recv() => match out {
                         Some(text) => {
                             if sink.send(Message::text(text)).await.is_err() {
@@ -170,6 +246,7 @@ pub async fn gateway_ws_open(
         let notify_r = notify.clone();
         tauri::async_runtime::spawn(async move {
             let mut reason = String::from("closed");
+            let mut close_code: Option<u16> = None;
             loop {
                 if abort_r.load(Ordering::Relaxed) {
                     break;
@@ -188,6 +265,9 @@ pub async fn gateway_ws_open(
                         Some(Ok(Message::Binary(_))) | Some(Ok(Message::Ping(_)))
                         | Some(Ok(Message::Pong(_))) | Some(Ok(Message::Frame(_))) => {}
                         Some(Ok(Message::Close(frame))) => {
+                            // Capture the numeric close code (4401 auth, 4403
+                            // host/origin) so the frontend can stop reconnecting.
+                            close_code = frame.as_ref().map(|f| u16::from(f.code));
                             reason = frame
                                 .map(|f| f.reason.to_string())
                                 .filter(|r| !r.is_empty())
@@ -218,17 +298,51 @@ pub async fn gateway_ws_open(
                     inner.gateway_ws = None;
                 }
             }
+            // A 4401 (auth) close on an oauth remote means re-login is needed;
+            // tell the frontend explicitly (the close-code event handles the
+            // reconnect-suppression, this drives the banner).
+            if close_code == Some(4401) {
+                if let Ok(inner) = app_r.state::<AppState>().inner.lock() {
+                    if inner.oauth_session.is_some() {
+                        emit_ws_auth_expired(&app_r, &inner.api_base_url.clone());
+                    }
+                }
+            }
             let _ = app_r.emit(
                 "gateway-ws-closed",
                 WsClosedPayload {
                     connection_id: cid,
                     message: reason,
+                    code: close_code,
                 },
             );
         });
     }
 
     Ok(())
+}
+
+/// Map a tungstenite connect error to an auth error when the upgrade was
+/// rejected with HTTP 401/403 (some servers reject before accepting the WS).
+fn map_ws_connect_error(err: tokio_tungstenite::tungstenite::Error) -> AppError {
+    use tokio_tungstenite::tungstenite::Error as WsErr;
+    if let WsErr::Http(resp) = &err {
+        let status = resp.status().as_u16();
+        if status == 401 || status == 403 {
+            return AppError::AuthSessionExpired(format!(
+                "gateway rejected the WebSocket upgrade with HTTP {status}"
+            ));
+        }
+    }
+    AppError::GatewayWs(err.to_string())
+}
+
+/// Emit `connection-auth-expired` from the WS path (mint 401 / close 4401).
+fn emit_ws_auth_expired(app: &tauri::AppHandle, base_url: &str) {
+    let _ = app.emit(
+        "connection-auth-expired",
+        serde_json::json!({ "baseUrl": base_url, "reason": "session_expired", "loginUrl": null }),
+    );
 }
 
 #[tauri::command]

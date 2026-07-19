@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import s from "./pill.module.css";
+import { Badge, StatusDot } from "@hermes/shared-ui";
 
 export type PillTone = "ok" | "warn" | "err" | "neutral";
 export type DotTone = "ok" | "warn" | "err" | "live" | "neutral";
@@ -12,9 +12,9 @@ interface PillProps {
 
 export function Pill({ tone = "neutral", children, className }: PillProps) {
   return (
-    <span className={className ? `${s.pill} ${className}` : s.pill} data-tone={tone}>
+    <Badge tone={tone} className={className}>
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -24,5 +24,5 @@ interface DotProps {
 }
 
 export function Dot({ tone = "neutral", className }: DotProps) {
-  return <span className={className ? `${s.dot} ${className}` : s.dot} data-tone={tone} />;
+  return <StatusDot tone={tone} className={className} />;
 }

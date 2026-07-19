@@ -328,7 +328,18 @@ fn apply_managed_gateway_env(
         .env("HERMES_DESKTOP_MANAGED", "1")
         .env("HERMES_GATEWAY_DETACHED", "1")
         .env("HERMES_NONINTERACTIVE", "1")
-        .env("PYTHONUNBUFFERED", "1");
+        .env("PYTHONUNBUFFERED", "1")
+        // Prepend the bundled node bin dir (P-032) so gateway-spawned
+        // node-based MCP stdio servers resolve node/npx without a host install.
+        .env(
+            "PATH",
+            crate::process::runtime::prepend_bundled_node_to_path(
+                crate::path_resolver::effective_path_os(),
+            ),
+        );
+    if let Some(node) = crate::process::runtime::current_node_binary() {
+        cmd.env("HERMES_NODE", node);
+    }
 }
 
 fn spawn_gateway_stop_helper(

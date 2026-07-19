@@ -3,6 +3,7 @@ import { runtime } from "./runtime";
 import { debugBus } from "./debug-bus";
 import { activeProfileAtom } from "@/stores/ui";
 import { AttachmentUploadResult } from "@hermes/protocol";
+import type { DownloadExternalImageInput, DownloadedImageResult } from "./runtime";
 
 interface Parser<T> {
   parse(value: unknown): T;
@@ -151,6 +152,24 @@ export async function fetchJSON<T>(
   return parser ? parser.parse(data) : data as T;
 }
 
+/**
+ * Resolve an image path on the gateway into a browser-safe data URL.
+ *
+ * Chat history stores the path returned by `image.attach(_bytes)`. A webview
+ * cannot load that absolute path directly (and must not be given broad
+ * `file://` access), so route it through Core's authenticated, media-root
+ * confined `/api/media` endpoint.
+ */
+export async function fetchMediaDataUrl(path: string): Promise<string> {
+  const result = await fetchJSON<{ data_url?: unknown }>(
+    `/api/media?path=${encodeURIComponent(path)}`,
+  );
+  if (typeof result.data_url !== "string" || !result.data_url.startsWith("data:image/")) {
+    throw new Error("Media response did not contain an image data URL");
+  }
+  return result.data_url;
+}
+
 const EXTERNAL_FETCH_TIMEOUT_MS = 15_000;
 
 function timeoutSignal(parent?: AbortSignal): AbortSignal {
@@ -206,12 +225,90 @@ export async function fetchExternalJSON<T>(
   return parser ? parser.parse(data) : data as T;
 }
 
+/**
+ * Fetch an external URL and return its raw response body as text (no JSON
+ * parsing). Routes through the Rust `external_request` proxy when available
+ * (avoids webview CSP / CORS), otherwise a plain fetch. Used for lightweight
+ * metadata scrapes like reading a page's <title>.
+ */
+export async function fetchExternalText(url: string, init?: RequestInit): Promise<string> {
+  const headers = (init?.headers as Record<string, string>) ?? {};
+  const externalRequest = window.hermesDesktop?.externalRequest;
+  if (externalRequest) {
+    const result = await externalRequest({
+      path: url,
+      method: init?.method,
+      headers,
+      body: typeof init?.body === "string" ? init.body : null,
+    });
+    if (!result.ok) throw new Error(`HTTP ${result.status}: ${result.body}`);
+    return result.body ?? "";
+  }
+  const res = await fetch(url, { ...init, headers, signal: timeoutSignal(init?.signal ?? undefined) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
+function base64ToArrayBuffer(value: string): ArrayBuffer {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function filenameFromUrl(url: string, mimeType?: string): string {
+  const extFromMime = mimeType?.toLowerCase().includes("png")
+    ? "png"
+    : mimeType?.toLowerCase().includes("jpeg") || mimeType?.toLowerCase().includes("jpg")
+      ? "jpg"
+      : mimeType?.toLowerCase().includes("gif")
+        ? "gif"
+        : mimeType?.toLowerCase().includes("webp")
+          ? "webp"
+          : "png";
+  try {
+    const pathname = new URL(url).pathname;
+    const last = decodeURIComponent(pathname.split("/").filter(Boolean).pop() ?? "");
+    if (last && /\.[a-z0-9]{2,8}$/i.test(last)) return last;
+  } catch {
+    // Fall through to timestamped filename.
+  }
+  return `external-image-${Date.now()}.${extFromMime}`;
+}
+
+export async function downloadExternalImageFile(url: string): Promise<File> {
+  const input: DownloadExternalImageInput = { url };
+  const nativeDownload = window.hermesDesktop?.downloadExternalImage;
+  if (nativeDownload) {
+    const result: DownloadedImageResult = await nativeDownload(input);
+    const data = base64ToArrayBuffer(result.dataBase64);
+    return new File([data], result.filename, { type: result.mimeType });
+  }
+
+  const res = await fetch(url, {
+    headers: { Accept: "image/avif,image/webp,image/png,image/jpeg,image/gif,image/*;q=0.8,*/*;q=0.3" },
+    signal: timeoutSignal(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith("image/")) {
+    throw new Error("URL 返回的不是图片内容");
+  }
+  return new File([blob], filenameFromUrl(url, blob.type), { type: blob.type });
+}
+
 export async function putJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
   return fetchJSON<T>(path, { method: "PUT", body: JSON.stringify(body) }, parser);
 }
 
 export async function postJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
   return fetchJSON<T>(path, { method: "POST", body: JSON.stringify(body) }, parser);
+}
+
+export async function patchJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
+  return fetchJSON<T>(path, { method: "PATCH", body: JSON.stringify(body) }, parser);
 }
 
 export async function deleteJSON<T>(path: string, body?: unknown, parser?: Parser<T>): Promise<T> {
@@ -274,3 +371,42 @@ export function uploadAttachmentFile(
   });
 }
 
+/** True when attached to a remote gateway (a different machine's filesystem). */
+export function isRemoteConnection(): boolean {
+  return runtime.isRemote();
+}
+
+function attachmentParentDir(path: string): string {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return i > 0 ? path.slice(0, i) : path;
+}
+
+function attachmentFileName(path: string): string {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return i >= 0 ? path.slice(i + 1) : path;
+}
+
+// Read a local image file's bytes (base64) via the desktop bridge, for attaching
+// to a REMOTE gateway that can't see this machine's filesystem. Mirrors the
+// official desktop's readImageForRemoteAttach. The desktop's read_workspace_file
+// command confines reads to a root, so we pass the image's own directory; it
+// caps inline images at 8 MB and returns null above that. Returns null when the
+// bridge is unavailable or the file can't be read as an image.
+export async function readImageBytesFromPath(
+  path: string,
+): Promise<{ contentBase64: string; filename: string } | null> {
+  const read = window.hermesDesktop?.readWorkspaceFile;
+  if (!read) return null;
+  try {
+    const preview = await read({ path, root: attachmentParentDir(path) });
+    const dataUrl = preview?.dataUrl;
+    if (!dataUrl) return null;
+    const comma = dataUrl.indexOf(",");
+    const contentBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    return contentBase64
+      ? { contentBase64, filename: attachmentFileName(path) }
+      : null;
+  } catch {
+    return null;
+  }
+}

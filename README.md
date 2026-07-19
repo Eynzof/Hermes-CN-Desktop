@@ -12,7 +12,7 @@ Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，
 
 官网与下载页见 [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn)。桌面端隶属于 [Hermes Agent 中文社区](https://hermesagent.org.cn) 生态，社区主站提供中文文档、实践指南、社群入口和更多生态项目。
 
-> 当前版本是 `v0.3.2`。项目仍在快速迭代，API、打包流程、运行时分发策略和界面细节都可能继续调整。
+> 当前版本是 `v0.6.3`。项目仍在快速迭代，API、打包流程、运行时分发策略和界面细节都可能继续调整。
 
 ## Hermes Agent 中文社区
 
@@ -76,7 +76,7 @@ Hermes Agent CN Desktop 由 Hermes Agent 中文社区维护。你可以访问 [H
 
 ## 项目定位
 
-Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外的桌面体验：原生窗口、本地进程管理、文件对话框、托管运行时安装、运行时诊断，以及生产模式下更安全的 REST 和 SSE 代理层。
+Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外的桌面体验：原生窗口、本地进程管理、文件对话框、托管运行时安装、运行时诊断，以及生产模式下更安全的 REST 代理层与必要时的 WS 中继。
 
 本仓库是桌面端外壳。Agent runtime 和 Dashboard 源码位于 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)。
 
@@ -87,7 +87,7 @@ Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外�
 - **内置独立 Hermes Agent 内核**：桌面端支持安装、更新、签名校验、健康检查和回滚本地 Hermes Agent 内核。
 - **面向 Agent 的完整 UI**：支持聊天、流式输出、附件、MCP 工具、Skills、Memory、Profiles、定时任务、LaTeX/Mermaid 渲染和运行时健康面板。
 - **中文模型与平台生态**：覆盖主流云端模型服务商和 Ollama、vLLM、LM Studio、llama.cpp 等本地部署方案，并提供飞书等平台接入配置；更多中文生态内容见 [Hermes Agent 中文社区](https://hermesagent.org.cn)。
-- **生产级传输桥**：生产模式下通过 Rust command 代理 REST、上传和 SSE，绕过 WebView CORS 限制，并集中处理鉴权。
+- **生产级传输桥**：生产模式下通过 Rust command 代理 REST 与上传；Gateway 使用官方 `/api/ws`，打包态必要时通过 Rust WS 中继绕过 WebView 限制，并集中处理鉴权。
 - **YOLO 模式开关**：「设置 → 常规」底部独立的「高风险操作」区提供开关，开启需二次确认，自动批准危险命令（对应后端 `HERMES_YOLO_MODE`），切换后自动重启内核生效，详见 [docs/yolo-mode.md](./docs/yolo-mode.md)。
 
 ## 下载
@@ -96,9 +96,9 @@ Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外�
 
 当前版本包含：
 
-- macOS Apple Silicon DMG：`Hermes.Agent.CN.Desktop_0.3.2_aarch64.dmg`
-- macOS Intel DMG：`Hermes.Agent.CN.Desktop_0.3.2_x64.dmg`
-- Windows x64 安装器：`Hermes.Agent.CN.Desktop_0.3.2_x64-setup.exe`
+- macOS Apple Silicon DMG：`Hermes.Agent.CN.Desktop_0.6.3_aarch64.dmg`
+- macOS Intel DMG：`Hermes.Agent.CN.Desktop_0.6.3_x64.dmg`
+- Windows x64 安装器：`Hermes.Agent.CN.Desktop_0.6.3_x64-setup.exe`
 
 当前 Windows 与 macOS 安装包都会预置 `Hermes-CN-Core` runtime，安装后优先从包内 runtime 完成本地内核初始化；托管 runtime 下载与更新流程只作为升级或兜底路径使用。
 
@@ -150,9 +150,16 @@ pnpm tauri:build
 
 # 构建带调试信息的 Debug 包
 pnpm tauri:build:debug
+
+# 在 Linux x64 上构建内置 runtime 的 .deb 和 .AppImage
+pnpm tauri:build:bundled-linux
 ```
 
 构建产物位于 `target/release/bundle/` 或 `target/debug/bundle/`。
+
+GitHub Actions 的 `release-desktop` 工作流会在发布 `v*` 标签时并行构建
+Windows x64、macOS Apple Silicon、macOS Intel 和 Linux x64 版本，并把 Linux
+的 `.deb` 与 `.AppImage` 直接上传到同一个 GitHub Release。
 
 ## 仓库结构
 
@@ -219,11 +226,15 @@ v0.1.1
 - 打磨 macOS 与 Windows 的打包和安装行为；
 - 完善桌面端与 runtime 边界文档，降低贡献门槛。
 
-## Star Track
+## Star History
 
-可以通过下面的趋势图查看本仓库 GitHub Star 的增长变化。
-
-[![Hermes Agent CN Desktop Star 趋势图](https://api.star-history.com/svg?repos=Eynzof/Hermes-CN-Desktop&type=Date)](https://www.star-history.com/#Eynzof/Hermes-CN-Desktop&Date)
+<a href="https://www.star-history.com/?type=date&repos=Eynzof%2FHermes-CN-Desktop">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&theme=dark&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
+ </picture>
+</a>
 
 ## 贡献
 

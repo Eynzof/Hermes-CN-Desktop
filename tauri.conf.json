@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
   "productName": "Hermes Agent CN Desktop",
-  "version": "0.3.2",
+  "version": "0.6.3",
   "identifier": "cn.org.hermesagent.desktop",
   "build": {
     "beforeDevCommand": "pnpm --filter @hermes/web dev",
@@ -21,14 +21,16 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:*; img-src 'self' data: blob:"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:*; img-src 'self' data: blob:; media-src 'self' data: blob:; frame-src 'self' http://localhost:* http://127.0.0.1:*"
     }
   },
   "bundle": {
     "active": true,
     "targets": [
       "nsis",
-      "dmg"
+      "dmg",
+      "deb",
+      "appimage"
     ],
     "icon": [
       "icons/32x32.png",
@@ -49,11 +51,13 @@
       "static/bundled-runtime/": "bundled-runtime/",
       "static/dashboard/": "dashboard/",
       "static/bundled-skills/": "bundled-skills/",
-      "static/bundled-plugins/": "bundled-plugins/"
+      "static/bundled-plugins/": "bundled-plugins/",
+      "legal/HarmonyOS_Sans_LICENSE.txt": "HarmonyOS_Sans_LICENSE.txt"
     },
     "windows": {
       "nsis": {
         "installMode": "currentUser",
+        "installerHooks": "installer/nsis/hooks.nsh",
         "languages": [
           "SimpChinese"
         ],

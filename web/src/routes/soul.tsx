@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, FileText, Pencil, RefreshCw } from "lucide-react";
+import { Button } from "@hermes/shared-ui";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { SOUL_CHAR_LIMIT, SOUL_TEMPLATE, useSaveSoul, useSoul } from "@/hooks/use-soul";
 import { SectionShell } from "./section-shell";
+import { SettingsHero } from "./settings-hero";
+import settings from "./settings.module.css";
 import s from "./soul.module.css";
 
 export function SoulRoute() {
@@ -57,33 +60,37 @@ export function SoulRoute() {
       <span className={s.profileChip} title="当前档案">
         {profile}
       </span>
-      <button
+      <Button
         type="button"
-        className={s.iconButton}
+        variant="outline"
         onClick={() => void soulQuery.refetch()}
         disabled={soulQuery.isFetching}
       >
         <RefreshCw size={14} />
         {soulQuery.isFetching ? "刷新中" : "刷新"}
-      </button>
+      </Button>
     </div>
   );
 
   return (
     <SectionShell title="灵魂" sub="SOUL.md · 智能体的核心人格（系统提示词第一身份）" right={right}>
+      <SettingsHero
+        ok={!errorMessage}
+        icon={<FileText size={24} />}
+        eyebrow="Hermes Agent 灵魂设定"
+        title="当前档案的核心人格"
+        description={(
+          <>
+            灵魂（SOUL.md）会被原样注入系统提示词的第一块，定义「这个智能体是谁、怎么说话」。这里编辑的是当前档案 <strong>{profile}</strong> 的灵魂；切换档案请前往{" "}
+            <Link to="/profiles" className={s.inlineLink}>档案</Link> 页。
+          </>
+        )}
+        badge={<span className={settings.statusBadge} data-on={!dirty}>{dirty ? "未保存" : "已同步"}</span>}
+      />
       {soulQuery.isLoading ? (
         <div className={s.emptyState}>加载灵魂中…</div>
       ) : (
         <div className={s.soulPage}>
-          <p className={s.desc}>
-            灵魂（SOUL.md）是智能体的首要身份——它被原样注入系统提示词的第一块，定义「这个智能体是谁、怎么说话」。
-            这里编辑的是当前档案 <strong>{profile}</strong> 的灵魂；切换档案请前往{" "}
-            <Link to="/profiles" className={s.inlineLink}>
-              档案
-            </Link>{" "}
-            页。
-          </p>
-
           {errorMessage && <div className={s.errorState}>{errorMessage}</div>}
 
           <section className={s.panel}>
@@ -122,15 +129,16 @@ export function SoulRoute() {
             </div>
 
             <div className={s.toolbar}>
-              <button
+              <Button
                 type="button"
-                className={s.secondaryButton}
+                variant="outline"
+                size="sm"
                 onClick={handleInsertTemplate}
                 disabled={!isEmpty}
                 title={isEmpty ? "插入结构化人格模板" : "仅在内容为空时可用"}
               >
                 <FileText size={13} /> 插入模板
-              </button>
+              </Button>
               <span className={s.toolbarHint}>建议分节：人格 / 风格 / 避免 / 技术取向</span>
             </div>
 
@@ -162,14 +170,16 @@ export function SoulRoute() {
                 {text.length.toLocaleString()} / {SOUL_CHAR_LIMIT.toLocaleString()} 字符
                 {over ? " · 超出部分将在注入时截断" : ""}
               </span>
-              <button
+              <Button
                 type="button"
-                className={s.primaryButton}
+                variant="solid"
+                tone="accent"
+                size="sm"
                 onClick={handleSave}
                 disabled={!dirty || saveSoul.isPending}
               >
                 {saveSoul.isPending ? "保存中…" : "保存灵魂"}
-              </button>
+              </Button>
             </div>
           </section>
         </div>

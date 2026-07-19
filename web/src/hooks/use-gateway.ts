@@ -8,12 +8,14 @@ import {
   InputDetectDropResult,
   ModelOptionsResult,
   PromptSubmitParams,
+  ProviderModelsListResult,
   ProviderProbeResult,
   SessionCreateResult,
   SessionResumeResult,
   SessionTitleResult,
   SlashCompletionResult,
   SessionUsageResult,
+  SessionCompressResult,
   type GatewayEvent,
 } from "@hermes/protocol";
 import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
@@ -24,6 +26,7 @@ import {
   invalidateModelOptionsCache,
 } from "@/lib/model-options-cache";
 import { buildGatewayModelConfigValue } from "@/lib/provider-id";
+import type { ReasoningEffort } from "@/lib/reasoning-effort";
 import {
   rememberSessionMapping,
   resolveGatewaySessionId,
@@ -46,6 +49,9 @@ import {
   terminateAllStreamsAtom,
   type ImageEntry,
 } from "@/stores/chat";
+import { sessionTipRedirectAtom } from "@/stores/ui";
+import { recordTipRedirect } from "@/lib/session-tip-redirect";
+import { createDeltaCoalescer } from "@/lib/gateway-delta-coalescer";
 
 type GatewayState = ReturnType<typeof getGatewayClient>["state"];
 
@@ -60,6 +66,7 @@ interface GatewaySubscriptionBridge {
   unsubscribeState: () => void;
   unsubscribeAny: () => void;
   unsubscribeDisconnect: () => void;
+  flushPendingDeltas: () => void;
 }
 
 let gatewayBridge: GatewaySubscriptionBridge | null = null;
@@ -127,9 +134,18 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
     unsubscribeState: () => {},
     unsubscribeAny: () => {},
     unsubscribeDisconnect: () => {},
+    flushPendingDeltas: () => {},
   };
   const client = getGatewayClient();
   client.enableAutoReconnect();
+
+  // Coalesce streaming message.delta into one apply per animation frame (see
+  // lib/gateway-delta-coalescer). apply() resolves the primary subscriber lazily
+  // so a buffered flush always lands on the current chat-store binding.
+  const coalescer = createDeltaCoalescer((event) =>
+    primarySubscriber(bridge)?.applyGatewayEvent(event),
+  );
+  bridge.flushPendingDeltas = coalescer.flush;
 
   // Re-issue session.resume only after a disconnect, never on the very first
   // connect (there is no in-flight state to re-pin yet). `gateway.disconnected`
@@ -148,15 +164,18 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
     }
   });
   bridge.unsubscribeAny = client.onAny((event) => {
-    primarySubscriber(bridge)?.applyGatewayEvent(event);
+    coalescer.dispatch(event);
   });
   bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () => {
-    // A disconnect that the transport could not silently recover. Keep the
-    // in-flight turn alive (don't freeze it as an error) and arm a one-shot
+    // A disconnect that the transport could not silently recover. Flush any
+    // buffered deltas first so the in-flight turn's last tokens aren't stranded,
+    // keep the turn alive (don't freeze it as an error), and arm a one-shot
     // session.resume for when the connection comes back.
+    coalescer.flush();
     needsResumeOnReopen = true;
     getDefaultStore().set(markStreamsReconnectingAtom);
   });
+
   gatewayBridge = bridge;
   return bridge;
 }
@@ -177,6 +196,7 @@ function subscribeGateway(
       bridge.subscribers.splice(index, 1);
     }
     if (bridge.subscribers.length === 0 && gatewayBridge === bridge) {
+      bridge.flushPendingDeltas();
       bridge.unsubscribeState();
       bridge.unsubscribeAny();
       bridge.unsubscribeDisconnect();
@@ -233,6 +253,7 @@ export function useGateway() {
   const markSessionInterrupted = useSetAtom(markSessionInterruptedAtom);
   const startPrompt = useSetAtom(startPromptAtom);
   const setSessionError = useSetAtom(setSessionErrorAtom);
+  const setSessionTipRedirect = useSetAtom(sessionTipRedirectAtom);
   const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);
 
   const activeRuntime = gwSessionId ? runtimeBySession[gwSessionId] : undefined;
@@ -251,6 +272,17 @@ export function useGateway() {
     await getGatewayClient().connect();
   }, [ensureSubscribed]);
 
+  // Pin an already-created gateway session as the live one: target for
+  // reconnect-resume (getActiveSessionId reads gwSessionIdAtom), reset its chat
+  // runtime, and remember it as the persistent key. Shared by createSession's
+  // default activation path and the composer's draft-prewarm reuse, so a
+  // pre-created draft is adopted with the exact same state as a fresh create.
+  const adoptCreatedSession = useCallback((sessionId: string) => {
+    setGwSessionId(sessionId);
+    resetChatSession(sessionId);
+    void rememberPersistentSessionKey(sessionId);
+  }, [resetChatSession, setGwSessionId]);
+
   const createSession = useCallback(async (options?: CreateSessionOptions): Promise<string> => {
     ensureSubscribed();
     const result = parseGatewayResult(
@@ -261,12 +293,10 @@ export function useGateway() {
       "session.create",
     );
     if (options?.activate !== false) {
-      setGwSessionId(result.session_id);
-      resetChatSession(result.session_id);
-      void rememberPersistentSessionKey(result.session_id);
+      adoptCreatedSession(result.session_id);
     }
     return result.session_id;
-  }, [ensureSubscribed, resetChatSession, setGwSessionId]);
+  }, [adoptCreatedSession, ensureSubscribed]);
 
   const closeSession = useCallback(async (sessionId: string) => {
     if (!sessionId) return;
@@ -300,12 +330,18 @@ export function useGateway() {
       }),
       "session.resume",
     );
+    const resumed = result.resumed ?? persistentSessionId;
     setGwSessionId(result.session_id);
     resetChatSession(result.session_id);
-    rememberSessionMapping(result.session_id, result.resumed ?? persistentSessionId);
-    mirrorSessionWorkspaceMapping(result.session_id, result.resumed ?? persistentSessionId);
+    rememberSessionMapping(result.session_id, resumed);
+    mirrorSessionWorkspaceMapping(result.session_id, resumed);
+    // Compression rotated the conversation onto a new continuation: the backend
+    // followed the chain and resumed a different persistent id than we asked
+    // for. Record it so the detail route can project onto the live tip instead
+    // of stranding the user on the now-empty pre-compression id (issue #305).
+    setSessionTipRedirect((prev) => recordTipRedirect(prev, persistentSessionId, result.resumed));
     return result.session_id;
-  }, [ensureSubscribed, resetChatSession, setGwSessionId]);
+  }, [ensureSubscribed, resetChatSession, setGwSessionId, setSessionTipRedirect]);
 
   const sendPrompt = useCallback(
     async (
@@ -372,6 +408,31 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  const compressSession = useCallback(
+    async (
+      sessionId: string,
+      focusTopic?: string,
+    ): Promise<SessionCompressResult> => {
+      ensureSubscribed();
+      const focus = focusTopic?.trim();
+      return parseGatewayResult(
+        SessionCompressResult,
+        await getGatewayClient().request(
+          "session.compress",
+          {
+            session_id: sessionId,
+            ...(focus ? { focus_topic: focus } : {}),
+          },
+          // Compaction summarises the whole history through the model; the
+          // backend classifies it as a slow handler, so give it room.
+          { timeoutMs: 180_000 },
+        ),
+        "session.compress",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const getModelOptions = useCallback(
     async (sessionId?: string): Promise<ModelOptionsResult> => {
       ensureSubscribed();
@@ -405,6 +466,28 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  // `@`-reference completion (files / folders / url / git starters). Mirrors the
+  // backend `complete.path` used by the official desktop: a bare "@" returns the
+  // reference starters, "@file:<basename>" fuzzy-matches repo files. `cwd` scopes
+  // the search to the composer's selected workspace; both args are optional.
+  const completePath = useCallback(
+    async (
+      word: string,
+      opts?: { sessionId?: string; cwd?: string },
+    ): Promise<SlashCompletionResult> => {
+      ensureSubscribed();
+      const params: { word: string; session_id?: string; cwd?: string } = { word };
+      if (opts?.sessionId) params.session_id = opts.sessionId;
+      if (opts?.cwd) params.cwd = opts.cwd;
+      return parseGatewayResult(
+        SlashCompletionResult,
+        await getGatewayClient().request("complete.path", params),
+        "complete.path",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const dispatchCommand = useCallback(
     async (
       sessionId: string,
@@ -430,6 +513,8 @@ export function useGateway() {
       provider: string;
       api_key?: string;
       base_url?: string;
+      /** "anthropic_messages" 让后端用 Anthropic 协议（x-api-key + /v1/models）探测。 */
+      api_mode?: string;
       timeout_ms?: number;
     }): Promise<ProviderProbeResult> => {
       ensureSubscribed();
@@ -437,6 +522,28 @@ export function useGateway() {
         ProviderProbeResult,
         await getGatewayClient().request("provider.probe", params),
         "provider.probe",
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  // List a provider's full model set from the backend (which has no
+  // external-request SSRF guard), so a self-hosted provider on a LAN IP — and
+  // the web shell, which can't fetch it cross-origin — can refresh the picker.
+  const listProviderModels = useCallback(
+    async (params: {
+      provider: string;
+      api_key?: string;
+      base_url?: string;
+      /** "anthropic_messages" 让后端用 Anthropic 协议（x-api-key + /v1/models）列模型。 */
+      api_mode?: string;
+      timeout_ms?: number;
+    }): Promise<ProviderModelsListResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        ProviderModelsListResult,
+        await getGatewayClient().request("provider.models", params),
+        "provider.models",
       );
     },
     [ensureSubscribed],
@@ -495,6 +602,31 @@ export function useGateway() {
     [ensureSubscribed, queryClient],
   );
 
+  // 思考强度走和模型选择同一条路：网关 config.set（key="reasoning"）。
+  // 后端会把字面档位写进 config.yaml 的 agent.reasoning_effort，并即时更新
+  // 该会话在内存里的 agent.reasoning_config，从而下一轮对话生效。
+  // （PUT /api/config 只落盘、不热更新当前会话，不满足"下一轮生效"。）
+  const setSessionReasoningEffort = useCallback(
+    async (sessionId: string, effort: ReasoningEffort): Promise<ConfigSetResult> => {
+      ensureSubscribed();
+      const result = parseGatewayResult(
+        ConfigSetResult,
+        await getGatewayClient().request("config.set", {
+          session_id: sessionId,
+          key: "reasoning",
+          value: effort,
+        }),
+        "config.set",
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["config"] }),
+        queryClient.invalidateQueries({ queryKey: ["model-info"] }),
+      ]);
+      return result;
+    },
+    [ensureSubscribed, queryClient],
+  );
+
   const attachImage = useCallback(
     async (sessionId: string, path: string): Promise<ImageAttachResult> => {
       ensureSubscribed();
@@ -505,6 +637,31 @@ export function useGateway() {
           path,
         }),
         "image.attach",
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  // Attach an image by uploading its bytes over the gateway (image.attach_bytes),
+  // mirroring the official desktop's remote path. Used when the image is an
+  // in-browser File with no gateway-readable filesystem path (e.g. a pasted
+  // screenshot) — avoids the fork-only REST /api/upload endpoint, which keeps
+  // getting dropped/restored across Core upstream syncs.
+  const attachImageBytes = useCallback(
+    async (
+      sessionId: string,
+      contentBase64: string,
+      filename?: string,
+    ): Promise<ImageAttachResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        ImageAttachResult,
+        await getGatewayClient().request("image.attach_bytes", {
+          session_id: sessionId,
+          content_base64: contentBase64,
+          ...(filename ? { filename } : {}),
+        }),
+        "image.attach_bytes",
       );
     },
     [ensureSubscribed],
@@ -584,19 +741,25 @@ export function useGateway() {
     streamStatus,
     connect,
     createSession,
+    adoptCreatedSession,
     closeSession,
     beginPrompt,
     failPrompt,
     resumeSession,
     sendPrompt,
     getSessionUsage,
+    compressSession,
     getModelOptions,
     completeSlash,
+    completePath,
     dispatchCommand,
     probeProvider,
+    listProviderModels,
     setSessionModel,
     setRuntimeModel,
+    setSessionReasoningEffort,
     attachImage,
+    attachImageBytes,
     detectDroppedPath,
     interruptSession,
     setSessionTitle,

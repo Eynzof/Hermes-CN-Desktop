@@ -1,0 +1,110 @@
+.alert {
+  --h-alert-fg: var(--h-color-fg-muted);
+  --h-alert-bg: var(--h-color-bg-subtle);
+  --h-alert-border: var(--h-color-border-default);
+
+  min-width: 0;
+  border: 1px solid var(--h-alert-border);
+  border-radius: var(--h-r-lg);
+  background: var(--h-alert-bg);
+  color: var(--h-alert-fg);
+  font-family: var(--h-font-ui);
+  font-size: 12px;
+  line-height: var(--h-line-height-normal);
+}
+
+.alert[data-tone="neutral"] {
+  --h-alert-fg: var(--h-color-fg-muted);
+  --h-alert-bg: var(--h-color-bg-subtle);
+  --h-alert-border: var(--h-color-border-default);
+}
+
+.alert[data-tone="info"],
+.alert[data-tone="accent"] {
+  --h-alert-fg: var(--h-color-accent-fg);
+  --h-alert-bg: var(--h-color-accent-soft);
+  --h-alert-border: var(--h-color-accent-border);
+}
+
+.alert[data-tone="success"],
+.alert[data-tone="ok"] {
+  --h-alert-fg: var(--h-color-success-fg);
+  --h-alert-bg: var(--h-color-success-bg);
+  --h-alert-border: var(--h-color-success-border);
+}
+
+.alert[data-tone="warning"],
+.alert[data-tone="warn"] {
+  --h-alert-fg: var(--h-color-warning-fg);
+  --h-alert-bg: var(--h-color-warning-bg);
+  --h-alert-border: var(--h-color-warning-border);
+}
+
+.alert[data-tone="danger"],
+.alert[data-tone="error"],
+.alert[data-tone="err"] {
+  --h-alert-fg: var(--h-color-danger-fg);
+  --h-alert-bg: var(--h-color-danger-bg);
+  --h-alert-border: var(--h-color-danger-border);
+}
+
+.alert[data-size="sm"] {
+  padding: 10px 12px;
+  border-radius: var(--h-r-md);
+}
+
+.alert[data-size="md"] {
+  padding: 14px 16px;
+}
+
+.alert[data-layout="inline"] {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.body {
+  min-width: 0;
+}
+
+.title {
+  display: block;
+  margin: 0 0 4px;
+  color: var(--h-color-fg-default);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: var(--h-line-height-tight);
+}
+
+.content {
+  color: var(--h-color-fg-muted);
+}
+
+.alert[data-tone="info"] .content,
+.alert[data-tone="accent"] .content,
+.alert[data-tone="success"] .content,
+.alert[data-tone="ok"] .content,
+.alert[data-tone="warning"] .content,
+.alert[data-tone="warn"] .content,
+.alert[data-tone="danger"] .content,
+.alert[data-tone="error"] .content,
+.alert[data-tone="err"] .content {
+  color: var(--h-color-fg-default);
+}
+
+.content :where(p) {
+  margin: 0;
+}
+
+.content :where(p + p) {
+  margin-top: 6px;
+}
+
+.actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}

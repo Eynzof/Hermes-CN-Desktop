@@ -1,0 +1,105 @@
+.card {
+  min-width: 0;
+  border: 1px solid var(--h-color-border-default);
+  border-radius: var(--h-card-radius);
+  background: var(--h-color-bg-surface);
+  color: var(--h-color-fg-default);
+  box-shadow: var(--h-shadow-sm);
+  overflow: hidden;
+}
+
+.card[data-variant="subtle"] {
+  background: var(--h-color-bg-subtle);
+  box-shadow: none;
+}
+
+.card[data-variant="flat"] {
+  box-shadow: none;
+}
+
+.card[data-interactive="true"] {
+  transition:
+    border-color var(--h-duration-fast) var(--h-ease-standard),
+    background-color var(--h-duration-fast) var(--h-ease-standard),
+    box-shadow var(--h-duration-fast) var(--h-ease-standard),
+    transform var(--h-duration-fast) var(--h-ease-standard);
+}
+
+.card[data-interactive="true"]:hover {
+  border-color: var(--h-color-border-strong);
+  box-shadow: var(--h-shadow-lg);
+  transform: translateY(-1px);
+}
+
+.header,
+.body,
+.footer {
+  min-width: 0;
+  padding: var(--h-card-padding-md);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 0;
+}
+
+.heading {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  color: var(--h-color-fg-default);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: var(--h-line-height-tight);
+}
+
+.description {
+  margin: 0;
+  color: var(--h-color-fg-muted);
+  font-size: 12px;
+  line-height: var(--h-line-height-normal);
+}
+
+.actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.body {
+  display: block;
+}
+
+.header + .body {
+  padding-top: 12px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--h-color-border-subtle);
+  background: color-mix(in srgb, var(--h-color-bg-subtle) 70%, transparent);
+}
+
+.card[data-padding="sm"] .header,
+.card[data-padding="sm"] .body,
+.card[data-padding="sm"] .footer {
+  padding: var(--h-card-padding-sm);
+}
+
+.card[data-padding="lg"] .header,
+.card[data-padding="lg"] .body,
+.card[data-padding="lg"] .footer {
+  padding: var(--h-card-padding-lg);
+}

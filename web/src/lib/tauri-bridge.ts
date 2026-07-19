@@ -8,13 +8,17 @@
 import type {
   ApiRequestInput,
   ApiRequestResult,
+  ApplyConnectionResult,
   BackupExportResult,
   BackupImportResult,
   ConfigMigrationImportInput,
   ConfigMigrationImportResult,
   ConfigMigrationScanInput,
   ConfigMigrationScanResult,
+  ConnectionConfigInput,
+  ConnectionConfigView,
   DesktopUpdateManifestFetchResult,
+  CodingAgentsCheckResult,
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
   ExportLogSnapshotResult,
@@ -28,19 +32,29 @@ import type {
   ImOnboardingPollResult,
   ImOnboardingStateInput,
   ImOnboardingStateResult,
+  ProbeConnectionResult,
+  OauthLoginResult,
   RuntimeInfo,
+  RuntimeControlResult,
+  GuideState,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
   SetYoloModeInput,
   SetYoloModeResult,
   SwitchProfileInput,
   SwitchProfileResult,
+  TestConnectionResult,
   YoloModeStatus,
 } from "@hermes/protocol";
 import type {
   DesktopNotifyInput,
   DesktopNotifyResult,
-  SkillMarkdownResult,
+  DesktopFileDropPayload,
+  DownloadExternalImageInput,
+  DownloadedImageResult,
+  FilePreview,
+  PreviewFileChangedPayload,
+  ReadWorkspaceFileInput,
   ExportDebugBundleInput,
   ExportDebugBundleResult,
   ExternalTerminalResult,
@@ -51,6 +65,10 @@ import type {
   UiEventInput,
   UiStoreSnapshot,
   UiTurnStats,
+  WatchPreviewFileResult,
+  WriteWorkspaceFileInput,
+  WriteWorkspaceFileResult,
+  HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
 import hermesLogoSvg from "../../../icons/icon.svg?raw";
@@ -63,6 +81,17 @@ export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
 
 const BASE64_CHUNK_SIZE = 0x8000;
 const BOOTSTRAP_LOGO_BLUE_RGB = "0,95,249";
+
+type TauriFileDropPosition = {
+  x: number;
+  y: number;
+};
+
+type TauriFileDropEventPayload =
+  | { type: "enter"; paths?: string[]; position?: TauriFileDropPosition }
+  | { type: "over"; position?: TauriFileDropPosition }
+  | { type: "drop"; paths?: string[]; position?: TauriFileDropPosition }
+  | { type: "leave" };
 
 interface BootstrapVersionLine {
   label: "界面";
@@ -103,6 +132,57 @@ async function ensureInvoke() {
   return invoke;
 }
 
+// Tear down a Tauri event listener without ever surfacing an unhandled rejection.
+// When a listener is unlistened before its async registration has fully landed
+// in Tauri's internal map (e.g. React StrictMode mount→unmount racing the
+// onDragDropEvent/listen promise), Tauri's injected unregisterListener throws
+// "undefined is not an object (evaluating 'listeners[eventId].handlerId')".
+// The unlisten can fail either synchronously or as a rejected promise depending
+// on the transport, so guard both. The listener is gone regardless — swallow it.
+function safeUnlisten(unlisten: (() => void) | null | undefined): void {
+  if (!unlisten) return;
+  try {
+    const result = unlisten() as unknown;
+    if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+      void (result as Promise<unknown>).catch(() => {});
+    }
+  } catch {
+    // Listener was never fully registered or was already removed.
+  }
+}
+
+// Tauri's webview onDragDropEvent wraps its unlisten so the actual teardown runs
+// in a detached promise that never reaches safeUnlisten's catch above. When that
+// teardown loses the StrictMode mount→unmount race, its
+// "listeners[eventId].handlerId" TypeError surfaces as an *unhandled* rejection
+// even though the listener is already gone and nothing is broken. Swallow exactly
+// that signature (the Tauri-internal "handlerId" field name — app code never
+// throws it) and let every other rejection propagate untouched.
+let rejectionGuardInstalled = false;
+
+function isTauriListenerTeardownRejection(reason: unknown): boolean {
+  const message =
+    reason instanceof Error
+      ? reason.message
+      : typeof reason === "string"
+        ? reason
+        : "";
+  // WebKit: "undefined is not an object (evaluating 'listeners[eventId].handlerId')"
+  // Chromium: "Cannot read properties of undefined (reading 'handlerId')"
+  return message.includes("handlerId");
+}
+
+function installTauriRejectionGuard(): void {
+  if (rejectionGuardInstalled || typeof window === "undefined") return;
+  if (typeof window.addEventListener !== "function") return;
+  rejectionGuardInstalled = true;
+  window.addEventListener("unhandledrejection", (event) => {
+    if (isTauriListenerTeardownRejection(event.reason)) {
+      event.preventDefault();
+    }
+  });
+}
+
 export interface TauriIpcError extends Error {
   code?: string;
   kind?: string;
@@ -141,6 +221,16 @@ async function invokeCommand<T = any>(command: string, args?: Record<string, unk
   }
 }
 
+function normalizeFileDropPayload(payload: TauriFileDropEventPayload): DesktopFileDropPayload {
+  return {
+    phase: payload.type,
+    paths: "paths" in payload && Array.isArray(payload.paths) ? payload.paths : [],
+    position: "position" in payload && payload.position
+      ? { x: payload.position.x, y: payload.position.y }
+      : undefined,
+  };
+}
+
 const tauriBridge = {
   windowType: "tauri" as const,
 
@@ -164,6 +254,10 @@ const tauriBridge = {
     });
   },
 
+  async downloadExternalImage(input: DownloadExternalImageInput): Promise<DownloadedImageResult> {
+    return invokeCommand("download_external_image", { input });
+  },
+
   async pickFiles(): Promise<FilePickerResult> {
     return invokeCommand("pick_files");
   },
@@ -176,12 +270,42 @@ const tauriBridge = {
     return invokeCommand("create_workspace_project");
   },
 
+  onFileDrop(handler: (payload: DesktopFileDropPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    import("@tauri-apps/api/webview")
+      .then(({ getCurrentWebview }) =>
+        getCurrentWebview().onDragDropEvent((event) => {
+          handler(normalizeFileDropPayload(event.payload as TauriFileDropEventPayload));
+        }))
+      .then((fn) => {
+        if (disposed) {
+          safeUnlisten(fn);
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to register Tauri file drop handler", error);
+      });
+
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
+  },
+
   async openWorkspacePath(input: { path: string }): Promise<ApiRequestResult> {
     return invokeCommand("open_workspace_path", { input });
   },
 
   async openExternalUrl(input: { url: string }): Promise<{ ok: boolean; message?: string | null }> {
     return invokeCommand("open_external_url", { input });
+  },
+
+  async toggleDevtools(): Promise<void> {
+    return invokeCommand("toggle_devtools");
   },
 
   async exportLogSnapshot(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult> {
@@ -195,6 +319,10 @@ const tauriBridge = {
 
   async environmentCheck(): Promise<EnvironmentCheckResult> {
     return invokeCommand("environment_check");
+  },
+
+  async codingAgentsCheck(): Promise<CodingAgentsCheckResult> {
+    return invokeCommand("coding_agents_check");
   },
 
   async checkDesktopUpdate(): Promise<DesktopUpdateManifestFetchResult> {
@@ -239,6 +367,75 @@ const tauriBridge = {
     return invokeCommand("switch_profile", { input });
   },
 
+  async getConnectionConfig(): Promise<ConnectionConfigView> {
+    return invokeCommand("get_connection_config");
+  },
+
+  async saveConnectionConfig(input: ConnectionConfigInput): Promise<ConnectionConfigView> {
+    return invokeCommand("save_connection_config", { input });
+  },
+
+  async applyConnectionConfig(input: ConnectionConfigInput): Promise<ApplyConnectionResult> {
+    return invokeCommand("apply_connection_config", { input });
+  },
+
+  async testConnectionConfig(input: ConnectionConfigInput): Promise<TestConnectionResult> {
+    return invokeCommand("test_connection_config", { input });
+  },
+
+  async getDesktopControlState(): Promise<RuntimeControlResult> {
+    return invokeCommand("get_desktop_control_state");
+  },
+
+  async setGuideState(guideState: GuideState): Promise<RuntimeControlResult> {
+    return invokeCommand("set_guide_state", { input: { guideState } });
+  },
+
+  async installManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_install");
+  },
+
+  async startManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_start");
+  },
+
+  async stopManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_stop");
+  },
+
+  async uninstallManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_uninstall");
+  },
+
+  async reinstallManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_reinstall");
+  },
+
+  async probeConnectionConfig(remoteUrl: string): Promise<ProbeConnectionResult> {
+    return invokeCommand("probe_connection_config", { remoteUrl });
+  },
+
+  async connectionOauthLogin(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_oauth_login", { input: { remoteUrl } });
+  },
+
+  async connectionPasswordLogin(input: {
+    remoteUrl: string;
+    provider: string;
+    username: string;
+    password: string;
+  }): Promise<OauthLoginResult> {
+    return invokeCommand("connection_password_login", { input });
+  },
+
+  async connectionAuthMe(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_auth_me", { input: { remoteUrl } });
+  },
+
+  async connectionOauthLogout(remoteUrl: string): Promise<void> {
+    return invokeCommand("connection_oauth_logout", { input: { remoteUrl } });
+  },
+
 
   async scanConfigMigration(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult> {
     return invokeCommand("config_migration_scan", { input: input ?? null });
@@ -270,10 +467,6 @@ const tauriBridge = {
 
   async imOnboardingApply(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult> {
     return invokeCommand("im_onboarding_apply", { input });
-  },
-
-  async readSkillMarkdown(input: { name: string }): Promise<SkillMarkdownResult> {
-    return invokeCommand("read_skill_markdown", { input });
   },
 
   async readMemory() {
@@ -350,15 +543,84 @@ const tauriBridge = {
 
   onTerminalOutput(handler: (event: TerminalEventPayload) => void): () => void {
     let unlisten: (() => void) | null = null;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen<TerminalEventPayload>("terminal-output", (event) => {
-        handler(event.payload);
-      }).then((fn) => {
-        unlisten = fn;
-      });
-    });
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<TerminalEventPayload>("terminal-output", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
     return () => {
-      unlisten?.();
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
+  },
+
+  async readWorkspaceFile(input: ReadWorkspaceFileInput): Promise<FilePreview> {
+    return invokeCommand("read_workspace_file", { input });
+  },
+
+  async writeWorkspaceFile(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult> {
+    return invokeCommand("write_workspace_file", { input });
+  },
+  // Git ops backing the review pane (issue #328). Mirrors the upstream
+  // `window.hermesDesktop.git.review.*` shape so the ported review logic reads
+  // naturally; each method forwards to a Rust command that shells `git`/`gh`.
+  git: {
+    review: {
+      list: (input) => invokeCommand("git_review_list", { input }),
+      diff: (input) => invokeCommand("git_review_diff", { input }),
+      stage: (input) => invokeCommand("git_review_stage", { input }),
+      unstage: (input) => invokeCommand("git_review_unstage", { input }),
+      revert: (input) => invokeCommand("git_review_revert", { input }),
+      revParse: (input) => invokeCommand("git_review_rev_parse", { input }),
+      commit: (input) => invokeCommand("git_review_commit", { input }),
+      commitContext: (input) => invokeCommand("git_review_commit_context", { input }),
+      push: (input) => invokeCommand("git_review_push", { input }),
+      shipInfo: (input) => invokeCommand("git_review_ship_info", { input }),
+      createPr: (input) => invokeCommand("git_review_create_pr", { input }),
+    },
+    // Worktree / branch / status ops backing the projects sidebar (issue #327).
+    worktree: {
+      list: (input) => invokeCommand("git_worktree_list", { input }),
+      add: (input) => invokeCommand("git_worktree_add", { input }),
+      remove: (input) => invokeCommand("git_worktree_remove", { input }),
+    },
+    branch: {
+      list: (input) => invokeCommand("git_branch_list", { input }),
+      switch: (input) => invokeCommand("git_branch_switch", { input }),
+    },
+    repoStatus: (input) => invokeCommand("git_repo_status", { input }),
+  } satisfies HermesGitBridge,
+
+  async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {
+    return invokeCommand("watch_preview_file", { input });
+  },
+
+  async stopPreviewFileWatch(input: { watchId: string }): Promise<boolean> {
+    return invokeCommand("stop_preview_file_watch", { input });
+  },
+
+  onPreviewFileChanged(handler: (payload: PreviewFileChangedPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<PreviewFileChangedPayload>("preview-file-changed", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
     };
   },
 
@@ -367,21 +629,37 @@ const tauriBridge = {
     // The watchdog detects sleep/wake within ~5s, which is acceptable.
     // Native power monitoring can be added later via a Tauri event.
     let unlisten: (() => void) | null = null;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen("system-resume", handler).then((fn) => {
-        unlisten = fn;
-      });
-    });
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) => listen("system-resume", handler))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
     return () => {
-      unlisten?.();
+      disposed = true;
+      safeUnlisten(unlisten);
     };
+  },
+
+  setUiZoom(factor: number): void {
+    // Native webview page zoom (WKWebView setPageZoom / WebView2 ZoomFactor /
+    // WebKitGTK zoom_level). Unlike CSS `zoom`, page zoom reflows the layout and
+    // scales the viewport, so `100vw`/`100vh` keep matching the window and the
+    // interface-scale setting no longer clips the right edge / bottom status bar.
+    import("@tauri-apps/api/webview")
+      .then(({ getCurrentWebview }) => getCurrentWebview().setZoom(factor))
+      .catch((error) => {
+        console.warn("Failed to apply webview zoom", error);
+      });
   },
 };
 
-// Overlay shown while the Rust side downloads the managed runtime on
-// first launch. Pre-React, plain DOM — we can't mount React yet
-// because the bridge isn't ready (no apiBaseUrl => API calls would
-// throw). Phase strings match the `runtime-status` event emitted by
+// Overlay shown while the Rust side prepares the managed runtime and
+// dashboard before React can mount. Pre-React, plain DOM — we can't mount
+// React yet because the bridge isn't ready (no apiBaseUrl => API calls
+// would throw). Phase strings match the `runtime-status` event emitted by
 // src/main.rs::emit_runtime_status.
 function showBootstrapOverlay(initialMessage: string): {
   update(phase: string, message: string): void;
@@ -522,7 +800,7 @@ function showBootstrapOverlay(initialMessage: string): {
     "font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;" +
       "color:rgba(255,255,255,0.45);letter-spacing:0.06em;text-transform:uppercase;",
   );
-  sub.textContent = "Hermes Agent 中文社区桌面版 · 首次启动";
+  sub.textContent = "Hermes Agent 中文社区桌面版 · 启动中";
   panel.appendChild(sub);
 
   root.appendChild(panel);
@@ -564,7 +842,7 @@ function showBootstrapOverlay(initialMessage: string): {
         errorText.textContent = lastErrorMessage;
         detail.style.display = "block";
         copyButton.disabled = false;
-        sub.textContent = "首次启动失败";
+        sub.textContent = "启动失败";
       } else if (msg) {
         message.textContent = msg;
       }
@@ -606,7 +884,7 @@ async function waitForBootstrap(
     const finish = (result: { failed: boolean; message: string }) => {
       if (settled) return;
       settled = true;
-      unlisten?.();
+      safeUnlisten(unlisten);
       if (interval !== null) window.clearInterval(interval);
       if (showTimer !== null) window.clearTimeout(showTimer);
       if (!result.failed) overlay?.dismiss();
@@ -652,12 +930,57 @@ async function waitForBootstrap(
   });
 }
 
+// Developer mode ships enabled in release builds (the `devtools` Cargo feature),
+// so the WebView inspector can be opened at runtime. Bind it to the keyboard
+// shortcuts every browser already uses so users can pop devtools without a menu:
+//   - F12                        (all platforms)
+//   - Cmd + Option + I  on macOS
+//   - Ctrl + Shift + I  on Windows / Linux
+// The matching hint lives on the About page (web/src/routes/settings.tsx).
+function isDevtoolsShortcut(event: KeyboardEvent): boolean {
+  if (event.key === "F12") return true;
+  if (event.key.toLowerCase() !== "i") return false;
+  const macCombo = event.metaKey && event.altKey;
+  const winCombo = event.ctrlKey && event.shiftKey;
+  return macCombo || winCombo;
+}
+
+let devtoolsShortcutBound = false;
+
+function registerDevtoolsShortcut(): void {
+  if (devtoolsShortcutBound || typeof window === "undefined") return;
+  if (typeof window.addEventListener !== "function") return;
+  devtoolsShortcutBound = true;
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isDevtoolsShortcut(event)) return;
+      event.preventDefault();
+      void invokeCommand("toggle_devtools").catch((error) => {
+        console.warn("Failed to toggle devtools", error);
+      });
+    },
+    // Capture phase so app-level key handlers can't swallow the shortcut first.
+    { capture: true },
+  );
+}
+
 export async function installTauriBridge(): Promise<void> {
+  // Install before any React component mounts a Tauri event listener, so the
+  // StrictMode mount→unmount teardown race can't leak an unhandled rejection.
+  installTauriRejectionGuard();
+
   let config = await invokeCommand<{
     apiBaseUrl: string;
     gatewayUrl: string;
     sessionToken?: string;
     currentProfile: string;
+    connectionMode?: "managed" | "local" | "remote";
+    portable?: boolean;
+    backendReady?: boolean;
+    guideState?: GuideState;
+    managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
+    managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
@@ -679,9 +1002,9 @@ export async function installTauriBridge(): Promise<void> {
   // the populated apiBaseUrl/sessionToken. In Vite dev we still avoid writing
   // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
   // the React app from racing the managed dashboard startup.
-  if (!config.apiBaseUrl) {
+  if (!config.apiBaseUrl && config.backendReady !== false) {
     const result = await waitForBootstrap(
-      "正在启动Hermes Agent内核...",
+      "正在唤醒Hermes...",
       () => invokeCommand("get_runtime_config"),
       () => invokeCommand("runtime_info"),
     );
@@ -695,14 +1018,29 @@ export async function installTauriBridge(): Promise<void> {
     config = await invokeCommand("get_runtime_config");
   }
 
+  // Attached local/remote mode must keep the real URLs even in Vite dev: the
+  // Vite proxy targets the managed dashboard port (9120), so relative URLs
+  // would route traffic to the wrong backend. Managed dev still hides URLs and
+  // uses the proxy as before.
+  const connectionMode = config.connectionMode ?? "managed";
+  const hideUrlsForViteProxy = isDevMode && connectionMode === "managed";
+
   window.__HERMES_RUNTIME__ = {
     platform: "tauri" as const,
-    apiBaseUrl: isDevMode ? undefined : config.apiBaseUrl,
+    apiBaseUrl: hideUrlsForViteProxy ? undefined : config.apiBaseUrl,
     dashboardApiBaseUrl: config.apiBaseUrl,
-    gatewayUrl: isDevMode ? undefined : config.gatewayUrl,
+    gatewayUrl: hideUrlsForViteProxy ? undefined : config.gatewayUrl,
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
+    connectionMode,
+    portable: config.portable ?? false,
+    backendReady: config.backendReady ?? Boolean(config.apiBaseUrl),
+    guideState: config.guideState ?? "completed",
+    managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
+    managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",
   };
 
   (window as any).hermesDesktop = tauriBridge;
+
+  registerDevtoolsShortcut();
 }

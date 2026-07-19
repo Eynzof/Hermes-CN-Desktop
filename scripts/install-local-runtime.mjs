@@ -247,7 +247,14 @@ console.log(`python:  ${python}`);
 run(python, ["-m", "venv", venv]);
 const py = venvPython(venv);
 run(py, ["-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"]);
-run(py, ["-m", "pip", "install", `${sourceRoot}[web]`]);
+// Install the same extra the frozen/release runtime uses ([cn-desktop] in
+// Core's pyproject.toml), NOT bare [web]. The frozen runtime can't lazy-install
+// (PyInstaller has no pip), so every desktop-exposed backend — native MCP SDK
+// (issue #16), Feishu/DingTalk/WeCom, Anthropic transport, Hindsight memory — is
+// pre-baked into [cn-desktop]. The dev managed runtime must match, otherwise dev
+// silently lacks features that ship in production (e.g. "MCP SDK is not available
+// in this runtime" with mcp_servers configured). [cn-desktop] already includes [web].
+run(py, ["-m", "pip", "install", `${sourceRoot}[cn-desktop]`]);
 rmSync(join(sourceRoot, "build"), { recursive: true, force: true });
 
 if (!existsSync(hermesExecutable(venv))) {

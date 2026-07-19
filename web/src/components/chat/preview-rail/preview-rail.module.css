@@ -1,0 +1,1035 @@
+.panel {
+  /* 宽度由 usePanelWidth 的 inline style 驱动（默认 460，可拖 360–840）。 */
+  width: 460px;
+  flex: 0 0 460px;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--h-line);
+  background: var(--h-bg-app);
+  overflow: hidden;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover:not(:disabled) {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.tab[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+  border-color: var(--h-line);
+}
+
+.tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.close:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Shared bits ─────────────────────────────────────────────────────────── */
+
+.bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-chip);
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.iconBtn:hover:not(:disabled) {
+  color: var(--h-text);
+  border-color: var(--h-accent-border);
+}
+
+.iconBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 22px;
+  text-align: center;
+  color: var(--h-text-3);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.notice {
+  margin: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-soft);
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ── Web preview ─────────────────────────────────────────────────────────── */
+
+.iframe {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+
+/* ── File preview ────────────────────────────────────────────────────────── */
+
+/* File tab: resizable two-pane layout (browser on top, content below). */
+.fileLayout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fileBrowser {
+  /* Height is driven by the draggable splitter (inline style). */
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+
+/* Drag handle between the directory browser and the content. */
+.splitter {
+  flex: 0 0 auto;
+  height: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  border-top: 1px solid var(--h-line-soft);
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-soft);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.splitterGrip {
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--h-line);
+}
+
+.splitter:hover .splitterGrip,
+.splitter:active .splitterGrip {
+  background: var(--h-accent-border);
+}
+
+.fileLower {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.crumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* Clickable path breadcrumb above the file list. */
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.crumbItem {
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font: inherit;
+  padding: 1px 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.crumbItem:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.crumbCurrent {
+  color: var(--h-text);
+  padding: 1px 3px;
+  white-space: nowrap;
+}
+
+.crumbSep {
+  color: var(--h-text-4);
+  user-select: none;
+}
+
+.fileEntry {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fileEntry:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.fileEntry[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.fileEntryIcon {
+  flex: 0 0 auto;
+  color: var(--h-text-4);
+}
+
+.fileMeta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+.fileMetaName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--h-font-mono);
+  color: var(--h-text-2);
+}
+
+.fileContent {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  cursor: text;
+}
+
+/* The global reset disables selection via `#root *` (ID specificity), so a
+   plain class rule can't re-enable it — match that specificity. Mirrors the
+   standalone /logs route's approach. */
+:global(#root) .fileContent,
+:global(#root) .fileContent * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.fileImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* Raw source view: plain, always-visible, horizontally scrollable. */
+.codePre {
+  margin: 0;
+  white-space: pre;
+  tab-size: 2;
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--h-text);
+}
+
+.markdownView {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--h-text);
+}
+
+/* ── Review pane (issue #328) ────────────────────────────────────────────── */
+
+.reviewLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.reviewToolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.reviewToolbarTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--h-text-2);
+  padding-left: 2px;
+}
+
+.spin {
+  animation: reviewSpin 1s linear infinite;
+}
+
+@keyframes reviewSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.reviewError {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-warn-soft);
+  color: var(--h-text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.reviewError > span {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.reviewErrorClose {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+}
+
+.reviewTree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px;
+}
+
+.reviewHint {
+  padding: 12px 8px;
+  text-align: center;
+  color: var(--h-text-3);
+  font-size: 12px;
+}
+
+.reviewRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 24px;
+  padding-right: 6px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reviewRow:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.reviewRow[data-selected="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.reviewRowName {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewRowDir {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--h-text-4);
+}
+
+/* Single-letter status badge, tinted by the file's git status. */
+.reviewStatus {
+  flex: 0 0 auto;
+  width: 13px;
+  text-align: center;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.reviewStatus[data-tone="added"] {
+  color: var(--h-ok);
+}
+.reviewStatus[data-tone="removed"] {
+  color: var(--h-danger);
+}
+.reviewStatus[data-tone="modified"] {
+  color: var(--h-warn);
+}
+.reviewStatus[data-tone="renamed"] {
+  color: var(--h-accent);
+}
+.reviewStatus[data-tone="conflict"] {
+  color: var(--h-danger);
+}
+.reviewStatus[data-tone="untracked"] {
+  color: var(--h-text-4);
+}
+
+.reviewRowActions {
+  flex: 0 0 auto;
+  display: none;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+}
+
+.reviewRow:hover .reviewRowActions {
+  display: inline-flex;
+}
+
+.reviewRowBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+}
+
+.reviewRowBtn:hover {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.reviewRowCount {
+  margin-left: auto;
+}
+
+.reviewRow:hover .reviewRowCount {
+  margin-left: 4px;
+}
+
+.reviewStagedDot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--h-ok);
+}
+
+.diffCount {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+.diffCountAdd {
+  color: var(--h-ok);
+}
+
+.diffCountDel {
+  color: var(--h-danger);
+}
+
+/* Selected file's unified diff. */
+.reviewDiffPane {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: 55%;
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.reviewDiffHeader {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.reviewDiffPath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-2);
+}
+
+.reviewDiffBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.diffPre {
+  margin: 0;
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.diffLine {
+  display: block;
+  padding: 0 10px;
+  white-space: pre;
+  color: var(--h-text);
+}
+
+.diffLine[data-kind="add"] {
+  background: var(--h-ok-soft);
+  color: var(--h-ok);
+}
+
+.diffLine[data-kind="del"] {
+  background: var(--h-danger-soft, var(--h-warn-soft));
+  color: var(--h-danger);
+}
+
+.diffLine[data-kind="hunk"] {
+  color: var(--h-accent);
+}
+
+.diffLine[data-kind="meta"] {
+  color: var(--h-text-4);
+}
+
+/* Commit / push / PR action bar. */
+.reviewShip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.reviewCommitInput {
+  width: 100%;
+  min-height: 30px;
+  max-height: 140px;
+  resize: vertical;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  padding: 6px 8px;
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reviewCommitInput:focus {
+  outline: none;
+  border-color: var(--h-accent-border);
+}
+
+.reviewShipActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reviewCommitBtn {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--h-accent-border);
+  border-radius: var(--h-r-sm);
+  background: var(--h-accent);
+  color: var(--h-accent-contrast);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reviewCommitBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.reviewCommitBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.reviewCommitMode {
+  flex: 0 0 auto;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: var(--h-bg-input);
+  color: var(--h-text-2);
+  font-size: 11px;
+  padding: 4px 4px;
+  cursor: pointer;
+}
+
+/* Destructive revert confirm. */
+.reviewModalBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+.reviewModal {
+  width: 100%;
+  max-width: 320px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-pane);
+  box-shadow: var(--h-shadow-lg);
+  padding: 14px;
+}
+
+.reviewModalTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h-text);
+}
+
+.reviewModalBody {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--h-text-2);
+}
+
+.reviewModalPath {
+  display: block;
+  margin-top: 8px;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-3);
+  word-break: break-all;
+}
+
+.reviewModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.reviewModalBtn {
+  padding: 5px 12px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.reviewModalBtn:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.reviewModalBtn[data-variant="danger"] {
+  border-color: var(--h-danger);
+  background: var(--h-danger);
+  color: #fff;
+}
+
+.reviewModalBtn[data-variant="danger"]:hover {
+  opacity: 0.9;
+  background: var(--h-danger);
+  color: #fff;
+}
+
+/* ── Logs ────────────────────────────────────────────────────────────────── */
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.segmentButton {
+  padding: 4px 8px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-3);
+  font-family: var(--h-font-cn);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.segmentButton[data-active="true"] {
+  background: var(--h-bg-chip);
+  color: var(--h-text);
+}
+
+.logViewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px;
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  cursor: text;
+}
+
+/* Re-enable selection for log text at `#root *` specificity (line numbers stay
+   unselectable so copies don't include them). Mirrors the /logs route. */
+:global(#root) .logViewport .lineText {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.logLine {
+  display: flex;
+  gap: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.logLine[data-tone="error"] .lineText {
+  color: var(--h-err, #d76f54);
+}
+
+.logLine[data-tone="warning"] .lineText {
+  color: var(--h-warn);
+}
+
+.lineNumber {
+  flex: 0 0 auto;
+  width: 34px;
+  text-align: right;
+  color: var(--h-text-4);
+  /* Keep line numbers out of copied selections. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.lineText {
+  flex: 1;
+  min-width: 0;
+  color: var(--h-text-2);
+}
+
+/* Terminal tab fills the body; the surface paints its own dark theme. */
+.terminalSurface {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+}
+
+/* ── Spot editor (in-place file editing) ─────────────────────────────────── */
+
+/* "modified" dot on the 文件 tab while the editor has unsaved changes. */
+.tabDirtyDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--h-accent);
+  flex: 0 0 auto;
+}
+
+/* Inline "未保存" hint shown in the file meta bar while editing. */
+.dirtyBadge {
+  color: var(--h-warn);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.editButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editButton:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.editControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editAction {
+  padding: 2px 9px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  background: transparent;
+  color: var(--h-text-2);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editAction:hover:not(:disabled) {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.editAction[data-variant="primary"] {
+  border-color: var(--h-accent-border);
+  background: var(--h-accent);
+  color: var(--h-accent-contrast);
+}
+
+.editAction[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--h-accent);
+  opacity: 0.9;
+}
+
+.editAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Stale-on-disk conflict banner. */
+.conflictBanner {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-warn-soft);
+  color: var(--h-text);
+  font-size: 11px;
+}
+
+.conflictTitle {
+  font-weight: 600;
+}
+
+.conflictBody {
+  margin-top: 2px;
+  color: var(--h-text-2);
+  line-height: 1.5;
+}
+
+.conflictActions {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.conflictAction {
+  border: 0;
+  background: transparent;
+  color: var(--h-text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.conflictAction:hover {
+  opacity: 0.8;
+}
+
+.saveError {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--h-line-soft);
+  color: var(--h-danger);
+  font-size: 11px;
+}
+
+.editorWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}

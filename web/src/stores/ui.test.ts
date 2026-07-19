@@ -99,10 +99,10 @@ describe("composerSubmitShortcutAtom (persisted)", () => {
 });
 
 describe("conversationWidthModeAtom (persisted)", () => {
-  it("defaults to medium when nothing is stored", async () => {
+  it("defaults to large when nothing is stored", async () => {
     const { conversationWidthModeAtom } = await loadUi();
     const store = createStore();
-    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
   });
 
   it("restores a supported width from the UI store", async () => {
@@ -113,26 +113,26 @@ describe("conversationWidthModeAtom (persisted)", () => {
     expect(store.get(conversationWidthModeAtom)).toBe("large");
   });
 
-  it("normalizes unsupported stored and written values back to medium", async () => {
+  it("normalizes unsupported stored and written values back to large", async () => {
     const { conversationWidthModeAtom, uiStore } = await loadUi({
       "hermes.conversation-width": "wide",
     });
     const store = createStore();
-    expect(store.get(conversationWidthModeAtom)).toBe("medium");
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
 
     store.set(conversationWidthModeAtom, "full");
     expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("full");
 
     store.set(conversationWidthModeAtom, "tiny" as never);
-    expect(store.get(conversationWidthModeAtom)).toBe("medium");
-    expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("medium");
+    expect(store.get(conversationWidthModeAtom)).toBe("large");
+    expect(uiStore.readUiValue("hermes.conversation-width", "")).toBe("large");
   });
 
   it("maps the four width modes to concrete CSS max-width values", async () => {
     const { conversationWidthMaxWidth } = await loadUi();
-    expect(conversationWidthMaxWidth("small")).toBe("640px");
-    expect(conversationWidthMaxWidth("medium")).toBe("780px");
-    expect(conversationWidthMaxWidth("large")).toBe("960px");
+    expect(conversationWidthMaxWidth("small")).toBe("780px");
+    expect(conversationWidthMaxWidth("medium")).toBe("960px");
+    expect(conversationWidthMaxWidth("large")).toBe("1006px");
     expect(conversationWidthMaxWidth("full")).toBe("100%");
   });
 });
@@ -274,5 +274,42 @@ describe("runtimeUpdatingAtom", () => {
     expect(store.get(runtimeUpdatingAtom)).toEqual({ active: true, mode: "install" });
     store.set(runtimeUpdatingAtom, { active: true, mode: "rollback" });
     expect(store.get(runtimeUpdatingAtom)).toEqual({ active: true, mode: "rollback" });
+  });
+});
+
+describe("assistant display profile atoms (persisted)", () => {
+  it("defaults to Hermes and restores a saved custom name", async () => {
+    const { assistantDisplayNameAtom } = await loadUi();
+    const store = createStore();
+    expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
+
+    const restored = await loadUi({ "hermes.assistant-display-name": "Claudia" });
+    const restoredStore = createStore();
+    expect(restoredStore.get(restored.assistantDisplayNameAtom)).toBe("Claudia");
+  });
+
+  it("trims, limits and persists custom assistant names", async () => {
+    const { assistantDisplayNameAtom, uiStore } = await loadUi();
+    const store = createStore();
+    store.set(assistantDisplayNameAtom, "  Claudia   Agent  ");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Claudia Agent");
+    expect(uiStore.readUiValue("hermes.assistant-display-name", "")).toBe("Claudia Agent");
+
+    store.set(assistantDisplayNameAtom, "");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
+    expect(uiStore.readUiValue("hermes.assistant-display-name", "fallback")).toBe("");
+  });
+
+  it("accepts image data URLs and rejects non-image avatar values", async () => {
+    const { assistantAvatarDataUrlAtom, uiStore } = await loadUi();
+    const store = createStore();
+    const avatar = "data:image/png;base64,AAAA";
+    store.set(assistantAvatarDataUrlAtom, avatar);
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe(avatar);
+    expect(uiStore.readUiValue("hermes.assistant-avatar-data-url", "")).toBe(avatar);
+
+    store.set(assistantAvatarDataUrlAtom, "https://example.test/avatar.png");
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe("");
+    expect(uiStore.readUiValue("hermes.assistant-avatar-data-url", "fallback")).toBe("");
   });
 });

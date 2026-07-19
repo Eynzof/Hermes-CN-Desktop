@@ -1,0 +1,4 @@
+interface:
+  display_name: "桌面端发版前预检"
+  short_description: "发版前安全闸门：防止覆盖升级把老用户内核静默降级 / schema 重置，校验签名公证、国内镜像 artifactUrl，先发 canary。"
+  default_prompt: "按发版前预检技能，核对 Hermes Agent CN 桌面端本次发版的覆盖升级安全性（bundled_runtime_tag 不降级、不 bump schemaVersion、identifier 不变）、macOS 公证 / Windows 签名、国内镜像 artifactUrl 签名前定死，并先发 canary 给开发团队验证再放 stable。"

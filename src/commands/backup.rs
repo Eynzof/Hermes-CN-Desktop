@@ -18,6 +18,7 @@ const BACKUP_KIND: &str = "hermes-profile-backup";
 const MAX_BACKUP_ZIP_FILES: usize = 50_000;
 const MAX_BACKUP_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
 const MAX_BACKUP_MANIFEST_BYTES: u64 = 1024 * 1024;
+#[allow(dead_code)]
 const SECRET_FILES: &[&str] = &[".env", "auth.json", ".anthropic_oauth.json"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -255,11 +256,11 @@ fn collect_backup_entries(
     Ok(())
 }
 
-fn zip_options_for_entry(entry: &PlannedBackupEntry) -> SimpleFileOptions {
+fn zip_options_for_entry(_entry: &PlannedBackupEntry) -> SimpleFileOptions {
     let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     #[cfg(unix)]
     {
-        if let Some(mode) = entry.mode {
+        if let Some(mode) = _entry.mode {
             return options.unix_permissions(mode);
         }
     }
@@ -455,6 +456,7 @@ fn extract_profile_backup_to_staging(
             top_level.insert(top);
         }
 
+        #[cfg(unix)]
         let mode = entry.unix_mode();
         #[cfg(unix)]
         let is_symlink = mode.map(|m| (m & 0o170000) == 0o120000).unwrap_or(false);
@@ -658,13 +660,13 @@ fn install_staging_profile(staging: &Path, target: &Path) -> AppResult<()> {
     }
 }
 
-fn harden_secret_permissions(target: &Path) {
+fn harden_secret_permissions(_target: &Path) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(target, fs::Permissions::from_mode(0o700));
+        let _ = fs::set_permissions(_target, fs::Permissions::from_mode(0o700));
         for rel in SECRET_FILES {
-            let path = target.join(rel);
+            let path = _target.join(rel);
             if path.is_file() {
                 let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
             }
@@ -714,6 +716,7 @@ pub async fn backup_export_profile(
 ) -> Result<BackupExportResult, AppError> {
     let (profile_name, hermes_home) = {
         let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机 Profile 备份")?;
         if inner.hermes_home.trim().is_empty() {
             return Err(AppError::NotReady);
         }
@@ -774,6 +777,10 @@ pub async fn backup_import_profile(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<BackupImportResult, AppError> {
+    {
+        let inner = state.inner.lock()?;
+        crate::connection::require_managed_mode(inner.connection_mode, "本机 Profile 备份恢复")?;
+    }
     let Some(zip_path) = choose_backup_zip(app).await? else {
         return Ok(BackupImportResult {
             ok: false,

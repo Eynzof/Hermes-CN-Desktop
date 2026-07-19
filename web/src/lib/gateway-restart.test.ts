@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyGatewayActionStatus,
+  GATEWAY_RESTART_ANTIVIRUS_HINT,
+  gatewayRestartAntivirusHint,
   gatewayRestartButtonLabel,
   gatewayRestartResponseError,
   gatewayRestartTitle,
@@ -50,12 +52,12 @@ describe("gateway restart helpers", () => {
     expect(classifyGatewayActionStatus(status({ running: true, pid: 1234 }))).toEqual({
       done: false,
       ok: false,
-      message: "Gateway 重启中（PID 1234）…",
+      message: "网关重启中…",
     });
     expect(classifyGatewayActionStatus(status({ running: false, exit_code: 0 }))).toEqual({
       done: true,
       ok: true,
-      message: "Gateway 重启已完成",
+      message: "网关已重启",
     });
   });
 
@@ -63,7 +65,7 @@ describe("gateway restart helpers", () => {
     expect(classifyGatewayActionStatus(status({ running: false, exit_code: null }))).toEqual({
       done: true,
       ok: true,
-      message: "Gateway 重启已完成",
+      message: "网关已重启",
     });
   });
 
@@ -71,7 +73,7 @@ describe("gateway restart helpers", () => {
     expect(classifyGatewayActionStatus(status({ running: false, exit_code: 75 }))).toEqual({
       done: true,
       ok: false,
-      message: "Gateway 重启失败（exit 75）",
+      message: "网关重启失败",
     });
   });
 
@@ -98,5 +100,14 @@ describe("gateway restart helpers", () => {
     expect(gatewayRestartResponseError({ ok: true })).toBeNull();
     expect(gatewayRestartResponseError({ ok: false, message: "无法重启" })).toBe("无法重启");
     expect(gatewayRestartResponseError({ ok: false, error: "failed" })).toBe("failed");
+  });
+});
+
+describe("gatewayRestartAntivirusHint", () => {
+  it("returns the antivirus hint only on Windows", () => {
+    expect(gatewayRestartAntivirusHint("windows")).toBe(GATEWAY_RESTART_ANTIVIRUS_HINT);
+    expect(gatewayRestartAntivirusHint("macos")).toBe("");
+    expect(gatewayRestartAntivirusHint("linux")).toBe("");
+    expect(gatewayRestartAntivirusHint("unknown")).toBe("");
   });
 });

@@ -151,6 +151,9 @@ export interface RuntimeInfo {
   source?: RuntimeSourceInfo;
   process?: RuntimeProcessInfo;
   lastError?: string;
+  guideState?: GuideState;
+  managedRuntimeDesiredState?: ManagedRuntimeDesiredState;
+  managedRuntimeLifecycleState?: ManagedRuntimeLifecycleState;
 }
 
 
@@ -179,6 +182,29 @@ export interface EnvironmentCheckResult {
   hermesHome: string;
   currentProfile: string;
   items: EnvironmentCheckItem[];
+}
+
+// 编码代理 CLI（Claude Code / Codex）深度检测（Rust coding_agents.rs，P-047）。
+export type CodingAgentLoginState = "logged_in" | "expired" | "not_logged_in" | "unknown";
+
+export interface CodingAgentStatus {
+  id: string;
+  label: string;
+  installed: boolean;
+  version?: string;
+  path?: string;
+  loginState: CodingAgentLoginState;
+  loginDetail?: string;
+  configDir: string;
+  skillName: string;
+  installHint: string;
+  loginHint: string;
+}
+
+export interface CodingAgentsCheckResult {
+  generatedAtMs: number;
+  platform: string;
+  agents: CodingAgentStatus[];
 }
 
 
@@ -253,6 +279,29 @@ export interface RuntimeInstallUpdateResult {
   ok: boolean;
   installed?: RuntimeInstallRecord;
   previous?: RuntimeInstallRecord;
+  error?: string;
+}
+
+export type GuideState = "pending" | "deferred" | "completed";
+export type ManagedRuntimeDesiredState = "running" | "stopped" | "uninstalled";
+export type ManagedRuntimeLifecycleState =
+  | "installing"
+  | "starting"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "uninstalling"
+  | "uninstalled"
+  | "error";
+
+export interface RuntimeControlResult {
+  ok: boolean;
+  guideState: GuideState;
+  desiredState: ManagedRuntimeDesiredState;
+  lifecycleState: ManagedRuntimeLifecycleState;
+  installed: boolean;
+  running: boolean;
+  backendReady: boolean;
   error?: string;
 }
 
@@ -476,8 +525,11 @@ export interface YoloModeStatus {
   enabled: boolean;
   /**
    * What the currently-running managed runtime was actually started with.
-   * Differs from `enabled` only between a toggle and the restart that applies
-   * it.
+   * Usually equals `enabled`. It can exceed it (`enabled=false / effective=true`)
+   * in two cases: the brief window between a toggle and the restart that applies
+   * it, and when an inherited `HERMES_YOLO_MODE` forces YOLO while no preference
+   * has been persisted. An explicit persisted preference is authoritative, so a
+   * persisted "off" always yields `effective=false` (see #287).
    */
   effective: boolean;
 }
@@ -495,6 +547,102 @@ export interface SetYoloModeResult {
   enabled: boolean;
   effective: boolean;
   restarted: boolean;
+  apiBaseUrl?: string;
+  gatewayUrl?: string;
+  sessionToken?: string;
+  error?: string;
+}
+
+// --- Connection config: managed runtime vs local/remote Hermes Agent -------
+// Mirrors the official desktop's connection IPC (token auth only). The token
+// value never crosses to the renderer — only presence/preview signals.
+
+export type ConnectionMode = "managed" | "local" | "remote";
+/** How a remote gateway authenticates. "token" = legacy session token;
+ * "oauth" = the v0.18.2 cookie gate (OAuth window or password provider). */
+export type RemoteAuthMode = "token" | "oauth";
+
+export interface ConnectionConfigInput {
+  mode?: ConnectionMode;
+  /** Loopback CLI dashboard URL for local connection mode. Defaults to 127.0.0.1:9119. */
+  localUrl?: string;
+  remoteUrl?: string;
+  /** Empty/absent keeps the previously saved token. */
+  remoteToken?: string;
+  /** "token" (default) or "oauth". Absent keeps the saved mode. */
+  remoteAuthMode?: RemoteAuthMode;
+}
+
+export interface ConnectionConfigView {
+  /** The saved (target) mode — may differ from effectiveMode until applied. */
+  mode: ConnectionMode;
+  localUrl: string;
+  remoteUrl: string;
+  remoteTokenSet: boolean;
+  /** "set" or "...XXXXXX" (last 6 chars); absent when no token is saved. */
+  remoteTokenPreview?: string | null;
+  /** Remote auth mode of the saved config. */
+  remoteAuthMode: RemoteAuthMode;
+  /** True when a persisted OAuth cookie session exists for the remote. */
+  remoteSessionSet: boolean;
+  /** True when HERMES_DESKTOP_REMOTE_URL forces the connection; UI read-only. */
+  envOverride: boolean;
+  /** What the running desktop is actually attached to right now. */
+  effectiveMode: ConnectionMode;
+}
+
+/** A login provider registered on a gated gateway (from /api/auth/providers). */
+export interface AuthProviderInfo {
+  name: string;
+  displayName: string;
+  supportsPassword: boolean;
+}
+
+export interface ProbeConnectionResult {
+  reachable: boolean;
+  /** The gateway enforces a login gate (OAuth / password). */
+  authRequired: boolean;
+  version?: string;
+  /** Registered login providers when gated (empty for token gateways). */
+  authProviders?: AuthProviderInfo[];
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  baseUrl: string;
+  httpOk: boolean;
+  httpStatus?: number;
+  wsOk: boolean;
+  authRequired: boolean;
+  version?: string;
+  /** True when the gated session is missing/expired and the UI should log in. */
+  needsOauthLogin?: boolean;
+  error?: string;
+}
+
+/** Logged-in identity from /api/auth/me (upstream flat shape). */
+export interface AuthIdentity {
+  userId?: string | null;
+  email?: string | null;
+  displayName?: string | null;
+  orgId?: string | null;
+  provider?: string | null;
+  expiresAt?: unknown;
+}
+
+export interface OauthLoginResult {
+  ok: boolean;
+  identity?: AuthIdentity;
+  error?: string;
+}
+
+// On `ok: true` the connection switched live; the renderer should reload the
+// webview so transport, socket-path selection, and all query caches rebuild
+// from get_runtime_config. On `ok: false` the previous backend is untouched
+// (local→remote probes the remote before tearing anything down).
+export interface ApplyConnectionResult {
+  ok: boolean;
+  mode: ConnectionMode;
   apiBaseUrl?: string;
   gatewayUrl?: string;
   sessionToken?: string;

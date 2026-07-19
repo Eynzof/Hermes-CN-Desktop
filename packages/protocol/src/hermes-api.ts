@@ -2,6 +2,13 @@ import { z } from "zod";
 
 const NullableStringAsEmpty = z.string().nullable().optional().transform((value) => value ?? "");
 
+// Wire value may be null (SQL NULL) or absent; normalize both to `undefined` so
+// consumers keep the simple `string | undefined` / `number | undefined` shape.
+// Zod v3's bare `.optional()` rejects an explicit JSON `null`, which is exactly
+// how routes serialize unset columns — hence these tolerant helpers.
+const NullishString = z.string().nullish().transform((value) => value ?? undefined);
+const NullishNumber = z.number().nullish().transform((value) => value ?? undefined);
+
 function stringifyMessageContent(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (value == null) return null;
@@ -31,15 +38,64 @@ export const StatusResponse = z.object({
   config_version: z.number().optional(),
   latest_config_version: z.number().optional(),
   gateway_running: z.boolean(),
-  gateway_pid: z.number().nullable(),
-  gateway_health_url: z.string().nullable(),
+  // `/api/status` is in PUBLIC_API_PATHS and omits these on an auth-gated bind,
+  // emitting them only on a loopback/insecure bind — so they're optional too,
+  // not merely nullable, otherwise a gated dashboard's 200 fails to parse.
+  gateway_pid: z.number().nullable().optional(),
+  gateway_health_url: z.string().nullable().optional(),
   gateway_state: NullableStringAsEmpty,
   gateway_platforms: z.record(z.string(), PlatformStatus).optional(),
   gateway_exit_reason: z.string().nullable(),
   gateway_updated_at: z.string().nullable(),
   active_sessions: z.number(),
+  // v0.18.0 上游新增（scale-to-zero / drain 协调 / dashboard 鉴权）。
+  can_update_hermes: z.boolean().optional(),
+  active_agents: z.number().optional(),
+  gateway_busy: z.boolean().optional(),
+  gateway_drainable: z.boolean().optional(),
+  restart_drain_timeout: z.number().nullable().optional(),
+  auth_required: z.boolean().optional(),
+  auth_providers: z.unknown().optional(),
 });
 export type StatusResponse = z.infer<typeof StatusResponse>;
+
+// ── Audio (/api/audio/*) ──────────────────────────────────────────────
+
+export const AudioTranscriptionResponse = z
+  .object({
+    ok: z.boolean(),
+    transcript: z.string(),
+    provider: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type AudioTranscriptionResponse = z.infer<typeof AudioTranscriptionResponse>;
+
+export const AudioSpeakResponse = z
+  .object({
+    ok: z.boolean(),
+    data_url: z.string(),
+    mime_type: z.string(),
+    provider: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type AudioSpeakResponse = z.infer<typeof AudioSpeakResponse>;
+
+export const ElevenLabsVoice = z
+  .object({
+    voice_id: z.string(),
+    name: z.string(),
+    label: z.string(),
+  })
+  .passthrough();
+export type ElevenLabsVoice = z.infer<typeof ElevenLabsVoice>;
+
+export const ElevenLabsVoicesResponse = z
+  .object({
+    available: z.boolean(),
+    voices: z.array(ElevenLabsVoice),
+  })
+  .passthrough();
+export type ElevenLabsVoicesResponse = z.infer<typeof ElevenLabsVoicesResponse>;
 
 // ── Messaging platforms (/api/messaging/platforms) ────────────────────
 
@@ -112,6 +168,10 @@ export const SessionSummary = z.object({
   model: NullableStringAsEmpty,
   title: z.string().nullable(),
   preview: z.string().optional(),
+  // Backend-stored working directory for the session (sessions.cwd). Null when
+  // the user never explicitly picked a workspace ("No workspace"). Used to
+  // restore the per-session workspace when switching sessions (see #216).
+  cwd: z.string().nullable().optional(),
   started_at: z.number(),
   ended_at: z.number().nullable(),
   end_reason: z.string().nullable().optional(),
@@ -125,6 +185,10 @@ export const SessionSummary = z.object({
   actual_cost_usd: z.number().nullable().optional(),
   is_active: z.boolean().optional(),
   api_call_count: z.number().optional(),
+  // Desktop-only UI state injected by the Rust proxy when a request carries
+  // ?include_archived=true. Absent on the default (active) list — the proxy
+  // strips archived sessions there. See src/session_archive.rs.
+  archived: z.boolean().optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
 
@@ -184,17 +248,22 @@ export const SessionMessage = z.object({
   role: z.string(),
   content: MessageContent,
   images: z.array(HermesImageSource).optional(),
-  tool_call_id: z.string().nullable(),
-  tool_calls: z.any().nullable(),
-  tool_name: z.string().nullable(),
+  // The nullable metadata columns below mirror the backend's `SELECT *` off
+  // the messages table. They are also `.optional()` on purpose: upstream adds
+  // and (rarely) drops columns across releases, and a "required but nullable"
+  // field turns a dropped column into a parse failure on EVERY row — the
+  // whole history blanks out. Missing → treated the same as null.
+  tool_call_id: z.string().nullable().optional(),
+  tool_calls: z.any().nullable().optional(),
+  tool_name: z.string().nullable().optional(),
   timestamp: z.number(),
-  token_count: z.number().nullable(),
-  finish_reason: z.string().nullable(),
-  reasoning: z.string().nullable(),
-  reasoning_details: z.any().nullable(),
-  codex_reasoning_items: z.any().nullable(),
-  reasoning_content: z.string().nullable(),
-});
+  token_count: z.number().nullable().optional(),
+  finish_reason: z.string().nullable().optional(),
+  reasoning: z.string().nullable().optional(),
+  reasoning_details: z.any().nullable().optional(),
+  codex_reasoning_items: z.any().nullable().optional(),
+  reasoning_content: z.string().nullable().optional(),
+}).passthrough();
 export type SessionMessage = z.infer<typeof SessionMessage>;
 
 export const HermesMessageUsage = z
@@ -297,6 +366,17 @@ const HermesNoticeMessagePart = z.object({
   text: z.string(),
 });
 
+// MoA（Mixture of Agents）参考模型输出块：网关在聚合器回答之前，为每个
+// reference 模型 relay 一个完整的带标签文本块（moa.reference 事件）。仅存在
+// 于实时流；重载后的历史由后端持久化决定，不在此重建。
+const HermesMoaReferenceMessagePart = z.object({
+  type: z.literal("moa_reference"),
+  label: z.string(),
+  text: z.string(),
+  index: z.number().optional(),
+  count: z.number().optional(),
+});
+
 export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesTextMessagePart,
   HermesReasoningMessagePart,
@@ -304,6 +384,7 @@ export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesImageMessagePart,
   HermesToolMessagePart,
   HermesNoticeMessagePart,
+  HermesMoaReferenceMessagePart,
 ]);
 export type HermesMessagePart = z.infer<typeof HermesMessagePart>;
 
@@ -329,11 +410,15 @@ export type MessagesResponse = z.infer<typeof MessagesResponse>;
 
 export const SearchResult = z.object({
   session_id: z.string(),
-  snippet: z.string().optional(),
-  role: z.string().optional(),
-  source: z.string().optional(),
-  model: z.string().optional(),
-  session_started: z.number().optional(),
+  // The session-id-match branch hardcodes `role: null` and passes nullable
+  // `model`/`source`/`started_at` straight from SQL — all must tolerate null.
+  snippet: NullishString,
+  role: NullishString,
+  source: NullishString,
+  model: NullishString,
+  session_started: NullishNumber,
+  // Desktop-only; see SessionSummary.archived.
+  archived: z.boolean().optional(),
 });
 export type SearchResult = z.infer<typeof SearchResult>;
 
@@ -381,16 +466,40 @@ export const ModelInfo = z.object({
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
-export const ProviderModelsResponse = z.object({
-  object: z.string().optional(),
-  data: z.array(z.object({
-    id: z.string(),
-    object: z.string().optional(),
-    owned_by: z.string().optional(),
-    created: z.number().optional(),
-  })).default([]),
+// ── MoA / Mixture of Agents (/api/model/moa) ──────────────────────────
+// 后端事实来源：Core `hermes_cli/moa_config.py`（normalize_moa_config）与
+// `hermes_cli/web_server.py`（GET/PUT /api/model/moa，MoaConfigPayload）。
+
+export const MoaModelSlot = z.object({
+  provider: z.string(),
+  model: z.string(),
 });
-export type ProviderModelsResponse = z.infer<typeof ProviderModelsResponse>;
+export type MoaModelSlot = z.infer<typeof MoaModelSlot>;
+
+// passthrough 保留后端归一化返回里 UI 不编辑的字段（reference_max_tokens、
+// fanout 等），避免读到什么丢什么。
+export const MoaPresetConfig = z
+  .object({
+    enabled: z.boolean(),
+    reference_models: z.array(MoaModelSlot),
+    aggregator: MoaModelSlot,
+    reference_temperature: z.number().nullable().optional(),
+    aggregator_temperature: z.number().nullable().optional(),
+    max_tokens: z.number(),
+  })
+  .passthrough();
+export type MoaPresetConfig = z.infer<typeof MoaPresetConfig>;
+
+// GET/PUT 共用的归一化配置形状。顶层的 flattened 字段（default preset 的
+// 兼容视图）由 passthrough 透传，UI 只读写 presets 命名视图。
+export const MoaConfigResponse = z
+  .object({
+    default_preset: z.string(),
+    active_preset: z.string().optional().default(""),
+    presets: z.record(z.string(), MoaPresetConfig),
+  })
+  .passthrough();
+export type MoaConfigResponse = z.infer<typeof MoaConfigResponse>;
 
 // ── Environment Variables (/api/env) ──────────────────────────────────
 
@@ -403,6 +512,12 @@ export const EnvVarInfo = z.object({
   is_password: z.boolean(),
   tools: z.array(z.string()),
   advanced: z.boolean(),
+  // v0.18.0 上游新增：provider 归属（Keys 页按服务商分组）、渠道托管标记
+  // （channel-managed 的密钥不应在 UI 里直接编辑）、用户自定义 .env 键标记。
+  provider: z.string().nullable().optional(),
+  provider_label: z.string().nullable().optional(),
+  channel_managed: z.boolean().optional(),
+  custom: z.boolean().optional(),
 });
 export type EnvVarInfo = z.infer<typeof EnvVarInfo>;
 
@@ -421,6 +536,10 @@ export const SkillInfo = z.object({
   description: z.string(),
   category: z.string().nullable(),
   enabled: z.boolean(),
+  provenance: z.enum(["bundled", "hub", "agent"]).optional(),
+  usage: z.number().int().nonnegative().optional(),
+  // Legacy CN Desktop fields. Current Core reports provenance and exposes
+  // the authenticated /api/skills/content endpoint for source + markdown.
   origin: z.enum(["builtin", "user", "external"]).optional(),
   source_path: z.string().optional(),
   skill_file: z.string().optional(),
@@ -429,6 +548,34 @@ export type SkillInfo = z.infer<typeof SkillInfo>;
 
 export const SkillsResponse = z.array(SkillInfo);
 export type SkillsResponse = z.infer<typeof SkillsResponse>;
+
+export const SkillContentResponse = z.object({
+  name: z.string(),
+  content: z.string(),
+  path: z.string(),
+});
+export type SkillContentResponse = z.infer<typeof SkillContentResponse>;
+
+// 技能 hub 搜索（GET /api/skills/hub/search?q=&source=&limit=&profile=）。
+// profile builder 的「从 hub 添加」用它；identifier 是安装时的唯一键。
+export const SkillHubResult = z.object({
+  name: z.string(),
+  description: z.string().optional().default(""),
+  source: z.string(),
+  identifier: z.string(),
+  trust_level: z.string().optional().default(""),
+  repo: z.string().nullable().optional().default(null),
+  tags: z.array(z.string()).optional().default([]),
+});
+export type SkillHubResult = z.infer<typeof SkillHubResult>;
+
+export const SkillsHubSearchResponse = z.object({
+  results: z.array(SkillHubResult).optional().default([]),
+  source_counts: z.record(z.number()).optional().default({}),
+  timed_out: z.array(z.string()).optional().default([]),
+  installed: z.record(z.unknown()).optional().default({}),
+});
+export type SkillsHubSearchResponse = z.infer<typeof SkillsHubSearchResponse>;
 
 // ── Toolsets (/api/tools/toolsets) ────────────────────────────────────
 
@@ -457,6 +604,106 @@ export const McpServersResponse = z.object({
   servers: z.array(McpServerInfo),
 });
 export type McpServersResponse = z.infer<typeof McpServersResponse>;
+
+// ── MCP 服务管理（/api/mcp/* — 官方上游接口）──────────────────────────
+// 官方 Dashboard 自带的完整管理面（增删改 / 启停 / 测试连接 / 目录浏览 /
+// 一键安装），桌面版直接复用，不再走只读的 fork 端点 /api/mcp-servers。
+// 这些 schema 对齐 hermes_cli/web_server.py 里的响应形状。
+
+// GET /api/mcp/servers 的单条。transport: "http" | "stdio" | "unknown"。
+// env 的值已被后端脱敏（仅用于展示键名/计数，不含真实密钥）。
+export const McpServer = z.object({
+  name: z.string(),
+  transport: z.string(),
+  url: z.string().nullable().optional(),
+  command: z.string().nullable().optional(),
+  args: z.array(z.string()).optional().default([]),
+  env: z.record(z.string()).optional().default({}),
+  auth: z.string().nullable().optional(),
+  enabled: z.boolean(),
+  // 启用的工具名列表；null = 全部启用。
+  tools: z.array(z.string()).nullable().optional(),
+});
+export type McpServer = z.infer<typeof McpServer>;
+
+export const McpServersFullResponse = z.object({
+  servers: z.array(McpServer),
+});
+export type McpServersFullResponse = z.infer<typeof McpServersFullResponse>;
+
+// POST /api/mcp/servers/{name}/test — 连接→列工具→断开。
+export const McpToolInfo = z.object({
+  name: z.string(),
+  description: z.string().nullable().optional().transform((v) => v ?? ""),
+});
+export type McpToolInfo = z.infer<typeof McpToolInfo>;
+
+export const McpTestResult = z.object({
+  ok: z.boolean(),
+  error: z.string().nullable().optional(),
+  tools: z.array(McpToolInfo).optional().default([]),
+});
+export type McpTestResult = z.infer<typeof McpTestResult>;
+
+// PUT /api/mcp/servers/{name}/enabled
+export const McpEnabledResponse = z.object({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+export type McpEnabledResponse = z.infer<typeof McpEnabledResponse>;
+
+// GET /api/mcp/catalog — Nous 官方审核过的 MCP 目录（optional-mcps/ manifest）。
+export const McpCatalogRequiredEnv = z.object({
+  name: z.string(),
+  prompt: z.string().optional().default(""),
+  required: z.boolean().optional().default(false),
+});
+export type McpCatalogRequiredEnv = z.infer<typeof McpCatalogRequiredEnv>;
+
+export const McpCatalogEntry = z.object({
+  name: z.string(),
+  description: z.string().optional().default(""),
+  source: z.string().optional().default(""),
+  transport: z.string(),
+  auth_type: z.string().optional().default("none"),
+  required_env: z.array(McpCatalogRequiredEnv).optional().default([]),
+  command: z.string().nullable().optional(),
+  args: z.array(z.string()).optional().default([]),
+  url: z.string().nullable().optional(),
+  // git bootstrap（仅 clone+build 类条目有）。
+  install_url: z.string().nullable().optional(),
+  install_ref: z.string().nullable().optional(),
+  bootstrap: z.array(z.string()).optional().default([]),
+  default_enabled: z.array(z.string()).nullable().optional(),
+  post_install: z.string().optional().default(""),
+  needs_install: z.boolean().optional().default(false),
+  installed: z.boolean().optional().default(false),
+  enabled: z.boolean().optional().default(false),
+});
+export type McpCatalogEntry = z.infer<typeof McpCatalogEntry>;
+
+export const McpCatalogDiagnostic = z.object({
+  name: z.string(),
+  kind: z.string(),
+  message: z.string(),
+});
+export type McpCatalogDiagnostic = z.infer<typeof McpCatalogDiagnostic>;
+
+export const McpCatalogResponse = z.object({
+  entries: z.array(McpCatalogEntry),
+  diagnostics: z.array(McpCatalogDiagnostic).optional().default([]),
+});
+export type McpCatalogResponse = z.infer<typeof McpCatalogResponse>;
+
+// POST /api/mcp/catalog/install。background=true 表示 git clone/build 在后台进行。
+export const McpCatalogInstallResponse = z.object({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  background: z.boolean().optional().default(false),
+  action: z.string().nullable().optional(),
+});
+export type McpCatalogInstallResponse = z.infer<typeof McpCatalogInstallResponse>;
 
 // ── Analytics (/api/analytics/usage) ──────────────────────────────────
 
@@ -623,7 +870,7 @@ export type LogsResponse = z.infer<typeof LogsResponse>;
 
 export const OAuthProviderStatus = z.object({
   logged_in: z.boolean(),
-  source: z.string().optional(),
+  source: z.string().nullable().optional(),
   source_label: z.string().nullable().optional(),
   token_preview: z.string().nullable().optional(),
   expires_at: z.union([z.string(), z.number()]).nullable().optional(),
@@ -636,7 +883,7 @@ export type OAuthProviderStatus = z.infer<typeof OAuthProviderStatus>;
 export const OAuthProvider = z.object({
   id: z.string(),
   name: z.string(),
-  flow: z.enum(["pkce", "device_code", "external"]).optional(),
+  flow: z.enum(["pkce", "device_code", "external", "loopback"]).optional(),
   cli_command: z.string().optional(),
   docs_url: z.string().optional(),
   status: OAuthProviderStatus,
@@ -664,9 +911,17 @@ const OAuthStartResponseDeviceCode = z.object({
   poll_interval: z.number(),
 });
 
+const OAuthStartResponseLoopback = z.object({
+  session_id: z.string(),
+  flow: z.literal("loopback"),
+  auth_url: z.string(),
+  expires_in: z.number(),
+});
+
 export const OAuthStartResponse = z.discriminatedUnion("flow", [
   OAuthStartResponsePkce,
   OAuthStartResponseDeviceCode,
+  OAuthStartResponseLoopback,
 ]);
 export type OAuthStartResponse = z.infer<typeof OAuthStartResponse>;
 
@@ -713,6 +968,9 @@ export type DashboardThemesResponse = z.infer<typeof DashboardThemesResponse>;
 // process stays bound to the profile it started with. Clients must
 // prompt the user to restart hermes for the switch to take effect.
 
+// 新增字段（gateway_running / description / distribution_* / has_alias）对齐
+// 上游 `_profile_to_dict`。全部 .optional().default(...)：旧 runtime（只发
+// 老字段）不会因缺字段被 Zod 拒掉，新字段自动取兜底值。
 export const ProfileSummary = z.object({
   name: z.string(),
   path: z.string(),
@@ -721,6 +979,13 @@ export const ProfileSummary = z.object({
   provider: z.string().nullable(),
   has_env: z.boolean(),
   skill_count: z.number(),
+  gateway_running: z.boolean().optional().default(false),
+  description: z.string().optional().default(""),
+  description_auto: z.boolean().optional().default(false),
+  distribution_name: z.string().nullable().optional().default(null),
+  distribution_version: z.string().nullable().optional().default(null),
+  distribution_source: z.string().nullable().optional().default(null),
+  has_alias: z.boolean().optional().default(false),
 });
 export type ProfileSummary = z.infer<typeof ProfileSummary>;
 
@@ -729,9 +994,22 @@ export const ProfilesListResponse = z.object({
 });
 export type ProfilesListResponse = z.infer<typeof ProfilesListResponse>;
 
-export const ActiveProfileResponse = z.object({
-  name: z.string(),
-});
+// 当前上游 GET /api/profiles/active 返回 {active, current}（active=sticky 默认，
+// current=运行中 dashboard 实际绑定的档案）；更早的 CN-fork P-008 只返回 {name}。
+// 这里做容错归一化，对两种 runtime 都不炸：active := active ?? name ?? "default"，
+// current := current ?? active。桌面端切换会自动重启 dashboard，故 active==current；
+// web/attached 模式下二者可能不同（sticky 已改但进程还绑旧档案）。
+export const ActiveProfileResponse = z
+  .object({
+    active: z.string().optional(),
+    current: z.string().optional(),
+    name: z.string().optional(),
+  })
+  .transform((r) => {
+    const active = r.active ?? r.name ?? "default";
+    const current = r.current ?? active;
+    return { active, current };
+  });
 export type ActiveProfileResponse = z.infer<typeof ActiveProfileResponse>;
 
 // SOUL.md（按档案存储的首要身份）— GET /api/profiles/{name}/soul
@@ -742,11 +1020,58 @@ export const ProfileSoulResponse = z.object({
 });
 export type ProfileSoulResponse = z.infer<typeof ProfileSoulResponse>;
 
+// 创建 MCP server 的请求体（POST /api/mcp/servers，也复用于 profile builder 的
+// ProfileCreateRequest.mcp_servers）。url（HTTP/SSE）或 command+args（stdio）二选一。
+// env（stdio 的 KEY=VALUE，含 API key 等）、auth（"oauth" 等）由 MCP 管理页填写；
+// 早期 profile 向导不发这两个字段，故均为 optional、向后兼容。
+export const McpServerCreate = z.object({
+  name: z.string(),
+  url: z.string().optional(),
+  command: z.string().optional(),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  auth: z.string().optional(),
+});
+export type McpServerCreate = z.infer<typeof McpServerCreate>;
+
+// POST /api/profiles（ProfileCreate）。clone_from_default 是更早 fork 的布尔；
+// 新增 clone_from（按名指定克隆源）、clone_all（连 memories/sessions 一并复制）、
+// no_skills（不预置 bundled 技能）、description/provider/model（创建即设）。
+// profile builder 追加：mcp_servers（写入 config）、keep_skills（REPLACE 语义——
+// 列出要*保留*的技能，其余禁用）、hub_skills（后台 install 的 hub 技能 identifier）。
 export const ProfileCreateRequest = z.object({
   name: z.string(),
   clone_from_default: z.boolean().optional(),
+  clone_from: z.string().optional(),
+  clone_all: z.boolean().optional(),
+  no_skills: z.boolean().optional(),
+  description: z.string().optional(),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  mcp_servers: z.array(McpServerCreate).optional(),
+  keep_skills: z.array(z.string()).optional(),
+  hub_skills: z.array(z.string()).optional(),
 });
 export type ProfileCreateRequest = z.infer<typeof ProfileCreateRequest>;
+
+// POST /api/profiles 的响应。hub_skills 会在后台 spawn `hermes skills install`，
+// pid=null 表示 spawn 失败。其余 *_set/*_written/*_disabled 是 best-effort 计数。
+export const ProfileHubInstall = z.object({
+  identifier: z.string(),
+  pid: z.number().nullable(),
+});
+export type ProfileHubInstall = z.infer<typeof ProfileHubInstall>;
+
+export const ProfileCreateResponse = z.object({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  path: z.string().optional(),
+  model_set: z.boolean().optional(),
+  mcp_written: z.number().optional(),
+  skills_disabled: z.number().optional(),
+  hub_installs: z.array(ProfileHubInstall).optional().default([]),
+});
+export type ProfileCreateResponse = z.infer<typeof ProfileCreateResponse>;
 
 export const ProfileRenameRequest = z.object({
   new_name: z.string(),
@@ -757,6 +1082,60 @@ export const ActiveProfileSetRequest = z.object({
   name: z.string(),
 });
 export type ActiveProfileSetRequest = z.infer<typeof ActiveProfileSetRequest>;
+
+// PUT /api/profiles/{name}/model — 设档案主模型（model.default + model.provider）。
+// 名字在 path 里，对任意档案生效，无需切换 dashboard。
+export const ProfileModelUpdateRequest = z.object({
+  provider: z.string(),
+  model: z.string(),
+});
+export type ProfileModelUpdateRequest = z.infer<typeof ProfileModelUpdateRequest>;
+
+export const ProfileModelUpdateResponse = z.object({
+  ok: z.boolean(),
+  provider: z.string(),
+  model: z.string(),
+});
+export type ProfileModelUpdateResponse = z.infer<typeof ProfileModelUpdateResponse>;
+
+// PUT /api/profiles/{name}/description — 用户手写描述（写非空即标记 description_auto:false，
+// 自动扫描不会再覆盖）。空串清空。
+export const ProfileDescriptionUpdateRequest = z.object({
+  description: z.string(),
+});
+export type ProfileDescriptionUpdateRequest = z.infer<
+  typeof ProfileDescriptionUpdateRequest
+>;
+
+export const ProfileDescriptionUpdateResponse = z.object({
+  ok: z.boolean(),
+  description: z.string(),
+  description_auto: z.boolean(),
+});
+export type ProfileDescriptionUpdateResponse = z.infer<
+  typeof ProfileDescriptionUpdateResponse
+>;
+
+// POST /api/profiles/{name}/describe-auto — 用辅助 LLM 自动生成描述。生成失败
+// 不抛 HTTP 错误，而是 ok:false + reason，让 UI 内联提示后让用户改配置重试。
+export const ProfileDescribeAutoRequest = z.object({
+  overwrite: z.boolean(),
+});
+export type ProfileDescribeAutoRequest = z.infer<typeof ProfileDescribeAutoRequest>;
+
+export const ProfileDescribeAutoResponse = z.object({
+  ok: z.boolean(),
+  reason: z.string().optional().default(""),
+  description: z.string().nullable(),
+  description_auto: z.boolean(),
+});
+export type ProfileDescribeAutoResponse = z.infer<typeof ProfileDescribeAutoResponse>;
+
+// GET /api/profiles/{name}/setup-command — 拿到「在终端配置此档案」的 shell 命令。
+export const ProfileSetupCommandResponse = z.object({
+  command: z.string(),
+});
+export type ProfileSetupCommandResponse = z.infer<typeof ProfileSetupCommandResponse>;
 
 // ── TUI Gateway JSON-RPC (/api/ws) ────────────────────────────────────
 
@@ -826,6 +1205,32 @@ export const SessionUsageResult = z.object({
 }).passthrough();
 export type SessionUsageResult = z.infer<typeof SessionUsageResult>;
 
+// Manual context compaction — mirrors the backend `session.compress` RPC
+// (tui_gateway/server.py). `focus_topic` lets the user steer which thread to
+// keep; the backend refuses (error 4009) while a turn is running.
+export const SessionCompressParams = z.object({
+  session_id: z.string(),
+  focus_topic: z.string().optional(),
+});
+export type SessionCompressParams = z.infer<typeof SessionCompressParams>;
+
+export const SessionCompressResult = z.object({
+  status: z.string().optional(),
+  removed: z.number().optional(),
+  before_messages: z.number().optional(),
+  after_messages: z.number().optional(),
+  before_tokens: z.number().optional(),
+  after_tokens: z.number().optional(),
+  // Core currently returns a structured manual-compression summary object
+  // ({ noop, headline, token_line, note }); older runtimes returned a string.
+  // The desktop UI derives its Chinese notice from the numeric before/after
+  // fields, so accept either shape instead of rejecting otherwise-successful
+  // /compress RPC results as "unrecognized".
+  summary: z.unknown().optional(),
+  usage: SessionUsageResult.optional(),
+}).passthrough();
+export type SessionCompressResult = z.infer<typeof SessionCompressResult>;
+
 export const GatewayModelProvider = z.object({
   slug: z.string(),
   name: z.string().optional(),
@@ -856,6 +1261,20 @@ export const ProviderProbeResult = z.object({
 }).passthrough();
 export type ProviderProbeResult = z.infer<typeof ProviderProbeResult>;
 
+// Result of the `provider.models` gateway RPC: the full model-id list for a
+// provider, fetched on the backend (no external-request SSRF guard there), so a
+// self-hosted provider on a LAN IP is reachable. Sibling to ProviderProbeResult
+// — that samples 5 for a connectivity check, this returns the complete list.
+export const ProviderModelsListResult = z.object({
+  ok: z.boolean(),
+  models: z.array(z.string()).default([]),
+  model_count: z.number().default(0),
+  status_code: z.number().nullable().default(null),
+  error: z.string().nullable().default(null),
+  error_kind: z.enum(["auth", "timeout", "http", "network", "unknown"]).nullable().default(null),
+}).passthrough();
+export type ProviderModelsListResult = z.infer<typeof ProviderModelsListResult>;
+
 export const ConfigSetResult = z.object({
   key: z.string().optional(),
   value: z.string().optional(),
@@ -882,17 +1301,29 @@ export const AttachmentUploadResult = z.object({
 }).passthrough();
 export type AttachmentUploadResult = z.infer<typeof AttachmentUploadResult>;
 
+// `/api/fs/list` entry. Upstream's handler returns `isDirectory`; the fork's
+// original P-004 handler returned `is_dir`. Accept either off the wire and
+// normalize to a single canonical `is_dir` so every consumer (and the inferred
+// type) stays stable regardless of which Core shape answers.
 export const FsEntry = z.object({
   name: z.string(),
   path: z.string(),
-  is_dir: z.boolean(),
-});
+  is_dir: z.boolean().optional(),
+  isDirectory: z.boolean().optional(),
+}).transform((e) => ({
+  name: e.name,
+  path: e.path,
+  is_dir: e.is_dir ?? e.isDirectory ?? false,
+}));
 export type FsEntry = z.infer<typeof FsEntry>;
 
+// `path` / `parent` / `home` are fork-only extras (gone after an upstream sync),
+// so they're optional; `error` is upstream's HTTP-200 soft error (EACCES/ENOENT/…).
 export const FsListResponse = z.object({
-  path: z.string(),
-  parent: z.string().nullable(),
-  home: z.string(),
+  path: z.string().optional(),
+  parent: z.string().nullable().optional(),
+  home: z.string().optional(),
+  error: z.string().optional(),
   entries: z.array(FsEntry).default([]),
 }).passthrough();
 export type FsListResponse = z.infer<typeof FsListResponse>;
@@ -928,6 +1359,9 @@ export const GatewayMessageUsage = z
     context_used: z.number().optional(),
     context_max: z.number().optional(),
     context_percent: z.number().optional(),
+    // Backend `_get_usage` reports this on every usage payload; declaring it
+    // lets the live message-stream count match the polled session.usage one.
+    compressions: z.number().optional(),
     cost_usd: z.number().nullable().optional(),
     cost_status: z.string().optional(),
     finish_reason: z.string().optional(),
@@ -1006,13 +1440,14 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
       context: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
+  // Core 从不发 "tool.progress"（新旧 runtime 均如此）；真实事件是
+  // "tool.generating"——模型正在流式生成工具调用参数（先于 tool.start），
+  // payload 仅带 {name}。
   z.object({
-    type: z.literal("tool.progress"),
+    type: z.literal("tool.generating"),
     session_id: z.string(),
     payload: z.object({
-      tool_id: z.string().optional(),
       name: z.string().optional(),
-      preview: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
   z.object({
@@ -1042,6 +1477,73 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
     session_id: z.string().optional(),
     payload: z.object({
       message: z.string().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // MoA：每个 reference 模型的完整输出（label=槽位/模型名，text=全文，
+  // index/count=第几个/共几个）。非流式 delta，一个事件一整块。
+  z.object({
+    type: z.literal("moa.reference"),
+    session_id: z.string(),
+    payload: z.object({
+      label: z.string().optional(),
+      text: z.string().optional(),
+      index: z.number().optional(),
+      count: z.number().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // MoA：references 齐了、聚合器开始综合（其回答走普通 message.delta 流）。
+  z.object({
+    type: z.literal("moa.aggregating"),
+    session_id: z.string(),
+    payload: z.object({
+      aggregator: z.string().optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // P-047：CLI 委派（Claude Code / Codex）。后端识别出 terminal 命令是一次
+  // 外部编码代理委派时发出；delegation_id == tool.start 的 tool_id，前端据此
+  // 把同一张工具卡升级为品牌化委派卡（stores/cli-delegations.ts）。旧内核不发
+  // 这些事件，前端回退为命令模式识别。
+  z.object({
+    type: z.literal("delegation.cli.started"),
+    session_id: z.string(),
+    payload: z.object({
+      delegation_id: z.string().optional(),
+      tool_id: z.string().optional(),
+      agent: z.string().optional(),
+      mode: z.string().optional(),
+      execution: z.string().optional(),
+      command_redacted: z.string().optional(),
+      prompt_excerpt: z.string().optional(),
+      workdir: z.string().nullable().optional(),
+      flags: z.record(z.unknown()).optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // 仅后台委派：≤2Hz 合并的实时输出（chunk 已脱敏/去 ANSI），events 是后端
+  // 归一化出的子事件（init/text/tool_use/result，snake_case 字段）。
+  z.object({
+    type: z.literal("delegation.cli.output"),
+    session_id: z.string(),
+    payload: z.object({
+      delegation_id: z.string().optional(),
+      process_session_id: z.string().nullable().optional(),
+      chunk: z.string().optional(),
+      truncated: z.boolean().optional(),
+      events: z.array(z.record(z.unknown())).optional(),
+    }).passthrough().optional(),
+  }).passthrough(),
+  // 终态一次成型（不设单独 failed 事件）：status ∈ completed|failed|killed|lost。
+  z.object({
+    type: z.literal("delegation.cli.completed"),
+    session_id: z.string(),
+    payload: z.object({
+      delegation_id: z.string().optional(),
+      agent: z.string().optional(),
+      execution: z.string().optional(),
+      status: z.string().optional(),
+      exit_code: z.number().nullable().optional(),
+      duration_s: z.number().optional(),
+      output_tail: z.string().optional(),
+      result: z.record(z.unknown()).nullable().optional(),
     }).passthrough().optional(),
   }).passthrough(),
 ]);

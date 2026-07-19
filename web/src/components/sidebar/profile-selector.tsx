@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Cable, Check, ChevronsUpDown, Globe2, X } from "lucide-react";
 import { Popover } from "@hermes/shared-ui";
 import {
   useActiveProfileName,
   useProfiles,
   useSetActiveProfile,
 } from "@/hooks/use-profiles";
+import { runtime } from "@/lib/runtime";
 import s from "./profile-selector.module.css";
 
 type ProfileSelectorVariant = "sidebar" | "topbar";
@@ -48,6 +49,30 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
     setOpen(false);
     navigate("/profiles");
   };
+
+  // Attached mode: profiles are HERMES_HOME-scoped local state, and the
+  // attached agent owns its own home/process — show an indicator instead of a
+  // switcher. The backend may still have its own active profile, but the
+  // desktop cannot restart it here.
+  if (!runtime.isManaged()) {
+    const isRemote = runtime.isRemote();
+    const Icon = isRemote ? Globe2 : Cable;
+    return (
+      <button
+        type="button"
+        className={s.trigger}
+        data-variant={variant}
+        data-no-drag={variant === "topbar" ? true : undefined}
+        disabled
+        title={`已连接${isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI"}；当前连接模式下不支持由桌面端切换档案（设置 → 连接 可切回本机内核）`}
+      >
+        <span className={s.triggerLabel}>
+          <Icon size={11} aria-hidden="true" /> {isRemote ? "远程" : "本地"}
+        </span>
+        <span className={s.triggerName}>Hermes Agent</span>
+      </button>
+    );
+  }
 
   return (
     <>

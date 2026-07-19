@@ -19,7 +19,7 @@ import s from "./settings.module.css";
 
 const CATEGORY_LABELS: Record<EnvironmentCheckCategory, string> = {
   core: "核心环境",
-  runtime: "Managed Runtime",
+  runtime: "本机内核",
   tools: "本机工具",
   browser: "浏览器能力",
   paths: "路径",
@@ -89,8 +89,8 @@ export function EnvironmentSection({ showHeading = true }: { showHeading?: boole
           <div className={s.aboutEyebrow}>本机环境与依赖检查</div>
           <h3>{data ? (healthy ? "核心环境正常" : "发现需要关注的环境项") : "正在读取环境状态"}</h3>
           <p>
-            此页展示桌面端 managed runtime 必需环境，以及 Git、Node、ripgrep、ffmpeg、浏览器工具等可选能力。
-            可选依赖缺失不会阻止启动，但会影响对应工具能力。
+            此页展示本机内核所需的环境，以及 Git、Node、ripgrep、ffmpeg、浏览器工具等可选能力。
+            可选项缺失不会影响启动，但会影响对应工具的能力。
           </p>
         </div>
         <span className={s.statusBadge} data-on={healthy && data ? "true" : summary.errors ? "false" : undefined}>
@@ -109,7 +109,7 @@ export function EnvironmentSection({ showHeading = true }: { showHeading?: boole
         </CopyButton>
         <button className={s.btn} type="button" onClick={() => void openPath(data?.runtimeRoot)} disabled={!data?.runtimeRoot || !window.hermesDesktop?.openWorkspacePath}>
           <FolderOpen size={13} />
-          打开 runtime
+          打开内核目录
         </button>
         <button className={s.btn} type="button" onClick={() => void openPath(data?.hermesHome)} disabled={!data?.hermesHome || !window.hermesDesktop?.openWorkspacePath}>
           <FolderOpen size={13} />
@@ -117,7 +117,7 @@ export function EnvironmentSection({ showHeading = true }: { showHeading?: boole
         </button>
       </div>
 
-      {!hasBridge && <div className={s.runtimeMessage} data-tone="error">当前环境没有桌面端环境检查 bridge。</div>}
+      {!hasBridge && <div className={s.runtimeMessage} data-tone="error">当前环境不支持环境检查。</div>}
       {query.isError && <div className={s.runtimeMessage} data-tone="error">环境检查失败：{query.error instanceof Error ? query.error.message : "unknown error"}</div>}
 
       {data && (

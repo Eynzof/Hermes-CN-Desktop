@@ -1,6 +1,6 @@
 [package]
 name = "hermes-agent-cn-desktop"
-version = "0.3.2"
+version = "0.6.3"
 edition = "2021"
 description = "Hermes Agent CN Desktop (Tauri)"
 authors = ["Hermes Agent CN Contributors"]
@@ -10,18 +10,24 @@ homepage = "https://hermesagent.org.cn"
 name = "hermes_agent_cn"
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+# `devtools` keeps the WebView inspector available in release builds too, so the
+# desktop ships in developer mode by default (toggled via a keyboard shortcut —
+# see commands/devtools.rs). On macOS this uses a private API, which is fine for
+# our dmg distribution since we don't publish through the App Store.
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = [
+    "cookies",
     "json",
     "multipart",
     "rustls-tls",
     "stream",
 ] }
+cookie = "0.18"
 sha2 = "0.10"
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 zip = "2"
@@ -34,10 +40,15 @@ base64 = "0.22"
 url = "2"
 urlencoding = "2"
 open = "5"
+# Native filesystem watch powering the right-rail preview's "文件实时刷新"
+# (commands/preview.rs). Raw change events are emitted to the renderer, which
+# debounces before re-reading.
+notify = "6"
 futures-util = "0.3"
 # WebSocket relay to the runtime's native /api/ws (commands/ws_proxy.rs).
-# Loopback is always ws:// so no TLS backend feature is needed.
-tokio-tungstenite = "0.29"
+# The relay also carries remote-mode connections (src/connection.rs), which
+# may be wss://, so a rustls backend is required.
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 fs2 = "0.4"
 thiserror = "2"
 portable-pty = "0.9"
@@ -47,13 +58,17 @@ getrandom = "0.3"
 # Parse $HERMES_HOME/.env for per-spawn child env injection (src/env_file.rs).
 # Only from_path_iter is used — the desktop process env is never mutated.
 dotenvy = "0.15"
+tauri-plugin-clipboard-manager = "2.3.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_JobObjects",
+    "Win32_System_Threading",
 ] }
+# Read-only registry access for live PATH/PATHEXT resolution (path_resolver.rs).
+winreg = "0.55"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

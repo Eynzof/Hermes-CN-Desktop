@@ -52,6 +52,13 @@ export function dashboardUrlFromInputs(inputs: DashboardUrlInputs): string {
   return `http://localhost:${DEFAULT_DESKTOP_DASHBOARD_PORT}/`;
 }
 
+export function dashboardPageUrlFromInputs(inputs: DashboardUrlInputs, pagePath: string): string {
+  const base = dashboardUrlFromInputs(inputs);
+  const path = pagePath.trim();
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return new URL(normalizedPath || "/", base).toString();
+}
+
 export function dashboardPortFromUrl(raw: string | null | undefined): string {
   const url = parseHttpUrl(raw);
   if (!url) return DEFAULT_DESKTOP_DASHBOARD_PORT;

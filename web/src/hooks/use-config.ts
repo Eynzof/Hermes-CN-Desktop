@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchJSON, putJSON } from "@/lib/transport";
 import { invalidateModelOptionsCache } from "@/lib/model-options-cache";
 import { useActiveProfileName } from "@/hooks/use-profiles";
+import { runtime } from "@/lib/runtime";
 import {
   ConfigResponse,
   ConfigSchemaResponse,
@@ -19,6 +20,11 @@ export function useConfig() {
   return useQuery<Record<string, any>>({
     queryKey: ["config", profile],
     queryFn: ({ signal }) => fetchJSON("/api/config", { signal }, ConfigResponse),
+    enabled: runtime.isBackendReady(),
+    // Config changes only via saves (which invalidate this query), so avoid the
+    // focus-refetch storm that re-hits the Models page's backing endpoints.
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -27,6 +33,7 @@ export function useConfigSchema() {
   return useQuery<ConfigSchemaResponse>({
     queryKey: ["config-schema"],
     queryFn: ({ signal }) => fetchJSON("/api/config/schema", { signal }, ConfigSchemaResponse),
+    enabled: runtime.isBackendReady(),
     staleTime: 5 * 60_000,
   });
 }
@@ -36,6 +43,12 @@ export function useModelInfo() {
   return useQuery<ModelInfo>({
     queryKey: ["model-info", profile],
     queryFn: ({ signal }) => fetchJSON("/api/model/info", { signal }, ModelInfo),
+    enabled: runtime.isBackendReady(),
+    // Model metadata changes via config saves (which invalidate this) or an
+    // explicit model switch (via CLI or WS event); poll every 15s so the UI
+    // catches CLI switches even if the WebSocket event is missed.
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
 }
 

@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
+  Brush,
   Bug,
+  Cable,
   CheckCircle2,
   Copy,
   ExternalLink as ExternalLinkIcon,
@@ -13,6 +15,7 @@ import {
   GitFork,
   Globe2,
   Heart,
+  Image as ImageIcon,
   Info,
   MessageCircle,
   RefreshCw,
@@ -21,8 +24,10 @@ import {
   Server,
   ShieldCheck,
   Terminal,
+  Upload,
+  X,
 } from "lucide-react";
-import { Dialog, useTheme, type ThemeConfig } from "@hermes/shared-ui";
+import { Alert, Button, Dialog, Field, Input, Select, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import { cronJobProfile, useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
@@ -39,6 +44,9 @@ import {
 } from "@/hooks/use-runtime-update";
 import {
   CONVERSATION_FONT_SIZE_OPTIONS,
+  DEFAULT_ASSISTANT_DISPLAY_NAME,
+  assistantAvatarDataUrlAtom,
+  assistantDisplayNameAtom,
   composerSubmitShortcutAtom,
   conversationFontSizeAtom,
   notifyOnApprovalAtom,
@@ -48,10 +56,13 @@ import {
   notifySystemAtom,
   profileSwitchingAtom,
   showReasoningAtom,
+  telemetryEnabledAtom,
+  normalizeAssistantDisplayName,
   type ConversationFontSizeMode,
 } from "@/stores/ui";
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
 import { openExternalUrl } from "@/lib/external-links";
+import { detectHostOS, runtime } from "@/lib/runtime";
 import { checkDesktopUpdate, DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import {
@@ -68,6 +79,10 @@ import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
+import feishuCommunityQr from "@/assets/feishu-community-qr.png";
+import { WandermindsMark } from "@/components/brand/wanderminds-mark";
+import { SettingsHero } from "./settings-hero";
+import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
 
 /* ── General ─────────────────────────────────────────────────────────── */
@@ -78,7 +93,47 @@ interface SettingsSectionProps {
 
 export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
+  const [telemetryEnabled, setTelemetryEnabled] = useAtom(telemetryEnabledAtom);
   const [composerSubmitShortcut, setComposerSubmitShortcut] = useAtom(composerSubmitShortcutAtom);
+  const [assistantDisplayName, setAssistantDisplayName] = useAtom(assistantDisplayNameAtom);
+  const [assistantAvatarDataUrl, setAssistantAvatarDataUrl] = useAtom(assistantAvatarDataUrlAtom);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [assistantProfileError, setAssistantProfileError] = useState("");
+
+  const handleAssistantNameChange = (value: string) => {
+    setAssistantProfileError("");
+    setAssistantDisplayName(value);
+  };
+
+  const handleAvatarFile = async (file: File | undefined) => {
+    if (!file) return;
+    setAssistantProfileError("");
+    if (!file.type.startsWith("image/")) {
+      setAssistantProfileError("请选择 PNG、JPG、WebP、GIF 或 SVG 图片。");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAssistantProfileError("头像图片不能超过 2 MB。");
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error ?? new Error("读取头像失败"));
+        reader.readAsDataURL(file);
+      });
+      if (!dataUrl.startsWith("data:image/")) {
+        setAssistantProfileError("头像文件格式不受支持。");
+        return;
+      }
+      setAssistantAvatarDataUrl(dataUrl);
+    } catch (error) {
+      setAssistantProfileError(error instanceof Error ? error.message : "读取头像失败");
+    } finally {
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
 
   return (
     <div>
@@ -88,6 +143,57 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
       } />
       <Row label="发送快捷键" sub="控制对话输入框的提交方式；未触发发送的 Enter 会保留为换行。" right={
         <RadioGroup value={composerSubmitShortcut} options={[{ value: "enter", label: "Enter 发送" }, { value: "ctrl-enter", label: "Ctrl+Enter 发送" }]} onChange={(v) => setComposerSubmitShortcut(v as ComposerSubmitShortcut)} />
+      } />
+      <Row label="Hermes 名称" sub="显示在对话中助手消息上方的名称，留空恢复为 Hermes。" right={
+        <div className={s.assistantProfileControl}>
+          <input
+            className={s.assistantNameInput}
+            value={assistantDisplayName === DEFAULT_ASSISTANT_DISPLAY_NAME ? "" : assistantDisplayName}
+            placeholder={DEFAULT_ASSISTANT_DISPLAY_NAME}
+            maxLength={40}
+            onChange={(event) => handleAssistantNameChange(event.target.value)}
+            onBlur={(event) => setAssistantDisplayName(normalizeAssistantDisplayName(event.target.value))}
+          />
+          {assistantDisplayName !== DEFAULT_ASSISTANT_DISPLAY_NAME ? (
+            <button
+              type="button"
+              className={s.iconPlainButton}
+              onClick={() => handleAssistantNameChange("")}
+              title="恢复默认名称"
+            >
+              <X size={13} />
+            </button>
+          ) : null}
+        </div>
+      } />
+      <Row label="Hermes 头像" sub="上传后会显示在 Hermes 的对话消息旁；不设置时保持原有纯文本样式。" right={
+        <div className={s.assistantAvatarControl}>
+          <input
+            ref={avatarInputRef}
+            className={s.hiddenFileInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+            onChange={(event) => void handleAvatarFile(event.target.files?.[0])}
+          />
+          {assistantAvatarDataUrl ? (
+            <img className={s.assistantAvatarPreview} src={assistantAvatarDataUrl} alt="Hermes 头像预览" />
+          ) : (
+            <span className={s.assistantAvatarPlaceholder}><ImageIcon size={16} /></span>
+          )}
+          <button type="button" className={s.btn} onClick={() => avatarInputRef.current?.click()}>
+            <Upload size={13} /> 上传
+          </button>
+          {assistantAvatarDataUrl ? (
+            <button type="button" className={s.btn} onClick={() => { setAssistantProfileError(""); setAssistantAvatarDataUrl(""); }}>
+              移除
+            </button>
+          ) : null}
+        </div>
+      } />
+      {assistantProfileError ? <p className={s.assistantProfileError}>{assistantProfileError}</p> : null}
+      <p className={s.assistantProfileStorageHint}>名称和头像只改变桌面端显示，不影响模型本身。清空名称、移除头像后即可恢复默认样式。</p>
+      <Row label="匿名使用统计" sub="上报版本号、系统类型、语言等匿名信息帮助改进产品；不含对话内容、密钥或任何可识别个人的信息。" right={
+        <RadioGroup value={telemetryEnabled ? "on" : "off"} options={[{ value: "off", label: "关闭" }, { value: "on", label: "开启" }]} onChange={(v) => setTelemetryEnabled(v === "on")} />
       } />
       <ApprovalModeSection />
     </div>
@@ -186,43 +292,68 @@ export function NotificationSection({ showHeading = true }: SettingsSectionProps
         <p className={s.desc}>系统通知与提示音均已关闭，上方事件开关暂不生效。</p>
       )}
       <Row label="发送测试通知" sub={testSub} right={
-        <button
+        <Button
           type="button"
-          className={s.btn}
+          variant="outline"
           disabled={testState.phase === "sending"}
           onClick={() => void handleTestNotification()}
         >
           {testState.phase === "sending" ? "发送中…" : "测试"}
-        </button>
+        </Button>
       } />
     </div>
   );
 }
 
+const UI_SCALE_OPTIONS: Array<{ value: ThemeConfig["scale"]; label: string }> = [
+  { value: "sm", label: "90%" },
+  { value: "md", label: "100%" },
+  { value: "lg", label: "110%" },
+  { value: "xl", label: "125%" },
+  { value: "2xl", label: "150%" },
+];
+
 export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
+  const activeSkin = THEME_SKINS.find((skin) => skin.value === config.theme);
+  const densityLabel = config.density === "compact" ? "紧凑" : "舒适";
 
   return (
     <div>
       {showHeading && <h2 className={s.heading}>主题</h2>}
+      <SettingsHero
+        ok
+        icon={<Brush size={24} />}
+        eyebrow="Hermes Agent 视觉系统"
+        title="主题与显示偏好"
+        description="调整界面主题、密度和阅读字号，修改即时生效。"
+        badge={<span className={s.statusBadge} data-on="true">{activeSkin?.label ?? "主题"}</span>}
+      />
       <div className={s.appearancePanel}>
         <div className={s.appearanceHeader}>
           <div className={s.appearanceHeaderText}>
-            <h3>外观</h3>
-            <p>颜色、密度和对话阅读字号会立即应用到桌面端界面。</p>
+            <h3>界面外观</h3>
+            <p>选择界面主题与外观风格。</p>
           </div>
-          <span className={s.appearanceMeta}>颜色 · 密度 · 字号</span>
+          <span className={s.appearanceMeta}>实时生效 · {densityLabel}</span>
         </div>
 
         <AppearanceRow
           label="主题"
-          sub="选择桌面端皮肤。现代主题采用更克制的工作台配色和蓝色主操作。"
+          sub="选择桌面端皮肤，包含现代工作台、Dracula 与 Catppuccin Mocha 色板。"
           right={
             <ThemeSkinPicker
               value={config.theme}
               onChange={(theme) => update({ theme })}
             />
+          }
+        />
+        <AppearanceRow
+          label="界面缩放"
+          sub="整体放大或缩小界面（文字、间距、图标一起缩放），适配高分屏 / 4K 显示器。标准为 100%。"
+          right={
+            <RadioGroup value={config.scale} options={UI_SCALE_OPTIONS} onChange={(v) => update({ scale: v as ThemeConfig["scale"] })} />
           }
         />
         <AppearanceRow
@@ -297,6 +428,26 @@ const THEME_SKINS: Array<{
     soft: "#252526",
     text: "#d4d4d4",
     accent: "#0078d4",
+  },
+  {
+    value: "dracula",
+    label: "Dracula",
+    sub: "紫粉高对比",
+    bg: "#282a36",
+    pane: "#44475a",
+    soft: "#21222c",
+    text: "#f8f8f2",
+    accent: "#bd93f9",
+  },
+  {
+    value: "catppuccin-mocha",
+    label: "Catppuccin Mocha",
+    sub: "柔和蓝灰",
+    bg: "#1e1e2e",
+    pane: "#181825",
+    soft: "#313244",
+    text: "#cdd6f4",
+    accent: "#cba6f7",
   },
 ];
 
@@ -375,9 +526,9 @@ function ThemeSkinPicker({
 /* ── Approval mode ───────────────────────────────────────────────────── */
 
 const APPROVAL_MODE_DESC: Record<ApprovalMode, string> = {
-  default: "匹配危险模式的命令会要求你手动确认，适合大多数工作区的默认安全策略。",
-  smart: "使用智能审批辅助模型先判断风险，低风险自动放行，高风险自动拒绝，不确定时再提示你手动决定。",
-  yolo: "自动批准所有危险命令（等同后端 --yolo / HERMES_YOLO_MODE）。请仅在受信任或隔离的工作区使用。",
+  default: "遇到有风险的命令会请你手动确认，适合大多数情况的默认安全策略。",
+  smart: "先由辅助模型判断风险：低风险自动放行，高风险自动拒绝，不确定时再请你手动决定。",
+  yolo: "自动批准所有有风险的命令。请仅在受信任或隔离的环境中使用。",
 };
 
 function ApprovalModeSection() {
@@ -429,7 +580,7 @@ function ApprovalModeSection() {
   const applyMode = async (mode: ApprovalMode) => {
     if (busy) return;
     if (mode === "smart" && !smartAvailable) {
-      setError("当前 runtime 的配置 schema 尚未声明 smart 审批模式，请先更新 Hermes Agent runtime。");
+      setError("当前版本暂不支持智能审批，请先更新 Hermes。");
       return;
     }
     if (mode === "yolo") {
@@ -489,7 +640,7 @@ function ApprovalModeSection() {
         <ShieldCheck size={14} aria-hidden="true" />
         <div>
           <h3 id="approval-mode-title">危险命令审批模式</h3>
-          <p>统一管理危险 shell 命令的确认策略。新设置只影响后续命令，已经弹出的审批请求仍需单独处理。</p>
+          <p>设置有风险命令的确认方式。改动只对之后的命令生效，已弹出的确认请求需单独处理。</p>
         </div>
       </div>
 
@@ -519,7 +670,7 @@ function ApprovalModeSection() {
               </span>
               <span className={s.approvalModeOptionDesc}>{APPROVAL_MODE_DESC[mode]}</span>
               {mode === "smart" && !smartAvailable && (
-                <span className={s.approvalModeWarning}>当前 runtime 暂未声明 smart 选项，请先更新 runtime。</span>
+                <span className={s.approvalModeWarning}>当前版本暂不支持智能审批，请先更新 Hermes。</span>
               )}
               {mode === "yolo" && yoloPending && (
                 <span className={s.approvalModeWarning}>YOLO 启动开关已保存，重启桌面端后生效。</span>
@@ -530,11 +681,11 @@ function ApprovalModeSection() {
       </div>
 
       <div className={s.approvalModeFooter}>
-        <button type="button" className={s.btn} onClick={openSmartModelConfig}>
+        <Button type="button" variant="outline" onClick={openSmartModelConfig}>
           配置智能审批辅助模型
-        </button>
+        </Button>
         <span>
-          Smart 模式会使用 <code>auxiliary.approval</code> 槽位。未指定时由后端自动选择可用辅助模型。
+          智能审批会用一个辅助模型来判断；未单独指定时，自动选择可用的辅助模型。
         </span>
       </div>
 
@@ -562,11 +713,11 @@ function ApprovalModeSection() {
             </label>
             <div className={s.dangerDialogActions}>
               <Dialog.Close asChild>
-                <button className={s.btn}>取消</button>
+                <Button variant="outline">取消</Button>
               </Dialog.Close>
-              <button className={s.btnDanger} disabled={!acknowledged || busy} onClick={() => void confirmEnableYolo()}>
+              <Button variant="outline" tone="danger" disabled={!acknowledged || busy} onClick={() => void confirmEnableYolo()}>
                 确认开启
-              </button>
+              </Button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -637,7 +788,7 @@ export function ConfigSection({ showHeading = true }: SettingsSectionProps) {
       </p>
 
       <div style={{ marginBottom: 12 }}>
-        <input className={s.fieldInput} placeholder="搜索配置项…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        <Input placeholder="搜索配置项…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
       </div>
 
       {!isSearching && (
@@ -688,10 +839,10 @@ export function SkillsSection() {
   const toggleSkill = useToggleSkill();
   const [filter, setFilter] = useState("");
   const refreshButton = (
-    <button className={s.btn} type="button" onClick={() => void refetch()} disabled={isFetching}>
+    <Button variant="outline" type="button" onClick={() => void refetch()} disabled={isFetching}>
       <RefreshCw size={13} />
       {isFetching ? "刷新中" : "刷新"}
-    </button>
+    </Button>
   );
 
   if (isLoading) return <div className={s.desc}>加载中…</div>;
@@ -717,7 +868,7 @@ export function SkillsSection() {
       <div className={s.sectionTitleRow}>{refreshButton}</div>
       <p className={s.desc}>{skills.length} 个可用技能。启用/禁用后立即生效。</p>
       <div style={{ marginBottom: 16 }}>
-        <input className={s.fieldInput} placeholder="搜索技能…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <Input placeholder="搜索技能…" value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
       {skills.length === 0 && <div className={s.desc}>未发现已安装技能。后端当前返回 0 项，请检查 Hermes home 的 skills 同步。</div>}
       {skills.length > 0 && filtered.length === 0 && <div className={s.desc}>没有匹配的技能。</div>}
@@ -892,15 +1043,15 @@ export function CronSection() {
     <div>
       <p className={s.desc}>Agent 会按计划自动执行这些任务。</p>
       {feedback && (
-        <div className={s.cronFeedback} data-tone={feedback.tone} role={feedback.tone === "error" ? "alert" : "status"}>
+        <Alert className={s.cronFeedback} tone={feedback.tone} size="sm">
           {feedback.message}
-        </div>
+        </Alert>
       )}
       {isLoading && <div className={s.desc}>加载中…</div>}
       {isError && (
         <div className={s.providerDetail} style={{ marginTop: 12 }}>
           <div className={s.desc}>加载定时任务失败：{error instanceof Error ? error.message : String(error)}</div>
-          <button className={s.btn} onClick={() => void refetch()}>重试</button>
+          <Button variant="outline" onClick={() => void refetch()}>重试</Button>
         </div>
       )}
       {!isLoading && !isError && jobs && jobs.length === 0 && !showNew && <div className={s.desc}>暂无定时任务。</div>}
@@ -916,11 +1067,11 @@ export function CronSection() {
             </div>
             <div className={s.rowRight} style={{ gap: 6 }}>
               <span className={s.statusBadge} data-on={!paused}>{cronStateLabel(job)}</span>
-              <button className={s.btn} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, paused ? "resume" : "pause")}>
+              <Button variant="outline" disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, paused ? "resume" : "pause")}>
                 {paused ? "恢复" : "暂停"}
-              </button>
-              <button className={s.btn} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, "trigger")}>触发</button>
-              <button className={s.btnDanger} disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleDelete(job)}>删除</button>
+              </Button>
+              <Button variant="outline" disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, "trigger")}>触发</Button>
+              <Button variant="outline" tone="danger" disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleDelete(job)}>删除</Button>
             </div>
           </div>
         );
@@ -931,12 +1082,12 @@ export function CronSection() {
           <FieldRow label="Cron 表达式" value={newSchedule} onChange={setNewSchedule} placeholder="0 9 * * *" />
           <FieldRow label="Prompt" value={newPrompt} onChange={setNewPrompt} placeholder="每天执行的任务描述…" />
           <div className={s.providerActions}>
-            <button className={s.btnPrimary} onClick={handleCreate} disabled={createJob.isPending}>创建</button>
-            <button className={s.btn} onClick={() => setShowNew(false)} disabled={createJob.isPending}>取消</button>
+            <Button variant="solid" tone="accent" onClick={handleCreate} disabled={createJob.isPending}>创建</Button>
+            <Button variant="outline" onClick={() => setShowNew(false)} disabled={createJob.isPending}>取消</Button>
           </div>
         </div>
       ) : (
-        <button className={s.btnPrimary} style={{ marginTop: 12 }} onClick={() => setShowNew(true)}>＋ 新建定时任务</button>
+        <Button variant="solid" tone="accent" style={{ marginTop: 12 }} onClick={() => setShowNew(true)}>＋ 新建定时任务</Button>
       )}
     </div>
   );
@@ -1011,9 +1162,9 @@ export function LogsSection() {
           <span>自动刷新</span>
           {autoRefresh && <span className={s.liveDot} />}
         </label>
-        <button className={s.btn} onClick={() => refetch()} disabled={isLoading}>
+        <Button variant="outline" onClick={() => void refetch()} disabled={isLoading}>
           {isLoading ? "加载中…" : "刷新"}
-        </button>
+        </Button>
       </div>
 
       <div className={s.logBlock} ref={scrollRef} style={{ maxHeight: "calc(100vh - 340px)", minHeight: 300 }}>
@@ -1077,6 +1228,10 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const source = info?.source;
   const kernelRuntimeTag = kernelRuntimeTagLabel(info?.current);
   const rendererRuntime = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
+  const isRemote = rendererRuntime?.connectionMode === "remote";
+  const isLocalConnection = rendererRuntime?.connectionMode === "local";
+  const isAttachedConnection = rendererRuntime?.connectionMode === "remote" || rendererRuntime?.connectionMode === "local";
+  const attachedConnectionLabel = isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI";
   const hermesHomePath = status?.hermes_home;
   const runtimeRootPath = info?.runtimeRoot;
   const runtimeVersionPath = info?.current?.path;
@@ -1128,66 +1283,74 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   return (
     <div>
       {showHeading && <h2 className={s.heading}>内核</h2>}
-      <div className={s.aboutHero} data-ok={isolationOk}>
-        <div className={s.aboutHeroMark}>{isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}</div>
-        <div className={s.aboutHeroBody}>
-          <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版内核</div>
-          <h3>{isolationOk ? (process?.ownsProcess ? "独立 runtime 内核正在运行" : "已连接到 managed runtime dashboard") : "正在读取内核隔离状态"}</h3>
-          <p>
-            {isolationOk && process?.ownsProcess
-              ? "当前 Dashboard 由桌面端托管的 managed runtime 子进程提供，内核、gateway runtime 与锁文件都收束在桌面 runtime 目录下。"
+      <SettingsHero
+        ok={isAttachedConnection || isolationOk}
+        icon={isRemote ? <Globe2 size={24} /> : isLocalConnection ? <Cable size={24} /> : isolationOk ? <ShieldCheck size={24} /> : <Bug size={24} />}
+        eyebrow="Hermes Agent 中文社区桌面版内核"
+        title={isAttachedConnection ? `已连接${attachedConnectionLabel}` : isolationOk ? (process?.ownsProcess ? "本机内核正在运行" : "已连接到本机内核") : "正在读取内核状态"}
+        description={
+          isAttachedConnection
+              ? `桌面端当前连接到${isRemote ? "远程后端" : "本机已运行的 Hermes"}（${rendererRuntime?.dashboardApiBaseUrl ?? rendererRuntime?.apiBaseUrl ?? "目标地址"}），会话与配置都来自那里。本机内核未在使用，可在 设置 → 连接 切回本机内核。`
+              : isolationOk && process?.ownsProcess
+              ? "当前由桌面端自动管理的本机内核提供服务，相关数据都收束在桌面端自己的目录下。"
               : isolationOk
-                ? "当前固定端口上已有兼容 Dashboard，桌面端已连接它；runtime 指针和可执行路径仍位于桌面 managed runtime 目录内。"
-              : "此处用于确认桌面端是否真的使用独立 hermes-agent-cn runtime，而不是复用全局 PATH 或外部 dashboard。"}
-          </p>
-          {kernelRuntimeTag && (
-            <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
-              {kernelRuntimeTag}
-            </code>
-          )}
-        </div>
-        <span className={s.statusBadge} data-on={isolationOk}>
-          {info ? runtimeModeLabel(info.mode) : "读取中"}
-        </span>
-      </div>
+                ? "本机已有兼容的 Hermes 在运行，桌面端已连接它；内核文件仍位于桌面端自己的目录内。"
+              : "用于确认桌面端使用的是自带的独立内核，而不是系统里的其它 Hermes。"
+        }
+        badge={(
+          <span className={s.statusBadge} data-on={isAttachedConnection || isolationOk}>
+            {isRemote ? "远程" : isLocalConnection ? "本地" : info ? runtimeModeLabel(info.mode) : "读取中"}
+          </span>
+        )}
+      >
+        {!isAttachedConnection && kernelRuntimeTag && (
+          <code className={s.aboutRuntimeTag} title="当前安装的 runtime 发行版本（对应 Hermes-CN-Core release tag）">
+            {kernelRuntimeTag}
+          </code>
+        )}
+      </SettingsHero>
+
+      <ManagedRuntimePanel />
 
       <div className={s.debugActionBar}>
-        <button className={s.btn} type="button" onClick={handleRefreshAll} disabled={refreshing}>
+        <Button variant="outline" type="button" onClick={handleRefreshAll} disabled={refreshing}>
           <RefreshCw size={13} />
           {refreshing ? "刷新中" : "刷新状态"}
-        </button>
-        <CopyButton className={s.btn} text={() => JSON.stringify(diagnostics, null, 2)}>
+        </Button>
+        <CopyButton variant="outline" size="md" text={() => JSON.stringify(diagnostics, null, 2)}>
           <Copy size={13} />
           复制诊断 JSON
         </CopyButton>
-        <button
-          className={s.btn}
+        <Button
+          variant="outline"
           type="button"
           onClick={() => handleOpenPath(hermesHomePath, " HERMES_HOME", setAboutMessage)}
-          disabled={!hermesHomePath || !window.hermesDesktop?.openWorkspacePath}
+          disabled={isRemote || !hermesHomePath || !window.hermesDesktop?.openWorkspacePath}
+          title={isRemote ? "远端 Hermes Home 不属于本机文件系统" : undefined}
         >
           <FolderOpen size={13} />
           打开 HERMES_HOME
-        </button>
-        <button
-          className={s.btn}
+        </Button>
+        <Button
+          variant="outline"
           type="button"
           onClick={() => handleOpenPath(runtimeRootPath, " runtime 根目录")}
           disabled={!runtimeRootPath || !window.hermesDesktop?.openWorkspacePath}
         >
           <FolderOpen size={13} />
           打开 runtime
-        </button>
-        <button
-          className={s.btnPrimary}
+        </Button>
+        <Button
+          variant="solid"
+          tone="accent"
           onClick={() => void gatewayRestart.restart()}
-          disabled={gatewayRestart.locked}
-          title={gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
+          disabled={gatewayRestart.locked || isAttachedConnection}
+          title={isAttachedConnection ? "当前连接模式下由目标后端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
           aria-busy={gatewayRestart.busy}
         >
           <RotateCcw size={13} />
           {gatewayRestart.phase === "idle" ? "重启 Gateway" : gatewayRestartButtonLabel(gatewayRestart.phase)}
-        </button>
+        </Button>
       </div>
       {aboutMessage && <div className={s.runtimeMessage} data-tone="error">{aboutMessage}</div>}
       {gatewayRestart.message && (
@@ -1253,49 +1416,53 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                 </div>
               )}
               <div className={s.providerActions}>
-                <button
-                  className={s.btn}
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => handleOpenPath(runtimeVersionPath, " runtime 版本目录")}
                   disabled={!runtimeVersionPath || !window.hermesDesktop?.openWorkspacePath}
                 >
                   <FolderOpen size={13} />
                   打开版本目录
-                </button>
-                <button
-                  className={s.btn}
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => handleOpenPath(currentRecordPath, " current.json")}
                   disabled={!currentRecordPath || !window.hermesDesktop?.openWorkspacePath}
                 >
                   <FolderOpen size={13} />
                   打开 current.json
-                </button>
-                <button
-                  className={s.btn}
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={handleCheckRuntime}
-                  disabled={!info?.updatesConfigured || checking}
+                  disabled={!info?.updatesConfigured || checking || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   <RefreshCw size={13} />
                   {checking ? "检查中" : "检查更新"}
-                </button>
-                <button
-                  className={s.btnPrimary}
+                </Button>
+                <Button
+                  variant="solid"
+                  tone="accent"
                   type="button"
                   onClick={handleInstallRuntime}
-                  disabled={!canInstall || installing}
+                  disabled={!canInstall || installing || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   {installing ? "安装中…" : "安装更新"}
-                </button>
-                <button
-                  className={s.btn}
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={handleRollbackRuntime}
-                  disabled={!info?.current?.previousRuntimeVersion || rollingBack}
+                  disabled={!info?.current?.previousRuntimeVersion || rollingBack || isAttachedConnection}
+                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
                   {rollingBack ? "回滚中…" : "回滚 Runtime"}
-                </button>
+                </Button>
               </div>
               {!info?.updatesConfigured && (
                 <p className={s.desc}>
@@ -1391,19 +1558,19 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     void openExternalUrl(desktopUpdateResult?.downloadUrl ?? DESKTOP_UPDATE_DOWNLOAD_URL);
   };
 
+  // Developer mode ships enabled; the shortcut to open devtools follows the
+  // platform's browser convention (registered in web/src/lib/tauri-bridge.ts).
+  const devtoolsShortcut =
+    detectHostOS() === "macos" ? "F12 或 ⌘ + ⌥ + I" : "F12 或 Ctrl + Shift + I";
+
   return (
     <div>
       {showHeading && <h2 className={s.heading}>关于</h2>}
-      <div className={s.aboutHero}>
-        <div className={s.aboutHeroMark}><Heart size={24} /></div>
-        <div className={s.aboutHeroBody}>
-          <div className={s.aboutEyebrow}>Hermes Agent 中文社区桌面版</div>
-          <h3>联系与致谢</h3>
-          <p>
-            致谢，联系方式及项目链接。
-          </p>
-        </div>
-      </div>
+      <SettingsHero
+        icon={<Heart size={24} />}
+        eyebrow="Hermes Agent 中文社区桌面版"
+        title="联系与致谢"
+      />
 
       <div className={s.aboutDebugGrid}>
         <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
@@ -1431,26 +1598,34 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             {formatDesktopUpdateMessage(desktopUpdateResult, desktopUpdateChecking, hasDesktopUpdateBridge)}
           </div>
           <div className={s.providerActions}>
-            <button
-              className={s.btn}
+            <Button
+              variant="outline"
               type="button"
               onClick={() => void handleCheckDesktopUpdate()}
               disabled={!hasDesktopUpdateBridge || desktopUpdateChecking}
             >
               <RefreshCw size={13} />
               {desktopUpdateChecking ? "检查中" : "检查更新"}
-            </button>
-            <button className={s.btnPrimary} type="button" onClick={handleOpenDesktopDownload}>
+            </Button>
+            <Button variant="solid" tone="accent" type="button" onClick={handleOpenDesktopDownload}>
               <ExternalLinkIcon size={13} />
               去官网下载
-            </button>
+            </Button>
+          </div>
+        </DebugCard>
+
+        <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools">
+          <div className={s.runtimeGrid}>
+            <RuntimeField label="开发者模式" value="已默认开启" />
+            <RuntimeField label="打开快捷键" value={devtoolsShortcut} mono />
           </div>
           <p className={s.desc}>
-            这里提醒的是桌面壳版本。下载新版安装包后，请按系统提示覆盖安装；应用不会自动下载安装包或替换正在运行的程序。
+            本桌面端默认开启开发者模式，按上述快捷键即可打开 / 关闭浏览器开发者工具（DevTools），
+            用于查看控制台日志、网络请求等，方便排查问题或向社区反馈。再次按下快捷键可以关闭。
           </p>
         </DebugCard>
 
-        <DebugCard icon={<Info size={15} />} title="致谢" sub="感谢支持和贡献" wide>
+        <DebugCard icon={<Heart size={15} />} title="致谢与许可" sub="贡献者、支持方与字体署名">
           <div className={s.thanksText}>
             <p>
               感谢 Hermes Agent 官方
@@ -1463,6 +1638,13 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               的代码贡献，及
               <ExternalTextLink href="https://www.compshare.cn/">优云智算</ExternalTextLink>
               的支持。
+            </p>
+            <p>
+              界面内置并使用华为 HarmonyOS Sans（SC，© 2021 Huawei Device Co., Ltd.），依据
+              <ExternalTextLink href="https://github.com/ajacocks/harmonyos-sans-font/blob/main/LICENSE">
+                《HarmonyOS Sans Fonts License Agreement》
+              </ExternalTextLink>
+              免费用于商业用途，以未修改的原始文件随应用分发。
             </p>
           </div>
         </DebugCard>
@@ -1486,14 +1668,20 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
                 </div>
               </ContactField>
             </div>
-            <div className={s.wechatQrPanel}>
-              <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
-              <p>这是 Hermes Agent 中文社区微信群入口，微信扫码即可加入。</p>
+            <div className={s.contactQrGroup}>
+              <div className={s.wechatQrPanel}>
+                <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
+                <p>微信扫码即可加入 Hermes Agent 中文社区微信群</p>
+              </div>
+              <div className={s.wechatQrPanel}>
+                <img src={feishuCommunityQr} alt="Hermes Agent 中文社区飞书群二维码" />
+                <p>飞书扫码即可加入 Hermes Agent 中文社区飞书群</p>
+              </div>
             </div>
           </div>
         </DebugCard>
 
-        <DebugCard icon={<GitFork size={15} />} title="项目链接" sub="桌面端与内核项目" wide>
+        <DebugCard icon={<GitFork size={15} />} title="项目链接" sub="桌面端与内核仓库" wide>
           <div className={s.runtimeGrid}>
             <ExternalLinkField
               label="桌面端"
@@ -1508,20 +1696,26 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               wide
             />
           </div>
-          <p className={s.desc}>
-            桌面端会继续围绕中文社区的使用习惯做体验优化，也欢迎通过
-            <ExternalTextLink href="https://github.com/Eynzof/hermes-agent-cn-desktop/issues">仓库反馈问题和建议</ExternalTextLink>。
-          </p>
-        </DebugCard>
-
-        <DebugCard icon={<Globe2 size={15} />} title="中文社区" sub="本地化体验和使用文档" wide>
-          <p className={s.desc}>
-            中文社区桌面版会把常用配置、消息平台接入、运行状态和排障入口收进一个桌面工作台，尽量减少命令行门槛。
-            后续社区入口和使用文档会同步到
-            <ExternalTextLink href="https://hermesagent.org.cn">中文社区官网</ExternalTextLink>。
-          </p>
         </DebugCard>
       </div>
+
+      <footer className={s.wandermindsFooter}>
+        <a
+          className={s.wandermindsCredit}
+          href="https://wanderminds.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(event) => {
+            event.preventDefault();
+            void openExternalUrl("https://wanderminds.ai");
+          }}
+          title="Wanderminds · wanderminds.ai"
+        >
+          <span className={s.wandermindsCreditLabel}>Designed by</span>
+          <WandermindsMark className={s.wandermindsCreditLogo} />
+        </a>
+        <p className={s.wandermindsCopyright}>© 2026 Wanderminds · All rights reserved</p>
+      </footer>
     </div>
   );
 }
@@ -1640,7 +1834,9 @@ function formatDesktopUpdateMessage(
   if (!result) return "点击“检查更新”可手动读取官网最新版本。";
   if (!result.ok) return result.error ?? "桌面端更新检查失败。";
   if (result.updateAvailable) {
-    return `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载新版安装包覆盖安装。`;
+    return runtime.isPortable()
+      ? `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载免安装版压缩包，退出应用后覆盖解压（data 目录会保留）。`
+      : `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载新版安装包覆盖安装。`;
   }
   return `当前已是最新版本 ${versionLabel(result.currentVersion)}。`;
 }
@@ -1752,7 +1948,7 @@ function ConfigFieldRow({ fieldKey, field, value, onSave, showCategory }: {
       <Row
         label={label}
         sub={showCategory ? `[${CATEGORY_CN[field.category] ?? field.category}] ${fieldKey}` : fieldKey}
-        right={<select className={s.select} value={String(value ?? "")} onChange={(e) => onSave(e.target.value)}>{field.options.map((o) => <option key={o} value={o}>{translateConfigOption(fieldKey, o)}</option>)}</select>}
+        right={<Select value={String(value ?? "")} onChange={(e) => onSave(e.target.value)}>{field.options.map((o) => <option key={o} value={o}>{translateConfigOption(fieldKey, o)}</option>)}</Select>}
       />
     );
   }
@@ -1773,14 +1969,14 @@ function ConfigFieldRow({ fieldKey, field, value, onSave, showCategory }: {
       sub={showCategory ? `[${CATEGORY_CN[field.category] ?? field.category}] ${fieldKey}` : fieldKey}
       right={editing ? (
         <div style={{ display: "flex", gap: 6 }}>
-          <input className={s.input} data-mono value={localVal} onChange={(e) => setLocalVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSave()} autoFocus style={{ width: 200 }} />
-          <button className={s.btnPrimary} onClick={handleSave}>保存</button>
-          <button className={s.btn} onClick={() => setEditing(false)}>取消</button>
+          <Input mono value={localVal} onChange={(e) => setLocalVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSave()} autoFocus style={{ width: 200 }} fullWidth={false} />
+          <Button variant="solid" tone="accent" onClick={handleSave}>保存</Button>
+          <Button variant="outline" onClick={() => setEditing(false)}>取消</Button>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <span style={{ fontFamily: "var(--h-font-mono)", fontSize: 12, color: "var(--h-text-2)" }}>{value != null ? String(value) : "—"}</span>
-          <button className={s.btn} onClick={() => { setLocalVal(String(value ?? "")); setEditing(true); }}>编辑</button>
+          <Button variant="outline" onClick={() => { setLocalVal(String(value ?? "")); setEditing(true); }}>编辑</Button>
         </div>
       )}
     />
@@ -1791,10 +1987,9 @@ function FieldRow({ label, value, onChange, placeholder }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string;
 }) {
   return (
-    <div className={s.fieldRow}>
-      <div className={s.fieldLabel}>{label}</div>
-      <input className={s.fieldInput} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-    </div>
+    <Field label={label} className={s.fieldRow}>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+    </Field>
   );
 }
 

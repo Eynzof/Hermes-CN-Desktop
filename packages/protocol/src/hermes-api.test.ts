@@ -1,5 +1,205 @@
 import { describe, expect, it } from "vitest";
-import { AnalyticsResponse, CronJob, CronJobsResponse, CronRunDetail, CronRunsResponse } from "./hermes-api";
+import {
+  ActiveProfileResponse,
+  AnalyticsResponse,
+  AudioSpeakResponse,
+  AudioTranscriptionResponse,
+  CronJob,
+  CronJobsResponse,
+  CronRunDetail,
+  CronRunsResponse,
+  ElevenLabsVoicesResponse,
+  FsListResponse,
+  MoaConfigResponse,
+  ProviderModelsListResult,
+  ProfileCreateResponse,
+  ProfileSummary,
+  SearchResponse,
+  SessionsResponse,
+  SkillContentResponse,
+  SkillsResponse,
+  SkillsHubSearchResponse,
+  SessionCompressResult,
+  SessionSummary,
+  StatusResponse,
+} from "./hermes-api";
+
+
+describe("Audio API schemas", () => {
+  it("parses desktop transcription responses", () => {
+    const parsed = AudioTranscriptionResponse.parse({
+      ok: true,
+      transcript: "你好 Hermes",
+      provider: "openai",
+    });
+
+    expect(parsed.transcript).toBe("你好 Hermes");
+    expect(parsed.provider).toBe("openai");
+  });
+
+  it("parses desktop speech responses with nullable provider", () => {
+    const parsed = AudioSpeakResponse.parse({
+      ok: true,
+      data_url: "data:audio/mpeg;base64,AAAA",
+      mime_type: "audio/mpeg",
+      provider: null,
+    });
+
+    expect(parsed.data_url).toContain("data:audio/mpeg");
+    expect(parsed.provider).toBeNull();
+  });
+
+  it("parses ElevenLabs voice list responses", () => {
+    const parsed = ElevenLabsVoicesResponse.parse({
+      available: true,
+      voices: [
+        {
+          voice_id: "voice-1",
+          name: "Rachel",
+          label: "Rachel (premade)",
+        },
+      ],
+    });
+
+    expect(parsed.available).toBe(true);
+    expect(parsed.voices[0]?.voice_id).toBe("voice-1");
+  });
+});
+
+describe("Skills API schemas", () => {
+  it("preserves the canonical Core provenance fields", () => {
+    const [bundled, agent] = SkillsResponse.parse([
+      {
+        name: "apple-reminders",
+        description: "Manage reminders.",
+        category: "apple",
+        enabled: true,
+        provenance: "bundled",
+        usage: 3,
+      },
+      {
+        name: "memory-eval-harness",
+        description: "Evaluate memory providers.",
+        category: "devops",
+        enabled: true,
+        provenance: "agent",
+        usage: 1,
+      },
+    ]);
+
+    expect(bundled?.provenance).toBe("bundled");
+    expect(bundled?.usage).toBe(3);
+    expect(agent?.provenance).toBe("agent");
+  });
+
+  it("parses skill content returned by the connected Core", () => {
+    const parsed = SkillContentResponse.parse({
+      name: "memory-eval-harness",
+      content: "# Memory Eval Harness\n",
+      path: "/remote/.hermes/skills/devops/memory-eval-harness/SKILL.md",
+    });
+
+    expect(parsed.path).toContain("memory-eval-harness/SKILL.md");
+    expect(parsed.content).toContain("Memory Eval Harness");
+  });
+});
+
+describe("Profile API schemas", () => {
+  it("parses the current upstream {active, current} active-profile shape", () => {
+    const parsed = ActiveProfileResponse.parse({ active: "work", current: "default" });
+    expect(parsed).toEqual({ active: "work", current: "default" });
+  });
+
+  it("normalizes the legacy CN-fork {name} shape to {active, current}", () => {
+    // 旧 P-008 runtime 只返回 {name}；新代码统一读 active/current，不能因缺字段而炸。
+    const parsed = ActiveProfileResponse.parse({ name: "sandbox" });
+    expect(parsed).toEqual({ active: "sandbox", current: "sandbox" });
+  });
+
+  it("falls back to default when the active endpoint returns nothing useful", () => {
+    const parsed = ActiveProfileResponse.parse({});
+    expect(parsed).toEqual({ active: "default", current: "default" });
+  });
+
+  it("backfills current from active when only active is present", () => {
+    const parsed = ActiveProfileResponse.parse({ active: "research" });
+    expect(parsed).toEqual({ active: "research", current: "research" });
+  });
+
+  it("defaults the new ProfileSummary fields for an older runtime payload", () => {
+    // 老 runtime 只发基础字段；新字段（gateway_running/description/distribution_*/has_alias）
+    // 必须有兜底默认值，否则整张档案列表解析失败。
+    const parsed = ProfileSummary.parse({
+      name: "default",
+      path: "/home/u/.hermes",
+      is_default: true,
+      model: null,
+      provider: null,
+      has_env: false,
+      skill_count: 0,
+    });
+    expect(parsed.gateway_running).toBe(false);
+    expect(parsed.description).toBe("");
+    expect(parsed.description_auto).toBe(false);
+    expect(parsed.distribution_name).toBeNull();
+    expect(parsed.has_alias).toBe(false);
+  });
+
+  it("defaults hub_installs to [] when the create response omits it", () => {
+    const parsed = ProfileCreateResponse.parse({ ok: true, name: "work", path: "/x" });
+    expect(parsed.hub_installs).toEqual([]);
+  });
+
+  it("parses a create response with background hub installs (pid may be null)", () => {
+    const parsed = ProfileCreateResponse.parse({
+      ok: true,
+      name: "work",
+      path: "/x",
+      model_set: true,
+      mcp_written: 2,
+      skills_disabled: 3,
+      hub_installs: [
+        { identifier: "owner/linear", pid: 4242 },
+        { identifier: "owner/broken", pid: null },
+      ],
+    });
+    expect(parsed.mcp_written).toBe(2);
+    expect(parsed.hub_installs).toHaveLength(2);
+    expect(parsed.hub_installs[1]?.pid).toBeNull();
+  });
+
+  it("parses a skills-hub search response and defaults its optional maps", () => {
+    const parsed = SkillsHubSearchResponse.parse({
+      results: [{ name: "Linear", source: "hermes-index", identifier: "owner/linear" }],
+    });
+    expect(parsed.results[0]?.identifier).toBe("owner/linear");
+    expect(parsed.results[0]?.description).toBe("");
+    expect(parsed.source_counts).toEqual({});
+    expect(parsed.timed_out).toEqual([]);
+  });
+
+  it("keeps the full ProfileSummary fields from a current runtime payload", () => {
+    const parsed = ProfileSummary.parse({
+      name: "coder",
+      path: "/home/u/.hermes/profiles/coder",
+      is_default: false,
+      model: "claude-opus-4-8",
+      provider: "anthropic",
+      has_env: true,
+      skill_count: 12,
+      gateway_running: true,
+      description: "全栈开发档案",
+      description_auto: true,
+      distribution_name: "coder-pro",
+      distribution_version: "1.0.0",
+      distribution_source: "https://example.com/coder-pro",
+      has_alias: true,
+    });
+    expect(parsed.gateway_running).toBe(true);
+    expect(parsed.description_auto).toBe(true);
+    expect(parsed.distribution_name).toBe("coder-pro");
+  });
+});
 
 describe("CronJobsResponse", () => {
   it("parses current dashboard cron jobs with structured schedules", () => {
@@ -207,5 +407,280 @@ describe("AnalyticsResponse", () => {
         },
       }),
     ).toThrow();
+  });
+});
+
+describe("SessionCompressResult", () => {
+  it("accepts current backend structured manual compression summaries", () => {
+    const parsed = SessionCompressResult.parse({
+      status: "compressed",
+      removed: 0,
+      before_messages: 0,
+      after_messages: 0,
+      before_tokens: 0,
+      after_tokens: 0,
+      summary: {
+        noop: true,
+        headline: "No changes from compression: 0 messages",
+        token_line: "Approx request size: ~0 tokens (unchanged)",
+        note: null,
+      },
+      usage: { total: 0, compressions: 0 },
+    });
+
+    expect(parsed.summary).toMatchObject({ noop: true });
+  });
+
+  it("keeps accepting older string summaries", () => {
+    const parsed = SessionCompressResult.parse({
+      status: "compressed",
+      summary: "Compressed: 20 → 8 messages",
+    });
+
+    expect(parsed.summary).toBe("Compressed: 20 → 8 messages");
+  });
+});
+
+describe("SessionSummary cwd (#216)", () => {
+  const baseSession = {
+    id: "20260613_000000_abcd",
+    model: "claude-opus-4-8",
+    title: "Demo",
+    started_at: 1,
+    ended_at: null,
+    message_count: 2,
+    input_tokens: 10,
+    output_tokens: 20,
+    estimated_cost_usd: null,
+  };
+
+  it("carries the backend per-session cwd", () => {
+    const parsed = SessionSummary.parse({ ...baseSession, cwd: "/Users/claw/project-a" });
+    expect(parsed.cwd).toBe("/Users/claw/project-a");
+  });
+
+  it("accepts a null cwd for sessions with no explicit workspace", () => {
+    const parsed = SessionSummary.parse({ ...baseSession, cwd: null });
+    expect(parsed.cwd).toBeNull();
+  });
+
+  it("treats cwd as optional for older payloads", () => {
+    const parsed = SessionSummary.parse(baseSession);
+    expect(parsed.cwd).toBeUndefined();
+  });
+
+  it("preserves cwd through the /api/sessions list response", () => {
+    const parsed = SessionsResponse.parse({
+      sessions: [{ ...baseSession, cwd: "/Users/claw/project-b" }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
+    expect(parsed.sessions[0]?.cwd).toBe("/Users/claw/project-b");
+  });
+});
+
+describe("OAuth schemas", () => {
+  it("accepts loopback providers and start responses", async () => {
+    const { OAuthProvider, OAuthStartResponse } = await import("./hermes-api");
+    const provider = OAuthProvider.parse({
+      id: "xai-oauth",
+      name: "xAI Grok OAuth",
+      flow: "loopback",
+      status: { logged_in: false, source: null },
+    });
+    expect(provider.flow).toBe("loopback");
+    expect(provider.status.source).toBeNull();
+
+    const start = OAuthStartResponse.parse({
+      session_id: "sid",
+      flow: "loopback",
+      auth_url: "https://example.test/authorize",
+      expires_in: 900,
+    });
+    expect(start.flow).toBe("loopback");
+  });
+});
+
+describe("FsListResponse schema", () => {
+  it("parses the upstream /api/fs/list shape (isDirectory, no path/parent/home)", () => {
+    const parsed = FsListResponse.parse({
+      entries: [
+        { name: "src", path: "/proj/src", isDirectory: true },
+        { name: "README.md", path: "/proj/README.md", isDirectory: false },
+      ],
+    });
+    // Normalized to the canonical `is_dir` regardless of wire field name.
+    expect(parsed.entries[0].is_dir).toBe(true);
+    expect(parsed.entries[1].is_dir).toBe(false);
+    expect(parsed.path).toBeUndefined();
+    expect(parsed.parent).toBeUndefined();
+    expect(parsed.home).toBeUndefined();
+  });
+
+  it("surfaces upstream's HTTP-200 soft error", () => {
+    const parsed = FsListResponse.parse({ entries: [], error: "EACCES" });
+    expect(parsed.error).toBe("EACCES");
+    expect(parsed.entries).toEqual([]);
+  });
+
+  it("still parses the legacy fork shape (is_dir + path/parent/home)", () => {
+    const parsed = FsListResponse.parse({
+      path: "/proj",
+      parent: "/",
+      home: "/home/u",
+      entries: [{ name: "src", path: "/proj/src", is_dir: true }],
+    });
+    expect(parsed.entries[0].is_dir).toBe(true);
+    expect(parsed.parent).toBe("/");
+  });
+});
+
+describe("SearchResponse schema", () => {
+  it("tolerates null role/model/source/started from the session-id-match branch", () => {
+    const parsed = SearchResponse.parse({
+      results: [
+        {
+          session_id: "s1",
+          snippet: "Session ID: s1",
+          role: null,
+          source: null,
+          model: null,
+          session_started: null,
+        },
+      ],
+    });
+    // Null wire values normalize to undefined (Zod v3 `.optional()` would throw on null).
+    expect(parsed.results[0].role).toBeUndefined();
+    expect(parsed.results[0].model).toBeUndefined();
+    expect(parsed.results[0].source).toBeUndefined();
+    expect(parsed.results[0].session_started).toBeUndefined();
+    expect(parsed.results[0].session_id).toBe("s1");
+  });
+
+  it("still accepts populated fields", () => {
+    const parsed = SearchResponse.parse({
+      results: [{ session_id: "s2", snippet: "hi", role: "user", model: "gpt", session_started: 123 }],
+    });
+    expect(parsed.results[0].model).toBe("gpt");
+    expect(parsed.results[0].session_started).toBe(123);
+  });
+});
+
+describe("StatusResponse schema", () => {
+  it("parses an auth-gated /api/status that omits gateway_pid/gateway_health_url", () => {
+    const parsed = StatusResponse.parse({
+      version: "0.5.4",
+      release_date: "2026-06-28",
+      gateway_running: false,
+      gateway_exit_reason: null,
+      gateway_updated_at: null,
+      active_sessions: 0,
+    });
+    expect(parsed.gateway_pid).toBeUndefined();
+    expect(parsed.gateway_health_url).toBeUndefined();
+    expect(parsed.gateway_running).toBe(false);
+  });
+
+  it("parses a loopback /api/status that includes them", () => {
+    const parsed = StatusResponse.parse({
+      version: "0.5.4",
+      release_date: "2026-06-28",
+      gateway_running: true,
+      gateway_pid: 4321,
+      gateway_health_url: "http://127.0.0.1:9120/health",
+      gateway_exit_reason: null,
+      gateway_updated_at: null,
+      active_sessions: 2,
+    });
+    expect(parsed.gateway_pid).toBe(4321);
+    expect(parsed.gateway_health_url).toContain("9120");
+  });
+});
+
+describe("ProviderModelsListResult schema", () => {
+  it("parses a successful provider.models result", () => {
+    const parsed = ProviderModelsListResult.parse({
+      ok: true,
+      models: ["qwen2.5-coder:7b", "llama3"],
+      model_count: 2,
+      status_code: 200,
+      error: null,
+      error_kind: null,
+    });
+    expect(parsed.ok).toBe(true);
+    expect(parsed.models).toEqual(["qwen2.5-coder:7b", "llama3"]);
+    expect(parsed.model_count).toBe(2);
+  });
+
+  it("defaults optional fields so a bare {ok} envelope still parses", () => {
+    const parsed = ProviderModelsListResult.parse({ ok: false });
+    expect(parsed.models).toEqual([]);
+    expect(parsed.model_count).toBe(0);
+    expect(parsed.status_code).toBeNull();
+    expect(parsed.error).toBeNull();
+    expect(parsed.error_kind).toBeNull();
+  });
+
+  it("carries an auth failure as data", () => {
+    const parsed = ProviderModelsListResult.parse({
+      ok: false,
+      models: [],
+      status_code: 401,
+      error: "API key rejected (HTTP 401)",
+      error_kind: "auth",
+    });
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error_kind).toBe("auth");
+  });
+});
+
+describe("MoaConfigResponse schema", () => {
+  // 后端 normalize_moa_config 的真实返回形状：命名 presets + 顶层 flattened
+  // 兼容视图。UI 只编辑 presets 视图，其余靠 passthrough 原样保留。
+  const normalized = {
+    default_preset: "default",
+    active_preset: "",
+    presets: {
+      default: {
+        enabled: true,
+        reference_models: [
+          { provider: "openai-codex", model: "gpt-5.5" },
+          { provider: "openrouter", model: "deepseek/deepseek-v4-pro" },
+        ],
+        aggregator: { provider: "openrouter", model: "anthropic/claude-opus-4.8" },
+        reference_temperature: null,
+        aggregator_temperature: null,
+        max_tokens: 4096,
+        reference_max_tokens: 600,
+        fanout: "per_iteration",
+      },
+    },
+    reference_models: [{ provider: "openai-codex", model: "gpt-5.5" }],
+    aggregator: { provider: "openrouter", model: "anthropic/claude-opus-4.8" },
+    max_tokens: 4096,
+    enabled: true,
+  };
+
+  it("parses the backend-normalized shape and keeps UI-unedited fields via passthrough", () => {
+    const parsed = MoaConfigResponse.parse(normalized);
+    expect(parsed.default_preset).toBe("default");
+    expect(parsed.presets.default.reference_models).toHaveLength(2);
+    expect(parsed.presets.default.aggregator.model).toBe("anthropic/claude-opus-4.8");
+    // passthrough：编辑器不渲染这些字段，但读取/回写时不能弄丢。
+    expect(parsed.presets.default.reference_max_tokens).toBe(600);
+    expect(parsed.presets.default.fanout).toBe("per_iteration");
+    expect(parsed.reference_models).toEqual(normalized.reference_models);
+  });
+
+  it("defaults a missing active_preset to empty string", () => {
+    const { active_preset: _omit, ...withoutActive } = normalized;
+    const parsed = MoaConfigResponse.parse(withoutActive);
+    expect(parsed.active_preset).toBe("");
+  });
+
+  it("parses the PUT echo carrying an ok flag", () => {
+    const parsed = MoaConfigResponse.parse({ ok: true, ...normalized });
+    expect(parsed.presets.default.max_tokens).toBe(4096);
   });
 });

@@ -3,7 +3,7 @@
 > **项目**：Hermes Agent CN 桌面端（Tauri v2 重写版）
 > **仓库**：`hermes-agent-cn-desktop`
 > **后端**：`hermes-agent-cn` Dashboard（桌面端 managed runtime 默认端口 9120）
-> **最后更新**：2026-05-16
+> **最后更新**：2026-06-13
 
 桌面端从 Electron（v1）切到 Tauri（v2）的产品文档集合。本文档（README）作为索引。
 
@@ -20,6 +20,7 @@
 | 02 | [信息架构](./02-information-architecture.md) | v0.1 草稿 | 完整路由、键位、深链接预留 |
 | 03 | [功能详细规格](./03-feature-specs.md) | v0.1 草稿 | 每页 spec：按钮、空状态、错误态、loading 态 |
 | 04 | [后端契约](./04-backend-contract.md) | v0.1 草稿 | 原型假设的 API vs Dashboard 实际接口 |
+| 05 | [上游桌面端功能差距](./05-feature-parity-gap.md) | v0.1 | 官方 Electron 桌面端有、我们 Tauri 端缺的功能盘点（突出 v0.16.0 新增） |
 
 ---
 

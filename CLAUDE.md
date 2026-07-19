@@ -3,23 +3,21 @@
 ## 项目概述
 
 Hermes Agent CN 桌面端 — 用 Tauri v2 + React 构建的独立桌面应用，替代原 Electron 壳。
-对接后端是 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)（CN 核心 runtime，原名 hermes-agent-cn）内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。版本号由 `pnpm version:sync` 在 `package.json` / `tauri.conf.json` / `Cargo.toml` 间统一（`pnpm version:check` 校验）。
+对接后端是 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)（CN 核心 runtime，原名 hermes-agent-cn）内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。bundle identifier 固定为 `cn.org.hermesagent.desktop`（升级安全承重标识，勿改）。版本号以 `package.json` 为唯一真相（勿在本文件硬编码版本号），由 `pnpm version:sync` 传播到 `tauri.conf.json` / `Cargo.toml` / `Cargo.lock` / 各 workspace `package.json` / README，`pnpm version:check` 校验。
 
 ## 项目结构
 
 ```
-hermes-agent-cn-desktop/
-├── src/                    Rust Tauri 后端（~19,600 行，crate lib 名 hermes_agent_cn）
-│   ├── main.rs               入口：解析 HERMES_HOME、启动 dashboard、注册 ~49 个命令、系统托盘
-│   ├── lib.rs / state.rs     库入口 + AppState（Mutex<AppStateInner>）
+Hermes-CN-Desktop/
+├── src/                    Rust Tauri 后端（~24,000 行，crate lib 名 hermes_agent_cn）
+│   ├── main.rs               入口：解析 HERMES_HOME、启动 dashboard、注册 61 个命令（generate_handler!）、系统托盘
+│   ├── lib.rs / state.rs     库入口（声明 18 个 module）+ AppState（Mutex<AppStateInner>）
 │   ├── tray.rs               系统托盘菜单
 │   ├── error.rs              AppError 统一错误类型
-│   ├── environment.rs        环境探测（PATH hermes、HERMES_HOME 等）
-│   ├── prevent_sleep.rs      运行期间阻止系统休眠
-│   ├── cron_runs.rs          cron 任务运行记录
+│   ├── environment.rs / bootstrap.rs / connection.rs / path_resolver.rs / env_file.rs
+│   ├── supervisor.rs / prevent_sleep.rs / cron_runs.rs / update_stage.rs / util.rs / ui_store.rs
 │   ├── session_archive.rs / session_log.rs   会话归档与日志读取
-│   ├── update_stage.rs / util.rs / ui_store.rs
-│   ├── commands/             ~49 个 #[tauri::command]（约 20 个文件，列表见 main.rs 的 generate_handler!）
+│   ├── commands/             61 个 #[tauri::command]（22 个模块，列表见 main.rs 的 generate_handler!）
 │   │   ├── api_proxy.rs         HTTP 代理（api_request / external_request / upload_file）
 │   │   ├── ws_proxy.rs          /api/ws WebSocket 中继（webview 原生 WS 被拦时的兜底）
 │   │   ├── gateway.rs           runtime config + gateway URL 刷新
@@ -28,8 +26,8 @@ hermes-agent-cn-desktop/
 │   │   ├── profiles.rs          profile 切换（含故障恢复）
 │   │   ├── config_migration.rs  配置迁移
 │   │   ├── im_onboarding.rs     飞书/钉钉/企微/微信 接入引导
-│   │   ├── memory/skills/terminal/backup/log_export/debug_bundle 等命令
-│   │   └── environment / file_dialogs / restart / ui_store / yolo / mod.rs
+│   │   └── connection/memory/skills/terminal/backup/log_export/debug_bundle/notify/
+│   │       preview/environment/file_dialogs/restart/ui_store/yolo/devtools/mod.rs
 │   └── process/
 │       ├── dashboard.rs         dashboard 子进程管理（probe/spawn/port fallback）
 │       ├── gateway.rs           gateway 子进程 / 冲突检测
@@ -38,16 +36,19 @@ hermes-agent-cn-desktop/
 │   ├── src/
 │   │   ├── lib/tauri-bridge.ts    Tauri invoke 包装 + hermesDesktop shim
 │   │   ├── lib/runtime.ts         平台检测（web / electron / tauri）
-│   │   ├── lib/transport.ts       HTTP 路由（native IPC vs fetch）
-│   │   ├── lib/gateway-client.ts  网关 WS 客户端（JSON-RPC over /api/ws，心跳/退避/唤醒重连）
+│   │   ├── lib/transport.ts       HTTP 路由（native IPC vs fetch）+ auth header 注入
+│   │   ├── lib/gateway-client.ts  网关 WS 客户端（JSON-RPC over /api/ws，退避/唤醒重连/session.resume）
 │   │   └── lib/gateway-socket-path.ts  原生 WS vs Rust 中继的 socket 路径选择与自动回退
 │   └── vite.config.ts
 ├── packages/
-│   ├── protocol/              Zod schemas、IPC 类型、会话日志解析
-│   └── shared-ui/             设计 token（CSS 变量）、Dialog/Popover 组件
+│   ├── protocol/              Zod schemas（hermes-api.ts）、IPC 类型、会话日志解析
+│   └── shared-ui/             设计 token（tokens/*.css）、components/composites/hooks
+├── e2e/                       Playwright E2E（真实 web → 真实 Core 后端 → 本地 fake model）
+├── tests/                     Rust 集成测试（crate 名 hermes_agent_cn）
+├── static/                    打包 stage 目标（bundled-runtime / -skills / -plugins / dashboard）
 ├── Cargo.toml                 Rust 依赖
 ├── tauri.conf.json            Tauri 窗口/打包/CSP 配置
-├── pnpm-workspace.yaml        pnpm monorepo（web + packages/*）
+├── pnpm-workspace.yaml        pnpm monorepo（web + packages/* + e2e）
 └── package.json               workspace root + 构建脚本
 ```
 
@@ -62,12 +63,29 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 
 ## 开发流程
 
+### 开发前预检（双仓同步 + Worktree 隔离）
+
+Hermes CN 的需求与 bug 修复通常**同时横跨 Desktop 与 Core 两个仓库**。正式动手写代码前，两个仓库都必须先过这道预检，**不要直接在 `main` 上改**：
+
+1. **确认主分支已与远端同步**。对 Desktop 与 Core 分别 `git fetch origin`，确认本地 `main` 与 `origin/main` 一致（`git rev-list --left-right --count main...origin/main` 应为 `0  0`）；落后就先快进，工作区脏就先收拾干净。
+2. **为每个仓库开独立的功能分支 + git worktree**，让 Desktop 与 Core 的改动互不干扰、可并行：
+   ```bash
+   git -C <repo> fetch origin
+   git -C <repo> worktree add ../wt/<repo>-<topic> -b <branch> origin/main
+   ```
+   分支命名沿用 Conventional 风格（`feat/` `fix/` `docs/` `chore/` …）。同一任务在两仓用同名分支，方便对应。
+3. 不要在同一个工作目录里来回 `git checkout` 切分支——双仓并行时极易串味；每条线一个 worktree。
+
+**收尾流程（每个仓库都要走完，缺一不可）**：改完 → `pnpm typecheck && pnpm test:unit && cargo check` → commit → push → 开 PR → **盯 PR 上 GitHub Actions 的构建与测试全绿**（`rust-test.yml` / `web-test.yml`），没过就回去修，别把任务当完成。
+
 ### 仓库技能
 
 双仓库（Desktop + Core）最新分支启动、dev 冒烟或打包态补验，必须参考：
 `.codex/skills/desktop-dual-repo-test/SKILL.md`。
 
-发版、版本号更新、安装包发布或 GitHub Release 相关任务必须参考仓库内技能：
+发版、版本号更新、安装包发布或 GitHub Release 相关任务必须参考仓库内技能。**发版前先过**发版前预检（覆盖升级安全性：防内核静默降级 / 防 schema 重置 / identifier 不变 / 公证签名 / 国内镜像 / 先发 canary）：
+`.codex/skills/desktop-release-preflight/SKILL.md`；
+随后再做版本同步与官网清单：
 `.codex/skills/desktop-release-sync-landing/SKILL.md`。
 只要桌面端公开版本发生变化，就必须同步处理 `Eynzof/hermes-agent-cn-desktop-landing`，
 更新官网版本与 `https://desktop.hermesagent.org.cn/latest.json` 清单；如果 release 资产尚未生成，
@@ -80,7 +98,7 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 ```bash
 pnpm tauri:dev                                 # 托管 runtime
 pnpm tauri:dev -- --source ../Hermes-CN-Core   # 指定本地后端源码安装进 runtime
-pnpm tauri:dev:external                         # 改用 PATH 上已有的 hermes / 外部 dashboard
+# pnpm tauri:dev:external 现已是 deprecated 别名：桌面端锁 managed runtime，它现在跑的就是和 tauri:dev 相同的 managed 路径
 ```
 
 手动分步（调试 Rust 时用）：
@@ -94,7 +112,7 @@ pnpm tauri:run               # 终端 3：cargo run
 
 ```bash
 pnpm typecheck        # license:check + version:check + 各 workspace typecheck
-pnpm test:unit        # 全部 vitest 单元测试（~600 个，~70 个测试文件，逐 workspace 串行）
+pnpm test:unit        # 全部 vitest 单元测试（~93 个测试文件，逐 workspace 串行 workspace-concurrency=1）
 cargo check           # Rust 编译检查
 ```
 
@@ -108,9 +126,14 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 pnpm tauri:build:bundled-windows         # NSIS
 pnpm tauri:build:bundled-macos-arm64     # dmg (aarch64)
 pnpm tauri:build:bundled-macos-intel     # dmg (x86_64)
+
+# 免安装（portable）zip：在上面对应平台 bundled 构建之后追加打包（见 docs/portable-mode.md）
+pnpm portable:package-windows            # Windows 上运行
+pnpm portable:package-macos-arm64
+pnpm portable:package-macos-intel
 ```
 
-产物在 `target/release/bundle/` 或 `target/debug/bundle/`。`scripts/stage-*.mjs` 负责把后端 runtime、dashboard web dist、skills、plugins 拷进打包目录。
+产物在 `target/release/bundle/` 或 `target/debug/bundle/`（portable zip 在 `target/portable/`）。`scripts/stage-bundled-runtime.mjs`、`stage-bundled-skills.mjs`、`stage-bundled-plugins.mjs`、`stage-dashboard-web-dist.mjs` 负责把后端 runtime、dashboard web dist、skills、plugins 拷进 `static/` 打包目录。portable 模式通过解压目录内的 `portable.marker` 把整棵数据树锚定到 `<解压目录>/data`（`src/process/runtime.rs`）。
 
 ## 架构约定
 
@@ -144,7 +167,7 @@ pnpm tauri:build:bundled-macos-intel     # dmg (x86_64)
 
 唯一传输是 **JSON-RPC over WebSocket（官方 `/api/ws`）**，与官方桌面端（Core `apps/desktop`）
 架构一致；SSE+POST 旧路径（P-009）已删除。`gateway-client.ts` 是协议层 + 重连编排
-（30s/10s 心跳、1→15s 指数退避、唤醒/online/visibility 触发、重连后 `session.resume`）。
+（1→15s 指数退避、唤醒/online/visibility 触发、重连后 `session.resume`；**对齐官方桌面端不主动发 synthetic ping**，半开连接靠 close/error + RPC 超时 + OS 唤醒兜底）。
 socket 载体由 `gateway-socket-path.ts` 选择：默认 webview 原生 WebSocket 直连；打包态
 webview 拦 `ws://` 时自动回退到 Rust 中继（`ws_proxy.rs`，线协议不变），结果粘性记忆在
 `HERMES_WS_PATH_LEARNED`，QA 可用 `?wspath=native|relay` 强制覆盖。
@@ -160,8 +183,8 @@ webview 拦 `ws://` 时自动回退到 Rust 中继（`ws_proxy.rs`，线协议�
 ## Commit 风格
 
 - Conventional commit：`feat` / `fix` / `style` / `docs` / `refactor` / `chore`
-- 标题用英文短句、命令式（"add ...", "fix ...", "rework ..."）
-- 描述可中英混用，写"为什么"而不是"做了什么"
+- 标题用中文、命令式（"新增 ..."、"修复 ..."、"重构 ..."）
+- 描述用中文，写"为什么"而不是"做了什么"
 
 ## 端口
 
@@ -176,5 +199,5 @@ webview 拦 `ws://` 时自动回退到 Rust 中继（`ws_proxy.rs`，线协议�
 - **文件系统测试**：用 `tempfile::TempDir`，禁止写 `/tmp`、cwd 或固定路径
 - **HTTP 测试**：用 `wiremock::MockServer`，禁止打真实网络
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
-- **CI**：`.github/workflows/rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）与 `web-test.yml`（前端 typecheck + vitest）在 PR / push 到 main 时运行；`release-desktop.yml` 负责发布构建
+- **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `Eynzof/Hermes-CN-Core` 真实后端 + fake model）；`release-desktop.yml` 负责发布构建
 - **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock

@@ -14,11 +14,16 @@ export interface MemoryProvidersState {
   options: MemoryProviderOption[];
 }
 
-interface DashboardPluginsResponse {
-  providers?: {
-    memory_provider?: string;
-    memory_options?: MemoryProviderOption[];
-  };
+/** Response shape from GET /api/memory (the correct endpoint for runtime memory state). */
+interface MemoryStatusResponse {
+  active: string;
+  providers: Array<{
+    name: string;
+    description: string;
+    available: boolean;
+    missing?: boolean;
+  }>;
+  builtin_files: Record<string, number>;
 }
 
 function ensureMemoryBridge() {
@@ -86,11 +91,13 @@ export function useMemoryProviders(options: { enabled?: boolean } = {}) {
   return useQuery<MemoryProvidersState>({
     queryKey: ["memory-providers", profile],
     queryFn: async ({ signal }) => {
-      const data = await fetchJSON<DashboardPluginsResponse>("/api/dashboard/plugins", { signal });
-      const providers = data.providers ?? {};
+      const data = await fetchJSON<MemoryStatusResponse>("/api/memory", { signal });
       return {
-        active: providers.memory_provider ?? "",
-        options: providers.memory_options ?? [],
+        active: data.active ?? "",
+        options: (data.providers ?? []).map((p) => ({
+          name: p.name,
+          description: p.description ?? "",
+        })),
       };
     },
     staleTime: 30_000,
@@ -102,7 +109,7 @@ export function useSetMemoryProvider() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (provider: string) =>
-      putJSON("/api/dashboard/plugin-providers", { memory_provider: provider }, MutationOkResponse),
+      putJSON("/api/memory/provider", { provider }, MutationOkResponse),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["memory-providers"] });
       qc.invalidateQueries({ queryKey: ["config"] });

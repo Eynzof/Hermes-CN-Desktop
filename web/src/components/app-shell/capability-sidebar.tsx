@@ -6,11 +6,11 @@ import {
   Brain,
   Clock,
   Ghost,
-  MessageCircle,
-  MessageSquareText,
   Cpu,
+  Mic,
   Puzzle,
   Sparkles,
+  SquareCode,
   TerminalSquare,
   type LucideIcon,
 } from "lucide-react";
@@ -30,34 +30,39 @@ interface CapabilityItem {
 
 export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "模型", path: "/models", icon: Cpu },
-  { label: "备份恢复", path: "/backup", icon: Archive },
-  { label: "配置迁移", path: "/config-migration", icon: Sparkles, shortcut: "/migration" },
+  { label: "语音", path: "/voice", icon: Mic },
   {
     label: "档案",
     path: "/profiles",
     icon: Boxes,
-    title: "档案：独立 config / .env / sessions / skills 的环境",
+    title: "档案：拥有独立配置、密钥、会话和技能的环境",
   },
   { label: "技能", path: "/skills", icon: Sparkles },
   { label: "MCP", path: "/mcp", icon: Puzzle },
   { label: "终端", path: "/console", icon: TerminalSquare, title: "Hermes Console：直接运行 Hermes 命令" },
   { label: "记忆", path: "/memory", icon: Brain },
   {
-    label: "灵魂",
+    label: "人格",
     path: "/soul",
     icon: Ghost,
-    title: "SOUL.md：智能体的核心人格（系统提示词第一身份）",
+    title: "SOUL.md：智能体的核心人格设定",
     prefetch: prefetchSoul,
   },
+  {
+    label: "编程Agent",
+    path: "/coding-agents",
+    icon: SquareCode,
+    title: "检测 Claude Code / Codex CLI 并配置委派可视化",
+  },
+];
+
+export const BACKUP_ITEMS: readonly CapabilityItem[] = [
+  { label: "备份恢复", path: "/backup", icon: Archive },
+  { label: "配置迁移", path: "/config-migration", icon: Sparkles, shortcut: "/migration" },
 ];
 
 const AUTOMATION_ITEMS: readonly CapabilityItem[] = [
   { label: "定时任务", path: "/cron", icon: Clock },
-];
-
-const IM_ITEMS: readonly CapabilityItem[] = [
-  { label: "飞书接入", path: "/im/feishu", icon: MessageCircle, title: "将飞书消息平台接入中文社区桌面版" },
-  { label: "微信接入", path: "/im/weixin", icon: MessageSquareText, title: "将微信消息平台接入中文社区桌面版" },
 ];
 
 export const CAPABILITY_SECTIONS: readonly {
@@ -66,7 +71,7 @@ export const CAPABILITY_SECTIONS: readonly {
 }[] = [
   { label: "§021 · 配置", items: CONFIG_ITEMS },
   { label: "§022 · 自动化", items: AUTOMATION_ITEMS },
-  { label: "§023 · 消息平台接入", items: IM_ITEMS },
+  { label: "§023 · 备份与恢复", items: BACKUP_ITEMS },
 ];
 
 export function CapabilitySidebar() {

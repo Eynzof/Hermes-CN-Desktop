@@ -1,0 +1,125 @@
+.panel {
+  border: 1px solid var(--h-line-soft);
+  border-radius: 12px;
+  background: var(--h-bg-soft);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--h-text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.head svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.headLabel {
+  flex: 1;
+  text-align: left;
+}
+
+.chevron {
+  transition: transform 0.15s ease;
+}
+
+.chevron[data-collapsed] {
+  transform: rotate(-90deg);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--h-bg-input);
+  border: 1px solid transparent;
+}
+
+.row[data-editing] {
+  border-color: var(--h-accent, #c2410c);
+}
+
+.preview {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--h-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--h-text-2);
+}
+
+.badge svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.rowActions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.action {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--h-text-2);
+}
+
+.action svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
+.action:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action[data-danger]:hover {
+  color: var(--h-danger, #dc2626);
+}

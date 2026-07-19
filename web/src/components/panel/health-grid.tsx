@@ -20,12 +20,12 @@ import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useEnvVars } from "@/hooks/use-env";
 import { useSkills } from "@/hooks/use-skills";
 import { useMcpServers } from "@/hooks/use-mcp-servers";
+import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { useLastUsedModel } from "@/lib/last-used-model";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Dot } from "@/components/ui/pill";
 import s from "./health-grid.module.css";
 
-const DEFAULT_DESKTOP_DASHBOARD_ORIGIN = "127.0.0.1:9120";
 const TOKEN_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GLM_API_KEY", "DEEPSEEK_API_KEY"];
 
 type Tone = "ok" | "warn" | "err";
@@ -64,13 +64,21 @@ function formatContextLength(n: number | undefined | null): string {
   return `${n} ctx`;
 }
 
-function originFromHealthUrl(url: string | null | undefined): string {
-  if (!url) return DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+function originFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
   try {
-    return new URL(url).host || DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+    return new URL(url).host || null;
   } catch {
-    return DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+    return null;
   }
+}
+
+function currentDashboardOrigin(statusHealthUrl: string | null | undefined): string {
+  const runtimeConfig = typeof window !== "undefined" ? window.__HERMES_RUNTIME__ : undefined;
+  return originFromUrl(runtimeConfig?.dashboardApiBaseUrl)
+    ?? originFromUrl(runtimeConfig?.apiBaseUrl)
+    ?? originFromUrl(statusHealthUrl)
+    ?? "Dashboard";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -90,15 +98,15 @@ function toneIcon(tone: Tone, size = 16): ReactNode {
 }
 
 function groupTitle(group: HealthGroup): string {
-  if (group === "runtime") return "运行时与路径";
-  if (group === "model") return "模型与凭证";
+  if (group === "runtime") return "内核与路径";
+  if (group === "model") return "模型与密钥";
   return "扩展能力";
 }
 
 function groupSub(group: HealthGroup): string {
-  if (group === "runtime") return "Dashboard、Gateway 与本地 Hermes 数据目录。";
-  if (group === "model") return "默认模型、API Token 与 provider 字段校验。";
-  return "Skills、MCP 以及会话扩展能力。";
+  if (group === "runtime") return "内核、网关与本地数据目录。";
+  if (group === "model") return "默认模型、模型密钥与服务商字段校验。";
+  return "技能、MCP 以及会话扩展能力。";
 }
 
 function groupIcon(group: HealthGroup): ReactNode {
@@ -259,29 +267,35 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
   const envQuery = useEnvVars();
   const skillsQuery = useSkills();
   const mcpQuery = useMcpServers();
+  const oauthQuery = useOAuthProviders();
   const status = statusQuery.data;
   const modelInfo = modelInfoQuery.data;
   const config = configQuery.data;
   const env = envQuery.data;
   const skills = skillsQuery.data;
   const mcp = mcpQuery.data;
+  const oauthProviders = oauthQuery.data;
   const lastUsedModel = useLastUsedModel();
 
   const health = useMemo(() => {
     // `gateway_running` is the *PTY daemon* status — a Python subprocess
-    // the dashboard *can* spawn for the embedded chat tab. With P-009
-    // the SSE+POST transport calls tui_gateway.dispatch() in-process,
-    // so the daemon stays "stopped" by design and that's fine. The real
-    // health signal is whether the dashboard responded to /api/status.
+    // the dashboard *can* spawn for the embedded chat tab. The desktop now
+    // talks to the dashboard's official /api/ws directly or through the Rust
+    // relay, so the daemon may still stay "stopped" by design. The real health
+    // signal here is whether the dashboard responded to /api/status.
     const dashboardReachable = !!status;
     const daemonRunning = status?.gateway_running === true;
     const gatewayState = status?.gateway_state || (daemonRunning ? "running" : "stopped");
-    const dashboardOrigin = originFromHealthUrl(status?.gateway_health_url);
+    const dashboardOrigin = currentDashboardOrigin(status?.gateway_health_url);
 
     const setTokens = env ? TOKEN_KEYS.filter((key) => env[key]?.is_set) : [];
     const anyTokenSet = setTokens.length > 0;
 
     const modelName = lastUsedModel?.model || modelInfo?.model || "—";
+    const currentProviderId = modelInfo?.provider || lastUsedModel?.provider || "";
+    const currentOAuthProvider = oauthProviders?.find((provider) => provider.id === currentProviderId);
+    const currentOAuthLoggedIn = currentOAuthProvider?.status.logged_in === true;
+    const anyModelCredential = anyTokenSet || currentOAuthLoggedIn;
     const ctxLabel = formatContextLength(
       lastUsedModel?.contextWindow
         ?? modelInfo?.effective_context_length
@@ -296,7 +310,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
     const providers = providerMap(config);
     const invalidProviders = findInvalidProviderApiKeys(providers);
     const providerTotal = Object.keys(providers).length;
-    const providersOk = providerTotal > 0 && invalidProviders.length === 0;
+    const providersOk = currentOAuthLoggedIn || (providerTotal > 0 && invalidProviders.length === 0);
 
     const items: HealthItem[] = [
       {
@@ -306,15 +320,15 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         tone: statusQuery.isError ? "err" : dashboardReachable ? "ok" : "warn",
         value: dashboardOrigin,
         sub: statusQuery.isError
-          ? "状态接口未响应"
+          ? "服务未响应"
           : dashboardReachable
             ? daemonRunning
-              ? "Gateway daemon 运行中"
-              : "Dashboard 就绪 · in-process dispatch"
+              ? "网关运行中"
+              : "内核就绪"
             : "正在连接",
         detail: dashboardReachable
-          ? "聊天传输走 dashboard 的 /api/ws WebSocket（进程内 dispatch）；gateway_state=stopped 不等同于不可用。"
-          : "如果长时间停留在连接中，请确认 managed runtime 已启动，或在状态栏执行 Gateway 重启。",
+          ? "聊天通过本机内核传输；gateway_state=stopped 不代表不可用。"
+          : "如果长时间停留在连接中，请确认本机内核已启动，或在状态栏重启网关。",
         mono: true,
         title: `dashboardReachable=${dashboardReachable}; gateway_state=${gatewayState}. /api/ws 在 dashboard 进程内 dispatch，gateway_state=stopped 是预期值。`,
       },
@@ -324,7 +338,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         label: "Hermes Home",
         tone: status?.hermes_home ? "ok" : "warn",
         value: status?.hermes_home || "—",
-        sub: status?.hermes_home ? "数据目录已识别" : "等待 /api/status 返回路径",
+        sub: status?.hermes_home ? "数据目录已识别" : "正在读取数据目录",
         detail: status?.config_path || status?.env_path
           ? `配置：${status?.config_path ?? "—"}；环境变量：${status?.env_path ?? "—"}`
           : "这是桌面端当前 profile 的配置、会话和环境变量根目录。",
@@ -347,37 +361,49 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
       {
         id: "token",
         group: "model",
-        label: "API Token",
-        tone: envQuery.isError ? "err" : env ? (anyTokenSet ? "ok" : "warn") : "warn",
-        value: envQuery.isError ? "读取失败" : env ? (anyTokenSet ? "已配置" : "未配置") : "检测中",
-        sub: anyTokenSet ? formatTokenNames(setTokens) : "模型调用需要至少一个可用 Token",
-        detail: anyTokenSet
-          ? "仅展示已设置的变量名称，不会暴露密钥内容。"
-          : "可在模型设置里补齐 Anthropic、OpenAI、GLM 或 DeepSeek 等服务商密钥。",
-        actionTo: anyTokenSet ? undefined : "/models",
-        actionLabel: "填写 Token",
+        label: "模型凭证",
+        tone: envQuery.isError ? "err" : env ? (anyModelCredential ? "ok" : "warn") : "warn",
+        value: envQuery.isError ? "读取失败" : env ? (anyModelCredential ? "已配置" : "未配置") : "检测中",
+        sub: currentOAuthLoggedIn
+          ? `${currentOAuthProvider?.name ?? currentProviderId} OAuth 已连接`
+          : anyTokenSet
+            ? formatTokenNames(setTokens)
+            : "模型调用需要 API Key 或 OAuth 凭证",
+        detail: currentOAuthLoggedIn
+          ? "当前主模型使用 OAuth 登录凭证，无需额外 API Token。"
+          : anyTokenSet
+            ? "仅展示已设置的变量名称，不会暴露密钥内容。"
+            : "可在模型设置里补齐 API Key，或完成支持 OAuth 的模型登录。",
+        actionTo: anyModelCredential ? undefined : "/models",
+        actionLabel: "配置凭证",
       },
       {
         id: "provider",
         group: "model",
         label: "Provider 配置",
         tone: providersOk ? "ok" : "warn",
-        value: providerTotal === 0
+        value: currentOAuthLoggedIn
+          ? "OAuth 有效"
+          : providerTotal === 0
           ? "未配置"
           : invalidProviders.length > 0
             ? `${invalidProviders.length} / ${providerTotal} 异常`
             : `${providerTotal} 个有效`,
-        sub: invalidProviders.length > 0
+        sub: currentOAuthLoggedIn
+          ? `${currentProviderId} 已通过 OAuth 提供模型凭证`
+          : invalidProviders.length > 0
           ? `api_key 是 URL：${invalidProviders.join(", ")}`
           : providerTotal === 0
             ? "缺少 providers 配置"
             : "api_key 字段形态正常",
-        detail: invalidProviders.length > 0
+        detail: currentOAuthLoggedIn
+          ? "当前后端 /api/model/info 与 OAuth 状态一致，健康检查不再要求 providers.api_key。"
+          : invalidProviders.length > 0
           ? "这些 provider 会把 URL 当作 Bearer token 发送，上游通常会返回 401。"
           : providerTotal === 0
             ? "选择服务商并保存模型后会自动写入 provider 配置。"
             : "已完成基础形态检查；真实额度与连通性仍以模型页探测结果为准。",
-        actionTo: providerTotal === 0 || invalidProviders.length > 0 ? "/models" : undefined,
+        actionTo: providersOk ? undefined : "/models",
         actionLabel: "修正配置",
       },
       {
@@ -434,12 +460,13 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         { label: "活跃会话", value: String(status?.active_sessions ?? 0), sub: status ? `Dashboard v${status.version}` : "等待状态接口", tone: status ? "ok" as Tone : "warn" as Tone },
       ] satisfies HealthMetric[],
     };
-  }, [config, env, envQuery.isError, lastUsedModel, mcp, mcpQuery.isError, modelInfo, skills, skillsQuery.isError, status, statusQuery.isError]);
+  }, [config, env, envQuery.isError, lastUsedModel, mcp, mcpQuery.isError, modelInfo, oauthProviders, skills, skillsQuery.isError, status, statusQuery.isError]);
 
   const isRefreshing = statusQuery.isFetching
     || modelInfoQuery.isFetching
     || configQuery.isFetching
     || envQuery.isFetching
+    || oauthQuery.isFetching
     || skillsQuery.isFetching
     || mcpQuery.isFetching;
 
@@ -449,6 +476,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
       modelInfoQuery.refetch(),
       configQuery.refetch(),
       envQuery.refetch(),
+      oauthQuery.refetch(),
       skillsQuery.refetch(),
       mcpQuery.refetch(),
     ]);
@@ -474,10 +502,10 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
             <h2>{health.summaryLabel}</h2>
             <p>
               {status
-                ? `Dashboard 已响应，当前版本 ${status.version}，活跃会话 ${status.active_sessions} 个。这里展示启动链路、模型凭证和扩展能力的实时诊断结果。`
+                ? `内核已响应，当前版本 ${status.version}，活跃会话 ${status.active_sessions} 个。这里展示启动状态、模型配置和扩展能力的实时诊断结果。`
                 : statusQuery.isError
-                  ? "无法读取 Dashboard 状态接口，优先检查 managed runtime 是否启动，以及本机端口是否被占用。"
-                  : "正在读取 Dashboard 状态、模型配置、环境变量、Skills 与 MCP 服务。"}
+                  ? "无法读取内核状态，请先确认本机内核是否已启动。"
+                  : "正在读取内核状态、模型配置、环境变量、技能与 MCP 服务。"}
             </p>
           </div>
           <div className={s.heroActions}>
@@ -580,7 +608,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
                 <span>刷新节奏</span>
               </div>
               <p className={s.asideText}>
-                `/api/status` 会自动轮询，其它配置项在进入页面和手动刷新时读取。这里不会再折叠隐藏详情，避免排查问题时漏看异常项。
+                状态会自动刷新，其它配置项在进入页面和手动刷新时读取。详情默认全部展开，避免排查时漏看异常项。
               </p>
             </div>
           </aside>

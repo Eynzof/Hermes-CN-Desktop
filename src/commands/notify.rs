@@ -112,8 +112,11 @@ fn system_sound_name() -> &'static str {
     }
 }
 
+// async + spawn_blocking：同步 command 在主线程上执行，而 `builder.show()`
+// 是阻塞的系统调用（Linux 上经 zbus 走同步 D-Bus 往返），通知系统卡顿时会
+// 冻结整个 UI；挪到阻塞线程池后主线程和 async runtime 都不受影响。
 #[tauri::command]
-pub fn desktop_notify(
+pub async fn desktop_notify(
     app: AppHandle,
     input: DesktopNotifyInput,
 ) -> Result<DesktopNotifyResult, AppError> {
@@ -127,6 +130,18 @@ pub fn desktop_notify(
     }
     let body = sanitize_text(&input.body, MAX_BODY_CHARS);
 
+    tauri::async_runtime::spawn_blocking(move || notify_blocking(&app, kind, &title, &body, &input))
+        .await
+        .map_err(|e| AppError::Internal(format!("desktop_notify task failed: {e}")))
+}
+
+fn notify_blocking(
+    app: &AppHandle,
+    kind: NotifyKind,
+    title: &str,
+    body: &str,
+    input: &DesktopNotifyInput,
+) -> DesktopNotifyResult {
     let window = app.get_webview_window(MAIN_WINDOW_LABEL);
     let foreground = window
         .as_ref()
@@ -144,18 +159,18 @@ pub fn desktop_notify(
         .unwrap_or(false);
 
     if should_suppress(input.respect_focus, foreground) {
-        return Ok(DesktopNotifyResult {
+        return DesktopNotifyResult {
             delivered: false,
             focused: foreground,
             attention_requested: false,
             error: None,
-        });
+        };
     }
 
     let mut delivered = false;
     let mut error = None;
     if input.show_system_notification {
-        let mut builder = app.notification().builder().title(&title).body(&body);
+        let mut builder = app.notification().builder().title(title).body(body);
         if input.with_sound {
             builder = builder.sound(system_sound_name());
         }
@@ -178,12 +193,12 @@ pub fn desktop_notify(
         }
     }
 
-    Ok(DesktopNotifyResult {
+    DesktopNotifyResult {
         delivered,
         focused: foreground,
         attention_requested,
         error,
-    })
+    }
 }
 
 #[cfg(test)]

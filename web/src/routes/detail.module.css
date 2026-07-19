@@ -8,12 +8,51 @@
   background: var(--h-bg-pane);
 }
 
+/* Horizontal work area: chat column (timeline + composer) and the optional
+   subagent monitor side panel sit side by side below the top bar. */
+.workArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.chatColumn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .composerArea {
   position: relative;
   width: 100%;
   max-width: var(--conversation-max-width, 780px);
   margin: 0 auto;
   padding: 10px 28px 18px;
+}
+
+/* Live subagent count badge on the top-bar toggle chip. */
+.subagentBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--h-r-pill);
+  background: var(--h-bg-chip);
+  color: var(--h-text-2);
+  font-size: 9.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.subagentBadge[data-active="true"] {
+  background: var(--h-accent);
+  color: var(--h-accent-contrast);
 }
 
 /* Soft fade between the scrolling timeline and the composer, mirroring

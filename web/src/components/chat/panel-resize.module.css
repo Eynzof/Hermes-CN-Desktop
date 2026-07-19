@@ -1,0 +1,30 @@
+/* 右侧面板左缘拖宽把手——预览分割条（preview-rail 的 splitter/splitterGrip）
+   的水平版：同样的条宽、grip 尺寸与 hover accent 反馈。 */
+
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  z-index: 2;
+}
+
+.grip {
+  width: 3px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--h-line);
+}
+
+.handle:hover .grip,
+.handle:active .grip {
+  background: var(--h-accent-border);
+}

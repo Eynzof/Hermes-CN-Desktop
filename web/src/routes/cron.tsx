@@ -188,7 +188,7 @@ function matchesStatus(job: CronJob, filter: StatusFilter): boolean {
 function buildRunErrorMessage(error: unknown): string {
   const raw = actionError(error);
   if (raw.includes("HTTP 404") || raw.includes("__hermes_cron_runs")) {
-    return "当前环境无法读取本地运行历史。请使用桌面端，或确认 Tauri IPC 已接管本地历史路由。";
+    return "当前环境无法读取本地运行历史，请使用桌面端打开。";
   }
   return `加载运行历史失败：${raw}`;
 }
@@ -571,7 +571,7 @@ function CreateJobPanel(props: CreateJobPanelProps) {
           </select>
         </label>
         <label className={s.field}>
-          <span>投递目标</span>
+          <span>发送目标</span>
           <select value={props.deliver} onChange={(event) => props.onDeliver(event.target.value)}>
             {DELIVERY_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
@@ -610,18 +610,20 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
   return (
     <section className={s.card}>
       <div className={s.cardHeader}>
-        <div className={s.titleBlock}>
+        <div className={s.cardHeaderTop}>
           <div className={s.breadcrumb}>自动化功能 / {cronJobProfile(job)}</div>
+          <div className={s.detailActions}>
+            <span className={s.statusBadge} data-tone={statusTone(job)}>{statusLabel(job)}</span>
+            <button type="button" className={s.secondaryButton} onClick={onPauseResume} disabled={busy}>
+              {paused ? <Play size={14} /> : <Pause size={14} />}{paused ? "恢复" : "暂停"}
+            </button>
+            <button type="button" className={s.primaryButton} onClick={onTrigger} disabled={busy}><Zap size={14} /> 立即运行</button>
+            <button type="button" className={s.dangerButton} onClick={onDelete} disabled={busy}><Trash2 size={14} /> 删除</button>
+          </div>
+        </div>
+        <div className={s.titleBlock}>
           <h1>{titleOf(job)}</h1>
           <p>{promptPreview(job).slice(0, 180)}</p>
-        </div>
-        <div className={s.detailActions}>
-          <span className={s.statusBadge} data-tone={statusTone(job)}>{statusLabel(job)}</span>
-          <button type="button" className={s.secondaryButton} onClick={onPauseResume} disabled={busy}>
-            {paused ? <Play size={14} /> : <Pause size={14} />}{paused ? "恢复" : "暂停"}
-          </button>
-          <button type="button" className={s.primaryButton} onClick={onTrigger} disabled={busy}><Zap size={14} /> 立即运行</button>
-          <button type="button" className={s.dangerButton} onClick={onDelete} disabled={busy}><Trash2 size={14} /> 删除</button>
         </div>
       </div>
 
@@ -642,7 +644,7 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
           <strong>{cronJobProfile(job)}</strong>
         </div>
         <div className={s.detailItem}>
-          <span>投递目标</span>
+          <span>发送目标</span>
           <strong>{deliveryLabel(text(job.deliver))}</strong>
         </div>
         <div className={s.detailItem}>

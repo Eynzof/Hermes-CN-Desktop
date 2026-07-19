@@ -1,43 +1,39 @@
 /* Hermes Design Tokens — Typography */
 
+/* Bundled HarmonyOS Sans SC (full, unmodified files) so Windows/Linux users
+   without the typeface installed still get the brand font instead of falling
+   back to Microsoft YaHei. The font's license forbids modification, so the full
+   SC weights ship as-is (no subsetting); see legal/HarmonyOS_Sans_LICENSE.txt
+   and the attribution in Settings → 关于. Vite hashes these and rewrites the
+   relative url() to honour the `base: "./"` custom-protocol asset paths. */
 @font-face {
   font-family: "HarmonyOS Sans SC";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400;
   font-display: swap;
   src:
     local("HarmonyOS Sans SC"),
-    local("HarmonyOS Sans");
-  unicode-range:
-    U+2E80-2EFF,
-    U+3000-303F,
-    U+31C0-31EF,
-    U+3400-4DBF,
-    U+4E00-9FFF,
-    U+F900-FAFF,
-    U+FF00-FFEF;
+    url("./fonts/HarmonyOS_Sans_SC_Regular.woff2") format("woff2");
 }
 
 @font-face {
   font-family: "HarmonyOS Sans SC";
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 700;
   font-display: swap;
   src:
     local("HarmonyOS Sans SC"),
-    local("HarmonyOS Sans");
-  unicode-range:
-    U+0000-00FF,
-    U+0100-024F,
-    U+2000-206F,
-    U+20A0-20CF,
-    U+2100-214F,
-    U+2190-22FF;
+    url("./fonts/HarmonyOS_Sans_SC_Bold.woff2") format("woff2");
 }
 
 :root {
+  /* Stack order is deliberate: macOS keeps PingFang SC (CJK+Latin) and SF.
+     Windows has none of HarmonyOS/PingFang/SF, so Latin lands on Segoe UI and
+     CJK on "Microsoft YaHei UI" (sharper hinting and more weights than the bare
+     "Microsoft YaHei" the app fell back to before — no font is bundled). */
   --h-font-ui: "HarmonyOS Sans SC", "HarmonyOS Sans", "PingFang SC",
-    "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+    "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --h-font-cn: var(--h-font-ui);
   --h-font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
     Consolas, monospace;

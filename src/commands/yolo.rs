@@ -10,6 +10,13 @@
 // preference and — when the desktop owns the dashboard process — restarts it so
 // the change takes effect immediately, mirroring the stop+respawn flow used by
 // `switch_profile`.
+//
+// The persisted preference is authoritative for the managed runtime: an
+// explicit "off" disables YOLO even when the desktop process inherited
+// `HERMES_YOLO_MODE=1`. The env var only seeds the default before the user has
+// ever set the preference, so `effective` can exceed the persisted `enabled`
+// in two cases: the brief window between a toggle and the restart that applies
+// it, and a never-set preference while the parent env forces YOLO (see #287).
 
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -25,8 +32,9 @@ pub struct YoloModeStatus {
     /// Persisted desktop preference for the active profile's HERMES_HOME.
     pub enabled: bool,
     /// What the currently-running managed dashboard was actually started with.
-    /// Differs from `enabled` only between a toggle and the runtime restart
-    /// that applies it.
+    /// Usually equals `enabled`; it can exceed it between a toggle and the
+    /// runtime restart that applies it, or when an inherited `HERMES_YOLO_MODE`
+    /// forces YOLO while no preference has been persisted (see #287).
     pub effective: bool,
 }
 
@@ -60,6 +68,14 @@ pub struct SetYoloModeResult {
 #[tauri::command]
 pub fn get_yolo_mode(state: State<'_, AppState>) -> Result<YoloModeStatus, AppError> {
     let inner = state.inner.lock()?;
+    // YOLO is a launch flag of the desktop-owned managed runtime; attached
+    // local/remote agents decide their own approval policy.
+    if inner.connection_mode != crate::connection::ConnectionMode::Managed {
+        return Ok(YoloModeStatus {
+            enabled: false,
+            effective: false,
+        });
+    }
     Ok(YoloModeStatus {
         enabled: crate::ui_store::yolo_mode_enabled(&inner.hermes_home),
         effective: inner.yolo_mode,
@@ -77,6 +93,18 @@ pub async fn set_yolo_mode(
     // a restart regardless of what happens to the live process.
     let (hermes_home, owns_process) = {
         let inner = state.inner.lock()?;
+        // Don't persist a preference while attached to another agent — it
+        // wouldn't affect that process, and would surprise the user on the
+        // next managed-runtime boot.
+        if inner.connection_mode != crate::connection::ConnectionMode::Managed {
+            return Ok(SetYoloModeResult {
+                ok: false,
+                enabled: false,
+                effective: false,
+                error: Some("当前连接的不是本机内核，YOLO 模式由当前后端自行配置".to_string()),
+                ..Default::default()
+            });
+        }
         let owns = inner
             .dashboard_handle
             .as_ref()

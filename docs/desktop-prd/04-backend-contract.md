@@ -8,7 +8,7 @@
 
 > **后端来源**：
 > - REST：`hermes-agent-cn/hermes_cli/web_server.py`
-> - Gateway JSON-RPC + SSE：`hermes-agent-cn/tui_gateway/server.py`
+> - Gateway JSON-RPC over WebSocket：`hermes-agent-cn/tui_gateway/server.py`
 > - 桌面端调用面：`hermes-agent-cn-desktop/web/src/hooks/*` + `lib/transport.ts`
 
 ---
@@ -31,7 +31,7 @@ Hermes Dashboard 给桌面端提供**两条并行通道**，职责互补：
 - 监控：`/api/analytics/*`、`/api/status`
 - 会话存档（FTS5 检索）：`/api/sessions/*`
 
-### 1.2 Gateway JSON-RPC `/api/v2/rpc` + SSE `/api/v2/events`
+### 1.2 Gateway JSON-RPC over WebSocket `/api/ws`
 
 定位：**实时双向通讯，所有"任务运行中"的流式交互**。
 
@@ -49,11 +49,11 @@ Hermes Dashboard 给桌面端提供**两条并行通道**，职责互补：
 ### 1.3 桌面端怎么选用
 
 - **写状态 / 启动动作**：走 REST
-- **实时事件 / 流式输出**：走 Gateway SSE + RPC
+- **实时事件 / 流式输出**：走 Gateway JSON-RPC over WebSocket
 - **配置查询**：优先 REST（缓存简单），但 RPC 的 `config.get` 是同源数据
 - **Session CRUD**：**只走 Gateway RPC**（虽然 REST 有 `/api/sessions/*`，但桌面端没用 — 桌面端把 session 视为"实时上下文"而非"档案"）
 
-> ⚠️ **重要原则**：桌面端**不要绕过 transport 层**直接调 REST 或开 EventSource。所有 HTTP 通过 [`web/src/lib/transport.ts`](../../web/src/lib/transport.ts)（注入 auth header + 路由 native IPC / fetch），所有 SSE/WS 通过 [`web/src/lib/gateway-sse-client.ts`](../../web/src/lib/gateway-sse-client.ts)。CLAUDE.md 里写明的规则。
+> ⚠️ **重要原则**：桌面端**不要绕过 transport 层**直接调 REST 或开 EventSource。所有 HTTP 通过 [`web/src/lib/transport.ts`](../../web/src/lib/transport.ts)（注入 auth header + 路由 native IPC / fetch），所有 Gateway 通讯通过 [`web/src/lib/gateway-client.ts`](../../web/src/lib/gateway-client.ts) 与 [`web/src/hooks/use-gateway.ts`](../../web/src/hooks/use-gateway.ts)。CLAUDE.md 里写明的规则。
 
 ---
 
@@ -154,8 +154,7 @@ Hermes Dashboard 给桌面端提供**两条并行通道**，职责互补：
 
 | 状态 | 路由 | 用途 |
 |------|------|------|
-| √ | `GET /api/v2/events` | SSE 通道（gateway-sse-client.ts） |
-| √ | `POST /api/v2/rpc` | RPC 请求通道 |
+| √ | `WS /api/ws` | 官方 JSON-RPC 通道；打包态必要时通过 Rust `ws_proxy.rs` 中继 |
 
 ---
 
@@ -451,7 +450,7 @@ Hermes Dashboard 给桌面端提供**两条并行通道**，职责互补：
 - [ ] 跟后端确认 P0「任务文件 audit log」方案（§ 5.1）
 - [ ] 跟后端确认是否补 `/api/workspaces`（§ 5.2）
 - [ ] 凡是 `/api/*` 调用统一走 `lib/transport.ts`
-- [ ] 凡是 gateway 通讯统一走 `lib/gateway-sse-client.ts`
+- [ ] 凡是 gateway 通讯统一走 `lib/gateway-client.ts` / `hooks/use-gateway.ts`
 - [ ] § 7 待核对字段逐项跟后端 owner 对一遍
 
 ---

@@ -581,6 +581,20 @@ pub fn yolo_mode_enabled(hermes_home: &str) -> bool {
     }
 }
 
+/// Read the persisted desktop YOLO-mode preference for `hermes_home` as an
+/// explicit tri-state.
+///
+/// `None` means the user has never set it — the inherited `HERMES_YOLO_MODE`
+/// env var may still act as a default. `Some(false)` is an authoritative "off"
+/// that overrides any inherited env flag; `Some(true)` is an explicit "on".
+/// Read errors fail closed to `None` (no persisted opinion).
+pub fn yolo_mode_preference(hermes_home: &str) -> Option<bool> {
+    match kv_value(hermes_home, YOLO_MODE_KEY) {
+        Ok(Some(value)) => Some(value_is_truthy(&value)),
+        _ => None,
+    }
+}
+
 /// Persist the desktop YOLO-mode preference for `hermes_home`.
 pub fn set_yolo_mode(hermes_home: &str, enabled: bool) -> AppResult<()> {
     set_kv(
@@ -632,6 +646,19 @@ mod tests {
         assert!(yolo_mode_enabled(home));
         set_yolo_mode(home, false).unwrap();
         assert!(!yolo_mode_enabled(home));
+    }
+
+    #[test]
+    fn yolo_mode_preference_is_tri_state() {
+        let dir = TempDir::new().unwrap();
+        let home = dir.path().to_str().unwrap();
+        // Never set → no persisted opinion.
+        assert_eq!(yolo_mode_preference(home), None);
+        // Explicit on/off round-trip as Some.
+        set_yolo_mode(home, true).unwrap();
+        assert_eq!(yolo_mode_preference(home), Some(true));
+        set_yolo_mode(home, false).unwrap();
+        assert_eq!(yolo_mode_preference(home), Some(false));
     }
 
     #[test]

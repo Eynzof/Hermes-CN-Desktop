@@ -6,33 +6,33 @@
 :root {
   /* ── Raw palette (ink/bone/accents)
      ── Source: hermes-cn-ui-prototypes/src/styles/tokens.base.css */
-  --ink-000: #050403;
-  --ink-050: #0a0908;
-  --ink-100: #11100e;
-  --ink-200: #1a1816;
-  --ink-300: #232120;
-  --ink-400: #2e2b29;
-  --ink-500: #3a3633;
-  --ink-600: #4a4541;
-  --ink-700: #5a554f;
-  --ink-800: #6e685f;
+  --ink-000: var(--h-color-ink-000);
+  --ink-050: var(--h-color-ink-050);
+  --ink-100: var(--h-color-ink-100);
+  --ink-200: var(--h-color-ink-200);
+  --ink-300: var(--h-color-ink-300);
+  --ink-400: var(--h-color-ink-400);
+  --ink-500: var(--h-color-ink-500);
+  --ink-600: var(--h-color-ink-600);
+  --ink-700: var(--h-color-ink-700);
+  --ink-800: var(--h-color-ink-800);
 
-  --bone-100: #f6f1e3;
-  --bone-200: #e8e2d4;
-  --bone-300: #d2cabb;
-  --bone-400: #aaa291;
-  --bone-500: #8a8273;
-  --bone-600: #6d6759;
+  --bone-100: var(--h-color-bone-100);
+  --bone-200: var(--h-color-bone-200);
+  --bone-300: var(--h-color-bone-300);
+  --bone-400: var(--h-color-bone-400);
+  --bone-500: var(--h-color-bone-500);
+  --bone-600: var(--h-color-bone-600);
 
-  --persimmon: #ff7a3d;
-  --persimmon-dim: #c95722;
-  --amber: #e8b85d;
-  --moss: #8db580;
-  --moss-deep: #5e7d54;
-  --rust: #d96666;
-  --rust-deep: #a8413f;
-  --sky: #6e9bd1;
-  --plum: #b58dc4;
+  --persimmon: var(--h-color-persimmon-500);
+  --persimmon-dim: var(--h-color-persimmon-600);
+  --amber: var(--h-color-amber-500);
+  --moss: var(--h-color-green-500);
+  --moss-deep: var(--h-color-green-600);
+  --rust: var(--h-color-red-500);
+  --rust-deep: var(--h-color-red-600);
+  --sky: var(--h-color-sky-500);
+  --plum: var(--h-color-plum-500);
 }
 
 :root,
@@ -48,7 +48,8 @@
   --h-text: var(--ink-300);
   --h-text-2: var(--ink-700);
   --h-text-3: var(--ink-800);
-  --h-text-4: #cac4b6;
+  /* Was #cac4b6 (~1.7:1 on the cream bg — effectively invisible). */
+  --h-text-4: var(--bone-500);
   --h-ok: #6b8e5a;
   --h-ok-soft: #e3ecdc;
   --h-warn: #c08828;
@@ -76,8 +77,10 @@
   --h-line-soft: #e5e5e5;
   --h-text: #1f1f1f;
   --h-text-2: #3f3f46;
-  --h-text-3: #6e6e6e;
-  --h-text-4: #a6a6a6;
+  /* Deepened for WCAG AA: #6e6e6e (~4.5:1, sub-AA on chips) → #595959 (~7:1);
+     #a6a6a6 (~2.4:1) → #757575 (~4.6:1). Secondary text is the workhorse here. */
+  --h-text-3: #595959;
+  --h-text-4: #757575;
   --h-ok: #16825d;
   --h-ok-soft: rgba(22, 130, 93, 0.1);
   --h-warn: #9d6b00;
@@ -142,7 +145,8 @@
   --h-text: #d4d4d4;
   --h-text-2: #c5c5c5;
   --h-text-3: #9d9d9d;
-  --h-text-4: #6f6f6f;
+  /* Was #6f6f6f (~3.3:1 on #1f1f1f) → #8a8a8a (~4.9:1) for AA on small text. */
+  --h-text-4: #8a8a8a;
   --h-ok: #89d185;
   --h-ok-soft: rgba(137, 209, 133, 0.1);
   --h-warn: #cca700;
@@ -161,4 +165,72 @@
   --amber: #dcdcaa;
   --moss: #89d185;
   --rust: #f48771;
+}
+
+[data-theme="dracula"] {
+  /* Dracula: deep violet surfaces with its familiar pink and purple accents. */
+  --h-bg-app: #282a36;
+  --h-bg-pane: #282a36;
+  --h-bg-soft: #44475a;
+  --h-bg-input: #44475a;
+  --h-bg-chip: #44475a;
+  --h-bg-code: #21222c;
+  --h-line: #6272a4;
+  --h-line-soft: #44475a;
+  --h-text: #f8f8f2;
+  --h-text-2: #e7e7df;
+  --h-text-3: #c2c4d2;
+  --h-text-4: #a2a5bb;
+  --h-ok: #50fa7b;
+  --h-ok-soft: rgba(80, 250, 123, 0.12);
+  --h-warn: #f1fa8c;
+  --h-warn-soft: rgba(241, 250, 140, 0.12);
+  --h-err: #ff5555;
+  --h-danger: #ff5555;
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.48);
+  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.64);
+  --h-sidebar-stripe: #282a36;
+  --h-accent: #bd93f9;
+  --h-accent-contrast: #282a36;
+  --h-accent-soft: rgba(189, 147, 249, 0.16);
+  --h-accent-border: rgba(189, 147, 249, 0.44);
+  --sky: #8be9fd;
+  --plum: #ff79c6;
+  --amber: #ffb86c;
+  --moss: #50fa7b;
+  --rust: #ff5555;
+}
+
+[data-theme="catppuccin-mocha"] {
+  /* Catppuccin Mocha: layered blue-grey neutrals with muted pastel accents. */
+  --h-bg-app: #1e1e2e;
+  --h-bg-pane: #181825;
+  --h-bg-soft: #313244;
+  --h-bg-input: #313244;
+  --h-bg-chip: #45475a;
+  --h-bg-code: #11111b;
+  --h-line: #45475a;
+  --h-line-soft: #313244;
+  --h-text: #cdd6f4;
+  --h-text-2: #bac2de;
+  --h-text-3: #a6adc8;
+  --h-text-4: #9399b2;
+  --h-ok: #a6e3a1;
+  --h-ok-soft: rgba(166, 227, 161, 0.12);
+  --h-warn: #f9e2af;
+  --h-warn-soft: rgba(249, 226, 175, 0.12);
+  --h-err: #f38ba8;
+  --h-danger: #f38ba8;
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.46);
+  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.62);
+  --h-sidebar-stripe: #181825;
+  --h-accent: #cba6f7;
+  --h-accent-contrast: #1e1e2e;
+  --h-accent-soft: rgba(203, 166, 247, 0.16);
+  --h-accent-border: rgba(203, 166, 247, 0.44);
+  --sky: #89dceb;
+  --plum: #f5c2e7;
+  --amber: #fab387;
+  --moss: #a6e3a1;
+  --rust: #f38ba8;
 }

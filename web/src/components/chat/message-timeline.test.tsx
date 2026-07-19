@@ -1,9 +1,15 @@
 import ReactDOMServer from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { MarkdownText } from "./markdown-renderer";
-import { MessageTimeline, resolveBottomFollowState } from "./message-timeline";
+import { MessageTimeline, resolveBottomFollowState, shouldDetachOnScroll } from "./message-timeline";
 import type { ChatMessage } from "./chat-types";
+
+// MessageTimeline 内部的资料卡用到 useNavigate，SSR 渲染需要 Router 上下文。
+const renderTimeline = (node: ReactElement) =>
+  ReactDOMServer.renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>);
 
 describe("MessageTimeline", () => {
   it("keeps bottom auto-follow disabled after an explicit upward scroll", () => {
@@ -20,6 +26,20 @@ describe("MessageTimeline", () => {
     });
   });
 
+  it("treats a genuine user upward scroll as a bottom-detach gesture", () => {
+    expect(shouldDetachOnScroll(800, 1000, false)).toBe(true);
+  });
+
+  it("does not detach while a programmatic turn jump animates upward", () => {
+    // The smooth scrollTo from scrollToTurn drives scrollTop down too; without the
+    // guard handleScroll would cancel its own jump. This locks in the fix.
+    expect(shouldDetachOnScroll(800, 1000, true)).toBe(false);
+  });
+
+  it("does not detach when scrolling downward", () => {
+    expect(shouldDetachOnScroll(1000, 800, false)).toBe(false);
+  });
+
   it("uses the optimistic progress model instead of stale session usage", () => {
     const messages: ChatMessage[] = [
       {
@@ -27,11 +47,11 @@ describe("MessageTimeline", () => {
         role: "assistant",
         createdAt: 1,
         status: "streaming",
-        blocks: [{ type: "progress", text: "正在启动Hermes Agent内核..." }],
+        blocks: [{ type: "progress", text: "正在唤醒Hermes..." }],
       },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline
         messages={messages}
         turnStartedAt={1}
@@ -55,7 +75,7 @@ describe("MessageTimeline", () => {
       },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline
         messages={messages}
         turnStartedAt={1}
@@ -99,10 +119,10 @@ describe("MessageTimeline", () => {
 
   it("keeps safe relative Markdown links renderable", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
-      <MarkdownText text="[内部帮助](/advanced/about)" />,
+      <MarkdownText text="[内部帮助](/about)" />,
     );
 
-    expect(html).toContain("href=\"/advanced/about\"");
+    expect(html).toContain("href=\"/about\"");
     expect(html).toContain("内部帮助");
   });
 
@@ -197,7 +217,7 @@ describe("MessageTimeline", () => {
     expect(html).toContain("\\(x_1\\)");
   });
 
-  it("shows a readable fallback for unsupported local image URLs", () => {
+  it("starts resolving local image URLs through the gateway media endpoint", () => {
     const messages: ChatMessage[] = [
       {
         id: "user-image",
@@ -207,11 +227,11 @@ describe("MessageTimeline", () => {
       },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 
-    expect(html).toContain("图片暂不能直接预览");
+    expect(html).toContain("图片加载中");
     expect(html).toContain("chart.png");
     expect(html).toContain("/Users/enzo/Downloads/chart.png");
   });
@@ -224,7 +244,7 @@ describe("MessageTimeline", () => {
       { id: "assistant-2", role: "assistant", createdAt: 4, text: "第二轮回答" },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 
@@ -239,10 +259,61 @@ describe("MessageTimeline", () => {
       { id: "assistant-1", role: "assistant", createdAt: 2, text: "回答" },
     ];
 
-    const html = ReactDOMServer.renderToStaticMarkup(
+    const html = renderTimeline(
       <MessageTimeline messages={messages} />,
     );
 
     expect(html).not.toContain("对话轮次定位");
   });
+  it("falls back to session usage stats for the latest completed assistant message", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "问题" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, status: "complete", text: "回答" },
+    ];
+
+    const html = renderTimeline(
+      <MessageTimeline
+        messages={messages}
+        sessionUsage={{
+          model: "deepseek-v4-flash",
+          input: 900,
+          output: 300,
+          total: 1200,
+          cache_read: 100,
+          calls: 1,
+        } as any}
+      />,
+    );
+
+    expect(html).toContain("1.2k");
+    expect(html).toContain('title="详细统计"');
+  });
+
+  it("renders read-aloud controls only for completed assistant messages", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "问题" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, status: "complete", text: "回答" },
+    ];
+
+    const html = renderTimeline(
+      <MessageTimeline messages={messages} />,
+    );
+
+    expect(html).toContain('title="朗读回复"');
+    expect(html).toContain("朗读");
+  });
+
+  it("does not render read-aloud controls for user or streaming assistant messages", () => {
+    const messages: ChatMessage[] = [
+      { id: "user-1", role: "user", createdAt: 1, text: "问题" },
+      { id: "assistant-1", role: "assistant", createdAt: 2, status: "streaming", text: "回答中" },
+    ];
+
+    const html = renderTimeline(
+      <MessageTimeline messages={messages} />,
+    );
+
+    expect(html).not.toContain('title="朗读回复"');
+  });
+
 });

@@ -1,0 +1,230 @@
+.layout {
+  display: grid;
+  gap: 16px;
+  max-width: 1040px;
+}
+
+.topActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.primaryButton,
+.secondaryButton {
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.primaryButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--h-accent);
+  background: var(--h-accent);
+  color: var(--h-accent-contrast, #fff);
+  font-family: var(--h-font-cn);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--h-accent) 84%, var(--h-text));
+  border-color: color-mix(in srgb, var(--h-accent) 84%, var(--h-text));
+}
+
+.secondaryButton {
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.hero,
+.card {
+  border: 1px solid var(--h-line);
+  border-radius: 18px;
+  background: var(--h-bg-surface);
+  box-shadow: var(--h-shadow-soft);
+}
+
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+  padding: 22px;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--h-accent) 14%, transparent), transparent 32%),
+    linear-gradient(135deg, color-mix(in srgb, var(--h-bg-pane) 92%, transparent), transparent);
+  pointer-events: none;
+}
+
+.heroMark,
+.heroCopy,
+.statusBadge {
+  position: relative;
+  z-index: 1;
+}
+
+.heroMark {
+  width: 54px;
+  height: 54px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 34%, var(--h-line));
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--h-accent) 10%, var(--h-bg-pane));
+  color: var(--h-accent);
+}
+
+.eyebrow,
+.cardEyebrow {
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.heroCopy h2,
+.cardHeader h3 {
+  margin: 0;
+  color: var(--h-text);
+}
+
+.heroCopy h2 {
+  margin-top: 7px;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.heroCopy p {
+  margin: 10px 0 0;
+  max-width: 720px;
+  color: var(--h-text-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.heroCopy code {
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+}
+
+.statusBadge {
+  border: 1px solid var(--h-line-soft);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--h-bg-pane);
+  color: var(--h-text-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.statusBadge[data-tone="ready"] {
+  border-color: rgba(127, 192, 131, 0.42);
+  color: #7fc083;
+}
+
+.statusBadge[data-tone="warn"] {
+  border-color: rgba(215, 168, 77, 0.42);
+  color: #d7a84d;
+}
+
+.card {
+  padding: 18px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.cardHeader h3 {
+  margin-top: 6px;
+  font-size: 15px;
+}
+
+.urlGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.urlField {
+  min-width: 0;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 13px;
+  background: var(--h-bg-pane);
+  padding: 11px 12px;
+}
+
+.urlField span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+.urlField strong {
+  display: block;
+  overflow: hidden;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.helpText {
+  margin: 14px 0 0;
+  color: var(--h-text-2);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.errorBox {
+  margin-top: 12px;
+  border: 1px solid rgba(215, 111, 84, 0.34);
+  border-radius: 12px;
+  background: rgba(215, 111, 84, 0.1);
+  color: #e18b74;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+@media (max-width: 840px) {
+  .hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .statusBadge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .urlGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

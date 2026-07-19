@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 export type TopTab =
   | "workbench"
   | "skills"
+  | "gateway"
   | "advanced";
 
 export interface TopTabDef {
@@ -12,6 +13,20 @@ export interface TopTabDef {
   href: string;
   matches: (path: string) => boolean;
 }
+
+const isRoute = (path: string, route: string) => path === route || path.startsWith(`${route}/`);
+
+const ADVANCED_ROUTES = [
+  "/common",
+  "/notifications",
+  "/config",
+  "/connection",
+  "/kernel",
+  "/env",
+  "/about",
+  "/advanced",
+  "/settings",
+] as const;
 
 export const TOP_TABS: readonly TopTabDef[] = [
   {
@@ -24,7 +39,8 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/new") ||
       path.startsWith("/tasks/") ||
       path.startsWith("/history") ||
-      path.startsWith("/projects"),
+      path.startsWith("/projects") ||
+      path.startsWith("/kanban"),
   },
   {
     id: "skills",
@@ -37,16 +53,24 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/mcp") ||
       path.startsWith("/profiles") ||
       path.startsWith("/models") ||
+      path.startsWith("/voice") ||
       path.startsWith("/config-migration") ||
       path.startsWith("/soul") ||
       path.startsWith("/memory") ||
       path.startsWith("/cron") ||
-      path.startsWith("/im") ||
-      path.startsWith("/console"),
+      path.startsWith("/console") ||
+      path.startsWith("/coding-agents"),
+  },
+  {
+    id: "gateway",
+    num: "03",
+    label: "消息接入",
+    href: "/im/feishu",
+    matches: (path) => path.startsWith("/im"),
   },
   {
     id: "advanced",
-    num: "03",
+    num: "04",
     label: "高级",
     href: "/health",
     matches: (path) =>
@@ -55,8 +79,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/logs") ||
       path.startsWith("/debug") ||
       path.startsWith("/theme") ||
-      path.startsWith("/advanced") ||
-      path.startsWith("/settings"),
+      ADVANCED_ROUTES.some((route) => isRoute(path, route)),
   },
 ];
 

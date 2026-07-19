@@ -5,6 +5,7 @@ import {
   extractBodyAfterLeadingSlashToken,
   filterComposerSkills,
   getLeadingSlashToken,
+  getSkillNamespaceToken,
   parseLeadingSlashCommand,
   replaceLeadingSlashToken,
   resolveComposerSkillCommand,
@@ -54,8 +55,32 @@ describe("composer skill slash helpers", () => {
       text: "修复类型错误",
       cursor: 0,
     });
-    expect(buildSkillCommandText("codex", " 修复类型错误 ")).toBe("/codex 修复类型错误");
-    expect(buildSkillCommandText("codex", "")).toBe("/codex");
+    expect(buildSkillCommandText("codex", " 修复类型错误 ")).toBe("/skill codex 修复类型错误");
+    expect(buildSkillCommandText("codex", "")).toBe("/skill codex");
+  });
+
+  it("detects the skill-name sub-token only inside the /skill <name> region", () => {
+    // caret right after "/skill " → empty query, opens the full skill list
+    expect(getSkillNamespaceToken("/skill ", 7)).toMatchObject({
+      start: 0,
+      end: 7,
+      query: "",
+    });
+    // caret inside the name word → query is the name word so far
+    expect(getSkillNamespaceToken("/skill cod", 10)).toMatchObject({
+      start: 0,
+      end: 10,
+      token: "/skill cod",
+      query: "cod",
+    });
+    // case-insensitive command word
+    expect(getSkillNamespaceToken("/SKILL codex", 12)).toMatchObject({ query: "codex" });
+    // caret moved into the body (past the name word) → no skill popover
+    expect(getSkillNamespaceToken("/skill codex 修任务", 16)).toBeNull();
+    // not the /skill namespace
+    expect(getSkillNamespaceToken("/codex 修任务", 6)).toBeNull();
+    // caret still inside the "/skill" command word → command mode, not skill mode
+    expect(getSkillNamespaceToken("/skill", 4)).toBeNull();
   });
 
   it("filters enabled skills by command, translation and description", () => {
@@ -89,20 +114,29 @@ describe("composer skill slash helpers", () => {
     ]);
   });
 
-  it("parses and resolves only known skill commands", () => {
+  it("parses leading slash commands (still used by built-in /compress)", () => {
     expect(parseLeadingSlashCommand("/codex 修复类型错误")).toEqual({
       name: "codex",
       arg: "修复类型错误",
     });
     expect(parseLeadingSlashCommand("请用 /codex")).toBeNull();
-    expect(resolveComposerSkillCommand("/CODEX 修复", ["codex"])).toEqual({
+  });
+
+  it("resolves only known skills under the /skill namespace", () => {
+    expect(resolveComposerSkillCommand("/skill CODEX 修复", ["codex"])).toEqual({
       name: "codex",
       arg: "修复",
     });
-    expect(resolveComposerSkillCommand("/user/review 总结代码", ["user/review"])).toEqual({
+    expect(resolveComposerSkillCommand("/skill user/review 总结代码", ["user/review"])).toEqual({
       name: "user/review",
       arg: "总结代码",
     });
-    expect(resolveComposerSkillCommand("/unknown 修复", ["codex"])).toBeNull();
+    expect(resolveComposerSkillCommand("/skill codex", ["codex"])).toEqual({
+      name: "codex",
+      arg: "",
+    });
+    expect(resolveComposerSkillCommand("/skill unknown 修复", ["codex"])).toBeNull();
+    // bare /<name> is no longer a skill invocation
+    expect(resolveComposerSkillCommand("/codex 修复", ["codex"])).toBeNull();
   });
 });

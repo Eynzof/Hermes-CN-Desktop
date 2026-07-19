@@ -1,0 +1,10 @@
+/* Hermes Design Tokens — Layering */
+
+:root {
+  --h-z-base: 0;
+  --h-z-sticky: 20;
+  --h-z-popover: 50;
+  --h-z-dialog-overlay: 60;
+  --h-z-dialog: 61;
+  --h-z-toast: 80;
+}

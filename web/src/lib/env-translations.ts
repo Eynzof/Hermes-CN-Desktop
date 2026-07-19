@@ -167,19 +167,19 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
     description: "用于 cron 和跨平台通知的默认飞书频道。",
   },
   WEIXIN_ACCOUNT_ID: {
-    label: "微信 iLink 账号 ID",
-    description: "扫码成功后自动获取，也可用于恢复已有 iLink bot 配置。",
+    label: "微信账号 ID",
+    description: "扫码成功后自动获取，也可用于恢复已有微信接入配置。",
   },
   WEIXIN_TOKEN: {
-    label: "微信 Bot Token",
-    description: "iLink bot 认证 token，仅保存到当前 profile。",
+    label: "微信认证口令",
+    description: "微信接入的认证口令，仅保存到当前档案。",
   },
   WEIXIN_BASE_URL: {
-    label: "微信 iLink API 地址",
+    label: "微信接入 API 地址",
     description: "默认 https://ilinkai.weixin.qq.com，通常无需修改。",
   },
   WEIXIN_CDN_BASE_URL: {
-    label: "微信 iLink CDN 地址",
+    label: "微信接入 CDN 地址",
     description: "用于媒体加密上传与下载的 CDN Base URL。",
   },
   WEIXIN_DM_POLICY: {
@@ -196,7 +196,7 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
   },
   WEIXIN_GROUP_POLICY: {
     label: "微信群聊策略",
-    description: "控制 iLink bot 收到群聊事件时如何响应。",
+    description: "控制微信接入收到群聊消息时如何响应。",
   },
   WEIXIN_GROUP_ALLOWED_USERS: {
     label: "微信允许群聊",

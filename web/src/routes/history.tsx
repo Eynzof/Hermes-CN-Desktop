@@ -2,15 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Dialog, Popover } from "@hermes/shared-ui";
+import { Popover } from "@hermes/shared-ui";
 import {
   Archive,
+  ArchiveRestore,
   ChevronDown,
-  Edit3,
   MoreHorizontal,
   Pin,
   PinOff,
-  Plus,
   Search,
   Trash2,
 } from "lucide-react";
@@ -23,6 +22,7 @@ import {
   useArchiveSession,
   useDeleteSessions,
   useSessions,
+  useUnarchiveSession,
 } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { isSessionRunning } from "@/lib/session-activity";
@@ -55,6 +55,11 @@ import {
   togglePinnedSource,
 } from "@/lib/source-pin";
 import { renameSession } from "@/lib/session-rename";
+import {
+  SessionDeleteModal,
+  SessionRenameModal,
+  SessionRowMenu,
+} from "@/components/session-actions";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
 import s from "./history.module.css";
 
@@ -69,6 +74,11 @@ const STATUS_LABELS: Record<StatusFilter, string> = {
   done: "已完成",
   failed: "失败",
 };
+
+// Archive scope partitions the list orthogonally to status: "active" is the
+// default (archived sessions hidden, matching the rest of the app); "archived"
+// shows only the sessions the user has tucked away, with restore actions.
+type ArchiveScope = "active" | "archived";
 
 function shortId(id: string): string {
   return id.slice(-6);
@@ -92,179 +102,6 @@ function classifySession(
     return { kind: "failed", label: session.end_reason === "interrupted" ? "已中止" : "失败" };
   }
   return { kind: "done", label: "已完成" };
-}
-
-interface RowMenuProps {
-  pinned: boolean;
-  disabled?: boolean;
-  onTogglePin: () => void;
-  onRename: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-}
-
-function RowMenu({ pinned, disabled, onTogglePin, onRename, onArchive, onDelete }: RowMenuProps) {
-  return (
-    <Popover.Portal>
-      <Popover.Content
-        className={s.rowMenu}
-        align="end"
-        side="bottom"
-        sideOffset={4}
-        role="menu"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <Popover.Close asChild>
-          <button type="button" onClick={onTogglePin} role="menuitem" disabled={disabled}>
-            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
-            {pinned ? "取消置顶" : "置顶"}
-          </button>
-        </Popover.Close>
-        <Popover.Close asChild>
-          <button type="button" onClick={onRename} role="menuitem" disabled={disabled}>
-            <Edit3 size={13} /> 重命名
-          </button>
-        </Popover.Close>
-        <Popover.Close asChild>
-          <button type="button" onClick={onArchive} role="menuitem" disabled={disabled}>
-            <Archive size={13} /> 归档
-          </button>
-        </Popover.Close>
-        <Popover.Close asChild>
-          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger" disabled={disabled}>
-            <Trash2 size={13} /> 删除
-          </button>
-        </Popover.Close>
-      </Popover.Content>
-    </Popover.Portal>
-  );
-}
-
-interface RenameModalProps {
-  value: string;
-  saving: boolean;
-  error: string;
-  onChange: (next: string) => void;
-  onClose: () => void;
-  onSubmit: () => void;
-}
-
-function RenameModal({ value, saving, error, onChange, onClose, onSubmit }: RenameModalProps) {
-  return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open && !saving) onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className={s.modalBackdrop} />
-        <Dialog.Content
-          className={s.renameModal}
-          aria-describedby={error ? "history-rename-error" : undefined}
-          onEscapeKeyDown={(event) => {
-            if (saving) event.preventDefault();
-          }}
-          onInteractOutside={(event) => {
-            if (saving) event.preventDefault();
-          }}
-        >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmit();
-            }}
-          >
-            <Dialog.Title asChild>
-              <h2>重命名会话</h2>
-            </Dialog.Title>
-            <input
-              className={s.renameInput}
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-              autoFocus
-              maxLength={80}
-            />
-            {error ? (
-              <div id="history-rename-error" className={s.renameError}>
-                {error}
-              </div>
-            ) : null}
-            <div className={s.renameActions}>
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className={s.renameCancel}
-                  disabled={saving}
-                >
-                  取消
-                </button>
-              </Dialog.Close>
-              <button type="submit" className={s.renameSubmit} disabled={saving}>
-                {saving ? "保存中…" : "保存"}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-interface DeleteConfirmModalProps {
-  sessions: SessionSummary[];
-  deleting: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}
-
-function DeleteConfirmModal({ sessions, deleting, onClose, onConfirm }: DeleteConfirmModalProps) {
-  const count = sessions.length;
-  const preview = sessions.slice(0, 5);
-  return (
-    <Dialog.Root
-      open
-      onOpenChange={(open) => {
-        if (!open && !deleting) onClose();
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className={s.modalBackdrop} />
-        <Dialog.Content
-          className={s.confirmModal}
-          aria-describedby="history-delete-confirm-desc"
-          onEscapeKeyDown={(event) => {
-            if (deleting) event.preventDefault();
-          }}
-        >
-          <Dialog.Title asChild>
-            <h2>{count === 1 ? "删除会话" : "批量删除会话"}</h2>
-          </Dialog.Title>
-          <Dialog.Description id="history-delete-confirm-desc" className={s.confirmText}>
-            将删除 {count} 个会话，此操作不可撤销。
-          </Dialog.Description>
-          <div className={s.confirmList}>
-            {preview.map((session) => (
-              <div key={session.id} className={s.confirmListItem}>
-                {sessionDisplayTitle(session)}
-              </div>
-            ))}
-            {count > preview.length ? (
-              <div className={s.confirmListMore}>另有 {count - preview.length} 个会话</div>
-            ) : null}
-          </div>
-          <div className={s.confirmActions}>
-            <button type="button" className={s.confirmCancel} onClick={onClose} disabled={deleting}>
-              取消
-            </button>
-            <button type="button" className={s.confirmDanger} onClick={onConfirm} disabled={deleting}>
-              {deleting ? "删除中…" : "确认删除"}
-            </button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
 }
 
 interface SourcePopoverProps {
@@ -393,11 +230,17 @@ function SourcePopover({
 export function HistoryRoute() {
   const navigate = useNavigate();
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
-  const { data, isLoading, isError } = useSessions(PAGE_SIZE, 0);
+  // Always fetch with archived sessions included (annotated `archived: true` by
+  // the Rust proxy) so both scopes share one query and their counts are always
+  // known; we split client-side by `archived`. The sidebar keeps the default
+  // active-only query, so archived sessions never leak there.
+  const { data, isLoading, isError } = useSessions(PAGE_SIZE, 0, { includeArchived: true });
   const archiveSession = useArchiveSession();
+  const unarchiveSession = useUnarchiveSession();
   const deleteSessions = useDeleteSessions();
   const { setSessionTitle, resumeSession } = useGateway();
 
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -443,6 +286,20 @@ export function HistoryRoute() {
     [data?.sessions, titleOverrides],
   );
 
+  // Counts for the scope toggle, derived from the single archived-inclusive set.
+  const activeCount = useMemo(() => sessions.filter((x) => !x.archived).length, [sessions]);
+  const archivedCount = useMemo(() => sessions.filter((x) => x.archived).length, [sessions]);
+
+  // Everything below (status/source counts, filtering, grouping) operates on the
+  // sessions in the current scope only.
+  const scopedSessions = useMemo(
+    () =>
+      sessions.filter((session) =>
+        archiveScope === "archived" ? !!session.archived : !session.archived,
+      ),
+    [archiveScope, sessions],
+  );
+
   useEffect(() => {
     if (!data || data.total > sessions.length || pinnedSessionIds.size === 0) return;
     const liveIds = new Set(sessions.map((session) => session.id));
@@ -453,20 +310,20 @@ export function HistoryRoute() {
   // status counts (across all sessions, ignoring source/search filters)
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = { all: 0, running: 0, done: 0, failed: 0 };
-    for (const session of sessions) {
+    for (const session of scopedSessions) {
       counts.all += 1;
       const live = isSessionRunning(session, runtimeBySession);
       const status = classifySession(session, live).kind;
       counts[status] += 1;
     }
     return counts;
-  }, [runtimeBySession, sessions]);
+  }, [runtimeBySession, scopedSessions]);
 
   // source counts (across sessions matching status + search, ignoring source filter)
   const sourceCounts = useMemo(() => {
     const counts = new Map<string, number>();
     const q = searchQuery.trim().toLowerCase();
-    for (const session of sessions) {
+    for (const session of scopedSessions) {
       const live = isSessionRunning(session, runtimeBySession);
       const status = classifySession(session, live).kind;
       if (statusFilter !== "all" && status !== statusFilter) continue;
@@ -479,7 +336,7 @@ export function HistoryRoute() {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
-  }, [runtimeBySession, searchQuery, sessions, statusFilter]);
+  }, [runtimeBySession, searchQuery, scopedSessions, statusFilter]);
 
   // inline sources: pinned first (sorted by count), then top remaining by count, capped to INLINE_SOURCE_LIMIT
   const inlineSourceKeys = useMemo(() => {
@@ -500,7 +357,7 @@ export function HistoryRoute() {
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const matches: SessionSummary[] = [];
-    for (const session of sessions) {
+    for (const session of scopedSessions) {
       const live = isSessionRunning(session, runtimeBySession);
       const status = classifySession(session, live).kind;
       if (statusFilter !== "all" && status !== statusFilter) continue;
@@ -517,7 +374,7 @@ export function HistoryRoute() {
     }
     matches.sort((a, b) => lastActivitySec(b) - lastActivitySec(a));
     return matches;
-  }, [runtimeBySession, searchQuery, selectedSource, sessions, statusFilter]);
+  }, [runtimeBySession, searchQuery, selectedSource, scopedSessions, statusFilter]);
 
   const dayGroups = useMemo(() => {
     const groups = new Map<string, { label: string; sessions: SessionSummary[]; sortKey: number }>();
@@ -655,6 +512,14 @@ export function HistoryRoute() {
     [archiveSession],
   );
 
+  const handleUnarchive = useCallback(
+    (session: SessionSummary) => {
+      setOpenMenuId(null);
+      unarchiveSession.mutate(session.id);
+    },
+    [unarchiveSession],
+  );
+
   const openDeleteDialog = useCallback((targets: SessionSummary[]) => {
     const uniqueTargets = Array.from(new Map(targets.map((session) => [session.id, session])).values());
     if (uniqueTargets.length === 0) return;
@@ -716,7 +581,7 @@ export function HistoryRoute() {
     <main className={s.page}>
       <TopBar
         title="对话历史"
-        sub={isLoading ? "加载中…" : `${filtered.length} / ${sessions.length} 个会话`}
+        sub={isLoading ? "加载中…" : `${filtered.length} / ${scopedSessions.length} 个会话`}
         right={
           <>
             <span className={s.headerStat}>
@@ -729,15 +594,12 @@ export function HistoryRoute() {
               <Trash2 size={13} />
               批量删除
             </TopBarActionButton>
-            <TopBarActionButton onClick={() => navigate("/")}>
-              <Plus size={13} />
-              新对话
-            </TopBarActionButton>
           </>
         }
       />
 
       <div className={s.filters}>
+        <div className={s.filtersRow}>
         <div className={s.seg} role="tablist" aria-label="状态筛选">
           {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((key) => (
             <button
@@ -820,6 +682,36 @@ export function HistoryRoute() {
             onChange={(event) => setSearchQuery(event.target.value)}
           />
         </div>
+        </div>
+
+        {/* 第二行：活跃/归档范围切换（用户反馈：与状态筛选分行，别挤在搜索框旁）。 */}
+        <div className={s.filtersRow}>
+        <div className={s.seg} role="tablist" aria-label="归档筛选">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={archiveScope === "active"}
+            className={s.segItem}
+            data-active={archiveScope === "active" ? "true" : undefined}
+            onClick={() => setArchiveScope("active")}
+          >
+            活跃中
+            <span className={s.segCount}>{activeCount}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={archiveScope === "archived"}
+            className={s.segItem}
+            data-active={archiveScope === "archived" ? "true" : undefined}
+            onClick={() => setArchiveScope("archived")}
+          >
+            <Archive size={12} />
+            已归档
+            <span className={s.segCount}>{archivedCount}</span>
+          </button>
+        </div>
+        </div>
       </div>
 
       {bulkDeleteMode ? (
@@ -857,7 +749,11 @@ export function HistoryRoute() {
           <div className={s.emptyState}>加载会话中…</div>
         ) : dayGroups.length === 0 ? (
           <div className={s.emptyState}>
-            {sessions.length === 0 ? "暂无会话" : "没有匹配当前筛选的会话"}
+            {scopedSessions.length === 0
+              ? archiveScope === "archived"
+                ? "暂无已归档会话"
+                : "暂无会话"
+              : "没有匹配当前筛选的会话"}
           </div>
         ) : (
           dayGroups.map((group, groupIdx) => {
@@ -895,6 +791,7 @@ export function HistoryRoute() {
                   const meta = getSourceMeta(session.source);
                   const selected = selectedSessionIds.has(session.id);
                   const pinned = pinnedSessionIds.has(session.id);
+                  const menuDisabled = live || deleteSessions.isPending;
                   const workspacePath = normalizeWorkspacePath(workspaceMap[session.id]);
                   const workspaceName = workspacePath
                     ? workspaceNameFromPath(workspacePath)
@@ -945,26 +842,31 @@ export function HistoryRoute() {
                       </span>
                       <span className={s.cellTimestamp}>{updatedDisplay}</span>
                       <Popover.Root
-                        open={openMenuId === session.id}
-                        onOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
+                        open={!menuDisabled && openMenuId === session.id}
+                        onOpenChange={(open) => {
+                          setOpenMenuId(open && !menuDisabled ? session.id : null);
+                        }}
                       >
                         <Popover.Trigger asChild>
                           <button
                             type="button"
                             className={s.cellMore}
                             aria-label="会话操作"
-                            disabled={deleteSessions.isPending}
+                            title={live ? "运行中任务暂不可操作" : "会话操作"}
+                            disabled={menuDisabled}
                             onClick={(event) => event.stopPropagation()}
                           >
                             <MoreHorizontal size={14} />
                           </button>
                         </Popover.Trigger>
-                        <RowMenu
+                        <SessionRowMenu
                           pinned={pinned}
-                          disabled={deleteSessions.isPending}
+                          disabled={menuDisabled}
+                          archived={archiveScope === "archived"}
                           onTogglePin={() => onTogglePinSession(session.id)}
                           onRename={() => startRename(session)}
                           onArchive={() => handleArchive(session)}
+                          onUnarchive={() => handleUnarchive(session)}
                           onDelete={() => openDeleteDialog([session])}
                         />
                       </Popover.Root>
@@ -987,7 +889,7 @@ export function HistoryRoute() {
       </div>
 
       {renamingSession ? (
-        <RenameModal
+        <SessionRenameModal
           value={renameValue}
           saving={renameSaving}
           error={renameError}
@@ -1001,7 +903,7 @@ export function HistoryRoute() {
       ) : null}
 
       {deleteTargets ? (
-        <DeleteConfirmModal
+        <SessionDeleteModal
           sessions={deleteTargets}
           deleting={deleteSessions.isPending}
           onClose={closeDeleteDialog}

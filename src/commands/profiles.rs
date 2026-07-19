@@ -108,6 +108,17 @@ pub async fn switch_profile(
     let (base, current_profile, _owns_process, previous_home) = {
         let inner = state.inner.lock()?;
 
+        // Profile switching requires a desktop-owned managed dashboard so the
+        // shell can restart it with a different HERMES_HOME. Attached local or
+        // remote agents own their own process/lifecycle.
+        if inner.connection_mode != crate::connection::ConnectionMode::Managed {
+            return Ok(SwitchProfileResult {
+                ok: false,
+                error: Some("当前连接的不是本机内核，不支持在桌面端切换 Profile".to_string()),
+                ..Default::default()
+            });
+        }
+
         if !inner
             .dashboard_handle
             .as_ref()

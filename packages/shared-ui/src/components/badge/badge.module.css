@@ -1,0 +1,125 @@
+.badge {
+  --h-badge-fg: var(--h-color-fg-muted);
+  --h-badge-bg: var(--h-color-bg-surface);
+  --h-badge-border: var(--h-color-border-default);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid var(--h-badge-border);
+  border-radius: var(--h-radius-pill);
+  background: var(--h-badge-bg);
+  color: var(--h-badge-fg);
+  font-family: var(--h-font-ui);
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.badge[data-size="sm"] {
+  min-height: 20px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.badge[data-size="md"] {
+  min-height: 22px;
+  padding: 3px 9px;
+}
+
+.badge[data-tone="accent"],
+.badge[data-tone="info"] {
+  --h-badge-fg: var(--h-color-accent-fg);
+  --h-badge-bg: var(--h-color-accent-soft);
+  --h-badge-border: var(--h-color-accent-border);
+}
+
+.badge[data-tone="success"],
+.badge[data-tone="ok"],
+.badge[data-tone="live"] {
+  --h-badge-fg: var(--h-color-success-fg);
+  --h-badge-bg: var(--h-color-success-bg);
+  --h-badge-border: var(--h-color-success-border);
+}
+
+.badge[data-tone="warning"],
+.badge[data-tone="warn"] {
+  --h-badge-fg: var(--h-color-warning-fg);
+  --h-badge-bg: var(--h-color-warning-bg);
+  --h-badge-border: var(--h-color-warning-border);
+}
+
+.badge[data-tone="danger"],
+.badge[data-tone="err"] {
+  --h-badge-fg: var(--h-color-danger-fg);
+  --h-badge-bg: var(--h-color-danger-bg);
+  --h-badge-border: var(--h-color-danger-border);
+}
+
+.badge[data-variant="outline"] {
+  background: transparent;
+}
+
+.badge[data-variant="solid"] {
+  color: var(--h-color-fg-on-accent);
+  background: var(--h-badge-fg);
+  border-color: var(--h-badge-fg);
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--h-color-fg-subtle);
+}
+
+.dot[data-size="sm"] {
+  width: 6px;
+  height: 6px;
+}
+
+.dot[data-size="md"] {
+  width: 7px;
+  height: 7px;
+}
+
+.dot[data-size="lg"] {
+  width: 9px;
+  height: 9px;
+}
+
+.dot[data-tone="accent"],
+.dot[data-tone="info"] {
+  background: var(--h-color-accent-fg);
+}
+
+.dot[data-tone="success"],
+.dot[data-tone="ok"],
+.dot[data-tone="live"] {
+  background: var(--h-color-success-fg);
+}
+
+.dot[data-tone="warning"],
+.dot[data-tone="warn"] {
+  background: var(--h-color-warning-fg);
+}
+
+.dot[data-tone="danger"],
+.dot[data-tone="err"] {
+  background: var(--h-color-danger-fg);
+}
+
+.dot[data-tone="live"] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--h-color-success-fg) 25%, transparent);
+  animation: hermesStatusPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes hermesStatusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
