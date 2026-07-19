@@ -447,6 +447,7 @@ function updateActiveAssistant(
   sessionId: string,
   now: number,
   updater: (message: HermesUIMessage) => HermesUIMessage | null,
+  sender?: GroupSenderFields,
 ): ChatSessionRuntime {
   const id = activeAssistantId(runtime, now);
   const ensured = ensureAssistantMessage(
@@ -454,6 +455,7 @@ function updateActiveAssistant(
     sessionId,
     id,
     now,
+    sender,
   );
   return updateMessage(ensured, id, updater);
 }
@@ -642,6 +644,7 @@ function reduceGatewayEventInner(
       // no-op that prevents "重复发送3条空消息".  The backend may
       // emit empty-string deltas during reasoning↔content transitions.
       if (!text && images.length === 0) return runtime;
+      const sender = extractGroupSender(payload);
       const id = activeAssistantId(runtime, now);
       const next = updateActiveAssistant(
         clearProviderStatus({
@@ -659,6 +662,7 @@ function reduceGatewayEventInner(
           status: "streaming",
           parts: appendImageParts(appendTextPart(message.parts, text), images),
         }),
+        sender,
       );
       return next;
     }
@@ -796,6 +800,7 @@ function reduceGatewayEventInner(
 
     case "message.complete": {
       const id = activeAssistantId(runtime, now);
+      const sender = extractGroupSender(payload);
       const metadata = completionMetadata(payload, runtime, now);
       const isErrorCompletion = payload.status === "error";
       let next = updateActiveAssistant(
@@ -817,6 +822,7 @@ function reduceGatewayEventInner(
             metadata: metadata ? { ...message.metadata, ...metadata } : message.metadata,
           };
         },
+        sender,
       );
 
       const warningText =
@@ -1053,6 +1059,16 @@ function isRecoverableStoredAssistant(
   turnStartedAt: number | undefined,
 ): boolean {
   if (liveAssistant.role !== "assistant" || storedAssistant.role !== "assistant") return false;
+  // Group chat (P-048): never recover across members. A member's live bubble —
+  // especially a progress-only one that just started streaming (reviewer) — must
+  // not match a DIFFERENT member's stored completion (default). That deleted the
+  // reviewer bubble mid-turn and let its later deltas merge into default.
+  const liveSender = liveAssistant.senderAgentId;
+  const storedSender = storedAssistant.senderAgentId;
+  if (liveSender && storedSender && liveSender !== storedSender) return false;
+  // A progress-only live bubble in a group room may only be recovered by a
+  // stored completion from the SAME member — otherwise it matches any reply.
+  if (liveSender && liveSender !== storedSender) return false;
   if (storedAssistant.status !== "complete") return false;
   if (!storedAssistantIsAfterTurn(storedAssistant, turnStartedAt)) return false;
 
