@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
-import { AppTopBar } from "./app-top-bar";
-import { AppSidebar } from "./app-sidebar";
-import { AppStatusBar } from "./app-status-bar";
+import { TaskRail } from "./task-rail";
 import { GuideReminder } from "./guide-reminder";
 import { ConnectionTargetNotice } from "./connection-target-notice";
+import { SettingsDialog } from "@/components/settings/settings-dialog";
 import s from "./app-shell.module.css";
 
 interface AppShellProps {
@@ -13,16 +12,15 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   return (
     <div className={s.shell}>
-      <div className={s.topbarSlot}>
-        <AppTopBar />
+      <div className={s.railSlot}>
+        <TaskRail />
       </div>
-      <div className={s.sidebarSlot}>
-        <AppSidebar />
+      <div className={s.mainSlot}>
+        <ConnectionTargetNotice />
+        {children}
+        <GuideReminder />
       </div>
-      <div className={s.mainSlot}><ConnectionTargetNotice />{children}<GuideReminder /></div>
-      <div className={s.statusbarSlot}>
-        <AppStatusBar />
-      </div>
+      <SettingsDialog />
     </div>
   );
 }

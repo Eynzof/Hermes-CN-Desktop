@@ -7,12 +7,12 @@
 <style>
 :root{
   --rail-bg:#f2f3f5; --bg:#ffffff; --bg-soft:#f5f6f7; --fg:#1f2329; --muted:#646a73; --faint:#9aa0a6;
-  --line:#e5e6eb; --line-soft:#eff0f1; --brand:#335cff; --brand-soft:#eef2ff; --green:#00b42a;
-  --shadow:0 8px 28px rgba(0,0,0,.14); --radius:12px; --radius-s:8px;
+  --line:#e5e6eb; --line-soft:#eff0f1; --brand:#335cff; --brand-soft:#eef2ff; --green:#00b42a; --ink:#1f2329;
+  --shadow:0 8px 28px rgba(0,0,0,.14);
 }
 [data-theme="dark"]{
   --rail-bg:#1b1d21; --bg:#14161a; --bg-soft:#1f2227; --fg:#e8eaf0; --muted:#9aa0aa; --faint:#6b7078;
-  --line:#2c2f36; --line-soft:#24272d; --brand:#5c7cff; --brand-soft:#23294a; --green:#23c55e;
+  --line:#2c2f36; --line-soft:#24272d; --brand:#5c7cff; --brand-soft:#23294a; --green:#23c55e; --ink:#e8eaf0;
   --shadow:0 8px 28px rgba(0,0,0,.5);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -20,28 +20,22 @@
 html,body{height:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--fg);background:var(--bg);font-size:14px;line-height:1.6;overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
-.app{display:flex;flex-direction:column;height:100vh}
-/* 窗口标题栏 */
-.titlebar{height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--rail-bg);border-bottom:1px solid var(--line);-webkit-app-region:drag;flex-shrink:0}
-.titlebar .logo{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,#335cff,#00b42a);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800}
-.titlebar .name{font-size:13px;color:var(--muted)}
-.titlebar .win-controls{margin-left:auto;display:flex;gap:18px;color:var(--muted);font-size:13px;-webkit-app-region:no-drag}
-.main{flex:1;display:flex;min-height:0}
+.app{display:flex;height:100vh}
 /* ========= 左栏 ========= */
-.rail{width:236px;background:var(--rail-bg);border-right:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0;position:relative}
-.rail-head{padding:10px 12px 6px;display:flex;align-items:center;gap:8px}
-.rail-head .brand{font-weight:700;font-size:14px}
-.rail-head .ver{font-size:11px;color:var(--faint)}
-.rail-head .icons{margin-left:auto;display:flex;gap:10px;color:var(--muted);font-size:14px}
-.rail-nav{padding:4px 8px}
-.nav-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border-radius:8px;font-size:13.5px;text-align:left;color:var(--fg)}
+.rail{width:236px;background:var(--rail-bg);border-right:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0}
+.rail-head{padding:14px 14px 8px;display:flex;align-items:flex-start;gap:8px}
+.rail-head .brand{font-weight:700;font-size:14.5px;line-height:1.2}
+.rail-head .ver{font-size:11px;color:var(--faint);margin-top:1px}
+.rail-head .icons{margin-left:auto;display:flex;gap:14px;color:var(--muted);font-size:14px;padding-top:2px}
+.rail-nav{padding:2px 8px}
+.nav-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:9px;font-size:13.5px;text-align:left;color:var(--fg)}
 .nav-item:hover{background:var(--line-soft)}
 .nav-item.active{background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.1);font-weight:600}
-.nav-item .ico{width:17px;text-align:center}
-.nav-item .sub{margin-left:auto;font-size:11px;color:var(--faint)}
-.rail-sec{padding:12px 14px 4px;font-size:12px;color:var(--faint);display:flex;align-items:center;gap:4px;cursor:pointer}
-.task-list{flex:1;overflow-y:auto;padding:0 8px 8px}
-.task-item{padding:7px 10px;border-radius:8px;cursor:pointer;margin:1px 0}
+.nav-item .ico{width:17px;text-align:center;font-size:14px}
+.nav-item .sub{margin-left:auto;font-size:11px;color:var(--faint);font-weight:400}
+.rail-sec{padding:14px 14px 4px;font-size:12px;color:var(--faint);display:flex;align-items:center;gap:4px;cursor:pointer}
+.task-list{flex:1;overflow-y:auto;padding:0 8px 4px}
+.task-item{padding:7px 10px;border-radius:9px;cursor:pointer;margin:1px 0}
 .task-item:hover{background:var(--line-soft)}
 .task-item.active{background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .task-item .t{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
@@ -50,39 +44,50 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .st.run{color:var(--green)} .st.done{color:var(--faint)} .st.fail{color:#f53f3f} .st.wait{color:#ff7d00}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.6s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.space-item{padding:6px 10px;border-radius:8px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center}
+.space-item{padding:6px 10px;border-radius:9px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center}
 .space-item:hover{background:var(--line-soft)}
-.account{margin:8px;padding:8px 10px;border-radius:10px;display:flex;align-items:center;gap:9px;cursor:pointer;border:1px solid transparent}
-.account:hover{background:var(--bg);border-color:var(--line)}
-.account .avatar{width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.account{margin-top:auto;padding:12px 14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px;cursor:pointer}
+.account:hover{background:var(--line-soft)}
+.account .avatar{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
 .account .nm{font-size:13px;font-weight:600}
 .account .st2{font-size:11px;color:var(--faint)}
-.account .bell{margin-left:auto;color:var(--muted)}
+.account .tail{margin-left:auto;display:flex;gap:12px;color:var(--muted);font-size:14px}
 /* ========= 主区 ========= */
 .content{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
 /* 首页 */
-.home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 48px;overflow-y:auto}
-.hero{font-size:34px;font-weight:800;letter-spacing:.5px}
-.hero-sub{font-size:30px;font-weight:800;margin-bottom:22px}
-.mode-tabs{display:flex;gap:8px;margin-bottom:16px}
-.mode-tab{padding:6px 16px;border-radius:999px;font-size:13px;color:var(--muted);border:1px solid var(--line)}
-.mode-tab.active{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
+.home{flex:1;display:flex;flex-direction:column;justify-content:center;padding:40px 8vw;overflow-y:auto}
+.home-col{max-width:860px;width:100%;margin:0 auto}
+.hero{font-size:38px;font-weight:800;letter-spacing:.5px;line-height:1.25}
+.hero2{font-size:38px;font-weight:800;margin-bottom:26px}
+.mode-tabs{display:flex;gap:10px;margin-bottom:14px}
+.mode-tab{display:flex;align-items:center;gap:6px;padding:7px 18px;border-radius:999px;font-size:13.5px;color:var(--fg)}
+.mode-tab.active{background:var(--ink);color:var(--bg);font-weight:600}
+.mode-tab:not(.active):hover{background:var(--bg-soft)}
 .mode-tab.disabled{opacity:.45;cursor:not-allowed}
-.chips{display:flex;gap:10px;margin-bottom:30px;flex-wrap:wrap;justify-content:center}
-.chip{padding:5px 14px;border-radius:999px;background:var(--bg-soft);color:var(--muted);font-size:12.5px}
-.chip:hover{background:var(--brand-soft);color:var(--brand)}
+.chips{display:flex;gap:10px;margin-bottom:34px;flex-wrap:wrap;align-items:center}
+.chip{display:flex;align-items:center;gap:6px;padding:6px 15px;border-radius:999px;border:1px solid var(--line);color:var(--fg);font-size:13px;background:var(--bg)}
+.chip:hover{border-color:var(--faint)}
+.mascot{margin-left:auto;position:relative}
+.mascot .bubble{position:absolute;top:-8px;right:6px;width:18px;height:18px;border-radius:50%;background:var(--green);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
 /* Composer */
-.composer-wrap{width:min(760px,92%)}
-.composer{border:1px solid var(--line);border-radius:16px;background:var(--bg);box-shadow:0 4px 20px rgba(0,0,0,.05);padding:14px 16px 10px}
-.composer .input{color:var(--faint);font-size:15px;padding:4px 2px 14px}
-.composer .input b{color:var(--muted);font-weight:400}
-.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.tool{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:8px;padding:3px 10px;font-size:12.5px;color:var(--fg);background:var(--bg)}
-.tool:hover{background:var(--bg-soft)}
-.tool .caret{color:var(--faint);font-size:10px}
-.tool-send{margin-left:auto;width:34px;height:34px;border-radius:50%;background:var(--fg);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:15px}
-.tool-ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px}
-.tool-ico:hover{background:var(--bg-soft)}
+.composer{border:1px solid var(--line);border-radius:18px;background:var(--bg);box-shadow:0 4px 20px rgba(0,0,0,.04);padding:16px 18px 12px}
+.composer .input{color:var(--faint);font-size:15px;min-height:66px}
+.composer .input b{color:var(--faint);font-weight:400}
+.c-row{display:flex;align-items:center;gap:6px}
+.c-plus{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--fg)}
+.c-plus:hover{background:var(--bg-soft)}
+.c-tool{display:flex;align-items:center;gap:5px;border-radius:9px;padding:5px 10px;font-size:13px;color:var(--fg)}
+.c-tool:hover{background:var(--bg-soft)}
+.c-tool .caret{color:var(--faint);font-size:10px}
+.c-model{display:flex;align-items:center;gap:5px;border-radius:9px;padding:5px 8px;font-size:13px;color:var(--fg)}
+.c-model:hover{background:var(--bg-soft)}
+.c-voice{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px}
+.c-voice:hover{background:var(--bg-soft)}
+.c-send{margin-left:4px;width:34px;height:34px;border-radius:50%;background:#e5e6eb;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px}
+.c-send.ready{background:var(--ink);color:var(--bg)}
+.below-pills{display:flex;gap:8px;margin-top:10px}
+.b-pill{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:9px;font-size:12.5px;color:var(--muted)}
+.b-pill:hover{background:var(--bg-soft)}
 .disclaimer{text-align:center;color:var(--faint);font-size:12px;margin-top:10px}
 /* 任务页 */
 .task-title{height:52px;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--line);flex-shrink:0}
@@ -112,13 +117,14 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .typing{color:var(--faint);font-size:13px;padding:4px 2px}
 /* 右侧结果区 */
 .results{width:400px;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--bg);flex-shrink:0}
-.results.hidden{display:none}
-.res-tabs{display:flex;gap:2px;padding:10px 12px 0;border-bottom:1px solid var(--line)}
-.res-tab{padding:7px 13px;font-size:13px;color:var(--muted);border-radius:8px 8px 0 0;cursor:pointer;border-bottom:2px solid transparent}
+.res-head{display:flex;align-items:center;padding:10px 14px 0;gap:4px}
+.res-tabs{display:flex;gap:2px;flex:1}
+.res-tab{padding:7px 12px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;border-radius:6px 6px 0 0}
 .res-tab:hover{color:var(--fg)}
-.res-tab.active{color:var(--fg);font-weight:600;border-bottom-color:var(--brand)}
+.res-tab.active{color:var(--fg);font-weight:600;border-bottom-color:var(--ink)}
 .res-tab .n{font-size:11px;color:var(--faint)}
-.res-body{flex:1;overflow-y:auto;padding:14px}
+.res-icons{display:flex;gap:10px;color:var(--muted);font-size:14px;padding-bottom:6px}
+.res-body{flex:1;overflow-y:auto;padding:14px;border-top:1px solid var(--line)}
 .res-pane{display:none}
 .res-pane.active{display:block}
 .p-card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--bg)}
@@ -134,7 +140,7 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .fileview .fp{font-size:12px;color:var(--faint);margin-bottom:6px}
 .fileview pre{background:var(--bg-soft);border-radius:8px;padding:12px;font-size:12px;line-height:1.7;overflow-x:auto;font-family:Consolas,"SFMono-Regular",monospace}
 .diff{font-family:Consolas,monospace;font-size:12px;line-height:1.7;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.diff .h{background:var(--bg-soft);padding:6px 12px;color:var(--muted);border-bottom:1px solid var(--line);font-family:inherit}
+.diff .h{background:var(--bg-soft);padding:6px 12px;color:var(--muted);border-bottom:1px solid var(--line)}
 .diff .add{background:rgba(0,180,42,.09);color:#1a7f37;padding:1px 12px}
 .diff .del{background:rgba(245,63,63,.09);color:#c9302c;padding:1px 12px}
 .diff .ctx{color:var(--muted);padding:1px 12px}
@@ -152,22 +158,21 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .new-flag{background:#e6f4ff;color:#0958d9;font-size:10.5px;border-radius:4px;padding:0 5px;margin-left:5px}
 /* ========= 账号弹窗 ========= */
 .popup-overlay{position:fixed;inset:0;z-index:40}
-.account-popup{position:fixed;left:12px;bottom:64px;width:292px;background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:50;padding:10px}
-.ap-head{display:flex;align-items:center;gap:11px;padding:9px;border-bottom:1px solid var(--line-soft);margin-bottom:6px}
-.ap-head .avatar{width:38px;height:38px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}
-.ap-head .nm{font-weight:700;font-size:14px}
-.ap-head .st{font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:5px}
+.account-popup{position:fixed;left:8px;bottom:60px;width:296px;background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:50;padding:10px 8px}
+.ap-head{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:4px}
+.ap-head .nm{font-weight:700;font-size:14.5px}
+.ap-head .st{font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:5px;margin-top:1px}
 .ap-head .st i{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block}
-.ap-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13.5px;cursor:pointer}
+.ap-head .copy{margin-left:auto;color:var(--faint);font-size:13px}
+.ap-sep{border-top:1px solid var(--line-soft);margin:4px 0}
+.ap-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;font-size:13.5px;cursor:pointer}
 .ap-item:hover{background:var(--bg-soft)}
 .ap-item .grow{flex:1}
 .ap-item .tail{color:var(--faint);font-size:12px}
 .ap-item.danger{color:#f53f3f}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
 .seg span{padding:2px 12px;font-size:12px;color:var(--muted);cursor:pointer}
-.seg span.on{background:var(--brand);color:#fff}
-.ap-foot{border-top:1px solid var(--line-soft);margin-top:6px;padding-top:6px;display:flex}
-.ap-foot .ap-item{flex:1;justify-content:center}
+.seg span.on{background:var(--ink);color:var(--bg)}
 /* ========= 设置弹窗 ========= */
 .settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:60;display:flex;align-items:center;justify-content:center}
 .settings{width:min(980px,94vw);height:min(660px,92vh);background:var(--bg);border-radius:16px;box-shadow:var(--shadow);display:flex;overflow:hidden;position:relative}
@@ -196,10 +201,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .model-row .tagauto{margin-left:auto;font-size:11px;background:var(--brand-soft);color:var(--brand);border-radius:5px;padding:1px 8px}
 .btn{border:1px solid var(--line);border-radius:8px;padding:5px 14px;font-size:12.5px;background:var(--bg)}
 .btn:hover{background:var(--bg-soft)}
-.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .placeholder{border:1px dashed var(--line);border-radius:10px;padding:26px;text-align:center;color:var(--faint);font-size:13px}
-/* 演示提示条 */
-.demo-tip{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);border-radius:999px;padding:6px 18px;font-size:12px;z-index:70;display:flex;gap:14px;align-items:center;box-shadow:var(--shadow)}
+.demo-tip{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);border-radius:999px;padding:6px 18px;font-size:12px;z-index:70;display:flex;gap:14px;align-items:center;box-shadow:var(--shadow)}
 .demo-tip .x{cursor:pointer;opacity:.7}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
@@ -208,225 +212,240 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 </head>
 <body data-theme="light">
 <div class="app">
-  <div class="titlebar">
-    <div class="logo">H</div>
-    <div class="name">Hermes Agent CN</div>
-    <div class="win-controls"><span>—</span><span>▢</span><span>✕</span></div>
-  </div>
-  <div class="main">
-    <!-- ================= 左栏 ================= -->
-    <aside class="rail">
-      <div class="rail-head">
-        <span class="brand">Hermes</span><span class="ver">v0.5.4</span>
-        <span class="icons"><span title="折叠">◧</span><span title="搜索">🔍</span><span title="筛选">⧩</span></span>
-      </div>
-      <div class="rail-nav">
-        <button class="nav-item" data-view="home"><span class="ico">⊕</span>新建任务</button>
-        <button class="nav-item"><span class="ico">🤝</span>助理</button>
-        <button class="nav-item"><span class="ico">⏱</span>自动化</button>
-        <button class="nav-item"><span class="ico">🧩</span>技能 · 连接器</button>
-        <button class="nav-item" style="opacity:.45"><span class="ico">✨</span>灵感<span class="sub">敬请期待</span></button>
-      </div>
-      <div class="rail-sec">任务 (5) ⌄</div>
-      <div class="task-list" id="taskList">
-        <div class="task-item active" data-view="task"><div class="t"><span class="dot"></span>登录页加「记住我」<span class="st run">进行中</span></div><div class="d">HuanXing-Hermes · 2 分钟前</div></div>
-        <div class="task-item" data-view="task"><div class="t">周报整理 <span class="st wait">待处理</span></div><div class="d">周报 · 1 小时前</div></div>
-        <div class="task-item" data-view="task"><div class="t">发票批量重命名 <span class="st done">已完成</span></div><div class="d">发票归档 · 昨天 18:42</div></div>
-        <div class="task-item" data-view="task"><div class="t">数据分析报表 PPT <span class="st done">已完成</span></div><div class="d">销售数据 · 昨天 15:07</div></div>
-        <div class="task-item" data-view="task"><div class="t">gateway 重连偶发失败 <span class="st fail">失败</span></div><div class="d">HuanXing-Hermes · 周一</div></div>
-      </div>
-      <div class="rail-sec">空间 (3) ⌄</div>
-      <div class="task-list" style="flex:0 0 auto">
-        <div class="space-item">📁 HuanXing-Hermes</div>
-        <div class="space-item">📁 周报</div>
-        <div class="space-item">📁 发票归档</div>
-      </div>
-      <div class="account" id="accountBtn">
-        <div class="avatar">H</div>
-        <div><div class="nm">个人 Profile</div><div class="st2">● 已连接 · Auto</div></div>
-        <span class="bell">🔔</span>
-      </div>
-    </aside>
-    <!-- ================= 主区 ================= -->
-    <section class="content">
-      <!-- 首页：新建任务 -->
-      <div class="home" id="view-home">
+  <!-- ================= 左栏 ================= -->
+  <aside class="rail">
+    <div class="rail-head">
+      <div><div class="brand">Hermes</div><div class="ver">v0.5.4</div></div>
+      <span class="icons"><span title="折叠">◧</span><span title="搜索">🔍</span><span title="筛选">⧩</span></span>
+    </div>
+    <div class="rail-nav">
+      <button class="nav-item active" data-view="home"><span class="ico">⊕</span>新建任务</button>
+      <button class="nav-item"><span class="ico">🤝</span>助理</button>
+      <button class="nav-item"><span class="ico">🗂</span>项目</button>
+      <button class="nav-item"><span class="ico">🧩</span>专家·技能·连接器</button>
+      <button class="nav-item"><span class="ico">⏱</span>自动化</button>
+      <button class="nav-item"><span class="ico">✨</span>更多<span class="sub">资料库 · 灵感</span></button>
+    </div>
+    <div class="rail-sec">任务 (5) ⌄</div>
+    <div class="task-list" id="taskList">
+      <div class="task-item" data-view="task"><div class="t"><span class="dot"></span>登录页加「记住我」<span class="st run">进行中</span></div><div class="d">HuanXing-Hermes · 2 分钟前</div></div>
+      <div class="task-item" data-view="task"><div class="t">周报整理 <span class="st wait">待处理</span></div><div class="d">周报 · 1 小时前</div></div>
+      <div class="task-item" data-view="task"><div class="t">发票批量重命名 <span class="st done">已完成</span></div><div class="d">发票归档 · 昨天 18:42</div></div>
+      <div class="task-item" data-view="task"><div class="t">数据分析报表 PPT <span class="st done">已完成</span></div><div class="d">销售数据 · 昨天 15:07</div></div>
+      <div class="task-item" data-view="task"><div class="t">gateway 重连偶发失败 <span class="st fail">失败</span></div><div class="d">HuanXing-Hermes · 周一</div></div>
+    </div>
+    <div class="rail-sec">空间 (3) ⌄</div>
+    <div class="task-list" style="flex:0 0 auto">
+      <div class="space-item">📁 HuanXing-Hermes</div>
+      <div class="space-item">📁 周报</div>
+      <div class="space-item">📁 发票归档</div>
+    </div>
+    <div class="account" id="accountBtn">
+      <div class="avatar">H</div>
+      <div><div class="nm">个人 Profile</div><div class="st2">已连接 · Auto</div></div>
+      <span class="tail"><span>🔔</span><span>🔗</span></span>
+    </div>
+  </aside>
+  <!-- ================= 主区 ================= -->
+  <section class="content">
+    <!-- 首页：新建任务 -->
+    <div class="home" id="view-home">
+      <div class="home-col">
         <div class="hero">Hermes</div>
-        <div class="hero-sub">你的职场超能力</div>
+        <div class="hero2">你的职场超能力</div>
         <div class="mode-tabs">
-          <button class="mode-tab active">🖥 日常办公</button>
+          <button class="mode-tab active">🚀 日常办公</button>
           <button class="mode-tab">⌨ 代码开发</button>
           <button class="mode-tab disabled" title="依赖 Core 支持，预留">🎨 设计创意</button>
         </div>
         <div class="chips">
-          <span class="chip">📄 文档处理</span><span class="chip">📊 数据分析及可视化</span><span class="chip">🐛 修一个 Bug</span><span class="chip">📝 写周报</span><span class="chip">更多 ⌄</span>
+          <span class="chip">📄 文档处理</span>
+          <span class="chip">📊 数据分析及可视化</span>
+          <span class="chip">🐛 修一个 Bug</span>
+          <span class="chip">📝 写周报</span>
+          <span class="chip">更多</span>
+          <span class="mascot">
+            <span class="bubble">✚</span>
+            <svg width="74" height="62" viewBox="0 0 74 62">
+              <rect x="12" y="10" width="9" height="16" rx="4.5" fill="#fff" stroke="#e5e6eb" transform="rotate(-14 16 18)"/>
+              <rect x="53" y="10" width="9" height="16" rx="4.5" fill="#fff" stroke="#e5e6eb" transform="rotate(14 57 18)"/>
+              <rect x="15" y="16" width="44" height="36" rx="15" fill="#fff" stroke="#e5e6eb"/>
+              <rect x="23" y="26" width="28" height="17" rx="8.5" fill="#1f2329"/>
+              <circle cx="31" cy="34.5" r="3" fill="#00b42a"/>
+              <path d="M42 30.5l4.5 4-4.5 4z" fill="#00b42a"/>
+            </svg>
+          </span>
         </div>
-        <div class="composer-wrap">
-          <div class="composer">
-            <div class="input">今天帮你做些什么？　<b>@ 引用文件，/ 调用技能</b></div>
-            <div class="toolbar">
-              <button class="tool">🚀 Craft <span class="caret">⌄</span></button>
-              <button class="tool">Auto <span class="caret">⌄</span></button>
-              <button class="tool">🧩 技能 <span class="caret">⌄</span></button>
-              <button class="tool">📁 选择工作空间 <span class="caret">⌄</span></button>
-              <button class="tool">🛡 默认权限 <span class="caret">⌄</span></button>
-              <button class="tool-ico" style="margin-left:auto">＋</button>
-              <button class="tool-ico">🎤</button>
-              <button class="tool-send" data-view="task">➤</button>
-            </div>
+        <div class="composer">
+          <div class="input">今天帮你做些什么？　<b>@ 引用对话文件，/ 调用技能与指令</b></div>
+          <div class="c-row">
+            <button class="c-plus">＋</button>
+            <span style="flex:1"></span>
+            <button class="c-model">Auto <span class="caret">⌄</span></button>
+            <button class="c-voice">🎤</button>
+            <button class="c-send" data-view="task">➤</button>
           </div>
-          <div class="disclaimer">内容由 AI 生成，请核实重要信息</div>
+        </div>
+        <div class="below-pills">
+          <button class="b-pill">📁 选择工作空间 <span class="caret">⌄</span></button>
+          <button class="b-pill">🛡 默认权限 <span class="caret">⌄</span></button>
         </div>
       </div>
-      <!-- 任务对话页 -->
-      <div id="view-task" style="display:none;flex:1;flex-direction:column;min-height:0">
-        <div class="task-title">
-          <span class="name">登录页加「记住我」</span>
-          <span class="path">D:\huanxing\HuanXing-Hermes</span>
-          <div class="ops"><span title="对话内搜索">🔍</span><span title="分享">↗</span><span title="历史提问">🕘</span><span title="结果面板" id="toggleResults">▣</span></div>
-        </div>
-        <div class="timeline" id="timeline">
-          <div class="msg user">给 dashboard 登录页加上「记住我」复选框，勾选后 token 存 7 天，顺便适配下移动端布局</div>
-          <div class="msg ai">
-            <div class="who"><div class="avatar">H</div><span class="nm">Hermes</span><span class="st run" style="font-size:12px">进行中</span></div>
-            <div class="body">
-              <div class="stage"><span class="ok">✓</span>分析需求并整理执行思路（规划中，12s）<span style="margin-left:auto">⌄</span></div>
-              <div class="stage"><span class="ok">✓</span>阅读 web/src/pages/login.tsx、auth.rs 等 4 个文件<span style="margin-left:auto">⌄</span></div>
-              <div class="stage"><span class="ok">✓</span>修改登录页布局，新增 RememberMe 组件<span style="margin-left:auto">⌄</span></div>
-              <div class="stage" style="border-color:var(--brand);color:var(--fg)"><span class="dot"></span>正在适配移动端样式（@media ≤768px）…</div>
-              <p style="margin:10px 0 4px">已完成登录页主体改造，产物如下：</p>
-              <div class="artifact">
-                <div class="fi">🌐</div>
-                <div><div class="fn">login-preview.html</div><div class="fm">网页 · 12 KB · 刚刚</div></div>
-                <span class="open">预览 ↗</span>
-              </div>
-              <div class="artifact">
-                <div class="fi">📝</div>
-                <div><div class="fn">登录页改造说明.md</div><div class="fm">Markdown · 3 KB · 刚刚</div></div>
-                <span class="open">打开 ↗</span>
-              </div>
-              <div style="margin-top:8px">
-                <span class="jump" data-restab="artifacts">查看所有产物 (2)</span>
-                <span class="jump" data-restab="changes">查看所有变更 (3)</span>
-              </div>
-              <div class="msg-actions"><span>📋</span><span>👍</span><span>👎</span><span>🔊</span><span>⋯</span></div>
+    </div>
+    <!-- 任务对话页 -->
+    <div id="view-task" style="display:none;flex:1;flex-direction:column;min-height:0">
+      <div class="task-title">
+        <span class="name">登录页加「记住我」</span>
+        <span class="path">D:\huanxing\HuanXing-Hermes</span>
+        <div class="ops"><span title="对话内搜索">🔍</span><span title="分享">↗</span><span title="历史提问">🕘</span><span title="结果面板" id="toggleResults">▣</span></div>
+      </div>
+      <div class="timeline" id="timeline">
+        <div class="msg user">给 dashboard 登录页加上「记住我」复选框，勾选后 token 存 7 天，顺便适配下移动端布局</div>
+        <div class="msg ai">
+          <div class="who"><div class="avatar">H</div><span class="nm">Hermes</span><span class="st run" style="font-size:12px">进行中</span></div>
+          <div class="body">
+            <div class="stage"><span class="ok">✓</span>分析需求并整理执行思路（规划中，12s）<span style="margin-left:auto">⌄</span></div>
+            <div class="stage"><span class="ok">✓</span>阅读 web/src/pages/login.tsx、auth.rs 等 4 个文件<span style="margin-left:auto">⌄</span></div>
+            <div class="stage"><span class="ok">✓</span>修改登录页布局，新增 RememberMe 组件<span style="margin-left:auto">⌄</span></div>
+            <div class="stage" style="border-color:var(--green);color:var(--fg)"><span class="dot"></span>正在适配移动端样式（@media ≤768px）…</div>
+            <p style="margin:10px 0 4px">已完成登录页主体改造，产物如下：</p>
+            <div class="artifact">
+              <div class="fi">🌐</div>
+              <div><div class="fn">login-preview.html</div><div class="fm">网页 · 12 KB · 刚刚</div></div>
+              <span class="open">预览 ↗</span>
             </div>
-          </div>
-        </div>
-        <div style="padding:0 26px 14px">
-          <div class="composer">
-            <div class="input">补充说明，或继续追问…　<b>@ 引用文件，/ 调用技能</b></div>
-            <div class="toolbar">
-              <button class="tool">🚀 Craft <span class="caret">⌄</span></button>
-              <button class="tool">Auto <span class="caret">⌄</span></button>
-              <button class="tool">🧩 技能 <span class="caret">⌄</span></button>
-              <button class="tool">📁 HuanXing-Hermes <span class="caret">⌄</span></button>
-              <button class="tool" id="permTool">🛡 默认权限 <span class="caret">⌄</span></button>
-              <button class="tool-ico" style="margin-left:auto">＋</button>
-              <button class="tool-ico">🎤</button>
-              <button class="tool-send" id="sendBtn">➤</button>
+            <div class="artifact">
+              <div class="fi">📝</div>
+              <div><div class="fn">登录页改造说明.md</div><div class="fm">Markdown · 3 KB · 刚刚</div></div>
+              <span class="open">打开 ↗</span>
             </div>
+            <div style="margin-top:8px">
+              <span class="jump" data-restab="artifacts">查看所有产物 (2)</span>
+              <span class="jump" data-restab="changes">查看所有变更 (3)</span>
+            </div>
+            <div class="msg-actions"><span>📋</span><span>👍</span><span>👎</span><span>🔊</span><span>⋯</span></div>
           </div>
-          <div class="disclaimer">内容由 AI 生成，请核实重要信息</div>
         </div>
       </div>
-    </section>
-    <!-- ================= 右侧结果区 ================= -->
-    <aside class="results" id="resultsPanel">
+      <div style="padding:0 26px 14px">
+        <div class="composer">
+          <div class="input" style="min-height:44px">补充说明，或继续追问…　<b>@ 引用对话文件，/ 调用技能与指令</b></div>
+          <div class="c-row">
+            <button class="c-plus">＋</button>
+            <button class="c-tool">🚀 Craft <span class="caret">⌄</span></button>
+            <button class="c-tool">🧩 技能 <span class="caret">⌄</span></button>
+            <span style="flex:1"></span>
+            <button class="c-model">Auto <span class="caret">⌄</span></button>
+            <button class="c-voice">🎤</button>
+            <button class="c-send ready" id="sendBtn">➤</button>
+          </div>
+        </div>
+        <div class="below-pills">
+          <button class="b-pill">📁 HuanXing-Hermes <span class="caret">⌄</span></button>
+          <button class="b-pill">🛡 默认权限 <span class="caret">⌄</span></button>
+        </div>
+        <div class="disclaimer">内容由 AI 生成，请核实重要信息</div>
+      </div>
+    </div>
+  </section>
+  <!-- ================= 右侧结果区 ================= -->
+  <aside class="results" id="resultsPanel" hidden>
+    <div class="res-head">
       <div class="res-tabs">
         <span class="res-tab active" data-tab="artifacts">产物 <span class="n">2</span></span>
-        <span class="res-tab" data-tab="files">工作空间文件</span>
+        <span class="res-tab" data-tab="files">文件</span>
         <span class="res-tab" data-tab="changes">变更 <span class="n">3</span></span>
         <span class="res-tab" data-tab="browser">浏览器</span>
       </div>
-      <div class="res-body">
-        <div class="res-pane active" data-pane="artifacts">
-          <div class="p-card"><div class="fn">🌐 login-preview.html</div><div class="fm">网页 · 12 KB · 刚刚 · 工作空间/previews/</div><div class="ops"><span>预览</span><span>打开所在文件夹</span><span style="color:var(--faint)">分享 ↗</span></div></div>
-          <div class="p-card"><div class="fn">📝 登录页改造说明.md</div><div class="fm">Markdown · 3 KB · 刚刚 · 工作空间/docs/</div><div class="ops"><span>预览</span><span>打开所在文件夹</span><span style="color:var(--faint)">分享 ↗</span></div></div>
+      <div class="res-icons"><span title="列表">☰</span><span title="弹出新窗口">⧉</span></div>
+    </div>
+    <div class="res-body">
+      <div class="res-pane active" data-pane="artifacts">
+        <div class="p-card"><div class="fn">🌐 login-preview.html</div><div class="fm">网页 · 12 KB · 刚刚 · 工作空间/previews/</div><div class="ops"><span>预览</span><span>打开所在文件夹</span><span style="color:var(--faint)">分享 ↗</span></div></div>
+        <div class="p-card"><div class="fn">📝 登录页改造说明.md</div><div class="fm">Markdown · 3 KB · 刚刚 · 工作空间/docs/</div><div class="ops"><span>预览</span><span>打开所在文件夹</span><span style="color:var(--faint)">分享 ↗</span></div></div>
+      </div>
+      <div class="res-pane" data-pane="files">
+        <div class="tree">
+          <div class="dir">▾ D:\huanxing\HuanXing-Hermes</div>
+          <div class="dir" style="padding-left:18px">▾ web\src</div>
+          <div class="dir" style="padding-left:36px">▾ pages</div>
+          <div class="file on" style="padding-left:54px">login.tsx</div>
+          <div class="file" style="padding-left:54px">panel.tsx</div>
+          <div class="dir" style="padding-left:36px">▾ components</div>
+          <div class="file" style="padding-left:54px">RememberMe.tsx</div>
+          <div class="dir" style="padding-left:18px">▾ src</div>
+          <div class="file" style="padding-left:36px">auth.rs</div>
+          <div class="file" style="padding-left:36px">main.rs</div>
         </div>
-        <div class="res-pane" data-pane="files">
-          <div class="tree">
-            <div class="dir">▾ D:\huanxing\HuanXing-Hermes</div>
-            <div class="dir" style="padding-left:18px">▾ web\src</div>
-            <div class="dir" style="padding-left:36px">▾ pages</div>
-            <div class="file on" style="padding-left:54px">login.tsx</div>
-            <div class="file" style="padding-left:54px">panel.tsx</div>
-            <div class="dir" style="padding-left:36px">▾ components</div>
-            <div class="file" style="padding-left:54px">RememberMe.tsx</div>
-            <div class="dir" style="padding-left:18px">▾ src</div>
-            <div class="file" style="padding-left:36px">auth.rs</div>
-            <div class="file" style="padding-left:36px">main.rs</div>
-          </div>
-          <div class="fileview">
-            <div class="fp">web\src\pages\login.tsx（节选）</div>
-            <pre>&lt;Form.Item name="password"&gt;
+        <div class="fileview">
+          <div class="fp">web\src\pages\login.tsx（节选）</div>
+          <pre>&lt;Form.Item name="password"&gt;
   &lt;Input.Password placeholder="密码" /&gt;
 &lt;/Form.Item&gt;
 <span style="color:#1a7f37">&lt;RememberMe defaultChecked={false} /&gt;</span>
 &lt;Button type="primary" htmlType="submit"&gt;
   登录
 &lt;/Button&gt;</pre>
-          </div>
-        </div>
-        <div class="res-pane" data-pane="changes">
-          <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">本任务共修改 <b>3</b> 个文件：<code>login.tsx</code> <span style="color:var(--green)">+28 −6</span> · <code>RememberMe.tsx</code> <span style="color:var(--green)">+41 −0</span> · <code>auth.rs</code> <span style="color:var(--green)">+17 −2</span></div>
-          <div class="diff">
-            <div class="h">web/src/pages/login.tsx　@@ -42,8 +42,10 @@</div>
-            <div class="ctx">  &lt;Form.Item name="password"&gt;</div>
-            <div class="ctx">    &lt;Input.Password placeholder="密码" /&gt;</div>
-            <div class="ctx">  &lt;/Form.Item&gt;</div>
-            <div class="del">- &lt;div className="login-extra" /&gt;</div>
-            <div class="add">+ &lt;RememberMe defaultChecked={false} /&gt;</div>
-            <div class="add">+ &lt;div className="login-mobile-tip"&gt;</div>
-            <div class="add">+   移动端建议使用扫码登录</div>
-            <div class="add">+ &lt;/div&gt;</div>
-            <div class="ctx">  &lt;Button type="primary" htmlType="submit"&gt;</div>
-          </div>
-        </div>
-        <div class="res-pane" data-pane="browser">
-          <div class="browser-mock">
-            <div class="bar"><span>←</span><span>→</span><span>⟳</span><span class="url">file:///D:/huanxing/HuanXing-Hermes/previews/login-preview.html</span><span>↗</span></div>
-            <div class="login-demo">
-              <div class="login-card">
-                <h4>Hermes 控制台</h4>
-                <div class="fld">账号</div>
-                <div class="fld">密码</div>
-                <label class="remember"><input type="checkbox" checked>记住我（7 天内免登录）<span class="new-flag">NEW</span></label>
-                <div class="btn">登 录</div>
-              </div>
-            </div>
-          </div>
-          <p style="font-size:12px;color:var(--faint);margin-top:10px">内置浏览器实时预览产物网页，支持地址栏与刷新。</p>
         </div>
       </div>
-    </aside>
-  </div>
+      <div class="res-pane" data-pane="changes">
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">本任务共修改 <b>3</b> 个文件：<code>login.tsx</code> <span style="color:var(--green)">+28 −6</span> · <code>RememberMe.tsx</code> <span style="color:var(--green)">+41 −0</span> · <code>auth.rs</code> <span style="color:var(--green)">+17 −2</span></div>
+        <div class="diff">
+          <div class="h">web/src/pages/login.tsx　@@ -42,8 +42,10 @@</div>
+          <div class="ctx">  &lt;Form.Item name="password"&gt;</div>
+          <div class="ctx">    &lt;Input.Password placeholder="密码" /&gt;</div>
+          <div class="ctx">  &lt;/Form.Item&gt;</div>
+          <div class="del">- &lt;div className="login-extra" /&gt;</div>
+          <div class="add">+ &lt;RememberMe defaultChecked={false} /&gt;</div>
+          <div class="add">+ &lt;div className="login-mobile-tip"&gt;</div>
+          <div class="add">+   移动端建议使用扫码登录</div>
+          <div class="add">+ &lt;/div&gt;</div>
+          <div class="ctx">  &lt;Button type="primary" htmlType="submit"&gt;</div>
+        </div>
+      </div>
+      <div class="res-pane" data-pane="browser">
+        <div class="browser-mock">
+          <div class="bar"><span>←</span><span>→</span><span>⟳</span><span class="url">file:///D:/huanxing/HuanXing-Hermes/previews/login-preview.html</span><span>↗</span></div>
+          <div class="login-demo">
+            <div class="login-card">
+              <h4>Hermes 控制台</h4>
+              <div class="fld">账号</div>
+              <div class="fld">密码</div>
+              <label class="remember"><input type="checkbox" checked>记住我（7 天内免登录）<span class="new-flag">NEW</span></label>
+              <div class="btn">登 录</div>
+            </div>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--faint);margin-top:10px">内置浏览器实时预览产物网页，支持地址栏与刷新。</p>
+      </div>
+    </div>
+  </aside>
 </div>
 <!-- ================= 账号弹窗 ================= -->
 <div class="popup-overlay" id="popupOverlay" hidden></div>
 <div class="account-popup" id="accountPopup" hidden>
   <div class="ap-head">
-    <div class="avatar">H</div>
+    <div style="width:38px;height:38px;border-radius:50%;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:800">H</div>
     <div><div class="nm">个人 Profile</div><div class="st"><i></i>网关已连接 · 端口 9120 · Auto</div></div>
+    <span class="copy" title="复制">📋</span>
   </div>
+  <div class="ap-sep"></div>
   <div class="ap-item" id="openSettings">⚙️ <span class="grow">设置</span></div>
   <div class="ap-item">🎨 <span class="grow">外观</span><span class="seg" id="themeSeg"><span class="on" data-t="light">浅色</span><span data-t="dark">深色</span></span></div>
   <div class="ap-item">👥 <span class="grow">切换 Profile</span><span class="tail">个人 / 公司测试 ›</span></div>
   <div class="ap-item">⌘K <span class="grow">命令面板</span></div>
   <div class="ap-item">❓ <span class="grow">帮助与反馈</span><span class="tail">文档 · 调试包 ›</span></div>
   <div class="ap-item">⬆️ <span class="grow">检查更新</span><span class="tail" style="color:var(--green)">v0.5.4</span></div>
-  <div class="ap-foot">
-    <div class="ap-item">↻ 重启应用</div>
-    <div class="ap-item danger">⏻ 退出</div>
-  </div>
+  <div class="ap-sep"></div>
+  <div class="ap-item danger">⏻ <span class="grow">退出</span></div>
 </div>
 <!-- ================= 设置弹窗 ================= -->
 <div class="settings-overlay" id="settingsOverlay" hidden>
   <div class="settings">
     <button class="close" id="closeSettings">✕</button>
     <nav id="settingsNav">
-      <button class="nav-item active" data-pane="system">⚙️ 系统设置</button>
       <button class="nav-item" data-pane="account">👤 账户管理</button>
+      <button class="nav-item active" data-pane="system">⚙️ 系统设置</button>
       <button class="nav-item" data-pane="agent">🤖 智能体设置</button>
       <button class="nav-item" data-pane="shortcuts">⌨️ 快捷键</button>
       <button class="nav-item" data-pane="memory">💡 记忆</button>
@@ -501,10 +520,11 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 </div>
 <script>
 const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
-// 视图切换：首页 / 任务页
+// 视图切换：首页 / 任务页（结果区仅任务页显示）
 function setView(v){
   $('#view-home').style.display = v==='home' ? 'flex' : 'none';
   $('#view-task').style.display = v==='task' ? 'flex' : 'none';
+  $('#resultsPanel').hidden = v!=='task';
   $$('#taskList .task-item').forEach(t=>t.classList.toggle('active', v==='task' && t.dataset.view==='task'));
   $$('.rail-nav .nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===v));
 }
@@ -513,11 +533,10 @@ $$('[data-view]').forEach(el=>el.addEventListener('click',()=>setView(el.dataset
 function setResTab(k){
   $$('.res-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===k));
   $$('.res-pane').forEach(p=>p.classList.toggle('active', p.dataset.pane===k));
-  $('#resultsPanel').classList.remove('hidden');
 }
 $$('.res-tab').forEach(t=>t.addEventListener('click',()=>setResTab(t.dataset.tab)));
 $$('.jump').forEach(j=>j.addEventListener('click',()=>setResTab(j.dataset.restab)));
-$('#toggleResults').addEventListener('click',()=>$('#resultsPanel').classList.toggle('hidden'));
+$('#toggleResults').addEventListener('click',()=>$('#resultsPanel').hidden=!$('#resultsPanel').hidden);
 // 账号弹窗
 const popup=$('#accountPopup'), overlay=$('#popupOverlay');
 $('#accountBtn').addEventListener('click',e=>{e.stopPropagation();popup.hidden=!popup.hidden;overlay.hidden=popup.hidden;});

@@ -1,116 +1,102 @@
-/* Workbench main page — restored to prototypes/01-workbench layout.
-   Structure: .pageWrap (scroll) > .pageContent > .hero / .composeStrip / .section[] */
+/* 新建任务首页 — WorkBuddy 范式：Hero + 模式 Tab + 场景入口 + 大 Composer */
 
-.pageWrap {
+.home {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 6vw;
   overflow-y: auto;
   min-height: 0;
-  background: var(--h-bg-app);
 }
 
-.pageContent {
-  max-width: 1100px;
+.homeCol {
+  max-width: 860px;
+  width: 100%;
   margin: 0 auto;
-  padding: 32px 40px 96px;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Section heading — grid with left num column + title + right meta. */
-.section {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 16px;
-  align-items: start;
-  padding: 24px 0 12px;
-}
-
-.sectionNum {
-  font-family: var(--h-font-mono);
-  font-size: 9.5px;
-  line-height: 1.2;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--h-text-3);
-  padding-top: 9px;
-}
-
-.sectionBody {
-  min-width: 0;
-}
-
-.sectionHead {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  gap: 12px;
+  flex-direction: column;
 }
 
-.sectionLh {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.sectionTag {
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  line-height: 1.2;
-  letter-spacing: 0.08em;
-  color: var(--h-text-3);
-  text-transform: uppercase;
-}
-
-.sectionTitle {
-  margin: 0;
-  font-family: var(--h-font-ui);
-  font-style: normal;
-  font-weight: 650;
-  font-size: 20px;
-  line-height: 1.2;
+.hero {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  line-height: 1.25;
   color: var(--h-text);
-  letter-spacing: 0;
 }
 
-.sectionMeta {
-  font-family: var(--h-font-mono);
-  font-size: 11px;
-  color: var(--h-text-3);
+.hero2 {
+  font-size: 38px;
+  font-weight: 800;
+  margin-bottom: 26px;
+  color: var(--h-text);
 }
 
-.sectionMeta a {
-  color: var(--h-accent);
-  text-decoration: none;
+.modeTabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
-.sectionMeta a:hover {
-  text-decoration: underline;
+.modeTab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: var(--h-radius-pill);
+  font-size: 13.5px;
+  color: var(--h-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--h-font-ui);
 }
 
-.taskGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+.modeTab:hover:not(:disabled) {
+  background: var(--h-bg-soft);
 }
 
-@media (max-width: 900px) {
-  .pageContent {
-    padding: 24px 20px 80px;
-  }
-  .section {
-    grid-template-columns: 48px 1fr;
-    gap: 12px;
-  }
-  .taskGrid {
-    grid-template-columns: 1fr;
-  }
+.modeTab[data-active="true"] {
+  background: var(--h-text);
+  color: var(--h-bg-app);
+  font-weight: 600;
 }
 
-.loading {
-  padding: 36px 0;
-  text-align: center;
-  color: var(--h-text-3);
+.modeTab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chips {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 34px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 15px;
+  border-radius: var(--h-radius-pill);
+  border: 1px solid var(--h-line);
+  color: var(--h-text);
   font-size: 13px;
-  font-family: var(--h-font-mono);
+  background: var(--h-bg-app);
+  cursor: pointer;
+  font-family: var(--h-font-ui);
+}
+
+.chip:hover {
+  border-color: var(--h-text-4);
+}
+
+.disclaimer {
+  text-align: center;
+  color: var(--h-text-4);
+  font-size: 12px;
+  margin-top: 10px;
 }

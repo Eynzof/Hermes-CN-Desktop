@@ -1,0 +1,241 @@
+/* AccountPopup — 左栏底部账号区 + 弹出面板（WorkBuddy 范式） */
+
+.account {
+  margin-top: auto;
+  padding: 12px 14px;
+  border-top: 1px solid var(--h-line);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  color: var(--h-text);
+  font-family: var(--h-font-ui);
+  text-align: left;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.account:hover {
+  background: var(--h-bg-soft);
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--h-text);
+  color: var(--h-bg-app);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.avatar[data-size="lg"] {
+  width: 38px;
+  height: 38px;
+  font-size: 15px;
+}
+
+.accountText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.accountName {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accountStatus {
+  font-size: 11px;
+  color: var(--h-text-4);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--h-text-4);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.statusDot[data-online="true"] {
+  background: var(--h-ok);
+}
+
+.popup.popup {
+  width: 296px;
+  background: var(--h-bg-app);
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-xl);
+  box-shadow: var(--h-shadow-l);
+  padding: 10px 8px;
+  z-index: var(--h-z-popover);
+  color: var(--h-text);
+  font-family: var(--h-font-ui);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+}
+
+.headText {
+  min-width: 0;
+}
+
+.headName {
+  font-weight: 700;
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.headStatus {
+  font-size: 11.5px;
+  color: var(--h-text-4);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.sep {
+  border-top: 1px solid var(--h-line-soft);
+  margin: 4px 0;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--h-radius-md);
+  font-size: 13.5px;
+  cursor: pointer;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--h-text);
+  font-family: var(--h-font-ui);
+  text-align: left;
+}
+
+.item:hover {
+  background: var(--h-bg-soft);
+}
+
+.item[data-tone="danger"] {
+  color: var(--h-err);
+}
+
+.itemIcon {
+  color: var(--h-text-3);
+  flex-shrink: 0;
+}
+
+.item[data-tone="danger"] .itemIcon {
+  color: var(--h-err);
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.tail {
+  color: var(--h-text-4);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tail[data-tone="ok"] {
+  color: var(--h-ok);
+}
+
+.tailIcon {
+  color: var(--h-text-4);
+  transition: transform 0.15s ease;
+}
+
+.tailIcon[data-open="true"] {
+  transform: rotate(90deg);
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.segItem {
+  padding: 2px 12px;
+  font-size: 12px;
+  color: var(--h-text-3);
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-family: var(--h-font-ui);
+}
+
+.segItem[data-on="true"] {
+  background: var(--h-text);
+  color: var(--h-bg-app);
+}
+
+.profileList {
+  padding: 0 4px 4px 24px;
+}
+
+.profileEmpty {
+  font-size: 12px;
+  color: var(--h-text-4);
+  padding: 6px 10px;
+}
+
+.profileItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--h-radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--h-text);
+  font-family: var(--h-font-ui);
+  text-align: left;
+}
+
+.profileItem:hover {
+  background: var(--h-bg-soft);
+}
+
+.profileItem[data-active="true"] {
+  font-weight: 600;
+}

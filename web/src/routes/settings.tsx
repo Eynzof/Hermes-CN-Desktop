@@ -531,7 +531,7 @@ const APPROVAL_MODE_DESC: Record<ApprovalMode, string> = {
   yolo: "自动批准所有有风险的命令。请仅在受信任或隔离的环境中使用。",
 };
 
-function ApprovalModeSection() {
+export function ApprovalModeSection() {
   const navigate = useNavigate();
   const { data: config } = useConfig();
   const { data: schema } = useConfigSchema();

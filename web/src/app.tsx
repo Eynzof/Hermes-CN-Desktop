@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { DEFAULT_THEME_CONFIG, hydrateThemeAtom, usePlatform, type ThemeConfig } from "@hermes/shared-ui";
 import { useEffect, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
@@ -40,10 +40,24 @@ import { ImOnboardingRoute } from "@/routes/im-onboarding";
 import { GuideRoute } from "@/routes/guide";
 import { OfflineShell } from "@/routes/offline-shell";
 import { runtime } from "@/lib/runtime";
+import {
+  normalizeSettingsPane,
+  openSettingsDialogAtom,
+} from "@/stores/settings-dialog";
 
 function NewTaskRedirect() {
   const { search } = useLocation();
   return <Navigate to={{ pathname: "/", search }} replace />;
+}
+
+// /settings/<pane> 深链：打开主界面并自动弹出设置弹窗对应面板（兼容旧书签）。
+function SettingsDeepLink() {
+  const { pane } = useParams();
+  const openSettings = useSetAtom(openSettingsDialogAtom);
+  useEffect(() => {
+    openSettings(normalizeSettingsPane(pane));
+  }, [openSettings, pane]);
+  return <Navigate to="/" replace />;
 }
 
 // Wrap each route's content in a local ErrorBoundary so a single page crash
@@ -94,7 +108,8 @@ function BackendApp() {
           <Route path="/coding-agents" element={withBoundary(<CodingAgentsRoute />)} />
           <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
           <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
-          <Route path="/settings" element={<Navigate to="/common" replace />} />
+          <Route path="/settings" element={<Navigate to="/settings/system" replace />} />
+          <Route path="/settings/:pane" element={<SettingsDeepLink />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppShell>
