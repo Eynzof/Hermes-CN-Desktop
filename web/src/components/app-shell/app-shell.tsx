@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { TaskRail } from "./task-rail";
-import { GuideReminder } from "./guide-reminder";
 import { ConnectionTargetNotice } from "./connection-target-notice";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
 import { AuthDialog } from "@/components/auth/auth-dialog";
@@ -19,7 +18,6 @@ export function AppShell({ children }: AppShellProps) {
       <div className={s.mainSlot}>
         <ConnectionTargetNotice />
         {children}
-        <GuideReminder />
       </div>
       <SettingsDialog />
       <AuthDialog />

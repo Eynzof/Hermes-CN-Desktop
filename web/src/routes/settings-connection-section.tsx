@@ -617,14 +617,7 @@ export function ConnectionSection({
         )}
         {!externalOnly && (
           <>
-            <Button
-              type="button"
-              className={mode === "managed" ? s.connFooterSpacer : undefined}
-              variant="ghost"
-              onClick={() => { window.location.hash = "#/guide"; }}
-            >
-              重新运行使用引导
-            </Button>
+            <span className={mode === "managed" ? s.connFooterSpacer : undefined} />
             <Button
               type="button"
               variant="outline"

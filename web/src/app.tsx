@@ -37,7 +37,6 @@ import { AnalyticsRoute } from "@/routes/analytics";
 import { AdvancedRoute, ThemeRoute } from "@/routes/advanced";
 import { CodingAgentsRoute } from "@/routes/coding-agents";
 import { ImOnboardingRoute } from "@/routes/im-onboarding";
-import { GuideRoute } from "@/routes/guide";
 import { OfflineShell } from "@/routes/offline-shell";
 import { runtime } from "@/lib/runtime";
 import {
@@ -125,7 +124,6 @@ function BackendApp() {
 export function App() {
   const platform = usePlatform();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
-  const location = useLocation();
   useEffect(() => {
     hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
   }, [hydrateTheme]);
@@ -133,14 +131,8 @@ export function App() {
     void sendTelemetryPingIfDue();
   }, []);
 
-  const guideState = runtime.getGuideState();
-  const isGuide = location.pathname === "/guide";
   let content: ReactNode;
-  if (guideState === "pending" && !isGuide) {
-    content = <Navigate to="/guide" replace />;
-  } else if (isGuide) {
-    content = withBoundary(<GuideRoute />);
-  } else if (!runtime.isBackendReady()) {
+  if (!runtime.isBackendReady()) {
     content = (
       <>
         <BackendReadyRecovery />
