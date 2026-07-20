@@ -1247,4 +1247,78 @@ describe("lastActivityAt (stall watchdog source)", () => {
     );
     expect(assistantMessage(thinking).parts).toEqual([{ type: "progress", text: placeholder }]);
   });
+
+  describe("empty message.delta should not create messages", () => {
+    it("message.delta with empty text should NOT create a new assistant message when no turn is active", () => {
+      // Simulate the real bug: backend emits empty-string deltas during
+      // reasoning-to-content transitions, WITHOUT a preceding message.start.
+      const now = 1000;
+      let runtime = createEmptyChatRuntime(now);
+      const messageCountBefore = runtime.messages.length;
+
+      // Send an empty delta — this should be a no-op
+      runtime = reduceGatewayEvent(
+        runtime,
+        {
+          type: "message.delta",
+          session_id: "s1",
+          payload: { text: "" },
+        },
+        now + 1,
+      );
+
+      const messageCountAfter = runtime.messages.length;
+
+      // without the fix, empty delta creates an assistant message with parts: []
+      expect(messageCountAfter).toBe(messageCountBefore);
+    });
+
+    it("message.delta with real text should create an assistant message normally", () => {
+      const now = 1000;
+      let runtime = createEmptyChatRuntime(now);
+
+      runtime = reduceGatewayEvent(
+        runtime,
+        {
+          type: "message.delta",
+          session_id: "s1",
+          payload: { text: "Hello, world!" },
+        },
+        now + 1,
+      );
+
+      const assistant = runtime.messages.find((m) => m.role === "assistant");
+      expect(assistant).toBeDefined();
+      expect(assistant!.parts.length).toBeGreaterThan(0);
+      const text = textFromParts(assistant!.parts);
+      expect(text).toBe("Hello, world!");
+    });
+
+    it("message.complete removes empty assistant message (existing safety)", () => {
+      const now = 1000;
+      let runtime = createEmptyChatRuntime(now);
+      runtime = reduceGatewayEvent(
+        runtime,
+        {
+          type: "message.start",
+          session_id: "s1",
+        },
+        now,
+      );
+      // Complete with empty text and no reasoning — parts.length === 0 → removed
+      runtime = reduceGatewayEvent(
+        runtime,
+        {
+          type: "message.complete",
+          session_id: "s1",
+          payload: { text: "" },
+        },
+        now + 1,
+      );
+
+      // Should have no assistant message after complete with empty parts
+      const assistants = runtime.messages.filter((m) => m.role === "assistant");
+      expect(assistants).toHaveLength(0);
+    });
+  });
 });
