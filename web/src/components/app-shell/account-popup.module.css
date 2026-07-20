@@ -239,3 +239,56 @@
 .profileItem[data-active="true"] {
   font-weight: 600;
 }
+
+.enterpriseCard {
+  padding: 4px 10px 8px;
+}
+
+.enterpriseRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: var(--h-radius-md);
+  padding: 8px 10px;
+  background: var(--h-bg-soft);
+}
+
+.enterpriseName {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.enterpriseMeta {
+  display: block;
+  font-size: 11px;
+  color: var(--h-text-4);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.enterpriseLogout {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--h-text-3);
+  background: none;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-sm);
+  padding: 3px 8px;
+  cursor: pointer;
+  font-family: var(--h-font-ui);
+  flex-shrink: 0;
+}
+
+.enterpriseLogout:hover {
+  color: var(--h-err);
+  border-color: var(--h-err);
+}

@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { Popover, useTheme } from "@hermes/shared-ui";
 import {
   Check,
   ChevronRight,
   Command,
   HelpCircle,
+  LogIn,
+  LogOut,
   Palette,
   Power,
   RefreshCw,
@@ -21,6 +23,8 @@ import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
 import { useCommandPalette } from "@/components/command-palette";
 import { openSettingsDialogAtom } from "@/stores/settings-dialog";
+import { authDialogOpenAtom, huanxingAuthAtom } from "@/stores/auth";
+import { huanxingAccountTypeLabel } from "@/lib/huanxing-auth";
 import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-url";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import s from "./account-popup.module.css";
@@ -47,6 +51,9 @@ export function AccountPopup() {
   const { config: themeConfig, update: updateTheme } = useTheme();
   const { openCommandPalette } = useCommandPalette();
   const openSettingsDialog = useSetAtom(openSettingsDialogAtom);
+  const huanxingAccount = useAtomValue(huanxingAuthAtom);
+  const setHuanxingAccount = useSetAtom(huanxingAuthAtom);
+  const openAuthDialog = useSetAtom(authDialogOpenAtom);
 
   const dashboardUrl = dashboardUrlFromInputs({
     healthUrl: status?.gateway_health_url,
@@ -98,6 +105,44 @@ export function AccountPopup() {
               </div>
             </div>
           </div>
+          <div className={s.sep} />
+
+          {huanxingAccount ? (
+            <div className={s.enterpriseCard}>
+              <div className={s.enterpriseRow}>
+                <span className={s.grow}>
+                  <span className={s.enterpriseName}>{huanxingAccount.username}</span>
+                  <span className={s.enterpriseMeta}>
+                    {huanxingAccountTypeLabel(huanxingAccount.type)}
+                    {huanxingAccount.enterpriseName ? ` · ${huanxingAccount.enterpriseName}` : ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className={s.enterpriseLogout}
+                  title="退出企业账号"
+                  onClick={() => setHuanxingAccount(null)}
+                >
+                  <LogOut size={13} />
+                  退出登录
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={s.item}
+              onClick={() => {
+                setOpen(false);
+                openAuthDialog(true);
+              }}
+            >
+              <LogIn size={14} className={s.itemIcon} />
+              <span className={s.grow}>登录 / 注册企业账号</span>
+              <span className={s.tail}>接收模型下发</span>
+            </button>
+          )}
+
           <div className={s.sep} />
 
           <button type="button" className={s.item} onClick={() => openSettings("system")}>

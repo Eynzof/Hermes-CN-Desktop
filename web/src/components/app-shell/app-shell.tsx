@@ -3,6 +3,7 @@ import { TaskRail } from "./task-rail";
 import { GuideReminder } from "./guide-reminder";
 import { ConnectionTargetNotice } from "./connection-target-notice";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
+import { AuthDialog } from "@/components/auth/auth-dialog";
 import s from "./app-shell.module.css";
 
 interface AppShellProps {
@@ -21,6 +22,7 @@ export function AppShell({ children }: AppShellProps) {
         <GuideReminder />
       </div>
       <SettingsDialog />
+      <AuthDialog />
     </div>
   );
 }

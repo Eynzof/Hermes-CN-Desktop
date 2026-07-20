@@ -34,7 +34,7 @@ import {
 import { EnvironmentSection } from "@/routes/environment";
 import { ConnectionSection } from "@/routes/settings-connection-section";
 import { CodingAgentsSection } from "@/routes/settings-coding-agents";
-import { ModelsSection } from "@/routes/settings-models-section";
+import { CustomModelsPane } from "./custom-models-pane";
 import { SoulRoute } from "@/routes/soul";
 import { VoiceRoute } from "@/routes/voice";
 import { MemoryRoute } from "@/routes/memory";
@@ -170,7 +170,7 @@ function EmbeddedPane({ pane }: { pane: SettingsPane }) {
     case "memory":
       return <EmbedSingle tab={{ key: "memory", label: "记忆", kind: "route", node: <MemoryRoute /> }} />;
     case "model":
-      return <EmbedSingle tab={{ key: "model", label: "模型", kind: "section", node: <ModelsSection /> }} />;
+      return <EmbedSingle tab={{ key: "model", label: "模型", kind: "section", node: <CustomModelsPane /> }} />;
     case "assistant":
       return (
         <EmbedTabs
