@@ -318,6 +318,13 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
 
   if (!RENDERABLE_LEGACY_ROLES.has(msg.role)) return null;
 
+  // Belt-and-suspenders: drop metadata-only user messages that slipped past
+  // the Core API-boundary filter (_normalize_message_content in web_server.py).
+  const METADATA_ONLY_RE = /^\[(?:System|Note):\s.*\]/;
+  if (msg.role === "user" && msg.content && METADATA_ONLY_RE.test(msg.content.trim())) {
+    return null;
+  }
+
   if (msg.role === "tool") {
     return {
       id: `stored-tool-${msg.id}`,

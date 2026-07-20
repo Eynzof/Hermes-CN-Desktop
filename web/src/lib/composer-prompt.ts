@@ -12,6 +12,7 @@ const IMAGE_BLOCK_START = "[Hermes UI Image]";
 const IMAGE_BLOCK_END = "[/Hermes UI Image]";
 const IMAGE_BLOCK_RE = /\n?\[Hermes UI Image\]\nname=([^\n]*)\ndescription:\n[\s\S]*?\n\[\/Hermes UI Image\]\n?/g;
 const IMAGE_FALLBACK_PREAMBLE_RE = /\n?\[The user attached an image(?: but analysis failed)?\.\]\n\[You can examine it with vision_analyze using image_url: [^\]\n]+\]\n?/g;
+const IMAGE_FULL_PREAMBLE_RE = /\n?\[The user attached an image[\s\S]*?\]\n?\[(?:If you need a closer look|You can examine it with) vision_analyze (?:with |using )?image_url: [^\]\n]+\]\n?/g;
 const LEGACY_IMAGE_BLOCK_RE = /^\s*\[User attached image: ([^\]\n]+)\]\n[\s\S]*$/;
 
 const IMAGE_EXTENSIONS = new Set([
@@ -64,6 +65,7 @@ function stripLegacyImageContext(value: string, labels: string[]): string {
 export function stripHermesUiWorkspaceContext(text: string | null | undefined): string {
   let value = (text ?? "")
     .replace(IMAGE_FALLBACK_PREAMBLE_RE, "")
+    .replace(IMAGE_FULL_PREAMBLE_RE, "")
     .replace(WORKSPACE_BLOCK_RE, "");
   const imageLabels: string[] = [];
 
