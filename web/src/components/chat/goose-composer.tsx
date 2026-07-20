@@ -251,7 +251,7 @@ export function GooseComposer({
   );
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState("");
-  const [modelSearch, setModelSearch] = useState("");
+  const modelButtonRef = useRef<HTMLButtonElement>(null);
   const [switchingModel, setSwitchingModel] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<ComposerSkillCandidate | null>(null);
   const [skillActiveIndex, setSkillActiveIndex] = useState(0);
@@ -1521,6 +1521,7 @@ export function GooseComposer({
             ) : null}
             {modelPicker ? (
               <button
+                ref={modelButtonRef}
                 className={s.toolButton}
                 type="button"
                 onClick={toggleModelPicker}
@@ -1595,8 +1596,6 @@ export function GooseComposer({
       </div>
       {modelOpen ? (
         <ModelPickerModal
-          modelSearch={modelSearch}
-          onSearchChange={setModelSearch}
           onClose={() => setModelOpen(false)}
           loading={modelLoading}
           error={modelError}
@@ -1616,10 +1615,7 @@ export function GooseComposer({
                 }
               : undefined
           }
-          onConfigureProvider={(providerId) => {
-            setModelOpen(false);
-            modelPicker?.onConfigureProvider?.(providerId);
-          }}
+          anchorRef={modelButtonRef}
         />
       ) : null}
       {workspacePickerOpen ? (

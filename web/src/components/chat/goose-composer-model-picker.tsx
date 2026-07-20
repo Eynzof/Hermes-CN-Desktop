@@ -1,15 +1,13 @@
 import {
-  useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Brain, Check, ChevronRight, Image as ImageIcon, RotateCcw, Sparkles, Wrench, X, Zap } from "lucide-react";
+import { Check, PencilLine, X } from "lucide-react";
+import { useSetAtom } from "jotai";
 import type { GatewayModelProvider, ModelOptionsResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
@@ -19,11 +17,10 @@ import {
 } from "@/lib/provider-catalog";
 import {
   rankRecentModels,
-  readModelUsageLog,
-  subscribeModelUsage,
   type ModelUsageEntry,
 } from "@/lib/model-usage-log";
-import { expandSearchQuery } from "@/lib/model-search-aliases";
+import { getProviderIconUrl } from "@/lib/provider-icons";
+import { openSettingsDialogAtom } from "@/stores/settings-dialog";
 import type { ComposerModelPickerProps, ComposerModelSelection } from "./composer-types";
 import s from "./goose-composer.module.css";
 
@@ -60,8 +57,6 @@ export function modelButtonText(
 // Candidate model
 // ─────────────────────────────────────────────────────────────────────────────
 
-type CapabilityKey = "vision" | "tools" | "reasoning" | "longContext";
-
 interface Candidate {
   key: string;
   providerSlug: string;
@@ -74,35 +69,6 @@ interface Candidate {
   caps: ProviderCatalogModel | null;
   warning?: string;
 }
-
-interface CapDescriptor {
-  key: CapabilityKey;
-  label: string;
-  Icon: typeof ImageIcon;
-  match: (caps: ProviderCatalogModel | null) => boolean;
-}
-
-const CAPABILITIES: CapDescriptor[] = [
-  { key: "vision", label: "视觉", Icon: ImageIcon, match: (c) => Boolean(c?.supportsVision) },
-  { key: "tools", label: "工具调用", Icon: Wrench, match: (c) => Boolean(c?.supportsTools) },
-  { key: "reasoning", label: "深度推理", Icon: Brain, match: (c) => Boolean(c?.supportsReasoning) },
-  {
-    key: "longContext",
-    label: "≥ 128K 上下文",
-    Icon: Zap,
-    match: (c) => (c?.contextWindow ?? 0) >= 128_000,
-  },
-];
-
-type GroupKey = "recent" | "configured" | "recommended" | "moa" | "more";
-
-const GROUP_LABELS: Record<GroupKey, { name: string; subtitle: string }> = {
-  recent: { name: "最近用过", subtitle: "按 7 日内调用次数排序" },
-  configured: { name: "已配置", subtitle: "填了 Key 但本周未用" },
-  recommended: { name: "推荐预设", subtitle: "Top 5 模型平台 · 一键跳设置页填 Key" },
-  moa: { name: "MoA 预设", subtitle: "多模型混合 · 参考模型先行分析，聚合器输出最终回答" },
-  more: { name: "更多", subtitle: "全球 / 企业 / OAuth 类" },
-};
 
 // 虚拟 provider：MoA 预设以 `moa` provider 的模型形式出现在 model.options
 // 里。对齐官方桌面端（model-menu-panel），它们不混入常规分桶，而是拆成
@@ -306,99 +272,62 @@ export function buildCandidates(
   return { all, recent, configured, recommended, moa, more };
 }
 
-function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
-  if (!expandedQuery) return true;
-  const haystack = [c.model, c.providerName, c.vendor, c.providerSlug, c.apiKeyLabel]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  // Expanded query is space-separated alternatives (raw + CN-alias
-  // expansions). Match if ANY token hits — so typing "千问" finds qwen
-  // models without forcing the user to know the English slug.
-  const tokens = expandedQuery.split(/\s+/).filter(Boolean);
-  return tokens.some((token) => haystack.includes(token));
-}
-
-function candidateMatchesCaps(c: Candidate, activeCaps: Set<CapabilityKey>): boolean {
-  if (activeCaps.size === 0) return true;
-  for (const key of activeCaps) {
-    const cap = CAPABILITIES.find((x) => x.key === key);
-    if (cap && !cap.match(c.caps)) return false;
-  }
-  return true;
-}
-
-function capabilityChips(caps: ProviderCatalogModel | null): { key: string; label: string; Icon: typeof ImageIcon }[] {
-  if (!caps) return [];
-  const chips: { key: string; label: string; Icon: typeof ImageIcon }[] = [];
-  if (caps.contextWindow) {
-    chips.push({
-      key: "ctx",
-      label: caps.contextWindow >= 1_000_000
-        ? `${Math.round(caps.contextWindow / 1_000_000)}M`
-        : `${Math.round(caps.contextWindow / 1_000)}K`,
-      Icon: Zap,
-    });
-  }
-  if (caps.supportsTools) chips.push({ key: "tools", label: "工具", Icon: Wrench });
-  if (caps.supportsReasoning) chips.push({ key: "reasoning", label: "推理", Icon: Brain });
-  if (caps.supportsVision) chips.push({ key: "vision", label: "视觉", Icon: ImageIcon });
-  return chips;
-}
-
-function formatUsageMeta(entry: ModelUsageEntry | undefined, now = Date.now()): string {
-  if (!entry) return "";
-  const ageMs = Math.max(0, now - entry.lastUsedAt);
-  const minutes = Math.floor(ageMs / 60_000);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  let when: string;
-  if (minutes < 1) when = "刚刚用过";
-  else if (minutes < 60) when = `${minutes} 分钟前用过`;
-  else if (hours < 24) when = `${hours} 小时前用过`;
-  else if (days < 7) when = `${days} 天前用过`;
-  else when = "7 天前用过";
-  return entry.count > 1 ? `${when} · 累计 ${entry.count} 次` : when;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// View components
+// WorkBuddy 风格紧凑模型菜单（锚定在「模型」按钮上方）
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface ModelPickerViewProps {
-  modelSearch: string;
-  onSearchChange: (value: string) => void;
+interface ModelMenuProps {
   loading: boolean;
   error: string;
   modelOptions: ModelOptionsResult | null;
-  /** Caller's currently-selected model (typically session-scoped). Used to
-   * mark the "当前" badge inside the picker. Falls back to modelOptions
-   * (gateway-level active model) when not provided. */
   selected?: ComposerModelSelection | null;
   switchingModel: boolean;
   onSelectModel: (selection: ComposerModelSelection) => void;
-  /** ⌘↵ variant — set this model AND make it the global default. Picker
-   * fires this when meta/ctrl is held during click; falls back to
-   * onSelectModel when unset. */
+  /** ⌘↵ variant — set this model AND make it the global default. */
   onSelectAndSetDefault?: (selection: ComposerModelSelection) => void;
-  /** When a user clicks an unconfigured-provider CTA, the host route navigates
-   * to /models with the provider id so the settings page can scroll to + focus
-   * the relevant section. */
-  onConfigureProvider?: (providerId: string) => void;
-}
-
-interface ModelPickerPanelProps extends ModelPickerViewProps {
   onClose: () => void;
+  /** 模型按钮的 ref，用于把菜单锚定到按钮上方。 */
+  anchorRef?: RefObject<HTMLElement | null>;
 }
 
-interface ModelPickerBodyProps extends ModelPickerViewProps {
-  searchInputRef?: RefObject<HTMLInputElement | null>;
-  closeControl?: ReactNode;
+const ENTERPRISE_PREFIX = "custom:team-";
+
+interface ModelGroups {
+  enterprise: Candidate[];
+  custom: Candidate[];
+  builtin: Candidate[];
 }
 
-function ModelPickerBody({
-  modelSearch,
-  onSearchChange,
+function groupCandidates(modelOptions: ModelOptionsResult | null): ModelGroups {
+  const groups: ModelGroups = { enterprise: [], custom: [], builtin: [] };
+  const { all } = buildCandidates(modelOptions, []);
+  for (const candidate of all) {
+    if (!candidate.configured) continue;
+    if (candidate.providerSlug.startsWith(ENTERPRISE_PREFIX)) groups.enterprise.push(candidate);
+    else if (candidate.providerSlug.startsWith("custom:")) groups.custom.push(candidate);
+    else groups.builtin.push(candidate);
+  }
+  const byName = (a: Candidate, b: Candidate) => a.model.localeCompare(b.model, "zh-Hans-CN");
+  groups.enterprise.sort(byName);
+  groups.custom.sort(byName);
+  groups.builtin.sort(byName);
+  return groups;
+}
+
+function CandidateIcon({ candidate }: { candidate: Candidate }) {
+  const preset = findCatalog(candidate.providerSlug);
+  const url = getProviderIconUrl(preset?.icon);
+  if (url) {
+    return <img className={s.modelMenuItemIcon} src={url} alt="" aria-hidden="true" />;
+  }
+  return (
+    <span className={s.modelMenuItemIcon} data-tone={candidate.providerSlug.startsWith(ENTERPRISE_PREFIX) ? "enterprise" : "custom"} aria-hidden="true">
+      {candidate.model.trim()[0]?.toUpperCase() ?? "M"}
+    </span>
+  );
+}
+
+export function ModelPickerModal({
   loading,
   error,
   modelOptions,
@@ -406,34 +335,15 @@ function ModelPickerBody({
   switchingModel,
   onSelectModel,
   onSelectAndSetDefault,
-  onConfigureProvider,
-  searchInputRef,
-  closeControl,
-}: ModelPickerBodyProps) {
-  const [usageEntries, setUsageEntries] = useState<ModelUsageEntry[]>(() => {
-    if (typeof window === "undefined") return [];
-    return readModelUsageLog();
-  });
-  const [activeGroup, setActiveGroup] = useState<"all" | GroupKey>("all");
-  const [activeCaps, setActiveCaps] = useState<Set<CapabilityKey>>(new Set());
-  const [moreExpanded, setMoreExpanded] = useState(false);
+  onClose,
+  anchorRef,
+}: ModelMenuProps) {
+  const openSettingsDialog = useSetAtom(openSettingsDialogAtom);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ bottom: number; left: number } | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    return subscribeModelUsage(() => setUsageEntries(readModelUsageLog()));
-  }, []);
-
-  const buckets = useMemo(
-    () => buildCandidates(modelOptions, usageEntries),
-    [modelOptions, usageEntries],
-  );
-
-  const query = expandSearchQuery(modelSearch);
-  const usageByKey = useMemo(() => {
-    const map = new Map<string, ModelUsageEntry>();
-    for (const e of usageEntries) map.set(e.key, e);
-    return map;
-  }, [usageEntries]);
+  const groups = useMemo(() => groupCandidates(modelOptions), [modelOptions]);
+  const isEmpty = groups.enterprise.length + groups.custom.length + groups.builtin.length === 0;
 
   const currentSelectionKey = useMemo(() => {
     const model = selected?.model ?? modelOptions?.model;
@@ -442,377 +352,130 @@ function ModelPickerBody({
     return `${provider ?? ""}:${model}`;
   }, [selected, modelOptions]);
 
-  const filterGroup = useCallback(
-    (group: Candidate[]) =>
-      group.filter((c) => candidateMatchesQuery(c, query) && candidateMatchesCaps(c, activeCaps)),
-    [query, activeCaps],
-  );
-
-  const visible = useMemo(() => {
-    const recent = filterGroup(buckets.recent);
-    const configured = filterGroup(buckets.configured);
-    const recommended = filterGroup(buckets.recommended);
-    const moa = filterGroup(buckets.moa);
-    const more = filterGroup(buckets.more);
-    return { recent, configured, recommended, moa, more };
-  }, [buckets, filterGroup]);
-
-  const totalVisible = visible.recent.length + visible.configured.length + visible.recommended.length + visible.moa.length + visible.more.length;
-
-  function toggleCap(cap: CapabilityKey) {
-    setActiveCaps((prev) => {
-      const next = new Set(prev);
-      if (next.has(cap)) next.delete(cap);
-      else next.add(cap);
-      return next;
-    });
-  }
-
-  const showGroup = useCallback(
-    (group: GroupKey): boolean => activeGroup === "all" || activeGroup === group,
-    [activeGroup],
-  );
-
-  function renderCard(candidate: Candidate) {
-    const isCurrent = candidate.key === currentSelectionKey;
-    const usage = usageByKey.get(candidate.key);
-    const caps = capabilityChips(candidate.caps);
-    const baseUrlHost = candidate.baseUrl ? candidate.baseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : "";
-
-    if (!candidate.configured) {
-      return (
-        <button
-          key={candidate.key}
-          type="button"
-          className={s.mpCard}
-          data-unconfigured="true"
-          onClick={() => onConfigureProvider?.(candidate.providerSlug)}
-          disabled={switchingModel}
-        >
-          <div className={s.mpCardHead}>
-            <span className={s.mpCardVendor}>{candidate.vendor || candidate.providerName}</span>
-            <span className={s.mpCardName}>{candidate.model}</span>
-            <span className={s.mpCardPillWarn}>未配置</span>
-          </div>
-          <div className={s.mpCardMeta}>
-            <span>{candidate.providerName}</span>
-            {candidate.apiKeyLabel && (
-              <>
-                <span className={s.mpCardSep}>·</span>
-                <span>需要 <code className={s.mpCardMono}>{candidate.apiKeyLabel}</code></span>
-              </>
-            )}
-          </div>
-          {caps.length > 0 && (
-            <div className={s.mpCardCaps}>
-              {caps.map(({ key, label, Icon }) => (
-                <span key={key} className={s.mpCapChip}>
-                  <Icon aria-hidden="true" />
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className={s.mpCardCta}>
-            <ArrowRight aria-hidden="true" />
-            去设置 · /models#{candidate.providerSlug}
-          </div>
-        </button>
-      );
+  // 锚定到模型按钮上方；无锚点时兜底为底部居中。
+  useEffect(() => {
+    const MENU_WIDTH = 300;
+    const rect = anchorRef?.current?.getBoundingClientRect();
+    if (!rect) {
+      setPosition(null);
+      return;
     }
-
-    return (
-      <button
-        key={candidate.key}
-        type="button"
-        className={s.mpCard}
-        data-current={isCurrent ? "true" : undefined}
-        disabled={switchingModel}
-        title="↵ 仅本会话 · ⌘↵ 同时设为全局默认"
-        onClick={(event) => {
-          const selection = {
-            model: candidate.model,
-            provider: candidate.providerSlug,
-            providerName: candidate.providerName,
-            contextWindow: candidate.caps?.contextWindow,
-          };
-          const setAsDefault = event.metaKey || event.ctrlKey;
-          if (setAsDefault && onSelectAndSetDefault) {
-            onSelectAndSetDefault(selection);
-          } else {
-            onSelectModel(selection);
-          }
-        }}
-      >
-        {isCurrent && <span className={s.mpCardStrip} aria-hidden="true" />}
-        <div className={s.mpCardHead}>
-          <span className={s.mpCardVendor}>{candidate.vendor || candidate.providerName}</span>
-          <span className={s.mpCardName}>{candidate.model}</span>
-          {isCurrent && (
-            <span className={s.mpCardPillOk}>
-              <Check aria-hidden="true" /> 当前
-            </span>
-          )}
-        </div>
-        <div className={s.mpCardMeta}>
-          <span>{candidate.providerName}</span>
-          {baseUrlHost && (
-            <>
-              <span className={s.mpCardSep}>·</span>
-              <span>{baseUrlHost}</span>
-            </>
-          )}
-        </div>
-        {caps.length > 0 && (
-          <div className={s.mpCardCaps}>
-            {caps.map(({ key, label, Icon }) => (
-              <span key={key} className={s.mpCapChip}>
-                <Icon aria-hidden="true" />
-                {label}
-              </span>
-            ))}
-          </div>
-        )}
-        {usage && (
-          <div className={s.mpCardUsage}>
-            <RotateCcw aria-hidden="true" />
-            {formatUsageMeta(usage)}
-          </div>
-        )}
-      </button>
-    );
-  }
-
-  return (
-    <>
-      <div className={s.modelPanelHeader}>
-        <input
-          ref={searchInputRef}
-          value={modelSearch}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="按名称、能力或厂商搜索 — 如 ‘128K’、‘视觉’、‘deepseek’"
-          className={s.modelSearch}
-        />
-        {closeControl}
-      </div>
-
-      {loading ? (
-        <div className={s.modelEmpty}>加载模型…</div>
-      ) : error ? (
-        <div className={s.modelError}>{error}</div>
-      ) : (
-        <div className={s.mpGrid}>
-          <aside className={s.mpFilters}>
-            <div className={s.mpFilterSection}>
-              <div className={s.mpFilterTitle}>分组</div>
-              <button
-                type="button"
-                className={s.mpFilterChip}
-                data-active={activeGroup === "all"}
-                onClick={() => setActiveGroup("all")}
-              >
-                <Sparkles aria-hidden="true" />
-                全部
-                <span className={s.mpFilterCount}>{totalVisible}</span>
-              </button>
-              {(["recent", "configured", "recommended", "moa", "more"] as const).map((group) => {
-                const count = visible[group].length;
-                return (
-                  <button
-                    key={group}
-                    type="button"
-                    className={s.mpFilterChip}
-                    data-active={activeGroup === group}
-                    onClick={() => setActiveGroup(group)}
-                  >
-                    {GROUP_LABELS[group].name}
-                    <span className={s.mpFilterCount}>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className={s.mpFilterSection}>
-              <div className={s.mpFilterTitle}>能力</div>
-              {CAPABILITIES.map((cap) => (
-                <button
-                  key={cap.key}
-                  type="button"
-                  className={s.mpFilterChip}
-                  data-active={activeCaps.has(cap.key)}
-                  onClick={() => toggleCap(cap.key)}
-                >
-                  <cap.Icon aria-hidden="true" />
-                  {cap.label}
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <div className={s.mpCandidates}>
-            {totalVisible === 0 ? (
-              <div className={s.modelEmpty}>没有匹配的模型</div>
-            ) : (
-              <>
-                {showGroup("recent") && visible.recent.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.recent.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.recent.subtitle}</span>
-                    </header>
-                    {visible.recent.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("configured") && visible.configured.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.configured.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.configured.subtitle}</span>
-                    </header>
-                    {visible.configured.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("recommended") && visible.recommended.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.recommended.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.recommended.subtitle}</span>
-                    </header>
-                    {visible.recommended.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("moa") && visible.moa.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.moa.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.moa.subtitle}</span>
-                    </header>
-                    {visible.moa.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("more") && visible.more.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <button
-                      type="button"
-                      className={s.mpGroupCollapsible}
-                      onClick={() => setMoreExpanded((x) => !x)}
-                    >
-                      <ChevronRight
-                        aria-hidden="true"
-                        className={s.mpGroupChevron}
-                        data-expanded={moreExpanded ? "true" : undefined}
-                      />
-                      <span>{GROUP_LABELS.more.name} · {visible.more.length} 项</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.more.subtitle}</span>
-                    </button>
-                    {moreExpanded && visible.more.map(renderCard)}
-                  </section>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-export function ModelPickerPanel({ onClose, ...props }: ModelPickerPanelProps) {
-  return (
-    <div className={s.modelPanel}>
-      <ModelPickerBody
-        {...props}
-        closeControl={(
-          <button type="button" className={s.modelClose} onClick={onClose} aria-label="关闭模型选择">
-            ×
-          </button>
-        )}
-      />
-    </div>
-  );
-}
-
-export function ModelPickerModal({ onClose, ...props }: ModelPickerPanelProps) {
-  const titleId = useId();
-  const modalRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - MENU_WIDTH - 12));
+    setPosition({ bottom: window.innerHeight - rect.top + 8, left });
+  }, [anchorRef, modelOptions]);
 
   useEffect(() => {
     const previousActiveElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
-    const previousOverflow = document.body.style.overflow;
-    const focusTimer = window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = Array.from(
-        modalRef.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => element.offsetParent !== null);
-      if (!focusable.length) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      if (event.key === "Escape") onClose();
     };
-
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.cancelAnimationFrame(focusTimer);
       window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
       previousActiveElement?.focus();
     };
   }, [onClose]);
+
+  const pick = (candidate: Candidate) => (event: React.MouseEvent) => {
+    const selection: ComposerModelSelection = {
+      model: candidate.model,
+      provider: candidate.providerSlug,
+      providerName: candidate.providerName,
+      contextWindow: candidate.caps?.contextWindow,
+    };
+    if ((event.metaKey || event.ctrlKey) && onSelectAndSetDefault) {
+      onSelectAndSetDefault(selection);
+    } else {
+      onSelectModel(selection);
+    }
+  };
+
+  const renderGroup = (label: string, candidates: Candidate[]) => {
+    if (candidates.length === 0) return null;
+    return (
+      <section>
+        <div className={s.modelMenuGroup}>{label}</div>
+        {candidates.map((candidate) => {
+          const isCurrent = candidate.key === currentSelectionKey;
+          return (
+            <button
+              key={candidate.key}
+              type="button"
+              className={s.modelMenuItem}
+              data-current={isCurrent ? "true" : undefined}
+              disabled={switchingModel}
+              title="↵ 仅本会话 · ⌘↵ 同时设为全局默认"
+              onClick={pick(candidate)}
+            >
+              <CandidateIcon candidate={candidate} />
+              <span className={s.modelMenuItemName}>{candidate.model}</span>
+              {isCurrent ? <Check size={14} className={s.modelMenuItemCheck} aria-hidden="true" /> : null}
+            </button>
+          );
+        })}
+      </section>
+    );
+  };
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
     <div
-      className={s.modelModalBackdrop}
+      className={s.modelMenuBackdrop}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
-        ref={modalRef}
-        className={s.modelModal}
+        ref={menuRef}
+        className={s.modelMenu}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={titleId}
+        aria-label="选择模型"
+        style={position ? { bottom: position.bottom, left: position.left } : undefined}
+        data-anchored={position ? "true" : undefined}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className={s.modelModalTitleBar}>
-          <h2 id={titleId}>选择模型</h2>
-          <button
-            type="button"
-            className={s.modelModalClose}
-            onClick={onClose}
-            aria-label="关闭模型选择"
-          >
-            <X aria-hidden="true" />
+        <div className={s.modelMenuHead}>
+          <span>选择模型</span>
+          <button type="button" className={s.modelMenuClose} onClick={onClose} aria-label="关闭模型选择">
+            <X size={13} aria-hidden="true" />
           </button>
         </div>
-        <ModelPickerBody {...props} searchInputRef={searchInputRef} />
+
+        <div className={s.modelMenuScroll}>
+          {loading ? (
+            <div className={s.modelMenuEmpty}>加载模型…</div>
+          ) : error ? (
+            <div className={s.modelMenuError}>{error}</div>
+          ) : isEmpty ? (
+            <div className={s.modelMenuEmpty}>暂无可用模型，请先在下方配置</div>
+          ) : (
+            <>
+              {renderGroup("企业模型", groups.enterprise)}
+              {renderGroup("自定义模型", groups.custom)}
+              {renderGroup("内置模型", groups.builtin)}
+            </>
+          )}
+        </div>
+
+        <div className={s.modelMenuFoot}>
+          <button
+            type="button"
+            className={s.modelMenuItem}
+            onClick={() => {
+              onClose();
+              openSettingsDialog("model");
+            }}
+          >
+            <span className={s.modelMenuItemIcon} data-tone="custom" aria-hidden="true">
+              <PencilLine size={12} />
+            </span>
+            <span className={s.modelMenuItemName}>配置自定义模型</span>
+          </button>
+        </div>
       </div>
     </div>,
     document.body,
