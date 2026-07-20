@@ -208,6 +208,12 @@ describe("composer prompt preparation", () => {
       },
     );
 
+    expect(result.promptText).toContain("[Skill: codex]");
+    expect(result.promptText).toContain("修复类型错误");
+    expect(result.promptText).not.toContain("/codex 修复类型错误");
+    expect(result.displayText).toBe("/codex 修复类型错误");
+  });
+
   it("strips full-description image preamble", () => {
     const input = `[The user attached an image. Here's what it contains:\nA screenshot of a dashboard with charts.]\n[If you need a closer look, use vision_analyze with image_url: /tmp/img.png]\n\nWhat do you see?`;
     const result = stripHermesUiWorkspaceContext(input);

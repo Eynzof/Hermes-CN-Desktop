@@ -22,6 +22,12 @@
   flex-wrap: wrap;
   gap: 8px;
   margin: 0 0 10px;
+  /* Cap the tray at ~3 chip rows and scroll the overflow: without this,
+     attaching many files grows the composer unbounded and squeezes the chat
+     timeline off-screen (issue #461). */
+  max-height: 160px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .attachmentChip {
