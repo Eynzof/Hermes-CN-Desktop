@@ -141,10 +141,47 @@ export function App() {
   } else if (isGuide) {
     content = withBoundary(<GuideRoute />);
   } else if (!runtime.isBackendReady()) {
-    content = <OfflineShell />;
+    content = (
+      <>
+        <BackendReadyRecovery />
+        <OfflineShell />
+      </>
+    );
   } else {
     content = <BackendApp />;
   }
 
   return <div lang="zh-CN" data-hermes-platform={platform}>{content}</div>;
+}
+
+/**
+ * 后端未就绪时展示 OfflineShell，但 managed runtime 可能正在后台启动
+ * （覆盖安装后的首次启动 reconcile 需要数十秒）。这里每 3 秒轮询一次
+ * 控制状态，一旦 backendReady 翻转就自动重载 webview，免去手动刷新——
+ * 对应 OfflineShell 文案「连接成功后重新加载即可恢复」。
+ */
+function BackendReadyRecovery() {
+  useEffect(() => {
+    if (runtime.isBackendReady()) return;
+    let stopped = false;
+    const timer = window.setInterval(() => {
+      if (stopped) return;
+      void (async () => {
+        try {
+          const bridge = window.hermesDesktop;
+          if (!bridge?.getDesktopControlState) return;
+          const result = await bridge.getDesktopControlState();
+          runtime.applyRuntimeControlResult(result);
+          if (result.backendReady) window.location.reload();
+        } catch {
+          // 后端仍未就绪，下个周期重试
+        }
+      })();
+    }, 3000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+  return null;
 }
