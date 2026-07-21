@@ -45,3 +45,4 @@ __pycache__/
 
 # AI plan cache
 .kimix_cache/
+issues/

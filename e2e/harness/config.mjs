@@ -12,8 +12,14 @@ export const DESKTOP_DIR = resolve(E2E_DIR, "..");
 // The Core backend repo. Defaults to the sibling checkout; override in CI.
 export const CORE_DIR =
   process.env.HERMES_CORE_DIR || resolve(DESKTOP_DIR, "..", "Hermes-CN-Core");
-export const VENV_PY =
-  process.env.HERMES_CORE_PYTHON || resolve(CORE_DIR, ".venv", "bin", "python");
+// A Python venv lays its interpreter under bin/ on POSIX but Scripts/ (with a
+// .exe suffix) on Windows — pick the platform-correct default so the harness
+// finds the Core venv without HERMES_CORE_PYTHON overrides on Windows.
+const VENV_PY_DEFAULT =
+  process.platform === "win32"
+    ? resolve(CORE_DIR, ".venv", "Scripts", "python.exe")
+    : resolve(CORE_DIR, ".venv", "bin", "python");
+export const VENV_PY = process.env.HERMES_CORE_PYTHON || VENV_PY_DEFAULT;
 
 export const RUNTIME_DIR = resolve(E2E_DIR, ".runtime");
 export const HERMES_HOME = resolve(RUNTIME_DIR, "hermes-home");

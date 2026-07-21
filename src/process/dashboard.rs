@@ -1068,6 +1068,7 @@ fn spawn_dashboard(
     cmd.env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir)
         .env("HERMES_DESKTOP_MANAGED", "1")
+        .env("HERMES_DESKTOP", "1")
         .env("HERMES_GATEWAY_DETACHED", "1");
     // Identity-proving readiness channel: the kernel atomically writes
     // {"port": N} here once its socket is bound (Core:

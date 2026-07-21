@@ -1155,6 +1155,39 @@ describe("assistant stats derivation", () => {
         token_count: 42,
       }),
     );
-    expect(stored?.stats).toMatchObject({ tokensTotal: 42 });
+      expect(stored?.stats).toMatchObject({ tokensTotal: 42 });
+  });
+
+  describe("metadata filter — legacySessionMessageToHermesUIMessage", () => {
+    it("drops model-switch system marker", () => {
+      const msg = {
+        id: 1, session_id: "s1", role: "user" as const,
+        content: "[System: The active model for this chat has changed to gpt-5 via provider openai. From this point forward, use this runtime metadata when answering questions about what model/provider is active.]",
+        timestamp: 1700000000,
+      };
+      // We check via storedMessageToChatMessage which calls legacySessionMessageToHermesUIMessage
+      const result = storedMessagesToChatMessages([msg]);
+      expect(result).toHaveLength(0);
+    });
+
+    it("drops gateway model-switch note", () => {
+      const msg = {
+        id: 2, session_id: "s1", role: "user" as const,
+        content: "[Note: model was just switched from gpt-4 to gpt-5 via openai. Adjust your self-identification accordingly.]",
+        timestamp: 1700000000,
+      };
+      const result = storedMessagesToChatMessages([msg]);
+      expect(result).toHaveLength(0);
+    });
+
+    it("keeps normal user messages", () => {
+      const msg = {
+        id: 3, session_id: "s1", role: "user" as const,
+        content: "Hello!",
+        timestamp: 1700000000,
+      };
+      const result = storedMessagesToChatMessages([msg]);
+      expect(result).toHaveLength(1);
+    });
   });
 });
