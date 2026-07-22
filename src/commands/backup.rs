@@ -175,6 +175,19 @@ fn should_skip_nested_entry(name: &str) -> bool {
         || name.ends_with(".pyo")
         || name.ends_with(".sock")
         || name.ends_with(".tmp")
+        // Advisory/exclusive lock files are runtime artefacts, not user
+        // data, and on Windows they are byte-range locked while the owning
+        // process is alive (os error 33 on read) — issue #107 / #427.
+        || name.ends_with(".lock")
+        // The live kernel database. SQLite on Windows holds byte-range
+        // locks on it while the kernel runs, so copying it mid-session both
+        // fails with os error 33 and would produce a corrupt snapshot
+        // anyway. Sessions live under `sessions/`, so user data is still
+        // fully exported. The official `hermes profile export` CLI excludes
+        // state.db for the same reason.
+        || name == "state.db"
+        || name == "state.db-wal"
+        || name == "state.db-shm"
 }
 
 #[cfg(unix)]
@@ -290,23 +303,55 @@ fn export_profile_backup_to_path(
         &mut warnings,
     )?;
 
-    let entries = planned
-        .iter()
-        .map(|entry| entry.manifest_entry.clone())
-        .collect();
-    let stats = BackupArchiveStats {
-        warnings,
-        file_count: planned
-            .iter()
-            .filter(|entry| entry.manifest_entry.kind == BackupEntryKind::File)
-            .count(),
-        total_bytes: planned
-            .iter()
-            .filter_map(|entry| entry.manifest_entry.size_bytes)
-            .fold(0u64, u64::saturating_add),
-        entries,
-        ..Default::default()
-    };
+    if let Some(parent) = backup_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let file = fs::File::create(backup_path)?;
+    let mut zip = ZipWriter::new(file);
+
+    // Write payload entries first; the manifest is written last so it only
+    // ever lists entries that actually made it into the archive. A file
+    // that cannot be read (e.g. byte-range locked by the running kernel or
+    // WebView2 on Windows — os error 33, issue #107 / #427) is skipped with
+    // a warning instead of aborting the whole export: the remaining profile
+    // data is still far more useful than no backup at all. The file is read
+    // fully BEFORE `start_file` so a failed read never leaves a half-written
+    // (corrupt) entry inside the zip.
+    let mut written_entries: Vec<BackupManifestEntry> = Vec::new();
+    let mut file_count = 0usize;
+    let mut total_bytes = 0u64;
+
+    for entry in &planned {
+        let options = zip_options_for_entry(entry);
+        match entry.manifest_entry.kind {
+            BackupEntryKind::Directory => {
+                zip.add_directory(&entry.zip_path, options)
+                    .map_err(zip_error)?;
+                written_entries.push(entry.manifest_entry.clone());
+            }
+            BackupEntryKind::File => {
+                let bytes = match fs::read(&entry.source_path) {
+                    Ok(bytes) => bytes,
+                    Err(err) => {
+                        warnings.push(format!(
+                            "已跳过无法读取的文件（可能被运行中的程序锁定）：{}（{}）",
+                            entry.source_path.display(),
+                            err
+                        ));
+                        continue;
+                    }
+                };
+                zip.start_file(&entry.zip_path, options)
+                    .map_err(zip_error)?;
+                zip.write_all(&bytes)?;
+                file_count += 1;
+                total_bytes = total_bytes.saturating_add(bytes.len() as u64);
+                let mut manifest_entry = entry.manifest_entry.clone();
+                manifest_entry.size_bytes = Some(bytes.len() as u64);
+                written_entries.push(manifest_entry);
+            }
+        }
+    }
 
     let manifest = BackupManifest {
         schema_version: BACKUP_SCHEMA_VERSION,
@@ -316,14 +361,8 @@ fn export_profile_backup_to_path(
         desktop_version: env!("CARGO_PKG_VERSION").to_string(),
         includes_secrets: true,
         includes_sessions: true,
-        entries: stats.entries.clone(),
+        entries: written_entries,
     };
-
-    if let Some(parent) = backup_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let file = fs::File::create(backup_path)?;
-    let mut zip = ZipWriter::new(file);
     let manifest_options =
         SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
     zip.start_file("manifest.json", manifest_options)
@@ -332,24 +371,14 @@ fn export_profile_backup_to_path(
         serde_json::to_vec_pretty(&manifest).map_err(|e| AppError::Internal(e.to_string()))?;
     zip.write_all(&manifest_json)?;
 
-    for entry in &planned {
-        let options = zip_options_for_entry(entry);
-        match entry.manifest_entry.kind {
-            BackupEntryKind::Directory => {
-                zip.add_directory(&entry.zip_path, options)
-                    .map_err(zip_error)?;
-            }
-            BackupEntryKind::File => {
-                zip.start_file(&entry.zip_path, options)
-                    .map_err(zip_error)?;
-                let mut source = fs::File::open(&entry.source_path)?;
-                std::io::copy(&mut source, &mut zip)?;
-            }
-        }
-    }
-
     zip.finish().map_err(zip_error)?;
-    Ok(stats)
+    Ok(BackupArchiveStats {
+        warnings,
+        file_count,
+        total_bytes,
+        entries: manifest.entries.clone(),
+        ..Default::default()
+    })
 }
 
 fn read_manifest_from_archive<R: Read + std::io::Seek>(
@@ -1041,6 +1070,83 @@ mod tests {
             .any(|warning| warning.contains("备份输出文件自身")));
         let names = zip_names(&zip);
         assert!(!names.contains(&"profile/self.zip".to_string()));
+    }
+
+    #[test]
+    fn export_skips_live_kernel_state_db() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let zip = tmp.path().join("backup.zip");
+        write(&home.join("config.yaml"), "model: test\n");
+        write(&home.join("state.db"), "sqlite-bytes\n");
+        write(&home.join("state.db-wal"), "wal-bytes\n");
+        write(&home.join("state.db-shm"), "shm-bytes\n");
+        write(&home.join("sessions/session_1.json"), "{}\n");
+
+        let stats = export_profile_backup_to_path(&home, "default", &zip).unwrap();
+
+        assert_eq!(stats.file_count, 2);
+        let names = zip_names(&zip);
+        assert!(names.contains(&"profile/config.yaml".to_string()));
+        assert!(names.contains(&"profile/sessions/session_1.json".to_string()));
+        assert!(!names.iter().any(|name| name.contains("state.db")));
+    }
+
+    #[test]
+    fn export_skips_dot_lock_files() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let zip = tmp.path().join("backup.zip");
+        write(&home.join("config.yaml"), "model: test\n");
+        write(&home.join("gateway.lock"), "\n");
+
+        let stats = export_profile_backup_to_path(&home, "default", &zip).unwrap();
+
+        assert_eq!(stats.file_count, 1);
+        let names = zip_names(&zip);
+        assert!(!names.iter().any(|name| name.ends_with(".lock")));
+    }
+
+    /// Issue #107 / #427: on Windows the running kernel and WebView2 hold
+    /// byte-range locks on live files; reading one fails with os error 33.
+    /// The export must skip that file with a warning instead of failing the
+    /// whole backup.
+    #[cfg(windows)]
+    #[test]
+    fn export_skips_byte_range_locked_file_with_warning() {
+        use fs2::FileExt;
+
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let zip = tmp.path().join("backup.zip");
+        write(&home.join("config.yaml"), "model: test\n");
+        write(&home.join("cache.db"), "locked-content\n");
+
+        let locked = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(home.join("cache.db"))
+            .unwrap();
+        locked.lock_exclusive().unwrap();
+
+        let stats = export_profile_backup_to_path(&home, "default", &zip).unwrap();
+
+        locked.unlock().unwrap();
+        drop(locked);
+
+        assert_eq!(stats.file_count, 1);
+        assert!(stats
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("cache.db")));
+        let names = zip_names(&zip);
+        assert!(names.contains(&"profile/config.yaml".to_string()));
+        assert!(!names.contains(&"profile/cache.db".to_string()));
+        // Manifest must not list the skipped file either.
+        let file = fs::File::open(&zip).unwrap();
+        let mut archive = ZipArchive::new(file).unwrap();
+        let manifest = read_manifest_from_archive(&mut archive).unwrap();
+        assert!(!manifest.entries.iter().any(|e| e.path == "cache.db"));
     }
 
     #[test]

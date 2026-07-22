@@ -614,6 +614,10 @@ function reduceGatewayEventInner(
     case "message.delta": {
       const text = typeof payload.text === "string" ? payload.text : "";
       const images = imagePartsFromPayload(payload);
+      // Empty delta must not create an assistant message block — it's a
+      // no-op that prevents "重复发送3条空消息".  The backend may
+      // emit empty-string deltas during reasoning↔content transitions.
+      if (!text && images.length === 0) return runtime;
       const id = activeAssistantId(runtime, now);
       const next = updateActiveAssistant(
         clearProviderStatus({

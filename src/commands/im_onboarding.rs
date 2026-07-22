@@ -1628,6 +1628,7 @@ fn spawn_managed_gateway_process(hermes_home: &str) -> Result<(u32, PathBuf), St
         .env("HERMES_GATEWAY_RUNTIME_DIR", &gateway_runtime_dir)
         .env("HERMES_GATEWAY_LOCK_DIR", &gateway_lock_dir)
         .env("HERMES_DESKTOP_MANAGED", "1")
+        .env("HERMES_DESKTOP", "1")
         .env("HERMES_GATEWAY_DETACHED", "1")
         .env("HERMES_NONINTERACTIVE", "1")
         .env("PYTHONUNBUFFERED", "1")

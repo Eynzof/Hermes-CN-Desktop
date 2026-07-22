@@ -208,7 +208,35 @@ describe("composer prompt preparation", () => {
       },
     );
 
-    expect(result.promptText).toBe("[Skill: codex]\n修复类型错误");
+    expect(result.promptText).toContain("[Skill: codex]");
+    expect(result.promptText).toContain("修复类型错误");
+    expect(result.promptText).not.toContain("/codex 修复类型错误");
     expect(result.displayText).toBe("/codex 修复类型错误");
+  });
+
+  it("strips full-description image preamble", () => {
+    const input = `[The user attached an image. Here's what it contains:\nA screenshot of a dashboard with charts.]\n[If you need a closer look, use vision_analyze with image_url: /tmp/img.png]\n\nWhat do you see?`;
+    const result = stripHermesUiWorkspaceContext(input);
+    expect(result).not.toContain("[The user attached an image");
+    expect(result).toContain("What do you see?");
+  });
+
+  it("strips short-fallback image preamble (existing behavior)", () => {
+    const input = `[The user attached an image.]\n[You can examine it with vision_analyze using image_url: /tmp/img.png]\n\nDescribe this.`;
+    const result = stripHermesUiWorkspaceContext(input);
+    expect(result).not.toContain("[The user attached an image");
+    expect(result).toContain("Describe this.");
+  });
+
+  it("strips failed-analysis preamble", () => {
+    const input = `[The user attached an image but analysis failed.]\n[You can examine it with vision_analyze using image_url: /tmp/img.png]\n\nTry again.`;
+    const result = stripHermesUiWorkspaceContext(input);
+    expect(result).not.toContain("[The user attached an image");
+    expect(result).toContain("Try again.");
+  });
+
+  it("preserves normal text without image metadata", () => {
+    const input = "Just a normal message.";
+    expect(stripHermesUiWorkspaceContext(input)).toBe("Just a normal message.");
   });
 });
