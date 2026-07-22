@@ -1,7 +1,7 @@
 {
   "id": "fengchihermes",
-  "appName": "风驰云",
-  "appNameEn": "Fengchiyun",
+  "appName": "HermesAgent",
+  "appNameEn": "HermesAgent",
   "productName": "FengchiHermes Desktop",
   "identifier": "cn.org.hermesagent.desktop",
   "dataDirName": ".fengchihermes",

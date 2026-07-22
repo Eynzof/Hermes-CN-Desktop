@@ -1,7 +1,7 @@
 {
   "id": "frogclawhermes",
-  "appName": "FrogClaw助手",
-  "appNameEn": "FrogClawHermes",
+  "appName": "HermesAgent",
+  "appNameEn": "HermesAgent",
   "productName": "FrogClawHermes Desktop",
   "identifier": "cn.org.hermesagent.desktop",
   "dataDirName": ".frogclawhermes",

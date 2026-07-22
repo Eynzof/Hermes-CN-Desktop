@@ -1,7 +1,7 @@
 {
   "id": "huanxinghermes",
-  "appName": "寰星Agent",
-  "appNameEn": "HuanxingHermes",
+  "appName": "HermesAgent",
+  "appNameEn": "HermesAgent",
   "productName": "HuanxingHermes Desktop",
   "identifier": "cn.org.hermesagent.desktop",
   "dataDirName": ".huanxinghermes",
