@@ -1,4 +1,5 @@
 import { runtime } from "@/lib/runtime";
+import { BRAND } from "@/lib/brand.generated";
 import s from "./boot-splash.module.css";
 
 /** 启动加载屏：managed runtime 安装/启动期间展示，替代直接落到离线控制台。 */
@@ -13,7 +14,7 @@ export function BootSplash() {
 
   return (
     <div className={s.splash} data-window-drag data-tauri-drag-region="deep">
-      <div className={s.brand}>Hermes</div>
+      <div className={s.brand}>{BRAND.appName}</div>
       <div className={s.spinner} aria-hidden="true" />
       <div className={s.status} role="status">
         {statusText}

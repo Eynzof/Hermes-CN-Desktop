@@ -1,0 +1,31 @@
+{
+  "id": "frogclawhermes",
+  "appName": "FrogClaw助手",
+  "appNameEn": "FrogClawHermes",
+  "productName": "FrogClawHermes Desktop",
+  "identifier": "cn.org.hermesagent.desktop",
+  "dataDirName": ".frogclawhermes",
+  "providerKey": "frogclawhermes",
+  "serviceUrl": "https://frogclaw.com/",
+  "registerUrl": "https://frogclaw.com/sign-up",
+  "rechargeUrl": "https://frogclaw.com/wallet",
+  "copyright": "Copyright © 2026 FrogClawHermes",
+  "publisher": "FrogClawHermes",
+  "homepage": "https://frogclaw.com",
+  "shortDescription": "FrogClawHermes AI Assistant Desktop",
+  "longDescription": "Desktop app for FrogClaw AI Assistant.",
+  "tagline": "AI Assistant",
+  "edition": "桌面版",
+  "updateManifestUrl": "https://ai.fengchiyun.com/downloads/frogclawhermes/latest.json",
+  "updateDownloadUrl": "https://frogclaw.com/hermes-client",
+  "accountDefaultModels": [
+    "claude-opus-4-8",
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+    "gpt-5.5",
+    "kimi-k2.6",
+    "minimax-m3",
+    "mimo-v2.5-pro",
+    "glm-5.1"
+  ]
+}

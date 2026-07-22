@@ -8,6 +8,8 @@ use tauri::menu::MenuBuilder;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{App, AppHandle, Manager, Runtime, Window};
 
+use crate::brand_generated::{BRAND_APP_NAME, BRAND_WINDOW_TITLE};
+
 pub const MAIN_WINDOW_LABEL: &str = "main";
 
 const TRAY_ID: &str = "hermes-main-tray";
@@ -51,12 +53,12 @@ pub fn install(app: &App) -> tauri::Result<()> {
     let menu = MenuBuilder::new(app)
         .text(MENU_OPEN_MAIN, "打开主窗口")
         .separator()
-        .text(MENU_QUIT, "退出 Hermes")
+        .text(MENU_QUIT, format!("退出 {}", BRAND_APP_NAME))
         .build()?;
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
-        .tooltip("Hermes Agent 中文社区桌面版")
+        .tooltip(BRAND_WINDOW_TITLE)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match action_for_menu_id(event.id().as_ref()) {
             Some(TrayMenuAction::OpenMainWindow) => show_main_window(app),

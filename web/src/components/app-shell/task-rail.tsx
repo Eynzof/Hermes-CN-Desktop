@@ -52,6 +52,7 @@ import {
 } from "@/components/session-actions";
 import { AccountPopup } from "./account-popup";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
+import { BRAND } from "@/lib/brand.generated";
 import type { SessionSummary } from "@hermes/protocol";
 import s from "./task-rail.module.css";
 
@@ -293,7 +294,7 @@ export function TaskRail() {
     <aside className={s.rail}>
       <div className={s.railHead} data-window-drag data-tauri-drag-region="deep">
         <div className={s.brandGroup}>
-          <div className={s.brand}>Hermes</div>
+          <div className={s.brand}>{BRAND.appName}</div>
           <div className={s.ver}>{DESKTOP_VERSION_LABEL}</div>
         </div>
         <span className={s.headIcons}>

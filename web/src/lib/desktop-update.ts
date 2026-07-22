@@ -4,8 +4,9 @@ import type {
   DesktopUpdateManifestFetchResult,
 } from "@hermes/protocol";
 import { DESKTOP_VERSION } from "./build-info";
+import { BRAND } from "./brand.generated";
 
-export const DESKTOP_UPDATE_DOWNLOAD_URL = "https://desktop.hermesagent.org.cn/#download";
+export const DESKTOP_UPDATE_DOWNLOAD_URL = BRAND.updateDownloadUrl;
 export const DESKTOP_UPDATE_AUTO_CHECK_DATE_KEY = "desktop.update.lastAutoCheckDate";
 export const DESKTOP_UPDATE_DISMISSED_VERSION_KEY = "desktop.update.dismissedVersion";
 
@@ -192,7 +193,7 @@ export function bridgeUnavailableDesktopUpdateResult(currentVersion = DESKTOP_VE
     ok: false,
     updateAvailable: false,
     currentVersion: current,
-    manifestUrl: "https://desktop.hermesagent.org.cn/latest.json",
+    manifestUrl: BRAND.updateManifestUrl,
     downloadUrl: DESKTOP_UPDATE_DOWNLOAD_URL,
     checkedAtMs: Date.now(),
     error: "当前环境没有桌面端更新检查能力",

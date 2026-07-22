@@ -1,4 +1,4 @@
-// Huanxing-api（new-api 企业版 fork，默认 :3000）认证 client。
+// Huanxing-api（new-api 企业版 fork）认证 client。
 //
 // 关键契约（来自后端调研）：
 // - 统一响应信封 {"success": bool, "message": string, "data": ...}；
@@ -12,7 +12,9 @@
 // - 主 /api/* 路由组无 CORS 中间件，webview 直连会被拦——必须走 Rust IPC
 //   代理（window.hermesDesktop.externalRequest）。
 
-export const DEFAULT_HUANXING_SERVER_URL = "http://localhost:3000";
+import { BRAND } from "./brand.generated";
+
+export const DEFAULT_HUANXING_SERVER_URL = BRAND.serviceUrl;
 
 export interface HuanxingUser {
   id: number;

@@ -274,6 +274,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          umask 077
 
           deploy_host="${SECRET_LINUX_DEPLOY_HOST:-${VAR_LINUX_DEPLOY_HOST:-}}"
           deploy_port="${SECRET_LINUX_DEPLOY_PORT:-${VAR_LINUX_DEPLOY_PORT:-}}"
@@ -299,8 +300,19 @@ jobs:
 
           mkdir -p "$HOME/.ssh"
           key_path="$HOME/.ssh/linux_deploy_key"
-          printf '%s' "$LINUX_DEPLOY_KEY" | tr -d '\r' > "$key_path"
-          chmod 600 "$key_path"
+          key_material="$LINUX_DEPLOY_KEY"
+          if [[ "$key_material" == *'\n'* ]]; then
+            key_material="${key_material//\\n/$'\n'}"
+          fi
+          printf '%s\n' "$key_material" | tr -d '\r' > "$key_path"
+          first_key_line="$(head -n 1 "$key_path")"
+          case "$first_key_line" in
+            "-----BEGIN "*"PRIVATE KEY-----") ;;
+            *)
+              echo "::error::LINUX_DEPLOY_KEY is not an OpenSSH/PEM private key. Store the full private key content, not a path or public key."
+              exit 1
+              ;;
+          esac
 
           known_hosts_path="$HOME/.ssh/known_hosts"
           if [[ -z "${LINUX_DEPLOY_KNOWN_HOSTS:-}" ]]; then
