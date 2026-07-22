@@ -19,6 +19,8 @@ import {
   rankRecentModels,
   type ModelUsageEntry,
 } from "@/lib/model-usage-log";
+import { BRAND } from "@/lib/brand.generated";
+import { ENTERPRISE_PROVIDER_PREFIX } from "@/lib/enterprise-sync";
 import { getProviderIconUrl } from "@/lib/provider-icons";
 import { openSettingsDialogAtom } from "@/stores/settings-dialog";
 import type { ComposerModelPickerProps, ComposerModelSelection } from "./composer-types";
@@ -57,7 +59,7 @@ export function modelButtonText(
 // Candidate model
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface Candidate {
+export interface Candidate {
   key: string;
   providerSlug: string;
   providerName: string;
@@ -290,27 +292,64 @@ interface ModelMenuProps {
   anchorRef?: RefObject<HTMLElement | null>;
 }
 
-const ENTERPRISE_PREFIX = "custom:team-";
+const CUSTOM_PROVIDER_PREFIX = "custom:";
+const BRAND_PROVIDER_SLUGS = new Set([
+  `${CUSTOM_PROVIDER_PREFIX}${BRAND.providerKey}`.toLowerCase(),
+  `${CUSTOM_PROVIDER_PREFIX}${BRAND.providerKey}-messages`.toLowerCase(),
+]);
+const BRAND_MODEL_ORDER = new Map(
+  BRAND.accountDefaultModels.map((model, index) => [model.toLowerCase(), index]),
+);
 
-interface ModelGroups {
+export interface ModelGroups {
   enterprise: Candidate[];
   custom: Candidate[];
   builtin: Candidate[];
 }
 
-function groupCandidates(modelOptions: ModelOptionsResult | null): ModelGroups {
+function isBrandProvider(providerSlug: string): boolean {
+  return BRAND_PROVIDER_SLUGS.has(providerSlug.toLowerCase());
+}
+
+function modelNameOrder(a: Candidate, b: Candidate): number {
+  return a.model.localeCompare(b.model, "zh-Hans-CN");
+}
+
+export function groupCandidates(modelOptions: ModelOptionsResult | null): ModelGroups {
   const groups: ModelGroups = { enterprise: [], custom: [], builtin: [] };
   const { all } = buildCandidates(modelOptions, []);
+  const brandCandidates: Candidate[] = [];
+  const otherBuiltinCandidates: Candidate[] = [];
+
   for (const candidate of all) {
     if (!candidate.configured) continue;
-    if (candidate.providerSlug.startsWith(ENTERPRISE_PREFIX)) groups.enterprise.push(candidate);
-    else if (candidate.providerSlug.startsWith("custom:")) groups.custom.push(candidate);
-    else groups.builtin.push(candidate);
+    const providerSlug = candidate.providerSlug.toLowerCase();
+    if (providerSlug.startsWith(ENTERPRISE_PROVIDER_PREFIX)) {
+      groups.enterprise.push(candidate);
+    } else if (isBrandProvider(providerSlug)) {
+      if (BRAND_MODEL_ORDER.has(candidate.model.toLowerCase())) {
+        brandCandidates.push(candidate);
+      }
+    } else if (providerSlug.startsWith(CUSTOM_PROVIDER_PREFIX)) {
+      groups.custom.push(candidate);
+    } else {
+      otherBuiltinCandidates.push(candidate);
+    }
   }
-  const byName = (a: Candidate, b: Candidate) => a.model.localeCompare(b.model, "zh-Hans-CN");
-  groups.enterprise.sort(byName);
-  groups.custom.sort(byName);
-  groups.builtin.sort(byName);
+
+  brandCandidates.sort((a, b) =>
+    (BRAND_MODEL_ORDER.get(a.model.toLowerCase()) ?? Number.MAX_SAFE_INTEGER)
+    - (BRAND_MODEL_ORDER.get(b.model.toLowerCase()) ?? Number.MAX_SAFE_INTEGER));
+  const brandModelIds = new Set(brandCandidates.map((candidate) => candidate.model.toLowerCase()));
+
+  groups.enterprise.sort(modelNameOrder);
+  groups.custom.sort(modelNameOrder);
+  groups.builtin = [
+    ...brandCandidates,
+    ...otherBuiltinCandidates
+      .filter((candidate) => !brandModelIds.has(candidate.model.toLowerCase()))
+      .sort(modelNameOrder),
+  ];
   return groups;
 }
 
@@ -321,7 +360,7 @@ function CandidateIcon({ candidate }: { candidate: Candidate }) {
     return <img className={s.modelMenuItemIcon} src={url} alt="" aria-hidden="true" />;
   }
   return (
-    <span className={s.modelMenuItemIcon} data-tone={candidate.providerSlug.startsWith(ENTERPRISE_PREFIX) ? "enterprise" : "custom"} aria-hidden="true">
+    <span className={s.modelMenuItemIcon} data-tone={candidate.providerSlug.toLowerCase().startsWith(ENTERPRISE_PROVIDER_PREFIX) ? "enterprise" : "custom"} aria-hidden="true">
       {candidate.model.trim()[0]?.toUpperCase() ?? "M"}
     </span>
   );
