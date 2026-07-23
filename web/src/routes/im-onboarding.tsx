@@ -746,7 +746,7 @@ function ApplyResult({ result }: { result: ImOnboardingApplyResult | null }) {
   );
 }
 
-function FeishuRoute() {
+export function FeishuRoute() {
   const stateQuery = useImOnboardingState("feishu");
   const statusQuery = useStatus();
   const begin = useBeginImOnboarding();
@@ -1021,7 +1021,7 @@ function FeishuRoute() {
   );
 }
 
-function WeixinRoute() {
+export function WeixinRoute() {
   const stateQuery = useImOnboardingState("weixin");
   const statusQuery = useStatus();
   const begin = useBeginImOnboarding();
@@ -1295,7 +1295,7 @@ function WeixinRoute() {
   );
 }
 
-function DingtalkRoute() {
+export function DingtalkRoute() {
   return (
     <SectionShell title="钉钉接入" sub="03 消息接入 / 031 消息平台接入">
       <div className={s.container}>

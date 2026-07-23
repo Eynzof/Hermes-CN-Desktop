@@ -19,6 +19,7 @@ import {
 import { usePlatform } from "@hermes/shared-ui";
 import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
+import { BRAND } from "@/lib/brand.generated";
 import {
   readWorkspaceProjects,
   subscribeWorkspaceChanges,
@@ -285,8 +286,8 @@ export function Sidebar() {
           </svg>
         </span>
         <div className={s.brandText}>
-          <div className={s.brandName}>Hermes Agent</div>
-          <div className={s.brandSub}>中文社区桌面版</div>
+          <div className={s.brandName}>{BRAND.appName}</div>
+          <div className={s.brandSub}>{BRAND.edition}</div>
         </div>
       </div>
 

@@ -588,6 +588,14 @@ export const runtime = {
     return window.__HERMES_RUNTIME__?.backendReady ?? true;
   },
 
+  getManagedRuntimeDesiredState(): import("@hermes/protocol").ManagedRuntimeDesiredState | undefined {
+    return window.__HERMES_RUNTIME__?.managedRuntimeDesiredState;
+  },
+
+  getManagedRuntimeLifecycleState(): import("@hermes/protocol").ManagedRuntimeLifecycleState | undefined {
+    return window.__HERMES_RUNTIME__?.managedRuntimeLifecycleState;
+  },
+
   getGuideState(): import("@hermes/protocol").GuideState {
     return window.__HERMES_RUNTIME__?.guideState ?? "completed";
   },

@@ -14,6 +14,7 @@ import { openExternalUrl } from "@/lib/external-links";
 import { runtime } from "@/lib/runtime";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
 import { versionLabel } from "@/lib/build-info";
+import { BRAND } from "@/lib/brand.generated";
 import s from "./desktop-update-notifier.module.css";
 
 let autoCheckPromise: Promise<DesktopUpdateCheckResult> | null = null;
@@ -78,7 +79,7 @@ export function DesktopUpdateNotifier() {
         <Dialog.Content className={s.dialog} aria-describedby="desktop-update-desc">
           <Dialog.Title className={s.title}>
             <span className={s.titleIcon}><Sparkles size={17} aria-hidden="true" /></span>
-            发现 Hermes Agent 桌面端新版本
+            发现 {BRAND.appName} 新版本
           </Dialog.Title>
           <Dialog.Description id="desktop-update-desc" className={s.body}>
             {runtime.isPortable()

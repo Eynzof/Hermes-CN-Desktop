@@ -1,0 +1,186 @@
+/* AuthDialog — 企业账号登录/注册弹窗 */
+
+.dialog.dialog {
+  width: min(400px, 92vw);
+  max-width: min(400px, 92vw);
+  background: var(--h-bg-app);
+  border-radius: var(--h-radius-xl);
+  padding: 26px 26px 24px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--h-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+
+.sub {
+  font-size: 12.5px;
+  color: var(--h-text-3);
+  text-align: center;
+  margin: 6px 0 18px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  background: var(--h-bg-soft);
+  border-radius: var(--h-radius-md);
+  padding: 3px;
+}
+
+.tab {
+  flex: 1;
+  padding: 6px 0;
+  border-radius: var(--h-radius-sm);
+  font-size: 13.5px;
+  color: var(--h-text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--h-font-ui);
+}
+
+.tab[data-active="true"] {
+  background: var(--h-bg-app);
+  color: var(--h-text);
+  font-weight: 600;
+  box-shadow: var(--h-shadow-sm);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.label {
+  font-size: 12.5px;
+  color: var(--h-text-3);
+}
+
+.input {
+  height: 36px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-md);
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-size: 13.5px;
+  padding: 0 11px;
+  outline: none;
+  width: 100%;
+  font-family: var(--h-font-ui);
+}
+
+.input:focus {
+  border-color: var(--h-accent-border);
+}
+
+.passwordWrap {
+  position: relative;
+  display: block;
+}
+
+.passwordWrap .input {
+  padding-right: 34px;
+}
+
+.eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--h-radius-xs);
+}
+
+.eye:hover {
+  color: var(--h-text);
+  background: var(--h-bg-soft);
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--h-err);
+  background: var(--h-color-danger-bg);
+  border: 1px solid var(--h-color-danger-border);
+  border-radius: var(--h-radius-sm);
+  padding: 7px 10px;
+}
+
+.notice {
+  font-size: 12.5px;
+  color: var(--h-ok);
+  background: var(--h-color-success-bg);
+  border: 1px solid var(--h-color-success-border);
+  border-radius: var(--h-radius-sm);
+  padding: 7px 10px;
+}
+
+.submit {
+  margin-top: 4px;
+  height: 38px;
+  border-radius: var(--h-radius-md);
+  background: var(--h-text);
+  color: var(--h-bg-app);
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-family: var(--h-font-ui);
+}
+
+.submit:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

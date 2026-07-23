@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playbook ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_enterprise_adminguide_Playbook" data-v-bd9b7757><div><h1 id="playbook" tabindex="-1">Playbook <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#playbook" aria-label="Permalink to &quot;Playbook&quot;">​</a></h1><h2 id="概述" tabindex="-1">概述 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#概述" aria-label="Permalink to &quot;概述&quot;">​</a></h2><p>Playbooks 展示了预配置的工作流模板，帮助你快速上手。面向<strong>泛开发者</strong>：产品经理、设计师以及任何希望借助 CodeBuddy / WorkBuddy 完成任务但未必精通提示词工程的用户。Playbooks 将上下文、工具和指令打包为可复用的模板，让你在处理常见任务时无需从零开始。</p><p><img src="../../assets/playbooks-1.BEZKCdQJ.png" alt="playbook列表" data-zoomable="true"></p><p>一个 Playbook 由以下配置组成：</p><table tabindex="0"><thead><tr><th>配置项</th><th>说明</th><th>示例</th></tr></thead><tbody><tr><td><strong>名称</strong></td><td>Playbook 的显示名称</td><td>Slack 数据分析机器人</td></tr><tr><td><strong>模型</strong></td><td>使用的模型，支持指定或自动选择</td><td><code>auto</code></td></tr><tr><td><strong>Agent ID</strong></td><td>唯一标识符，用于引用和调用该 Playbook</td><td><code>slack-data-bot</code></td></tr><tr><td><strong>System Prompt</strong></td><td>引导 Agent 行为的背景上下文和指令，定义角色、工作流程和输出规范</td><td>见下方示例</td></tr></tbody></table><div class="language-text vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>System Prompt 示例：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>你是数据分析师，运行在沙箱容器中。</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>用户在 Slack thread 里上传一份 CSV，</span></span>
+<span class="line"><span>已挂载到 /mnt/session/uploads/。请：</span></span>
+<span class="line"><span>1. 先用 pandas 读前几行确认 schema</span></span>
+<span class="line"><span>2. 运行 Python 脚本聚合关键指标</span></span>
+<span class="line"><span>3. 用 plotly 做 3 个图表</span></span>
+<span class="line"><span>4. 将所有内容写到</span></span>
+<span class="line"><span>/mnt/session/outputs/report.html（自包含、内嵌 CSS）</span></span>
+<span class="line"><span>5. 完成后回复 &quot;Saved: report.html&quot;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>保持简洁专业，先抛结论再讲过程。</span></span></code></pre></div><h2 id="浏览与使用" tabindex="-1">浏览与使用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#浏览与使用" aria-label="Permalink to &quot;浏览与使用&quot;">​</a></h2><h3 id="打开-playbooks-面板" tabindex="-1">打开 Playbooks 面板 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#打开-playbooks-面板" aria-label="Permalink to &quot;打开 Playbooks 面板&quot;">​</a></h3><p>进入<a href="https://www.codebuddy.cn/admin" target="_blank" rel="noreferrer">企业管理后台</a>，在左侧边栏找到 <strong>AI 资源管理-Playbooks</strong>。</p><h3 id="选择-playbook" tabindex="-1">选择 Playbook <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#选择-playbook" aria-label="Permalink to &quot;选择 Playbook&quot;">​</a></h3><ol><li>点击某个 Playbook，在详情卡片中查看 Manifest 摘要、场景说明、工作流设计、SDK调用范例等信息。</li><li>点击 <strong>使用此Playbook创建Agent</strong> 按钮，进入<strong>新建Agent</strong>页面，使用该模板创建企业智能体。</li></ol><div class="info custom-block"><p class="custom-block-title">说明</p><p>企业智能体（CloudAgent）配置与使用可参考<a href="CloudAgent.html">企业智能体</a></p></div><h2 id="配置说明" tabindex="-1">配置说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#配置说明" aria-label="Permalink to &quot;配置说明&quot;">​</a></h2><p>当你使用选中 Playbook 的创建Agent时，以下配置会自动生效：</p><h3 id="system-prompt-注入" tabindex="-1">System Prompt 注入 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#system-prompt-注入" aria-label="Permalink to &quot;System Prompt 注入&quot;">​</a></h3><p>Playbook 的 System Prompt 会被注入对话上下文，为 Agent 提供与所选工作流匹配的领域知识、角色指令和行为引导。</p><div class="language-text vp-adaptive-theme"><button title="Copy Code" class="copy"></button><span class="lang">text</span><pre class="shiki shiki-themes github-light github-dark vp-code" tabindex="0"><code><span class="line"><span>System Prompt 示例（概念性）：</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>你是一位专注于 PRD 撰写的产品经理助手。</span></span>
+<span class="line"><span>请帮助用户将产品想法转化为结构化、可执行的需求文档。</span></span>
+<span class="line"><span>文档需始终包含背景、用户故事、功能需求以及成功指标等章节。</span></span></code></pre></div><h3 id="mcp-配置" tabindex="-1">MCP 配置 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#mcp-配置" aria-label="Permalink to &quot;MCP 配置&quot;">​</a></h3><p>如果 Playbook 指定了 MCP 服务器，这些服务器会在对话会话中激活，使 Agent 能够访问外部 API、数据库或服务。例如连接设计工具或查询分析数据。</p><h3 id="skill-配置" tabindex="-1">Skill 配置 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#skill-配置" aria-label="Permalink to &quot;Skill 配置&quot;">​</a></h3><p>如果 Playbook 定义了专项技能，这些能力会在对话期间加载并可供 Agent 使用。</p><h2 id="注意事项与重点提示" tabindex="-1">注意事项与重点提示 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#注意事项与重点提示" aria-label="Permalink to &quot;注意事项与重点提示&quot;">​</a></h2><h3 id="信息收集与使用" tabindex="-1">信息收集与使用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#信息收集与使用" aria-label="Permalink to &quot;信息收集与使用&quot;">​</a></h3><table tabindex="0"><thead><tr><th>收集项</th><th>类型</th><th>用途</th></tr></thead><tbody><tr><td>企业账号信息（登录凭据）</td><td>必要</td><td>登录企业管理后台，浏览、选择和创建基于 Playbook 的企业智能体</td></tr><tr><td>Playbook 模板配置（System Prompt、模型、Agent ID）</td><td>必要</td><td>定义 Agent 的角色、行为模式、工作流程和调用标识</td></tr><tr><td>MCP 服务器连接配置（URL、认证凭据）</td><td>必要</td><td>激活 Agent 对话会话中的外部服务访问能力，如连接设计工具、数据库或第三方 API</td></tr><tr><td>Skill 能力定义</td><td>必要</td><td>在对话期间加载专项技能，扩展 Agent 的功能边界</td></tr><tr><td>对话交互内容</td><td>非必要</td><td>仅在用户与基于 Playbook 创建的 Agent 进行对话时涉及，用于上下文理解和响应生成</td></tr></tbody></table><p><strong>类型判定标准：</strong></p><ul><li>「必要」：使用 Playbook 创建和运行企业智能体时必须提供的配置信息（如企业账号、模板配置、MCP 连接、Skill 定义）</li><li>「非必要」：仅在用户与已创建的 Agent 开展实际对话时才产生的数据（如对话消息、上传文件、操作指令）</li></ul><h3 id="权限边界" tabindex="-1">权限边界 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#权限边界" aria-label="Permalink to &quot;权限边界&quot;">​</a></h3><ul><li>基于 Playbook 创建的 Agent 运行在企业沙箱环境中，访问范围受 Agent 自身配置和企业权限策略双重约束</li><li>MCP 服务器的访问范围取决于您在 Playbook 中配置的服务端点和凭据，不会超出您授权的服务边界</li><li>Agent 的行为和输出受 System Prompt 约束，不会执行范围外的操作</li></ul><h3 id="安全提示" tabindex="-1">安全提示 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#安全提示" aria-label="Permalink to &quot;安全提示&quot;">​</a></h3><ul><li>Playbook 的 System Prompt 定义了 Agent 的行为边界，建议在创建 Agent 时仔细审核 Prompt 内容，确保指令安全合规</li><li>MCP 服务器连接涉及外部服务访问，请使用最小权限原则配置凭据，避免使用高权限账号</li><li>Playbook 模板来自平台预置，请从可信来源选择和启用；自定义模板需审慎评估后再投入使用</li><li>不再使用的 Agent 建议及时停用或删除，并撤销关联的 MCP 服务器授权</li></ul><h3 id="积分消耗提醒" tabindex="-1">积分消耗提醒 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#积分消耗提醒" aria-label="Permalink to &quot;积分消耗提醒&quot;">​</a></h3><p>Playbook 模板的浏览和选择不消耗积分；基于 Playbook 创建 Agent 后，在对话会话中调用模型、执行代码、访问外部服务等操作会消耗相应积分。</p><h3 id="第三方共享" tabindex="-1">第三方共享 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#第三方共享" aria-label="Permalink to &quot;第三方共享&quot;">​</a></h3><ul><li>Playbook 模板本身不包含第三方数据，仅为配置框架</li><li>当 Playbook 配置了 MCP 服务器后，Agent 将在您的授权范围内与对应第三方服务交互</li><li>第三方服务的可用性、数据准确性和安全性由其自身负责</li></ul><h3 id="免责声明" tabindex="-1">免责声明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#免责声明" aria-label="Permalink to &quot;免责声明&quot;">​</a></h3><ul><li>Playbook 模板为通用的工作流框架，具体使用时产生的结果取决于 System Prompt 设计、模型选择和数据输入，客户端不对具体输出内容的准确性承担责任</li><li>基于 Playbook 创建的 Agent 在沙箱中运行，其行为受配置约束，但仍建议在对外发送、写入或修改数据前进行人工确认</li><li>第三方 MCP 服务的接口变更或不可用可能导致 Agent 功能异常，请关注对应服务的状态更新</li></ul><h3 id="使用建议" tabindex="-1">使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#使用建议" aria-label="Permalink to &quot;使用建议&quot;">​</a></h3><ul><li>选择 Playbook 前先查看 Manifest 摘要和场景说明，确认模板与您的实际需求匹配后再创建 Agent</li><li>System Prompt 是决定 Agent 行为质量的核心要素，建议在模板基础上根据业务场景补充领域特定指令和输出规范</li><li>为 Agent 配置 MCP 服务器时，优先使用只读权限的凭据；仅在业务确需写入或修改外部数据时才授予写入权限</li><li>创建 Agent 后建议先在非关键场景中测试，验证 System Prompt、MCP 和 Skill 的协同表现，确认无异常后再投入正式使用</li><li>定期检查已启用的 Agent 列表，清理长期未使用或已过时的实例，降低不必要的资源消耗和安全隐患</li><li>如果 Playbook 模板内置了文件读写指令，注意 Agent 对文件系统的操作范围，避免意外覆盖或删除重要文件</li></ul><h2 id="声明" tabindex="-1">声明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook#声明" aria-label="Permalink to &quot;声明&quot;">​</a></h2><p>本节说明，构成<a href="https://rule.tencent.com/rule/202603180001" target="_blank" rel="noreferrer">服务协议</a>和<a href="https://privacy.qq.com/document/preview/771d9a58551449e9a7e7445ebfe04966" target="_blank" rel="noreferrer">隐私保护</a>指引的组成部分，具有同等法律效力。如有不一致之处，以前述协议原文为准。</p></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook">https://www.codebuddy.cn/docs/enterprise/adminguide/Playbook</a></div>
+</body>
+</html>

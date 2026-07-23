@@ -1775,3 +1775,168 @@
     padding: 0 11px;
   }
 }
+
+/* ── WorkBuddy 风格紧凑模型菜单（锚定在「模型」按钮上方） ─────────────── */
+
+.modelMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--h-z-dialog);
+  background: transparent;
+}
+
+.modelMenu {
+  position: fixed;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--h-bg-app);
+  color: var(--h-text);
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-xl);
+  box-shadow: var(--h-shadow-l);
+  overflow: hidden;
+  font-family: var(--h-font-ui);
+  /* 无锚点兜底：底部居中（Composer 本身居中） */
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.modelMenu[data-anchored="true"] {
+  transform: none;
+}
+
+.modelMenuHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+  font-size: 12px;
+  color: var(--h-text-4);
+  flex-shrink: 0;
+}
+
+.modelMenuClose {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--h-radius-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.modelMenuClose:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.modelMenuScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 6px 4px;
+}
+
+.modelMenuGroup {
+  font-size: 11px;
+  color: var(--h-text-4);
+  padding: 8px 8px 3px;
+  user-select: none;
+}
+
+.modelMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--h-radius-md);
+  background: none;
+  border: none;
+  color: var(--h-text);
+  font-size: 13px;
+  font-family: var(--h-font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelMenuItem:hover:not(:disabled) {
+  background: var(--h-bg-soft);
+}
+
+.modelMenuItem[data-current="true"] {
+  font-weight: 600;
+}
+
+.modelMenuItem:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.modelMenuItemIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--h-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: var(--h-bg-soft);
+  color: var(--h-text-3);
+  object-fit: contain;
+}
+
+.modelMenuItemIcon[data-tone="enterprise"] {
+  background: var(--h-accent-soft);
+  color: var(--h-accent);
+}
+
+.modelMenuItemIcon[data-tone="custom"] {
+  background: var(--h-ok-soft);
+  color: var(--h-ok);
+}
+
+.modelMenuItemName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modelMenuItemCheck {
+  color: var(--h-accent);
+  flex-shrink: 0;
+}
+
+.modelMenuFoot {
+  border-top: 1px solid var(--h-line-soft);
+  padding: 6px;
+  flex-shrink: 0;
+}
+
+.modelMenuEmpty {
+  padding: 22px 12px;
+  text-align: center;
+  color: var(--h-text-4);
+  font-size: 12.5px;
+}
+
+.modelMenuError {
+  margin: 10px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--h-err);
+  background: var(--h-color-danger-bg);
+  border: 1px solid var(--h-color-danger-border);
+  border-radius: var(--h-radius-sm);
+}

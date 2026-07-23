@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>腾讯云代码助手 CodeBuddy – AI 代码编辑器 - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/enterprise/adminguide/安全管理/IP 白名单" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_enterprise_adminguide_%E5%AE%89%E5%85%A8%E7%AE%A1%E7%90%86_IP%20%E7%99%BD%E5%90%8D%E5%8D%95" data-v-bd9b7757><div><p>腾讯云代码助手提供了企业 IP 白名单配置功能，使企业能够通过 IP 限制插件的使用范围。</p><blockquote><p><strong>说明：</strong></p></blockquote><blockquote><p>适用版本：旗舰版、专享版、企业版。</p></blockquote><p>在 <a href="https://copilot.tencent.com/admin" target="_blank" rel="noreferrer">企业设置</a> &gt; <strong>网络设置</strong>菜单当中，配置企业的 IP 白名单，IP 白名单作用于代码助手插件，被限制的 IP 将无法登录插件并使用。</p><p><img src="../../../assets/28f10aae113511f0aaa3525400e889b2.png" alt="" data-zoomable="true"></p><p>IP 限制的生效规则如下：</p><ul><li><p>多个 IP 用英文逗号隔开，逗号前后不加空格。</p></li><li><p>仅设置127.0.0.1代表禁止所有 IP 访问。</p></li><li><p>不填写则代表允许所有 IP 访问。</p></li><li><p>设置 IP 段例如10.10.10.0/24代表允许该网段访问。</p></li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/enterprise/adminguide/安全管理/IP 白名单">https://www.codebuddy.cn/docs/enterprise/adminguide/安全管理/IP 白名单</a></div>
+</body>
+</html>

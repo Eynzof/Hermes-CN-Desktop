@@ -10,7 +10,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-const DESKTOP_UPDATE_MANIFEST_URL: &str = "https://desktop.hermesagent.org.cn/latest.json";
+use crate::brand_generated::BRAND_UPDATE_MANIFEST_URL as DESKTOP_UPDATE_MANIFEST_URL;
+
 const DESKTOP_UPDATE_TIMEOUT: Duration = Duration::from_secs(10);
 
 static DESKTOP_UPDATE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {

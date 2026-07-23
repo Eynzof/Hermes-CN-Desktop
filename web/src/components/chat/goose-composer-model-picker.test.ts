@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ModelOptionsResult } from "@hermes/protocol";
-import { buildCandidates } from "./goose-composer-model-picker";
+import { BRAND } from "@/lib/brand.generated";
+import { buildCandidates, groupCandidates } from "./goose-composer-model-picker";
 
 describe("buildCandidates", () => {
   it("augments a stale MiniMax gateway model list with MiniMax-M3 from the desktop catalog", () => {
@@ -107,5 +108,83 @@ describe("buildCandidates", () => {
 
     expect(buckets.recent).toHaveLength(0);
     expect(buckets.moa.map((candidate) => candidate.key)).toEqual(["moa:default"]);
+  });
+});
+
+describe("groupCandidates", () => {
+  it("groups brand, Team, and user models by source and keeps brand JSON order", () => {
+    const [firstBrandModel, secondBrandModel] = BRAND.accountDefaultModels;
+    const brandProvider = `custom:${BRAND.providerKey}`;
+    const options = {
+      providers: [
+        {
+          slug: brandProvider,
+          name: BRAND.appName,
+          models: [secondBrandModel, "not-in-brand-json", firstBrandModel],
+          authenticated: true,
+        },
+        {
+          slug: "custom:team-company-model",
+          name: "企业模型",
+          models: [firstBrandModel],
+          authenticated: true,
+        },
+        {
+          slug: "custom:my-endpoint",
+          name: "我的模型",
+          models: ["local-model"],
+          authenticated: true,
+        },
+        {
+          slug: "official-provider",
+          name: "Official",
+          models: [firstBrandModel, "official-only"],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options);
+
+    expect(groups.enterprise.map((candidate) => candidate.key)).toEqual([
+      `custom:team-company-model:${firstBrandModel}`,
+    ]);
+    expect(groups.custom.map((candidate) => candidate.key)).toEqual([
+      "custom:my-endpoint:local-model",
+    ]);
+    expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
+      `${brandProvider}:${firstBrandModel}`,
+      `${brandProvider}:${secondBrandModel}`,
+      "official-provider:official-only",
+    ]);
+  });
+
+  it("treats the brand messages provider as built-in and hides unconfigured rows", () => {
+    const brandModel = BRAND.accountDefaultModels[0];
+    const messagesProvider = `custom:${BRAND.providerKey}-messages`;
+    const options = {
+      providers: [
+        {
+          slug: messagesProvider,
+          name: `${BRAND.appName} Messages`,
+          models: [brandModel],
+          authenticated: true,
+        },
+        {
+          slug: "custom:not-ready",
+          name: "Not ready",
+          models: ["not-ready"],
+          authenticated: false,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options);
+
+    expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
+      `${messagesProvider}:${brandModel}`,
+    ]);
+    expect(groups.enterprise).toEqual([]);
+    expect(groups.custom).toEqual([]);
   });
 });

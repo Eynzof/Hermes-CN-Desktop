@@ -1,5 +1,5 @@
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { CircleOff, Compass, ExternalLink, Globe2, HardDrive, Palette } from "lucide-react";
+import { CircleOff, Compass, ExternalLink, Globe2, HardDrive, Palette, RefreshCw } from "lucide-react";
 import { Button } from "@hermes/shared-ui";
 import { openExternalUrl } from "@/lib/external-links";
 import { ThemeSection } from "./settings";
@@ -22,8 +22,8 @@ function OfflineHome() {
       <div className={s.empty}>
         <CircleOff size={32} />
         <h2>工作台暂时离线</h2>
-        <p>会话、模型、Skills、MCP 等页面需要后端。连接成功后重新加载即可恢复。</p>
-        <div><Button variant="solid" tone="accent" onClick={() => { window.location.hash = "#/guide"; }}><Compass size={13} />继续使用引导</Button></div>
+        <p>会话、模型、Skills、MCP 等页面需要后端。内核启动完成后会自动恢复，也可以手动重试。</p>
+        <div><Button variant="solid" tone="accent" onClick={() => { window.location.reload(); }}><RefreshCw size={13} />重新加载</Button></div>
       </div>
     </OfflinePage>
   );
@@ -34,7 +34,7 @@ function OfflineAbout() {
     <OfflinePage title="关于与帮助" sub="离线时也可以访问社区和使用文档。">
       <div className={s.cards}>
         <article><Globe2 size={20} /><h2>中文社区官网</h2><p>查看最新文档、安装说明和社区联系方式。</p><Button variant="outline" onClick={() => void openExternalUrl("https://hermesagent.org.cn")}><ExternalLink size={13} />打开官网</Button></article>
-        <article><Compass size={20} /><h2>重新选择开始方式</h2><p>选择开箱即用，或连接你已经部署好的 Hermes。</p><Button variant="outline" onClick={() => { window.location.hash = "#/guide"; }}>打开引导</Button></article>
+        <article><Compass size={20} /><h2>内核与连接</h2><p>恢复内置内核，或连接你已经部署好的 Hermes。</p><Button variant="outline" onClick={() => { window.location.hash = "#/kernel"; }}>打开内核设置</Button></article>
       </div>
     </OfflinePage>
   );

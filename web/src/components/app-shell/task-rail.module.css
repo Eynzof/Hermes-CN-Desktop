@@ -1,0 +1,303 @@
+/* TaskRail — WorkBuddy 范式固定左栏：品牌 / 导航 / 任务列表 / 空间 / 账号 */
+
+.rail {
+  width: 100%;
+  height: 100%;
+  background: var(--h-bg-pane);
+  border-right: 1px solid var(--h-line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--h-text);
+  font-family: var(--h-font-ui);
+}
+
+.railHead {
+  padding: calc(14px + var(--h-window-control-safe-top, 0px)) 14px 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.brandGroup {
+  min-width: 0;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 14.5px;
+  line-height: 1.2;
+}
+
+.ver {
+  font-size: 11px;
+  color: var(--h-text-4);
+  margin-top: 1px;
+}
+
+.headIcons {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  color: var(--h-text-3);
+  padding-top: 2px;
+}
+
+.headIcon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--h-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.headIcon:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.headIcon[data-active="true"] {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.railNav {
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--h-radius-md);
+  font-size: 13.5px;
+  text-align: left;
+  color: var(--h-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--h-font-ui);
+}
+
+.navItem:hover {
+  background: var(--h-bg-soft);
+}
+
+.navItem[data-active="true"] {
+  background: var(--h-bg-app);
+  box-shadow: var(--h-shadow-sm);
+  font-weight: 600;
+}
+
+.navIcon {
+  width: 17px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--h-text-3);
+  flex-shrink: 0;
+}
+
+.navItem[data-active="true"] .navIcon {
+  color: var(--h-text);
+}
+
+.searchBox {
+  padding: 6px 10px 2px;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-sm);
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-size: 12.5px;
+  padding: 0 9px;
+  outline: none;
+  font-family: var(--h-font-ui);
+}
+
+.searchInput:focus {
+  border-color: var(--h-accent-border);
+}
+
+.secLabel {
+  padding: 12px 14px 4px;
+  font-size: 12px;
+  color: var(--h-text-4);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.taskList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 4px;
+  min-height: 0;
+}
+
+.empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--h-text-4);
+}
+
+.taskItem {
+  padding: 7px 10px;
+  border-radius: var(--h-radius-md);
+  cursor: pointer;
+  margin: 1px 0;
+  position: relative;
+}
+
+.taskItem:hover {
+  background: var(--h-bg-soft);
+}
+
+.taskItem[data-active="true"] {
+  background: var(--h-bg-app);
+  box-shadow: var(--h-shadow-sm);
+}
+
+.taskTitle {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.taskTitleText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+.pulseDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--h-ok);
+  display: inline-block;
+  flex-shrink: 0;
+  animation: taskRailPulse 1.6s infinite;
+}
+
+@keyframes taskRailPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pinIcon {
+  color: var(--h-text-4);
+  flex-shrink: 0;
+}
+
+.statusLabel {
+  font-size: 11px;
+  flex-shrink: 0;
+  color: var(--h-text-4);
+}
+
+.statusLabel[data-status="run"] {
+  color: var(--h-ok);
+}
+
+.statusLabel[data-status="fail"] {
+  color: var(--h-err);
+}
+
+.rowMore {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--h-radius-xs);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  border: none;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.taskItem:hover .rowMore,
+.taskItem[data-active="true"] .rowMore {
+  display: inline-flex;
+}
+
+.rowMore:hover {
+  background: var(--h-bg-pane);
+  color: var(--h-text);
+}
+
+.taskMeta {
+  font-size: 11.5px;
+  color: var(--h-text-4);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spaceList {
+  flex: 0 0 auto;
+  max-height: 148px;
+  overflow-y: auto;
+  padding: 0 8px 6px;
+}
+
+.spaceItem {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--h-radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--h-text);
+  font-family: var(--h-font-ui);
+  text-align: left;
+}
+
+.spaceItem:hover {
+  background: var(--h-bg-soft);
+}
+
+.spaceItem[data-active="true"] {
+  background: var(--h-bg-app);
+  box-shadow: var(--h-shadow-sm);
+}
+
+.spaceIcon {
+  color: var(--h-text-3);
+  flex-shrink: 0;
+}
+
+.spaceName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
-  "productName": "Hermes Agent CN Desktop",
+  "productName": "HermesAgent Desktop",
   "version": "0.6.3",
   "identifier": "cn.org.hermesagent.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Hermes Agent 中文社区桌面版",
+        "title": "HermesAgent 桌面版",
         "width": 1240,
         "height": 820,
         "minWidth": 960,
@@ -40,12 +40,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "Hermes Agent CN Contributors",
-    "homepage": "https://hermesagent.org.cn",
-    "copyright": "Copyright © 2026 Hermes Agent CN Contributors",
+    "publisher": "HermesAgent",
+    "homepage": "https://api.huanxing.ai",
+    "copyright": "Copyright © 2026 HermesAgent",
     "category": "DeveloperTool",
-    "shortDescription": "Hermes Agent Chinese Community Desktop",
-    "longDescription": "Desktop app for Hermes Agent Chinese Community Edition.",
+    "shortDescription": "HermesAgent AI Assistant Desktop",
+    "longDescription": "Desktop app for HermesAgent AI Assistant.",
     "licenseFile": "legal/EULA.zh-CN.rtf",
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",

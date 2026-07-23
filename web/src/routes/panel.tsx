@@ -1,163 +1,150 @@
-import { useEffect, useMemo, useState } from "react";
-import { useAtom, useAtomValue } from "jotai";
-import { useNavigate } from "react-router-dom";
-import { chatRuntimeBySessionAtom } from "@/stores/chat";
-import { activeSessionIdAtom } from "@/stores/ui";
-import { useSessions } from "@/hooks/use-sessions";
-import { isSessionRunning, mergeLiveRuntimeSessions } from "@/lib/session-activity";
+import { useState } from "react";
+import { useSetAtom } from "jotai";
 import {
-  readSessionTitleOverrides,
-  subscribeSessionUiStateChanges,
-} from "@/lib/session-ui-state";
-import { HealthGrid } from "@/components/panel/health-grid";
+  BarChart3,
+  Bug,
+  Code2,
+  FileText,
+  FileEdit,
+  Palette,
+  Rocket,
+  BookOpenText,
+  GitPullRequest,
+  Newspaper,
+} from "lucide-react";
+import { composerPrefillAtom } from "@/stores/panel";
 import { PanelComposer } from "@/components/panel/panel-composer";
-import { PanelHero } from "@/components/panel/panel-hero";
-import { QuickStart } from "@/components/panel/quick-start";
-import { RecentTable } from "@/components/panel/recent-table";
-import { TaskCard } from "@/components/panel/task-card";
-import type { SessionSummary } from "@hermes/protocol";
+import { RECIPES_NEW_TASK, RECIPES_PANEL } from "@/components/panel/quick-start";
 import s from "./panel.module.css";
 
-const TODAY_START_SEC = () => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime() / 1000;
-};
+type HomeMode = "office" | "code";
 
-interface SectionProps {
-  num: string;
-  tag: string;
-  title: string;
-  meta?: React.ReactNode;
-  children: React.ReactNode;
+interface ScenarioChip {
+  label: string;
+  icon: typeof FileText;
+  prompt: string;
 }
 
-function Section({ num, tag, title, meta, children }: SectionProps) {
-  return (
-    <section className={s.section}>
-      <div className={s.sectionNum}>§ {num}</div>
-      <div className={s.sectionBody}>
-        <div className={s.sectionHead}>
-          <div className={s.sectionLh}>
-            <span className={s.sectionTag}>[ {tag} ]</span>
-            <h2 className={s.sectionTitle}>{title}</h2>
-          </div>
-          {meta && <div className={s.sectionMeta}>{meta}</div>}
-        </div>
-        {children}
-      </div>
-    </section>
-  );
-}
+const OFFICE_CHIPS: readonly ScenarioChip[] = [
+  {
+    label: "文档处理",
+    icon: FileText,
+    prompt:
+      "帮我处理文档：\n- 提取核心要点\n- 按需要改写 / 翻译 / 排版\n输出结构化结果并与原文对照。\n\n文档路径：",
+  },
+  {
+    label: "数据分析及可视化",
+    icon: BarChart3,
+    prompt:
+      "分析我指定的数据文件，输出：\n- 关键指标概览\n- 趋势与异常点\n- 可视化图表（生成 HTML 报表）\n\n数据文件：",
+  },
+  {
+    label: "写周报",
+    icon: Newspaper,
+    prompt:
+      "帮我整理本周工作并生成周报：\n- 本周完成的事项（按项目分组）\n- 关键数据与成果\n- 下周计划\n\n工作材料位置：",
+  },
+  {
+    label: RECIPES_PANEL[3].title,
+    icon: BookOpenText,
+    prompt: RECIPES_PANEL[3].prompt,
+  },
+];
+
+const CODE_CHIPS: readonly ScenarioChip[] = [
+  {
+    label: "修一个 Bug",
+    icon: Bug,
+    prompt:
+      "项目里有一个待修复的 bug：\n\n现象：\n期望行为：\n复现步骤：\n\n请先定位根因，给出修复方案并实施，最后运行相关测试验证。",
+  },
+  {
+    label: RECIPES_PANEL[0].title,
+    icon: GitPullRequest,
+    prompt: RECIPES_PANEL[0].prompt,
+  },
+  {
+    label: RECIPES_PANEL[2].title,
+    icon: FileEdit,
+    prompt: RECIPES_PANEL[2].prompt,
+  },
+  {
+    label: RECIPES_NEW_TASK[3].title,
+    icon: BookOpenText,
+    prompt: RECIPES_NEW_TASK[3].prompt,
+  },
+];
 
 export function PanelRoute() {
-  const [, setActiveId] = useAtom(activeSessionIdAtom);
-  const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
-  const { data, isLoading } = useSessions();
-  const navigate = useNavigate();
-  const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
-
-  useEffect(() => {
-    return subscribeSessionUiStateChanges(() => {
-      setSessionTitleOverrides(readSessionTitleOverrides());
-    });
-  }, []);
-
-  const sessions = useMemo(
-    () =>
-      mergeLiveRuntimeSessions(
-        (data?.sessions ?? []).flatMap((session) => {
-          const title = sessionTitleOverrides[session.id];
-          return title ? [{ ...session, title }] : [session];
-        }),
-        runtimeBySession,
-      ),
-    [data?.sessions, runtimeBySession, sessionTitleOverrides],
-  );
-
-  const { active, recent } = useMemo(() => {
-    const active = sessions.filter((session) => isSessionRunning(session, runtimeBySession));
-    const recent = sessions.filter((session) => !isSessionRunning(session, runtimeBySession));
-    return { active, recent };
-  }, [runtimeBySession, sessions]);
-
-  const todayStats = useMemo(() => {
-    const start = TODAY_START_SEC();
-    let completed = 0;
-    let needsAttention = 0;
-    for (const sess of sessions) {
-      if (sess.ended_at != null && sess.ended_at >= start) {
-        if (sess.end_reason === "error" || sess.end_reason === "interrupted") {
-          needsAttention += 1;
-        } else {
-          completed += 1;
-        }
-      }
-    }
-    return { completed, needsAttention };
-  }, [sessions]);
-
-  const goSession = (sess: SessionSummary) => {
-    setActiveId(sess.id);
-    navigate(`/tasks/${sess.id}`);
-  };
+  const [mode, setMode] = useState<HomeMode>("office");
+  const setPrefill = useSetAtom(composerPrefillAtom);
+  const chips = mode === "office" ? OFFICE_CHIPS : CODE_CHIPS;
 
   return (
-    <div className={s.pageWrap}>
-      <div className={s.pageContent}>
-        <PanelHero
-          activeCount={active.length}
-          completedToday={todayStats.completed}
-          needsAttention={todayStats.needsAttention}
-        />
+    <div className={s.home} data-window-drag data-tauri-drag-region="deep">
+      <div className={s.homeCol}>
+        <div className={s.hero} data-no-drag>
+          Hermes
+        </div>
+        <div className={s.hero2} data-no-drag>
+          你的职场超能力
+        </div>
 
-        <Section num="01" tag="开始" title="新任务">
-          <PanelComposer />
-        </Section>
-
-        <Section
-          num="02"
-          tag="健康"
-          title="当前状态"
-          meta={<>实时刷新</>}
-        >
-          <HealthGrid />
-        </Section>
-
-        {isLoading && <div className={s.loading}>加载中…</div>}
-
-        {active.length > 0 && (
-          <Section
-            num="03"
-            tag="运行中"
-            title="正在执行"
-            meta={`${active.length} 个任务 · 自动刷新`}
+        <div className={s.modeTabs} data-no-drag>
+          <button
+            type="button"
+            className={s.modeTab}
+            data-active={mode === "office" ? "true" : undefined}
+            onClick={() => setMode("office")}
           >
-            <div className={s.taskGrid}>
-              {active.map((sess) => (
-                <TaskCard key={sess.id} session={sess} onClick={() => goSession(sess)} />
-              ))}
-            </div>
-          </Section>
-        )}
+            <Rocket size={14} />
+            日常办公
+          </button>
+          <button
+            type="button"
+            className={s.modeTab}
+            data-active={mode === "code" ? "true" : undefined}
+            onClick={() => setMode("code")}
+          >
+            <Code2 size={14} />
+            代码开发
+          </button>
+          <button
+            type="button"
+            className={s.modeTab}
+            disabled
+            title="依赖 Core 支持，预留"
+          >
+            <Palette size={14} />
+            设计创意
+          </button>
+        </div>
 
-        <Section
-          num={active.length > 0 ? "04" : "03"}
-          tag="近况"
-          title="最近会话"
-          meta={`共 ${recent.length} 个`}
-        >
-          <RecentTable sessions={recent} onOpen={goSession} />
-        </Section>
+        <div className={s.chips} data-no-drag>
+          {chips.map((chip) => {
+            const Icon = chip.icon;
+            return (
+              <button
+                key={chip.label}
+                type="button"
+                className={s.chip}
+                title="点击填入输入框"
+                onClick={() => setPrefill({ text: chip.prompt, nonce: Date.now() })}
+              >
+                <Icon size={13} />
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
 
-        <Section
-          num={active.length > 0 ? "05" : "04"}
-          tag="模板"
-          title="快速起手"
-          meta="点击预填到 Composer"
-        >
-          <QuickStart />
-        </Section>
+        <div data-no-drag>
+          <PanelComposer />
+        </div>
+
+        <div className={s.disclaimer} data-no-drag>
+          内容由 AI 生成，请核实重要信息
+        </div>
       </div>
     </div>
   );

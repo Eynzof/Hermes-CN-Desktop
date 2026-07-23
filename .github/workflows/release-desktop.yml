@@ -1,22 +1,23 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
 # Release. Triggers on tags matching `v*` (e.g. `v0.6.3`).
 #
-# Desktop release build runs in parallel for Windows, macOS, and Linux. Each job:
+# Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
-#   4. Stages the bundled dashboard frontend, bundled skills, bundled plugins,
+#   4. Applies the active brand from brands/<BRAND>.json
+#   5. Stages the bundled dashboard frontend, bundled skills, bundled plugins,
 #      and bundled Hermes-CN-Core runtime payload + manifest for the target platform.
 #      macOS keeps the upstream signed zip opaque and verifies nested Mach-O
 #      signatures before notarization.
-#   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
+#   6. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
 #      env vars are NOT set here; src/process/runtime.rs ships hardcoded
 #      production fallbacks. Set them only if you fork the project and
 #      want to point the auto-update at a different runtime release
 #      pipeline.
-#   6. tauri-action uploads .exe / .dmg / .deb / .AppImage to the GitHub Release
+#   7. tauri-action uploads .exe / .dmg / .deb / .AppImage to the GitHub Release
 #      it creates on first run, or appends to an existing tag's release.
-#   7. Extra portable (unzip-and-run) zip artifacts are packaged from the same
+#   8. Extra portable (unzip-and-run) zip artifacts are packaged from the same
 #      build output and uploaded alongside the installers: Windows collects
 #      exe + resources from the cargo target dir; macOS staples the already
 #      notarized .app and zips it with ditto. See docs/portable-mode.md.
@@ -41,31 +42,117 @@ permissions:
   contents: write
 
 jobs:
+  resolve-brands:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      brands: ${{ steps.matrix.outputs.brands }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve brand/platform matrix
+        id: matrix
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const platforms = [
+            {
+              runner: "windows-latest",
+              target: "x86_64-pc-windows-msvc",
+              runtime_platform: "win32",
+              runtime_arch: "x64",
+              bundles: "nsis",
+            },
+            {
+              runner: "macos-14",
+              target: "aarch64-apple-darwin",
+              runtime_platform: "darwin",
+              runtime_arch: "arm64",
+              bundles: "dmg",
+            },
+            {
+              runner: "macos-15-intel",
+              target: "x86_64-apple-darwin",
+              runtime_platform: "darwin",
+              runtime_arch: "x64",
+              bundles: "dmg",
+            },
+            {
+              runner: "ubuntu-22.04",
+              target: "x86_64-unknown-linux-gnu",
+              runtime_platform: "linux",
+              runtime_arch: "x64",
+              bundles: "deb,appimage",
+            },
+          ];
+
+          const brandsDir = path.join(process.cwd(), "brands");
+          const brands = fs.readdirSync(brandsDir)
+            .filter((name) => name.endsWith(".json"))
+            .map((name) => path.basename(name, ".json"))
+            .sort();
+          if (brands.length === 0) throw new Error("No brand configs found under brands/");
+
+          const include = brands.flatMap((brand) => platforms.map((platform) => ({ brand, ...platform })));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `brands=${brands.join(", ")}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(include)}\n`);
+          console.log(`Resolved ${brands.length} brands and ${include.length} build jobs.`);
+          NODE
+
+  prepare-release:
+    needs: resolve-brands
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or reuse GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          BUILT_BRANDS: ${{ needs.resolve-brands.outputs.brands }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null
+
+          if gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+            exit 0
+          fi
+
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          cat > "$notes_file" <<EOF
+          Automated Hermes Agent CN Desktop installers.
+
+          Built brands: $BUILT_BRANDS.
+
+          Windows installer name, install directory, and uninstall registry
+          entries use the English name Hermes Agent CN Desktop to avoid
+          compatibility issues caused by non-ASCII install paths.
+          EOF
+
+          prerelease_args=()
+          if [[ "$RELEASE_TAG" == *-alpha* || "$RELEASE_TAG" == *-beta* || "$RELEASE_TAG" == *-rc* ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            -R "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Hermes Agent CN Desktop $RELEASE_TAG" \
+            --notes-file "$notes_file" \
+            "${prerelease_args[@]}"
+
   build:
+    needs: [resolve-brands, prepare-release]
+    name: Build ${{ matrix.brand }} / ${{ matrix.target }}
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
-        include:
-          - runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            runtime_platform: win32
-            runtime_arch: x64
-            bundles: nsis
-          - runner: macos-14
-            target: aarch64-apple-darwin
-            runtime_platform: darwin
-            runtime_arch: arm64
-            bundles: dmg
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-            runtime_platform: darwin
-            runtime_arch: x64
-            bundles: dmg
-          - runner: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            runtime_platform: linux
-            runtime_arch: x64
-            bundles: deb,appimage
+        include: ${{ fromJson(needs.resolve-brands.outputs.matrix) }}
 
     runs-on: ${{ matrix.runner }}
 
@@ -109,6 +196,11 @@ jobs:
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
+
+      - name: Synchronize brand
+        env:
+          BRAND: ${{ matrix.brand }}
+        run: pnpm run brand:sync
 
       - name: Resolve bundled runtime manifest
         id: runtime_manifest
@@ -239,7 +331,7 @@ jobs:
           # trigger it falls back to GITHUB_REF, but we pass it explicitly
           # so workflow_dispatch also works.
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: "Hermes Agent 中文社区桌面版 ${{ github.event.inputs.tag || github.ref_name }}"
+          releaseName: "Hermes Agent branded desktop ${{ github.event.inputs.tag || github.ref_name }}"
           releaseBody: |
             自动构建的 Hermes Agent 中文社区桌面版安装包。
 
@@ -345,7 +437,8 @@ jobs:
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          app="target/${{ matrix.target }}/release/bundle/macos/Hermes Agent CN Desktop.app"
+          product_name="$(node -p "require('./tauri.conf.json').productName")"
+          app="target/${{ matrix.target }}/release/bundle/macos/$product_name.app"
 
           # Tauri's updater bundler compresses the .app into the .app.tar.gz
           # updater artifact and then REMOVES the plain .app ("Cleaning …"),
@@ -357,7 +450,7 @@ jobs:
             mnt="$(mktemp -d)"
             hdiutil attach "${dmgs[0]}" -mountpoint "$mnt" -nobrowse -quiet
             mkdir -p "$(dirname "$app")"
-            ditto "$mnt/Hermes Agent CN Desktop.app" "$app"
+            ditto "$mnt/$product_name.app" "$app"
             hdiutil detach "$mnt" -quiet
           fi
 

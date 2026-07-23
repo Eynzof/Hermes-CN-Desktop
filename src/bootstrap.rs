@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use tauri::Emitter;
 
+use crate::brand_generated::BRAND_APP_NAME;
 use crate::connection::{ConnectionMode, LocalBackend, RemoteBackend};
 use crate::environment;
 use crate::error::AppError;
@@ -67,7 +68,7 @@ pub fn finalize_offline_bootstrap(app: &tauri::AppHandle) {
         inner.last_runtime_error = None;
     }
     emit_runtime_status(app, "ready-offline", "内核未启动，已进入桌面引导");
-    log::info!("Hermes Agent 中文社区桌面版 ready (managed runtime offline)");
+    log::info!("{} ready (managed runtime offline)", BRAND_APP_NAME);
 }
 
 pub async fn install_bundled_runtime_for_bootstrap(
@@ -347,7 +348,7 @@ pub async fn finalize_bootstrap(
     }
 
     emit_runtime_status(app, "ready", "");
-    log::info!("Hermes Agent 中文社区桌面版 ready");
+    log::info!("{} ready", BRAND_APP_NAME);
 }
 
 #[cfg(test)]

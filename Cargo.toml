@@ -2,7 +2,7 @@
 name = "hermes-agent-cn-desktop"
 version = "0.6.3"
 edition = "2021"
-description = "Hermes Agent CN Desktop (Tauri)"
+description = "HermesAgent AI Assistant Desktop"
 authors = ["Hermes Agent CN Contributors"]
 homepage = "https://hermesagent.org.cn"
 

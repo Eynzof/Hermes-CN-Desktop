@@ -1,0 +1,377 @@
+/* CustomModelsPane — 模型面板：企业模型下发 + 自定义模型（对齐 自定义模型1-3.png） */
+
+.section {
+  margin-bottom: 26px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.desc {
+  font-size: 12px;
+  color: var(--h-text-4);
+  line-height: 1.6;
+}
+
+.card {
+  border: 1px solid var(--h-line-soft);
+  border-radius: var(--h-radius-lg);
+  padding: 13px 16px;
+  margin: 10px 0;
+  background: var(--h-bg-app);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cardHeadTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.cardHead .btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.bindRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bindRow .input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.syncMeta {
+  font-size: 12px;
+  color: var(--h-text-4);
+  margin-top: 10px;
+}
+
+.savedTitle {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 16px 0 8px;
+}
+
+.empty {
+  border: 1px dashed var(--h-line);
+  border-radius: var(--h-radius-lg);
+  padding: 22px;
+  text-align: center;
+  color: var(--h-text-4);
+  font-size: 12.5px;
+}
+
+.modelList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modelRow {
+  border: 1px solid var(--h-line-soft);
+  border-radius: var(--h-radius-lg);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--h-bg-app);
+}
+
+.modelRow:hover {
+  border-color: var(--h-line);
+}
+
+.modelIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--h-radius-md);
+  background: var(--h-bg-soft);
+  color: var(--h-text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.modelIcon[data-tone="enterprise"] {
+  background: var(--h-accent-soft);
+  color: var(--h-accent);
+}
+
+.modelText {
+  flex: 1;
+  min-width: 0;
+}
+
+.modelName {
+  font-weight: 600;
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modelSub {
+  font-size: 11.5px;
+  color: var(--h-text-4);
+  margin-top: 1px;
+}
+
+.rowOp {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--h-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rowOp:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-sm);
+  padding: 5px 14px;
+  font-size: 12.5px;
+  background: var(--h-bg-app);
+  color: var(--h-text);
+  cursor: pointer;
+  font-family: var(--h-font-ui);
+  flex-shrink: 0;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--h-bg-soft);
+}
+
+.btn[data-variant="primary"] {
+  background: var(--h-text);
+  border-color: var(--h-text);
+  color: var(--h-bg-app);
+}
+
+.btn[data-variant="primary"]:hover:not(:disabled) {
+  opacity: 0.88;
+  background: var(--h-text);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--h-err);
+  background: var(--h-color-danger-bg);
+  border: 1px solid var(--h-color-danger-border);
+  border-radius: var(--h-radius-sm);
+  padding: 7px 10px;
+  margin-top: 10px;
+}
+
+/* ── 表单控件 ─────────────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 12.5px;
+  color: var(--h-text-3);
+}
+
+.input {
+  height: 36px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-md);
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-size: 13.5px;
+  padding: 0 11px;
+  outline: none;
+  width: 100%;
+  font-family: var(--h-font-ui);
+}
+
+.input:focus {
+  border-color: var(--h-accent-border);
+}
+
+.input:disabled {
+  color: var(--h-text-3);
+  background: var(--h-bg-soft);
+}
+
+.select {
+  height: 36px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-md);
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font-size: 13px;
+  padding: 0 9px;
+  outline: none;
+  width: 100%;
+  font-family: var(--h-font-ui);
+}
+
+.keyWrap {
+  position: relative;
+  display: block;
+}
+
+.keyWrap[data-grow="true"] {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.keyWrap .input {
+  padding-right: 34px;
+}
+
+.eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--h-radius-xs);
+}
+
+.eye:hover {
+  color: var(--h-text);
+  background: var(--h-bg-soft);
+}
+
+.checkRow {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--h-text);
+  cursor: pointer;
+}
+
+.check[data-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.check input {
+  accent-color: var(--h-accent);
+}
+
+.windowGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── 编辑模型弹窗 ─────────────────────────────────────────────── */
+
+.editDialog.editDialog {
+  width: min(560px, 94vw);
+  max-width: min(560px, 94vw);
+  background: var(--h-bg-app);
+  border-radius: var(--h-radius-xl);
+  padding: 0;
+}
+
+.editTitle {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 18px 20px 0;
+  display: inline-block;
+}
+
+.editBadge {
+  display: inline-block;
+  margin: 20px 20px 0 8px;
+  font-size: 11px;
+  color: var(--h-text-3);
+  background: var(--h-bg-soft);
+  border-radius: var(--h-radius-pill);
+  padding: 3px 10px;
+  vertical-align: middle;
+}
+
+.editClose {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--h-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.editClose:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.editBody {
+  padding: 14px 20px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+.editFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px 18px;
+  border-top: 1px solid var(--h-line-soft);
+  margin-top: 8px;
+}

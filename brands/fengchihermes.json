@@ -1,0 +1,31 @@
+{
+  "id": "fengchihermes",
+  "appName": "HermesAgent",
+  "appNameEn": "HermesAgent",
+  "productName": "FengchiHermes Desktop",
+  "identifier": "cn.org.hermesagent.desktop",
+  "dataDirName": ".fengchihermes",
+  "providerKey": "fengchihermes",
+  "serviceUrl": "https://ai.fengchiyun.com/",
+  "registerUrl": "https://www.fengchicloud.com/console/index.html#/login?redirect=%2F&type=1",
+  "rechargeUrl": "https://ai.fengchiyun.com/wallet",
+  "copyright": "Copyright © 2026 FengchiHermes",
+  "publisher": "FengchiHermes",
+  "homepage": "https://ai.fengchiyun.com",
+  "shortDescription": "FengchiHermes AI Assistant Desktop",
+  "longDescription": "Desktop app for FengchiHermes AI Assistant.",
+  "tagline": "AI Assistant",
+  "edition": "桌面版",
+  "updateManifestUrl": "https://ai.fengchiyun.com/downloads/fengchihermes/latest.json",
+  "updateDownloadUrl": "https://ai.fengchiyun.com/hermes-client",
+  "accountDefaultModels": [
+    "claude-opus-4-8",
+    "deepseek-v4-flash",
+    "deepseek-v4-pro",
+    "gpt-5.5",
+    "kimi-k2.6",
+    "minimax-m3",
+    "mimo-v2.5-pro",
+    "glm-5.1"
+  ]
+}
