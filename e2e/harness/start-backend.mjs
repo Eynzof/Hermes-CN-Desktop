@@ -17,6 +17,7 @@ import {
   E2E_DIR,
   RUNTIME_DIR,
   HERMES_HOME,
+  PROCESS_HOME,
   UPLOAD_DIR,
   WEB_DIST,
   FAKE_MODEL_PORT,
@@ -68,6 +69,7 @@ async function main() {
   // 1. Clean, reproducible runtime dir.
   rmSync(RUNTIME_DIR, { recursive: true, force: true });
   mkdirSync(HERMES_HOME, { recursive: true });
+  mkdirSync(PROCESS_HOME, { recursive: true });
   mkdirSync(UPLOAD_DIR, { recursive: true });
   writeFileSync(resolve(HERMES_HOME, "config.yaml"), configYaml());
 

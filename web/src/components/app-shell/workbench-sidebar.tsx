@@ -3,7 +3,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Popover } from "@hermes/shared-ui";
-import { Folder, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
+import { Folder, MessageSquare, MoreHorizontal, Plus, Users } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useActiveProfileName } from "@/hooks/use-profiles";
@@ -14,6 +14,7 @@ import {
   useSessions,
 } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
+import { groupChatDialogOpenAtom } from "@/components/sidebar/create-group-chat-dialog";
 import {
   isSessionRunning,
   mergeLiveRuntimeSessions,
@@ -182,6 +183,7 @@ export function WorkbenchSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const setActiveId = useSetAtom(activeSessionIdAtom);
+  const setGroupDialogOpen = useSetAtom(groupChatDialogOpenAtom);
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
   const queryClient = useQueryClient();
   const profile = useActiveProfileName();
@@ -326,6 +328,16 @@ export function WorkbenchSidebar() {
       </button>
 
       <div className={s.quickNav}>
+        <button
+          type="button"
+          className={s.quickNavButton}
+          onClick={() => setGroupDialogOpen(true)}
+        >
+          <span className={s.entryIcon}>
+            <Users size={16} />
+          </span>
+          <span className={s.entryLabel}>新建群聊</span>
+        </button>
         <button
           type="button"
           className={s.quickNavButton}

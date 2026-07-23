@@ -12,6 +12,7 @@ import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
 import { ConnectionAuthBanner } from "@/components/connection-auth-banner";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CommandPalette } from "@/components/command-palette";
+import { CreateGroupChatDialog } from "@/components/sidebar/create-group-chat-dialog";
 import { PanelRoute } from "@/routes/panel";
 import { DetailRoute } from "@/routes/detail";
 import { HistoryRoute } from "@/routes/history";
@@ -103,6 +104,7 @@ function BackendApp() {
       <DesktopUpdateNotifier />
       <ConnectionAuthBanner />
       <CommandPalette />
+      <CreateGroupChatDialog />
     </>
   );
 }

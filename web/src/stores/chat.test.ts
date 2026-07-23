@@ -634,6 +634,212 @@ describe("chat runtime reducer", () => {
     expect(assistantMessage(rt).parts).toEqual([{ type: "text", text: "hello" }]);
   });
 
+  it("keeps a group chain busy between member replies until the chain completes", () => {
+    const chainPayload = {
+      chain_id: "chain-1",
+      root_message_id: "root-1",
+      status: "running",
+      turns: 0,
+      max_turns: 8,
+      max_depth: 4,
+      max_chain_seconds: 300,
+    };
+    let runtime = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "groupchat.chain_started",
+        session_id: "gc_room",
+        payload: chainPayload,
+      },
+      10,
+    );
+    runtime = reduceGatewayEvent(
+      runtime,
+      {
+        type: "groupchat.dispatch_started",
+        session_id: "gc_room",
+        payload: {
+          ...chainPayload,
+          turns: 1,
+          target_agent_id: "agent-planner",
+          target_name: "planner",
+          mention_depth: 1,
+          route_kind: "user",
+        },
+      },
+      20,
+    );
+    runtime = reduceGatewayEvent(
+      runtime,
+      {
+        type: "message.start",
+        session_id: "gc_room",
+        payload: {
+          sender_agent_id: "agent-planner",
+          sender_name: "planner",
+          chain_id: "chain-1",
+        },
+      },
+      30,
+    );
+    runtime = reduceGatewayEvent(
+      runtime,
+      {
+        type: "message.complete",
+        session_id: "gc_room",
+        payload: {
+          text: "@critic 请检查",
+          status: "complete",
+          sender_agent_id: "agent-planner",
+          sender_name: "planner",
+          chain_id: "chain-1",
+        },
+      },
+      40,
+    );
+
+    expect(runtime.streamStatus).toBe("streaming");
+    expect(runtime.activeAssistantId).toBeUndefined();
+    expect(runtime.groupChain).toMatchObject({
+      chainId: "chain-1",
+      status: "running",
+      turns: 1,
+      activeAgent: "planner",
+      mentionDepth: 1,
+    });
+    expect(assistantMessage(runtime)).toMatchObject({
+      status: "complete",
+      senderName: "planner",
+    });
+
+    runtime = reduceGatewayEvent(
+      runtime,
+      {
+        type: "groupchat.chain_complete",
+        session_id: "gc_room",
+        payload: {
+          ...chainPayload,
+          status: "complete",
+          turns: 1,
+          replied: ["planner"],
+        },
+      },
+      50,
+    );
+
+    expect(runtime.streamStatus).toBe("complete");
+    expect(runtime.groupChain).toBeUndefined();
+    expect(runtime.statusMessage).toBe("");
+  });
+
+  it("keeps the chain running when one member finishes with an error", () => {
+    const runtime = reduceGatewayEvent(
+      {
+        ...createEmptyChatRuntime(1),
+        streamStatus: "streaming",
+        groupChain: {
+          chainId: "chain-error",
+          status: "running",
+          turns: 1,
+          maxTurns: 8,
+          maxDepth: 4,
+        },
+      },
+      {
+        type: "message.complete",
+        session_id: "gc_room",
+        payload: {
+          text: "critic failed",
+          status: "error",
+          sender_agent_id: "agent-critic",
+          sender_name: "critic",
+          chain_id: "chain-error",
+        },
+      },
+      20,
+    );
+
+    expect(runtime.streamStatus).toBe("streaming");
+    expect(runtime.groupChain?.chainId).toBe("chain-error");
+    expect(assistantMessage(runtime).status).toBe("error");
+  });
+
+  it("settles an interrupted group chain when the backend confirms it stopped", () => {
+    const runtime = reduceGatewayEvent(
+      {
+        ...createEmptyChatRuntime(1),
+        streamStatus: "streaming",
+        interrupted: true,
+        groupChain: {
+          chainId: "chain-stop",
+          status: "running",
+          turns: 2,
+          maxTurns: 8,
+          maxDepth: 4,
+        },
+      },
+      {
+        type: "groupchat.chain_stopped",
+        session_id: "gc_room",
+        payload: {
+          chain_id: "chain-stop",
+          root_message_id: "root-stop",
+          status: "stopped",
+          turns: 2,
+          max_turns: 8,
+          max_depth: 4,
+          max_chain_seconds: 300,
+          stop_reason: "user",
+          message: "群聊接力已由用户停止。",
+        },
+      },
+      20,
+    );
+
+    expect(runtime.streamStatus).toBe("complete");
+    expect(runtime.groupChain).toBeUndefined();
+    expect(runtime.interrupted).toBeUndefined();
+    expect(systemMessage(runtime).parts).toEqual([
+      {
+        type: "notice",
+        level: "warning",
+        text: "群聊接力已由用户停止。",
+      },
+    ]);
+  });
+
+  it("settles a group prompt that has no matching mention targets", () => {
+    const runtime = reduceGatewayEvent(
+      {
+        ...createEmptyChatRuntime(1),
+        streamStatus: "streaming",
+        groupChain: {
+          chainId: "chain-empty",
+          status: "running",
+          turns: 0,
+          maxTurns: 8,
+          maxDepth: 4,
+        },
+      },
+      {
+        type: "groupchat.no_targets",
+        session_id: "gc_room",
+        payload: { chain_id: "chain-empty" },
+      },
+      20,
+    );
+
+    expect(runtime.streamStatus).toBe("complete");
+    expect(runtime.groupChain).toBeUndefined();
+    expect(systemMessage(runtime).parts).toEqual([
+      {
+        type: "notice",
+        level: "warning",
+        text: "没有找到匹配的群聊成员，请检查 @名字。",
+      },
+    ]);
+  });
+
   it("exports action atoms used for per-session updates", () => {
     expect(startPromptAtom).toBeDefined();
     expect(chatRuntimeBySessionAtom).toBeDefined();

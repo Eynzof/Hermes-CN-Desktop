@@ -161,6 +161,89 @@ export type MessagingPlatformTestResponse = z.infer<typeof MessagingPlatformTest
 
 // ── Sessions (/api/sessions) ──────────────────────────────────────────
 
+// Group chat (P-052): sender attribution fields. snake_case mirrors the Core
+// gateway / DB payload verbatim; the camelCase variant is the UI-facing shape
+// (message-adapter maps snake -> camel, matching SessionMessage -> HermesUIMessage).
+const groupSenderSnakeShape = {
+  sender_agent_id: z.string().optional(),
+  sender_name: z.string().optional(),
+  sender_avatar: z.string().optional(),
+};
+const groupSenderCamelShape = {
+  senderAgentId: z.string().optional(),
+  senderName: z.string().optional(),
+  senderAvatar: z.string().optional(),
+};
+const groupChainSnakeShape = {
+  message_id: z.string().optional(),
+  chain_id: z.string().optional(),
+  root_message_id: z.string().optional(),
+  parent_message_id: z.string().optional(),
+  mention_depth: z.number().optional(),
+  route_kind: z.enum(["user", "relay"]).optional(),
+  dispatch_turn: z.number().optional(),
+};
+
+// A group-chat room member, backed by a Core profile. Returned by
+// groupchat.create and stored on a group session's SessionSummary.members.
+export const GroupChatMember = z
+  .object({
+    profile: z.string(),
+    name: z.string(),
+    description: z.string().optional(),
+    agent_id: z.string().optional(),
+    avatar: z.string().optional(),
+  })
+  .passthrough();
+export type GroupChatMember = z.infer<typeof GroupChatMember>;
+
+export const GroupChatRelayConfig = z
+  .object({
+    enabled: z.boolean(),
+    require_leading_mention: z.boolean(),
+    allow_agent_all: z.boolean(),
+    max_depth: z.number(),
+    max_turns: z.number(),
+    max_chain_seconds: z.number(),
+  })
+  .passthrough();
+export type GroupChatRelayConfig = z.infer<typeof GroupChatRelayConfig>;
+
+// Result of groupchat.create (P-052): the new room's id + resolved members and
+// the room-pinned automatic hand-off policy.
+export const GroupChatCreateResult = z
+  .object({
+    room_id: z.string(),
+    title: z.string().optional(),
+    members: z.array(GroupChatMember).default([]),
+    relay: GroupChatRelayConfig.optional(),
+    active_chain_id: z.string().nullable().optional(),
+  })
+  .passthrough();
+export type GroupChatCreateResult = z.infer<typeof GroupChatCreateResult>;
+
+export const GroupChatSubmitResult = z
+  .object({
+    room_id: z.string(),
+    chain_id: z.string(),
+    root_message_id: z.string(),
+    status: z.enum(["complete", "stopped"]),
+    stop_reason: z.string(),
+    turns: z.number(),
+    replied: z.array(z.string()),
+  })
+  .passthrough();
+export type GroupChatSubmitResult = z.infer<typeof GroupChatSubmitResult>;
+
+export const GroupChatInterruptResult = z
+  .object({
+    room_id: z.string(),
+    chain_id: z.string().optional(),
+    status: z.enum(["idle", "interrupting", "already_stopping", "stale_chain"]),
+  })
+  .passthrough();
+export type GroupChatInterruptResult = z.infer<typeof GroupChatInterruptResult>;
+
 export const SessionSummary = z.object({
   id: z.string(),
   source: z.string().optional(),
@@ -189,6 +272,10 @@ export const SessionSummary = z.object({
   // ?include_archived=true. Absent on the default (active) list — the proxy
   // strips archived sessions there. See src/session_archive.rs.
   archived: z.boolean().optional(),
+  // Group chat (P-052): `kind` distinguishes a single-agent session from a
+  // multi-agent group room; `members` lists the room's profile-backed agents.
+  kind: z.enum(["single", "group"]).optional(),
+  members: z.array(GroupChatMember).optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
 
@@ -263,6 +350,10 @@ export const SessionMessage = z.object({
   reasoning_details: z.any().nullable().optional(),
   codex_reasoning_items: z.any().nullable().optional(),
   reasoning_content: z.string().nullable().optional(),
+  // Group chat (P-052): sender attribution for multi-agent rooms.
+  ...groupSenderSnakeShape,
+  ...groupChainSnakeShape,
+  group_status: z.string().optional(),
 }).passthrough();
 export type SessionMessage = z.infer<typeof SessionMessage>;
 
@@ -397,6 +488,8 @@ export const HermesUIMessage = z
     status: z.enum(["streaming", "complete", "error"]),
     parts: z.array(HermesMessagePart),
     metadata: HermesMessageMetadata.optional(),
+    // Group chat (P-052): which room member authored this message.
+    ...groupSenderCamelShape,
   })
   .passthrough();
 export type HermesUIMessage = z.infer<typeof HermesUIMessage>;
@@ -1373,6 +1466,29 @@ export type GatewayMessageUsageT = z.infer<typeof GatewayMessageUsage>;
 const GatewayTextPayload = z.object({
   text: z.string().optional(),
   rendered: z.string().optional(),
+  // Group chat (P-052): delta events in a group room carry the speaking member.
+  ...groupSenderSnakeShape,
+  ...groupChainSnakeShape,
+}).passthrough();
+
+const GatewayGroupChainPayload = z.object({
+  chain_id: z.string(),
+  root_message_id: z.string(),
+  status: z.string(),
+  turns: z.number(),
+  max_turns: z.number(),
+  max_depth: z.number(),
+  max_chain_seconds: z.number(),
+  stop_reason: z.string().optional(),
+  replied: z.array(z.string()).optional(),
+  target_agent_id: z.string().optional(),
+  target_name: z.string().optional(),
+  message_id: z.string().optional(),
+  parent_message_id: z.string().optional(),
+  mention_depth: z.number().optional(),
+  route_kind: z.enum(["user", "relay"]).optional(),
+  message: z.string().optional(),
+  error: z.string().optional(),
 }).passthrough();
 
 export const GatewayKnownEvent = z.discriminatedUnion("type", [
@@ -1389,7 +1505,12 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("message.start"),
     session_id: z.string(),
-    payload: z.unknown().optional(),
+    // Group chat (P-052): a group room starts one message per member reply,
+    // tagged with the speaking member so the UI opens the right bubble.
+    payload: z.object({
+      ...groupSenderSnakeShape,
+      ...groupChainSnakeShape,
+    }).passthrough().optional(),
   }).passthrough(),
   z.object({
     type: z.literal("message.delta"),
@@ -1406,6 +1527,47 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
       usage: GatewayMessageUsage.optional(),
       status: z.string().optional(),
       warning: z.string().optional(),
+      // Group chat (P-052): which member's reply just completed.
+      ...groupSenderSnakeShape,
+      ...groupChainSnakeShape,
+    }).passthrough().optional(),
+  }).passthrough(),
+  z.object({
+    type: z.literal("groupchat.chain_started"),
+    session_id: z.string(),
+    payload: GatewayGroupChainPayload.optional(),
+  }).passthrough(),
+  z.object({
+    type: z.literal("groupchat.dispatch_started"),
+    session_id: z.string(),
+    payload: GatewayGroupChainPayload.optional(),
+  }).passthrough(),
+  z.object({
+    type: z.literal("groupchat.dispatch_complete"),
+    session_id: z.string(),
+    payload: GatewayGroupChainPayload.optional(),
+  }).passthrough(),
+  z.object({
+    type: z.literal("groupchat.dispatch_error"),
+    session_id: z.string(),
+    payload: GatewayGroupChainPayload.optional(),
+  }).passthrough(),
+  z.object({
+    type: z.literal("groupchat.chain_complete"),
+    session_id: z.string(),
+    payload: GatewayGroupChainPayload.optional(),
+  }).passthrough(),
+  z.object({
+    type: z.literal("groupchat.chain_stopped"),
+    session_id: z.string(),
+    payload: GatewayGroupChainPayload.optional(),
+  }).passthrough(),
+  z.object({
+    type: z.literal("groupchat.no_targets"),
+    session_id: z.string(),
+    payload: z.object({
+      chain_id: z.string().optional(),
+      text: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough(),
   z.object({

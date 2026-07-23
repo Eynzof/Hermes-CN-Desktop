@@ -37,6 +37,8 @@ import type {
   RuntimeInfo,
   RuntimeControlResult,
   GuideState,
+  ManagedRuntimeDesiredState,
+  ManagedRuntimeLifecycleState,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
   SetYoloModeInput,
@@ -930,6 +932,44 @@ async function waitForBootstrap(
   });
 }
 
+export interface TauriRuntimeConfigSnapshot {
+  apiBaseUrl: string;
+  gatewayUrl: string;
+  sessionToken?: string;
+  currentProfile: string;
+  connectionMode?: "managed" | "local" | "remote";
+  portable?: boolean;
+  backendReady?: boolean;
+  guideState?: GuideState;
+  managedRuntimeDesiredState?: ManagedRuntimeDesiredState;
+  managedRuntimeLifecycleState?: ManagedRuntimeLifecycleState;
+}
+
+/**
+ * Decide whether the pre-React bridge must wait for the managed runtime.
+ *
+ * `backendReady=false` is shared by two very different states:
+ *   1. a managed runtime that is still booting, and
+ *   2. a runtime the user intentionally stopped/uninstalled.
+ *
+ * The persisted desired state disambiguates them. Falling back to the legacy
+ * `backendReady` check keeps compatibility with Rust shells that predate the
+ * lifecycle fields.
+ */
+export function shouldWaitForManagedRuntime(
+  config: Pick<
+    TauriRuntimeConfigSnapshot,
+    "apiBaseUrl" | "connectionMode" | "backendReady" | "managedRuntimeDesiredState"
+  >,
+): boolean {
+  if (config.apiBaseUrl.trim()) return false;
+  if ((config.connectionMode ?? "managed") !== "managed") return false;
+  if (config.managedRuntimeDesiredState !== undefined) {
+    return config.managedRuntimeDesiredState === "running";
+  }
+  return config.backendReady !== false;
+}
+
 // Developer mode ships enabled in release builds (the `devtools` Cargo feature),
 // so the WebView inspector can be opened at runtime. Bind it to the keyboard
 // shortcuts every browser already uses so users can pop devtools without a menu:
@@ -970,18 +1010,7 @@ export async function installTauriBridge(): Promise<void> {
   // StrictMode mount→unmount teardown race can't leak an unhandled rejection.
   installTauriRejectionGuard();
 
-  let config = await invokeCommand<{
-    apiBaseUrl: string;
-    gatewayUrl: string;
-    sessionToken?: string;
-    currentProfile: string;
-    connectionMode?: "managed" | "local" | "remote";
-    portable?: boolean;
-    backendReady?: boolean;
-    guideState?: GuideState;
-    managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
-    managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
-  }>("get_runtime_config");
+  let config = await invokeCommand<TauriRuntimeConfigSnapshot>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
   // Don't set apiBaseUrl/gatewayUrl — let the browser use relative URLs that
@@ -1002,7 +1031,7 @@ export async function installTauriBridge(): Promise<void> {
   // the populated apiBaseUrl/sessionToken. In Vite dev we still avoid writing
   // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
   // the React app from racing the managed dashboard startup.
-  if (!config.apiBaseUrl && config.backendReady !== false) {
+  if (shouldWaitForManagedRuntime(config)) {
     const result = await waitForBootstrap(
       "正在唤醒Hermes...",
       () => invokeCommand("get_runtime_config"),

@@ -7,6 +7,9 @@ import {
   ImageAttachResult,
   InputDetectDropResult,
   ModelOptionsResult,
+  GroupChatCreateResult,
+  GroupChatInterruptResult,
+  GroupChatSubmitResult,
   PromptSubmitParams,
   ProviderModelsListResult,
   ProviderProbeResult,
@@ -396,6 +399,74 @@ export function useGateway() {
     [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt],
   );
 
+  // Group chat (P-052): create a room from profile names and adopt it as the
+  // active session (room_id doubles as the session id, gc_-prefixed by Core).
+  const createGroupChat = useCallback(
+    async (members: string[], title?: string): Promise<GroupChatCreateResult> => {
+      ensureSubscribed();
+      const result = parseGatewayResult(
+        GroupChatCreateResult,
+        await getGatewayClient().request("groupchat.create", {
+          members,
+          ...(title?.trim() ? { title: title.trim() } : {}),
+        }),
+        "groupchat.create",
+      );
+      adoptCreatedSession(result.room_id);
+      return result;
+    },
+    [adoptCreatedSession, ensureSubscribed],
+  );
+
+  // Group chat (P-052): send into a room. Core owns the complete bounded relay
+  // chain; Desktop never parses an agent reply or submits the next hand-off.
+  const sendGroupPrompt = useCallback(
+    async (roomId: string, text: string, options?: { skipOptimisticStart?: boolean }) => {
+      ensureSubscribed();
+      ensureChatSession(roomId);
+      if (!options?.skipOptimisticStart) {
+        // Every group member emits its own sender-tagged message.start. A
+        // sender-less optimistic assistant would later be merged into one of
+        // those bubbles and can poison stored/live reconciliation across
+        // repeated rounds, so group turns optimistically add only the user row.
+        startPrompt({ sessionId: roomId, text, optimisticAssistant: false });
+      }
+      try {
+        return parseGatewayResult(
+          GroupChatSubmitResult,
+          await getGatewayClient().request(
+            "groupchat.submit",
+            { room_id: roomId, text },
+            // Core defaults to 300s but bounds an explicitly configured room
+            // policy at 3600s. Keep the request alive through that hard limit
+            // plus one minute of transport slack; interruption still travels
+            // over the independent WebSocket reader while this call is open.
+            { timeoutMs: 3_660_000 },
+          ),
+          "groupchat.submit",
+        );
+      } catch (error) {
+        setSessionError({ sessionId: roomId, message: errorMessage(error) });
+        throw error;
+      }
+    },
+    [ensureChatSession, ensureSubscribed, setSessionError, startPrompt],
+  );
+
+  // Group chat (P-052): fetch a room's members (survives reload — the room
+  // lives in the gateway process, not the DB).
+  const groupChatInfo = useCallback(
+    async (roomId: string): Promise<GroupChatCreateResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        GroupChatCreateResult,
+        await getGatewayClient().request("groupchat.info", { room_id: roomId }),
+        "groupchat.info",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const getSessionUsage = useCallback(
     async (sessionId: string): Promise<SessionUsageResult> => {
       ensureSubscribed();
@@ -689,11 +760,23 @@ export function useGateway() {
       ensureSubscribed();
 
       try {
-        await getGatewayClient().request(
-          "session.interrupt",
-          { session_id: gatewaySessionId },
-          { timeoutMs: 10_000 },
-        );
+        if (gatewaySessionId.startsWith("gc_") && !gatewaySessionId.includes(":")) {
+          parseGatewayResult(
+            GroupChatInterruptResult,
+            await getGatewayClient().request(
+              "groupchat.interrupt",
+              { room_id: gatewaySessionId },
+              { timeoutMs: 10_000 },
+            ),
+            "groupchat.interrupt",
+          );
+        } else {
+          await getGatewayClient().request(
+            "session.interrupt",
+            { session_id: gatewaySessionId },
+            { timeoutMs: 10_000 },
+          );
+        }
       } catch (error) {
         setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
         throw error;
@@ -747,6 +830,9 @@ export function useGateway() {
     failPrompt,
     resumeSession,
     sendPrompt,
+    createGroupChat,
+    sendGroupPrompt,
+    groupChatInfo,
     getSessionUsage,
     compressSession,
     getModelOptions,

@@ -58,6 +58,16 @@ export interface PendingApproval {
 
 export type StreamStatus = "idle" | "connecting" | "streaming" | "complete" | "error";
 
+export interface GroupChatChainRuntime {
+  chainId: string;
+  status: "running";
+  turns: number;
+  maxTurns: number;
+  maxDepth: number;
+  activeAgent?: string;
+  mentionDepth?: number;
+}
+
 export interface ChatSessionRuntime {
   messages: HermesUIMessage[];
   streamStatus: StreamStatus;
@@ -78,6 +88,7 @@ export interface ChatSessionRuntime {
   turnFirstTokenAt?: number;
   activeAssistantId?: string;
   interrupted?: boolean;
+  groupChain?: GroupChatChainRuntime;
 }
 
 export type ChatRuntimeBySession = Record<string, ChatSessionRuntime>;
@@ -114,6 +125,17 @@ function assistantClientId(now: number): string {
   return `live-assistant-${now}`;
 }
 
+function nextAssistantClientId(runtime: ChatSessionRuntime, now: number): string {
+  const base = assistantClientId(now);
+  if (!runtime.messages.some((message) => message.id === base)) return base;
+
+  let sequence = 2;
+  while (runtime.messages.some((message) => message.id === `${base}-${sequence}`)) {
+    sequence += 1;
+  }
+  return `${base}-${sequence}`;
+}
+
 function userClientId(now: number): string {
   return `live-user-${now}`;
 }
@@ -145,6 +167,7 @@ function resetStream(runtime: ChatSessionRuntime, now: number): ChatSessionRunti
     activeAssistantId: undefined,
     turnStartedAt: undefined,
     turnFirstTokenAt: undefined,
+    groupChain: undefined,
     updatedAt: now,
   };
 }
@@ -389,16 +412,42 @@ function updateMessage(
   return changed ? { ...runtime, messages } : runtime;
 }
 
+// Group chat (P-052): sender attribution carried on a gateway event payload.
+interface GroupSenderFields {
+  senderAgentId?: string;
+  senderName?: string;
+  senderAvatar?: string;
+}
+
+// Pull sender attribution off an event payload; undefined for single-agent
+// sessions (no sender_* fields), which keep the global assistant identity.
+function extractGroupSender(payload: Record<string, unknown>): GroupSenderFields | undefined {
+  const senderAgentId = typeof payload.sender_agent_id === "string" ? payload.sender_agent_id : undefined;
+  const senderName = typeof payload.sender_name === "string" ? payload.sender_name : undefined;
+  const senderAvatar = typeof payload.sender_avatar === "string" ? payload.sender_avatar : undefined;
+  if (!senderAgentId && !senderName && !senderAvatar) return undefined;
+  return { senderAgentId, senderName, senderAvatar };
+}
+
 function ensureAssistantMessage(
   runtime: ChatSessionRuntime,
   sessionId: string,
   id: string,
   now: number,
+  sender?: GroupSenderFields,
 ): ChatSessionRuntime {
   if (runtime.messages.some((message) => message.id === id)) {
     return updateMessage(runtime, id, (message) => ({
       ...message,
       status: message.status === "error" ? "error" : "streaming",
+      // A completed transcript refetch can retire a just-started group bubble
+      // before buffered deltas reach the reducer. A sender-less reasoning event
+      // may then recreate that active id; adopt the attribution carried by the
+      // next member delta/complete instead of leaving it sender-less and
+      // allowing it to merge into the previous member.
+      senderAgentId: message.senderAgentId ?? sender?.senderAgentId,
+      senderName: message.senderName ?? sender?.senderName,
+      senderAvatar: message.senderAvatar ?? sender?.senderAvatar,
     }));
   }
 
@@ -414,13 +463,14 @@ function ensureAssistantMessage(
         createdAt,
         status: "streaming",
         parts: [],
+        ...(sender ?? {}),
       },
     ],
   };
 }
 
 function activeAssistantId(runtime: ChatSessionRuntime, now: number): string {
-  return runtime.activeAssistantId ?? assistantClientId(now);
+  return runtime.activeAssistantId ?? nextAssistantClientId(runtime, now);
 }
 
 function updateActiveAssistant(
@@ -428,6 +478,7 @@ function updateActiveAssistant(
   sessionId: string,
   now: number,
   updater: (message: HermesUIMessage) => HermesUIMessage | null,
+  sender?: GroupSenderFields,
 ): ChatSessionRuntime {
   const id = activeAssistantId(runtime, now);
   const ensured = ensureAssistantMessage(
@@ -435,6 +486,7 @@ function updateActiveAssistant(
     sessionId,
     id,
     now,
+    sender,
   );
   return updateMessage(ensured, id, updater);
 }
@@ -581,18 +633,147 @@ function reduceGatewayEventInner(
       // 新回合开始即解除屏蔽，远程发起的回合和 busy 重试都依赖这里恢复渲染
       return reduceGatewayEvent({ ...runtime, interrupted: undefined }, event, now);
     }
-    if (event.type !== "message.complete" && event.type !== "error") {
+    if (
+      event.type !== "message.complete" &&
+      event.type !== "error" &&
+      event.type !== "groupchat.chain_complete" &&
+      event.type !== "groupchat.chain_stopped" &&
+      event.type !== "groupchat.no_targets"
+    ) {
       // 丢弃被中断回合迟到的流式事件；终态事件放行，让半截消息正常收尾
       return runtime;
     }
   }
 
   switch (event.type) {
+    case "groupchat.chain_started": {
+      const chainId = typeof payload.chain_id === "string" ? payload.chain_id : "";
+      if (!chainId) return runtime;
+      return {
+        ...runtime,
+        streamStatus: "streaming",
+        groupChain: {
+          chainId,
+          status: "running",
+          turns: typeof payload.turns === "number" ? payload.turns : 0,
+          maxTurns: typeof payload.max_turns === "number" ? payload.max_turns : 8,
+          maxDepth: typeof payload.max_depth === "number" ? payload.max_depth : 4,
+        },
+        turnStartedAt: runtime.turnStartedAt ?? now,
+        statusMessage: "正在组织群聊成员…",
+        statusKind: "groupchat_chain",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.dispatch_started": {
+      if (!runtime.groupChain || payload.chain_id !== runtime.groupChain.chainId) {
+        return runtime;
+      }
+      const activeAgent =
+        typeof payload.target_name === "string" ? payload.target_name : undefined;
+      const mentionDepth =
+        typeof payload.mention_depth === "number" ? payload.mention_depth : undefined;
+      return {
+        ...runtime,
+        streamStatus: "streaming",
+        groupChain: {
+          ...runtime.groupChain,
+          turns:
+            typeof payload.turns === "number"
+              ? payload.turns
+              : runtime.groupChain.turns,
+          activeAgent,
+          mentionDepth,
+        },
+        statusMessage: activeAgent
+          ? `${activeAgent} 正在回复${mentionDepth && mentionDepth > 1 ? "并接力" : ""}…`
+          : runtime.statusMessage,
+        statusKind: "groupchat_chain",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.chain_complete": {
+      if (
+        runtime.groupChain &&
+        payload.chain_id &&
+        payload.chain_id !== runtime.groupChain.chainId
+      ) {
+        return runtime;
+      }
+      return {
+        ...runtime,
+        streamStatus: "complete",
+        groupChain: undefined,
+        statusMessage: "",
+        statusKind: undefined,
+        statusUpdatedAt: undefined,
+        turnStartedAt: undefined,
+        turnFirstTokenAt: undefined,
+        activeAssistantId: undefined,
+        interrupted: undefined,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.chain_stopped": {
+      if (
+        runtime.groupChain &&
+        payload.chain_id &&
+        payload.chain_id !== runtime.groupChain.chainId
+      ) {
+        return runtime;
+      }
+      const text =
+        typeof payload.message === "string" && payload.message.trim()
+          ? payload.message.trim()
+          : "群聊接力已停止。";
+      const next = appendNoticeMessage(runtime, sessionId, now, text, "warning");
+      return {
+        ...next,
+        streamStatus: "complete",
+        groupChain: undefined,
+        statusMessage: text,
+        statusKind: "warn",
+        statusUpdatedAt: now,
+        turnStartedAt: undefined,
+        turnFirstTokenAt: undefined,
+        activeAssistantId: undefined,
+        interrupted: undefined,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.no_targets": {
+      const text = "没有找到匹配的群聊成员，请检查 @名字。";
+      const next = appendNoticeMessage(runtime, sessionId, now, text, "warning");
+      return {
+        ...next,
+        streamStatus: "complete",
+        groupChain: undefined,
+        statusMessage: text,
+        statusKind: "warn",
+        statusUpdatedAt: now,
+        turnStartedAt: undefined,
+        turnFirstTokenAt: undefined,
+        activeAssistantId: undefined,
+        interrupted: undefined,
+        updatedAt: now,
+      };
+    }
+
     case "message.start": {
+      // Group chat (P-052): a start carrying a sender opens a NEW bubble per
+      // member reply (each is distinct), even mid-stream; single-agent starts
+      // reuse the active bubble as before.
+      const sender = extractGroupSender(payload);
       const id =
-        isStreamingStatus(runtime.streamStatus) && runtime.activeAssistantId
+        !sender && isStreamingStatus(runtime.streamStatus) && runtime.activeAssistantId
           ? runtime.activeAssistantId
-          : assistantClientId(now);
+          : nextAssistantClientId(runtime, now);
       return ensureAssistantMessage(
         {
           ...runtime,
@@ -601,13 +782,14 @@ function reduceGatewayEventInner(
           statusKind: undefined,
           statusUpdatedAt: undefined,
           activeAssistantId: id,
-          turnStartedAt: runtime.turnStartedAt ?? now,
+          turnStartedAt: sender ? now : (runtime.turnStartedAt ?? now),
           turnFirstTokenAt: undefined,
           updatedAt: now,
         },
         sessionId,
         id,
         now,
+        sender,
       );
     }
 
@@ -618,6 +800,7 @@ function reduceGatewayEventInner(
       // no-op that prevents "重复发送3条空消息".  The backend may
       // emit empty-string deltas during reasoning↔content transitions.
       if (!text && images.length === 0) return runtime;
+      const sender = extractGroupSender(payload);
       const id = activeAssistantId(runtime, now);
       const next = updateActiveAssistant(
         clearProviderStatus({
@@ -635,6 +818,7 @@ function reduceGatewayEventInner(
           status: "streaming",
           parts: appendImageParts(appendTextPart(message.parts, text), images),
         }),
+        sender,
       );
       return next;
     }
@@ -772,6 +956,7 @@ function reduceGatewayEventInner(
 
     case "message.complete": {
       const id = activeAssistantId(runtime, now);
+      const sender = extractGroupSender(payload);
       const metadata = completionMetadata(payload, runtime, now);
       const isErrorCompletion = payload.status === "error";
       let next = updateActiveAssistant(
@@ -793,6 +978,7 @@ function reduceGatewayEventInner(
             metadata: metadata ? { ...message.metadata, ...metadata } : message.metadata,
           };
         },
+        sender,
       );
 
       const warningText =
@@ -806,13 +992,18 @@ function reduceGatewayEventInner(
         next = appendNoticeMessage(next, sessionId, now + 2, pickErrorText(payload), "error");
       }
 
+      const chainContinues = Boolean(runtime.groupChain) && !runtime.interrupted;
       return {
         ...next,
-        streamStatus: isErrorCompletion ? "error" : "complete",
+        streamStatus: chainContinues
+          ? "streaming"
+          : isErrorCompletion
+            ? "error"
+            : "complete",
         statusMessage: warningText ?? "",
         statusKind: warningText ? "warn" : undefined,
         statusUpdatedAt: warningText ? now : undefined,
-        turnStartedAt: undefined,
+        turnStartedAt: chainContinues ? runtime.turnStartedAt : undefined,
         turnFirstTokenAt: undefined,
         activeAssistantId: undefined,
         interrupted: undefined,
@@ -1029,6 +1220,16 @@ function isRecoverableStoredAssistant(
   turnStartedAt: number | undefined,
 ): boolean {
   if (liveAssistant.role !== "assistant" || storedAssistant.role !== "assistant") return false;
+  // Group chat (P-052): never recover across members. A member's live bubble —
+  // especially a progress-only one that just started streaming (reviewer) — must
+  // not match a DIFFERENT member's stored completion (default). That deleted the
+  // reviewer bubble mid-turn and let its later deltas merge into default.
+  const liveSender = liveAssistant.senderAgentId;
+  const storedSender = storedAssistant.senderAgentId;
+  if (liveSender && storedSender && liveSender !== storedSender) return false;
+  // A progress-only live bubble in a group room may only be recovered by a
+  // stored completion from the SAME member — otherwise it matches any reply.
+  if (liveSender && liveSender !== storedSender) return false;
   if (storedAssistant.status !== "complete") return false;
   if (!storedAssistantIsAfterTurn(storedAssistant, turnStartedAt)) return false;
 
@@ -1102,9 +1303,19 @@ export const recoverCompletedTurnFromStoredMessagesAtom = atom(
 
 export const startPromptAtom = atom(
   null,
-  (_get, set, params: { sessionId: string; text: string; images?: ImageEntry[]; now?: number }) => {
+  (
+    _get,
+    set,
+    params: {
+      sessionId: string;
+      text: string;
+      images?: ImageEntry[];
+      now?: number;
+      optimisticAssistant?: boolean;
+    },
+  ) => {
     const now = params.now ?? Date.now();
-    const assistantId = assistantClientId(now);
+    const optimisticAssistant = params.optimisticAssistant !== false;
     const userParts: HermesMessagePart[] = [];
     if (params.text) userParts.push({ type: "text", text: params.text });
     for (const image of params.images ?? []) {
@@ -1113,34 +1324,41 @@ export const startPromptAtom = atom(
     }
     set(gwSessionIdAtom, params.sessionId);
     set(chatRuntimeBySessionAtom, (state) =>
-      updateSessionRuntime(state, params.sessionId, (runtime) => ({
-        ...resetStream(runtime, now),
-        interrupted: undefined,
-        messages: [
-          ...runtime.messages,
-          {
-            id: userClientId(now),
-            sessionId: params.sessionId,
-            role: "user",
-            createdAt: now,
-            status: "complete",
-            parts: userParts.length ? userParts : [{ type: "text", text: params.text }],
-          },
-          {
-            id: assistantId,
-            sessionId: params.sessionId,
-            role: "assistant",
-            createdAt: now,
-            status: "streaming",
-            parts: [{ type: "progress", text: OPTIMISTIC_ASSISTANT_PROGRESS }],
-          },
-        ],
-        streamStatus: "streaming",
-        pendingApprovals: [],
-        turnStartedAt: now,
-        turnFirstTokenAt: undefined,
-        activeAssistantId: assistantId,
-      })),
+      updateSessionRuntime(state, params.sessionId, (runtime) => {
+        const assistantId = optimisticAssistant
+          ? nextAssistantClientId(runtime, now)
+          : undefined;
+        return {
+          ...resetStream(runtime, now),
+          interrupted: undefined,
+          messages: [
+            ...runtime.messages,
+            {
+              id: userClientId(now),
+              sessionId: params.sessionId,
+              role: "user",
+              createdAt: now,
+              status: "complete",
+              parts: userParts.length ? userParts : [{ type: "text", text: params.text }],
+            },
+            ...(assistantId
+              ? [{
+                  id: assistantId,
+                  sessionId: params.sessionId,
+                  role: "assistant" as const,
+                  createdAt: now,
+                  status: "streaming" as const,
+                  parts: [{ type: "progress" as const, text: OPTIMISTIC_ASSISTANT_PROGRESS }],
+                }]
+              : []),
+          ],
+          streamStatus: "streaming",
+          pendingApprovals: [],
+          turnStartedAt: now,
+          turnFirstTokenAt: undefined,
+          activeAssistantId: assistantId,
+        };
+      }),
     );
   },
 );

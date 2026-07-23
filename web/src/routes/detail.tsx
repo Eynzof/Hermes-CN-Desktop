@@ -19,6 +19,8 @@ import {
   removeApprovalAtom,
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
+import { useGroupChatInfo, isGroupRoomId } from "@/hooks/use-group-chat";
+import { GroupChatHeader } from "@/components/chat/group-chat-header";
 import { useSkills } from "@/hooks/use-skills";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { useGateway } from "@/hooks/use-gateway";
@@ -106,6 +108,7 @@ export function DetailRoute() {
   const {
     resumeSession,
     sendPrompt,
+    sendGroupPrompt,
     interruptSession,
     getSessionUsage,
     compressSession,
@@ -189,6 +192,10 @@ export function DetailRoute() {
   ]);
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
+  // Group chat (P-052): room members drive the @ picker, header roster, and empty-state guide.
+  const groupInfo = useGroupChatInfo(taskId);
+  const isGroupChat = isGroupRoomId(taskId);
+  const groupMembers = groupInfo.data?.members;
   const { data: messagesData, isLoading } = messagesQuery;
   const { data: sessionsData } = useSessions();
   const sessionData = session;
@@ -298,6 +305,11 @@ export function DetailRoute() {
 
   const ensureGatewaySession = useCallback(async (): Promise<string> => {
     if (!taskId) throw new Error("缺少会话 ID");
+    // Group rooms are gateway-owned room ids, not resumable AIAgent session
+    // ids. After a page reload there is no in-memory mapping, but the room
+    // remains valid in the running Core process and must go straight back to
+    // groupchat.submit instead of session.resume.
+    if (isGroupRoomId(taskId)) return taskId;
     if (restSessionId && taskId === restSessionId && !activeMappedGatewaySessionId) {
       // No URL navigate after the resume — atom + gwSessionIdAtom hold
       // the authoritative state; downstream callers go through
@@ -420,11 +432,16 @@ export function DetailRoute() {
       uploadFile: uploadAttachmentFile,
       onAttachmentUpdate: updateAttachment,
     }, { transportText });
-    await sendPrompt(gatewaySessionId, prepared.promptText, {
-      displayText: prepared.displayText,
-      displayImages: prepared.displayImages,
-    });
-  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+    if (gatewaySessionId.startsWith("gc_")) {
+      // Group chat (P-052): rooms use gc_-prefixed ids and route to groupchat.submit.
+      await sendGroupPrompt(gatewaySessionId, prepared.promptText);
+    } else {
+      await sendPrompt(gatewaySessionId, prepared.promptText, {
+        displayText: prepared.displayText,
+        displayImages: prepared.displayImages,
+      });
+    }
+  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendGroupPrompt, sendPrompt, taskId]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
@@ -701,6 +718,13 @@ export function DetailRoute() {
       />
       <div className={s.workArea}>
         <div className={s.chatColumn}>
+          {isGroupChat && groupMembers ? (
+            <GroupChatHeader
+              members={groupMembers}
+              chain={runtime.groupChain}
+              showGuide={chatMessages.length === 0}
+            />
+          ) : null}
           {/* key={taskId}：切会话强制重挂载时间线。layout effect 在首帧绘制前就
               把滚动定位到底部，避免新会话内容先以上一个会话的滚动位置绘制、再
               在 650ms 的滚动校正窗口里反复跳动（用户感知为"闪烁两下"）。 */}
@@ -733,6 +757,7 @@ export function DetailRoute() {
             />
             <GooseComposer
               key={taskId}
+              placeholder={isGroupChat ? "@某成员单独聊，或直接发送让大家都参与…" : undefined}
               initialWorkspacePath={sessionWorkspace}
               initial={composerPrefill.text}
               initialNonce={composerPrefill.nonce}
@@ -772,6 +797,7 @@ export function DetailRoute() {
                   }),
                 sessions: sessionsData?.sessions,
                 profile: activeProfile,
+                members: groupMembers,
                 disabled: runtimeIsBusy,
               }}
               contextUsage={contextUsage}

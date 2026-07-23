@@ -10,7 +10,12 @@ import {
   CronRunsResponse,
   ElevenLabsVoicesResponse,
   FsListResponse,
+  GroupChatCreateResult,
+  GroupChatInterruptResult,
+  GroupChatSubmitResult,
+  MessagesResponse,
   MoaConfigResponse,
+  parseGatewayEvent,
   ProviderModelsListResult,
   ProfileCreateResponse,
   ProfileSummary,
@@ -23,7 +28,6 @@ import {
   SessionSummary,
   StatusResponse,
 } from "./hermes-api";
-
 
 describe("Audio API schemas", () => {
   it("parses desktop transcription responses", () => {
@@ -198,6 +202,142 @@ describe("Profile API schemas", () => {
     expect(parsed.gateway_running).toBe(true);
     expect(parsed.description_auto).toBe(true);
     expect(parsed.distribution_name).toBe("coder-pro");
+  });
+});
+
+describe("Group chat schemas", () => {
+  const relay = {
+    enabled: true,
+    require_leading_mention: true,
+    allow_agent_all: false,
+    max_depth: 4,
+    max_turns: 8,
+    max_chain_seconds: 300,
+  };
+
+  it("parses room creation with its pinned relay policy", () => {
+    const parsed = GroupChatCreateResult.parse({
+      room_id: "group:abc",
+      title: "方案评审",
+      members: [
+        {
+          profile: "qa-planner",
+          name: "planner",
+          agent_id: "qa-planner",
+        },
+      ],
+      relay,
+      active_chain_id: null,
+    });
+
+    expect(parsed.members[0]?.name).toBe("planner");
+    expect(parsed.relay).toEqual(relay);
+  });
+
+  it("parses submit and interrupt results", () => {
+    const submitted = GroupChatSubmitResult.parse({
+      room_id: "group:abc",
+      chain_id: "gcc-1",
+      root_message_id: "gcmsg-1",
+      status: "complete",
+      stop_reason: "complete",
+      turns: 3,
+      replied: ["planner", "critic", "synthesizer"],
+    });
+    const interrupted = GroupChatInterruptResult.parse({
+      room_id: "group:abc",
+      chain_id: "gcc-1",
+      status: "interrupting",
+    });
+
+    expect(submitted.turns).toBe(3);
+    expect(interrupted.status).toBe("interrupting");
+  });
+
+  it("accepts missing chain fields on user history and keeps relay metadata", () => {
+    const parsed = MessagesResponse.parse({
+      session_id: "group:abc",
+      messages: [
+        {
+          id: 1,
+          session_id: "group:abc",
+          role: "user",
+          content: "请开始",
+          timestamp: 1,
+          message_id: "gcmsg-1",
+        },
+        {
+          id: 2,
+          session_id: "group:abc",
+          role: "assistant",
+          content: "@critic 请审查",
+          timestamp: 2,
+          sender_agent_id: "qa-planner",
+          sender_name: "planner",
+          message_id: "gcmsg-2",
+          chain_id: "gcc-1",
+          root_message_id: "gcmsg-1",
+          parent_message_id: "gcmsg-1",
+          mention_depth: 1,
+          route_kind: "relay",
+          dispatch_turn: 1,
+        },
+      ],
+    });
+
+    expect(parsed.messages[0]?.route_kind).toBeUndefined();
+    expect(parsed.messages[1]?.route_kind).toBe("relay");
+    expect(parsed.messages[1]?.chain_id).toBe("gcc-1");
+  });
+
+  it("rejects an empty route_kind instead of blanking history silently", () => {
+    expect(() =>
+      MessagesResponse.parse({
+        session_id: "group:abc",
+        messages: [
+          {
+            id: 1,
+            session_id: "group:abc",
+            role: "user",
+            content: "请开始",
+            timestamp: 1,
+            route_kind: "",
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it.each([
+    "groupchat.chain_started",
+    "groupchat.dispatch_started",
+    "groupchat.dispatch_complete",
+    "groupchat.dispatch_error",
+    "groupchat.chain_complete",
+    "groupchat.chain_stopped",
+  ])("parses the %s lifecycle event", (type) => {
+    const parsed = parseGatewayEvent({
+      type,
+      session_id: "group:abc",
+      payload: {
+        chain_id: "gcc-1",
+        root_message_id: "gcmsg-1",
+        status: type.endsWith("error") ? "error" : "running",
+        turns: 1,
+        max_turns: 8,
+        max_depth: 4,
+        max_chain_seconds: 300,
+        target_agent_id: "qa-planner",
+        target_name: "planner",
+        message_id: "gcmsg-2",
+        parent_message_id: "gcmsg-1",
+        mention_depth: 1,
+        route_kind: "relay",
+      },
+    });
+
+    expect(parsed.type).toBe(type);
+    expect(parsed.session_id).toBe("group:abc");
   });
 });
 

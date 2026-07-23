@@ -9,19 +9,14 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::commands::restart::{self, RespawnOutcome};
 use crate::error::AppError;
 use crate::state::AppState;
-
-static PROFILE_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").expect("valid profile name regex")
-});
+use crate::util::is_valid_profile_name;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,10 +78,6 @@ pub fn read_active_profile_sticky(base: &str) -> String {
         }
         Err(_) => "default".to_string(),
     }
-}
-
-fn is_valid_profile_name(name: &str) -> bool {
-    PROFILE_NAME_RE.is_match(name)
 }
 
 #[tauri::command]
@@ -296,15 +287,15 @@ mod tests {
         // Cannot start with hyphen / underscore
         assert!(!is_valid_profile_name("-leading-hyphen"));
         assert!(!is_valid_profile_name("_leading-underscore"));
-        // Too long (>32 chars)
-        assert!(!is_valid_profile_name(&"a".repeat(33)));
+        // Too long (>64 chars)
+        assert!(!is_valid_profile_name(&"a".repeat(65)));
     }
 
     #[test]
     fn profile_name_length_boundary() {
-        // 32 chars exactly is the max — regex is {0,31} after first char = 32 total
-        assert!(is_valid_profile_name(&"a".repeat(32)));
-        assert!(!is_valid_profile_name(&"a".repeat(33)));
+        // Core accepts 64 characters: one leading alphanumeric plus {0,63}.
+        assert!(is_valid_profile_name(&"a".repeat(64)));
+        assert!(!is_valid_profile_name(&"a".repeat(65)));
     }
 
     // -------- read / write active_profile sticky --------

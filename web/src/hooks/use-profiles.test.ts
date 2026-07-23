@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { resolveBootstrapProfile } from "./use-profiles";
+import {
+  remapRenamedProfileReference,
+  resolveBootstrapProfile,
+} from "./use-profiles";
+
+describe("remapRenamedProfileReference", () => {
+  it("updates active and management references that point at the renamed profile", () => {
+    expect(remapRenamedProfileReference("reviewer", "reviewer", "critic")).toBe(
+      "critic",
+    );
+    expect(remapRenamedProfileReference(null, "reviewer", "critic")).toBeNull();
+  });
+
+  it("leaves unrelated profile references untouched", () => {
+    expect(remapRenamedProfileReference("default", "reviewer", "critic")).toBe(
+      "default",
+    );
+  });
+});
 
 describe("resolveBootstrapProfile", () => {
   // 核心回归测试（#189/#195）：首次同步完成后，过期的 /api/profiles/active 值

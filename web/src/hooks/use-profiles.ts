@@ -273,12 +273,28 @@ export interface RenameProfileInput {
   newName: string;
 }
 
+export function remapRenamedProfileReference(
+  current: string | null,
+  oldName: string,
+  newName: string,
+): string | null {
+  return current === oldName ? newName : current;
+}
+
 export function useRenameProfile() {
   const qc = useQueryClient();
+  const active = useAtomValue(activeProfileAtom);
+  const management = useAtomValue(managementProfileAtom);
+  const setActive = useSetAtom(activeProfileAtom);
+  const setManagement = useSetAtom(managementProfileAtom);
   return useMutation<MutationOkResponse, Error, RenameProfileInput>({
     mutationFn: ({ name, newName }) =>
       patchJSON(profilePath(name), { new_name: newName }, MutationOkResponse),
-    onSuccess: () => {
+    onSuccess: (_result, { name, newName }) => {
+      const nextActive = remapRenamedProfileReference(active, name, newName);
+      if (nextActive !== active) setActive(nextActive as string);
+      const nextManagement = remapRenamedProfileReference(management, name, newName);
+      if (nextManagement !== management) setManagement(nextManagement);
       qc.invalidateQueries({ queryKey: ["profiles"] });
       // 重命名当前 sticky 档案时后端会同步改 active_profile。
       qc.invalidateQueries({ queryKey: ["profile-active"] });
@@ -375,10 +391,12 @@ export function useUpdateProfileSoul() {
   return useMutation<MutationOkResponse, Error, UpdateProfileSoulInput>({
     mutationFn: ({ name, content }) =>
       putJSON(profilePath(name, "/soul"), { content }, MutationOkResponse),
-    onSuccess: (_result, { name }) => {
-      qc.invalidateQueries({ queryKey: ["profile-soul", name] });
+    onSuccess: async (_result, { name }) => {
+      // 保持编辑器挂载到对应 query，直到新内容回读完毕；这样调用方的
+      // mutate-level onSuccess 关闭 Dialog 前，缓存已经与磁盘一致。
+      await qc.invalidateQueries({ queryKey: ["profile-soul", name] });
       // 改的若是当前档案，SOUL 页也要刷新。
-      qc.invalidateQueries({ queryKey: ["soul"] });
+      await qc.invalidateQueries({ queryKey: ["soul"] });
     },
   });
 }
