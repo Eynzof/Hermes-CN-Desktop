@@ -865,10 +865,10 @@ pub(crate) fn probe_commands(commands: &[&str], version_args: &[&str]) -> Comman
 }
 
 fn run_version_command(command: &Path, args: &[&str]) -> CommandProbe {
-    let output = Command::new(command)
-        .args(args)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output();
+    let mut cmd = Command::new(command);
+    cmd.args(args).env("GIT_TERMINAL_PROMPT", "0");
+    crate::util::hide_console_window(&mut cmd);
+    let output = cmd.output();
     match output {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();

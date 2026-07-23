@@ -157,10 +157,10 @@ fn pid_is_running(pid: u32) -> bool {
         return false;
     }
     let filter = format!("PID eq {}", pid);
-    let Ok(output) = Command::new("tasklist")
-        .args(["/FI", &filter, "/FO", "CSV", "/NH"])
-        .output()
-    else {
+    let mut cmd = Command::new("tasklist");
+    cmd.args(["/FI", &filter, "/FO", "CSV", "/NH"]);
+    crate::util::hide_console_window(&mut cmd);
+    let Ok(output) = cmd.output() else {
         return false;
     };
     String::from_utf8_lossy(&output.stdout).contains(&pid.to_string())
@@ -190,10 +190,10 @@ fn process_command_line(pid: u32) -> Option<String> {
         "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = {}\"; if ($p) {{ $p.CommandLine }}",
         pid
     );
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-Command", &script]);
+    crate::util::hide_console_window(&mut cmd);
+    let output = cmd.output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -387,11 +387,10 @@ fn terminate_pid(pid: u32, force: bool) {
     if force {
         args.push("/F");
     }
-    let _ = Command::new("taskkill")
-        .args(args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+    let mut cmd = Command::new("taskkill");
+    cmd.args(args).stdout(Stdio::null()).stderr(Stdio::null());
+    crate::util::hide_console_window(&mut cmd);
+    let _ = cmd.status();
 }
 
 #[cfg(not(any(unix, windows)))]

@@ -232,10 +232,10 @@ fn pid_is_running(pid: u32) -> bool {
         return false;
     }
     let filter = format!("PID eq {}", pid);
-    let Ok(output) = Command::new("tasklist")
-        .args(["/FI", &filter, "/FO", "CSV", "/NH"])
-        .output()
-    else {
+    let mut cmd = Command::new("tasklist");
+    cmd.args(["/FI", &filter, "/FO", "CSV", "/NH"]);
+    crate::util::hide_console_window(&mut cmd);
+    let Ok(output) = cmd.output() else {
         return false;
     };
     String::from_utf8_lossy(&output.stdout).contains(&pid.to_string())
@@ -420,11 +420,12 @@ fn force_kill_process_tree(pid: u32) {
         return;
     }
     let pid_arg = pid.to_string();
-    let _ = Command::new("taskkill")
-        .args(["/PID", &pid_arg, "/T", "/F"])
+    let mut cmd = Command::new("taskkill");
+    cmd.args(["/PID", &pid_arg, "/T", "/F"])
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+        .stderr(Stdio::null());
+    crate::util::hide_console_window(&mut cmd);
+    let _ = cmd.status();
 }
 
 pub fn terminate_owned_dashboard_tree(
