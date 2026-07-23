@@ -6,7 +6,7 @@ import { useProfiles } from "@/hooks/use-profiles";
 import { useGateway } from "@/hooks/use-gateway";
 import s from "./create-group-chat-dialog.module.css";
 
-// Group chat (P-048): open state for the "新建群聊" dialog, toggled from the sidebar.
+// Group chat (P-052): open state for the "新建群聊" dialog, toggled from the sidebar.
 export const groupChatDialogOpenAtom = atom(false);
 
 // A lightweight multi-select dialog for composing a group chat from existing

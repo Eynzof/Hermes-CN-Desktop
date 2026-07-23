@@ -192,7 +192,7 @@ export function DetailRoute() {
   ]);
   const { data: session } = useSession(restSessionId);
   const messagesQuery = useSessionMessages(restSessionId);
-  // Group chat (P-048): room members drive the @ picker, header roster, and empty-state guide.
+  // Group chat (P-052): room members drive the @ picker, header roster, and empty-state guide.
   const groupInfo = useGroupChatInfo(taskId);
   const isGroupChat = isGroupRoomId(taskId);
   const groupMembers = groupInfo.data?.members;
@@ -428,7 +428,7 @@ export function DetailRoute() {
       onAttachmentUpdate: updateAttachment,
     }, { transportText });
     if (gatewaySessionId.startsWith("gc_")) {
-      // Group chat (P-048): rooms use gc_-prefixed ids and route to groupchat.submit.
+      // Group chat (P-052): rooms use gc_-prefixed ids and route to groupchat.submit.
       await sendGroupPrompt(gatewaySessionId, prepared.promptText);
     } else {
       await sendPrompt(gatewaySessionId, prepared.promptText, {

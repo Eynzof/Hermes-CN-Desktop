@@ -377,7 +377,7 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
     status: msg.finish_reason === "error" ? "error" : "complete",
     parts: processNotificationText ? [{ type: "notice", level: "system", text: processNotificationText }] : parts,
     metadata: legacyMetadata(msg),
-    // Group chat (P-048): carry persisted sender attribution into the UI message
+    // Group chat (P-052): carry persisted sender attribution into the UI message
     // so a group room's history renders each member's identity after reload.
     ...(msg.sender_agent_id ? { senderAgentId: msg.sender_agent_id } : {}),
     ...(msg.sender_name ? { senderName: msg.sender_name } : {}),
@@ -468,7 +468,7 @@ export function legacySessionMessagesToHermesUIMessages(messages: SessionMessage
     if (!next) continue;
 
     const last = result[result.length - 1];
-    // Group chat (P-048): only merge adjacent assistants from the SAME speaker
+    // Group chat (P-052): only merge adjacent assistants from the SAME speaker
     // (or both sender-less). Distinct group members — e.g. an @all turn's
     // default + reviewer replies in the persisted transcript — must stay as
     // separate bubbles, otherwise both collapse into the first member's bubble.
@@ -835,7 +835,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     status: msg.status,
     error: msg.status === "error" || messageHasErrorNotice(msg),
     stats: deriveAssistantStats(msg),
-    // Group chat (P-048): carry sender attribution through to the renderer.
+    // Group chat (P-052): carry sender attribution through to the renderer.
     senderAgentId: msg.senderAgentId,
     senderName: msg.senderName,
     senderAvatar: msg.senderAvatar,
@@ -1120,7 +1120,7 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
   return storedText === liveText && storedReasoning === liveReasoning && storedImages === liveImages;
 }
 
-// Group chat (P-048): two adjacent assistant messages may merge only when they
+// Group chat (P-052): two adjacent assistant messages may merge only when they
 // belong to the same speaker. Distinct group members (both carrying a
 // senderAgentId) must stay as separate bubbles; a sender-less optimistic
 // placeholder or an ordinary single-agent message merges freely.

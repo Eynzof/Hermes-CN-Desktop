@@ -1,4 +1,4 @@
-// Group chat (P-048) completion-race regression. Real timeline (from logs):
+// Group chat (P-052) completion-race regression. Real timeline (from logs):
 // default completes, reviewer starts ~155ms later, then a completed-turn
 // transcript refetch fires while reviewer is still progress-only. The recovery
 // logic used to match reviewer's progress-only bubble to default's stored
@@ -30,7 +30,7 @@ function textOf(message: HermesUIMessage): string {
     .join(" ");
 }
 
-describe("group chat @all completion race (P-048)", () => {
+describe("group chat @all completion race (P-052)", () => {
   it("default completes, reviewer starts, transcript refetch mid-turn, reviewer streams — stays two bubbles", () => {
     const store = createStore();
     store.set(ensureChatSessionAtom, SID);

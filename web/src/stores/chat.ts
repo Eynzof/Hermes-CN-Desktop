@@ -389,7 +389,7 @@ function updateMessage(
   return changed ? { ...runtime, messages } : runtime;
 }
 
-// Group chat (P-048): sender attribution carried on a gateway event payload.
+// Group chat (P-052): sender attribution carried on a gateway event payload.
 interface GroupSenderFields {
   senderAgentId?: string;
   senderName?: string;
@@ -610,7 +610,7 @@ function reduceGatewayEventInner(
 
   switch (event.type) {
     case "message.start": {
-      // Group chat (P-048): a start carrying a sender opens a NEW bubble per
+      // Group chat (P-052): a start carrying a sender opens a NEW bubble per
       // member reply (each is distinct), even mid-stream; single-agent starts
       // reuse the active bubble as before.
       const sender = extractGroupSender(payload);
@@ -1059,7 +1059,7 @@ function isRecoverableStoredAssistant(
   turnStartedAt: number | undefined,
 ): boolean {
   if (liveAssistant.role !== "assistant" || storedAssistant.role !== "assistant") return false;
-  // Group chat (P-048): never recover across members. A member's live bubble —
+  // Group chat (P-052): never recover across members. A member's live bubble —
   // especially a progress-only one that just started streaming (reviewer) — must
   // not match a DIFFERENT member's stored completion (default). That deleted the
   // reviewer bubble mid-turn and let its later deltas merge into default.

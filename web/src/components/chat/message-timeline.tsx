@@ -782,7 +782,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   const speechBusy = speechStatus === "preparing" || speechStatus === "speaking";
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
   const messageStats = message.stats ?? sessionUsageFallbackStats(message, sessionUsage);
-  // Group chat (P-048): a message carrying a sender renders that member's own
+  // Group chat (P-052): a message carrying a sender renders that member's own
   // name / avatar instead of the single global assistant identity. Single-agent
   // sessions have no sender and fall back to the global identity + profile card.
   const isGroupMessage = !isUser && Boolean(message.senderName);

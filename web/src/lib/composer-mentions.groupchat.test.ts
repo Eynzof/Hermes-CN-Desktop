@@ -1,4 +1,4 @@
-// Group chat (P-048): `@` completes to room members + `@all` when the composer
+// Group chat (P-052): `@` completes to room members + `@all` when the composer
 // mention source carries members. Mirrors studio's buildMentionOptions.
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +11,7 @@ const members: GroupChatMember[] = [
   { profile: "bob", name: "Bob", description: "工程师", agent_id: "bob" },
 ];
 
-describe("group chat @ member mentions (P-048)", () => {
+describe("group chat @ member mentions (P-052)", () => {
   it("bare @ lists @all first, then each member with its role", () => {
     const out = filterMemberMentions(members, "");
     expect(out.map((c) => c.insertText)).toEqual(["@all", "@Alice", "@Bob"]);

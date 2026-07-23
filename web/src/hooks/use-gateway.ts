@@ -397,7 +397,7 @@ export function useGateway() {
     [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt],
   );
 
-  // Group chat (P-048): create a room from profile names and adopt it as the
+  // Group chat (P-052): create a room from profile names and adopt it as the
   // active session (room_id doubles as the session id, gc_-prefixed by Core).
   const createGroupChat = useCallback(
     async (members: string[], title?: string): Promise<GroupChatCreateResult> => {
@@ -416,7 +416,7 @@ export function useGateway() {
     [adoptCreatedSession, ensureSubscribed],
   );
 
-  // Group chat (P-048): send into a room. Mentioned members reply serially,
+  // Group chat (P-052): send into a room. Mentioned members reply serially,
   // each as its own sender-tagged message.* stream over the same session id.
   const sendGroupPrompt = useCallback(
     async (roomId: string, text: string, options?: { skipOptimisticStart?: boolean }) => {
@@ -435,7 +435,7 @@ export function useGateway() {
     [ensureChatSession, ensureSubscribed, setSessionError, startPrompt],
   );
 
-  // Group chat (P-048): fetch a room's members (survives reload — the room
+  // Group chat (P-052): fetch a room's members (survives reload — the room
   // lives in the gateway process, not the DB).
   const groupChatInfo = useCallback(
     async (roomId: string): Promise<GroupChatCreateResult> => {

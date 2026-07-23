@@ -161,7 +161,7 @@ export type MessagingPlatformTestResponse = z.infer<typeof MessagingPlatformTest
 
 // ── Sessions (/api/sessions) ──────────────────────────────────────────
 
-// Group chat (P-048): sender attribution fields. snake_case mirrors the Core
+// Group chat (P-052): sender attribution fields. snake_case mirrors the Core
 // gateway / DB payload verbatim; the camelCase variant is the UI-facing shape
 // (message-adapter maps snake -> camel, matching SessionMessage -> HermesUIMessage).
 const groupSenderSnakeShape = {
@@ -188,7 +188,7 @@ export const GroupChatMember = z
   .passthrough();
 export type GroupChatMember = z.infer<typeof GroupChatMember>;
 
-// Result of groupchat.create (P-048): the new room's id + resolved members.
+// Result of groupchat.create (P-052): the new room's id + resolved members.
 export const GroupChatCreateResult = z
   .object({
     room_id: z.string(),
@@ -226,7 +226,7 @@ export const SessionSummary = z.object({
   // ?include_archived=true. Absent on the default (active) list — the proxy
   // strips archived sessions there. See src/session_archive.rs.
   archived: z.boolean().optional(),
-  // Group chat (P-048): `kind` distinguishes a single-agent session from a
+  // Group chat (P-052): `kind` distinguishes a single-agent session from a
   // multi-agent group room; `members` lists the room's profile-backed agents.
   kind: z.enum(["single", "group"]).optional(),
   members: z.array(GroupChatMember).optional(),
@@ -304,7 +304,7 @@ export const SessionMessage = z.object({
   reasoning_details: z.any().nullable().optional(),
   codex_reasoning_items: z.any().nullable().optional(),
   reasoning_content: z.string().nullable().optional(),
-  // Group chat (P-048): sender attribution for multi-agent rooms.
+  // Group chat (P-052): sender attribution for multi-agent rooms.
   ...groupSenderSnakeShape,
 }).passthrough();
 export type SessionMessage = z.infer<typeof SessionMessage>;
@@ -440,7 +440,7 @@ export const HermesUIMessage = z
     status: z.enum(["streaming", "complete", "error"]),
     parts: z.array(HermesMessagePart),
     metadata: HermesMessageMetadata.optional(),
-    // Group chat (P-048): which room member authored this message.
+    // Group chat (P-052): which room member authored this message.
     ...groupSenderCamelShape,
   })
   .passthrough();
@@ -1418,7 +1418,7 @@ export type GatewayMessageUsageT = z.infer<typeof GatewayMessageUsage>;
 const GatewayTextPayload = z.object({
   text: z.string().optional(),
   rendered: z.string().optional(),
-  // Group chat (P-048): delta events in a group room carry the speaking member.
+  // Group chat (P-052): delta events in a group room carry the speaking member.
   ...groupSenderSnakeShape,
 }).passthrough();
 
@@ -1436,7 +1436,7 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("message.start"),
     session_id: z.string(),
-    // Group chat (P-048): a group room starts one message per member reply,
+    // Group chat (P-052): a group room starts one message per member reply,
     // tagged with the speaking member so the UI opens the right bubble.
     payload: z.object({ ...groupSenderSnakeShape }).passthrough().optional(),
   }).passthrough(),
@@ -1455,7 +1455,7 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
       usage: GatewayMessageUsage.optional(),
       status: z.string().optional(),
       warning: z.string().optional(),
-      // Group chat (P-048): which member's reply just completed.
+      // Group chat (P-052): which member's reply just completed.
       ...groupSenderSnakeShape,
     }).passthrough().optional(),
   }).passthrough(),

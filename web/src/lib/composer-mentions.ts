@@ -118,11 +118,11 @@ export interface MentionFetchSource {
   completePath: (word: string) => Promise<{ items: SlashCompletionItem[] }>;
   sessions?: readonly SessionSummary[] | null;
   profile?: string;
-  /** Group chat (P-048): when set, `@` completes to a room member or `@all`. */
+  /** Group chat (P-052): when set, `@` completes to a room member or `@all`. */
   members?: readonly GroupChatMember[] | null;
 }
 
-// Group chat (P-048): local `@` completion to room members + `@all`. Mirrors
+// Group chat (P-052): local `@` completion to room members + `@all`. Mirrors
 // studio's buildMentionOptions (name + role description, no avatar; @all first).
 export function filterMemberMentions(
   members: readonly GroupChatMember[] | null | undefined,

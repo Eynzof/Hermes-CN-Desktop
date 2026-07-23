@@ -1,4 +1,4 @@
-// Group chat (P-048) regression: the real-time merge path must not lose a
+// Group chat (P-052) regression: the real-time merge path must not lose a
 // member's identity. `startPrompt` inserts a sender-less optimistic assistant
 // placeholder; `message.start` then opens the member's own (sender-tagged)
 // bubble. consolidateAssistantMessages used to fold adjacent assistants keeping
@@ -28,7 +28,7 @@ function assistant(partial: Partial<HermesUIMessage>): HermesUIMessage {
   } as HermesUIMessage;
 }
 
-describe("consolidateAssistantMessages — group chat identity (P-048)", () => {
+describe("consolidateAssistantMessages — group chat identity (P-052)", () => {
   it("sender-less placeholder adopts the member's identity", () => {
     const placeholder = assistant({ id: "ph", status: "streaming", parts: [] });
     const member = assistant({
@@ -75,7 +75,7 @@ function storedRow(partial: Partial<SessionMessage> & { role: string }): Session
   return { id: 0, session_id: "gc_x", content: "", timestamp: 1, ...partial } as SessionMessage;
 }
 
-describe("legacySessionMessagesToHermesUIMessages — group chat identity (P-048)", () => {
+describe("legacySessionMessagesToHermesUIMessages — group chat identity (P-052)", () => {
   it("distinct-sender assistants stay separate bubbles (@all default + reviewer)", () => {
     const rows: SessionMessage[] = [
       storedRow({ id: 1, role: "user", content: "大家好" }),

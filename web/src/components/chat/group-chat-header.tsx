@@ -10,7 +10,7 @@ interface GroupChatHeaderProps {
   showGuide: boolean;
 }
 
-// Group chat (P-048): a slim roster bar above the transcript — who is in the
+// Group chat (P-052): a slim roster bar above the transcript — who is in the
 // room + how to address them. Fills the "no idea who's here / how to @" gap
 // that made the group chat feel like an ordinary single chat.
 export function GroupChatHeader({ members, showGuide }: GroupChatHeaderProps) {
