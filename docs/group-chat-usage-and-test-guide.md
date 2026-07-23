@@ -252,15 +252,15 @@
 - 下一轮的共享历史投影；
 - 当前 Core 进程内刷新读取 transcript 和成员信息。
 
-### 3.2 当前确认缺陷
+### 3.2 已修复缺陷
 
-| 编号 | 现象 | 期望 |
+| 编号 | 原现象 | 修复与验证结果 |
 |---|---|---|
-| BUG-GC-001 | 发送后输入框要等所有串行成员结束才清空 | 点击发送后 500ms 内清空，后台继续执行 |
-| BUG-GC-002 | 页面刷新后再次发送出现 `session not found`，草稿保留 | 房间仍存在时可继续发送 |
-| BUG-GC-003 | 20 轮压力中 UI 出现重复气泡，并把一个成员的文本并入另一成员气泡；同轮 REST transcript 仍正确 | UI 气泡数量、文本和 sender 与 REST transcript 一一对应 |
+| BUG-GC-001 | 发送后输入框要等所有串行成员结束才清空 | 已修复；点击发送后立即清空，长流场景在 500ms 检查点保持为空 |
+| BUG-GC-002 | 页面刷新后再次发送出现 `session not found`，草稿保留 | 已修复；仍处于当前 Core 进程的房间刷新后可继续定向发送 |
+| BUG-GC-003 | 20 轮压力中 UI 出现重复气泡，并把一个成员的文本并入另一成员气泡；同轮 REST transcript 仍正确 | 已修复；20 轮 UI 与 REST 均为 45 个 assistant，sender 顺序一致且无跨成员合并 |
 
-这些缺陷不是产品语义，也不能写成“已知限制所以无需修复”。
+这三项曾是产品缺陷，不属于 MVP 限制。修复前基线保留在第 9 节，修复后的定向复测证据见第 10 节。
 
 ### 3.3 MVP 限制
 
@@ -616,3 +616,55 @@ latency_ms.max=1965
 | 内部成员子会话不可见 | `PASS` | 分别查询成员 Profile 的公开会话列表，未出现 `gc_<room>:<profile>` | |
 
 本轮只新增测试、测试工具、文档和 CI Python 版本调整；没有混入 BUG-GC-001～003 的产品修复。
+
+## 10. 2026-07-23 缺陷修复定向复测
+
+### 10.1 范围与环境
+
+| 字段 | 值 |
+|---|---|
+| 执行时间 | 2026-07-23 18:27～18:35 CST |
+| Desktop 分支 | `feat/agent-group-chat` |
+| 产品修复提交 | `9c2ce59`（`fix: 修复群聊续聊与消息渲染`） |
+| 回归测试提交 | `588cbae`（`test: 补充群聊缺陷端到端回归`） |
+| Core 分支 / SHA | `cn/P-048-agent-group-chat` / `7614e02ac4ffb5029ad5cb08c4bb3d37b60512b7` |
+| Python / Node / pnpm | Python 3.14.5 / Node v24.18.0 / pnpm 9.15.0 |
+| 隔离端口 | fake model `8098` / Dashboard `9121` / Vite `9546` |
+| 测试范围 | 仅 BUG-GC-001～003 对应 E2E、两份群聊窄单测和 Web TypeScript 检查；未运行全量测试 |
+
+修复包含四条约束：
+
+- Composer 在等待串行成员回复前清空已提交草稿；若发送立即失败，只在用户没有输入新草稿时恢复原内容；
+- `gc_` 房间刷新后直接使用房间 ID 调用 `groupchat.submit`，不再误走 `session.resume`；
+- 群聊发送不再创建无 sender 的乐观助手气泡；
+- 同毫秒产生的助手消息 ID 保持唯一，延迟事件补齐 sender，stored/live 合并禁止跨成员匹配。
+
+### 10.2 定向结果
+
+| 检查 | 状态 | 耗时 | 实际结果 |
+|---|---|---:|---|
+| BUG-GC-001：发送后 500ms 内清空草稿 | `PASS` | `4.5s` | 两成员长碎片流仍在执行时，500ms 检查点输入框为空；两成员最终各完成一个气泡 |
+| BUG-GC-002：刷新后继续定向发送 | `PASS` | `3.1s` | 刷新后原消息回读正常；`@qa-critic` 发送成功，无 `session not found`，sender 为 `qa-critic` |
+| BUG-GC-003：20 轮混合路由压力 | `PASS` | `18.4s` | 20 条 user、45 条 assistant；UI 与 REST 均为 45 个气泡，sender 序列完全一致，首次偏差为 `null` |
+| 群聊 store / merge 窄单测 | `PASS` | `175ms` | `2` 个测试文件、`10` 个用例通过，覆盖同毫秒 ID、延迟 sender 修复和跨成员 canonical 守卫 |
+| Web TypeScript | `PASS` | `6.1s` | `pnpm --filter @hermes/web typecheck` 通过 |
+
+压力统计：
+
+```text
+rounds=20
+assistant_messages(REST)=45
+transcript_messages=65
+stable_senders=3
+rest_sender_sequence_ok=true
+ui_assistant_bubbles=45
+expected_assistant_bubbles=45
+first_ui_mismatch_round=null
+latency_ms.p50=852
+latency_ms.p95=941
+latency_ms.max=1880
+```
+
+因此，第 9 节历史记录中的 GC-12、GC-16、草稿清空和刷新续聊 `FAIL` 均由本节的 `PASS` 关闭。GC-14 等明确的 MVP 限制仍保持 `EXPECTED_LIMIT`，没有借本次修复扩大产品能力。
+
+测试结束后 `8098`、`9121`、`9546` 均无监听进程；原开发实例 `127.0.0.1:9120`（PID `64873`）保持运行，未被测试接管或停止。

@@ -159,7 +159,7 @@ Profile 描述用于成员栏快速识别，应控制为一句话：
 - planner → critic → planner → synthesizer 四轮上下文连续；
 - 单成员失败时后续成员继续。
 
-仍需处理的产品缺陷和未执行场景记录在[TODO](./TODO.md)。完整测试证据与用例矩阵见[《多 Agent 群聊：用户场景与测试指南》](../group-chat-usage-and-test-guide.md)。
+已关闭的产品缺陷和仍未执行的场景记录在[TODO](./TODO.md)。完整测试证据与用例矩阵见[《多 Agent 群聊：用户场景与测试指南》](../group-chat-usage-and-test-guide.md)。
 
 ## 8. 维护规则
 
