@@ -4,9 +4,12 @@ import {
   installTauriBridge,
   isTauriDevMode,
   normalizeTauriInvokeError,
+  shouldWaitForManagedRuntime,
 } from "./tauri-bridge";
 
 const mockInvoke = vi.fn();
+const mockRuntimeStatusUnlisten = vi.fn();
+const mockListen = vi.fn(() => Promise.resolve(mockRuntimeStatusUnlisten));
 const mockFileDropUnlisten = vi.fn();
 let fileDropHandler: ((event: {
   payload: {
@@ -24,6 +27,10 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: mockInvoke,
 }));
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: mockListen,
+}));
+
 vi.mock("@tauri-apps/api/webview", () => ({
   getCurrentWebview: () => ({
     onDragDropEvent: mockOnDragDropEvent,
@@ -32,6 +39,8 @@ vi.mock("@tauri-apps/api/webview", () => ({
 
 beforeEach(() => {
   mockInvoke.mockReset();
+  mockListen.mockClear();
+  mockRuntimeStatusUnlisten.mockReset();
   mockFileDropUnlisten.mockReset();
   mockOnDragDropEvent.mockClear();
   fileDropHandler = null;
@@ -46,7 +55,12 @@ beforeEach(() => {
     }
     return Promise.resolve({ command, args });
   });
-  (globalThis as any).window = {};
+  (globalThis as any).window = {
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    setInterval: globalThis.setInterval.bind(globalThis),
+    clearInterval: globalThis.clearInterval.bind(globalThis),
+  };
 });
 
 afterEach(() => {
@@ -57,6 +71,57 @@ describe("isTauriDevMode", () => {
   it("uses Vite build mode instead of the window URL protocol", () => {
     expect(isTauriDevMode(true)).toBe(true);
     expect(isTauriDevMode(false)).toBe(false);
+  });
+
+  it("waits only when a managed runtime is expected to be running", () => {
+    expect(
+      shouldWaitForManagedRuntime({
+        apiBaseUrl: "",
+        connectionMode: "managed",
+        backendReady: false,
+        managedRuntimeDesiredState: "running",
+      }),
+    ).toBe(true);
+    expect(
+      shouldWaitForManagedRuntime({
+        apiBaseUrl: "",
+        connectionMode: "managed",
+        backendReady: false,
+        managedRuntimeDesiredState: "stopped",
+      }),
+    ).toBe(false);
+    expect(
+      shouldWaitForManagedRuntime({
+        apiBaseUrl: "",
+        connectionMode: "managed",
+        backendReady: false,
+        managedRuntimeDesiredState: "uninstalled",
+      }),
+    ).toBe(false);
+    expect(
+      shouldWaitForManagedRuntime({
+        apiBaseUrl: "",
+        connectionMode: "remote",
+        backendReady: false,
+        managedRuntimeDesiredState: "running",
+      }),
+    ).toBe(false);
+    expect(
+      shouldWaitForManagedRuntime({
+        apiBaseUrl: "http://127.0.0.1:9120",
+        connectionMode: "managed",
+        backendReady: true,
+        managedRuntimeDesiredState: "running",
+      }),
+    ).toBe(false);
+    expect(
+      shouldWaitForManagedRuntime({
+        apiBaseUrl: "",
+        connectionMode: "managed",
+        backendReady: undefined,
+        managedRuntimeDesiredState: undefined,
+      }),
+    ).toBe(true);
   });
 
   it("encodes large upload buffers in chunks", () => {
@@ -244,6 +309,55 @@ describe("isTauriDevMode", () => {
       managedRuntimeLifecycleState: "stopped",
     });
     expect(mockInvoke).not.toHaveBeenCalledWith("runtime_info", undefined);
+  });
+
+  it("waits for a desired managed runtime and adopts its live session token", async () => {
+    let configReads = 0;
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_runtime_config") {
+        configReads += 1;
+        if (configReads === 1) {
+          return Promise.resolve({
+            apiBaseUrl: "",
+            gatewayUrl: "",
+            currentProfile: "reviewer",
+            connectionMode: "managed",
+            backendReady: false,
+            guideState: "completed",
+            managedRuntimeDesiredState: "running",
+            managedRuntimeLifecycleState: "stopped",
+          });
+        }
+        return Promise.resolve({
+          apiBaseUrl: "http://127.0.0.1:9120",
+          gatewayUrl: "ws://127.0.0.1:9120/api/ws?token=rotated",
+          sessionToken: "rotated",
+          currentProfile: "reviewer",
+          connectionMode: "managed",
+          backendReady: true,
+          guideState: "completed",
+          managedRuntimeDesiredState: "running",
+          managedRuntimeLifecycleState: "running",
+        });
+      }
+      if (command === "runtime_info") {
+        return Promise.resolve({ lastError: null });
+      }
+      return Promise.resolve({});
+    });
+
+    await installTauriBridge();
+
+    expect(configReads).toBeGreaterThanOrEqual(2);
+    expect(mockListen).toHaveBeenCalledWith("runtime-status", expect.any(Function));
+    expect(mockRuntimeStatusUnlisten).toHaveBeenCalledTimes(1);
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      sessionToken: "rotated",
+      currentProfile: "reviewer",
+      backendReady: true,
+      managedRuntimeDesiredState: "running",
+      managedRuntimeLifecycleState: "running",
+    });
   });
 
   it("exposes persisted guide and managed runtime lifecycle commands", async () => {

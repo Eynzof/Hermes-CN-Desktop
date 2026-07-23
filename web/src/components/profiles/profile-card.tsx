@@ -41,7 +41,11 @@ export function ProfileCard({
     : null;
 
   return (
-    <div className={s.card} data-active={isActive ? "true" : undefined}>
+    <div
+      className={s.card}
+      data-profile-name={p.name}
+      data-active={isActive ? "true" : undefined}
+    >
       <div className={s.cardHead}>
         <div className={s.cardHeadMain}>
           <span className={s.name} title={p.name}>

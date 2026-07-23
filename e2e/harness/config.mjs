@@ -23,6 +23,7 @@ export const VENV_PY = process.env.HERMES_CORE_PYTHON || VENV_PY_DEFAULT;
 
 export const RUNTIME_DIR = resolve(E2E_DIR, ".runtime");
 export const HERMES_HOME = resolve(RUNTIME_DIR, "hermes-home");
+export const PROCESS_HOME = resolve(RUNTIME_DIR, "process-home");
 export const UPLOAD_DIR = resolve(RUNTIME_DIR, "uploads");
 // Stub SPA dist so the dashboard serves *something* at `/` (we use the desktop's
 // own Vite frontend; Core's UI is irrelevant here). HERMES_WEB_DIST overrides
@@ -69,6 +70,13 @@ export function configYaml() {
 export function coreEnv() {
   return {
     ...process.env,
+    // Profile creation writes convenience wrapper aliases under Path.home().
+    // Keep those and any incidental XDG state inside the disposable E2E tree.
+    HOME: PROCESS_HOME,
+    USERPROFILE: PROCESS_HOME,
+    XDG_CONFIG_HOME: resolve(PROCESS_HOME, ".config"),
+    XDG_DATA_HOME: resolve(PROCESS_HOME, ".local", "share"),
+    XDG_CACHE_HOME: resolve(PROCESS_HOME, ".cache"),
     HERMES_HOME,
     HERMES_WEB_DIST: WEB_DIST,
     HERMES_DASHBOARD_SESSION_TOKEN: DASHBOARD_TOKEN,

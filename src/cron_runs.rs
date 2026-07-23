@@ -5,6 +5,7 @@
 //! `{HERMES_HOME}/cron/output/{job_id}/{timestamp}.md`, so the desktop proxy
 //! serves a small read-only API for the renderer.
 
+use crate::util::is_valid_profile_name;
 use regex::Regex;
 use serde_json::{json, Value};
 use std::fs;
@@ -18,8 +19,6 @@ const MAX_LIMIT: usize = 100;
 const LIST_PREVIEW_BYTES: u64 = 64 * 1024;
 const DETAIL_MAX_BYTES: u64 = 2 * 1024 * 1024;
 
-static PROFILE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").expect("valid profile regex"));
 static JOB_ID_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{1,128}$").expect("valid job id regex"));
 static OUTPUT_FILE_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -35,7 +34,7 @@ fn decode_path_segment(value: &str) -> Option<String> {
 }
 
 fn validate_profile(value: &str) -> Result<(), &'static str> {
-    if PROFILE_RE.is_match(value) {
+    if is_valid_profile_name(value) {
         Ok(())
     } else {
         Err("invalid profile")
@@ -571,5 +570,23 @@ mod tests {
         let (status, body) = get("/__hermes_cron_runs/alpha/job1", dir.path());
         assert_eq!(status, 200);
         assert_eq!(body["runs"][0]["summary"], "alpha");
+    }
+
+    #[test]
+    fn accepts_core_max_length_profile_name() {
+        let dir = TempDir::new().unwrap();
+        let profile = "a".repeat(64);
+        write_output(
+            dir.path(),
+            &profile,
+            "job1",
+            "2026-06-07_09-00-00.md",
+            "# Cron Job: A\n\n## Response\n\nlong-profile",
+        );
+
+        let (status, body) = get(&format!("/__hermes_cron_runs/{profile}/job1"), dir.path());
+        assert_eq!(status, 200);
+        assert_eq!(body["profile"], profile);
+        assert_eq!(body["runs"][0]["summary"], "long-profile");
     }
 }

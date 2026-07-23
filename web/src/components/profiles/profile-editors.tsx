@@ -189,18 +189,30 @@ export function ProfileSoulDialog({
   const soul = useProfileSoul(p.name);
   const update = useUpdateProfileSoul();
   const [content, setContent] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
 
-  // 内容到达后灌入一次；之后由用户编辑，不再被 refetch 覆盖。
+  // 切换编辑目标时丢弃上一个 Profile 的本地草稿。当前路由通常会卸载
+  // 对话框，但显式重置也能防止未来改为常驻 Dialog 后串档案。
   useEffect(() => {
-    if (content === null && soul.data) setContent(soul.data.content);
-  }, [soul.data, content]);
+    setContent(null);
+    setDirty(false);
+  }, [p.name]);
+
+  // staleTime=0 的 query 重新挂载时可能先给出旧缓存、同时后台 refetch。
+  // 必须等本轮 refetch 完成后再灌入，否则快速“保存 → 关闭 → 重开”会把
+  // 旧 SOUL 固化进 textarea；一旦用户开始输入，则不再用后台数据覆盖草稿。
+  useEffect(() => {
+    if (!dirty && soul.data && !soul.isFetching && !soul.isError) {
+      setContent(soul.data.content);
+    }
+  }, [dirty, soul.data, soul.isError, soul.isFetching]);
 
   const save = () => {
     if (content === null) return;
     update.mutate({ name: p.name, content }, { onSuccess: onClose });
   };
 
-  const loading = soul.isLoading && content === null;
+  const loading = content === null && (soul.isLoading || soul.isFetching);
 
   return (
     <ProfileDialogShell
@@ -240,7 +252,10 @@ export function ProfileSoulDialog({
           <Textarea
             className={s.soulArea}
             value={content ?? ""}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+              setDirty(true);
+              setContent(e.target.value);
+            }}
             disabled={update.isPending}
             spellCheck={false}
             autoFocus
