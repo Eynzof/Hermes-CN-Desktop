@@ -14,6 +14,8 @@ import {
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
+import { desktopBuildPolicy } from "@/lib/desktop-build-policy";
+import { runtime } from "@/lib/runtime";
 import s from "./debug-sidebar.module.css";
 
 interface AdvancedItem {
@@ -51,6 +53,9 @@ const SECTIONS: readonly {
 export function AdvancedSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const showKernelSettings = desktopBuildPolicy(
+    runtime.getDesktopBuildFlavor(),
+  ).showKernelSettings;
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -64,7 +69,7 @@ export function AdvancedSidebar() {
               <span>{section.label}</span>
               <span className={s.labelNum}>✕✕</span>
             </div>
-            {section.items.map((item) => {
+            {section.items.filter((item) => showKernelSettings || item.path !== "/kernel").map((item) => {
               const Icon = item.icon;
               return (
                 <button

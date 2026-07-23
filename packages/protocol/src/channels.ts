@@ -283,6 +283,7 @@ export interface RuntimeInstallUpdateResult {
 }
 
 export type GuideState = "pending" | "deferred" | "completed";
+export type DesktopBuildFlavor = "standard" | "shell";
 export type ManagedRuntimeDesiredState = "running" | "stopped" | "uninstalled";
 export type ManagedRuntimeLifecycleState =
   | "installing"

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
+  Cable,
   CheckCircle2,
   ExternalLink,
   Globe2,
@@ -25,7 +26,8 @@ export function GuideRoute() {
   const { config: themeConfig } = useTheme();
   const desktop = typeof window === "undefined" ? undefined : window.hermesDesktop;
   const externalSetupRef = useRef<HTMLElement>(null);
-  const [choice, setChoice] = useState<GuideChoice>(null);
+  const shellBuild = runtime.isShellBuild();
+  const [choice, setChoice] = useState<GuideChoice>(shellBuild ? "external" : null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState("");
 
@@ -96,9 +98,13 @@ export function GuideRoute() {
           }
         />
         <div>
-          <p>Hermes Agent 中文社区桌面版</p>
+          <p>{shellBuild ? "Hermes Agent 本地 CLI 壳版" : "Hermes Agent 中文社区桌面版"}</p>
           <h1>你想怎么开始使用 Hermes？</h1>
-          <span>不确定怎么选？直接选择“开箱即用”，适合绝大多数用户。</span>
+          <span>
+            {shellBuild
+              ? "壳版不会安装或启动内核，请先在终端运行 hermes dashboard --no-open。"
+              : "不确定怎么选？直接选择“开箱即用”，适合绝大多数用户。"}
+          </span>
         </div>
       </header>
 
@@ -107,10 +113,44 @@ export function GuideRoute() {
           <div className={s.introCopy}>
             <span className={s.stepLabel}>只需选择一次，以后可以随时更改</span>
             <h2 id="guide-choice-title">选择适合你的开始方式</h2>
-            <p>如果“服务器、地址、Token”这些词对你很陌生，选择左边就对了。</p>
+            <p>
+              {shellBuild
+                ? "推荐连接本机已经运行的官方 Hermes CLI，也可以连接远端 Hermes。"
+                : "如果“服务器、地址、Token”这些词对你很陌生，选择左边就对了。"}
+            </p>
           </div>
 
-          <div className={s.choiceGrid}>
+          <div className={s.choiceGrid} data-shell={shellBuild ? "true" : undefined}>
+            {shellBuild ? (
+              <button
+                type="button"
+                className={s.choiceCard}
+                data-recommended="true"
+                data-active={choice === "external" ? "true" : undefined}
+                onClick={() => {
+                  setChoice("external");
+                  setError("");
+                }}
+                disabled={preparing}
+              >
+                <span className={s.choiceTopline}>
+                  <span className={s.choiceIcon}><Cable size={22} /></span>
+                  <span className={s.recommendedBadge}>推荐</span>
+                </span>
+                <strong>连接本机 Hermes CLI</strong>
+                <span className={s.choiceLead}>使用你已经安装的官方 Hermes Agent CLI，不复制或维护另一套内核。</span>
+                <span className={s.choiceDetail}>
+                  <CheckCircle2 size={15} /> 默认连接 127.0.0.1:9119
+                </span>
+                <span className={s.choiceDetail}>
+                  <CheckCircle2 size={15} /> 桌面壳不会启动、停止或更新 CLI 进程
+                </span>
+                <span className={s.choiceAction}>
+                  <ArrowRight size={15} /> 配置本机 CLI 或远端连接
+                </span>
+              </button>
+            ) : (
+              <>
             <button
               type="button"
               className={s.choiceCard}
@@ -162,6 +202,8 @@ export function GuideRoute() {
                 <ArrowRight size={15} /> 填写已有 Hermes 的连接信息
               </span>
             </button>
+              </>
+            )}
           </div>
 
           {error && <Alert tone="danger">{error}</Alert>}
@@ -175,13 +217,19 @@ export function GuideRoute() {
           >
             <div className={s.externalHeader}>
               <div>
-                <span className={s.stepLabel}>适合已经部署过 Hermes 的用户</span>
+                <span className={s.stepLabel}>{shellBuild ? "壳版仅使用外部 Hermes" : "适合已经部署过 Hermes 的用户"}</span>
                 <h2 id="external-setup-title">连接你已有的 Hermes</h2>
-                <p>选择它是在这台电脑上运行，还是在另一台电脑或服务器上运行。</p>
+                <p>
+                  {shellBuild
+                    ? "本机 CLI 请先运行 hermes dashboard --no-open；也可以选择另一台电脑或服务器。"
+                    : "选择它是在这台电脑上运行，还是在另一台电脑或服务器上运行。"}
+                </p>
               </div>
-              <Button variant="ghost" onClick={() => setChoice(null)}>
-                <ArrowLeft size={14} /> 返回重新选择
-              </Button>
+              {!shellBuild && (
+                <Button variant="ghost" onClick={() => setChoice(null)}>
+                  <ArrowLeft size={14} /> 返回重新选择
+                </Button>
+              )}
             </div>
             <ConnectionSection
               showHeading={false}

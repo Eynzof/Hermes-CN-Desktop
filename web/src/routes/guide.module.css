@@ -111,6 +111,10 @@
   margin-top: 24px;
 }
 
+.choiceGrid[data-shell="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .choiceCard {
   display: flex;
   min-width: 0;

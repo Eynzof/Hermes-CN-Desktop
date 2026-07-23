@@ -56,6 +56,7 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
   // desktop cannot restart it here.
   if (!runtime.isManaged()) {
     const isRemote = runtime.isRemote();
+    const shellBuild = runtime.isShellBuild();
     const Icon = isRemote ? Globe2 : Cable;
     return (
       <button
@@ -64,7 +65,7 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
         data-variant={variant}
         data-no-drag={variant === "topbar" ? true : undefined}
         disabled
-        title={`已连接${isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI"}；当前连接模式下不支持由桌面端切换档案（设置 → 连接 可切回本机内核）`}
+        title={`已连接${isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI"}；当前连接模式下不支持由桌面端切换档案${shellBuild ? "" : "（设置 → 连接 可切回本机内核）"}`}
       >
         <span className={s.triggerLabel}>
           <Icon size={11} aria-hidden="true" /> {isRemote ? "远程" : "本地"}

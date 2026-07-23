@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
+  "productName": "Hermes Agent CN Desktop Shell",
+  "identifier": "cn.org.hermesagent.desktop.shell",
+  "app": {
+    "windows": [
+      {
+        "title": "Hermes Agent CN Desktop Shell",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 680,
+        "titleBarStyle": "Transparent"
+      }
+    ]
+  },
+  "bundle": {
+    "targets": [
+      "app"
+    ],
+    "resources": [
+      "legal/HarmonyOS_Sans_LICENSE.txt"
+    ]
+  }
+}

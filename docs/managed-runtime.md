@@ -241,6 +241,32 @@ pnpm tauri:dev:external
 `HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD`、始终返回 `false`，因此这两个环境变量已不再生效，
 别名仅为向后兼容保留。
 
+### 纯壳本地开发口味
+
+需要复用本机官方 Hermes CLI、避免每次开发都创建 Python venv 和重新安装 Core 时，
+先在另一个终端启动默认的 9119 Dashboard：
+
+```
+hermes dashboard --no-open
+```
+
+然后启动带 `shell-only` feature 和独立 identifier 的桌面壳：
+
+```
+pnpm tauri:dev:shell
+```
+
+该口味是严格的 attach-only 客户端：默认连接 `http://127.0.0.1:9119`，允许改为
+远端连接，但不会打包、下载、安装、启动、停止或更新 managed runtime。桌面控制状态
+位于独立的 `cn.org.hermesagent.desktop.shell` 数据根，CLI 会话、模型与配置仍由外部
+Dashboard 对应的 `HERMES_HOME` 提供。
+
+本地未签名 debug `.app` 使用：
+
+```
+pnpm tauri:build:shell:debug
+```
+
 ## 五、Runtime 升级
 
 ```

@@ -67,6 +67,7 @@ async fn test_connection_succeeds_against_a_live_http_plus_ws_server() {
     });
 
     let result = test_connection_config(ConnectionConfigInput {
+        mode: Some("remote".to_string()),
         remote_url: Some(base_url.clone()),
         remote_token: Some("e2e-token".to_string()),
         ..Default::default()

@@ -6,6 +6,7 @@ import { useCommandPalette } from "@/components/command-palette";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import { openExternalUrl } from "@/lib/external-links";
+import { runtime } from "@/lib/runtime";
 import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
 
@@ -33,6 +34,7 @@ export function AppTopBar() {
   const location = useLocation();
   const { config: themeConfig, update: updateTheme } = useTheme();
   const { openCommandPalette } = useCommandPalette();
+  const shellBuild = runtime.isShellBuild();
   const currentThemeIndex = THEME_SEQUENCE.indexOf(themeConfig.theme);
   const nextTheme = THEME_SEQUENCE[(currentThemeIndex + 1) % THEME_SEQUENCE.length] ?? DEFAULT_THEME_CONFIG.theme;
   const ThemeIcon =
@@ -62,7 +64,7 @@ export function AppTopBar() {
         <span className={s.brandText}>
           <span className={s.wordmark}>Hermes Agent</span>
           <span className={s.brandMeta}>
-            <span className={s.edition}>中文社区桌面版</span>
+            <span className={s.edition}>{shellBuild ? "本地 CLI 壳版" : "中文社区桌面版"}</span>
             <span className={s.metaDot} aria-hidden="true">·</span>
             <span className={s.site}>hermesagent.org.cn</span>
           </span>

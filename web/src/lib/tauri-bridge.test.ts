@@ -246,6 +246,33 @@ describe("isTauriDevMode", () => {
     expect(mockInvoke).not.toHaveBeenCalledWith("runtime_info", undefined);
   });
 
+  it("propagates the shell build flavor into renderer runtime state", async () => {
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_runtime_config") {
+        return Promise.resolve({
+          apiBaseUrl: "http://127.0.0.1:9119",
+          gatewayUrl: "ws://127.0.0.1:9119/api/ws",
+          currentProfile: "default",
+          connectionMode: "local",
+          desktopBuildFlavor: "shell",
+          backendReady: true,
+          guideState: "completed",
+          managedRuntimeDesiredState: "uninstalled",
+          managedRuntimeLifecycleState: "uninstalled",
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    await installTauriBridge();
+
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      connectionMode: "local",
+      desktopBuildFlavor: "shell",
+      managedRuntimeDesiredState: "uninstalled",
+    });
+  });
+
   it("exposes persisted guide and managed runtime lifecycle commands", async () => {
     await installTauriBridge();
 

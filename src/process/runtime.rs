@@ -347,14 +347,18 @@ fn portable_anchor_dir_from_exe(exe: &Path) -> Option<PathBuf> {
     exe.parent().map(Path::to_path_buf)
 }
 
-/// The historical anchor: `<OS data dir>/cn.org.hermesagent.desktop/<runtime>`.
+/// The historical anchor: `<OS data dir>/<desktop identifier>/<runtime>`.
 /// Used for existing Windows installs, all non-Windows platforms, and dev.
 fn legacy_appdata_runtime_root() -> PathBuf {
     let base = resolve_runtime_data_base(dirs::data_dir(), dirs::home_dir()).expect(
         "无法确定可写的数据目录：系统数据目录与用户主目录都不可用。\
          请设置环境变量 HERMES_DESKTOP_RUNTIME_ROOT 指向一个可写目录后重试。",
     );
-    base.join("cn.org.hermesagent.desktop")
+    appdata_runtime_root_from(&base)
+}
+
+fn appdata_runtime_root_from(base: &Path) -> PathBuf {
+    base.join(crate::build_flavor::current().app_identifier())
         .join(runtime_subdir_name())
 }
 
@@ -1166,6 +1170,9 @@ fn bundled_expanded_runtime_dir(runtime_dir: &Path) -> PathBuf {
 }
 
 pub fn bundled_runtime_available(resource_dir: Option<&Path>) -> bool {
+    if crate::build_flavor::is_shell() {
+        return false;
+    }
     let Some(runtime_dir) = bundled_runtime_dir(resource_dir) else {
         return false;
     };
@@ -1948,6 +1955,14 @@ async fn install_runtime_tree(
 pub async fn install_bundled_runtime_if_needed(
     resource_dir: Option<&Path>,
 ) -> RuntimeInstallUpdateResult {
+    if crate::build_flavor::is_shell() {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some("本地 CLI 壳版不支持安装内置 runtime".to_string()),
+        };
+    }
     let Some(runtime_dir) = bundled_runtime_dir(resource_dir) else {
         return RuntimeInstallUpdateResult {
             ok: true,
@@ -2091,6 +2106,14 @@ pub async fn install_bundled_runtime_if_needed(
 pub async fn install_runtime_update(
     manifest: Option<RuntimeUpdateManifest>,
 ) -> RuntimeInstallUpdateResult {
+    if crate::build_flavor::is_shell() {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some("本地 CLI 壳版不支持下载或安装 runtime".to_string()),
+        };
+    }
     let resolved = match manifest {
         Some(m) => m,
         None => {
@@ -2216,6 +2239,14 @@ pub async fn install_runtime_update(
 
 /// Rollback to the previous runtime version.
 pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
+    if crate::build_flavor::is_shell() {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some("本地 CLI 壳版不支持回滚内置 runtime".to_string()),
+        };
+    }
     let current = match read_current_record() {
         Some(c) => c,
         None => {
@@ -2800,6 +2831,49 @@ mod tests {
     // -------- containment roots --------
 
     #[test]
+    fn appdata_runtime_root_is_namespaced_by_build_flavor() {
+        let base = Path::new("/data");
+        let expected_identifier = crate::build_flavor::current().app_identifier();
+        assert_eq!(
+            appdata_runtime_root_from(base),
+            base.join(expected_identifier).join(runtime_subdir_name())
+        );
+        if crate::build_flavor::is_shell() {
+            assert_ne!(
+                expected_identifier,
+                crate::build_flavor::STANDARD_APP_IDENTIFIER
+            );
+        }
+    }
+
+    #[cfg(feature = "shell-only")]
+    #[tokio::test]
+    async fn shell_build_rejects_every_runtime_install_entrypoint() {
+        assert!(!bundled_runtime_available(None));
+
+        let bundled = install_bundled_runtime_if_needed(None).await;
+        assert!(!bundled.ok);
+        assert!(bundled
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("壳版")));
+
+        let update = install_runtime_update(None).await;
+        assert!(!update.ok);
+        assert!(update
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("壳版")));
+
+        let rollback = rollback_runtime();
+        assert!(!rollback.ok);
+        assert!(rollback
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("壳版")));
+    }
+
+    #[test]
     #[serial]
     fn runtime_root_override_moves_the_entire_desktop_runtime_tree() {
         let tmp = TempDir::new().unwrap();
@@ -3072,6 +3146,7 @@ mod tests {
         assert!(error.contains("normal path segment"));
     }
 
+    #[cfg(not(feature = "shell-only"))]
     #[tokio::test]
     #[serial]
     async fn runtime_update_rejects_unsafe_version_before_download() {
@@ -3093,6 +3168,7 @@ mod tests {
             .is_some_and(|error| error.contains("runtimeVersion")));
     }
 
+    #[cfg(not(feature = "shell-only"))]
     #[test]
     #[serial]
     fn rollback_rejects_unsafe_previous_runtime_version() {
@@ -3918,6 +3994,7 @@ mod tests {
         assert!(!runtime.join("_internal").exists());
     }
 
+    #[cfg(not(feature = "shell-only"))]
     #[test]
     fn bundled_runtime_available_accepts_expanded_runtime_tree() {
         let dir = TempDir::new().unwrap();
@@ -3942,7 +4019,7 @@ mod tests {
         assert!(!bundled_runtime_available(Some(&resource)));
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(feature = "shell-only")))]
     #[tokio::test]
     #[serial]
     async fn install_bundled_runtime_from_expanded_tree() {
@@ -4017,7 +4094,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    #[cfg(unix)]
+    #[cfg(all(unix, not(feature = "shell-only")))]
     async fn install_bundled_runtime_does_not_overwrite_local_source_runtime() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -4106,7 +4183,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    #[cfg(unix)]
+    #[cfg(all(unix, not(feature = "shell-only")))]
     async fn install_bundled_runtime_migrates_local_source_when_not_preserved() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -4196,7 +4273,7 @@ mod tests {
         assert_eq!(after.runtime_version, "0.14.0-cn.4");
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(feature = "shell-only")))]
     #[tokio::test]
     #[serial]
     async fn install_bundled_runtime_from_zip_preserves_symlinks() {

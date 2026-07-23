@@ -143,6 +143,7 @@ async fn test_connection_sends_auth_headers_and_reports_http_ok() {
         .await;
 
     let result = test_connection_config(ConnectionConfigInput {
+        mode: Some("remote".to_string()),
         remote_url: Some(server.uri()),
         remote_token: Some("secret-token".to_string()),
         ..Default::default()
@@ -181,6 +182,7 @@ async fn test_connection_rejects_oauth_gateway() {
         .await;
 
     let result = test_connection_config(ConnectionConfigInput {
+        mode: Some("remote".to_string()),
         remote_url: Some(server.uri()),
         remote_token: Some("tok".to_string()),
         ..Default::default()
@@ -207,6 +209,7 @@ async fn test_connection_reports_401_token_error() {
         .await;
 
     let result = test_connection_config(ConnectionConfigInput {
+        mode: Some("remote".to_string()),
         remote_url: Some(server.uri()),
         remote_token: Some("bad-token".to_string()),
         ..Default::default()
@@ -225,6 +228,10 @@ async fn test_connection_reports_401_token_error() {
 async fn test_connection_without_url_is_an_error() {
     let _root = isolate_runtime_root();
     // No saved config, no env, no input URL → nothing to test against.
-    let result = test_connection_config(ConnectionConfigInput::default()).await;
+    let result = test_connection_config(ConnectionConfigInput {
+        mode: Some("remote".to_string()),
+        ..Default::default()
+    })
+    .await;
     assert!(result.is_err());
 }

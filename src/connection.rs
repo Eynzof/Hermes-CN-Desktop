@@ -86,6 +86,7 @@ impl ConnectionMode {
 /// Process/filesystem capabilities owned by the desktop must never be applied
 /// to an attached local or remote Hermes target.
 pub fn require_managed_mode(mode: ConnectionMode, capability: &str) -> AppResult<()> {
+    crate::build_flavor::require_managed_runtime(capability)?;
     if mode == ConnectionMode::Managed {
         Ok(())
     } else {
@@ -253,7 +254,30 @@ pub fn config_path() -> PathBuf {
 /// or malformed file yields the default managed config rather than an error, so
 /// a corrupt connection.json can never brick the desktop boot.
 pub fn read_config() -> ConnectionConfig {
-    read_config_from(&config_path())
+    config_for_build(read_config_from(&config_path()))
+}
+
+fn config_for_build(mut config: ConnectionConfig) -> ConnectionConfig {
+    if crate::build_flavor::is_shell() && config.mode == ConnectionMode::Managed {
+        log::info!(
+            "Shell build ignores managed connection mode and attaches to the local CLI instead"
+        );
+        config.mode = ConnectionMode::Local;
+        if config.local_url.is_none() {
+            config.local_url = Some(DEFAULT_LOCAL_DASHBOARD_URL.to_string());
+        }
+    }
+    config
+}
+
+fn fallback_backend() -> ConnectionBackend {
+    if crate::build_flavor::is_shell() {
+        ConnectionBackend::Local(LocalBackend {
+            base_url: DEFAULT_LOCAL_DASHBOARD_URL.to_string(),
+        })
+    } else {
+        ConnectionBackend::Managed
+    }
 }
 
 fn read_config_from(path: &PathBuf) -> ConnectionConfig {
@@ -477,8 +501,9 @@ pub fn env_override_active() -> bool {
 /// Resolve the effective backend for this boot.
 ///
 /// Returns a managed/local/remote backend. Env remote misconfiguration is a
-/// hard error; invalid saved local/remote entries fall back to managed so the
-/// user can still reach Settings and repair them.
+/// hard error; invalid saved local/remote entries fall back to the build's safe
+/// default (managed for standard, loopback CLI for shell) so Settings remains
+/// reachable without violating the shell build's attach-only boundary.
 pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
     if let Some(raw_url) = env_non_empty(ENV_REMOTE_URL) {
         let token = env_non_empty(ENV_REMOTE_TOKEN).ok_or_else(|| {
@@ -500,7 +525,7 @@ pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
 
     let config = read_config();
     match config.mode {
-        ConnectionMode::Managed => Ok(ConnectionBackend::Managed),
+        ConnectionMode::Managed => Ok(fallback_backend()),
         ConnectionMode::Local => {
             let raw_url = config
                 .local_url
@@ -510,17 +535,17 @@ pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
                 Ok(base_url) => Ok(ConnectionBackend::Local(LocalBackend { base_url })),
                 Err(err) => {
                     log::warn!(
-                        "connection.json 中的本地连接地址无效（{}）；回退到本机内核",
+                        "connection.json 中的本地连接地址无效（{}）；回退到安全默认连接",
                         err
                     );
-                    Ok(ConnectionBackend::Managed)
+                    Ok(fallback_backend())
                 }
             }
         }
         ConnectionMode::Remote => {
             let Some(raw_url) = config.remote_url.clone() else {
-                log::warn!("connection.json 选择了远程模式但缺少 URL；回退到本机内核");
-                return Ok(ConnectionBackend::Managed);
+                log::warn!("connection.json 选择了远程模式但缺少 URL；回退到安全默认连接");
+                return Ok(fallback_backend());
             };
             let auth = match config.remote_auth_mode {
                 RemoteAuthMode::Oauth => {
@@ -531,9 +556,9 @@ pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
                 RemoteAuthMode::Token => {
                     let Some(token) = config.remote_token.clone() else {
                         log::warn!(
-                            "connection.json 选择了远程 token 模式但缺少 token；回退到本机内核"
+                            "connection.json 选择了远程 token 模式但缺少 token；回退到安全默认连接"
                         );
-                        return Ok(ConnectionBackend::Managed);
+                        return Ok(fallback_backend());
                     };
                     RemoteAuth::Token(token)
                 }
@@ -546,10 +571,10 @@ pub fn resolve_connection_backend() -> Result<ConnectionBackend, String> {
                 })),
                 Err(err) => {
                     log::warn!(
-                        "connection.json 中的远程地址无效（{}）；回退到本机内核",
+                        "connection.json 中的远程地址无效（{}）；回退到安全默认连接",
                         err
                     );
-                    Ok(ConnectionBackend::Managed)
+                    Ok(fallback_backend())
                 }
             }
         }
@@ -733,6 +758,23 @@ mod tests {
         let path = dir.path().join("connection.json");
         fs::write(&path, "{ not json").unwrap();
         assert_eq!(read_config_from(&path), ConnectionConfig::default());
+    }
+
+    #[test]
+    fn build_flavor_applies_its_safe_default_connection() {
+        let config = config_for_build(ConnectionConfig::default());
+        let backend = fallback_backend();
+        if crate::build_flavor::is_shell() {
+            assert_eq!(config.mode, ConnectionMode::Local);
+            assert_eq!(
+                config.local_url.as_deref(),
+                Some(DEFAULT_LOCAL_DASHBOARD_URL)
+            );
+            assert!(matches!(backend, ConnectionBackend::Local(_)));
+        } else {
+            assert_eq!(config.mode, ConnectionMode::Managed);
+            assert!(matches!(backend, ConnectionBackend::Managed));
+        }
     }
 
     #[test]
@@ -937,11 +979,21 @@ mod tests {
 
     #[test]
     fn desktop_owned_capabilities_reject_external_modes() {
-        assert!(require_managed_mode(ConnectionMode::Managed, "backup").is_ok());
+        let managed = require_managed_mode(ConnectionMode::Managed, "backup");
+        if crate::build_flavor::is_shell() {
+            assert!(managed.unwrap_err().to_string().contains("壳版"));
+        } else {
+            assert!(managed.is_ok());
+        }
         let local = require_managed_mode(ConnectionMode::Local, "backup").unwrap_err();
         let remote = require_managed_mode(ConnectionMode::Remote, "migration").unwrap_err();
-        assert!(local.to_string().contains("外部 Hermes"));
-        assert!(remote.to_string().contains("外部 Hermes"));
+        let expected = if crate::build_flavor::is_shell() {
+            "壳版"
+        } else {
+            "外部 Hermes"
+        };
+        assert!(local.to_string().contains(expected));
+        assert!(remote.to_string().contains(expected));
         assert!(require_local_filesystem(ConnectionMode::Managed, "files").is_ok());
         assert!(require_local_filesystem(ConnectionMode::Local, "files").is_ok());
         assert!(require_local_filesystem(ConnectionMode::Remote, "files").is_err());

@@ -10,6 +10,7 @@ import {
   shouldRunAutoDesktopUpdateCheck,
   shouldShowDesktopUpdateNotice,
 } from "@/lib/desktop-update";
+import { desktopBuildPolicy } from "@/lib/desktop-build-policy";
 import { openExternalUrl } from "@/lib/external-links";
 import { runtime } from "@/lib/runtime";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
@@ -40,7 +41,11 @@ export function DesktopUpdateNotifier() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (runtime.platform === "web" || !window.hermesDesktop?.checkDesktopUpdate) return;
+    if (
+      runtime.platform === "web"
+      || !desktopBuildPolicy(runtime.getDesktopBuildFlavor()).showDesktopUpdates
+      || !window.hermesDesktop?.checkDesktopUpdate
+    ) return;
 
     let cancelled = false;
     const promise = startAutoCheckIfNeeded();

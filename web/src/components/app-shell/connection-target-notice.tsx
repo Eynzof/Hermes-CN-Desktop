@@ -12,6 +12,7 @@ export function ConnectionTargetNotice() {
   const navigate = useNavigate();
   const attached = runtime.isAttached();
   const remote = runtime.isRemote();
+  const shellBuild = runtime.isShellBuild();
   const runtimeConfig = window.__HERMES_RUNTIME__;
   const target = runtimeConfig?.dashboardApiBaseUrl ?? runtimeConfig?.apiBaseUrl ?? "外部目标";
   const desktop = window.hermesDesktop;
@@ -62,7 +63,13 @@ export function ConnectionTargetNotice() {
           </strong>
           <span>{target}</span>
         </div>
-        {failed && <div className={s.detail}>{summary.detail}</div>}
+        {failed && (
+          <div className={s.detail}>
+            {shellBuild && !remote
+              ? "未检测到本机 Hermes CLI Dashboard。请先在终端运行 hermes dashboard --no-open，然后重新检测。"
+              : summary.detail}
+          </div>
+        )}
       </div>
       <div className={s.actions}>
         {!failed && !health.isFetching && <em>本页修改将作用于外部目标</em>}

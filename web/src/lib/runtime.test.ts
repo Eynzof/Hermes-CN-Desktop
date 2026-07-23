@@ -9,8 +9,20 @@ beforeEach(() => {
       gatewayUrl: "ws://old/api/ws",
       sessionToken: "old-token",
       currentProfile: "default",
+      desktopBuildFlavor: "standard",
     },
   };
+});
+
+describe("desktop build flavor", () => {
+  it("defaults to standard and identifies the strict shell flavor", () => {
+    expect(runtime.getDesktopBuildFlavor()).toBe("standard");
+    expect(runtime.isShellBuild()).toBe(false);
+
+    window.__HERMES_RUNTIME__!.desktopBuildFlavor = "shell";
+    expect(runtime.getDesktopBuildFlavor()).toBe("shell");
+    expect(runtime.isShellBuild()).toBe(true);
+  });
 });
 
 afterEach(() => {

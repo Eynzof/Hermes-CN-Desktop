@@ -169,6 +169,7 @@ fn shell_quote(value: &str) -> String {
 
 #[tauri::command]
 pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult, AppError> {
+    crate::build_flavor::require_managed_runtime("Runtime 更新检查")?;
     Ok(runtime::check_runtime_update().await)
 }
 
@@ -177,6 +178,7 @@ pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult,
 pub async fn runtime_install_update(
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
+    crate::build_flavor::require_managed_runtime("Runtime 更新")?;
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 更新")?;
@@ -378,6 +380,7 @@ pub async fn managed_runtime_install(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
+    crate::build_flavor::require_managed_runtime("安装内置内核")?;
     if runtime::read_current_record().is_some() {
         desktop_control::set_managed_runtime_desired_state(ManagedRuntimeDesiredState::Stopped)?;
         return runtime_control_snapshot(&state, None);
@@ -404,6 +407,7 @@ pub async fn managed_runtime_install(
 pub async fn managed_runtime_stop(
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
+    crate::build_flavor::require_managed_runtime("停止内置内核")?;
     if !restart::try_begin_restart(&state)? {
         return runtime_control_snapshot(
             &state,
@@ -428,6 +432,7 @@ pub async fn managed_runtime_start(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
+    crate::build_flavor::require_managed_runtime("启动内置内核")?;
     let is_managed = {
         let inner = state.inner.lock()?;
         inner.connection_mode == ConnectionMode::Managed
@@ -475,6 +480,7 @@ pub async fn managed_runtime_start(
 pub async fn managed_runtime_uninstall(
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
+    crate::build_flavor::require_managed_runtime("卸载内置内核")?;
     if !restart::try_begin_restart(&state)? {
         return runtime_control_snapshot(
             &state,
@@ -508,6 +514,7 @@ pub async fn managed_runtime_reinstall(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
+    crate::build_flavor::require_managed_runtime("重装内置内核")?;
     if !restart::try_begin_restart(&state)? {
         return runtime_control_snapshot(
             &state,
@@ -801,6 +808,7 @@ mod tests {
 pub async fn runtime_rollback(
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
+    crate::build_flavor::require_managed_runtime("Runtime 回滚")?;
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 回滚")?;

@@ -3,6 +3,7 @@ import { SectionShell } from "./section-shell";
 import { AboutSection, ConfigSection, GeneralSection, KernelSection, NotificationSection, ThemeSection } from "./settings";
 import { ConnectionSection } from "./settings-connection-section";
 import { EnvironmentSection } from "./environment";
+import { runtime } from "@/lib/runtime";
 
 type AdvancedSection = "general" | "notifications" | "config" | "connection" | "kernel" | "env" | "about";
 
@@ -55,12 +56,17 @@ export function AdvancedRoute() {
   const section = sectionFromPath(pathname);
 
   if (!section) return <Navigate to="/common" replace />;
+  if (runtime.isShellBuild() && section === "kernel") {
+    return <Navigate to="/connection" replace />;
+  }
 
   const canonicalPath = SECTION_PATHS[section];
   const normalizedPathname = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
   if (normalizedPathname !== canonicalPath) return <Navigate to={`${canonicalPath}${hash}`} replace />;
 
-  const meta = SECTION_META[section];
+  const meta = runtime.isShellBuild() && section === "connection"
+    ? { title: "连接", sub: "连接本机 Hermes CLI Dashboard 或远程 Hermes Agent。" }
+    : SECTION_META[section];
   return (
     <SectionShell title={meta.title} sub={meta.sub}>
       {section === "general" && <GeneralSection showHeading={false} />}

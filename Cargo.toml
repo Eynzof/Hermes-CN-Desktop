@@ -9,6 +9,10 @@ homepage = "https://hermesagent.org.cn"
 [lib]
 name = "hermes_agent_cn"
 
+[features]
+default = []
+shell-only = []
+
 [dependencies]
 # `devtools` keeps the WebView inspector available in release builds too, so the
 # desktop ships in developer mode by default (toggled via a keyboard shortcut —

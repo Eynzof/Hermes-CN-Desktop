@@ -976,6 +976,7 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken?: string;
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
+    desktopBuildFlavor?: import("@hermes/protocol").DesktopBuildFlavor;
     portable?: boolean;
     backendReady?: boolean;
     guideState?: GuideState;
@@ -1033,6 +1034,7 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
     connectionMode,
+    desktopBuildFlavor: config.desktopBuildFlavor ?? "standard",
     portable: config.portable ?? false,
     backendReady: config.backendReady ?? Boolean(config.apiBaseUrl),
     guideState: config.guideState ?? "completed",

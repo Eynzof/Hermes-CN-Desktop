@@ -1543,7 +1543,8 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
 export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   const [desktopUpdateResult, setDesktopUpdateResult] = useState<DesktopUpdateCheckResult | null>(null);
   const [desktopUpdateChecking, setDesktopUpdateChecking] = useState(false);
-  const hasDesktopUpdateBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.checkDesktopUpdate);
+  const shellBuild = runtime.isShellBuild();
+  const hasDesktopUpdateBridge = !shellBuild && typeof window !== "undefined" && Boolean(window.hermesDesktop?.checkDesktopUpdate);
 
   const handleCheckDesktopUpdate = async () => {
     setDesktopUpdateChecking(true);
@@ -1573,6 +1574,19 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
       />
 
       <div className={s.aboutDebugGrid}>
+        {shellBuild ? (
+          <DebugCard icon={<Cable size={15} />} title="本地 CLI 壳版" sub="严格的外部 Hermes 连接口味" wide>
+            <div className={s.runtimeGrid}>
+              <RuntimeField label="当前版本" value={versionLabel(DESKTOP_VERSION)} />
+              <RuntimeField label="构建口味" value="shell" mono />
+              <RuntimeField label="默认目标" value="http://127.0.0.1:9119" mono wide />
+            </div>
+            <p className={s.desc}>
+              此本地开发口味不参与正式桌面版更新检查，也不会安装、下载或启动内置内核。
+              更新方式是拉取 Desktop 源码后重新运行壳版开发或构建命令。
+            </p>
+          </DebugCard>
+        ) : (
         <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
           <div className={s.runtimeGrid}>
             <RuntimeField label="当前版本" value={versionLabel(DESKTOP_VERSION)} />
@@ -1613,6 +1627,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             </Button>
           </div>
         </DebugCard>
+        )}
 
         <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools">
           <div className={s.runtimeGrid}>

@@ -1,4 +1,5 @@
 pub mod bootstrap;
+pub mod build_flavor;
 pub mod coding_agents;
 pub mod commands;
 pub mod connection;

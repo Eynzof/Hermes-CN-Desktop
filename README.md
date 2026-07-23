@@ -142,6 +142,21 @@ cargo run
 pnpm tauri:dev
 ```
 
+如果本机已经安装官方 Hermes CLI，只想开发桌面壳，可先单独启动 CLI Dashboard，
+再运行严格的纯壳开发口味：
+
+```bash
+hermes dashboard --no-open
+pnpm tauri:dev:shell
+```
+
+纯壳口味默认附着 `http://127.0.0.1:9119`，不会安装、下载、启动或停止 managed
+runtime，数据根与正式桌面版隔离。构建未签名的本地 debug `.app` 可运行：
+
+```bash
+pnpm tauri:build:shell:debug
+```
+
 ## 构建
 
 ```bash
@@ -150,6 +165,9 @@ pnpm tauri:build
 
 # 构建带调试信息的 Debug 包
 pnpm tauri:build:debug
+
+# 构建仅连接已有 CLI 的本地 Debug 壳版
+pnpm tauri:build:shell:debug
 
 # 在 Linux x64 上构建内置 runtime 的 .deb 和 .AppImage
 pnpm tauri:build:bundled-linux
@@ -183,11 +201,13 @@ Windows x64、macOS Apple Silicon、macOS Intel 和 Linux x64 版本，并把 Li
 | --- | --- |
 | `pnpm web:dev` | 启动 Vite dev server，默认端口 `9545` |
 | `cargo run` | 编译并启动 Tauri 桌面窗口 |
+| `pnpm tauri:dev:shell` | 启动只附着本机 CLI / 远端 Hermes 的纯壳开发口味 |
 | `pnpm typecheck` | 运行 TypeScript 类型检查 |
 | `pnpm test:unit` | 运行 Vitest 单元测试 |
 | `cargo check` | 运行 Rust 编译检查 |
 | `cargo test --all-features` | 运行 Rust 测试 |
 | `pnpm tauri:build` | 构建生产桌面包 |
+| `pnpm tauri:build:shell:debug` | 构建未签名的本地 debug 壳版 `.app` |
 
 ## 质量门禁
 

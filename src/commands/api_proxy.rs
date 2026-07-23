@@ -498,6 +498,7 @@ async fn api_request_impl_inner(
 
     // 4. Runtime update intercept
     if url_p == "/api/hermes/update" && method.to_uppercase() == "POST" {
+        crate::build_flavor::require_managed_runtime("Runtime 更新")?;
         let result = crate::process::runtime::install_runtime_update(None).await;
         let status = if result.ok { 200 } else { 503 };
         let status_text = if result.ok {

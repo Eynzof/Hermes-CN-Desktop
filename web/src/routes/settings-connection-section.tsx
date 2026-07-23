@@ -20,6 +20,8 @@ import type {
 } from "@hermes/protocol";
 import { Alert, Button, Input } from "@hermes/shared-ui";
 import { notifyConnectionAuthRestored } from "@/lib/connection-auth-events";
+import { desktopBuildPolicy } from "@/lib/desktop-build-policy";
+import { runtime } from "@/lib/runtime";
 import { SettingsHero } from "./settings-hero";
 import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
@@ -36,7 +38,7 @@ type ConnectionMessage = { tone: "ok" | "error"; text: string; hint?: string };
 const PROBE_DEBOUNCE_MS = 500;
 const DEFAULT_LOCAL_URL = "http://127.0.0.1:9119";
 const LOCAL_DASHBOARD_RECOVERY_HINT =
-  "如果确认本机已安装 Hermes，请先运行 hermes dashboard 启动后端，确认 http://127.0.0.1:9119/ 能在浏览器打开，再试一次。";
+  "如果确认本机已安装 Hermes，请先运行 hermes dashboard --no-open 启动后端，确认 http://127.0.0.1:9119/ 能在浏览器打开，再试一次。";
 
 function modeLabel(mode: ConnectionMode | undefined): string {
   if (mode === "remote") return "外部 Hermes · 远端服务器";
@@ -107,10 +109,14 @@ export function ConnectionSection({
 }: SettingsSectionProps) {
   const desktop = typeof window !== "undefined" ? window.hermesDesktop : undefined;
   const supported = Boolean(desktop?.getConnectionConfig);
+  const buildPolicy = desktopBuildPolicy(runtime.getDesktopBuildFlavor());
+  const shellBuild = !buildPolicy.showManagedRuntime;
 
   const [config, setConfig] = useState<ConnectionConfigView | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [mode, setMode] = useState<ConnectionMode>(externalOnly ? "local" : "managed");
+  const [mode, setMode] = useState<ConnectionMode>(
+    externalOnly ? "local" : buildPolicy.defaultConnectionMode,
+  );
   const [externalKind, setExternalKind] = useState<Exclude<ConnectionMode, "managed">>("local");
   const [localUrl, setLocalUrl] = useState(DEFAULT_LOCAL_URL);
   const [remoteUrl, setRemoteUrl] = useState("");
@@ -135,7 +141,7 @@ export function ConnectionSection({
       .getConnectionConfig()
       .then((view) => {
         setConfig(view);
-        setMode(externalOnly && view.mode === "managed" ? "local" : view.mode);
+        setMode((externalOnly || shellBuild) && view.mode === "managed" ? "local" : view.mode);
         if (view.mode !== "managed") setExternalKind(view.mode);
         setLocalUrl(view.localUrl || DEFAULT_LOCAL_URL);
         setRemoteUrl(view.remoteUrl);
@@ -143,7 +149,7 @@ export function ConnectionSection({
       .catch((error) => {
         setLoadError(error instanceof Error ? error.message : String(error));
       });
-  }, [desktop, externalOnly]);
+  }, [desktop, externalOnly, shellBuild]);
 
   const envOverride = config?.envOverride ?? false;
   const busy = saving || applying;
@@ -355,7 +361,9 @@ export function ConnectionSection({
         : `当前连接目标：${modeLabel(effectiveMode)}`;
   const connectionDescription = envOverride
     ? `当前会话由环境变量强制连接到远程端（${config?.remoteUrl ?? "远程地址"}），需取消环境变量后才能在此修改。`
-    : effectiveMode === "managed"
+    : shellBuild
+      ? "本地 CLI 壳版只附着到已经运行的 Hermes，不会安装、启动、停止或更新内置内核。"
+      : effectiveMode === "managed"
       ? "软件分为两种顶层使用模式：使用桌面端内置内核，或连接本机其他 / 远端服务器上的外部 Hermes。"
       : "这里显示的是当前连接目标，不代表目标一定可用；请以上方的外部 Hermes Agent 实时检测结果为准。";
   const connectionBadge = !connectionLoaded ? "读取中" : envOverride ? "环境变量" : modeLabel(effectiveMode);
@@ -364,7 +372,7 @@ export function ConnectionSection({
     <div>
       {showHeading && <h2 className={s.heading}>连接</h2>}
 
-      {!externalOnly && (
+      {!externalOnly && buildPolicy.showManagedRuntime && (
         <SettingsHero
           ok={connectionLoaded}
           icon={effectiveMode === "remote" || envOverride ? <Globe2 size={24} /> : effectiveMode === "local" ? <Cable size={24} /> : <HardDrive size={24} />}
@@ -390,7 +398,7 @@ export function ConnectionSection({
         </div>
       )}
 
-      {!externalOnly && (
+      {!externalOnly && buildPolicy.showManagedRuntime && (
         <div className={s.connModeGrid}>
           <ModeCard
             active={mode === "managed"}
@@ -419,7 +427,7 @@ export function ConnectionSection({
             active={mode === "local"}
             current={effectiveMode === "local"}
             icon={Cable}
-            title="本机其他 Hermes"
+            title={shellBuild ? "本机 Hermes CLI（推荐）" : "本机其他 Hermes"}
             description="接入本机已经运行的 Hermes Dashboard，默认使用 127.0.0.1:9119。"
             disabled={disabled}
             onSelect={() => { setExternalKind("local"); setMode("local"); }}
@@ -436,7 +444,7 @@ export function ConnectionSection({
         </div>
       )}
 
-      {!externalOnly && mode === "managed" && <ManagedRuntimePanel compact />}
+      {!externalOnly && buildPolicy.showManagedRuntime && mode === "managed" && <ManagedRuntimePanel compact />}
 
       {mode === "local" && (
         <div className={s.row}>
@@ -444,7 +452,7 @@ export function ConnectionSection({
             <div className={s.rowLabel}>本地连接地址</div>
             <div className={s.rowSub}>
               仅允许 localhost / 127.0.0.1 / ::1。连接时会自动获取登录所需的会话令牌，无需手动粘贴。
-              如果确认本机已安装 Hermes，请先运行 <code>hermes dashboard</code> 启动后端，确认 <code>http://127.0.0.1:9119/</code> 能在浏览器打开，再试一次。
+              如果确认本机已安装 Hermes，请先运行 <code>hermes dashboard --no-open</code> 启动后端，确认 <code>http://127.0.0.1:9119/</code> 能在浏览器打开，再试一次。
             </div>
           </div>
           <div className={s.rowRight}>

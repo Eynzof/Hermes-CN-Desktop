@@ -9,6 +9,7 @@ import type {
   ConnectionConfigInput,
   ConnectionConfigView,
   ConnectionMode,
+  DesktopBuildFlavor,
   DesktopUpdateManifestFetchResult,
   CodingAgentsCheckResult,
   EnvironmentCheckResult,
@@ -430,6 +431,8 @@ declare global {
       currentProfile?: string;
       /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;
+      /** Compile-time distribution flavor; shell builds never own a runtime. */
+      desktopBuildFlavor?: DesktopBuildFlavor;
       backendReady?: boolean;
       guideState?: import("@hermes/protocol").GuideState;
       managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
@@ -562,6 +565,14 @@ export const runtime = {
 
   getConnectionMode(): ConnectionMode {
     return window.__HERMES_RUNTIME__?.connectionMode ?? "managed";
+  },
+
+  getDesktopBuildFlavor(): DesktopBuildFlavor {
+    return window.__HERMES_RUNTIME__?.desktopBuildFlavor ?? "standard";
+  },
+
+  isShellBuild(): boolean {
+    return this.getDesktopBuildFlavor() === "shell";
   },
 
   /** True when the desktop owns and can restart the bundled Hermes runtime. */

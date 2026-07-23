@@ -74,6 +74,10 @@ pub async fn install_bundled_runtime_for_bootstrap(
     app: &tauri::AppHandle,
     resource_dir: Option<&Path>,
 ) -> bool {
+    if crate::build_flavor::is_shell() {
+        log::info!("Shell build: bundled runtime installation is disabled");
+        return true;
+    }
     // Allow skipping bundled runtime install via env var (e.g. when the user
     // only uses local/remote connection mode and never needs a local runtime).
     if std::env::var("HERMES_DESKTOP_SKIP_BUNDLED_RUNTIME")
@@ -122,6 +126,8 @@ pub async fn acquire_managed_dashboard(
     resource_dir: Option<PathBuf>,
     install_bundled: bool,
 ) -> Result<DashboardHandle, String> {
+    crate::build_flavor::require_managed_runtime("启动内置内核")
+        .map_err(|error| error.to_string())?;
     emit_runtime_status(app, "checking-env", "正在检查本机环境...");
     // Resolve the user's real PATH (login shell / registry) before anything
     // spawns, so the dashboard and its MCP descendants inherit it.
@@ -249,7 +255,7 @@ pub async fn connect_local_backend(
     if !dashboard::probe_attached_dashboard(&local.base_url).await {
         log::warn!(
             "Local Hermes Agent CLI dashboard not reachable at {} during bootstrap; continuing — \
-             Settings → 连接 can fix the URL or switch back to managed runtime",
+             run `hermes dashboard --no-open`, then retry from Settings → 连接",
             local.base_url
         );
     }

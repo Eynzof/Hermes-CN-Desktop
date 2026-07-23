@@ -67,7 +67,11 @@ impl DesktopControlState {
             guide_state: GuideState::Pending,
             // A clean install must let /guide choose the backend before the
             // bundled runtime is extracted or launched.
-            managed_runtime_desired_state: ManagedRuntimeDesiredState::Stopped,
+            managed_runtime_desired_state: if crate::build_flavor::is_shell() {
+                ManagedRuntimeDesiredState::Uninstalled
+            } else {
+                ManagedRuntimeDesiredState::Stopped
+            },
         }
     }
 
@@ -75,8 +79,19 @@ impl DesktopControlState {
         Self {
             schema_version: CONTROL_SCHEMA_VERSION,
             guide_state: GuideState::Completed,
-            managed_runtime_desired_state: ManagedRuntimeDesiredState::Running,
+            managed_runtime_desired_state: if crate::build_flavor::is_shell() {
+                ManagedRuntimeDesiredState::Uninstalled
+            } else {
+                ManagedRuntimeDesiredState::Running
+            },
         }
+    }
+
+    fn for_build(mut self) -> Self {
+        if crate::build_flavor::is_shell() {
+            self.managed_runtime_desired_state = ManagedRuntimeDesiredState::Uninstalled;
+        }
+        self
     }
 }
 
@@ -114,7 +129,7 @@ fn write_to(path: &Path, state: &DesktopControlState) -> AppResult<()> {
 pub fn initialize() -> AppResult<DesktopControlState> {
     let path = control_path();
     if let Some(state) = read_from(&path) {
-        return Ok(state);
+        return Ok(state.for_build());
     }
     let established = runtime::read_current_record().is_some()
         || connection::config_path().is_file()
@@ -129,16 +144,18 @@ pub fn initialize() -> AppResult<DesktopControlState> {
 }
 
 pub fn read() -> DesktopControlState {
-    read_from(&control_path()).unwrap_or_else(|| {
-        if runtime::read_current_record().is_some()
-            || connection::config_path().is_file()
-            || connection::env_override_active()
-        {
-            DesktopControlState::migrated_existing_install()
-        } else {
-            DesktopControlState::fresh_install()
-        }
-    })
+    read_from(&control_path())
+        .map(DesktopControlState::for_build)
+        .unwrap_or_else(|| {
+            if runtime::read_current_record().is_some()
+                || connection::config_path().is_file()
+                || connection::env_override_active()
+            {
+                DesktopControlState::migrated_existing_install()
+            } else {
+                DesktopControlState::fresh_install()
+            }
+        })
 }
 
 pub fn write(state: &DesktopControlState) -> AppResult<()> {
@@ -155,6 +172,9 @@ pub fn set_guide_state(guide_state: GuideState) -> AppResult<DesktopControlState
 pub fn set_managed_runtime_desired_state(
     desired: ManagedRuntimeDesiredState,
 ) -> AppResult<DesktopControlState> {
+    if crate::build_flavor::is_shell() && desired != ManagedRuntimeDesiredState::Uninstalled {
+        crate::build_flavor::require_managed_runtime("修改内置内核状态")?;
+    }
     let mut state = read();
     state.managed_runtime_desired_state = desired;
     write(&state)?;
@@ -168,8 +188,9 @@ pub fn should_start_managed_runtime(
     state: &DesktopControlState,
     external_dev_dashboard: bool,
 ) -> bool {
-    external_dev_dashboard
-        || state.managed_runtime_desired_state == ManagedRuntimeDesiredState::Running
+    !crate::build_flavor::is_shell()
+        && (external_dev_dashboard
+            || state.managed_runtime_desired_state == ManagedRuntimeDesiredState::Running)
 }
 
 /// Report the actual managed-runtime lifecycle from files/process state.
@@ -199,13 +220,18 @@ mod tests {
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", root.path());
         let state = initialize().expect("initialize");
         assert_eq!(state.guide_state, GuideState::Pending);
-        assert_eq!(
-            state.managed_runtime_desired_state,
+        let expected = if crate::build_flavor::is_shell() {
+            ManagedRuntimeDesiredState::Uninstalled
+        } else {
             ManagedRuntimeDesiredState::Stopped
-        );
+        };
+        assert_eq!(state.managed_runtime_desired_state, expected);
         assert!(control_path().is_file());
         assert!(!should_start_managed_runtime(&state, false));
-        assert!(should_start_managed_runtime(&state, true));
+        assert_eq!(
+            should_start_managed_runtime(&state, true),
+            !crate::build_flavor::is_shell()
+        );
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 
@@ -218,11 +244,16 @@ mod tests {
             .expect("write connection config");
         let state = initialize().expect("initialize");
         assert_eq!(state.guide_state, GuideState::Completed);
-        assert_eq!(
-            state.managed_runtime_desired_state,
+        let expected = if crate::build_flavor::is_shell() {
+            ManagedRuntimeDesiredState::Uninstalled
+        } else {
             ManagedRuntimeDesiredState::Running
+        };
+        assert_eq!(state.managed_runtime_desired_state, expected);
+        assert_eq!(
+            should_start_managed_runtime(&state, false),
+            !crate::build_flavor::is_shell()
         );
-        assert!(should_start_managed_runtime(&state, false));
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 

@@ -129,6 +129,9 @@ fn coerce_config(
             )))
         }
     };
+    if mode == ConnectionMode::Managed {
+        crate::build_flavor::require_managed_runtime("切换内置内核")?;
+    }
 
     let local_url = match input.local_url.as_deref().map(str::trim) {
         Some(url) if !url.is_empty() => Some(connection::normalize_local_base_url(url)?),
@@ -854,6 +857,7 @@ pub(crate) async fn apply_managed(
     app: &tauri::AppHandle,
     state: &State<'_, AppState>,
 ) -> Result<ApplyConnectionResult, AppError> {
+    crate::build_flavor::require_managed_runtime("切换内置内核")?;
     let (already_managed, api_base_url, gateway_url, session_token) = {
         let inner = state.inner.lock()?;
         (
@@ -984,6 +988,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "shell-only"))]
     #[test]
     fn coerce_defaults_to_managed_keeping_saved_fields() {
         let coerced = coerce_config(&remote_config(), &ConnectionConfigInput::default()).unwrap();
@@ -1071,6 +1076,7 @@ mod tests {
         assert!(coerce_config(&ConnectionConfig::default(), &bad_url).is_err());
     }
 
+    #[cfg(not(feature = "shell-only"))]
     #[test]
     fn coerce_explicit_empty_url_clears_saved_value() {
         let input = ConnectionConfigInput {
@@ -1082,5 +1088,16 @@ mod tests {
         let coerced = coerce_config(&remote_config(), &input).unwrap();
         assert_eq!(coerced.remote_url, None);
         assert_eq!(coerced.remote_token.as_deref(), Some("saved-token"));
+    }
+
+    #[cfg(feature = "shell-only")]
+    #[test]
+    fn shell_build_rejects_managed_connection_config() {
+        let input = ConnectionConfigInput {
+            mode: Some("managed".to_string()),
+            ..Default::default()
+        };
+        let error = coerce_config(&remote_config(), &input).unwrap_err();
+        assert!(error.to_string().contains("壳版"));
     }
 }
