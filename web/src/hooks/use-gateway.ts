@@ -423,7 +423,11 @@ export function useGateway() {
       ensureSubscribed();
       ensureChatSession(roomId);
       if (!options?.skipOptimisticStart) {
-        startPrompt({ sessionId: roomId, text });
+        // Every group member emits its own sender-tagged message.start. A
+        // sender-less optimistic assistant would later be merged into one of
+        // those bubbles and can poison stored/live reconciliation across
+        // repeated rounds, so group turns optimistically add only the user row.
+        startPrompt({ sessionId: roomId, text, optimisticAssistant: false });
       }
       try {
         await getGatewayClient().request("groupchat.submit", { room_id: roomId, text });

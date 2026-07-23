@@ -114,6 +114,17 @@ function assistantClientId(now: number): string {
   return `live-assistant-${now}`;
 }
 
+function nextAssistantClientId(runtime: ChatSessionRuntime, now: number): string {
+  const base = assistantClientId(now);
+  if (!runtime.messages.some((message) => message.id === base)) return base;
+
+  let sequence = 2;
+  while (runtime.messages.some((message) => message.id === `${base}-${sequence}`)) {
+    sequence += 1;
+  }
+  return `${base}-${sequence}`;
+}
+
 function userClientId(now: number): string {
   return `live-user-${now}`;
 }
@@ -417,6 +428,14 @@ function ensureAssistantMessage(
     return updateMessage(runtime, id, (message) => ({
       ...message,
       status: message.status === "error" ? "error" : "streaming",
+      // A completed transcript refetch can retire a just-started group bubble
+      // before buffered deltas reach the reducer. A sender-less reasoning event
+      // may then recreate that active id; adopt the attribution carried by the
+      // next member delta/complete instead of leaving it sender-less and
+      // allowing it to merge into the previous member.
+      senderAgentId: message.senderAgentId ?? sender?.senderAgentId,
+      senderName: message.senderName ?? sender?.senderName,
+      senderAvatar: message.senderAvatar ?? sender?.senderAvatar,
     }));
   }
 
@@ -439,7 +458,7 @@ function ensureAssistantMessage(
 }
 
 function activeAssistantId(runtime: ChatSessionRuntime, now: number): string {
-  return runtime.activeAssistantId ?? assistantClientId(now);
+  return runtime.activeAssistantId ?? nextAssistantClientId(runtime, now);
 }
 
 function updateActiveAssistant(
@@ -617,7 +636,7 @@ function reduceGatewayEventInner(
       const id =
         !sender && isStreamingStatus(runtime.streamStatus) && runtime.activeAssistantId
           ? runtime.activeAssistantId
-          : assistantClientId(now);
+          : nextAssistantClientId(runtime, now);
       return ensureAssistantMessage(
         {
           ...runtime,
@@ -1142,9 +1161,19 @@ export const recoverCompletedTurnFromStoredMessagesAtom = atom(
 
 export const startPromptAtom = atom(
   null,
-  (_get, set, params: { sessionId: string; text: string; images?: ImageEntry[]; now?: number }) => {
+  (
+    _get,
+    set,
+    params: {
+      sessionId: string;
+      text: string;
+      images?: ImageEntry[];
+      now?: number;
+      optimisticAssistant?: boolean;
+    },
+  ) => {
     const now = params.now ?? Date.now();
-    const assistantId = assistantClientId(now);
+    const optimisticAssistant = params.optimisticAssistant !== false;
     const userParts: HermesMessagePart[] = [];
     if (params.text) userParts.push({ type: "text", text: params.text });
     for (const image of params.images ?? []) {
@@ -1153,34 +1182,41 @@ export const startPromptAtom = atom(
     }
     set(gwSessionIdAtom, params.sessionId);
     set(chatRuntimeBySessionAtom, (state) =>
-      updateSessionRuntime(state, params.sessionId, (runtime) => ({
-        ...resetStream(runtime, now),
-        interrupted: undefined,
-        messages: [
-          ...runtime.messages,
-          {
-            id: userClientId(now),
-            sessionId: params.sessionId,
-            role: "user",
-            createdAt: now,
-            status: "complete",
-            parts: userParts.length ? userParts : [{ type: "text", text: params.text }],
-          },
-          {
-            id: assistantId,
-            sessionId: params.sessionId,
-            role: "assistant",
-            createdAt: now,
-            status: "streaming",
-            parts: [{ type: "progress", text: OPTIMISTIC_ASSISTANT_PROGRESS }],
-          },
-        ],
-        streamStatus: "streaming",
-        pendingApprovals: [],
-        turnStartedAt: now,
-        turnFirstTokenAt: undefined,
-        activeAssistantId: assistantId,
-      })),
+      updateSessionRuntime(state, params.sessionId, (runtime) => {
+        const assistantId = optimisticAssistant
+          ? nextAssistantClientId(runtime, now)
+          : undefined;
+        return {
+          ...resetStream(runtime, now),
+          interrupted: undefined,
+          messages: [
+            ...runtime.messages,
+            {
+              id: userClientId(now),
+              sessionId: params.sessionId,
+              role: "user",
+              createdAt: now,
+              status: "complete",
+              parts: userParts.length ? userParts : [{ type: "text", text: params.text }],
+            },
+            ...(assistantId
+              ? [{
+                  id: assistantId,
+                  sessionId: params.sessionId,
+                  role: "assistant" as const,
+                  createdAt: now,
+                  status: "streaming" as const,
+                  parts: [{ type: "progress" as const, text: OPTIMISTIC_ASSISTANT_PROGRESS }],
+                }]
+              : []),
+          ],
+          streamStatus: "streaming",
+          pendingApprovals: [],
+          turnStartedAt: now,
+          turnFirstTokenAt: undefined,
+          activeAssistantId: assistantId,
+        };
+      }),
     );
   },
 );

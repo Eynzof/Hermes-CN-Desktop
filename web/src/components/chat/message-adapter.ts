@@ -1074,6 +1074,12 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
   const liveImages = canonicalImages(live);
 
   if (stored.role === "assistant") {
+    const storedSender = stored.senderAgentId ?? stored.senderName;
+    const liveSender = live.senderAgentId ?? live.senderName;
+    if (storedSender && liveSender && storedSender !== liveSender) {
+      return false;
+    }
+
     // 工具身份守卫：toolCallId 是后端唯一的。两边都带工具调用而 id 集不同，
     // 必然是不同的回合——不能再进入下面的纯文本匹配。否则当多个回合的
     // assistant 文本完全相同时（委派/确认类模板化回复），早先回合的 stored
@@ -1125,10 +1131,18 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
 // senderAgentId) must stay as separate bubbles; a sender-less optimistic
 // placeholder or an ordinary single-agent message merges freely.
 function canMergeAssistantSenders(a: HermesUIMessage, b: HermesUIMessage): boolean {
-  const sa = a.senderAgentId;
-  const sb = b.senderAgentId;
+  const sa = a.senderAgentId ?? a.senderName;
+  const sb = b.senderAgentId ?? b.senderName;
   if (sa && sb) return sa === sb;
-  return true;
+  if (!sa && !sb) return true;
+
+  // Only a genuinely empty/progress-only optimistic row may adopt a tagged
+  // group member. A sender-less row that already contains answer text is a
+  // recovery artifact and must stay separate until its later sender-tagged
+  // event repairs attribution; merging it here corrupts the previous member.
+  const senderless = sa ? b : a;
+  return senderless.parts.length === 0 ||
+    senderless.parts.every((part) => part.type === "progress");
 }
 
 export function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMessage[] {
@@ -1173,6 +1187,9 @@ function mergeMatchedMessage(storedMessage: HermesUIMessage, liveMessage: Hermes
     metadata: mergeMessageMetadata(fallback.metadata, selected.metadata, {
       persistedId: selected.metadata?.persistedId ?? fallback.metadata?.persistedId,
     }),
+    senderAgentId: selected.senderAgentId ?? fallback.senderAgentId,
+    senderName: selected.senderName ?? fallback.senderName,
+    senderAvatar: selected.senderAvatar ?? fallback.senderAvatar,
   };
 }
 

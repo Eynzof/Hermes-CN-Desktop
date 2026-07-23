@@ -305,6 +305,11 @@ export function DetailRoute() {
 
   const ensureGatewaySession = useCallback(async (): Promise<string> => {
     if (!taskId) throw new Error("缺少会话 ID");
+    // Group rooms are gateway-owned room ids, not resumable AIAgent session
+    // ids. After a page reload there is no in-memory mapping, but the room
+    // remains valid in the running Core process and must go straight back to
+    // groupchat.submit instead of session.resume.
+    if (isGroupRoomId(taskId)) return taskId;
     if (restSessionId && taskId === restSessionId && !activeMappedGatewaySessionId) {
       // No URL navigate after the resume — atom + gwSessionIdAtom hold
       // the authoritative state; downstream callers go through

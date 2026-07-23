@@ -269,6 +269,7 @@ export function GooseComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
   const valueRef = useRef(initial);
+  const draftEditVersionRef = useRef(0);
   const voiceStatusRef = useRef(voiceStatus);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentsRef = useRef<ComposerAttachment[]>([]);
@@ -881,6 +882,12 @@ export function GooseComposer({
 
   const send = async () => {
     if (!canSend) return;
+    const submittedValue = value;
+    const submittedSkill = selectedSkill;
+    const submittedSelectionStart = selectionStart;
+    const submittedSelectionEnd = selectionEnd;
+    const submittedDraftVersion = draftEditVersionRef.current;
+    const submittedAttachmentIds = new Set(attachments.map((attachment) => attachment.id));
     const payload: ComposerSubmitPayload = {
       text: submitText,
       attachments,
@@ -891,19 +898,38 @@ export function GooseComposer({
 
     setSubmitError("");
     markAttachmentsProcessing();
+    // The transport may remain pending for the whole model turn (and group
+    // chat serially waits for every member). Clear the submitted draft before
+    // awaiting it so the composer reflects acceptance immediately.
+    valueRef.current = "";
+    setValue("");
+    setSelectedSkill(null);
+    setSelectionStart(0);
+    setSelectionEnd(0);
+    setDismissedSlashToken("");
+    setDismissedMentionToken("");
     try {
       await onSend?.(payload, { updateAttachment });
-      setValue("");
-      setSelectedSkill(null);
-      setSelectionStart(0);
-      setSelectionEnd(0);
-      setDismissedSlashToken("");
       setAttachments((current) => {
-        current.forEach(revokeAttachmentPreview);
-        return [];
+        current
+          .filter((attachment) => submittedAttachmentIds.has(attachment.id))
+          .forEach(revokeAttachmentPreview);
+        return current.filter((attachment) => !submittedAttachmentIds.has(attachment.id));
       });
     } catch (error) {
       restoreAttachmentState(error);
+      // A failed submission may restore the draft only if the user has not
+      // typed anything new while the request was pending.
+      if (
+        draftEditVersionRef.current === submittedDraftVersion &&
+        valueRef.current === ""
+      ) {
+        valueRef.current = submittedValue;
+        setValue(submittedValue);
+        setSelectedSkill(submittedSkill);
+        setSelectionStart(submittedSelectionStart);
+        setSelectionEnd(submittedSelectionEnd);
+      }
     }
   };
 
@@ -1291,7 +1317,10 @@ export function GooseComposer({
           ref={textareaRef}
           value={value}
           onChange={(event) => {
-            setValue(event.target.value);
+            const nextValue = event.target.value;
+            draftEditVersionRef.current += 1;
+            valueRef.current = nextValue;
+            setValue(nextValue);
             setSelectionStart(event.target.selectionStart);
             setSelectionEnd(event.target.selectionEnd);
             setDismissedSlashToken("");
