@@ -8,6 +8,8 @@ import {
   InputDetectDropResult,
   ModelOptionsResult,
   GroupChatCreateResult,
+  GroupChatInterruptResult,
+  GroupChatSubmitResult,
   PromptSubmitParams,
   ProviderModelsListResult,
   ProviderProbeResult,
@@ -416,8 +418,8 @@ export function useGateway() {
     [adoptCreatedSession, ensureSubscribed],
   );
 
-  // Group chat (P-052): send into a room. Mentioned members reply serially,
-  // each as its own sender-tagged message.* stream over the same session id.
+  // Group chat (P-052): send into a room. Core owns the complete bounded relay
+  // chain; Desktop never parses an agent reply or submits the next hand-off.
   const sendGroupPrompt = useCallback(
     async (roomId: string, text: string, options?: { skipOptimisticStart?: boolean }) => {
       ensureSubscribed();
@@ -430,7 +432,19 @@ export function useGateway() {
         startPrompt({ sessionId: roomId, text, optimisticAssistant: false });
       }
       try {
-        await getGatewayClient().request("groupchat.submit", { room_id: roomId, text });
+        return parseGatewayResult(
+          GroupChatSubmitResult,
+          await getGatewayClient().request(
+            "groupchat.submit",
+            { room_id: roomId, text },
+            // Core defaults to 300s but bounds an explicitly configured room
+            // policy at 3600s. Keep the request alive through that hard limit
+            // plus one minute of transport slack; interruption still travels
+            // over the independent WebSocket reader while this call is open.
+            { timeoutMs: 3_660_000 },
+          ),
+          "groupchat.submit",
+        );
       } catch (error) {
         setSessionError({ sessionId: roomId, message: errorMessage(error) });
         throw error;
@@ -746,11 +760,23 @@ export function useGateway() {
       ensureSubscribed();
 
       try {
-        await getGatewayClient().request(
-          "session.interrupt",
-          { session_id: gatewaySessionId },
-          { timeoutMs: 10_000 },
-        );
+        if (gatewaySessionId.startsWith("gc_") && !gatewaySessionId.includes(":")) {
+          parseGatewayResult(
+            GroupChatInterruptResult,
+            await getGatewayClient().request(
+              "groupchat.interrupt",
+              { room_id: gatewaySessionId },
+              { timeoutMs: 10_000 },
+            ),
+            "groupchat.interrupt",
+          );
+        } else {
+          await getGatewayClient().request(
+            "session.interrupt",
+            { session_id: gatewaySessionId },
+            { timeoutMs: 10_000 },
+          );
+        }
       } catch (error) {
         setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
         throw error;

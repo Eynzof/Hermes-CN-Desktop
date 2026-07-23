@@ -15,7 +15,7 @@
 - Profile 描述；
 - 配置、技能和工具权限。
 
-用户负责决定下一轮由谁发言。当前版本不是让 Agent 在后台自动互相对话，而是让用户通过普通消息和 `@` 提及编排多个成员。
+用户可以直接决定下一轮由谁发言，也可以使用有界自动接力：当一个 Agent 把有效 `@成员` 写在回复开头时，Core 会在本条回复完成后串行触发下一位成员。它不是无限自治聊天室；接力受明确的 mention 规则、深度、回合、总时长和停止控制约束。
 
 ### 1.1 快速使用
 
@@ -27,7 +27,9 @@
    - 输入 `@all`，所有成员依次回答；
    - 输入 `@planner`，只有 `planner` 回答；
    - 输入 `@planner @critic`，只有这两个成员按房间成员顺序回答。
-5. 需要成员互相评论时，分成多轮：先让一方发言，再在下一条消息中点名另一方审查。
+5. 需要成员互相评论时，可以：
+   - 由用户分成多轮，先让一方发言，再点名另一方审查；
+   - 在角色指令中要求前一位完成特定产物后，以 `@critic ...` 作为回复开头交接。Core 会把该回复作为下一位成员的当前消息。
 
 输入 `@` 后，界面会列出 `@all` 和当前房间成员。成员栏显示人数、名字和 Profile 描述。
 
@@ -42,12 +44,35 @@
 | 回复顺序 | 串行，按建群时的成员顺序，不按文字中 mention 的先后 |
 | 同一轮上下文 | 所有目标成员拿到同一个“本轮开始前”快照，互相看不到同轮的新回答 |
 | 下一轮上下文 | 能看到前面已经完成的成员发言，并带发送者名字 |
+| Agent 回复开头的 `@名字` | 本条回复完成后触发对应成员，形成下一波串行接力 |
+| Agent 回复形如 `[自身名字]: @名字 ...` | 容忍模型误带的精确自身署名前缀，仍按开头 mention 接力；伪造其他成员署名不生效 |
+| Agent 回复正文中的 `@名字` | 不触发接力 |
+| Agent 回复中的 `@all` | 默认不触发接力，防止调用数量膨胀 |
+| 自动链路保护 | 默认最大深度 4、总回合 8、总时长 300 秒；达到边界时明确停止 |
+| 停止 | 中断当前成员，并阻止尚未开始的成员继续回复 |
 | 成员身份 | 实时流、完成态和房间 transcript 都携带 `sender_agent_id/name/avatar` |
 | 房间状态 | 只保存在当前 Core 进程内存中 |
 
-“串行”只表示执行顺序；同一轮仍然是独立意见。例如一条普通消息依次触发 A、B、C，B 和 C 不会看到 A 在这一轮刚生成的回答。要让 C 汇总 A、B 的观点，应在三人都完成后再单独发送一轮给 C。
+“串行”只表示执行顺序；同一波仍然是独立意见。例如一条普通消息依次触发 A、B、C，B 和 C 不会看到 A 在这一波刚生成的回答。要让 C 汇总 A、B 的观点，应在三人都完成后由用户再点名 C，或让上一波成员在回复开头明确交接给 C；后一种方式会创建新的波次，因此 C 能看到已完成的上一波内容。
 
-### 1.3 建议的 Profile 设计
+### 1.3 自动接力配置
+
+默认配置如下：
+
+```yaml
+group_chat:
+  auto_relay:
+    enabled: true
+    require_leading_mention: true
+    allow_agent_all: false
+    max_depth: 4
+    max_turns: 8
+    max_chain_seconds: 300
+```
+
+策略在建群时固定到房间，保证成员的系统提示词在房间生命周期内保持稳定。修改 `config.yaml` 只影响之后新建的房间，不会在进行中的会话中间改变工具或系统提示。除非有明确成本评估，不建议打开 Agent `@all`。
+
+### 1.4 建议的 Profile 设计
 
 职责应互补，而不是只换三个名字使用同一套提示词。
 
@@ -61,7 +86,7 @@
 
 ## 2. 六类复杂用户场景
 
-每个场景都采用多轮用户编排。不要期待 Agent 自动接力。
+每个场景都保留多轮用户编排作为最可复核的基线；步骤之间职责与输入足够明确时，也可以让前一位成员使用回复开头 mention 交接。自动接力只减少用户点击次数，不改变同波快照、角色职责或验收标准。
 
 可直接复用的角色卡、Profile 指令、逐轮提示词和输出契约已经整理到
 [多 Agent Orchestrator 场景库](./Orchestrator/README.md)。本节保留面向测试的简版流程，
@@ -130,7 +155,7 @@
 **不要误解**
 
 - `@planner @critic` 同轮发送不会形成辩论，两人只会独立回答同一条用户消息；
-- 当前没有 Agent 自动 `@` 另一个 Agent 后触发接力的能力。
+- 若 planner 的回复以 `@critic` 开头，critic 会在下一波被触发并看到 planner 的完整回复；正文中只是讨论 `@critic` 不会触发。
 
 ### 2.3 不同模型的 A/B 对比
 
@@ -250,6 +275,10 @@
 - 普通消息默认全员参与；
 - 成员独立流式气泡；
 - 下一轮的共享历史投影；
+- 回复开头 mention 驱动的有界 Agent 自动接力；
+- 接力链深度、总回合和总时长保护；
+- 群聊级停止：中断当前成员且不再启动剩余成员；
+- 每条消息的 chain、root、parent、深度和路由类型元数据；
 - 当前 Core 进程内刷新读取 transcript 和成员信息。
 
 ### 3.2 已修复缺陷
@@ -265,11 +294,10 @@
 ### 3.3 MVP 限制
 
 - 房间和共享 transcript 不跨 Core 进程重启持久化；
-- 没有 Agent 自动接力；
 - 不并行调用多个成员；
 - 没有群聊专用上下文压缩；
-- 没有可靠的群聊级停止/中断保证；
-- 没有为长时间运行房间提供 freshness guard。
+- 自动接力只支持回复开头 mention，不支持声明式 DAG、条件分支、阶段回滚或自动主持人；
+- Core 重启后没有房间版本/freshness 对账，旧房间会明确失效。
 
 测试这些边界时使用 `EXPECTED_LIMIT`，不要把它们误报为普通回归；但 UI 若无明确提示、静默丢失或展示错误状态，仍应单独记录缺陷。
 
@@ -332,13 +360,16 @@ pnpm --filter @hermes/e2e exec playwright test \
 
 压力用例把 REST sender 序列和 UI 气泡数量分别统计。若 Core transcript 正确但 UI 合并或重复气泡，必须记为 Desktop `FAIL`，不能以“后端数据没丢”判为通过。
 
-假模型提供四种标记：
+假模型提供七种确定性标记：
 
 | 标记 | 用途 |
 |---|---|
 | `group-context-e2e` | 返回当前成员名字和它在历史中看见的其他测试成员 |
 | `group-long-stream-e2e` | 返回带成员名字的长碎片流 |
 | `group-failure-e2e` | 让 `qa-failing` 返回确定性错误，其他成员正常 |
+| `group-relay-e2e` | planner 误带 `[qa-planner]:` 自身署名后仍能 → critic → synthesizer 三段接力，并报告已见成员 |
+| `group-incidental-mention-e2e` | 在正文提及成员，验证不会产生接力 |
+| `group-agent-all-e2e` | 让 Agent 以 `@all` 开头，验证默认策略阻止广播接力 |
 | `stream-order-marker` | 保留现有单聊长流回归 |
 
 测试 Profile 统一使用 `qa-` 前缀，并写入隔离 `HERMES_HOME`：
@@ -389,7 +420,7 @@ node e2e/harness/groupchat-real-smoke.mjs
 - 刷新后继续发送；
 - 切换到普通会话再返回；
 - WS 在成员长流中断开后恢复；
-- 点击停止；
+- 点击停止并确认当前成员中断、剩余成员不启动；
 - 错误 mention；
 - 侧栏和历史页是否暴露 `gc_<room>:<profile>` 内部子会话；
 - Core 重启后房间失效是否有明确提示；
@@ -415,6 +446,7 @@ node e2e/harness/groupchat-real-smoke.mjs
 | GC-04 | L1 | 同轮独立上下文 | 每名成员报告看不到同轮其他成员 |
 | GC-05 | L1/L2 | 下一轮定向总结 | 主持人能看到并引用至少两名上一轮成员 |
 | GC-06 | L2 | 规划—批评—修订—总结四轮协作 | 角色和历史连续，目标成员集合正确 |
+| GC-06R | L1/L2 | Agent 开头 mention 自动接力 | 串行顺序、parent/depth、下一波上下文和退出条件正确 |
 | GC-07 | L1 | 三成员长碎片流 | 不丢 token、不重复、不串气泡 |
 | GC-08 | L1/L2 | 中间成员模型失败 | 后续成员继续；错误归属失败成员 |
 | GC-09 | L2 | 不同模型和角色 | 模型、身份、人格保持独立 |
@@ -422,7 +454,7 @@ node e2e/harness/groupchat-real-smoke.mjs
 | GC-11 | L2 | 临时 fixture 仓库只读 Review | 校验和与 Git 状态前后完全一致 |
 | GC-12 | L3 | 会话切换与页面刷新 | transcript、成员身份保留且可继续发送 |
 | GC-13 | L3 | WS 中断、重连 | 不丢失/重复消息，成员归属稳定 |
-| GC-14 | L3 | 停止群聊回复 | 记录当前行为；可靠中断暂按 MVP 限制分类 |
+| GC-14 | L3 | 停止群聊回复 | 当前成员被中断，剩余成员不启动，界面显示明确停止原因 |
 | GC-15 | L3 | Core 重启与历史/侧栏检查 | 房间明确失效；不得把内部子会话冒充群聊 |
 | GC-16 | L3 | 3～5 成员、20 轮压力 | 记录延迟、消息数、身份稳定性和上下文增长 |
 
@@ -434,6 +466,9 @@ node e2e/harness/groupchat-real-smoke.mjs
 - 多目标回复按房间成员顺序执行；
 - 错误 mention 不触发其他成员兜底；
 - 每个目标成员最多产生一个本轮回答。
+- Agent 只有在回复开头点名有效成员时才触发下一波；
+- 正文 mention 和默认禁用的 Agent `@all` 不得产生额外调用；
+- 自动链路达到深度、回合或时长边界后必须停止并报告原因。
 
 ### 6.2 消息与身份
 
@@ -454,6 +489,7 @@ node e2e/harness/groupchat-real-smoke.mjs
 - 点击发送后 500ms 内清空草稿；
 - 刷新后房间仍存在时能够继续发送；
 - 一个成员失败不阻断后续成员；
+- 点击停止后当前成员尽快结束，尚未开始的成员不再启动；
 - Core 重启造成的房间丢失必须明确提示，不能静默显示为可继续。
 
 ### 6.5 只读与安全
@@ -665,6 +701,50 @@ latency_ms.p95=941
 latency_ms.max=1880
 ```
 
-因此，第 9 节历史记录中的 GC-12、GC-16、草稿清空和刷新续聊 `FAIL` 均由本节的 `PASS` 关闭。GC-14 等明确的 MVP 限制仍保持 `EXPECTED_LIMIT`，没有借本次修复扩大产品能力。
+因此，第 9 节历史记录中的 GC-12、GC-16、草稿清空和刷新续聊 `FAIL` 均由本节的 `PASS` 关闭。GC-14 在本次记录时仍是 `EXPECTED_LIMIT`；后续自动接力与群聊级停止实现见第 11 节。
 
 测试结束后 `8098`、`9121`、`9546` 均无监听进程；原开发实例 `127.0.0.1:9120`（PID `64873`）保持运行，未被测试接管或停止。
+
+## 11. 2026-07-23 Agent 自动接力与群聊级停止
+
+### 11.1 实现契约
+
+- Core 是接力链唯一权威：Desktop 不解析模型正文，也不会代表 Agent 再提交一条用户消息；
+- 用户首波目标仍按原 mention 规则确定；同一波成员共享回合前快照；
+- 只有已成功完成的 Agent 回复以有效 `@成员` 开头时，才创建下一波；模型误带精确的自身署名前缀（如 `[default]: @reviewer`）时也能正确识别；
+- 正文 mention 不接力，Agent `@all` 默认不接力，发送者自身不会成为下一目标；
+- 下一波读取上一波已完成历史，并保存 `chain_id`、`root_message_id`、`parent_message_id`、`mention_depth` 和 `route_kind`；
+- 默认保护为深度 4、总回合 8、总时长 300 秒；达到保护边界时发送明确的 `groupchat.chain_stopped`；
+- `groupchat.submit` 在后台长处理线程运行，WebSocket 读循环保持可用；`groupchat.interrupt` 可中断当前成员并阻止剩余成员启动；
+- 接力策略在建群时固定，避免房间进行中修改配置导致成员系统提示词变化；
+- Desktop 受管 Core 子进程复用父进程已经取得的端口锁，不再因重复申请同一把锁而启动失败；独立运行的 `hermes serve/dashboard` 仍保留原有端口锁保护。
+
+### 11.2 范围与环境
+
+| 字段 | 值 |
+|---|---|
+| 执行时间 | 2026-07-23 23:01～23:46 CST |
+| Desktop 分支 / 基线 | `feat/agent-group-chat` / `a128f111c0c7`，叠加本节工作树改动 |
+| Core 分支 / 基线 | `cn/P-048-agent-group-chat` / `7614e02ac4ff`，叠加本节工作树改动 |
+| Python | Core worktree 独立 `.venv`，Python 3.14.5 |
+| 隔离端口 | fake model `18099` / Dashboard `19120` / Vite `19545` |
+| 隔离状态 | 使用 `e2e/.runtime/hermes-home`；未接管开发实例的 `9120/9545` |
+| 配对实机 | Desktop `9545` / Core `9120`；本地 Core runtime `dev-local-0.19.0-7614e02ac4ff-dirty-30488cb7ee4a`，来源为本节 Core worktree |
+
+### 11.3 结果
+
+| 检查 | 状态 | 结果 |
+|---|---|---|
+| Core mention、编排器和 Gateway 专项 | `PASS` | `3` 个文件、`51 passed`；覆盖开头/正文 mention、自身署名前缀、Agent `@all`、同波快照、下一波历史、深度/回合限制、成员失败和真实 interrupt |
+| Desktop 受管 Core 启动锁 | `PASS` | `tests/hermes_cli/test_dashboard_unified_launch.py`：`12 passed`；覆盖受管子进程跳过重复锁和独立服务仍申请、释放锁 |
+| Desktop 群聊链状态机 | `PASS` | `web/src/stores/chat.test.ts`：`54 passed`；成员完成或失败时链仍保持运行，终态/停止/no-target 正确收口 |
+| Desktop 协议与相关 Web 单测 | `PASS` | 协议 `52 passed`；聊天状态、群聊合并与消息适配共 `64 passed` |
+| Web TypeScript | `PASS` | `pnpm --filter @hermes/web typecheck` 通过 |
+| 群聊确定性 Playwright | `PASS` | 最终回归 `10 passed, 1 skipped`；跳过项仅为需单独开关的 20 轮压力 |
+| 三段自动接力 | `PASS` | sender 为 planner → critic → synthesizer；深度为 1 → 2 → 3；critic 看见 planner，synthesizer 看见 planner 与 critic |
+| 接力边界 | `PASS` | `[qa-planner]: @qa-critic` 成功接力；正文 `@qa-critic`、伪造其他成员署名和 Agent 开头 `@all` 均不产生错误调用 |
+| 群聊级停止 | `PASS` | 长流中停止当前成员后，剩余成员未启动，界面显示“群聊接力已由用户停止。” |
+| 真实模型 `default → reviewer` | `PASS` | 用户首波只点名 `default`；其回复以 `@reviewer` 开头后自动触发 reviewer，reviewer 返回约定标记；REST 显示 sender 为 default → reviewer、深度为 1 → 2、第二条 `route_kind=relay` 且 parent 指向 default 回复 |
+| 刷新回读与续聊 | `PASS` | 修复可选 `route_kind` 空字符串导致整段历史协议校验失败的问题；真实配对实例刷新后恢复两个独立成员气泡，再定向 `@reviewer` 获得第三个正确 sender 的回复 |
+
+本节把历史 GC-14 从 `EXPECTED_LIMIT` 提升为 `PASS`，并新增 GC-06R。仍未改变的边界是：串行而非并行、没有群聊专用压缩、房间不跨 Core 重启持久化、没有声明式 DAG 或阶段回滚。

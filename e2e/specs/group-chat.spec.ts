@@ -101,6 +101,93 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     await ensureProfiles(request);
   });
 
+  test("Agent 开头点名会串行接力且下一棒看到上一棒上下文", async ({
+    page,
+    request,
+  }) => {
+    const roomId = await createGroup(
+      page,
+      ["qa-planner", "qa-critic", "qa-synthesizer"],
+      "自动接力验证",
+    );
+
+    await submitAndWait(page, "@qa-planner group-relay-e2e", 3);
+    await expect(completedAssistantRows(page)).toHaveCount(3);
+    await expect(completedAssistantRows(page).nth(0)).toContainText(
+      "[qa-planner]: @qa-critic group-relay-e2e stage=planner",
+    );
+    await expect(completedAssistantRows(page).nth(1)).toContainText(
+      "@qa-synthesizer group-relay-e2e stage=critic seen=qa-planner",
+    );
+    await expect(completedAssistantRows(page).nth(2)).toContainText(
+      "GROUP-RELAY-DONE agent=qa-synthesizer seen=qa-critic,qa-planner",
+    );
+
+    const transcriptResponse = await request.get(
+      `${DASHBOARD_ORIGIN}/api/sessions/${roomId}/messages`,
+      { headers: dashboardHeaders },
+    );
+    expect(transcriptResponse.ok()).toBeTruthy();
+    const transcript = (await transcriptResponse.json()) as {
+      messages: Array<{
+        role?: string;
+        sender_name?: string;
+        chain_id?: string;
+        root_message_id?: string;
+        parent_message_id?: string;
+        mention_depth?: number;
+        route_kind?: string;
+      }>;
+    };
+    const assistants = transcript.messages.filter(
+      (message) => message.role === "assistant",
+    );
+    expect(assistants.map((message) => message.sender_name)).toEqual([
+      "qa-planner",
+      "qa-critic",
+      "qa-synthesizer",
+    ]);
+    expect(assistants.map((message) => message.mention_depth)).toEqual([1, 2, 3]);
+    expect(assistants.map((message) => message.route_kind)).toEqual([
+      "user",
+      "relay",
+      "relay",
+    ]);
+    expect(new Set(assistants.map((message) => message.chain_id)).size).toBe(1);
+    expect(assistants.every((message) => Boolean(message.root_message_id))).toBe(
+      true,
+    );
+    expect(assistants.every((message) => Boolean(message.parent_message_id))).toBe(
+      true,
+    );
+  });
+
+  test("Agent 正文中的 @ 与 Agent 发出的 @all 都不会触发接力", async ({
+    page,
+  }) => {
+    await createGroup(
+      page,
+      ["qa-planner", "qa-critic", "qa-synthesizer"],
+      "自动接力边界",
+    );
+
+    await submitAndWait(
+      page,
+      "@qa-planner group-incidental-mention-e2e",
+      1,
+    );
+    await expect(completedAssistantRows(page)).toHaveCount(1);
+    await expect(completedAssistantRows(page).last()).toContainText(
+      "正文提到 @qa-critic，但没有发起接力",
+    );
+
+    await submitAndWait(page, "@qa-planner group-agent-all-e2e", 1);
+    await expect(completedAssistantRows(page)).toHaveCount(2);
+    await expect(completedAssistantRows(page).last()).toContainText(
+      "@all GROUP-AGENT-ALL agent=qa-planner",
+    );
+  });
+
   test("三成员独立回答、定向总结和多成员路由保持上下文与顺序", async ({
     page,
     request,
@@ -411,10 +498,6 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
   });
 
   test("停止按钮可以中止剩余群成员回复", async ({ page }) => {
-    test.fail(
-      true,
-      "群聊成员使用独立子会话，当前对房间 ID 的 session.interrupt 不保证中止它们",
-    );
     await createGroup(
       page,
       ["qa-planner", "qa-critic", "qa-synthesizer"],
@@ -428,17 +511,40 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     await page.waitForTimeout(200);
     await stopButton.click();
     await expect.poll(() => composer(page).inputValue(), { timeout: 45_000 }).toBe("");
+    await expect(
+      page
+        .getByRole("log")
+        .getByText("群聊接力已由用户停止。", { exact: true })
+        .first(),
+    ).toBeVisible();
 
     expect(await completedAssistantRows(page).count()).toBeLessThan(3);
   });
 
-  test("刷新群聊后可以继续定向发送", async ({ page }) => {
-    await createGroup(page, ["qa-planner", "qa-critic"], "刷新后续聊");
+  test("刷新群聊后可以继续定向发送", async ({ page, request }) => {
+    const roomId = await createGroup(
+      page,
+      ["qa-planner", "qa-critic"],
+      "刷新后续聊",
+    );
     await submitAndWait(page, "@qa-planner group-context-e2e before-reload", 1);
     await expect(completedAssistantRows(page)).toHaveCount(1);
 
     await page.reload();
     await expect(page.getByText("2 位成员", { exact: true })).toBeVisible();
+    const transcriptResponse = await request.get(
+      `${DASHBOARD_ORIGIN}/api/sessions/${roomId}/messages`,
+      { headers: dashboardHeaders },
+    );
+    expect(transcriptResponse.ok()).toBeTruthy();
+    const transcript = (await transcriptResponse.json()) as {
+      messages: Array<{ role?: string; sender_name?: string }>;
+    };
+    expect(transcript.messages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+    expect(transcript.messages[1]?.sender_name).toBe("qa-planner");
     await expect(completedAssistantRows(page)).toHaveCount(1);
 
     await composer(page).fill("@qa-critic group-context-e2e after-reload");

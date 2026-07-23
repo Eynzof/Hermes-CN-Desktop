@@ -62,6 +62,14 @@ export function configYaml() {
     "  user_profile_enabled: false",
     "compression:",
     "  enabled: false",
+    "group_chat:",
+    "  auto_relay:",
+    "    enabled: true",
+    "    require_leading_mention: true",
+    "    allow_agent_all: false",
+    "    max_depth: 4",
+    "    max_turns: 8",
+    "    max_chain_seconds: 300",
     "",
   ].join("\n");
 }

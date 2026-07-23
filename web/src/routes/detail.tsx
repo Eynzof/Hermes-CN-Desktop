@@ -719,7 +719,11 @@ export function DetailRoute() {
       <div className={s.workArea}>
         <div className={s.chatColumn}>
           {isGroupChat && groupMembers ? (
-            <GroupChatHeader members={groupMembers} showGuide={chatMessages.length === 0} />
+            <GroupChatHeader
+              members={groupMembers}
+              chain={runtime.groupChain}
+              showGuide={chatMessages.length === 0}
+            />
           ) : null}
           {/* key={taskId}：切会话强制重挂载时间线。layout effect 在首帧绘制前就
               把滚动定位到底部，避免新会话内容先以上一个会话的滚动位置绘制、再

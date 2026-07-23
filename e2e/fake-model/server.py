@@ -45,6 +45,9 @@ STREAM_ORDER_REPLY = (
 GROUP_CONTEXT_MARKER = "group-context-e2e"
 GROUP_LONG_STREAM_MARKER = "group-long-stream-e2e"
 GROUP_FAILURE_MARKER = "group-failure-e2e"
+GROUP_RELAY_MARKER = "group-relay-e2e"
+GROUP_INCIDENTAL_MENTION_MARKER = "group-incidental-mention-e2e"
+GROUP_AGENT_ALL_MARKER = "group-agent-all-e2e"
 _GROUP_AGENT_RE = re.compile(r'你是"([^"]+)"，群聊房间')
 _ATTRIBUTED_SPEAKER_RE = re.compile(r"\[([^\]\n]+)\]:")
 
@@ -162,6 +165,29 @@ def _reply_for(messages: list[dict[str, Any]]) -> str:
         return f"我看到一张图片，共 {image_bytes} 字节。"
     text = _text_of(last_user.get("content")).strip()
     agent_name = _group_agent_name(messages)
+    if GROUP_RELAY_MARKER in text:
+        seen = _group_seen_agents(messages, agent_name)
+        if agent_name == "qa-planner":
+            # Models occasionally echo the projected sender label even though
+            # the room prompt tells them not to. This mirrors the real
+            # "[default]: @reviewer ..." regression reported from Desktop.
+            return "[qa-planner]: @qa-critic group-relay-e2e stage=planner"
+        if agent_name == "qa-critic":
+            return (
+                "@qa-synthesizer group-relay-e2e stage=critic "
+                f"seen={','.join(seen) if seen else 'none'}"
+            )
+        return (
+            f"GROUP-RELAY-DONE agent={agent_name} "
+            f"seen={','.join(seen) if seen else 'none'}"
+        )
+    if GROUP_INCIDENTAL_MENTION_MARKER in text:
+        return (
+            f"GROUP-INCIDENTAL agent={agent_name} "
+            "正文提到 @qa-critic，但没有发起接力。"
+        )
+    if GROUP_AGENT_ALL_MARKER in text:
+        return f"@all GROUP-AGENT-ALL agent={agent_name}"
     if GROUP_CONTEXT_MARKER in text:
         seen = _group_seen_agents(messages, agent_name)
         return (

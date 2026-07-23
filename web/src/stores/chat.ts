@@ -58,6 +58,16 @@ export interface PendingApproval {
 
 export type StreamStatus = "idle" | "connecting" | "streaming" | "complete" | "error";
 
+export interface GroupChatChainRuntime {
+  chainId: string;
+  status: "running";
+  turns: number;
+  maxTurns: number;
+  maxDepth: number;
+  activeAgent?: string;
+  mentionDepth?: number;
+}
+
 export interface ChatSessionRuntime {
   messages: HermesUIMessage[];
   streamStatus: StreamStatus;
@@ -78,6 +88,7 @@ export interface ChatSessionRuntime {
   turnFirstTokenAt?: number;
   activeAssistantId?: string;
   interrupted?: boolean;
+  groupChain?: GroupChatChainRuntime;
 }
 
 export type ChatRuntimeBySession = Record<string, ChatSessionRuntime>;
@@ -156,6 +167,7 @@ function resetStream(runtime: ChatSessionRuntime, now: number): ChatSessionRunti
     activeAssistantId: undefined,
     turnStartedAt: undefined,
     turnFirstTokenAt: undefined,
+    groupChain: undefined,
     updatedAt: now,
   };
 }
@@ -621,13 +633,138 @@ function reduceGatewayEventInner(
       // 新回合开始即解除屏蔽，远程发起的回合和 busy 重试都依赖这里恢复渲染
       return reduceGatewayEvent({ ...runtime, interrupted: undefined }, event, now);
     }
-    if (event.type !== "message.complete" && event.type !== "error") {
+    if (
+      event.type !== "message.complete" &&
+      event.type !== "error" &&
+      event.type !== "groupchat.chain_complete" &&
+      event.type !== "groupchat.chain_stopped" &&
+      event.type !== "groupchat.no_targets"
+    ) {
       // 丢弃被中断回合迟到的流式事件；终态事件放行，让半截消息正常收尾
       return runtime;
     }
   }
 
   switch (event.type) {
+    case "groupchat.chain_started": {
+      const chainId = typeof payload.chain_id === "string" ? payload.chain_id : "";
+      if (!chainId) return runtime;
+      return {
+        ...runtime,
+        streamStatus: "streaming",
+        groupChain: {
+          chainId,
+          status: "running",
+          turns: typeof payload.turns === "number" ? payload.turns : 0,
+          maxTurns: typeof payload.max_turns === "number" ? payload.max_turns : 8,
+          maxDepth: typeof payload.max_depth === "number" ? payload.max_depth : 4,
+        },
+        turnStartedAt: runtime.turnStartedAt ?? now,
+        statusMessage: "正在组织群聊成员…",
+        statusKind: "groupchat_chain",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.dispatch_started": {
+      if (!runtime.groupChain || payload.chain_id !== runtime.groupChain.chainId) {
+        return runtime;
+      }
+      const activeAgent =
+        typeof payload.target_name === "string" ? payload.target_name : undefined;
+      const mentionDepth =
+        typeof payload.mention_depth === "number" ? payload.mention_depth : undefined;
+      return {
+        ...runtime,
+        streamStatus: "streaming",
+        groupChain: {
+          ...runtime.groupChain,
+          turns:
+            typeof payload.turns === "number"
+              ? payload.turns
+              : runtime.groupChain.turns,
+          activeAgent,
+          mentionDepth,
+        },
+        statusMessage: activeAgent
+          ? `${activeAgent} 正在回复${mentionDepth && mentionDepth > 1 ? "并接力" : ""}…`
+          : runtime.statusMessage,
+        statusKind: "groupchat_chain",
+        statusUpdatedAt: now,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.chain_complete": {
+      if (
+        runtime.groupChain &&
+        payload.chain_id &&
+        payload.chain_id !== runtime.groupChain.chainId
+      ) {
+        return runtime;
+      }
+      return {
+        ...runtime,
+        streamStatus: "complete",
+        groupChain: undefined,
+        statusMessage: "",
+        statusKind: undefined,
+        statusUpdatedAt: undefined,
+        turnStartedAt: undefined,
+        turnFirstTokenAt: undefined,
+        activeAssistantId: undefined,
+        interrupted: undefined,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.chain_stopped": {
+      if (
+        runtime.groupChain &&
+        payload.chain_id &&
+        payload.chain_id !== runtime.groupChain.chainId
+      ) {
+        return runtime;
+      }
+      const text =
+        typeof payload.message === "string" && payload.message.trim()
+          ? payload.message.trim()
+          : "群聊接力已停止。";
+      const next = appendNoticeMessage(runtime, sessionId, now, text, "warning");
+      return {
+        ...next,
+        streamStatus: "complete",
+        groupChain: undefined,
+        statusMessage: text,
+        statusKind: "warn",
+        statusUpdatedAt: now,
+        turnStartedAt: undefined,
+        turnFirstTokenAt: undefined,
+        activeAssistantId: undefined,
+        interrupted: undefined,
+        updatedAt: now,
+      };
+    }
+
+    case "groupchat.no_targets": {
+      const text = "没有找到匹配的群聊成员，请检查 @名字。";
+      const next = appendNoticeMessage(runtime, sessionId, now, text, "warning");
+      return {
+        ...next,
+        streamStatus: "complete",
+        groupChain: undefined,
+        statusMessage: text,
+        statusKind: "warn",
+        statusUpdatedAt: now,
+        turnStartedAt: undefined,
+        turnFirstTokenAt: undefined,
+        activeAssistantId: undefined,
+        interrupted: undefined,
+        updatedAt: now,
+      };
+    }
+
     case "message.start": {
       // Group chat (P-052): a start carrying a sender opens a NEW bubble per
       // member reply (each is distinct), even mid-stream; single-agent starts
@@ -855,13 +992,18 @@ function reduceGatewayEventInner(
         next = appendNoticeMessage(next, sessionId, now + 2, pickErrorText(payload), "error");
       }
 
+      const chainContinues = Boolean(runtime.groupChain) && !runtime.interrupted;
       return {
         ...next,
-        streamStatus: isErrorCompletion ? "error" : "complete",
+        streamStatus: chainContinues
+          ? "streaming"
+          : isErrorCompletion
+            ? "error"
+            : "complete",
         statusMessage: warningText ?? "",
         statusKind: warningText ? "warn" : undefined,
         statusUpdatedAt: warningText ? now : undefined,
-        turnStartedAt: undefined,
+        turnStartedAt: chainContinues ? runtime.turnStartedAt : undefined,
         turnFirstTokenAt: undefined,
         activeAssistantId: undefined,
         interrupted: undefined,

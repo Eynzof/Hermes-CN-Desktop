@@ -40,6 +40,30 @@
   white-space: nowrap;
 }
 
+.chainStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--h-text-2);
+  font-size: 12px;
+}
+
+.chainDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--h-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 16%, transparent);
+  animation: chainPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes chainPulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .guide {
   font-size: 12px;
   color: var(--h-text-3);
