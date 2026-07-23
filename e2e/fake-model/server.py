@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import re
 import time
 import uuid
 from typing import Any
@@ -41,6 +42,11 @@ STREAM_ORDER_REPLY = (
     + "".join(f"{index:02d}|" for index in range(64))
     + "STREAM-ORDER-END"
 )
+GROUP_CONTEXT_MARKER = "group-context-e2e"
+GROUP_LONG_STREAM_MARKER = "group-long-stream-e2e"
+GROUP_FAILURE_MARKER = "group-failure-e2e"
+_GROUP_AGENT_RE = re.compile(r'你是"([^"]+)"，群聊房间')
+_ATTRIBUTED_SPEAKER_RE = re.compile(r"\[([^\]\n]+)\]:")
 
 
 def _extract_image_bytes(content: Any) -> int:
@@ -76,6 +82,27 @@ def _text_of(content: Any) -> str:
             if isinstance(part, dict) and part.get("type") == "text"
         )
     return ""
+
+
+def _group_agent_name(messages: list[dict[str, Any]]) -> str:
+    for message in messages:
+        if message.get("role") != "system":
+            continue
+        match = _GROUP_AGENT_RE.search(_text_of(message.get("content")))
+        if match:
+            return match.group(1)
+    return "unknown"
+
+
+def _group_seen_agents(messages: list[dict[str, Any]], own_name: str) -> list[str]:
+    speakers: set[str] = set()
+    for message in messages:
+        if message.get("role") == "system":
+            continue
+        for speaker in _ATTRIBUTED_SPEAKER_RE.findall(_text_of(message.get("content"))):
+            if speaker.startswith("qa-") and speaker != own_name:
+                speakers.add(speaker)
+    return sorted(speakers)
 
 
 DELEGATE_MARKER = "delegate-cli-e2e:"
@@ -134,6 +161,21 @@ def _reply_for(messages: list[dict[str, Any]]) -> str:
     if image_bytes > 0:
         return f"我看到一张图片，共 {image_bytes} 字节。"
     text = _text_of(last_user.get("content")).strip()
+    agent_name = _group_agent_name(messages)
+    if GROUP_CONTEXT_MARKER in text:
+        seen = _group_seen_agents(messages, agent_name)
+        return (
+            f"GROUP-CONTEXT agent={agent_name} "
+            f"seen={','.join(seen) if seen else 'none'}"
+        )
+    if GROUP_LONG_STREAM_MARKER in text:
+        return (
+            f"GROUP-LONG-BEGIN|agent={agent_name}|"
+            + "".join(f"{index:02d}|" for index in range(64))
+            + "GROUP-LONG-END"
+        )
+    if GROUP_FAILURE_MARKER in text:
+        return f"GROUP-FAILURE-SURVIVOR agent={agent_name}"
     if STREAM_ORDER_MARKER in text:
         return STREAM_ORDER_REPLY
     if text == "scroll-follow-e2e":
@@ -170,6 +212,24 @@ async def models() -> dict[str, Any]:
 async def chat_completions(request: Request):
     body = await request.json()
     messages = body.get("messages") or []
+    last_user = next(
+        (message for message in reversed(messages) if message.get("role") == "user"),
+        {"content": ""},
+    )
+    last_user_text = _text_of(last_user.get("content")).strip()
+    if (
+        GROUP_FAILURE_MARKER in last_user_text
+        and _group_agent_name(messages) == "qa-failing"
+    ):
+        return JSONResponse(
+            {
+                "error": {
+                    "message": "intentional group E2E member failure",
+                    "type": "invalid_request_error",
+                }
+            },
+            status_code=400,
+        )
 
     delegate_args = _delegate_request(messages)
     if delegate_args is not None:
@@ -225,7 +285,7 @@ async def chat_completions(request: Request):
             if reply.startswith("scroll-follow-token-0"):
                 await asyncio.sleep(0.25)
             yield _chunk({"role": "assistant"})
-            if reply == STREAM_ORDER_REPLY:
+            if reply == STREAM_ORDER_REPLY or reply.startswith("GROUP-LONG-BEGIN|"):
                 # Span many 33ms Core coalescing windows. Two-character chunks
                 # plus a small delay make overlapping timer/completion batches
                 # likely in the real gateway while keeping the test fast.
