@@ -12,6 +12,7 @@ import type { HermesUIMessage, SessionMessage } from "@hermes/protocol";
 import {
   consolidateAssistantMessages,
   legacySessionMessagesToHermesUIMessages,
+  mergeHermesUIMessages,
 } from "./message-adapter";
 
 const SID = "gc_test";
@@ -60,6 +61,22 @@ describe("consolidateAssistantMessages — group chat identity (P-052)", () => {
     expect(out.map((m) => m.senderName)).toEqual(["alice", "bob"]);
   });
 
+  it("sender-less answer text never merges into an adjacent member", () => {
+    const alice = assistant({
+      id: "a",
+      parts: [{ type: "text", text: "A" }],
+      senderAgentId: "alice",
+      senderName: "alice",
+    });
+    const recoveryArtifact = assistant({
+      id: "recovered",
+      parts: [{ type: "text", text: "B" }],
+    });
+    const out = consolidateAssistantMessages([alice, recoveryArtifact]);
+    expect(out).toHaveLength(2);
+    expect(out[0]?.senderName).toBe("alice");
+  });
+
   it("single-agent assistants still merge (no regression)", () => {
     const a = assistant({ id: "a", parts: [{ type: "text", text: "A" }] });
     const b = assistant({ id: "b", parts: [{ type: "text", text: "B" }] });
@@ -95,5 +112,23 @@ describe("legacySessionMessagesToHermesUIMessages — group chat identity (P-052
     const assistants = legacySessionMessagesToHermesUIMessages(rows).filter((m) => m.role === "assistant");
     expect(assistants).toHaveLength(1);
     expect(assistants[0].senderName).toBe("default");
+  });
+
+  it("identical text from different members does not canonical-match", () => {
+    const stored = assistant({
+      id: "stored",
+      parts: [{ type: "text", text: "同意" }],
+      senderAgentId: "planner",
+      senderName: "planner",
+    });
+    const live = assistant({
+      id: "live",
+      parts: [{ type: "text", text: "同意" }],
+      senderAgentId: "critic",
+      senderName: "critic",
+    });
+    const merged = mergeHermesUIMessages([stored], [live]);
+    expect(merged).toHaveLength(2);
+    expect(merged.map((message) => message.senderName)).toEqual(["planner", "critic"]);
   });
 });

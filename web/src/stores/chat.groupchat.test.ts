@@ -6,7 +6,7 @@
 // rebuild a sender-less bubble that merged into default — giving 3 bubbles.
 // The whole migration must end with exactly TWO bubbles, one per member.
 import { createStore } from "jotai/vanilla";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { GatewayEvent, HermesUIMessage } from "@hermes/protocol";
 
@@ -15,9 +15,14 @@ import {
   chatRuntimeBySessionAtom,
   ensureChatSessionAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
+  startPromptAtom,
 } from "./chat";
 
 const SID = "gc_race";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function ev(type: string, payload: Record<string, unknown>): GatewayEvent {
   return { type, session_id: SID, payload } as unknown as GatewayEvent;
@@ -31,7 +36,55 @@ function textOf(message: HermesUIMessage): string {
 }
 
 describe("group chat @all completion race (P-052)", () => {
+  it("starts group turns without a sender-less assistant and keeps repeated member replies separate", () => {
+    vi.spyOn(Date, "now").mockReturnValue(10_000);
+    const store = createStore();
+    store.set(ensureChatSessionAtom, SID);
+
+    const runTurn = (text: string, members: string[], now: number) => {
+      store.set(startPromptAtom, {
+        sessionId: SID,
+        text,
+        now,
+        optimisticAssistant: false,
+      });
+      for (const member of members) {
+        store.set(applyGatewayEventAtom, ev("message.start", {
+          sender_agent_id: member,
+          sender_name: member,
+        }));
+        store.set(applyGatewayEventAtom, ev("message.delta", {
+          text: `${member} 的回复`,
+          sender_agent_id: member,
+          sender_name: member,
+        }));
+        store.set(applyGatewayEventAtom, ev("message.complete", {
+          text: `${member} 的回复`,
+          status: "complete",
+          sender_agent_id: member,
+          sender_name: member,
+        }));
+      }
+    };
+
+    runTurn("第一轮", ["planner", "critic", "synthesizer"], 1_000);
+    runTurn("第二轮", ["critic", "synthesizer"], 2_000);
+
+    const runtime = store.get(chatRuntimeBySessionAtom)[SID];
+    const assistants = (runtime?.messages ?? []).filter((message) => message.role === "assistant");
+    expect(assistants).toHaveLength(5);
+    expect(assistants.map((message) => message.senderName)).toEqual([
+      "planner",
+      "critic",
+      "synthesizer",
+      "critic",
+      "synthesizer",
+    ]);
+    expect(assistants.every((message) => message.senderAgentId)).toBe(true);
+  });
+
   it("default completes, reviewer starts, transcript refetch mid-turn, reviewer streams — stays two bubbles", () => {
+    vi.spyOn(Date, "now").mockReturnValue(20_000);
     const store = createStore();
     store.set(ensureChatSessionAtom, SID);
 
@@ -67,5 +120,51 @@ describe("group chat @all completion race (P-052)", () => {
     expect(assistants.map((m) => m.senderName)).toEqual(["default", "reviewer"]);
     expect(textOf(assistants[0]!)).toContain("default");
     expect(textOf(assistants[1]!)).toContain("reviewer");
+  });
+
+  it("repairs sender attribution when a stored completion wins before buffered member deltas", () => {
+    vi.spyOn(Date, "now").mockReturnValue(30_000);
+    const store = createStore();
+    store.set(ensureChatSessionAtom, SID);
+
+    store.set(applyGatewayEventAtom, ev("message.start", {
+      sender_agent_id: "reviewer",
+      sender_name: "reviewer",
+    }));
+    const storedReviewer: HermesUIMessage = {
+      id: "stored-reviewer",
+      sessionId: SID,
+      role: "assistant",
+      createdAt: 30_000,
+      status: "complete",
+      parts: [{ type: "text", text: "reviewer 的回复" }],
+      senderAgentId: "reviewer",
+      senderName: "reviewer",
+    };
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, {
+      sessionId: SID,
+      storedMessages: [storedReviewer],
+    });
+
+    // These events were already in transit when the REST completion retired
+    // the original live bubble. The reasoning event has no sender fields.
+    store.set(applyGatewayEventAtom, ev("thinking.delta", { text: "正在思考" }));
+    store.set(applyGatewayEventAtom, ev("message.delta", {
+      text: "reviewer 的回复",
+      sender_agent_id: "reviewer",
+      sender_name: "reviewer",
+    }));
+    store.set(applyGatewayEventAtom, ev("message.complete", {
+      text: "reviewer 的回复",
+      status: "complete",
+      sender_agent_id: "reviewer",
+      sender_name: "reviewer",
+    }));
+
+    const runtime = store.get(chatRuntimeBySessionAtom)[SID];
+    const assistants = (runtime?.messages ?? []).filter((message) => message.role === "assistant");
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0]?.senderAgentId).toBe("reviewer");
+    expect(assistants[0]?.senderName).toBe("reviewer");
   });
 });

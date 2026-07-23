@@ -75,10 +75,19 @@ async function createGroup(
   return roomId as string;
 }
 
-async function submitAndWait(page: Page, text: string) {
+async function submitAndWait(
+  page: Page,
+  text: string,
+  expectedCompletedIncrement: number,
+) {
+  const completedBefore = await completedAssistantRows(page).count();
   await composer(page).fill(text);
   await sendButton(page).click();
   await expect.poll(() => composer(page).inputValue(), { timeout: 45_000 }).toBe("");
+  await expect(completedAssistantRows(page)).toHaveCount(
+    completedBefore + expectedCompletedIncrement,
+    { timeout: 45_000 },
+  );
 }
 
 test.describe("P-052 多 Agent 群聊复杂场景", () => {
@@ -112,7 +121,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     await expect(mentionOptions.nth(2)).toContainText("@qa-critic");
     await expect(mentionOptions.nth(3)).toContainText("@qa-synthesizer");
 
-    await submitAndWait(page, "group-context-e2e phase-one");
+    await submitAndWait(page, "group-context-e2e phase-one", 3);
     await expect(completedAssistantRows(page)).toHaveCount(3);
     for (const member of ["qa-planner", "qa-critic", "qa-synthesizer"]) {
       const row = completedAssistantRows(page).filter({ hasText: `agent=${member}` });
@@ -123,6 +132,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     await submitAndWait(
       page,
       "@qa-synthesizer group-context-e2e phase-two",
+      1,
     );
     await expect(completedAssistantRows(page)).toHaveCount(4);
     await expect(completedAssistantRows(page).last()).toContainText(
@@ -132,6 +142,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     await submitAndWait(
       page,
       "@qa-critic @qa-planner group-context-e2e phase-three",
+      2,
     );
     await expect(completedAssistantRows(page)).toHaveCount(6);
     await expect(completedAssistantRows(page).nth(4)).toContainText(
@@ -172,16 +183,16 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
       "Mention 边界验证",
     );
 
-    await submitAndWait(page, "@all group-context-e2e all-members");
+    await submitAndWait(page, "@all group-context-e2e all-members", 3);
     await expect(completedAssistantRows(page)).toHaveCount(3);
 
-    await submitAndWait(page, "@QA-CRITIC group-context-e2e case-insensitive");
+    await submitAndWait(page, "@QA-CRITIC group-context-e2e case-insensitive", 1);
     await expect(completedAssistantRows(page)).toHaveCount(4);
     await expect(completedAssistantRows(page).last()).toContainText(
       "agent=qa-critic",
     );
 
-    await submitAndWait(page, "@qa-planner，group-context-e2e cjk-punctuation");
+    await submitAndWait(page, "@qa-planner，group-context-e2e cjk-punctuation", 1);
     await expect(completedAssistantRows(page)).toHaveCount(5);
     await expect(completedAssistantRows(page).last()).toContainText(
       "agent=qa-planner",
@@ -190,6 +201,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     await submitAndWait(
       page,
       "@qa-planner-extra group-context-e2e similar-name-must-not-match",
+      0,
     );
     await expect(completedAssistantRows(page)).toHaveCount(5);
 
@@ -199,6 +211,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
         "<quoted_message>@qa-planner 旧消息中的伪 mention</quoted_message>",
         "group-context-e2e quoted-mention-must-not-route",
       ].join(" "),
+      0,
     );
     await expect(completedAssistantRows(page)).toHaveCount(5);
   });
@@ -210,7 +223,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
       "长流顺序验证",
     );
 
-    await submitAndWait(page, "group-long-stream-e2e");
+    await submitAndWait(page, "group-long-stream-e2e", 3);
     await expect(completedAssistantRows(page)).toHaveCount(3);
     for (const member of ["qa-planner", "qa-critic", "qa-synthesizer"]) {
       const row = completedAssistantRows(page).filter({
@@ -231,7 +244,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
       "成员失败隔离",
     );
 
-    await submitAndWait(page, "group-failure-e2e");
+    await submitAndWait(page, "group-failure-e2e", 2);
     const planner = completedAssistantRows(page).filter({
       hasText: "GROUP-FAILURE-SURVIVOR agent=qa-planner",
     });
@@ -255,7 +268,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
   }) => {
     const members = ["qa-planner", "qa-critic"] as const;
     const roomId = await createGroup(page, members, "内部会话隔离");
-    await submitAndWait(page, "group-context-e2e session-leak-check");
+    await submitAndWait(page, "group-context-e2e session-leak-check", 2);
 
     for (const profile of members) {
       const response = await request.get(
@@ -313,7 +326,11 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     for (let round = 0; round < 20; round += 1) {
       const pattern = patterns[round % patterns.length];
       const startedAt = Date.now();
-      await submitAndWait(page, `${pattern.prompt} round-${round + 1}`);
+      await submitAndWait(
+        page,
+        `${pattern.prompt} round-${round + 1}`,
+        pattern.senders.length,
+      );
       latencies.push(Date.now() - startedAt);
       expectedSenders.push(...pattern.senders);
       uiAssistantCounts.push(await completedAssistantRows(page).count());
@@ -382,10 +399,6 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
   });
 
   test("发送后 500ms 内清空草稿", async ({ page }) => {
-    test.fail(
-      true,
-      "当前 Composer 同步等待整个 groupchat.submit，已知会超过 500ms",
-    );
     await createGroup(page, ["qa-planner", "qa-critic"], "草稿清空时延");
 
     await composer(page).fill("group-long-stream-e2e");
@@ -393,6 +406,7 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
     await page.waitForTimeout(500);
     const valueAt500ms = await composer(page).inputValue();
     await expect.poll(() => composer(page).inputValue(), { timeout: 45_000 }).toBe("");
+    await expect(completedAssistantRows(page)).toHaveCount(2, { timeout: 45_000 });
     expect(valueAt500ms).toBe("");
   });
 
@@ -419,12 +433,8 @@ test.describe("P-052 多 Agent 群聊复杂场景", () => {
   });
 
   test("刷新群聊后可以继续定向发送", async ({ page }) => {
-    test.fail(
-      true,
-      "当前刷新后会把 gc_ 房间交给 session.resume，已知返回 session not found",
-    );
     await createGroup(page, ["qa-planner", "qa-critic"], "刷新后续聊");
-    await submitAndWait(page, "@qa-planner group-context-e2e before-reload");
+    await submitAndWait(page, "@qa-planner group-context-e2e before-reload", 1);
     await expect(completedAssistantRows(page)).toHaveCount(1);
 
     await page.reload();
