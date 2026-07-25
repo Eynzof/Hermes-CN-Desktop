@@ -1,0 +1,70 @@
+﻿<html lang="zh-CN" theme-mode="light" class="lang-zh"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tencent Cloud CodeBuddy</title>
+  <meta name="theme-color" content="#ffffff">
+  <meta name="msapplication-TileColor" content="#FFFFFF">
+  <script>
+    if (window.location.pathname === '/admin') {
+      window.location.pathname = '/admin/';
+    }
+    window.APP_EDITION = 'standard';
+    window.RUN_ENV = 'prod';
+    window.DEFAULT_AGENT_SERVER_URL = 'http://default-agent-server:3000/custom-prompt-agent';
+    window.__toCdnUrl = (url) => {
+      const BASE_URL = '//download.codebuddy.cn/web/admin/b31edee8e67fb71f38e72d7a024c40da363da7aa';
+      return (/__.*?__$/.test(BASE_URL) ? '' : BASE_URL) + '/' + url;
+    };
+    window.IFRAME_MENUS = '""';
+    window.IS_NEW_EXCLUSIVE_EDITION = '__IS_NEW_EXCLUSIVE_EDITION__';
+    window.IS_INTERNATIONAL_EDITION = 'false';
+    window.DASHBOARD_DETAIL_MODEL_FILTER_ENABLED = '__DASHBOARD_DETAIL_MODEL_FILTER_ENABLED__';
+  </script>
+  <link rel="icon" href="//download.codebuddy.cn/web/admin/b31edee8e67fb71f38e72d7a024c40da363da7aa/assets/favicon.svg">
+  <script>
+    if (APP_EDITION === 'standard') {
+      document.title = 'Tencent Cloud CodeBuddy';
+      const link = document.querySelector("link[rel='icon']");
+      link.href = __toCdnUrl('assets/favicon.svg');
+    }
+  </script>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="//download.codebuddy.cn/web/admin/b31edee8e67fb71f38e72d7a024c40da363da7aa/assets/file-icon.css">
+  <!--[if IE]>
+      <style>
+        #app {
+          display: none;
+        }
+      </style>
+    <![endif]-->
+  <script type="module" crossorigin="" src="//download.codebuddy.cn/web/admin/b31edee8e67fb71f38e72d7a024c40da363da7aa/assets/index-UqKpQi1y.js"></script>
+  <link rel="stylesheet" crossorigin="" href="//download.codebuddy.cn/web/admin/b31edee8e67fb71f38e72d7a024c40da363da7aa/assets/style-BFf79hak.css">
+<link rel="modulepreload" as="script" crossorigin="" href="https://download.codebuddy.cn/web/admin/b31edee8e67fb71f38e72d7a024c40da363da7aa/assets/instrument-BGMiLhrP.js"><link rel="modulepreload" as="script" crossorigin="" href="https://download.codebuddy.cn/web/admin/b31edee8e67fb71f38e72d7a024c40da363da7aa/assets/trace-api-DZSa3eiD.js"></head>
+
+<body class="t-loading--lock">
+  <!--[if IE]>
+      <h1 style="position: absolute; width: 100%; text-align: center; top: 45%">
+        建议使用 <a href="https://www.google.cn/chrome/">Chrome</a>
+      </h1>
+    <![endif]-->
+  <td-horizon></td-horizon>
+  <td-aegis></td-aegis>
+  <div id="app"><div class="t-layout _panel_xrhkd_1"><div class="t-loading t-loading__fullscreen t-loading--center t-loading__overlay"><div class="t-loading--center t-size-m w-full h-full bg-white"><svg class="t-loading__gradient t-icon-loading" viewBox="0 0 12 12" version="1.1" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg"><foreignObject x="0" y="0" width="12" height="12"><div class="t-loading__gradient-conic" style="background: conic-gradient(from 90deg at 50% 50%, rgba(0, 82, 217, 0) 0deg, rgb(0, 82, 217) 360deg);"></div></foreignObject></svg></div></div></div></div>
+  <script>
+    if (window.Cypress) {
+      window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = window.parent.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+    }
+  </script>
+
+  <script>
+    const isInIframe = window.self !== window.top;
+    if (isInIframe) {
+      window.top.location.href = window.location.origin + window.location.pathname;
+    } else {
+      document.getElementById('app').style.display = '';
+    }
+  </script>
+
+
+
+</body></html>
