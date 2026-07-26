@@ -20,7 +20,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
-use crate::process::port_lock::{claim_port_set, release_orphaned_port_locks, PortLock};
+use crate::process::port_lock::{
+    claim_port_set, pid_is_running, release_orphaned_port_locks, reset_local_claims, PortLock,
+};
 use crate::state::{DashboardHandle, DashboardJobHandle};
 
 // A freshly installed onefile runtime can spend tens of seconds on macOS
@@ -116,16 +118,28 @@ fn fallback_ports(start: u16) -> Vec<u16> {
     ports
 }
 
-/// The well-known satellite ports that a desktop-managed dashboard tree may
-/// bind (webhook, proxy). These are reserved alongside the dashboard API port.
-const WELL_KNOWN_DASHBOARD_PORTS: &[u16] = &[8644, 8645];
+/// The base satellite ports that a desktop-managed dashboard tree may bind
+/// (webhook, proxy).  These are offset from ``DEFAULT_DESKTOP_DASHBOARD_PORT``
+/// so that multiple Hermes instances can coexist without colliding:
+///
+/// ```text
+///     dashboard=9120 → [9120, 8644, 8645]
+///     dashboard=9121 → [9121, 8646, 8647]
+///     dashboard=9122 → [9122, 8648, 8649]
+///     ...
+/// ```
+///
+/// Must be kept in sync with the Python ``_compute_well_known_ports`` in
+/// ``hermes_cli/main.py``.
+const SATELLITE_PORT_BASE_WEBHOOK: u16 = 8644;
+const SATELLITE_PORT_BASE_PROXY: u16 = 8645;
 
 /// Build the full set of ports to claim for a dashboard at ``dashboard_port``.
 fn ports_to_claim(dashboard_port: u16) -> Vec<u16> {
-    let mut ports = Vec::with_capacity(WELL_KNOWN_DASHBOARD_PORTS.len() + 1);
-    ports.push(dashboard_port);
-    ports.extend_from_slice(WELL_KNOWN_DASHBOARD_PORTS);
-    ports
+    let offset = (dashboard_port.saturating_sub(DEFAULT_DESKTOP_DASHBOARD_PORT)) * 2;
+    let webhook_port = SATELLITE_PORT_BASE_WEBHOOK.saturating_add(offset);
+    let proxy_port = SATELLITE_PORT_BASE_PROXY.saturating_add(offset);
+    vec![dashboard_port, webhook_port, proxy_port]
 }
 
 /// Try to claim the full port set for a candidate dashboard port.
@@ -217,34 +231,8 @@ fn marker_owner_state(
     }
 }
 
-#[cfg(unix)]
-fn pid_is_running(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-}
-
-#[cfg(windows)]
-fn pid_is_running(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    let filter = format!("PID eq {}", pid);
-    let Ok(output) = Command::new("tasklist")
-        .args(["/FI", &filter, "/FO", "CSV", "/NH"])
-        .output()
-    else {
-        return false;
-    };
-    String::from_utf8_lossy(&output.stdout).contains(&pid.to_string())
-}
-
-#[cfg(not(any(unix, windows)))]
-fn pid_is_running(_pid: u32) -> bool {
-    false
-}
+// pid_is_running is imported from port_lock.rs (the single canonical
+// implementation, using OpenProcess on Windows and libc::kill on Unix).
 
 fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> bool {
     let start = Instant::now();
@@ -1570,6 +1558,9 @@ pub async fn ensure_hermes_dashboard(
             // scan. Release the old claim first — the new candidate (possibly
             // the same port) gets a fresh atomic claim of its full port set.
             drop(std::mem::take(&mut port_locks));
+            // Ensure no stale local claims remain from the dropped locks so
+            // the re-claim below gets real OS locks (not no-op handles).
+            reset_local_claims();
             let next = std::iter::once(options.port)
                 .chain(fallback_ports(options.port))
                 .filter(|port| {
@@ -2167,5 +2158,40 @@ mod tests {
             "live-foreign marker must collapse to stale adoption, not live attach"
         );
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    // ── Bug 2: Satellite port offset ─────────────────────────────────
+
+    #[test]
+    fn ports_to_claim_offsets_satellite_ports() {
+        // dashboard=9120 → [9120, 8644, 8645]
+        let ports = ports_to_claim(9120);
+        assert_eq!(ports, vec![9120, 8644, 8645]);
+
+        // dashboard=9121 → [9121, 8646, 8647]
+        let ports = ports_to_claim(9121);
+        assert_eq!(ports, vec![9121, 8646, 8647]);
+
+        // dashboard=9130 → [9130, 8664, 8665]
+        let ports = ports_to_claim(9130);
+        assert_eq!(ports, vec![9130, 8664, 8665]);
+    }
+
+    #[test]
+    fn fallback_ports_each_have_unique_satellite_ports() {
+        use std::collections::HashSet;
+
+        let mut all_ports: HashSet<u16> = HashSet::new();
+        for offset in 0..=20 {
+            let dashboard_port = DEFAULT_DESKTOP_DASHBOARD_PORT + offset;
+            for p in ports_to_claim(dashboard_port) {
+                assert!(
+                    all_ports.insert(p),
+                    "port {} collides between offset {} and another",
+                    p,
+                    offset
+                );
+            }
+        }
     }
 }

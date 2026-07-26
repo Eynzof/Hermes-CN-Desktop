@@ -1,0 +1,4 @@
+interface:
+  display_name: "项目结构导航"
+  short_description: "理解 Hermes Agent CN Desktop 代码库结构，定位源文件，了解 Tauri+React 架构，查找 Rust 命令或前端模块，导航 monorepo。"
+  default_prompt: "根据项目结构技能，帮助用户在 Hermes Agent CN Desktop 代码库中定位文件、理解模块职责、导航 monorepo 结构、查找特定 Tauri 命令或 React 组件位置。"
