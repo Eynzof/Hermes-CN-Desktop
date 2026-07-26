@@ -208,11 +208,7 @@ fn get_process_start_time(pid: u32) -> Option<u64> {
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 
     extern "system" {
-        fn OpenProcess(
-            dwDesiredAccess: u32,
-            bInheritHandle: i32,
-            dwProcessId: u32,
-        ) -> *mut c_void;
+        fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut c_void;
         fn CloseHandle(hObject: *mut c_void) -> i32;
         fn GetProcessTimes(
             hProcess: *mut c_void,
@@ -232,7 +228,13 @@ fn get_process_start_time(pid: u32) -> Option<u64> {
         let mut exit_t: u64 = 0;
         let mut kernel_t: u64 = 0;
         let mut user_t: u64 = 0;
-        let result = GetProcessTimes(handle, &mut creation, &mut exit_t, &mut kernel_t, &mut user_t);
+        let result = GetProcessTimes(
+            handle,
+            &mut creation,
+            &mut exit_t,
+            &mut kernel_t,
+            &mut user_t,
+        );
         CloseHandle(handle);
         if result == 0 {
             return None;
@@ -568,8 +570,11 @@ mod tests {
         // Re-claim same ports — should get real OS locks, not no-op handles
         let locks2 = claim_port_set(&[50010, 50011, 50012], home).unwrap();
         for lock in &locks2 {
-            assert!(lock.file.is_some(),
-                "port {} should have real OS lock after re-claim", lock.port());
+            assert!(
+                lock.file.is_some(),
+                "port {} should have real OS lock after re-claim",
+                lock.port()
+            );
         }
         drop(locks2);
     }
@@ -590,8 +595,10 @@ mod tests {
         fs::write(&path, format!("{}:{}\n", our_pid, fake_start)).unwrap();
 
         // stale_lock_owner should detect the mismatch
-        assert!(stale_lock_owner(&path),
-            "should detect stale lock via start_time mismatch");
+        assert!(
+            stale_lock_owner(&path),
+            "should detect stale lock via start_time mismatch"
+        );
 
         // And try_claim_port should break it
         let lock = try_claim_port(50020, home).expect("should break stale lock and claim");
@@ -610,18 +617,20 @@ mod tests {
         write_lock_owner(&path, our_pid);
 
         // stale_lock_owner should return false (we're alive, times match)
-        assert!(!stale_lock_owner(&path),
-            "live owner with matching start_time should not be stale");
+        assert!(
+            !stale_lock_owner(&path),
+            "live owner with matching start_time should not be stale"
+        );
     }
 
     // ── Bug 7: PID consistency matrix ────────────────────────────────
 
     #[test]
     fn pid_is_running_consistency_matrix() {
-        assert!(!pid_is_running(0));                    // PID 0
-        assert!(pid_is_running(std::process::id()));    // ourselves
-        assert!(!pid_is_running(99999999));              // nonexistent
-        // SYSTEM PID (4) — should not crash
+        assert!(!pid_is_running(0)); // PID 0
+        assert!(pid_is_running(std::process::id())); // ourselves
+        assert!(!pid_is_running(99999999)); // nonexistent
+                                            // SYSTEM PID (4) — should not crash
         let _system = pid_is_running(4);
     }
 
@@ -650,9 +659,11 @@ mod tests {
         for (content, expected) in cases {
             fs::write(&path, content).unwrap();
             let result = read_lock_owner(&path);
-            assert_eq!(result, expected,
+            assert_eq!(
+                result, expected,
                 "Mismatch for content {:?}: got {:?}, expected {:?}",
-                content, result, expected);
+                content, result, expected
+            );
         }
     }
 

@@ -21,8 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 use crate::process::port_lock::{
-    claim_port_set, pid_is_running, release_orphaned_port_locks, reset_local_claims,
-    PortLock,
+    claim_port_set, pid_is_running, release_orphaned_port_locks, reset_local_claims, PortLock,
 };
 use crate::state::{DashboardHandle, DashboardJobHandle};
 
