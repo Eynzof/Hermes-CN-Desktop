@@ -13,5 +13,5 @@ pub const BRAND_DATA_DIR_NAME: &str = ".HermesAgent";
 pub const BRAND_WINDOW_TITLE: &str = "HermesAgent 桌面版";
 pub const BRAND_HOMEPAGE: &str = "https://api.huanxing.ai";
 pub const BRAND_UPDATE_MANIFEST_URL: &str =
-    "https://ai.fengchiyun.com/downloads/HermesAgent/latest.json";
+    "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent/hermesagent/latest.json";
 pub const BRAND_UPDATE_DOWNLOAD_URL: &str = "https://api.huanxing.ai/hermes-client";

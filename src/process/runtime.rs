@@ -708,13 +708,16 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
 // Forks rebuilding the desktop should set the compile-time env override
 // to point at their own release pipeline + key (or edit the constants
 // below).
+// The production fallback below is the Volcengine TOS mirror.
 const BAKED_MANIFEST_BASE_URL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
 const BAKED_MANIFEST_CHANNEL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
 const BAKED_PUBLIC_KEY_PEM: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
 
 const FALLBACK_MANIFEST_BASE_URL: &str =
-    "https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download";
+    "https://huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime";
+// The upstream signed manifest is mirrored byte-for-byte; its artifactUrl is
+// not rewritten here because it is covered by the Ed25519 signature.
 const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
     "-----BEGIN PUBLIC KEY-----\n",
     "MCowBQYDK2VwAyEAqPkLQ4o67G2GMTgkQQQZXWwDBZM/4hqq5thSZSNhoC0=\n",
@@ -4387,9 +4390,9 @@ mod tests {
     fn manifest_url_falls_back_when_env_unset() {
         clear_runtime_env();
         // No env, no compile-time bake (BAKED_* are option_env! and unset in
-        // dev/test builds), so we get FALLBACK_MANIFEST_BASE_URL + default channel.
+        // dev/test builds), so we get the TOS fallback + default channel.
         let url = configured_manifest_url().unwrap();
-        assert!(url.contains("Eynzof/Hermes-CN-Core"));
+        assert!(url.contains("huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime"));
         assert!(url.contains("stable-"));
     }
 

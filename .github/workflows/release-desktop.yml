@@ -466,32 +466,21 @@ jobs:
           node scripts/package-portable-macos.mjs --target ${{ matrix.target }}
           gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
-  # Mirror all release assets to Cloudflare R2 so the dl-desktop download
-  # mirror (landing repo workers/release-mirror) serves from R2 instead of
-  # proxying GitHub. Runs after every build leg finishes, i.e. after the
-  # notarized DMG --clobber re-uploads and portable zips are final.
+  # Mirror final release assets to Volcengine TOS after every build leg
+  # finishes, i.e. after notarized DMGs and portable zips are final. GitHub
+  # Releases remains the source and fallback for users.
   #
-  # Failure here never blocks the release: the mirror Worker falls back to
-  # GitHub for any object missing from R2. Re-run this job from the Actions
-  # UI after a failure — every step is idempotent.
+  # The upload is idempotent and can be re-run from the Actions UI.
   #
-  # Required repo secrets (R2 API token scoped to the bucket, created in
-  # Cloudflare Dashboard → R2 → Manage API Tokens):
-  #   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ACCOUNT_ID
+  # TOS upload uses the public HTTPS PUT endpoint, matching Tapdance.
+  # TOS receives both an immutable tag directory and a latest directory.
   mirror-sync:
     needs: build
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-      BUCKET: hermes-desktop-releases
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: auto
-      AWS_ENDPOINT_URL: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-      # aws cli v2.23+ 默认的数据完整性校验头与 R2 不兼容,必须降级
-      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
-      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+      DESKTOP_TOS_BASE_URL: https://huanxing.tos-cn-beijing.volces.com/package/hermesagent
     steps:
       - name: Download all release assets
         run: |
@@ -505,12 +494,8 @@ jobs:
           sha256sum * | sort -k2 > checksums.txt
           gh release upload "$RELEASE_TAG" checksums.txt -R "$GITHUB_REPOSITORY" --clobber
 
-      - name: Sync assets to R2
-        run: aws s3 sync assets/ "s3://$BUCKET/$RELEASE_TAG/"
-
-      - name: Prune old versions from R2 (keep newest 5 tags)
-        run: |
-          aws s3 ls "s3://$BUCKET/" | awk '{print $2}' | tr -d '/' \
-            | sort -V | head -n -5 | while read -r old; do
-              [ -n "$old" ] && aws s3 rm "s3://$BUCKET/$old/" --recursive
-            done
+      - name: Upload assets to Volcengine TOS
+        env:
+          DESKTOP_ASSET_DIR: assets
+          DESKTOP_VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: node scripts/upload-desktop-tos.mjs

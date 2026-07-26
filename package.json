@@ -18,6 +18,8 @@
     "web:build": "pnpm run version:sync && pnpm run brand:sync && pnpm --filter @hermes/web build",
     "web:build:desktop": "pnpm run version:sync && pnpm run brand:sync && pnpm --filter @hermes/web build:desktop",
     "runtime:install-local": "node scripts/install-local-runtime.mjs",
+    "runtime:upload-tos": "node scripts/upload-tos.mjs",
+    "desktop:upload-tos": "node scripts/upload-desktop-tos.mjs",
     "tauri:dev": "pnpm run version:sync && pnpm run brand:sync && node scripts/tauri-dev-managed.mjs",
     "tauri:dev:managed": "pnpm run version:sync && pnpm run brand:sync && node scripts/tauri-dev-managed.mjs",
     "tauri:dev:external": "pnpm run version:sync && pnpm run brand:sync && node scripts/tauri-dev-external.mjs",
