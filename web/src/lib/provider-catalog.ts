@@ -732,6 +732,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
         { id: "Qwen/Qwen3-Coder-480B-A35B-Instruct", supportsTools: true },
         { id: "zai-org/GLM-5.2", supportsTools: true, supportsReasoning: true },
         { id: "deepseek-ai/DeepSeek-V4-Pro", supportsTools: true, supportsReasoning: true },
+        { id: "deepseek-ai/DeepSeek-V4-Flash", supportsTools: true, supportsReasoning: true },
         { id: "deepseek-ai/DeepSeek-V3.2", supportsTools: true },
         { id: "deepseek-ai/DeepSeek-R1", supportsReasoning: true },
       ],
