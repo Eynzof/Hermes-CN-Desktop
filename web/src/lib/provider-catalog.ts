@@ -320,7 +320,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.18.4";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.26.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -511,10 +511,12 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       icon: "kimi",
       websiteUrl: "https://www.kimi.com/code",
       docsUrl: "https://platform.moonshot.cn/docs",
-      defaultModel: "kimi-k2.6",
+      defaultModel: "kimi-k3",
       models: [
-        { id: "kimi-k2.7-code", supportsTools: true, supportsReasoning: true },
-        { id: "kimi-k2.6", supportsTools: true },
+        { id: "kimi-k3", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true, supportsVision: true },
+        { id: "kimi-k2.7-code-highspeed", contextWindow: 262_144, supportsTools: true, supportsReasoning: true, supportsVision: true },
+        { id: "kimi-k2.7-code", contextWindow: 262_144, supportsTools: true, supportsReasoning: true, supportsVision: true },
+        { id: "kimi-k2.6", contextWindow: 262_144, supportsTools: true, supportsReasoning: true, supportsVision: true },
         { id: "kimi-k2-0905-preview", supportsTools: true },
         { id: "kimi-latest", supportsTools: true },
         { id: "moonshot-v1-128k" },
@@ -731,7 +733,8 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       models: [
         { id: "Qwen/Qwen3-Coder-480B-A35B-Instruct", supportsTools: true },
         { id: "zai-org/GLM-5.2", supportsTools: true, supportsReasoning: true },
-        { id: "deepseek-ai/DeepSeek-V4-Pro", supportsTools: true, supportsReasoning: true },
+        { id: "deepseek-ai/DeepSeek-V4-Pro", contextWindow: 1_049_000, supportsTools: true, supportsReasoning: true },
+        { id: "deepseek-ai/DeepSeek-V4-Flash", contextWindow: 1_049_000, supportsTools: true, supportsReasoning: true },
         { id: "deepseek-ai/DeepSeek-V3.2", supportsTools: true },
         { id: "deepseek-ai/DeepSeek-R1", supportsReasoning: true },
       ],
@@ -1058,7 +1061,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       icon: "rightcode",
       websiteUrl: "https://www.right.codes",
       promotion: {
-        url: "https://www.right.codes/register?aff=d7899e4a",
+        url: "https://right.codes/register?aff=e4158139",
         badge: "partner",
       },
       defaultModel: "claude-opus-4-8",
