@@ -246,7 +246,7 @@ fn get_process_start_time(pid: u32) -> Option<u64> {
     }
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn get_process_start_time(pid: u32) -> Option<u64> {
     if pid == 0 {
         return None;
@@ -273,7 +273,37 @@ fn get_process_start_time(pid: u32) -> Option<u64> {
     Some(start_secs * 1000)
 }
 
-#[cfg(not(any(unix, windows)))]
+#[cfg(target_os = "macos")]
+fn get_process_start_time(pid: u32) -> Option<u64> {
+    let pid = libc::pid_t::try_from(pid).ok()?;
+    if pid == 0 {
+        return None;
+    }
+
+    let mut info = std::mem::MaybeUninit::<libc::proc_bsdinfo>::zeroed();
+    let info_size = std::mem::size_of::<libc::proc_bsdinfo>();
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDTBSDINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            info_size as libc::c_int,
+        )
+    };
+    if written != info_size as libc::c_int {
+        return None;
+    }
+
+    let info = unsafe { info.assume_init() };
+    Some(
+        info.pbi_start_tvsec
+            .saturating_mul(1000)
+            .saturating_add(info.pbi_start_tvusec / 1000),
+    )
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn get_process_start_time(_pid: u32) -> Option<u64> {
     None
 }
