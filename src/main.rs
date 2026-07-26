@@ -22,6 +22,7 @@ use hermes_agent_cn::connection::{self, ConnectionBackend, ConnectionMode};
 use hermes_agent_cn::desktop_control;
 use hermes_agent_cn::process::{dashboard, instance, runtime};
 use hermes_agent_cn::state::{AppState, DashboardHandle};
+use hermes_agent_cn::team_sync;
 use hermes_agent_cn::tray;
 
 /// Build a `DashboardHandle` describing an externally-managed dev dashboard we
@@ -335,6 +336,9 @@ fn main() {
                             (external_dev_handle(api_base_url), ConnectionMode::Managed)
                         }
                         ConnectionBackend::Managed => {
+                            if let Err(err) = hermes_agent_cn::team_sync::sync_if_configured(&boot_home_for_task).await {
+                                log::warn!("Team enterprise sync failed: {err}");
+                            }
                             match acquire_managed_dashboard(
                                 &app_handle,
                                 options,
@@ -469,6 +473,9 @@ fn main() {
 
             // Managed runtime already present (or update channel not configured):
             // block on the happy path — fast on a normal launch.
+            if let Err(err) = tauri::async_runtime::block_on(hermes_agent_cn::team_sync::sync_if_configured(&boot_home_str)) {
+                log::warn!("Team enterprise sync failed: {err}");
+            }
             let handle = match tauri::async_runtime::block_on(acquire_managed_dashboard(
                 app.handle(),
                 options,
@@ -547,6 +554,9 @@ fn main() {
             commands::profiles::switch_profile,
             commands::yolo::get_yolo_mode,
             commands::yolo::set_yolo_mode,
+            team_sync::get_team_device_token_status,
+            team_sync::set_team_device_token,
+            team_sync::clear_team_device_token,
             commands::memory::read_memory,
             commands::memory::add_memory_entry,
             commands::memory::update_memory_entry,

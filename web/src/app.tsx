@@ -44,6 +44,7 @@ import {
   normalizeSettingsPane,
   openSettingsDialogAtom,
 } from "@/stores/settings-dialog";
+import { getTeamDeviceTokenStatus, setTeamDeviceToken } from "@/lib/tauri-bridge";
 
 function NewTaskRedirect() {
   const { search } = useLocation();
@@ -70,6 +71,22 @@ function withBoundary(node: ReactNode) {
 
 function BackendApp() {
   useBootstrapActiveProfile();
+  useEffect(() => {
+    if (window.__TAURI_INTERNALS__ == null) return;
+    let cancelled = false;
+    void getTeamDeviceTokenStatus().then(async (status) => {
+      if (cancelled || status.configured) return;
+      const token = window.prompt("请输入企业设备令牌（可留空跳过）", "")?.trim() ?? "";
+      if (!token || cancelled) return;
+      try {
+        const result = await setTeamDeviceToken(token);
+        if (!cancelled) window.alert(`企业配置同步完成：${result.syncedModels} 个模型，${result.syncedSkills} 个 skills`);
+      } catch (error) {
+        if (!cancelled) window.alert(`企业配置同步失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   return (
     <>
       <AppShell>

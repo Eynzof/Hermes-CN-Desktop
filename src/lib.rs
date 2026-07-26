@@ -16,6 +16,7 @@ pub mod session_archive;
 pub mod session_log;
 pub mod state;
 pub mod supervisor;
+pub mod team_sync;
 pub mod tray;
 pub mod ui_store;
 pub mod update_stage;
