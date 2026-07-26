@@ -221,12 +221,22 @@ async function invokeCommand<T = any>(command: string, args?: Record<string, unk
   }
 }
 
-export async function getTeamDeviceTokenStatus(): Promise<{ configured: boolean; syncedModels: number; syncedSkills: number }> {
+export interface TeamDeviceTokenStatus {
+  configured: boolean;
+  syncedModels: number;
+  syncedSkills: number;
+}
+
+export async function getTeamDeviceTokenStatus(): Promise<TeamDeviceTokenStatus> {
   return invokeCommand("get_team_device_token_status");
 }
 
-export async function setTeamDeviceToken(token: string): Promise<{ configured: boolean; syncedModels: number; syncedSkills: number }> {
+export async function setTeamDeviceToken(token: string): Promise<TeamDeviceTokenStatus> {
   return invokeCommand("set_team_device_token", { token });
+}
+
+export async function clearTeamDeviceToken(): Promise<void> {
+  return invokeCommand("clear_team_device_token");
 }
 
 function normalizeFileDropPayload(payload: TauriFileDropEventPayload): DesktopFileDropPayload {

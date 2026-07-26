@@ -372,6 +372,9 @@ pub async fn clear_team_device_token(
     let home = { state.inner.lock()?.hermes_home.clone() };
     let _ = fs::remove_file(token_path(Path::new(&home)));
     let _ = clear_managed(Path::new(&home));
+    if let Err(error) = crate::commands::runtime_manager::restart_dashboard(&state).await {
+        log::warn!("Team device unbind succeeded but dashboard restart failed: {error}");
+    }
     Ok(())
 }
 
