@@ -80,6 +80,8 @@ Hermes CN 的需求与 bug 修复通常**同时横跨 Desktop 与 Core 两个仓
 
 ### 仓库技能
 
+开始任何工作前，必须先阅读项目结构技能：`.codex/skills/project-structure/SKILL.md`。
+
 双仓库（Desktop + Core）最新分支启动、dev 冒烟或打包态补验，必须使用：
 `.codex/skills/desktop-dual-repo-test/SKILL.md`。
 
