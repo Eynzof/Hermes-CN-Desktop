@@ -49,10 +49,10 @@ pub fn record_bootstrap_error(app: &tauri::AppHandle, message: String) -> String
     message
 }
 
-/// Finish a shell-only bootstrap when the managed runtime is intentionally
+/// Finish an offline bootstrap when the managed runtime is intentionally
 /// stopped or uninstalled. The renderer still needs the profile/home metadata
-/// and a ready event so it can mount `/guide` and the recovery surfaces, but no
-/// backend URL is invented and no runtime payload is installed.
+/// and a ready event so it can mount recovery surfaces, but no backend URL is
+/// invented and no runtime payload is installed.
 pub fn finalize_offline_bootstrap(app: &tauri::AppHandle) {
     use tauri::Manager;
 
