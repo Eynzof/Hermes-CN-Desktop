@@ -136,10 +136,19 @@ const SATELLITE_PORT_BASE_PROXY: u16 = 8645;
 
 /// Build the full set of ports to claim for a dashboard at ``dashboard_port``.
 fn ports_to_claim(dashboard_port: u16) -> Vec<u16> {
-    let offset = (dashboard_port.saturating_sub(DEFAULT_DESKTOP_DASHBOARD_PORT)) * 2;
-    let webhook_port = SATELLITE_PORT_BASE_WEBHOOK.saturating_add(offset);
-    let proxy_port = SATELLITE_PORT_BASE_PROXY.saturating_add(offset);
-    vec![dashboard_port, webhook_port, proxy_port]
+    let offset = u32::from(dashboard_port.saturating_sub(DEFAULT_DESKTOP_DASHBOARD_PORT)) * 2;
+    let mut ports = vec![dashboard_port];
+
+    for base in [SATELLITE_PORT_BASE_WEBHOOK, SATELLITE_PORT_BASE_PROXY] {
+        let candidate = u32::from(base) + offset;
+        if let Ok(port) = u16::try_from(candidate) {
+            if !ports.contains(&port) {
+                ports.push(port);
+            }
+        }
+    }
+
+    ports
 }
 
 /// Try to claim the full port set for a candidate dashboard port.
@@ -2175,6 +2184,11 @@ mod tests {
         // dashboard=9130 → [9130, 8664, 8665]
         let ports = ports_to_claim(9130);
         assert_eq!(ports, vec![9130, 8664, 8665]);
+    }
+
+    #[test]
+    fn ports_to_claim_omits_satellites_outside_u16_range() {
+        assert_eq!(ports_to_claim(u16::MAX), vec![u16::MAX]);
     }
 
     #[test]
