@@ -118,12 +118,9 @@ export function App() {
     void sendTelemetryPingIfDue();
   }, []);
 
-  const guideState = runtime.getGuideState();
   const isGuide = location.pathname === "/guide";
   let content: ReactNode;
-  if (guideState === "pending" && !isGuide) {
-    content = <Navigate to="/guide" replace />;
-  } else if (isGuide) {
+  if (isGuide) {
     content = withBoundary(<GuideRoute />);
   } else if (!runtime.isBackendReady()) {
     content = <OfflineShell />;
