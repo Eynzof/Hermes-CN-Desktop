@@ -36,7 +36,7 @@ fn local_claims_remove(port: u16) {
 /// Check whether *port* is in the local claims set (used by tests).
 pub fn local_claims_contains(port: u16) -> bool {
     let guard = LOCAL_CLAIMS.lock().unwrap_or_else(|e| e.into_inner());
-    guard.as_ref().map_or(false, |set| set.contains(&port))
+    guard.as_ref().is_some_and(|set| set.contains(&port))
 }
 
 /// Clear all local port claims (used before retry-loops that re-acquire
@@ -591,7 +591,7 @@ mod tests {
         // Write a lock with our PID but a deliberately *wrong* start_time
         // (simulating PID reuse).
         let our_pid = std::process::id();
-        let fake_start = (now_millis() as u64).saturating_sub(3600_000); // 1h ago
+        let fake_start = (now_millis() as u64).saturating_sub(3_600_000); // 1h ago
         fs::write(&path, format!("{}:{}\n", our_pid, fake_start)).unwrap();
 
         // stale_lock_owner should detect the mismatch
