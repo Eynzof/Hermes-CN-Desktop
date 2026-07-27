@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   Archive,
+  Blocks,
   Boxes,
   Brain,
   Clock,
@@ -38,6 +39,7 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
     title: "档案：拥有独立配置、密钥、会话和技能的环境",
   },
   { label: "技能", path: "/skills", icon: Sparkles },
+  { label: "Plugins", path: "/plugins", icon: Blocks, title: "管理当前档案的 Hermes 插件" },
   { label: "MCP", path: "/mcp", icon: Puzzle },
   { label: "终端", path: "/console", icon: TerminalSquare, title: "Hermes Console：直接运行 Hermes 命令" },
   { label: "记忆", path: "/memory", icon: Brain },

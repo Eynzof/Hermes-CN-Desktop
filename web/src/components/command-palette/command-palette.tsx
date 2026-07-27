@@ -7,6 +7,7 @@ import { Dialog } from "@hermes/shared-ui";
 import {
   Archive,
   BarChart3,
+  Blocks,
   Boxes,
   Brain,
   Bug,
@@ -66,6 +67,7 @@ const ICONS: Record<CommandPaletteIconKey, LucideIcon> = {
   models: Cpu,
   new: Plus,
   profiles: Boxes,
+  plugins: Blocks,
   project: Folder,
   settings: Settings,
   skill: Sparkles,

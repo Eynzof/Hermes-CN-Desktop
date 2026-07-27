@@ -51,6 +51,12 @@ describe("command palette item building and filtering", () => {
     expect(groupLabels("看板")).toContain("看板 Kanban");
   });
 
+  it("includes Plugins lifecycle management", () => {
+    const command = COMMAND_PALETTE_COMMANDS.find((item) => item.id === "command-plugins");
+    expect(command?.action).toEqual({ type: "navigate", to: "/plugins" });
+    expect(groupLabels("插件")).toContain("Plugins 管理");
+  });
+
   it("matches sessions by title, preview and id", () => {
     const items = buildCommandPaletteItems({
       sessions: [session("session-abc123", "修复登录问题", "检查 token 刷新")],

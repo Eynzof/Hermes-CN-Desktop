@@ -22,6 +22,7 @@ export type CommandPaletteIconKey =
   | "models"
   | "new"
   | "profiles"
+  | "plugins"
   | "project"
   | "settings"
   | "skill"
@@ -133,6 +134,17 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     action: { type: "navigate", to: "/skills" },
     defaultVisible: true,
     priority: 4,
+  },
+  {
+    id: "command-plugins",
+    group: "commands",
+    label: "Plugins 管理",
+    subtitle: "/plugins · 安装、启停、更新和卸载插件",
+    keywords: ["plugins", "plugin", "extension", "扩展", "插件"],
+    icon: "plugins",
+    action: { type: "navigate", to: "/plugins" },
+    defaultVisible: true,
+    priority: 5,
   },
   {
     id: "command-models",

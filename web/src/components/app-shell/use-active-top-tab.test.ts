@@ -50,4 +50,9 @@ describe("TOP_TABS", () => {
     expect(tabFor("/soul/edit")).toBe("skills");
     expect(CONFIG_ITEMS.some((item) => item.label === "人格" && item.path === "/soul")).toBe(true);
   });
+
+  it("keeps Plugins under the 02 config tab and sidebar section", () => {
+    expect(tabFor("/plugins")).toBe("skills");
+    expect(CONFIG_ITEMS.some((item) => item.label === "Plugins" && item.path === "/plugins")).toBe(true);
+  });
 });

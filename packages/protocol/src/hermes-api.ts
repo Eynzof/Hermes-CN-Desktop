@@ -705,6 +705,72 @@ export const McpCatalogInstallResponse = z.object({
 });
 export type McpCatalogInstallResponse = z.infer<typeof McpCatalogInstallResponse>;
 
+// ── Plugins Hub (/api/dashboard/plugins/hub) ──────────────────────────
+
+export const PluginHubRow = z.object({
+  name: z.string(),
+  key: z.string().optional(),
+  kind: z.string().optional().default("standalone"),
+  author: z.string().optional().default(""),
+  version: z.string().optional().default(""),
+  description: z.string().optional().default(""),
+  source: z.string().optional().default("unknown"),
+  // Legacy Core exposes runtime_status only. New Core adds config/effective
+  // status while retaining the legacy field, so every field remains tolerant.
+  runtime_status: z.string().optional().default("inactive"),
+  config_status: z.string().optional(),
+  effective_status: z.string().optional(),
+  can_toggle: z.boolean().optional(),
+  provides_tools: z.array(z.string()).optional().default([]),
+  provides_hooks: z.array(z.string()).optional().default([]),
+  requires_env: z.array(z.string()).optional().default([]),
+  missing_env: z.array(z.string()).optional().default([]),
+  has_dashboard_manifest: z.boolean().optional().default(false),
+  dashboard_manifest: z.unknown().nullable().optional(),
+  path: z.string().optional().default(""),
+  can_remove: z.boolean().optional().default(false),
+  can_update_git: z.boolean().optional().default(false),
+  auth_required: z.boolean().optional().default(false),
+  auth_command: z.string().optional().default(""),
+  user_hidden: z.boolean().optional().default(false),
+}).passthrough();
+export type PluginHubRow = z.infer<typeof PluginHubRow>;
+
+export const PluginHubProviderOption = z.object({
+  name: z.string(),
+  description: z.string().optional().default(""),
+}).passthrough();
+export type PluginHubProviderOption = z.infer<typeof PluginHubProviderOption>;
+
+export const PluginsHubResponse = z.object({
+  plugins: z.array(PluginHubRow),
+  orphan_dashboard_plugins: z.array(z.unknown()).optional().default([]),
+  providers: z.object({
+    memory_provider: z.string().optional().default(""),
+    memory_options: z.array(PluginHubProviderOption).optional().default([]),
+    context_engine: z.string().optional().default(""),
+    context_options: z.array(PluginHubProviderOption).optional().default([]),
+  }).passthrough(),
+}).passthrough();
+export type PluginsHubResponse = z.infer<typeof PluginsHubResponse>;
+
+export const PluginInstallResponse = z.object({
+  ok: z.boolean(),
+  plugin_name: z.string().optional(),
+  warnings: z.array(z.string()).optional().default([]),
+  missing_env: z.array(z.string()).optional().default([]),
+  enabled: z.boolean().optional(),
+}).passthrough();
+export type PluginInstallResponse = z.infer<typeof PluginInstallResponse>;
+
+export const PluginActionResponse = z.object({
+  ok: z.boolean(),
+  name: z.string().optional(),
+  unchanged: z.boolean().optional(),
+  output: z.string().optional(),
+}).passthrough();
+export type PluginActionResponse = z.infer<typeof PluginActionResponse>;
+
 // ── Analytics (/api/analytics/usage) ──────────────────────────────────
 
 export const AnalyticsTotals = z.object({

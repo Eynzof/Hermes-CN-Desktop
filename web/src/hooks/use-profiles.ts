@@ -160,6 +160,7 @@ export const PROFILE_AWARE_QUERY_KEYS = [
   "mcp-servers",
   "mcp-servers-full",
   "mcp-catalog",
+  "plugins-hub",
   "status",
   "sessions",
   "session",

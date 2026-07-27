@@ -19,6 +19,7 @@ import { ProjectsRoute } from "@/routes/projects";
 import { ProjectDetailRoute } from "@/routes/project-detail";
 import { KanbanRoute } from "@/routes/kanban";
 import { SkillsRoute } from "@/routes/skills";
+import { PluginsRoute } from "@/routes/plugins";
 import { ModelsRoute } from "@/routes/models";
 import { VoiceRoute } from "@/routes/voice";
 import { BackupRoute } from "@/routes/backup";
@@ -68,6 +69,7 @@ function BackendApp() {
           <Route path="/projects/:workspacePath" element={withBoundary(<ProjectDetailRoute />)} />
           <Route path="/kanban" element={withBoundary(<KanbanRoute />)} />
           <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
+          <Route path="/plugins" element={withBoundary(<PluginsRoute />)} />
           <Route path="/models" element={withBoundary(<ModelsRoute />)} />
           <Route path="/voice" element={withBoundary(<VoiceRoute />)} />
           <Route path="/backup" element={withBoundary(<BackupRoute />)} />

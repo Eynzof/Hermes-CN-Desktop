@@ -49,6 +49,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
     href: "/models",
     matches: (path) =>
       path.startsWith("/skills") ||
+      path.startsWith("/plugins") ||
       path.startsWith("/backup") ||
       path.startsWith("/mcp") ||
       path.startsWith("/profiles") ||
