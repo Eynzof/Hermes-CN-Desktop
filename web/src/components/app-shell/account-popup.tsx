@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import { Popover, useTheme } from "@hermes/shared-ui";
 import {
   Check,
   ChevronRight,
   Command,
   HelpCircle,
+  KeyRound,
   LogIn,
+  LogOut,
   Palette,
   Power,
   RefreshCw,
@@ -18,7 +20,12 @@ import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
 import { useCommandPalette } from "@/components/command-palette";
 import { openSettingsDialogAtom } from "@/stores/settings-dialog";
-import { authDialogOpenAtom } from "@/stores/auth";
+import {
+  authDialogOpenAtom,
+  deviceTokenDialogOpenAtom,
+  huanxingAuthAtom,
+} from "@/stores/auth";
+import { huanxingAccountTypeLabel } from "@/lib/huanxing-auth";
 import { getTeamDeviceTokenStatus, type TeamDeviceTokenStatus } from "@/lib/tauri-bridge";
 import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-url";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
@@ -47,7 +54,10 @@ export function AccountPopup() {
   const { config: themeConfig, update: updateTheme } = useTheme();
   const { openCommandPalette } = useCommandPalette();
   const openSettingsDialog = useSetAtom(openSettingsDialogAtom);
+  const huanxingAccount = useAtomValue(huanxingAuthAtom);
+  const setHuanxingAccount = useSetAtom(huanxingAuthAtom);
   const openAuthDialog = useSetAtom(authDialogOpenAtom);
+  const openDeviceTokenDialog = useSetAtom(deviceTokenDialogOpenAtom);
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +85,16 @@ export function AccountPopup() {
 
   const openDeviceDialog = () => {
     setOpen(false);
-    openAuthDialog(true);
+    openDeviceTokenDialog(true);
+  };
+
+  const quitApp = () => {
+    setOpen(false);
+    if (window.hermesDesktop?.quitApp) {
+      void window.hermesDesktop.quitApp();
+      return;
+    }
+    window.close();
   };
 
   return (
@@ -106,6 +125,42 @@ export function AccountPopup() {
           </div>
           <div className={s.sep} />
 
+          {huanxingAccount ? (
+            <div className={s.enterpriseCard}>
+              <div className={s.enterpriseRow}>
+                <span className={s.grow}>
+                  <span className={s.enterpriseName}>{huanxingAccount.username}</span>
+                  <span className={s.enterpriseMeta}>
+                    {huanxingAccountTypeLabel(huanxingAccount.type)}
+                    {huanxingAccount.enterpriseName ? ` · ${huanxingAccount.enterpriseName}` : ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className={s.enterpriseLogout}
+                  title="退出企业账号"
+                  onClick={() => setHuanxingAccount(null)}
+                >
+                  <LogOut size={13} />
+                  退出登录
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={s.item}
+              onClick={() => {
+                setOpen(false);
+                openAuthDialog(true);
+              }}
+            >
+              <LogIn size={14} className={s.itemIcon} />
+              <span className={s.grow}>登录 / 注册企业账号</span>
+              <span className={s.tail}>账号登录</span>
+            </button>
+          )}
+
           {teamDevice?.configured ? (
             <div className={s.enterpriseCard}>
               <div className={s.enterpriseRow}>
@@ -116,14 +171,14 @@ export function AccountPopup() {
                   </span>
                 </span>
                 <button type="button" className={s.enterpriseLogout} title="更换企业设备令牌" onClick={openDeviceDialog}>
-                  <LogIn size={13} />
+                  <KeyRound size={13} />
                   更换令牌
                 </button>
               </div>
             </div>
           ) : (
             <button type="button" className={s.item} onClick={openDeviceDialog}>
-              <LogIn size={14} className={s.itemIcon} />
+              <KeyRound size={14} className={s.itemIcon} />
               <span className={s.grow}>绑定企业设备令牌</span>
               <span className={s.tail}>同步模型下发</span>
             </button>
@@ -180,7 +235,7 @@ export function AccountPopup() {
             <span className={s.tail} data-tone="ok">{DESKTOP_VERSION_LABEL}</span>
           </button>
           <div className={s.sep} />
-          <button type="button" className={s.item} data-tone="danger" onClick={() => window.close()}>
+          <button type="button" className={s.item} data-tone="danger" onClick={quitApp}>
             <Power size={14} className={s.itemIcon} />
             <span className={s.grow}>退出</span>
           </button>

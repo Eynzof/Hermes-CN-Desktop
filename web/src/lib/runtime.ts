@@ -439,6 +439,7 @@ declare global {
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
+      quitApp?(): Promise<void>;
       request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;

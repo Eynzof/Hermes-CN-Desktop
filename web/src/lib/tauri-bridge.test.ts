@@ -90,6 +90,14 @@ describe("isTauriDevMode", () => {
     });
   });
 
+  it("exposes an explicit app quit command instead of closing the webview", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.quitApp?.();
+
+    expect(mockInvoke).toHaveBeenCalledWith("quit_app", undefined);
+  });
+
   it("exposes debug bundle export through Tauri IPC", async () => {
     await installTauriBridge();
 

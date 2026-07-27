@@ -252,6 +252,10 @@ function normalizeFileDropPayload(payload: TauriFileDropEventPayload): DesktopFi
 const tauriBridge = {
   windowType: "tauri" as const,
 
+  async quitApp(): Promise<void> {
+    return invokeCommand("quit_app");
+  },
+
   async request(input: ApiRequestInput): Promise<ApiRequestResult> {
     return invokeCommand("api_request", { input });
   },

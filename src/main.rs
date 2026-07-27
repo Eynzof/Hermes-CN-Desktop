@@ -552,6 +552,7 @@ fn main() {
             commands::runtime_manager::managed_runtime_uninstall,
             commands::runtime_manager::managed_runtime_reinstall,
             commands::profiles::switch_profile,
+            commands::restart::quit_app,
             commands::yolo::get_yolo_mode,
             commands::yolo::set_yolo_mode,
             team_sync::get_team_device_token_status,
