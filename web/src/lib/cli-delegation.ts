@@ -23,23 +23,32 @@ export interface CliDelegationSubEvent {
   toolName?: string;
   sessionId?: string;
   model?: string;
+  workdir?: string;
   numTurns?: number;
-  totalCostUsd?: number;
   subtype?: string;
   isError?: boolean;
   inputTokens?: number;
   outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+  totalTokens?: number;
 }
 
 export interface CliDelegationResult {
   sessionId?: string;
+  model?: string;
+  workdir?: string;
   numTurns?: number;
-  totalCostUsd?: number;
   subtype?: string;
   isError?: boolean;
   text?: string;
   inputTokens?: number;
   outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+  totalTokens?: number;
 }
 
 const PROMPT_EXCERPT_CAP = 200;
@@ -80,6 +89,10 @@ const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const MAX_SHELL_RECURSION = 3;
 
 const oneline = (text: string, cap: number) => text.replace(/\s+/g, " ").trim().slice(0, cap);
+const staticWorkdir = (value: unknown): string | null => {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text && !text.includes("$") && !text.includes("`") ? text : null;
+};
 
 const basename = (token: string) => {
   const parts = token.trim().split(/[\\/]/);
@@ -353,7 +366,7 @@ function classifyCodex(words: string[], args: TerminalArgs): CliDelegationSpec |
   const model = values.get("--model") ?? values.get("-m");
   if (model) flags.model = model;
 
-  const workdir = values.get("--cd") ?? values.get("-C") ?? null;
+  const workdir = staticWorkdir(values.get("--cd") ?? values.get("-C"));
   let prompt = positionals[0] ?? "";
   const mode = subcommand || "interactive";
   if (mode === "resume") {
@@ -403,8 +416,8 @@ function classifyCommand(command: string, args: TerminalArgs, depth = 0): CliDel
     }
     const spec = classifySegment(seg, args, depth);
     if (spec) {
-      const argsWorkdir = typeof args?.workdir === "string" && args.workdir ? args.workdir : null;
-      const workdir = argsWorkdir ?? spec.workdir ?? pendingWorkdir;
+      const argsWorkdir = staticWorkdir(args?.workdir);
+      const workdir = argsWorkdir ?? spec.workdir ?? staticWorkdir(pendingWorkdir);
       return workdir === spec.workdir ? spec : { ...spec, workdir };
     }
   }
@@ -461,7 +474,15 @@ export function parseClaudeStreamJsonLine(line: string): CliDelegationSubEvent[]
   if (!obj) return [];
   const type = obj.type;
   if (type === "system" && obj.subtype === "init") {
-    return [{ kind: "init", sessionId: strOrUndef(obj.session_id), model: strOrUndef(obj.model) }];
+    const sessionId = strOrUndef(obj.session_id);
+    const model = strOrUndef(obj.model);
+    const workdir = strOrUndef(obj.cwd) ?? strOrUndef(obj.workdir);
+    return [{
+      kind: "init",
+      ...(sessionId ? { sessionId } : {}),
+      ...(model ? { model } : {}),
+      ...(workdir ? { workdir } : {}),
+    }];
   }
   if (type === "assistant") {
     const message = asRecord(obj.message);
@@ -481,13 +502,19 @@ export function parseClaudeStreamJsonLine(line: string): CliDelegationSubEvent[]
     return events;
   }
   if (type === "result") {
+    const usage = asRecord(obj.usage);
     return [{
       kind: "result",
       sessionId: strOrUndef(obj.session_id),
+      model: strOrUndef(obj.model),
+      workdir: strOrUndef(obj.cwd) ?? strOrUndef(obj.workdir),
       numTurns: numOrUndef(obj.num_turns),
-      totalCostUsd: numOrUndef(obj.total_cost_usd),
       subtype: strOrUndef(obj.subtype),
       isError: obj.is_error === true ? true : undefined,
+      inputTokens: numOrUndef(usage?.input_tokens),
+      outputTokens: numOrUndef(usage?.output_tokens),
+      cacheCreationInputTokens: numOrUndef(usage?.cache_creation_input_tokens),
+      cacheReadInputTokens: numOrUndef(usage?.cache_read_input_tokens),
     }];
   }
   return [];
@@ -501,7 +528,15 @@ export function parseCodexJsonlLine(line: string): CliDelegationSubEvent[] {
   if (msg) {
     const mtype = msg.type;
     if (mtype === "session_configured") {
-      return [{ kind: "init", sessionId: strOrUndef(msg.session_id) }];
+      const sessionId = strOrUndef(msg.session_id);
+      const model = strOrUndef(msg.model);
+      const workdir = strOrUndef(msg.cwd) ?? strOrUndef(msg.workdir);
+      return [{
+        kind: "init",
+        ...(sessionId ? { sessionId } : {}),
+        ...(model ? { model } : {}),
+        ...(workdir ? { workdir } : {}),
+      }];
     }
     if (mtype === "agent_message" && msg.message) {
       return [{ kind: "text", text: clip(msg.message) }];
@@ -518,7 +553,15 @@ export function parseCodexJsonlLine(line: string): CliDelegationSubEvent[] {
 
   const otype = obj.type;
   if (otype === "thread.started") {
-    return [{ kind: "init", sessionId: strOrUndef(obj.thread_id) }];
+    const sessionId = strOrUndef(obj.thread_id);
+    const model = strOrUndef(obj.model);
+    const workdir = strOrUndef(obj.cwd) ?? strOrUndef(obj.workdir);
+    return [{
+      kind: "init",
+      ...(sessionId ? { sessionId } : {}),
+      ...(model ? { model } : {}),
+      ...(workdir ? { workdir } : {}),
+    }];
   }
   if (otype === "item.completed") {
     const item = asRecord(obj.item);
@@ -538,6 +581,7 @@ export function parseCodexJsonlLine(line: string): CliDelegationSubEvent[] {
       kind: "result",
       inputTokens: numOrUndef(usage?.input_tokens),
       outputTokens: numOrUndef(usage?.output_tokens),
+      cachedInputTokens: numOrUndef(usage?.cached_input_tokens),
     }];
   }
   if (otype === "turn.failed") return [{ kind: "result", isError: true }];
@@ -548,7 +592,10 @@ export function parseCodexJsonlLine(line: string): CliDelegationSubEvent[] {
 }
 
 export function normalizeOutputLine(agent: CliDelegationAgent, line: string): CliDelegationSubEvent[] {
-  return agent === "claude-code" ? parseClaudeStreamJsonLine(line) : parseCodexJsonlLine(line);
+  const events = agent === "claude-code" ? parseClaudeStreamJsonLine(line) : parseCodexJsonlLine(line);
+  if (events.length) return events;
+  if (!loadJsonLine(line) && clip(line)) return [{ kind: "raw", text: clip(line) }];
+  return [];
 }
 
 /** 把整段输出（前台结果 / 历史重载）解析为时间线子事件，cap 条数。 */
@@ -580,12 +627,16 @@ export function subEventFromWire(raw: unknown): CliDelegationSubEvent | null {
     toolName: strOrUndef(rec.tool_name),
     sessionId: strOrUndef(rec.session_id),
     model: strOrUndef(rec.model),
+    workdir: strOrUndef(rec.workdir),
     numTurns: numOrUndef(rec.num_turns),
-    totalCostUsd: numOrUndef(rec.total_cost_usd),
     subtype: strOrUndef(rec.subtype),
     isError: rec.is_error === true ? true : undefined,
     inputTokens: numOrUndef(rec.input_tokens),
     outputTokens: numOrUndef(rec.output_tokens),
+    cachedInputTokens: numOrUndef(rec.cached_input_tokens),
+    cacheCreationInputTokens: numOrUndef(rec.cache_creation_input_tokens),
+    cacheReadInputTokens: numOrUndef(rec.cache_read_input_tokens),
+    totalTokens: numOrUndef(rec.total_tokens),
   };
 }
 
@@ -594,13 +645,18 @@ export function resultFromWire(raw: unknown): CliDelegationResult | undefined {
   if (!rec) return undefined;
   const result: CliDelegationResult = {
     sessionId: strOrUndef(rec.session_id),
+    model: strOrUndef(rec.model),
+    workdir: strOrUndef(rec.workdir),
     numTurns: numOrUndef(rec.num_turns),
-    totalCostUsd: numOrUndef(rec.total_cost_usd),
     subtype: strOrUndef(rec.subtype),
     isError: rec.is_error === true ? true : undefined,
     text: strOrUndef(rec.text),
     inputTokens: numOrUndef(rec.input_tokens),
     outputTokens: numOrUndef(rec.output_tokens),
+    cachedInputTokens: numOrUndef(rec.cached_input_tokens),
+    cacheCreationInputTokens: numOrUndef(rec.cache_creation_input_tokens),
+    cacheReadInputTokens: numOrUndef(rec.cache_read_input_tokens),
+    totalTokens: numOrUndef(rec.total_tokens),
   };
   return Object.values(result).some((v) => v !== undefined) ? result : undefined;
 }
@@ -608,40 +664,58 @@ export function resultFromWire(raw: unknown): CliDelegationResult | undefined {
 export function extractClaudeResult(output: string): CliDelegationResult | undefined {
   if (!output) return undefined;
   const text = output.trim();
+  let lines = output.split("\n").slice(-400);
   if (text.startsWith("{")) {
     try {
       const whole = asRecord(JSON.parse(text));
       if (whole && (whole.type === "result" || "session_id" in whole)) {
-        return resultFromWire(whole);
+        lines = [JSON.stringify(whole)];
       }
     } catch {
       // 不是单对象 JSON，继续按行扫描。
     }
   }
-  const lines = output.split("\n").slice(-200);
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    for (const event of parseClaudeStreamJsonLine(lines[i]!)) {
-      if (event.kind === "result") {
-        const { kind: _kind, toolName: _t, ...rest } = event;
-        return rest;
+  const result: CliDelegationResult = {};
+  for (const line of lines) {
+    for (const event of parseClaudeStreamJsonLine(line)) {
+      if (event.kind !== "init" && event.kind !== "result") continue;
+      const { kind: _kind, toolName: _toolName, ...fields } = event;
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) Object.assign(result, { [key]: value });
       }
     }
   }
-  return undefined;
+  return Object.values(result).some((value) => value !== undefined) ? result : undefined;
 }
 
 export function extractCodexResult(output: string): CliDelegationResult | undefined {
   if (!output) return undefined;
-  const lines = output.split("\n").slice(-200);
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    for (const event of parseCodexJsonlLine(lines[i]!)) {
-      if (event.kind === "result") {
-        const { kind: _kind, toolName: _t, ...rest } = event;
-        return rest;
+  const result: CliDelegationResult = {};
+  for (const line of output.split("\n").slice(-400)) {
+    for (const event of parseCodexJsonlLine(line)) {
+      if (event.kind !== "init" && event.kind !== "result") continue;
+      const { kind: _kind, toolName: _toolName, ...fields } = event;
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== undefined) Object.assign(result, { [key]: value });
       }
     }
   }
-  return undefined;
+
+  const humanFields: Array<[keyof CliDelegationResult, RegExp]> = [
+    ["workdir", /^workdir:\s*(.+?)\s*$/im],
+    ["model", /^model:\s*(.+?)\s*$/im],
+    ["sessionId", /^session id:\s*(\S+)\s*$/im],
+  ];
+  for (const [key, pattern] of humanFields) {
+    const match = output.match(pattern);
+    if (match?.[1]) Object.assign(result, { [key]: match[1].trim() });
+  }
+  const totalTokens = output.match(/^tokens used\s*\r?\n\s*([0-9][0-9,]*)\s*$/im)?.[1];
+  if (totalTokens) {
+    const parsed = Number.parseInt(totalTokens.replaceAll(",", ""), 10);
+    if (Number.isFinite(parsed)) result.totalTokens = parsed;
+  }
+  return Object.values(result).some((value) => value !== undefined) ? result : undefined;
 }
 
 export function extractResult(agent: CliDelegationAgent, output: string): CliDelegationResult | undefined {

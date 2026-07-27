@@ -226,6 +226,18 @@ const CLI_ABNORMAL_STATUS_LABELS: Partial<Record<CliDelegationEntry["status"], s
   detached: "结果未跟踪",
 };
 
+function cliTokenTotal(entry: Pick<CliDelegationEntry, "result">): number {
+  const result = entry.result;
+  if (!result) return 0;
+  if (result.totalTokens !== undefined) return result.totalTokens;
+  return (
+    (result.inputTokens ?? 0) +
+    (result.outputTokens ?? 0) +
+    (result.cacheCreationInputTokens ?? 0) +
+    (result.cacheReadInputTokens ?? 0)
+  );
+}
+
 function CliStatusIcon({ status }: { status: CliDelegationEntry["status"] }) {
   if (status === "running") {
     return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={14} aria-label="执行中" />;
@@ -250,15 +262,25 @@ function cliStreamEntries(entry: CliDelegationEntry): SubagentStreamEntry[] {
       text = `${event.toolName ?? "工具"}${snippet}`;
     } else if (event.kind === "result") {
       kind = "summary";
+      const eventTokens =
+        event.totalTokens ??
+        ((event.inputTokens ?? 0) +
+          (event.outputTokens ?? 0) +
+          (event.cacheCreationInputTokens ?? 0) +
+          (event.cacheReadInputTokens ?? 0));
       text = [
         event.isError ? "子任务出错" : "子任务完成",
         event.numTurns !== undefined ? `${event.numTurns} 轮` : "",
-        event.outputTokens !== undefined ? `输出 ${formatTokens(event.outputTokens)} tok` : "",
+        eventTokens > 0 ? `${formatTokens(eventTokens)} tok` : "",
       ]
         .filter(Boolean)
         .join(" · ");
     } else if (event.kind === "init") {
-      text = "已连接";
+      text = [
+        "已连接",
+        event.model ?? "",
+        event.workdir ? `目录 ${event.workdir}` : "",
+      ].filter(Boolean).join(" · ");
     } else {
       text = event.text ?? "";
     }
@@ -285,9 +307,15 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
   // 一行只说必要的话：代理名 ·（后台）·（异常态说明）。completed/running
   // 由左侧图标表达；时长右置常显；会话 id 等细节收进展开态。
   const abnormal = CLI_ABNORMAL_STATUS_LABELS[entry.status];
+  const tokens = cliTokenTotal(entry);
+  const model =
+    entry.result?.model ??
+    (typeof entry.flags?.model === "string" ? entry.flags.model : "");
   const subtitle = [
     CLI_AGENT_LABELS[entry.agent],
+    model,
     entry.execution === "background" ? "后台" : "",
+    tokens > 0 ? `${formatTokens(tokens)} tok` : "",
     abnormal ?? "",
   ].filter(Boolean);
 
@@ -298,7 +326,10 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
         entry.mode ? (CLI_MODE_LABELS[entry.mode] ?? "") : "",
         entry.result?.sessionId ? `会话 ${entry.result.sessionId}` : "",
         entry.result?.numTurns !== undefined ? `${entry.result.numTurns} 轮` : "",
-        entry.workdir ? `目录 ${entry.workdir}` : "",
+        (entry.result?.workdir ?? entry.workdir)
+          ? `目录 ${entry.result?.workdir ?? entry.workdir}`
+          : (running ? "目录获取中" : "目录未提供"),
+        tokens > 0 ? `Token ${formatTokens(tokens)}` : (running ? "Token 统计中" : "Token 未提供"),
         entry.exitCode !== undefined && entry.exitCode !== null && entry.exitCode !== 0
           ? `退出码 ${entry.exitCode}`
           : "",
@@ -385,13 +416,19 @@ export function SubagentPanel({
     return () => window.clearInterval(id);
   }, [active]);
 
-  const failed = flat.filter((nd) => nd.status === "failed" || nd.status === "interrupted").length;
+  const failed =
+    flat.filter((nd) => nd.status === "failed" || nd.status === "interrupted").length +
+    cliDelegations.filter((entry) =>
+      entry.status === "failed" || entry.status === "killed" || entry.status === "lost"
+    ).length;
   const tools = flat.reduce((sum, nd) => sum + (nd.toolCount ?? 0), 0);
   const files = flat.reduce((sum, nd) => sum + nd.filesRead.length + nd.filesWritten.length, 0);
-  const tokens = flat.reduce((sum, nd) => sum + (nd.inputTokens ?? 0) + (nd.outputTokens ?? 0), 0);
+  const tokens =
+    flat.reduce((sum, nd) => sum + (nd.inputTokens ?? 0) + (nd.outputTokens ?? 0), 0) +
+    cliDelegations.reduce((sum, entry) => sum + cliTokenTotal(entry), 0);
 
   const summary = [
-    `${flat.length} 个子Agent`,
+    `${flat.length + cliDelegations.length} 个子Agent`,
     active > 0 ? `${active} 活跃` : "",
     failed > 0 ? `${failed} 失败` : "",
     tools > 0 ? `${tools} 工具` : "",
