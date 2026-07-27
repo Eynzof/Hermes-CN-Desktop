@@ -2563,33 +2563,6 @@ fn contains_plugin_manifest(dir: &Path) -> bool {
     false
 }
 
-fn collect_missing_plugin_inits(dir: &Path, missing: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_missing_plugin_inits(&path, missing);
-            continue;
-        }
-        if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| {
-                name.eq_ignore_ascii_case("plugin.yaml") || name.eq_ignore_ascii_case("plugin.yml")
-            })
-        {
-            let Some(plugin_dir) = path.parent() else {
-                continue;
-            };
-            if !plugin_dir.join("__init__.py").is_file() {
-                missing.push(plugin_dir.to_path_buf());
-            }
-        }
-    }
-}
-
 fn collect_missing_dashboard_plugin_apis(dir: &Path, missing: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -2654,15 +2627,6 @@ fn validate_bundled_plugins_tree(dir: &Path) -> Result<(), String> {
         return Err(format!(
             "Bundled plugins resource is missing plugin.yaml files at {}",
             dir.display()
-        ));
-    }
-
-    let mut missing_inits = Vec::new();
-    collect_missing_plugin_inits(dir, &mut missing_inits);
-    if !missing_inits.is_empty() {
-        return Err(format!(
-            "Bundled plugins resource has plugin manifests without __init__.py: {}",
-            format_sample_paths(&missing_inits)
         ));
     }
 
@@ -3855,7 +3819,7 @@ mod tests {
     }
 
     #[test]
-    fn sync_bundled_plugins_from_resource_rejects_missing_init() {
+    fn sync_bundled_plugins_from_resource_accepts_declarative_manifest_only_plugin() {
         let dir = TempDir::new().unwrap();
         let resource = dir.path().join("resources");
         let plugin = resource
@@ -3870,13 +3834,16 @@ mod tests {
         )
         .unwrap();
 
-        let err = sync_bundled_plugins_from_resource(Some(&resource), &runtime).unwrap_err();
+        let target = sync_bundled_plugins_from_resource(Some(&resource), &runtime)
+            .unwrap()
+            .unwrap();
 
-        assert!(
-            err.contains("without __init__.py"),
-            "unexpected error: {err}"
-        );
-        assert!(!runtime.join("_internal").join("plugins").exists());
+        assert!(target
+            .join("web")
+            .join("ddgs")
+            .join("plugin.yaml")
+            .is_file());
+        assert!(!target.join("web").join("ddgs").join("__init__.py").exists());
     }
 
     #[test]

@@ -113,17 +113,9 @@ function validatePluginTree(path) {
     throw new Error(`bundled plugins source is missing plugin.yaml files: ${path}`);
   }
 
-  const missingInits = [];
   const missingApis = [];
   walk(path, (full, name) => {
     const lower = name.toLowerCase();
-    if (lower === "plugin.yaml" || lower === "plugin.yml") {
-      const pluginDir = dirname(full);
-      if (!existsSync(join(pluginDir, "__init__.py"))) {
-        missingInits.push(pluginDir);
-      }
-      return;
-    }
     if (lower !== "manifest.json" || dirname(full).split(/[\\/]/).pop() !== "dashboard") {
       return;
     }
@@ -134,13 +126,6 @@ function validatePluginTree(path) {
     }
   });
 
-  if (missingInits.length > 0) {
-    throw new Error(
-      `bundled plugins source has plugin manifests without __init__.py: ${missingInits
-        .slice(0, 5)
-        .join(", ")}`,
-    );
-  }
   if (missingApis.length > 0) {
     throw new Error(
       `bundled dashboard plugins declare missing api files: ${missingApis.slice(0, 5).join(", ")}`,
