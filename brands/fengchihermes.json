@@ -7,6 +7,7 @@
   "dataDirName": ".fengchihermes",
   "providerKey": "fengchihermes",
   "serviceUrl": "https://ai.fengchiyun.com/",
+  "teamServiceUrl": "https://team.fengchiyun.com",
   "registerUrl": "https://www.fengchicloud.com/console/index.html#/login?redirect=%2F&type=1",
   "rechargeUrl": "https://ai.fengchiyun.com/wallet",
   "copyright": "Copyright © 2026 FengchiHermes",

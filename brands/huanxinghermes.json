@@ -7,6 +7,7 @@
   "dataDirName": ".huanxinghermes",
   "providerKey": "huanxinghermes",
   "serviceUrl": "https://api.huanxing.ai/",
+  "teamServiceUrl": "https://team.huanxing.ai",
   "registerUrl": "https://api.huanxing.ai/sign-up",
   "rechargeUrl": "https://api.huanxing.ai/wallet",
   "copyright": "Copyright © 2026 HuanxingHermes",

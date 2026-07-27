@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkOnly = process.argv.includes("--check");
 const validateAll = process.argv.includes("--validate-all");
-const DEFAULT_BRAND = "hermesagent";
+const DEFAULT_BRAND = "huanxingcomhermes";
 const STABLE_BUNDLE_IDENTIFIER = "cn.org.hermesagent.desktop";
 
 const REQUIRED_STRING_FIELDS = [
@@ -18,6 +18,7 @@ const REQUIRED_STRING_FIELDS = [
   "dataDirName",
   "providerKey",
   "serviceUrl",
+  "teamServiceUrl",
   "registerUrl",
   "rechargeUrl",
   "copyright",
@@ -34,6 +35,7 @@ const REQUIRED_ARRAY_FIELDS = ["accountDefaultModels"];
 const OPTIONAL_RECORD_FIELDS = ["accountModelDescriptions"];
 const URL_FIELDS = [
   "serviceUrl",
+  "teamServiceUrl",
   "registerUrl",
   "rechargeUrl",
   "homepage",
@@ -215,6 +217,7 @@ const rustModule = `${rustBanner}\n${[
   ["BRAND_PRODUCT_NAME", brand.productName],
   ["BRAND_PROVIDER_KEY", brand.providerKey],
   ["BRAND_SERVICE_URL", brand.serviceUrl],
+  ["BRAND_TEAM_SERVICE_URL", brand.teamServiceUrl],
   ["BRAND_REGISTER_URL", brand.registerUrl],
   ["BRAND_RECHARGE_URL", brand.rechargeUrl],
   ["BRAND_DATA_DIR_NAME", brand.dataDirName],

@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
-  "productName": "HermesAgent Desktop",
+  "productName": "HuanxingHermes Desktop",
   "version": "0.6.4",
   "identifier": "cn.org.hermesagent.desktop",
   "build": {
@@ -40,12 +40,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "HermesAgent",
+    "publisher": "HuanxingHermes",
     "homepage": "https://api.huanxing.ai",
-    "copyright": "Copyright © 2026 HermesAgent",
+    "copyright": "Copyright © 2026 HuanxingHermes",
     "category": "DeveloperTool",
-    "shortDescription": "HermesAgent AI Assistant Desktop",
-    "longDescription": "Desktop app for HermesAgent AI Assistant.",
+    "shortDescription": "HuanxingHermes AI Assistant Desktop",
+    "longDescription": "Desktop app for HuanxingHermes AI Assistant.",
     "licenseFile": "legal/EULA.zh-CN.rtf",
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",

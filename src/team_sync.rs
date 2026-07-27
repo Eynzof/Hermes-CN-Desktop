@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zip::ZipArchive;
 
-const DEFAULT_SERVER_URL: &str = "https://team.huanxingapi.com";
 const TOKEN_FILE: &str = ".team-device-token";
 const STATE_FILE: &str = ".team-sync-state.json";
 const MAX_MANIFEST: usize = 10 * 1024 * 1024;
@@ -78,7 +77,8 @@ fn token_path(home: &Path) -> PathBuf {
 }
 
 fn server_url() -> String {
-    std::env::var("HERMES_TEAM_SERVER_URL").unwrap_or_else(|_| DEFAULT_SERVER_URL.to_string())
+    std::env::var("HERMES_TEAM_SERVER_URL")
+        .unwrap_or_else(|_| crate::brand_generated::BRAND_TEAM_SERVICE_URL.to_string())
 }
 
 fn atomic_write(path: &Path, data: &[u8]) -> Result<(), String> {
@@ -475,7 +475,10 @@ mod tests {
 
     #[test]
     fn team_sync_defaults_to_the_team_service() {
-        assert_eq!(DEFAULT_SERVER_URL, "https://team.huanxingapi.com");
+        assert_eq!(
+            crate::brand_generated::BRAND_TEAM_SERVICE_URL,
+            "https://team.huanxingapi.com"
+        );
     }
 
     #[test]

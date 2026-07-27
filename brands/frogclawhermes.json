@@ -7,6 +7,7 @@
   "dataDirName": ".frogclawhermes",
   "providerKey": "frogclawhermes",
   "serviceUrl": "https://frogclaw.com/",
+  "teamServiceUrl": "https://team.frogclaw.com",
   "registerUrl": "https://frogclaw.com/sign-up",
   "rechargeUrl": "https://frogclaw.com/wallet",
   "copyright": "Copyright © 2026 FrogClawHermes",

@@ -13,8 +13,9 @@
 // 并通过 Core 的 OpenAI 兼容通道真实可用。
 
 import { readUiValue, removeUiValue, writeUiValue } from "./ui-store";
+import { BRAND } from "./brand.generated";
 
-export const DEFAULT_TEAM_SERVER_URL = "https://team.huanxingapi.com";
+export const DEFAULT_TEAM_SERVER_URL = BRAND.teamServiceUrl;
 export const ENTERPRISE_PROVIDER_PREFIX = "custom:team-";
 
 export interface EnterpriseBinding {
