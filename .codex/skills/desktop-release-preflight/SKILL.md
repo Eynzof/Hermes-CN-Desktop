@@ -30,7 +30,7 @@ description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop rele
 1. ☑️ **identifier 没改**：`grep identifier tauri.conf.json` 仍是 `cn.org.hermesagent.desktop`。永不更改。
 2. ☑️ **`bundled_runtime_tag` 锁到 ≥ 线上 stable 最高 runtime，且是明确版本（不是 `latest`）**。这是**防内核静默降级**的关键（见下"坑 1"）。
    - 查线上 stable 最高 runtime：`gh release list -R Eynzof/Hermes-CN-Core | head` 或看 stable manifest。
-   - 触发 `release-desktop.yml` 时用 `workflow_dispatch` 输入 `bundled_runtime_tag=<该版本>`（输入定义在 `.github/workflows/release-desktop.yml:31`），或先把默认值 `:33,89,147`（当前 `runtime-v0.16.0-cn.6`）更新到该版本。
+   - 触发 `release-desktop.yml` 时用 `workflow_dispatch` 输入 `bundled_runtime_tag=<该版本>`（输入定义在 `.github/workflows/release-desktop.yml:35`），或先把默认值 `:37,118,176`（当前 `runtime-v0.19.0-cn.3`）更新到该版本。
 3. ☑️ **本次不 bump `MANIFEST_SCHEMA_VERSION`**（保持 `runtime.rs:29` 的 `2`）。schema→3（强升门改造）单独排期（见"坑 2"）。
 4. ☑️ **macOS 走完公证/装订**（`release-desktop.yml:153-293`）。未公证会被 Gatekeeper 拦。
 5. ☑️ **Windows 现状未签名**（无 Authenticode）→ 覆盖装会触发 SmartScreen。发版说明里明确告知用户点"仍要运行"，或本次补 Authenticode（见 `docs/hot-update-impl-plan.md` §5）。
@@ -45,7 +45,7 @@ description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop rele
 
 reconcile 只判**相等**（`runtime.rs:1574` 仅 `current.runtime_version == manifest.runtime_version`），**没有"当前已是更新版本则跳过"的保护**。若某 0.3.2 用户已通过热更把内核更新到**高于本次内置版本**的 runtime，覆盖新外壳后启动会把内核**降级回内置版本**（可一键回滚，但用户无感、属意外）。
 
-- **触发条件**：`bundled_runtime_tag`（默认锁死在 `runtime-v0.16.0-cn.6`）落后于线上 stable 渠道已发布的 runtime。
+- **触发条件**：`bundled_runtime_tag`（默认锁死在 release workflow 中的明确 runtime tag）落后于线上 stable 渠道已发布的 runtime。
 - **规避**：checklist #2 —— 发版时把 `bundled_runtime_tag` 设为 ≥ 当前 stable 最高 runtime。
 - **根因修复（排期项，非本次）**：给 bundled 安装路径加 semver 守卫"当前 ≥ 内置则不降级"，与 `docs/hot-update-impl-plan.md` §3.4 的防降级配套（注意 §3.4 改的是自动更新路径，bundled 路径需单独加）。
 
