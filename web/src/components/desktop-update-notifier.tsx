@@ -14,6 +14,7 @@ import { openExternalUrl } from "@/lib/external-links";
 import { runtime } from "@/lib/runtime";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
 import { versionLabel } from "@/lib/build-info";
+import { checkShellUpdate, type ShellUpdateInfo } from "@/lib/shell-updater";
 import s from "./desktop-update-notifier.module.css";
 
 let autoCheckPromise: Promise<DesktopUpdateCheckResult> | null = null;
@@ -38,6 +39,12 @@ function startAutoCheckIfNeeded(): Promise<DesktopUpdateCheckResult> | null {
 export function DesktopUpdateNotifier() {
   const [result, setResult] = useState<DesktopUpdateCheckResult | null>(null);
   const [open, setOpen] = useState(false);
+  // Track C: when the updater plugin is configured and reports an update, we
+  // can download+install+relaunch in-app instead of only linking to the site.
+  const [shellUpdate, setShellUpdate] = useState<ShellUpdateInfo | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+  const [progressPct, setProgressPct] = useState<number | null>(null);
 
   useEffect(() => {
     if (runtime.platform === "web" || !window.hermesDesktop?.checkDesktopUpdate) return;
@@ -46,13 +53,16 @@ export function DesktopUpdateNotifier() {
     const promise = startAutoCheckIfNeeded();
     if (!promise) return;
 
-    promise.then((next) => {
+    promise.then(async (next) => {
       if (cancelled) return;
       const dismissedVersion = readUiValue<string | null>(DESKTOP_UPDATE_DISMISSED_VERSION_KEY, null);
-      if (shouldShowDesktopUpdateNotice(next, dismissedVersion)) {
-        setResult(next);
-        setOpen(true);
-      }
+      if (!shouldShowDesktopUpdateNotice(next, dismissedVersion)) return;
+      setResult(next);
+      setOpen(true);
+      // Probe the in-app updater in the background; if configured and it
+      // agrees an update exists, the dialog upgrades to an install button.
+      const info = await checkShellUpdate();
+      if (!cancelled) setShellUpdate(info);
     });
 
     return () => {
@@ -61,8 +71,28 @@ export function DesktopUpdateNotifier() {
   }, []);
 
   const close = () => {
+    if (installing) return;
     rememberDismissedVersion(result);
     setOpen(false);
+  };
+
+  const installInApp = async () => {
+    if (!shellUpdate) return;
+    setInstalling(true);
+    setInstallError(null);
+    try {
+      await shellUpdate.downloadInstallAndRelaunch((event) => {
+        if (event.phase === "downloading" && event.contentLength) {
+          setProgressPct(Math.min(100, Math.round((event.downloaded / event.contentLength) * 100)));
+        } else if (event.phase === "finished") {
+          setProgressPct(100);
+        }
+      });
+      // relaunch() replaces the process; code below usually never runs.
+    } catch (error) {
+      setInstallError(error instanceof Error ? error.message : String(error));
+      setInstalling(false);
+    }
   };
 
   const download = async () => {
@@ -95,11 +125,40 @@ export function DesktopUpdateNotifier() {
               <b>{versionLabel(result?.latestVersion)}</b>
             </div>
           </div>
+          {installError && (
+            <p className={s.body} role="alert">
+              自动更新失败：{installError}。可改用「去官网下载」手动安装。
+            </p>
+          )}
+          {installing && (
+            <p className={s.body} aria-live="polite">
+              {progressPct == null ? "正在准备更新…" : `正在下载并安装… ${progressPct}%`}
+              （完成后应用会自动重启）
+            </p>
+          )}
           <div className={s.actions}>
-            <button className={s.btn} type="button" onClick={close}>本版本不再提醒</button>
-            <button className={s.btnPrimary} type="button" onClick={() => void download()}>
-              <Download size={13} /> 去官网下载
+            <button className={s.btn} type="button" onClick={close} disabled={installing}>
+              本版本不再提醒
             </button>
+            {shellUpdate && !runtime.isPortable() ? (
+              <button
+                className={s.btnPrimary}
+                type="button"
+                onClick={() => void installInApp()}
+                disabled={installing}
+              >
+                <Download size={13} /> {installing ? "更新中…" : "下载并安装"}
+              </button>
+            ) : (
+              <button
+                className={s.btnPrimary}
+                type="button"
+                onClick={() => void download()}
+                disabled={installing}
+              >
+                <Download size={13} /> 去官网下载
+              </button>
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

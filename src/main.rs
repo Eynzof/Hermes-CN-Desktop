@@ -153,6 +153,12 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Shell self-update (Track C). Endpoints + minisign pubkey live in
+        // tauri.conf.json's plugins.updater; the frontend drives
+        // check→download→install→relaunch via @tauri-apps/plugin-updater and
+        // falls back to the notify-and-guide flow (commands/desktop_update.rs)
+        // when the updater is unconfigured.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         .setup(move |app| {
             use tauri::Manager;

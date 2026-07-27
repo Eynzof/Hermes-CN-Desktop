@@ -73,5 +73,17 @@
     "macOS": {
       "minimumSystemVersion": "10.15"
     }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://desktop.hermesagent.org.cn/shell/latest.json",
+        "https://github.com/Eynzof/Hermes-CN-Desktop/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM5RDcwMEQyNjE0REI4RUQKUldUdHVFMWgwZ0RYT1dhMCs5ZDB3ZUh6Q1R1ajR1LzJlRE5DWkFQWmdFc0tMRmp4SE5zb1VDTG0K",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

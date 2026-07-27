@@ -10,6 +10,7 @@
     "dialog:default",
     "dialog:allow-open",
     "clipboard-manager:allow-read-image",
-    "notification:default"
+    "notification:default",
+    "updater:default"
   ]
 }

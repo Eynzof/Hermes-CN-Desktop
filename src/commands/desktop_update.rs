@@ -13,6 +13,18 @@ use serde::{Deserialize, Serialize};
 const DESKTOP_UPDATE_MANIFEST_URL: &str = "https://desktop.hermesagent.org.cn/latest.json";
 const DESKTOP_UPDATE_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The landing-site notification manifest URL, overridable via
+/// `HERMES_DESKTOP_UPDATE_MANIFEST_URL` so self-hosters / mirror operators can
+/// repoint the soft-update check without rebuilding. Empty env falls back to
+/// the baked default.
+fn desktop_update_manifest_url() -> String {
+    std::env::var("HERMES_DESKTOP_UPDATE_MANIFEST_URL")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DESKTOP_UPDATE_MANIFEST_URL.to_string())
+}
+
 static DESKTOP_UPDATE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(DESKTOP_UPDATE_TIMEOUT)
@@ -123,7 +135,7 @@ async fn fetch_desktop_update_manifest_from(
 
 #[tauri::command]
 pub async fn desktop_check_update() -> DesktopUpdateManifestFetchResult {
-    fetch_desktop_update_manifest_from(&DESKTOP_UPDATE_HTTP_CLIENT, DESKTOP_UPDATE_MANIFEST_URL)
+    fetch_desktop_update_manifest_from(&DESKTOP_UPDATE_HTTP_CLIENT, &desktop_update_manifest_url())
         .await
 }
 
@@ -136,6 +148,28 @@ mod tests {
 
     fn test_client(timeout: Duration) -> reqwest::Client {
         reqwest::Client::builder().timeout(timeout).build().unwrap()
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn manifest_url_env_override() {
+        std::env::remove_var("HERMES_DESKTOP_UPDATE_MANIFEST_URL");
+        assert_eq!(desktop_update_manifest_url(), DESKTOP_UPDATE_MANIFEST_URL);
+
+        std::env::set_var(
+            "HERMES_DESKTOP_UPDATE_MANIFEST_URL",
+            "https://mirror.example.com/latest.json",
+        );
+        assert_eq!(
+            desktop_update_manifest_url(),
+            "https://mirror.example.com/latest.json"
+        );
+
+        // Blank env falls back to the baked default.
+        std::env::set_var("HERMES_DESKTOP_UPDATE_MANIFEST_URL", "   ");
+        assert_eq!(desktop_update_manifest_url(), DESKTOP_UPDATE_MANIFEST_URL);
+
+        std::env::remove_var("HERMES_DESKTOP_UPDATE_MANIFEST_URL");
     }
 
     #[tokio::test]

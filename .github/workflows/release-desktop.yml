@@ -42,6 +42,12 @@ permissions:
 
 jobs:
   build:
+    # Mapped at job level so the "Compute updater args" step's `if:` can read
+    # whether the minisign key is present (a step's `if` runs before its own
+    # env is applied — job-level env is the documented way to gate on a secret).
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -227,6 +233,23 @@ jobs:
         shell: bash
         run: scripts/verify-macos-runtime-payload.sh "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"
 
+      # Track C: enable signed updater artifacts (.sig + latest.json) ONLY when
+      # the minisign key is present, so a release cut before the key is
+      # provisioned (P0) still succeeds — it just ships no self-update. Passed
+      # as a config override rather than baked into tauri.conf.json for exactly
+      # that reason (createUpdaterArtifacts:true hard-fails a keyless build).
+      - name: Compute updater args
+        id: updater
+        shell: bash
+        run: |
+          if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+            echo 'config_arg=--config {"bundle":{"createUpdaterArtifacts":true}}' >> "$GITHUB_OUTPUT"
+            echo "Shell self-update artifacts ENABLED (signing key present)."
+          else
+            echo 'config_arg=' >> "$GITHUB_OUTPUT"
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY absent — building WITHOUT self-update artifacts. Set the secret (P0) to enable Track C."
+          fi
+
       - name: Build + upload installers
         uses: tauri-apps/tauri-action@v0
         env:
@@ -234,6 +257,10 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # minisign key for signing the updater artifacts (Track C). Absent =>
+          # config_arg is empty above and no updater artifacts are produced.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # tauri-action looks up the tag from this input. On a push:tags
           # trigger it falls back to GITHUB_REF, but we pass it explicitly
@@ -270,7 +297,7 @@ jobs:
           releaseDraft: false
           # Mark SemVer prerelease tags as prerelease on GitHub Releases.
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
-          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} ${{ steps.updater.outputs.config_arg }}
 
       - name: Package + upload Windows portable zip
         if: matrix.runtime_platform == 'win32'
@@ -283,6 +310,18 @@ jobs:
           node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
           gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
+      # KNOWN FOLLOW-UPS for Track C shell self-update (do before GA):
+      #  - macOS: the updater artifact is a `.app.tar.gz` (+ .sig), signed by
+      #    tauri-action during the build BEFORE this DMG notarization step. Its
+      #    embedded .app carries the Developer-ID signature but NOT this step's
+      #    stapled notarization ticket. Gatekeeper still accepts it (online
+      #    notarization check), but for parity the updater `.app.tar.gz` should
+      #    be rebuilt from the notarized+stapled .app and re-signed. See
+      #    docs/hot-update-impl-plan.md §5.
+      #  - Windows: NSIS installer is not Authenticode-signed. Enabling silent
+      #    (passive) self-update before buying an OV/EV cert means SmartScreen
+      #    warnings on every update. Keep the frontend on prompt-then-install
+      #    until the cert lands.
       - name: Notarize, staple, verify, and reupload macOS DMG
         if: matrix.runtime_platform == 'darwin'
         shell: bash
