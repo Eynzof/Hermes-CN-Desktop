@@ -439,6 +439,23 @@ fn clear_managed(home: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn sync_if_configured(home: &str) -> Result<(), String> {
+    if let Some(token) = read_token(Path::new(home)) {
+        match sync_home(Path::new(home), &token).await {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                if error.contains("rejected") || error.contains("disabled") {
+                    let _ = fs::remove_file(token_path(Path::new(home)));
+                    let _ = clear_managed(Path::new(home));
+                }
+                Err(error)
+            }
+        }
+    } else {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,22 +503,5 @@ mod tests {
         let status = status_for_home(home);
         assert!(!status.configured);
         assert_eq!(status.synced_models, 1);
-    }
-}
-
-pub async fn sync_if_configured(home: &str) -> Result<(), String> {
-    if let Some(token) = read_token(Path::new(home)) {
-        match sync_home(Path::new(home), &token).await {
-            Ok(_) => Ok(()),
-            Err(error) => {
-                if error.contains("rejected") || error.contains("disabled") {
-                    let _ = fs::remove_file(token_path(Path::new(home)));
-                    let _ = clear_managed(Path::new(home));
-                }
-                Err(error)
-            }
-        }
-    } else {
-        Ok(())
     }
 }
