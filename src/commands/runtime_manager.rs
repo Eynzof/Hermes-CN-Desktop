@@ -14,6 +14,7 @@ use crate::error::AppError;
 use crate::process::dashboard;
 use crate::process::runtime;
 use crate::state::AppState;
+use crate::update_stage::UpdateStage;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -173,23 +174,55 @@ pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult,
 }
 
 /// Install a runtime update and restart the dashboard.
+///
+/// Progress is pushed to the webview as `runtime-update-stage` events
+/// (src/update_stage.rs) so the update overlay can render real stages instead
+/// of an indeterminate spinner.
 #[tauri::command]
 pub async fn runtime_install_update(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 更新")?;
     }
-    let result = runtime::install_runtime_update(None).await;
+    let stage_app = app.clone();
+    let sink = move |stage: UpdateStage| stage.emit(&stage_app);
+    let result = runtime::install_runtime_update(None, Some(&sink)).await;
     if !result.ok {
+        UpdateStage::Failed {
+            error: result
+                .error
+                .clone()
+                .unwrap_or_else(|| "runtime update failed".to_string()),
+            new_version: result.installed.as_ref().map(|r| r.runtime_version.clone()),
+        }
+        .emit(&app);
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = result.error.clone();
         return Ok(result);
     }
 
+    let new_version = result
+        .installed
+        .as_ref()
+        .map(|r| r.runtime_version.clone())
+        .unwrap_or_default();
+
     // Restart dashboard after successful install
+    UpdateStage::RestartingDashboard {
+        new_version: new_version.clone(),
+    }
+    .emit(&app);
     if let Err(e) = restart_dashboard(&state).await {
+        // Half-updated state: the new runtime is already active on disk — only
+        // the dashboard restart failed. Message and stage must both read as
+        // "restart the app", never as a failed update the user should retry.
+        UpdateStage::RestartRequired {
+            new_version: new_version.clone(),
+        }
+        .emit(&app);
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = Some(e.to_string());
         return Ok(runtime::RuntimeInstallUpdateResult {
@@ -197,12 +230,16 @@ pub async fn runtime_install_update(
             installed: result.installed,
             previous: result.previous,
             error: Some(format!(
-                "Runtime installed, but dashboard restart failed: {}",
-                e
+                "内核已更新到 {new_version}，但自动重启失败：{e}。更新已生效，请手动重启应用。"
             )),
         });
     }
 
+    UpdateStage::Complete {
+        new_version,
+        previous_version: result.previous.as_ref().map(|p| p.runtime_version.clone()),
+    }
+    .emit(&app);
     {
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = None;
@@ -355,7 +392,7 @@ async fn install_runtime_payload(app: &tauri::AppHandle) -> runtime::RuntimeInst
     {
         runtime::install_bundled_runtime_if_needed(resource_dir.as_deref()).await
     } else {
-        runtime::install_runtime_update(None).await
+        runtime::install_runtime_update(None, None).await
     }
 }
 
@@ -799,20 +836,46 @@ mod tests {
 /// Rollback runtime and restart the dashboard.
 #[tauri::command]
 pub async fn runtime_rollback(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 回滚")?;
     }
+    UpdateStage::RollingBack.emit(&app);
     let result = runtime::rollback_runtime();
     if !result.ok {
+        UpdateStage::Failed {
+            error: result
+                .error
+                .clone()
+                .unwrap_or_else(|| "runtime rollback failed".to_string()),
+            new_version: None,
+        }
+        .emit(&app);
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = result.error.clone();
         return Ok(result);
     }
 
+    let restored_version = result
+        .installed
+        .as_ref()
+        .map(|r| r.runtime_version.clone())
+        .unwrap_or_default();
+    UpdateStage::RestartingDashboard {
+        new_version: restored_version.clone(),
+    }
+    .emit(&app);
     if let Err(e) = restart_dashboard(&state).await {
+        // Half-rolled-back: current.json already points at the previous
+        // version — only the dashboard restart failed. Same "restart the app"
+        // messaging as the install path.
+        UpdateStage::RestartRequired {
+            new_version: restored_version.clone(),
+        }
+        .emit(&app);
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = Some(e.to_string());
         return Ok(runtime::RuntimeInstallUpdateResult {
@@ -820,12 +883,12 @@ pub async fn runtime_rollback(
             installed: result.installed,
             previous: result.previous,
             error: Some(format!(
-                "Runtime rolled back, but dashboard restart failed: {}",
-                e
+                "已回滚到内核 {restored_version}，但自动重启失败：{e}。回滚已生效，请手动重启应用。"
             )),
         });
     }
 
+    UpdateStage::RolledBack { restored_version }.emit(&app);
     {
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = None;

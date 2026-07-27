@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import type { RuntimeUpdateStage } from "@hermes/protocol";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
 import hermesDefaultAvatar from "@/assets/hermes-default-avatar.png";
@@ -289,3 +290,9 @@ export const profileSwitchingAtom = atom<{
 export const runtimeUpdatingAtom = atom<{ active: boolean; mode?: "install" | "rollback" }>({
   active: false,
 });
+
+// Latest runtime-update-stage event from the Rust side (update_stage.rs),
+// written by the listener in use-runtime-update.ts while an install/rollback
+// is in flight. The RuntimeUpdateOverlay renders it as stage-level progress;
+// null means "no stage received yet" (overlay falls back to generic copy).
+export const runtimeUpdateStageAtom = atom<RuntimeUpdateStage | null>(null);

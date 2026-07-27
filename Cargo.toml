@@ -37,6 +37,9 @@ log = "0.4"
 env_logger = "0.11"
 tempfile = "3"
 base64 = "0.22"
+# Runtime-update version ordering (process/runtime.rs): upgrade/downgrade
+# gates parse `0.18.2-cn.N` as semver with a `cn.N` pre-release.
+semver = "1"
 url = "2"
 urlencoding = "2"
 open = "5"

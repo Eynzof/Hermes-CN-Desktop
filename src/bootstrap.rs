@@ -143,7 +143,7 @@ pub async fn acquire_managed_dashboard(
     if info.current.is_none() && info.updates_configured {
         emit_runtime_status(app, "installing", "正在下载 hermes-agent-cn runtime...");
         log::info!("Bootstrap: install_runtime_update");
-        let install = runtime::install_runtime_update(None).await;
+        let install = runtime::install_runtime_update(None, None).await;
         if !install.ok {
             let msg = install
                 .error

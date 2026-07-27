@@ -16,6 +16,19 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::process::Command;
 
+use crate::update_stage::UpdateStage;
+
+/// Progress sink threaded through the install path so the command layer can
+/// forward [`UpdateStage`]s to the webview. `None` keeps silent installs
+/// (bundled bootstrap at startup) free of UI events.
+pub type StageSink<'a> = &'a (dyn Fn(UpdateStage) + Send + Sync);
+
+fn emit_stage(sink: Option<StageSink<'_>>, stage: UpdateStage) {
+    if let Some(sink) = sink {
+        sink(stage);
+    }
+}
+
 const RUNTIME_BASENAME: &str = "hermes-agent-cn-runtime";
 /// Managed runtime tree used by release / packaged installs.
 const RUNTIME_SUBDIR_RELEASE: &str = "runtime";
@@ -31,7 +44,21 @@ const PORTABLE_MARKER_FILE: &str = "portable.marker";
 const CURRENT_FILE: &str = "current.json";
 const MANIFEST_FILE: &str = "manifest.json";
 const DEFAULT_CHANNEL: &str = "stable";
-const MANIFEST_SCHEMA_VERSION: u32 = 2;
+/// Schema written into `current.json` install records. The record shape did
+/// NOT change when the update manifest gained v3 (minAppVersion lives only in
+/// the signed manifest payload), so this stays at 2 — bumping it would orphan
+/// every existing install: `read_current_record` treats unknown schemas as
+/// "nothing installed" and forces a full re-bootstrap.
+const RECORD_SCHEMA_VERSION: u32 = 2;
+/// Install records this client accepts. 3 is reserved forward-compat so a
+/// future record bump can roll out reader-first, mirroring the manifest plan.
+const SUPPORTED_RECORD_SCHEMA_VERSIONS: [u32; 2] = [2, 3];
+/// Update-manifest schemas this client can verify.
+/// v2 = original 12-field signature payload; v3 appends `minAppVersion` as
+/// field #13 (see `signature_payload`) and requires it to be present.
+/// Keep accepting v2 until the Core signing pipeline has fully moved to v3
+/// (client-first rollout: readers must ship before signers switch).
+const SUPPORTED_MANIFEST_SCHEMA_VERSIONS: [u32; 2] = [2, 3];
 const DASHBOARD_RESOURCE_DIR: &str = "dashboard";
 const DASHBOARD_WEB_DIST_DIR: &str = "web_dist";
 const BUNDLED_SKILLS_RESOURCE_DIR: &str = "bundled-skills";
@@ -218,12 +245,40 @@ pub struct RuntimeProcessInfo {
 pub struct RuntimeUpdateCheckResult {
     pub ok: bool,
     pub update_available: bool,
+    /// The channel offered an older runtime than the installed one and the
+    /// downgrade gate suppressed it (`update_available` stays false).
+    #[serde(default)]
+    pub downgrade_blocked: bool,
+    /// The manifest's signed `minAppVersion` is newer than this desktop build:
+    /// installing is blocked until the shell itself is upgraded.
+    #[serde(default)]
+    pub force_app_update_required: bool,
+    /// Set alongside `force_app_update_required`: the minimum shell version
+    /// the manifest demands, for UI messaging.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required_app_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_runtime_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub manifest: Option<RuntimeUpdateManifest>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+impl RuntimeUpdateCheckResult {
+    /// Failed check with every gate flag cleared.
+    fn failure(error: String) -> Self {
+        RuntimeUpdateCheckResult {
+            ok: false,
+            update_available: false,
+            downgrade_blocked: false,
+            force_app_update_required: false,
+            required_app_version: None,
+            current_runtime_version: None,
+            manifest: None,
+            error: Some(error),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -256,6 +311,84 @@ fn current_arch() -> &'static str {
     } else {
         std::env::consts::ARCH
     }
+}
+
+/// Desktop shell version, taken from the crate itself (kept in sync with
+/// `package.json`/`tauri.conf.json` by `pnpm version:sync`). Never accept this
+/// from the webview — the min-app-version gate must not be spoofable.
+fn desktop_app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Runtime versions are `<kernel>-cn.<rev>` (e.g. `0.18.2-cn.7`), which is
+/// valid semver with a `cn.<rev>` pre-release: `cn.2 < cn.10` compares
+/// numerically, and `0.18.2-cn.* < 0.18.3-cn.*`. Beware if a canary suffix is
+/// ever added: `0.18.2-cn.2-canary.3` makes the pre-release `cn.2-canary` an
+/// *alphanumeric* identifier that sorts ABOVE the numeric `cn.2` — canary
+/// version grammar must be designed together with these gates.
+fn parse_runtime_semver(version: &str) -> Option<semver::Version> {
+    semver::Version::parse(version.trim().trim_start_matches('v')).ok()
+}
+
+/// True when installing `candidate` over `current` would be a downgrade.
+/// Only ever true when BOTH sides parse as semver — unparseable versions fall
+/// back to the legacy "any difference is installable" behavior rather than
+/// bricking updates over a formatting quirk.
+fn is_version_downgrade(candidate: &str, current: &str) -> bool {
+    match (
+        parse_runtime_semver(candidate),
+        parse_runtime_semver(current),
+    ) {
+        (Some(candidate), Some(current)) => candidate < current,
+        _ => {
+            log::warn!(
+                "runtime version compare fell back to string equality: {candidate:?} vs {current:?}"
+            );
+            false
+        }
+    }
+}
+
+/// Returns the manifest's `minAppVersion` when it demands a newer desktop
+/// shell than this build. Unparseable values never block: the field is
+/// signature-protected, so a bad value is an authoring bug, not an attack.
+fn blocking_min_app_version(manifest: &RuntimeUpdateManifest) -> Option<String> {
+    let min = manifest.min_app_version.as_deref()?.trim();
+    if min.is_empty() {
+        return None;
+    }
+    let (Some(min_version), Some(app_version)) = (
+        parse_runtime_semver(min),
+        parse_runtime_semver(desktop_app_version()),
+    ) else {
+        log::warn!("ignoring unparseable minAppVersion {min:?} in runtime update manifest");
+        return None;
+    };
+    (min_version > app_version).then(|| min.to_string())
+}
+
+/// Schema acceptance shared by every manifest consumer (update check, install,
+/// bundled bootstrap). v3 additionally requires `minAppVersion`: the field is
+/// part of the v3 signature payload, and Python's signer must never have to
+/// serialize a missing value (`str(None)` vs `""` ambiguity).
+fn validate_manifest_schema(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
+    if !SUPPORTED_MANIFEST_SCHEMA_VERSIONS.contains(&manifest.schema_version) {
+        return Err(format!(
+            "Manifest schemaVersion is {}, expected one of {:?}",
+            manifest.schema_version, SUPPORTED_MANIFEST_SCHEMA_VERSIONS
+        ));
+    }
+    if manifest.schema_version >= 3
+        && manifest
+            .min_app_version
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+    {
+        return Err("Manifest schemaVersion 3 requires a non-empty minAppVersion".to_string());
+    }
+    Ok(())
 }
 
 fn executable_extension() -> &'static str {
@@ -654,7 +787,7 @@ fn read_legacy_current_record(path: &Path) -> Option<RuntimeInstallRecord> {
     let runtime_dir = PathBuf::from(&legacy.path);
     let kernel_version = infer_kernel_version_from_local_manifest(&runtime_dir, &legacy.version);
     Some(RuntimeInstallRecord {
-        schema_version: MANIFEST_SCHEMA_VERSION,
+        schema_version: RECORD_SCHEMA_VERSION,
         runtime_version: legacy.version,
         kernel_version,
         runtime_flavor: if legacy.source == "local-source" {
@@ -684,7 +817,7 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
     } else {
         (read_legacy_current_record(&path)?, true)
     };
-    if record.schema_version != MANIFEST_SCHEMA_VERSION {
+    if !SUPPORTED_RECORD_SCHEMA_VERSIONS.contains(&record.schema_version) {
         return None;
     }
     if record.platform != current_platform() || record.arch != current_arch() {
@@ -1177,12 +1310,7 @@ pub fn bundled_runtime_available(resource_dir: Option<&Path>) -> bool {
 fn validate_manifest_for_current_platform(
     manifest: &RuntimeUpdateManifest,
 ) -> Result<String, String> {
-    if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
-        return Err(format!(
-            "Manifest schemaVersion is {}, expected {}",
-            manifest.schema_version, MANIFEST_SCHEMA_VERSION
-        ));
-    }
+    validate_manifest_schema(manifest)?;
     if manifest.platform != current_platform() || manifest.arch != current_arch() {
         return Err(format!(
             "Manifest is for {}-{}, not {}-{}",
@@ -1274,13 +1402,9 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
     let url = match configured_manifest_url() {
         Some(u) => u,
         None => {
-            return RuntimeUpdateCheckResult {
-                ok: false,
-                update_available: false,
-                current_runtime_version: None,
-                manifest: None,
-                error: Some("Runtime update manifest URL is not configured".to_string()),
-            };
+            return RuntimeUpdateCheckResult::failure(
+                "Runtime update manifest URL is not configured".to_string(),
+            );
         }
     };
 
@@ -1292,68 +1416,48 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
     {
         Ok(res) if res.status().is_success() => match res.json::<RuntimeUpdateManifest>().await {
             Ok(manifest) => {
-                if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
-                    return RuntimeUpdateCheckResult {
-                        ok: false,
-                        update_available: false,
-                        current_runtime_version: None,
-                        manifest: None,
-                        error: Some(format!(
-                            "Manifest schemaVersion is {}, expected {}",
-                            manifest.schema_version, MANIFEST_SCHEMA_VERSION
-                        )),
-                    };
+                if let Err(e) = validate_manifest_schema(&manifest) {
+                    return RuntimeUpdateCheckResult::failure(e);
                 }
                 if manifest.platform != current_platform() || manifest.arch != current_arch() {
-                    return RuntimeUpdateCheckResult {
-                        ok: false,
-                        update_available: false,
-                        current_runtime_version: None,
-                        manifest: None,
-                        error: Some(format!(
-                            "Manifest is for {}-{}, not {}-{}",
-                            manifest.platform,
-                            manifest.arch,
-                            current_platform(),
-                            current_arch()
-                        )),
-                    };
+                    return RuntimeUpdateCheckResult::failure(format!(
+                        "Manifest is for {}-{}, not {}-{}",
+                        manifest.platform,
+                        manifest.arch,
+                        current_platform(),
+                        current_arch()
+                    ));
                 }
                 let current = read_current_record();
-                let update_available = current
-                    .as_ref()
-                    .map(|c| c.runtime_version != manifest.runtime_version)
-                    .unwrap_or(true);
+                // Same version → up to date; older (semver) → downgrade gate
+                // suppresses it; anything else (newer or unparseable) keeps
+                // the legacy "different means installable" behavior.
+                let (update_available, downgrade_blocked) = match current.as_ref() {
+                    None => (true, false),
+                    Some(c) if c.runtime_version == manifest.runtime_version => (false, false),
+                    Some(c)
+                        if is_version_downgrade(&manifest.runtime_version, &c.runtime_version) =>
+                    {
+                        (false, true)
+                    }
+                    Some(_) => (true, false),
+                };
+                let required_app_version = blocking_min_app_version(&manifest);
                 RuntimeUpdateCheckResult {
                     ok: true,
                     update_available,
+                    downgrade_blocked,
+                    force_app_update_required: required_app_version.is_some(),
+                    required_app_version,
                     current_runtime_version: current.map(|c| c.runtime_version),
                     manifest: Some(manifest),
                     error: None,
                 }
             }
-            Err(e) => RuntimeUpdateCheckResult {
-                ok: false,
-                update_available: false,
-                current_runtime_version: None,
-                manifest: None,
-                error: Some(format!("Failed to parse manifest: {}", e)),
-            },
+            Err(e) => RuntimeUpdateCheckResult::failure(format!("Failed to parse manifest: {}", e)),
         },
-        Ok(res) => RuntimeUpdateCheckResult {
-            ok: false,
-            update_available: false,
-            current_runtime_version: None,
-            manifest: None,
-            error: Some(format!("HTTP {}", res.status())),
-        },
-        Err(e) => RuntimeUpdateCheckResult {
-            ok: false,
-            update_available: false,
-            current_runtime_version: None,
-            manifest: None,
-            error: Some(e.to_string()),
-        },
+        Ok(res) => RuntimeUpdateCheckResult::failure(format!("HTTP {}", res.status())),
+        Err(e) => RuntimeUpdateCheckResult::failure(e.to_string()),
     }
 }
 
@@ -1364,8 +1468,14 @@ fn sha256_hex(data: &[u8]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+// Signed payload, one field per line. Field ORDER and the exact set per
+// schema version are a cross-language contract with the Core signer
+// (Hermes-CN-Core/scripts/sign_runtime_manifest.py `_PAYLOAD_FIELDS`) — any
+// change must land in both repos in lockstep, guarded by the order-lock tests
+// below. v2 = 12 fields; v3 appends `minAppVersion` as field #13 (validated
+// non-empty before verification, so the signer never serializes a null).
 fn signature_payload(manifest: &RuntimeUpdateManifest) -> Vec<u8> {
-    format!(
+    let mut payload = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         manifest.schema_version,
         manifest.channel,
@@ -1379,8 +1489,12 @@ fn signature_payload(manifest: &RuntimeUpdateManifest) -> Vec<u8> {
         manifest.sha256,
         manifest.source_repo,
         manifest.source_commit,
-    )
-    .into_bytes()
+    );
+    if manifest.schema_version >= 3 {
+        payload.push('\n');
+        payload.push_str(manifest.min_app_version.as_deref().unwrap_or(""));
+    }
+    payload.into_bytes()
 }
 
 fn verify_signature(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
@@ -1396,6 +1510,10 @@ fn verify_signature_with_key(
     use base64::Engine;
     use ed25519_dalek::pkcs8::DecodePublicKey;
     use ed25519_dalek::{Signature, VerifyingKey};
+
+    // Reject unsupported schemas / v3-without-minAppVersion up front so the
+    // caller gets a precise error instead of an opaque signature mismatch.
+    validate_manifest_schema(manifest)?;
 
     let key = VerifyingKey::from_public_key_pem(public_key_pem.trim())
         .map_err(|e| format!("Invalid public key PEM: {}", e))?;
@@ -1627,7 +1745,7 @@ fn install_record_from_manifest(
     previous: Option<&RuntimeInstallRecord>,
 ) -> RuntimeInstallRecord {
     RuntimeInstallRecord {
-        schema_version: MANIFEST_SCHEMA_VERSION,
+        schema_version: RECORD_SCHEMA_VERSION,
         runtime_version: resolved.runtime_version.clone(),
         kernel_version: resolved.kernel_version.clone(),
         runtime_flavor: resolved.runtime_flavor.clone(),
@@ -1650,6 +1768,7 @@ async fn install_runtime_zip(
     resolved: RuntimeUpdateManifest,
     zip_path: &Path,
     source: &str,
+    stage_sink: Option<StageSink<'_>>,
 ) -> RuntimeInstallUpdateResult {
     let version_segment = match validate_manifest_for_current_platform(&resolved) {
         Ok(version_segment) => version_segment,
@@ -1663,6 +1782,12 @@ async fn install_runtime_zip(
         }
     };
 
+    emit_stage(
+        stage_sink,
+        UpdateStage::Verifying {
+            new_version: resolved.runtime_version.clone(),
+        },
+    );
     let digest = match file_sha256(zip_path) {
         Some(digest) => digest,
         None => {
@@ -1727,6 +1852,12 @@ async fn install_runtime_zip(
         }
     };
 
+    emit_stage(
+        stage_sink,
+        UpdateStage::Extracting {
+            new_version: resolved.runtime_version.clone(),
+        },
+    );
     if let Err(e) = extract_zip(&cached_zip_path, staging.path()) {
         return RuntimeInstallUpdateResult {
             ok: false,
@@ -1748,6 +1879,12 @@ async fn install_runtime_zip(
         }
     };
 
+    emit_stage(
+        stage_sink,
+        UpdateStage::SmokeChecking {
+            new_version: resolved.runtime_version.clone(),
+        },
+    );
     if let Err(e) = smoke_check_runtime(&executable).await {
         return RuntimeInstallUpdateResult {
             ok: false,
@@ -1757,6 +1894,12 @@ async fn install_runtime_zip(
         };
     }
 
+    emit_stage(
+        stage_sink,
+        UpdateStage::Installing {
+            new_version: resolved.runtime_version.clone(),
+        },
+    );
     let target = versions_root().join(&version_segment);
     if let Err(e) = remove_existing_runtime_target(&target) {
         return RuntimeInstallUpdateResult {
@@ -2057,6 +2200,23 @@ pub async fn install_bundled_runtime_if_needed(
                 previous: Some(current),
                 error: None,
             };
+        } else if is_version_downgrade(&manifest.runtime_version, &current.runtime_version) {
+            // Overwrite-install safety: a user who auto-updated the kernel past
+            // the version bundled with this (newer) shell installer must NOT be
+            // silently downgraded back to the bundled kernel. Keep the newer
+            // installed runtime and skip the resource sync too — the bundled
+            // dashboard web_dist/skills belong to the older bundled kernel.
+            log::info!(
+                "Bundled runtime {} is older than installed {}; keeping the installed runtime",
+                manifest.runtime_version,
+                current.runtime_version
+            );
+            return RuntimeInstallUpdateResult {
+                ok: true,
+                installed: None,
+                previous: Some(current),
+                error: None,
+            };
         }
     }
 
@@ -2072,7 +2232,7 @@ pub async fn install_bundled_runtime_if_needed(
     let mut result = if has_expanded_runtime {
         install_runtime_tree(manifest, &expanded_runtime_dir, "bundled").await
     } else {
-        install_runtime_zip(manifest, &artifact_path, "bundled").await
+        install_runtime_zip(manifest, &artifact_path, "bundled", None).await
     };
     if result.ok {
         if let Some(installed) = &result.installed {
@@ -2090,6 +2250,7 @@ pub async fn install_bundled_runtime_if_needed(
 /// Download, verify, and install a runtime update.
 pub async fn install_runtime_update(
     manifest: Option<RuntimeUpdateManifest>,
+    stage_sink: Option<StageSink<'_>>,
 ) -> RuntimeInstallUpdateResult {
     let resolved = match manifest {
         Some(m) => m,
@@ -2121,6 +2282,35 @@ pub async fn install_runtime_update(
             previous: None,
             error: Some(e),
         };
+    }
+
+    // Post-signature gates. Both fields are signature-protected, so at this
+    // point they carry the release pipeline's intent, not an attacker's.
+    // `check` surfaces them as flags; install must re-enforce because callers
+    // can pass a manifest directly and skip the check step.
+    if let Some(required) = blocking_min_app_version(&resolved) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(format!(
+                "此内核更新要求桌面端版本 ≥ {required}（当前 {}），请先升级桌面应用后再更新内核",
+                desktop_app_version()
+            )),
+        };
+    }
+    if let Some(current) = read_current_record() {
+        if is_version_downgrade(&resolved.runtime_version, &current.runtime_version) {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(format!(
+                    "已拒绝降级安装：更新源提供的内核 {} 低于当前已安装的 {}",
+                    resolved.runtime_version, current.runtime_version
+                )),
+            };
+        }
     }
 
     let version_segment = match validate_manifest_for_current_platform(&resolved) {
@@ -2156,6 +2346,12 @@ pub async fn install_runtime_update(
         }
     }
 
+    emit_stage(
+        stage_sink,
+        UpdateStage::Downloading {
+            new_version: resolved.runtime_version.clone(),
+        },
+    );
     let artifact = match RUNTIME_HTTP_CLIENT
         .get(&resolved.artifact_url)
         .timeout(RUNTIME_ARTIFACT_HTTP_TIMEOUT)
@@ -2211,7 +2407,7 @@ pub async fn install_runtime_update(
         };
     }
 
-    install_runtime_zip(resolved, &zip_path, "update").await
+    install_runtime_zip(resolved, &zip_path, "update", stage_sink).await
 }
 
 /// Rollback to the previous runtime version.
@@ -2278,7 +2474,7 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
         read_json_file(&prev_path.join(MANIFEST_FILE));
 
     let installed = RuntimeInstallRecord {
-        schema_version: MANIFEST_SCHEMA_VERSION,
+        schema_version: RECORD_SCHEMA_VERSION,
         runtime_version: prev_runtime_version.clone(),
         kernel_version: prev_manifest
             .as_ref()
@@ -2773,7 +2969,9 @@ mod tests {
 
     fn fixture_manifest() -> RuntimeUpdateManifest {
         RuntimeUpdateManifest {
-            schema_version: MANIFEST_SCHEMA_VERSION,
+            // v2 manifest fixture — the original 12-field signature payload.
+            // v3 tests clone this and bump schema + minAppVersion.
+            schema_version: 2,
             channel: "stable".to_string(),
             runtime_version: "1.2.3-cn.1".to_string(),
             kernel_version: "1.2.3".to_string(),
@@ -3083,7 +3281,7 @@ mod tests {
         sign_manifest(&key, &mut manifest);
         std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
 
-        let result = install_runtime_update(Some(manifest)).await;
+        let result = install_runtime_update(Some(manifest), None).await;
 
         std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
         assert!(!result.ok);
@@ -3108,7 +3306,7 @@ mod tests {
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
 
         let current = RuntimeInstallRecord {
-            schema_version: MANIFEST_SCHEMA_VERSION,
+            schema_version: RECORD_SCHEMA_VERSION,
             runtime_version: "current".to_string(),
             kernel_version: "1.0.0".to_string(),
             runtime_flavor: "cn".to_string(),
@@ -3240,7 +3438,7 @@ mod tests {
         .unwrap();
 
         let record = read_current_record().expect("legacy record should migrate");
-        assert_eq!(record.schema_version, MANIFEST_SCHEMA_VERSION);
+        assert_eq!(record.schema_version, RECORD_SCHEMA_VERSION);
         assert_eq!(record.runtime_version, runtime_version);
         assert_eq!(record.kernel_version, "0.14.0");
         assert_eq!(record.runtime_flavor, "cn-local");
@@ -3252,6 +3450,59 @@ mod tests {
         assert!(rewritten.contains(r#""schemaVersion": 2"#));
         assert!(rewritten.contains(r#""runtimeVersion": "dev-local-0.14.0"#));
         assert!(!rewritten.contains(r#""upstreamRepo""#));
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    #[test]
+    #[serial]
+    fn read_current_record_accepts_forward_record_schema_but_rejects_unknown() {
+        // Records are written as schema 2 (RECORD_SCHEMA_VERSION) and the
+        // reader additionally accepts 3, so a future record bump can ship
+        // reader-first without orphaning installs. Unknown schemas still mean
+        // "nothing installed" — that fallback is exactly the re-bootstrap
+        // hazard the forward window exists to avoid.
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", tmp.path());
+
+        let runtime_dir = tmp.path().join("versions").join("0.18.2-cn.7");
+        let exe = runtime_dir.join("hermes");
+        fs::create_dir_all(&runtime_dir).unwrap();
+        fs::write(&exe, "#!/bin/sh\n").unwrap();
+
+        let write_record = |schema: u32| {
+            fs::write(
+                current_record_path(),
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "schemaVersion": schema,
+                    "runtimeVersion": "0.18.2-cn.7",
+                    "kernelVersion": "0.18.2",
+                    "runtimeFlavor": "cn",
+                    "runtimeRevision": 7,
+                    "platform": current_platform(),
+                    "arch": current_arch(),
+                    "path": runtime_dir.display().to_string(),
+                    "executablePath": exe.display().to_string(),
+                    "source": "update",
+                    "installedAt": "2026-07-18T00:00:00.000Z",
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        };
+
+        write_record(2);
+        assert!(read_current_record().is_some(), "schema 2 must be accepted");
+        write_record(3);
+        assert!(
+            read_current_record().is_some(),
+            "schema 3 is the forward-compat window"
+        );
+        write_record(4);
+        assert!(
+            read_current_record().is_none(),
+            "unknown schemas must be treated as not installed"
+        );
 
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
@@ -3357,6 +3608,100 @@ mod tests {
         assert_ne!(signature_payload(&m2), baseline);
     }
 
+    fn fixture_manifest_v3() -> RuntimeUpdateManifest {
+        let mut m = fixture_manifest();
+        m.schema_version = 3;
+        m.min_app_version = Some("0.7.0".to_string());
+        m
+    }
+
+    #[test]
+    fn signature_payload_v3_appends_min_app_version_as_field_13() {
+        // Cross-language order lock with Core's sign_runtime_manifest.py:
+        // v3 = the 12 v2 fields, then minAppVersion. Any reorder or resize
+        // here must ship together with the Python signer.
+        let payload = String::from_utf8(signature_payload(&fixture_manifest_v3())).unwrap();
+        let lines: Vec<&str> = payload.split('\n').collect();
+        assert_eq!(lines.len(), 13);
+        assert_eq!(lines[0], "3");
+        assert_eq!(lines[12], "0.7.0");
+        // The first 12 fields keep the exact v2 order.
+        let v2_payload = String::from_utf8(signature_payload(&fixture_manifest())).unwrap();
+        let v2_lines: Vec<&str> = v2_payload.split('\n').collect();
+        assert_eq!(&lines[1..12], &v2_lines[1..12]);
+    }
+
+    #[test]
+    fn signature_payload_v2_ignores_min_app_version() {
+        // A v2 manifest must produce a byte-identical payload whether or not
+        // the (unsigned, optional) minAppVersion field happens to be present —
+        // otherwise old signatures would break the moment Core starts
+        // emitting the field.
+        let baseline = signature_payload(&fixture_manifest());
+        let mut m = fixture_manifest();
+        m.min_app_version = Some("9.9.9".to_string());
+        assert_eq!(signature_payload(&m), baseline);
+    }
+
+    #[test]
+    fn validate_manifest_schema_accepts_supported_versions_only() {
+        assert!(validate_manifest_schema(&fixture_manifest()).is_ok());
+        assert!(validate_manifest_schema(&fixture_manifest_v3()).is_ok());
+
+        let mut v3_missing = fixture_manifest();
+        v3_missing.schema_version = 3;
+        let err = validate_manifest_schema(&v3_missing).unwrap_err();
+        assert!(err.contains("minAppVersion"), "unexpected error: {err}");
+
+        let mut v3_blank = fixture_manifest_v3();
+        v3_blank.min_app_version = Some("   ".to_string());
+        assert!(validate_manifest_schema(&v3_blank).is_err());
+
+        let mut v4 = fixture_manifest();
+        v4.schema_version = 4;
+        assert!(validate_manifest_schema(&v4).is_err());
+        let mut v1 = fixture_manifest();
+        v1.schema_version = 1;
+        assert!(validate_manifest_schema(&v1).is_err());
+    }
+
+    // -------- version gates --------
+
+    #[test]
+    fn is_version_downgrade_orders_cn_revisions_numerically() {
+        // cn.<rev> is a numeric pre-release identifier: cn.2 < cn.10.
+        assert!(is_version_downgrade("0.18.2-cn.2", "0.18.2-cn.10"));
+        assert!(!is_version_downgrade("0.18.2-cn.10", "0.18.2-cn.2"));
+        // Kernel bump beats revision.
+        assert!(is_version_downgrade("0.18.2-cn.9", "0.18.3-cn.1"));
+        assert!(!is_version_downgrade("0.18.3-cn.1", "0.18.2-cn.9"));
+        // Equal is not a downgrade.
+        assert!(!is_version_downgrade("0.18.2-cn.7", "0.18.2-cn.7"));
+        // Unparseable falls back to "not a downgrade" (legacy behavior).
+        assert!(!is_version_downgrade("dev-local-0.14.0-abc", "0.18.2-cn.7"));
+        assert!(!is_version_downgrade("0.18.2-cn.7", "dev-local-0.14.0-abc"));
+    }
+
+    #[test]
+    fn blocking_min_app_version_gates_only_newer_requirements() {
+        let mut m = fixture_manifest_v3();
+        // Far above any real desktop version → blocked.
+        m.min_app_version = Some("999.0.0".to_string());
+        assert_eq!(blocking_min_app_version(&m).as_deref(), Some("999.0.0"));
+        // At or below the current desktop version → allowed.
+        m.min_app_version = Some(desktop_app_version().to_string());
+        assert_eq!(blocking_min_app_version(&m), None);
+        m.min_app_version = Some("0.0.1".to_string());
+        assert_eq!(blocking_min_app_version(&m), None);
+        // Absent / blank / unparseable never block.
+        m.min_app_version = None;
+        assert_eq!(blocking_min_app_version(&m), None);
+        m.min_app_version = Some("  ".to_string());
+        assert_eq!(blocking_min_app_version(&m), None);
+        m.min_app_version = Some("not-a-version".to_string());
+        assert_eq!(blocking_min_app_version(&m), None);
+    }
+
     // -------- verify_signature_with_key --------
 
     #[test]
@@ -3365,6 +3710,30 @@ mod tests {
         let mut m = fixture_manifest();
         sign_manifest(&key, &mut m);
         verify_signature_with_key(&m, &pem).expect("should verify");
+    }
+
+    #[test]
+    fn verify_accepts_valid_v3_signature_and_detects_min_app_version_tampering() {
+        let (key, pem) = test_keypair();
+        let mut m = fixture_manifest_v3();
+        sign_manifest(&key, &mut m);
+        verify_signature_with_key(&m, &pem).expect("v3 should verify");
+
+        // minAppVersion is inside the v3 payload — tampering (e.g. a MITM
+        // nulling the forced-upgrade gate) must break the signature.
+        let mut tampered = m.clone();
+        tampered.min_app_version = Some("0.0.1".to_string());
+        assert!(verify_signature_with_key(&tampered, &pem).is_err());
+    }
+
+    #[test]
+    fn verify_rejects_v3_manifest_without_min_app_version() {
+        let (key, pem) = test_keypair();
+        let mut m = fixture_manifest();
+        m.schema_version = 3;
+        sign_manifest(&key, &mut m);
+        let err = verify_signature_with_key(&m, &pem).unwrap_err();
+        assert!(err.contains("minAppVersion"), "unexpected error: {err}");
     }
 
     #[test]
@@ -4017,6 +4386,67 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    async fn install_bundled_runtime_never_downgrades_a_newer_installed_runtime() {
+        // Overwrite-install safety (impl-plan §12.3): a user who auto-updated
+        // the kernel past the version bundled with a newer shell installer
+        // must keep their newer kernel — the bundled reconcile only installs
+        // when the bundled version is genuinely different AND not older.
+        let dir = TempDir::new().unwrap();
+        let runtime_root = dir.path().join("runtime-root");
+        let resource = dir.path().join("resources");
+        let bundled = resource.join("bundled-runtime");
+        std::fs::create_dir_all(bundled_expanded_runtime_dir(&bundled)).unwrap();
+
+        let mut manifest = fixture_manifest();
+        manifest.runtime_version = "0.18.2-cn.2".to_string();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
+
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        // Installed runtime is NEWER than the bundled one.
+        let installed_dir = runtime_root.join("versions").join("0.18.2-cn.5");
+        let installed_exe = installed_dir.join(primary_runtime_name());
+        std::fs::create_dir_all(&installed_dir).unwrap();
+        std::fs::write(&installed_exe, b"#!/bin/sh\nexit 0\n").unwrap();
+        let current = RuntimeInstallRecord {
+            schema_version: RECORD_SCHEMA_VERSION,
+            runtime_version: "0.18.2-cn.5".to_string(),
+            kernel_version: "0.18.2".to_string(),
+            runtime_flavor: "cn".to_string(),
+            runtime_revision: 5,
+            platform: current_platform().to_string(),
+            arch: current_arch().to_string(),
+            path: installed_dir.display().to_string(),
+            executable_path: installed_exe.display().to_string(),
+            source: "update".to_string(),
+            installed_at: "2026-07-18T00:00:00.000Z".to_string(),
+            source_repo: None,
+            source_commit: None,
+            local_dirty_hash: None,
+            artifact_sha256: None,
+            previous_runtime_version: None,
+        };
+        write_json_file(&current_record_path(), &current).unwrap();
+
+        let result = install_bundled_runtime_if_needed(Some(&resource)).await;
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        assert!(result.ok, "unexpected error: {:?}", result.error);
+        assert!(
+            result.installed.is_none(),
+            "bundled runtime must not be installed over a newer kernel"
+        );
+        assert_eq!(
+            result.previous.map(|p| p.runtime_version),
+            Some("0.18.2-cn.5".to_string())
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
     #[cfg(unix)]
     async fn install_bundled_runtime_does_not_overwrite_local_source_runtime() {
         use std::os::unix::fs::PermissionsExt;
@@ -4065,7 +4495,7 @@ mod tests {
         std::fs::create_dir_all(local_exe.parent().unwrap()).unwrap();
         std::fs::write(&local_exe, b"#!/bin/sh\nexit 0\n").unwrap();
         let local_record = RuntimeInstallRecord {
-            schema_version: MANIFEST_SCHEMA_VERSION,
+            schema_version: RECORD_SCHEMA_VERSION,
             runtime_version: local_version.to_string(),
             kernel_version: "0.15.2".to_string(),
             runtime_flavor: "cn-local".to_string(),
@@ -4156,7 +4586,7 @@ mod tests {
         std::fs::create_dir_all(local_exe.parent().unwrap()).unwrap();
         std::fs::write(&local_exe, b"#!/bin/sh\nexit 0\n").unwrap();
         let local_record = RuntimeInstallRecord {
-            schema_version: MANIFEST_SCHEMA_VERSION,
+            schema_version: RECORD_SCHEMA_VERSION,
             runtime_version: local_version.to_string(),
             kernel_version: "0.15.2".to_string(),
             runtime_flavor: "cn-local".to_string(),

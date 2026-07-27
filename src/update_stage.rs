@@ -2,8 +2,15 @@
 //
 // Inspired by Warp's autoupdate/mod.rs: clear enum-based stages make the
 // update lifecycle visible to the frontend and simplify error recovery.
+//
+// Stages are pushed to the webview as `runtime-update-stage` events while a
+// runtime install/rollback is in flight (commands/runtime_manager.rs threads a
+// sink into process/runtime.rs); the update overlay renders them as progress.
 
 use serde::Serialize;
+
+/// Tauri event name carrying [`UpdateStage`] payloads to the webview.
+pub const RUNTIME_UPDATE_STAGE_EVENT: &str = "runtime-update-stage";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "stage", rename_all = "camelCase")]
@@ -33,6 +40,12 @@ pub enum UpdateStage {
     RestartingDashboard {
         new_version: String,
     },
+    /// Half-updated: the new runtime is already installed on disk, but the
+    /// dashboard restart failed. The update itself succeeded — the frontend
+    /// must ask the user to restart the app, not report a failed update.
+    RestartRequired {
+        new_version: String,
+    },
     Complete {
         new_version: String,
         previous_version: Option<String>,
@@ -48,11 +61,17 @@ pub enum UpdateStage {
 }
 
 impl UpdateStage {
+    pub fn emit(&self, app: &tauri::AppHandle) {
+        use tauri::Emitter;
+        let _ = app.emit(RUNTIME_UPDATE_STAGE_EVENT, self);
+    }
+
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
             UpdateStage::Idle
                 | UpdateStage::NoUpdateAvailable
+                | UpdateStage::RestartRequired { .. }
                 | UpdateStage::Complete { .. }
                 | UpdateStage::Failed { .. }
                 | UpdateStage::RolledBack { .. }
@@ -93,6 +112,12 @@ mod tests {
         .is_terminal());
         assert!(UpdateStage::RolledBack {
             restored_version: v("0.9")
+        }
+        .is_terminal());
+        // Half-updated is terminal: the install itself finished — only a
+        // manual app restart is pending. Never render it as "in progress".
+        assert!(UpdateStage::RestartRequired {
+            new_version: v("1")
         }
         .is_terminal());
     }

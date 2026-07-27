@@ -1241,7 +1241,14 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const checking = checkRuntimeUpdate.isPending;
   const rollingBack = rollbackRuntime.isPending;
   const hasRuntimeBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.getRuntimeInfo);
-  const canInstall = Boolean(updateResult?.ok && updateResult.updateAvailable && info?.updatesConfigured);
+  // forceAppUpdateRequired：manifest 签名的 minAppVersion 高于当前桌面端，
+  // Rust 侧 install 也会拒绝——这里同步禁用按钮并引导先升级桌面应用。
+  const canInstall = Boolean(
+    updateResult?.ok &&
+    updateResult.updateAvailable &&
+    !updateResult.forceAppUpdateRequired &&
+    info?.updatesConfigured,
+  );
   const refreshing = runtimeInfo.isFetching || statusQuery.isFetching;
   const runtimeInsideRoot = Boolean(
     info?.current?.executablePath &&
@@ -1899,6 +1906,13 @@ function formatDateTime(value: string | undefined): string {
 
 function formatRuntimeUpdateResult(result: RuntimeUpdateCheckResult): string {
   if (!result.ok) return result.error ?? "runtime 更新检查失败";
+  if (result.forceAppUpdateRequired) {
+    const required = result.requiredAppVersion ?? result.manifest?.minAppVersion ?? "";
+    return `发现新 runtime ${result.manifest?.runtimeVersion ?? ""}，但需要桌面端 ≥ ${required}，请先升级桌面应用`.trim();
+  }
+  if (result.downgradeBlocked) {
+    return `更新源提供的 runtime ${result.manifest?.runtimeVersion ?? ""} 低于当前已安装版本，已忽略（防降级保护）`.trim();
+  }
   if (!result.updateAvailable) return `已是最新版本 ${result.currentRuntimeVersion ?? ""}`.trim();
   return `发现新 runtime ${result.manifest?.runtimeVersion ?? ""}`.trim();
 }

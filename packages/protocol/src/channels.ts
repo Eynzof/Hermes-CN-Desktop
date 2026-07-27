@@ -263,6 +263,7 @@ export interface RuntimeUpdateManifest {
   signature: string;
   sourceRepo: string;
   sourceCommit: string;
+  /** schema v3 起为必填且纳入签名载荷（强制升级闸门）；v2 为可选未签名字段。 */
   minAppVersion?: string;
   createdAt?: string;
 }
@@ -270,10 +271,41 @@ export interface RuntimeUpdateManifest {
 export interface RuntimeUpdateCheckResult {
   ok: boolean;
   updateAvailable: boolean;
+  /** 更新源提供的 runtime 低于当前已装版本，防降级门已忽略它。 */
+  downgradeBlocked?: boolean;
+  /** manifest 签名的 minAppVersion 高于当前桌面端版本，安装被阻断。 */
+  forceAppUpdateRequired?: boolean;
+  /** 与 forceAppUpdateRequired 配套：manifest 要求的最低桌面端版本。 */
+  requiredAppVersion?: string;
   currentRuntimeVersion?: string;
   manifest?: RuntimeUpdateManifest;
   error?: string;
 }
+
+/**
+ * 内核更新/回滚过程的阶段事件（Tauri 事件 "runtime-update-stage"）。
+ * 镜像 Rust 侧 src/update_stage.rs 的 UpdateStage：serde tag = "stage"、
+ * 变体名 camelCase、字段名保持 snake_case（由 Rust 侧序列化测试锁定）。
+ */
+export type RuntimeUpdateStage =
+  | { stage: "idle" }
+  | { stage: "checking" }
+  | { stage: "noUpdateAvailable" }
+  | { stage: "updateAvailable"; current_version?: string | null; new_version: string }
+  | { stage: "downloading"; new_version: string }
+  | { stage: "verifying"; new_version: string }
+  | { stage: "extracting"; new_version: string }
+  | { stage: "smokeChecking"; new_version: string }
+  | { stage: "installing"; new_version: string }
+  | { stage: "restartingDashboard"; new_version: string }
+  /** 半更新态：runtime 已换好，仅内核自动重启失败——提示"请重启应用"，不是失败。 */
+  | { stage: "restartRequired"; new_version: string }
+  | { stage: "complete"; new_version: string; previous_version?: string | null }
+  | { stage: "failed"; error: string; new_version?: string | null }
+  | { stage: "rollingBack" }
+  | { stage: "rolledBack"; restored_version: string };
+
+export const RUNTIME_UPDATE_STAGE_EVENT = "runtime-update-stage";
 
 export interface RuntimeInstallUpdateResult {
   ok: boolean;
