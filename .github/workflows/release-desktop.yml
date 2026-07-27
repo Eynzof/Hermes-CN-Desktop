@@ -35,7 +35,7 @@ on:
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.19.0-cn.2"
+        default: "runtime-v0.19.0-cn.4"
         required: false
 
 permissions:
@@ -207,7 +207,7 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.19.0-cn.2' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.19.0-cn.4' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -216,9 +216,11 @@ jobs:
           (async () => {
             const repo = process.env.BUNDLED_RUNTIME_REPO || "Eynzof/Hermes-CN-Core";
             const tag = process.env.BUNDLED_RUNTIME_TAG || "latest";
-            const baseUrl = tag === "latest"
-              ? `https://github.com/${repo}/releases/latest/download`
-              : `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}`;
+            const feedBaseUrl = "https://huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime";
+            const runtimeVersion = tag === "latest" ? null : tag.replace(/^runtime-v/u, "");
+            const baseUrl = runtimeVersion
+              ? `${feedBaseUrl}/releases/${encodeURIComponent(runtimeVersion)}`
+              : `${feedBaseUrl}/stable`;
             const platform = process.env.RUNTIME_PLATFORM;
             const arch = process.env.RUNTIME_ARCH;
             const response = await fetch(`${baseUrl}/stable-${platform}-${arch}.json`, {
@@ -243,21 +245,12 @@ jobs:
           });
           NODE
 
-      - name: Checkout runtime source for dashboard assets
+      - name: Checkout runtime source for bundled skills only
         uses: actions/checkout@v4
         with:
           repository: ${{ steps.runtime_manifest.outputs.source_repo }}
           ref: ${{ steps.runtime_manifest.outputs.source_commit }}
           path: hermes-agent-cn-source
-
-      - name: Stage bundled dashboard frontend
-        run: node scripts/stage-dashboard-web-dist.mjs --source hermes-agent-cn-source
-
-      - name: Stage bundled skills
-        run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
-
-      - name: Stage bundled plugins
-        run: node scripts/stage-bundled-plugins.mjs --source hermes-agent-cn-source
 
       - name: Stage bundled Hermes-CN-Core runtime
         shell: bash
@@ -265,11 +258,17 @@ jobs:
           args=(
             scripts/stage-bundled-runtime.mjs
             --repo "Eynzof/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.19.0-cn.2' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.19.0-cn.4' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
           node "${args[@]}"
+
+      - name: Stage Dashboard and plugins from prebuilt runtime
+        run: node scripts/stage-bundled-runtime-resources.mjs
+
+      - name: Stage bundled skills
+        run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
 
       - name: Prepare macOS signing credentials
         if: matrix.runtime_platform == 'darwin'

@@ -449,7 +449,10 @@ export function ModelPickerModal({
               onClick={pick(candidate)}
             >
               <CandidateIcon candidate={candidate} />
-              <span className={s.modelMenuItemName}>{candidate.model}</span>
+              <span className={s.modelMenuItemText}>
+                <span className={s.modelMenuItemName}>{candidate.model}</span>
+                <span className={s.modelMenuItemProvider}>{candidate.providerName}</span>
+              </span>
               {isCurrent ? <Check size={14} className={s.modelMenuItemCheck} aria-hidden="true" /> : null}
             </button>
           );
@@ -512,7 +515,9 @@ export function ModelPickerModal({
             <span className={s.modelMenuItemIcon} data-tone="custom" aria-hidden="true">
               <PencilLine size={12} />
             </span>
-            <span className={s.modelMenuItemName}>配置自定义模型</span>
+            <span className={s.modelMenuItemText}>
+              <span className={s.modelMenuItemName}>配置自定义模型</span>
+            </span>
           </button>
         </div>
       </div>

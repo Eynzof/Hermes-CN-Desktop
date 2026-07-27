@@ -711,11 +711,15 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
 // The production fallback below is the Volcengine TOS mirror.
 const BAKED_MANIFEST_BASE_URL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
 const BAKED_MANIFEST_CHANNEL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
+const BAKED_ARTIFACT_MIRROR_BASE_URL: Option<&str> =
+    option_env!("HERMES_RUNTIME_ARTIFACT_MIRROR_BASE_URL_DEFAULT");
 const BAKED_PUBLIC_KEY_PEM: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
 
 const FALLBACK_MANIFEST_BASE_URL: &str =
-    "https://huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime";
+    "https://huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime/stable";
+const FALLBACK_ARTIFACT_MIRROR_BASE_URL: &str =
+    "https://huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime/stable";
 // The upstream signed manifest is mirrored byte-for-byte; its artifactUrl is
 // not rewritten here because it is covered by the Ed25519 signature.
 const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
@@ -791,6 +795,62 @@ fn configured_public_key() -> Option<String> {
     }
     // 4. Hardcoded fallback — the Eynzof/Hermes-CN-Core production key.
     Some(FALLBACK_PUBLIC_KEY_PEM.to_string())
+}
+
+fn configured_artifact_mirror_base_url(manifest: &RuntimeUpdateManifest) -> Option<String> {
+    if let Ok(value) = std::env::var("HERMES_RUNTIME_ARTIFACT_MIRROR_BASE_URL") {
+        let trimmed = value.trim();
+        if trimmed.eq_ignore_ascii_case("off") {
+            return None;
+        }
+        if !trimmed.is_empty() {
+            return Some(trimmed.trim_end_matches('/').to_string());
+        }
+    }
+    BAKED_ARTIFACT_MIRROR_BASE_URL
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.trim_end_matches('/').to_string())
+        .or_else(|| {
+            manifest
+                .source_repo
+                .eq_ignore_ascii_case("Eynzof/Hermes-CN-Core")
+                .then(|| FALLBACK_ARTIFACT_MIRROR_BASE_URL.to_string())
+        })
+}
+
+fn artifact_download_url(
+    manifest: &RuntimeUpdateManifest,
+    mirror_base_url: Option<&str>,
+) -> Result<String, String> {
+    let signed_url = url::Url::parse(&manifest.artifact_url)
+        .map_err(|error| format!("Invalid artifact_url: {error}"))?;
+    if signed_url.scheme() != "https" {
+        return Err(format!(
+            "artifact_url must be https, got {}",
+            signed_url.scheme()
+        ));
+    }
+
+    let Some(base) = mirror_base_url else {
+        return Ok(manifest.artifact_url.clone());
+    };
+    let mirror = url::Url::parse(&format!("{}/", base.trim_end_matches('/')))
+        .map_err(|error| format!("Invalid runtime artifact mirror URL: {error}"))?;
+    if mirror.scheme() != "https" {
+        return Err(format!(
+            "runtime artifact mirror must be https, got {}",
+            mirror.scheme()
+        ));
+    }
+    let file_name = format!(
+        "hermes-agent-cn-runtime-{}-{}.zip",
+        manifest.platform, manifest.arch
+    );
+    mirror
+        .join(&file_name)
+        .map(|url| url.to_string())
+        .map_err(|error| format!("Invalid runtime artifact mirror URL: {error}"))
 }
 
 /// Get current runtime information.
@@ -2138,29 +2198,26 @@ pub async fn install_runtime_update(
         }
     };
 
-    // Validate URL scheme before downloading
-    match url::Url::parse(&resolved.artifact_url) {
-        Ok(u) if u.scheme() == "https" => {}
-        Ok(u) => {
+    // Verify the signed artifact URL first, then optionally use the byte-for-byte
+    // TOS mirror as the transport source. The signed manifest is never mutated;
+    // install_runtime_zip still enforces its signed SHA-256 before extraction.
+    let download_url = match artifact_download_url(
+        &resolved,
+        configured_artifact_mirror_base_url(&resolved).as_deref(),
+    ) {
+        Ok(url) => url,
+        Err(error) => {
             return RuntimeInstallUpdateResult {
                 ok: false,
                 installed: None,
                 previous: None,
-                error: Some(format!("artifact_url must be https, got {}", u.scheme())),
+                error: Some(error),
             };
         }
-        Err(e) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Invalid artifact_url: {}", e)),
-            };
-        }
-    }
+    };
 
     let artifact = match RUNTIME_HTTP_CLIENT
-        .get(&resolved.artifact_url)
+        .get(&download_url)
         .timeout(RUNTIME_ARTIFACT_HTTP_TIMEOUT)
         .send()
         .await
@@ -4353,6 +4410,7 @@ mod tests {
             "HERMES_RUNTIME_UPDATE_CHANNEL",
             "HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM",
             "HERMES_RUNTIME_UPDATE_PUBLIC_KEY_FILE",
+            "HERMES_RUNTIME_ARTIFACT_MIRROR_BASE_URL",
         ] {
             std::env::remove_var(var);
         }
@@ -4392,8 +4450,49 @@ mod tests {
         // No env, no compile-time bake (BAKED_* are option_env! and unset in
         // dev/test builds), so we get the TOS fallback + default channel.
         let url = configured_manifest_url().unwrap();
-        assert!(url.contains("huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime"));
+        assert!(url
+            .contains("huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime/stable"));
         assert!(url.contains("stable-"));
+    }
+
+    #[test]
+    fn artifact_download_uses_tos_mirror_without_mutating_signed_url() {
+        let manifest = fixture_manifest();
+        let signed_url = manifest.artifact_url.clone();
+        let download_url =
+            artifact_download_url(&manifest, Some("https://mirror.example/runtime/stable"))
+                .unwrap();
+
+        assert_eq!(manifest.artifact_url, signed_url);
+        assert_eq!(
+            download_url,
+            "https://mirror.example/runtime/stable/hermes-agent-cn-runtime-linux-x64.zip"
+        );
+    }
+
+    #[test]
+    fn artifact_download_can_use_the_signed_url_directly() {
+        let manifest = fixture_manifest();
+        assert_eq!(
+            artifact_download_url(&manifest, None).unwrap(),
+            manifest.artifact_url
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn default_artifact_mirror_only_applies_to_the_official_core_feed() {
+        clear_runtime_env();
+        let mut official = fixture_manifest();
+        official.source_repo = "Eynzof/Hermes-CN-Core".to_string();
+        assert_eq!(
+            configured_artifact_mirror_base_url(&official).as_deref(),
+            Some(FALLBACK_ARTIFACT_MIRROR_BASE_URL)
+        );
+
+        let custom = fixture_manifest();
+        assert_eq!(configured_artifact_mirror_base_url(&custom), None);
+        clear_runtime_env();
     }
 
     #[test]

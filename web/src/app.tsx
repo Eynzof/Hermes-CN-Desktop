@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { DEFAULT_THEME_CONFIG, hydrateThemeAtom, usePlatform, type ThemeConfig } from "@hermes/shared-ui";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
 import { readUiValue } from "@/lib/ui-store";
@@ -39,12 +39,18 @@ import { CodingAgentsRoute } from "@/routes/coding-agents";
 import { ImOnboardingRoute } from "@/routes/im-onboarding";
 import { OfflineShell } from "@/routes/offline-shell";
 import { BootSplash } from "@/components/boot-splash";
+import { DeviceTokenDialog } from "@/components/auth/device-token-dialog";
 import { useBackendGate } from "@/hooks/use-backend-gate";
 import {
   normalizeSettingsPane,
   openSettingsDialogAtom,
 } from "@/stores/settings-dialog";
-import { getTeamDeviceTokenStatus, setTeamDeviceToken } from "@/lib/tauri-bridge";
+import { getTeamDeviceTokenStatus } from "@/lib/tauri-bridge";
+import {
+  dismissTeamDeviceTokenOnboarding,
+  isTeamDeviceTokenOnboardingDismissed,
+  resetTeamDeviceTokenOnboarding,
+} from "@/stores/auth";
 
 function NewTaskRedirect() {
   const { search } = useLocation();
@@ -71,22 +77,6 @@ function withBoundary(node: ReactNode) {
 
 function BackendApp() {
   useBootstrapActiveProfile();
-  useEffect(() => {
-    if (window.__TAURI_INTERNALS__ == null) return;
-    let cancelled = false;
-    void getTeamDeviceTokenStatus().then(async (status) => {
-      if (cancelled || status.configured) return;
-      const token = window.prompt("请输入企业设备令牌（可留空跳过）", "")?.trim() ?? "";
-      if (!token || cancelled) return;
-      try {
-        const result = await setTeamDeviceToken(token);
-        if (!cancelled) window.alert(`企业配置同步完成：${result.syncedModels} 个模型，${result.syncedSkills} 个 skills`);
-      } catch (error) {
-        if (!cancelled) window.alert(`企业配置同步失败：${error instanceof Error ? error.message : String(error)}`);
-      }
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
   return (
     <>
       <AppShell>
@@ -143,18 +133,63 @@ export function App() {
   const platform = usePlatform();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
   const gate = useBackendGate();
+  const [teamTokenGate, setTeamTokenGate] = useState<"checking" | "prompt" | "done">(
+    () => window.__TAURI_INTERNALS__ == null ? "done" : "checking",
+  );
   useEffect(() => {
     hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
   }, [hydrateTheme]);
   useEffect(() => {
     void sendTelemetryPingIfDue();
   }, []);
+  useEffect(() => {
+    if (gate !== "ready" || teamTokenGate !== "checking") return;
+    if (isTeamDeviceTokenOnboardingDismissed()) {
+      setTeamTokenGate("done");
+      return;
+    }
+    let cancelled = false;
+    void getTeamDeviceTokenStatus()
+      .then((status) => {
+        if (cancelled) return;
+        if (status.configured) {
+          resetTeamDeviceTokenOnboarding();
+          setTeamTokenGate("done");
+        } else {
+          setTeamTokenGate("prompt");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTeamTokenGate("done");
+      });
+    return () => { cancelled = true; };
+  }, [gate, teamTokenGate]);
 
   let content: ReactNode;
   if (gate === "booting") {
     content = <BootSplash />;
   } else if (gate === "offline") {
     content = <OfflineShell />;
+  } else if (teamTokenGate !== "done") {
+    content = (
+      <>
+        <BootSplash
+          statusText="工作台已就绪"
+          hint="可连接企业设备，也可以直接进入工作台"
+        />
+        {teamTokenGate === "prompt" ? (
+          <DeviceTokenDialog
+            variant="startup"
+            open
+            onConnected={() => setTeamTokenGate("done")}
+            onSkip={() => {
+              dismissTeamDeviceTokenOnboarding();
+              setTeamTokenGate("done");
+            }}
+          />
+        ) : null}
+      </>
+    );
   } else {
     content = <BackendApp />;
   }

@@ -93,6 +93,25 @@ fn read_token(home: &Path) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+fn read_sync_state(home: &Path) -> Option<SyncState> {
+    fs::read(home.join(STATE_FILE))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+}
+
+fn status_for_home(home: &Path) -> TeamSyncStatus {
+    let state = read_sync_state(home);
+    TeamSyncStatus {
+        // A token file is written before the network sync begins. Do not call
+        // that a configured device unless the matching sync state was also
+        // committed; otherwise one failed first-run attempt suppresses the
+        // onboarding dialog forever.
+        configured: read_token(home).is_some() && state.is_some(),
+        synced_models: state.as_ref().map_or(0, |value| value.models.len()),
+        synced_skills: state.as_ref().map_or(0, |value| value.skills.len()),
+    }
+}
+
 fn merge_config(home: &Path, token: &str, manifest: &TeamManifest) -> Result<(), String> {
     let path = home.join("config.yaml");
     let mut config: serde_yaml::Value = if path.exists() {
@@ -288,8 +307,11 @@ pub async fn sync_home(home: &Path, token: &str) -> Result<TeamSyncStatus, Strin
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
-    merge_config(home, token, &manifest)?;
+    // Download skills before exposing the new providers in config.yaml. A
+    // failed download should leave the currently running model configuration
+    // intact instead of publishing a half-applied enterprise sync.
     sync_skills(&client, home, token, &manifest.skills).await?;
+    merge_config(home, token, &manifest)?;
     let current: std::collections::HashSet<String> = manifest
         .skills
         .iter()
@@ -328,15 +350,7 @@ pub async fn get_team_device_token_status(
     state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<TeamSyncStatus, crate::error::AppError> {
     let home = { state.inner.lock()?.hermes_home.clone() };
-    let state: SyncState = fs::read(Path::new(&home).join(STATE_FILE))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default();
-    Ok(TeamSyncStatus {
-        configured: read_token(Path::new(&home)).is_some(),
-        synced_models: state.models.len(),
-        synced_skills: state.skills.len(),
-    })
+    Ok(status_for_home(Path::new(&home)))
 }
 
 #[tauri::command]
@@ -351,11 +365,21 @@ pub async fn set_team_device_token(
             "device token is empty".into(),
         ));
     }
-    atomic_write(&token_path(Path::new(&home)), token.as_bytes())
-        .map_err(crate::error::AppError::FileError)?;
-    let result = sync_home(Path::new(&home), token)
-        .await
-        .map_err(crate::error::AppError::ProxyError)?;
+    let home = Path::new(&home);
+    let token_file = token_path(home);
+    let previous_token = fs::read(&token_file).ok();
+    atomic_write(&token_file, token.as_bytes()).map_err(crate::error::AppError::FileError)?;
+    let result = match sync_home(home, token).await {
+        Ok(result) => result,
+        Err(error) => {
+            if let Some(previous) = previous_token {
+                let _ = atomic_write(&token_file, &previous);
+            } else {
+                let _ = fs::remove_file(&token_file);
+            }
+            return Err(crate::error::AppError::ProxyError(error));
+        }
+    };
     // The managed runtime reads config.yaml at process start. Restart it so a
     // first-time token takes effect immediately, matching the WorkBuddy
     // launcher's "sync before launch" behaviour.
@@ -429,5 +453,55 @@ pub async fn sync_if_configured(home: &str) -> Result<(), String> {
         }
     } else {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_requires_both_token_and_committed_sync_state() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let home = temp.path();
+
+        atomic_write(&token_path(home), b"wbd_test").unwrap();
+        assert!(!status_for_home(home).configured);
+
+        atomic_write(
+            &home.join(STATE_FILE),
+            serde_json::to_vec(&SyncState {
+                models: vec!["model-a".into(), "model-b".into()],
+                skills: vec!["skill-a".into()],
+            })
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        let status = status_for_home(home);
+        assert!(status.configured);
+        assert_eq!(status.synced_models, 2);
+        assert_eq!(status.synced_skills, 1);
+    }
+
+    #[test]
+    fn status_ignores_stale_state_without_a_token() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let home = temp.path();
+        atomic_write(
+            &home.join(STATE_FILE),
+            serde_json::to_vec(&SyncState {
+                models: vec!["model-a".into()],
+                skills: vec![],
+            })
+            .unwrap()
+            .as_slice(),
+        )
+        .unwrap();
+
+        let status = status_for_home(home);
+        assert!(!status.configured);
+        assert_eq!(status.synced_models, 1);
     }
 }

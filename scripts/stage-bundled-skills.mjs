@@ -97,6 +97,7 @@ if (resolve(sourceSkills) === resolve(outDir)) {
 mkdirSync(dirname(outDir), { recursive: true });
 rmSync(outDir, { recursive: true, force: true });
 cpSync(sourceSkills, outDir, { recursive: true });
+writeFileSync(join(outDir, ".gitkeep"), "\n");
 
 const sourceCommit = isDirectory(join(sourceRoot, ".git"))
   ? capture("git", ["rev-parse", "HEAD"], { cwd: sourceRoot })
