@@ -84,8 +84,11 @@ function shouldUseNativeIpc(path: string): boolean {
     path.startsWith("/__hermes_session_log/") || path.startsWith("/__hermes_cron_runs/");
 
   if (runtime.platform === "tauri") {
-    if (isLocalDesktopRoute && window.hermesDesktop?.request) return true;
-    if (!window.__HERMES_RUNTIME__?.apiBaseUrl) return false;
+    if (!window.hermesDesktop?.request) return false;
+    if (isLocalDesktopRoute) return true;
+    if (!window.__HERMES_RUNTIME__?.apiBaseUrl && window.__HERMES_RUNTIME__?.backendReady !== true) {
+      return false;
+    }
     return true;
   }
   if (runtime.platform !== "electron") return false;

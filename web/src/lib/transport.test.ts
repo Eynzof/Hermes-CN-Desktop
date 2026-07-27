@@ -159,6 +159,33 @@ describe("transport · debug-bus integration", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
+  it("fetchJSON uses Tauri IPC when backend is ready even if renderer missed apiBaseUrl", async () => {
+    const request = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      body: JSON.stringify({ version: "0.19.0" }),
+    }));
+    globalThis.fetch = vi.fn(async () => makeResponse(500, "should not fetch")) as unknown as typeof globalThis.fetch;
+    window.__HERMES_RUNTIME__ = { platform: "tauri", backendReady: true };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request,
+    };
+
+    const out = await fetchJSON<{ version: string }>("/api/status");
+
+    expect(out).toEqual({ version: "0.19.0" });
+    expect(request).toHaveBeenCalledWith({
+      path: "/api/status",
+      method: undefined,
+      headers: { "Content-Type": "application/json" },
+      body: null,
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("fetchExternalJSON uses desktop externalRequest capability on Tauri", async () => {
     const externalRequest = vi.fn(async () => ({
       ok: true,
