@@ -965,6 +965,20 @@ function registerDevtoolsShortcut(): void {
   );
 }
 
+export function shouldWaitForManagedRuntimeConfig(config: {
+  apiBaseUrl?: string;
+  backendReady?: boolean;
+  connectionMode?: "managed" | "local" | "remote";
+  managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
+}): boolean {
+  if (config.apiBaseUrl) return false;
+  const connectionMode = config.connectionMode ?? "managed";
+  const managedRuntimeShouldRun =
+    connectionMode === "managed" &&
+    (config.managedRuntimeDesiredState ?? "running") === "running";
+  return config.backendReady !== false || managedRuntimeShouldRun;
+}
+
 export async function installTauriBridge(): Promise<void> {
   // Install before any React component mounts a Tauri event listener, so the
   // StrictMode mount→unmount teardown race can't leak an unhandled rejection.
@@ -1002,7 +1016,7 @@ export async function installTauriBridge(): Promise<void> {
   // the populated apiBaseUrl/sessionToken. In Vite dev we still avoid writing
   // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
   // the React app from racing the managed dashboard startup.
-  if (!config.apiBaseUrl && config.backendReady !== false) {
+  if (shouldWaitForManagedRuntimeConfig(config)) {
     const result = await waitForBootstrap(
       "正在唤醒Hermes...",
       () => invokeCommand("get_runtime_config"),
