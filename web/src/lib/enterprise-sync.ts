@@ -14,7 +14,7 @@
 
 import { readUiValue, removeUiValue, writeUiValue } from "./ui-store";
 
-export const DEFAULT_TEAM_SERVER_URL = "http://localhost:3100";
+export const DEFAULT_TEAM_SERVER_URL = "https://team.huanxingapi.com";
 export const ENTERPRISE_PROVIDER_PREFIX = "custom:team-";
 
 export interface EnterpriseBinding {

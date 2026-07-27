@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zip::ZipArchive;
 
-const DEFAULT_SERVER_URL: &str = "https://api.huanxing.ai";
+const DEFAULT_SERVER_URL: &str = "https://team.huanxingapi.com";
 const TOKEN_FILE: &str = ".team-device-token";
 const STATE_FILE: &str = ".team-sync-state.json";
 const MAX_MANIFEST: usize = 10 * 1024 * 1024;
@@ -50,6 +50,13 @@ pub struct TeamManifest {
     pub models: Vec<TeamModel>,
     pub default_model: Option<String>,
     pub skills: Vec<TeamSkill>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TeamManifestEnvelope {
+    success: Option<bool>,
+    message: Option<String>,
+    data: Option<TeamManifest>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -185,27 +192,33 @@ fn merge_config(home: &Path, token: &str, manifest: &TeamManifest) -> Result<(),
 
 async fn fetch_manifest(client: &reqwest::Client, token: &str) -> Result<TeamManifest, String> {
     let url = format!("{}/api/workbuddy/sync", server_url().trim_end_matches('/'));
-    let bytes = client
+    let response = client
         .get(url)
         .bearer_auth(token)
         .send()
         .await
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .await
         .map_err(|e| e.to_string())?;
+    let status = response.status();
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
     if bytes.len() > MAX_MANIFEST {
         return Err("Team manifest is too large".into());
     }
-    #[derive(Deserialize)]
-    struct Envelope {
-        success: Option<bool>,
-        data: Option<TeamManifest>,
-    }
-    let env: Envelope =
-        serde_json::from_slice(&bytes).map_err(|e| format!("parse Team manifest: {e}"))?;
-    if env.success == Some(false) {
-        return Err("Team device token was rejected".into());
+    parse_manifest_response(status, &bytes)
+}
+
+fn parse_manifest_response(
+    status: reqwest::StatusCode,
+    bytes: &[u8],
+) -> Result<TeamManifest, String> {
+    let env: TeamManifestEnvelope =
+        serde_json::from_slice(bytes).map_err(|e| format!("parse Team manifest: {e}"))?;
+    if !status.is_success() || env.success == Some(false) {
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("Team device token was rejected".into());
+        }
+        return Err(env.message.unwrap_or_else(|| {
+            format!("Team manifest request failed (HTTP {})", status.as_u16())
+        }));
     }
     env.data
         .ok_or_else(|| "Team manifest did not contain data".into())
@@ -459,6 +472,33 @@ pub async fn sync_if_configured(home: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn team_sync_defaults_to_the_team_service() {
+        assert_eq!(DEFAULT_SERVER_URL, "https://team.huanxingapi.com");
+    }
+
+    #[test]
+    fn manifest_error_preserves_the_server_message() {
+        let error = parse_manifest_response(
+            reqwest::StatusCode::BAD_REQUEST,
+            br#"{"success":false,"message":"device is disabled"}"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "device is disabled");
+    }
+
+    #[test]
+    fn unauthorized_manifest_is_reported_as_a_rejected_token() {
+        let error = parse_manifest_response(
+            reqwest::StatusCode::UNAUTHORIZED,
+            br#"{"success":false,"message":"valid device bearer token required"}"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "Team device token was rejected");
+    }
 
     #[test]
     fn status_requires_both_token_and_committed_sync_state() {
