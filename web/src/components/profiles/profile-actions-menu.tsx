@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Popover } from "@hermes/shared-ui";
+import { DropdownMenu } from "@hermes/shared-ui";
 import {
   AlignLeft,
   Check,
@@ -29,7 +29,7 @@ export interface ProfileActionsMenuProps {
 }
 
 /**
- * 单个档案的 ⋯ 动作菜单（自带 Popover 触发器）。对齐官方桌面端 ProfileActionsMenu：
+ * 单个档案的 ⋯ 动作菜单（自带 DropdownMenu 触发器）。对齐官方桌面端 ProfileActionsMenu：
  * 设为默认 / 改模型 / 改描述 / 编辑 SOUL / 复制 CLI 命令 / 重命名 / 删除。
  * default 档案不可重命名/删除；当前档案不可「设为默认」、且要切走后才能删。
  */
@@ -61,12 +61,12 @@ export function ProfileActionsMenu({
   };
 
   return (
-    <Popover.Root
+    <DropdownMenu.Root
       onOpenChange={(open) => {
         if (!open) setCopyState("idle");
       }}
     >
-      <Popover.Trigger asChild>
+      <DropdownMenu.Trigger asChild>
         <button
           type="button"
           className={s.menuTrigger}
@@ -74,87 +74,87 @@ export function ProfileActionsMenu({
         >
           <MoreVertical size={15} />
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
           className={s.menu}
           align="end"
           side="bottom"
           sideOffset={4}
-          role="menu"
         >
-          <Popover.Close asChild>
+          <DropdownMenu.Item asChild onSelect={onSetActive} disabled={isActive}>
             <button
               type="button"
-              role="menuitem"
-              onClick={onSetActive}
               disabled={isActive}
             >
               <Check size={13} /> 设为默认
             </button>
-          </Popover.Close>
+          </DropdownMenu.Item>
 
-          <div className={s.menuSep} />
+          <DropdownMenu.Separator className={s.menuSep} />
 
-          <Popover.Close asChild>
-            <button type="button" role="menuitem" onClick={onEditModel}>
+          <DropdownMenu.Item asChild onSelect={onEditModel}>
+            <button type="button">
               <Cpu size={13} /> 改模型
             </button>
-          </Popover.Close>
-          <Popover.Close asChild>
-            <button type="button" role="menuitem" onClick={onEditDescription}>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild onSelect={onEditDescription}>
+            <button type="button">
               <AlignLeft size={13} /> 改描述
             </button>
-          </Popover.Close>
-          <Popover.Close asChild>
-            <button type="button" role="menuitem" onClick={onEditSoul}>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild onSelect={onEditSoul}>
+            <button type="button">
               <ScrollText size={13} /> 编辑 SOUL.md
             </button>
-          </Popover.Close>
-          <Popover.Close asChild>
-            <button type="button" role="menuitem" onClick={onManageSkills}>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild onSelect={onManageSkills}>
+            <button type="button">
               <Package size={13} /> 管理技能
             </button>
-          </Popover.Close>
-          {/* 不包 Popover.Close：保持菜单打开以便就地显示「已复制」反馈。 */}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={handleCopyCommand}
-            className={copyState === "copied" ? s.menuItemCopied : undefined}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            asChild
+            onSelect={(event) => {
+              event.preventDefault();
+              void handleCopyCommand();
+            }}
           >
-            <Terminal size={13} />
-            {copyState === "copied"
-              ? "已复制"
-              : copyState === "error"
-                ? "复制失败"
-                : "复制 CLI 命令"}
-          </button>
+            <button
+              type="button"
+              className={copyState === "copied" ? s.menuItemCopied : undefined}
+            >
+              <Terminal size={13} />
+              {copyState === "copied"
+                ? "已复制"
+                : copyState === "error"
+                  ? "复制失败"
+                  : "复制 CLI 命令"}
+            </button>
+          </DropdownMenu.Item>
 
           {!profile.is_default && (
             <>
-              <div className={s.menuSep} />
-              <Popover.Close asChild>
-                <button type="button" role="menuitem" onClick={onRename}>
+              <DropdownMenu.Separator className={s.menuSep} />
+              <DropdownMenu.Item asChild onSelect={onRename}>
+                <button type="button">
                   <Pencil size={13} /> 重命名
                 </button>
-              </Popover.Close>
-              <Popover.Close asChild>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item asChild onSelect={onDelete} disabled={isActive}>
                 <button
                   type="button"
-                  role="menuitem"
                   data-tone="danger"
-                  onClick={onDelete}
                   disabled={isActive}
                   title={isActive ? "切到别的档案后才能删" : undefined}
                 >
                   <Trash2 size={13} /> 删除
                 </button>
-              </Popover.Close>
+              </DropdownMenu.Item>
             </>
           )}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

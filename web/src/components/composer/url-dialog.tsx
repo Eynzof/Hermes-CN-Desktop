@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import { Globe, ImagePlus, Link2, X } from "lucide-react";
+import { Dialog } from "@hermes/shared-ui";
 import {
   fetchLinkMetadata,
   isLikelyImageUrl,
@@ -34,7 +34,6 @@ export function UrlDialog({
   onAttachImage,
   onCancel,
 }: UrlDialogProps) {
-  const titleId = useId();
   const [metadata, setMetadata] = useState<LinkMetadata | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
   const [previewObjectUrl, setPreviewObjectUrl] = useState("");
@@ -86,22 +85,6 @@ export function UrlDialog({
     };
   }, [open, previewSource]);
 
-  useEffect(() => {
-    if (!open) return;
-    insertRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCancel();
-      } else if (event.key === "Enter") {
-        event.preventDefault();
-        onInsertReference();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onCancel, onInsertReference]);
-
   if (!open || typeof document === "undefined") return null;
 
   const imageCandidate = isLikelyImageUrl(url) ? url : metadata?.imageUrl;
@@ -127,28 +110,30 @@ export function UrlDialog({
     }
   };
 
-  return createPortal(
-    <div
-      className={s.backdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
-    >
-      <div
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={s.backdrop} />
+        <Dialog.Content
         className={s.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onMouseDown={(event) => event.stopPropagation()}
+        aria-describedby={undefined}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          insertRef.current?.focus();
+        }}
       >
         <div className={s.titleBar}>
-          <h2 id={titleId}>
-            <Globe aria-hidden="true" />
-            添加链接引用
-          </h2>
-          <button type="button" className={s.close} onClick={onCancel} aria-label="关闭">
-            <X aria-hidden="true" />
-          </button>
+          <Dialog.Title asChild>
+            <h2>
+              <Globe aria-hidden="true" />
+              添加链接引用
+            </h2>
+          </Dialog.Title>
+          <Dialog.Close asChild>
+            <button type="button" className={s.close} aria-label="关闭">
+              <X aria-hidden="true" />
+            </button>
+          </Dialog.Close>
         </div>
         <div className={s.body}>
           <div className={s.urlText}>{url}</div>
@@ -197,8 +182,8 @@ export function UrlDialog({
             插入引用
           </button>
         </div>
-      </div>
-    </div>,
-    document.body,
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

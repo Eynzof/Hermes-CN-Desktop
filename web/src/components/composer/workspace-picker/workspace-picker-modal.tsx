@@ -1,15 +1,14 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { createPortal } from "react-dom";
 import { ArrowUp, Folder, X } from "lucide-react";
 import type { FsEntry } from "@hermes/protocol";
+import { Dialog } from "@hermes/shared-ui";
 import { useFsList } from "@/hooks/use-fs-list";
 import { parentDir } from "@/lib/preview-rail";
 import s from "./workspace-picker-modal.module.css";
@@ -68,8 +67,6 @@ export function WorkspacePickerModal({
   onConfirm,
   onCancel,
 }: WorkspacePickerModalProps) {
-  const titleId = useId();
-  const modalRef = useRef<HTMLDivElement>(null);
   const manualInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -154,116 +151,63 @@ export function WorkspacePickerModal({
     });
   }, [directoryEntries]);
 
-  // Modal lifecycle: focus trap, body lock, keyboard.
-  useEffect(() => {
-    if (!open) return undefined;
-    const previousActiveElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const focusTimer = window.requestAnimationFrame(() => {
-      manualInputRef.current?.focus();
-    });
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCancel();
-        return;
-      }
-      const focusInsideManualInput = document.activeElement === manualInputRef.current;
-      if (event.key === "ArrowDown" && !focusInsideManualInput) {
-        event.preventDefault();
-        moveSelection(1);
-        return;
-      }
-      if (event.key === "ArrowUp" && !focusInsideManualInput) {
-        event.preventDefault();
-        moveSelection(-1);
-        return;
-      }
-      if (event.key === "Enter" && !focusInsideManualInput) {
-        if (selectedName) {
-          const target = directoryEntries.find((e) => e.name === selectedName);
-          if (target) {
-            event.preventDefault();
-            navigateTo(target.path);
-            return;
-          }
+  const handleDialogKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const focusInsideManualInput = document.activeElement === manualInputRef.current;
+    if (event.key === "ArrowDown" && !focusInsideManualInput) {
+      event.preventDefault();
+      moveSelection(1);
+      return;
+    }
+    if (event.key === "ArrowUp" && !focusInsideManualInput) {
+      event.preventDefault();
+      moveSelection(-1);
+      return;
+    }
+    if (event.key === "Enter" && !focusInsideManualInput) {
+      if (selectedName) {
+        const target = directoryEntries.find((entry) => entry.name === selectedName);
+        if (target) {
+          event.preventDefault();
+          navigateTo(target.path);
+          return;
         }
-        event.preventDefault();
-        handleConfirm();
-        return;
       }
-      if (event.key !== "Tab") return;
-
-      const focusable = Array.from(
-        modalRef.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => element.offsetParent !== null);
-      if (!focusable.length) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.cancelAnimationFrame(focusTimer);
-      window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previousActiveElement?.focus();
-    };
-  }, [
-    open,
-    onCancel,
-    moveSelection,
-    selectedName,
-    directoryEntries,
-    navigateTo,
-    handleConfirm,
-  ]);
+      event.preventDefault();
+      handleConfirm();
+    }
+  };
 
   if (!open || typeof document === "undefined") return null;
 
   const errorText = query.isError ? prettyFsError(query.error) : null;
   const isInitialLoad = query.isPending;
 
-  return createPortal(
-    <div
-      className={s.wpBackdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
-    >
-      <div
-        ref={modalRef}
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={s.wpBackdrop} />
+        <Dialog.Content
         className={s.wpModal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onMouseDown={(event) => event.stopPropagation()}
+        aria-describedby={undefined}
+        onKeyDown={handleDialogKeyDown}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          manualInputRef.current?.focus();
+        }}
       >
         <div className={s.wpTitleBar}>
-          <h2 id={titleId}>选择工作区目录</h2>
-          <button
-            type="button"
-            className={s.wpClose}
-            onClick={onCancel}
-            aria-label="关闭目录选择"
-          >
-            <X aria-hidden="true" />
-          </button>
+          <Dialog.Title asChild>
+            <h2>选择工作区目录</h2>
+          </Dialog.Title>
+          <Dialog.Close asChild>
+            <button
+              type="button"
+              className={s.wpClose}
+              aria-label="关闭目录选择"
+            >
+              <X aria-hidden="true" />
+            </button>
+          </Dialog.Close>
         </div>
 
         <div className={s.wpManualRow}>
@@ -346,9 +290,9 @@ export function WorkspacePickerModal({
             {resolvedPath || "—"}
           </div>
           <div className={s.wpFooterButtons}>
-            <button type="button" className={s.wpButtonGhost} onClick={onCancel}>
-              取消
-            </button>
+            <Dialog.Close asChild>
+              <button type="button" className={s.wpButtonGhost}>取消</button>
+            </Dialog.Close>
             <button
               type="button"
               className={s.wpButtonPrimary}
@@ -359,8 +303,8 @@ export function WorkspacePickerModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>,
-    document.body,
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

@@ -27,8 +27,10 @@
   font-family: var(--h-font-cn);
 }
 
-.rowMenu button:hover {
+.rowMenu button:hover,
+.rowMenu button[data-highlighted] {
   background: var(--h-bg-soft);
+  outline: none;
 }
 
 .rowMenu button:disabled {
@@ -40,7 +42,8 @@
   color: var(--h-err);
 }
 
-.rowMenu button[data-tone="danger"]:hover {
+.rowMenu button[data-tone="danger"]:hover,
+.rowMenu button[data-tone="danger"][data-highlighted] {
   background: color-mix(in srgb, var(--h-err) 12%, transparent);
 }
 

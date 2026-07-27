@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Brain, Check } from "lucide-react";
-import { Popover } from "@hermes/shared-ui";
+import { DropdownMenu } from "@hermes/shared-ui";
 import {
   DEFAULT_REASONING_EFFORT,
   REASONING_EFFORTS,
@@ -44,8 +44,8 @@ export function ReasoningEffortMenu({ value, onSelect, disabled }: ReasoningEffo
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
+      <DropdownMenu.Trigger asChild>
         <button
           type="button"
           className={s.trigger}
@@ -60,29 +60,33 @@ export function ReasoningEffortMenu({ value, onSelect, disabled }: ReasoningEffo
           <span>思考</span>
           <small>{triggerHint}</small>
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content className={s.menu} side="top" align="start">
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className={s.menu} side="top" align="start">
           <div className={s.menuTitle}>思考强度</div>
-          <div className={s.menuList} role="menu" aria-label="思考强度">
+          <DropdownMenu.RadioGroup
+            className={s.menuList}
+            value={value ?? ""}
+            onValueChange={(effort) => handleSelect(effort as ReasoningEffort)}
+            aria-label="思考强度"
+          >
             {REASONING_EFFORTS.map((effort) => {
               const isActive = effort === value;
               return (
-                <button
+                <DropdownMenu.RadioItem
                   key={effort}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={isActive}
+                  value={effort}
                   className={s.menuItem}
                   data-active={isActive ? "true" : undefined}
-                  onClick={() => handleSelect(effort)}
                 >
                   <span className={s.menuItemLabel}>{REASONING_EFFORT_LABELS[effort]}</span>
-                  {isActive && <Check className={s.menuCheck} aria-hidden="true" />}
-                </button>
+                  <DropdownMenu.ItemIndicator asChild>
+                    <Check className={s.menuCheck} aria-hidden="true" />
+                  </DropdownMenu.ItemIndicator>
+                </DropdownMenu.RadioItem>
               );
             })}
-          </div>
+          </DropdownMenu.RadioGroup>
           <div className={s.menuFoot}>
             {thinkingOn
               ? "模型会进行推理；强度越高越慢、越耗 Token。"
@@ -90,8 +94,8 @@ export function ReasoningEffortMenu({ value, onSelect, disabled }: ReasoningEffo
                 ? "已关闭推理，响应更快、更省 Token。"
                 : `未设置时默认按「${REASONING_EFFORT_LABELS[DEFAULT_REASONING_EFFORT]}」运行。`}
           </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

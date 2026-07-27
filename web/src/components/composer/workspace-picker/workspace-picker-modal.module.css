@@ -1,7 +1,7 @@
 .wpBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--h-z-dialog-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,6 +13,7 @@
   display: flex;
   flex-direction: column;
   width: min(640px, calc(100vw - 32px));
+  max-width: none;
   max-height: min(680px, calc(100vh - 48px));
   border: 1px solid var(--h-line);
   border-radius: 18px;

@@ -62,15 +62,18 @@
   font-family: var(--h-font-cn);
 }
 
-.menu button:hover {
+.menu button:hover,
+.menu button[data-highlighted] {
   background: var(--h-bg-soft);
+  outline: none;
 }
 
 .menu button[data-tone="danger"] {
   color: var(--h-err);
 }
 
-.menu button[data-tone="danger"]:hover {
+.menu button[data-tone="danger"]:hover,
+.menu button[data-tone="danger"][data-highlighted] {
   background: color-mix(in srgb, var(--h-err) 12%, transparent);
 }
 

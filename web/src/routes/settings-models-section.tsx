@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   closestCenter,
@@ -64,7 +63,7 @@ import {
 } from "@/lib/local-provider-context";
 import type { EnvVarInfo } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
-import { Alert, Button, Field, Input, Select, Textarea } from "@hermes/shared-ui";
+import { Alert, Button, Dialog, Field, Input, Select, Textarea } from "@hermes/shared-ui";
 import { OAuthProvidersSection } from "./settings-oauth-section";
 import { MoaPanel } from "./settings-moa-panel";
 import { useMoaConfig } from "@/hooks/use-moa-config";
@@ -677,7 +676,6 @@ export function ModelsSection() {
   const [auxSavingTask, setAuxSavingTask] = useState<AuxiliaryTaskId | "__all__" | "image_mode" | null>(null);
   const [auxSavedTask, setAuxSavedTask] = useState<AuxiliaryTaskId | "__all__" | "image_mode" | null>(null);
   const [auxError, setAuxError] = useState("");
-  const customDialogTitleId = useId();
   const selectProvider = useCallback((providerId: string) => {
     if (!providerId || selectedProviderIdRef.current === providerId) return;
     selectedProviderIdRef.current = providerId;
@@ -719,15 +717,6 @@ export function ModelsSection() {
       contextWindow: String(RECOMMENDED_LOCAL_CONTEXT_LENGTH),
     }));
   }, []);
-  useEffect(() => {
-    if (!showCustomForm) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeCustomForm();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [showCustomForm, closeCustomForm]);
-
   const currentProviderId = modelInfo?.provider ||
     (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
       ? String((config.model as Record<string, unknown>).provider ?? "")
@@ -1943,25 +1932,29 @@ export function ModelsSection() {
         <MoaPanel />
       )}
 
-      {showCustomForm && createPortal(
-        <div className={s.customProviderBackdrop} onClick={closeCustomForm}>
-          <div
+      <Dialog.Root
+        open={showCustomForm}
+        onOpenChange={(open) => { if (!open) closeCustomForm(); }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className={s.customProviderBackdrop} />
+          <Dialog.Content
             className={s.customProviderModal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={customDialogTitleId}
-            onClick={(e) => e.stopPropagation()}
+            aria-describedby={undefined}
           >
             <div className={s.customProviderTitleBar}>
-              <h2 id={customDialogTitleId}>{customProviderTitle}</h2>
-              <button
-                type="button"
-                className={s.customProviderClose}
-                onClick={closeCustomForm}
-                aria-label="关闭"
-              >
-                ×
-              </button>
+              <Dialog.Title asChild>
+                <h2>{customProviderTitle}</h2>
+              </Dialog.Title>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className={s.customProviderClose}
+                  aria-label="关闭"
+                >
+                  ×
+                </button>
+              </Dialog.Close>
             </div>
             <div className={s.customProviderBody}>
               <p className={s.customProviderHint}>
@@ -2097,7 +2090,9 @@ export function ModelsSection() {
               </Field>
             </div>
             <div className={s.customProviderActions}>
-              <Button type="button" variant="outline" onClick={closeCustomForm}>取消</Button>
+              <Dialog.Close asChild>
+                <Button type="button" variant="outline">取消</Button>
+              </Dialog.Close>
               <Button
                 type="button"
                 variant="solid"
@@ -2114,10 +2109,9 @@ export function ModelsSection() {
                 {saveConfig.isPending ? "保存中…" : "添加并选中"}
               </Button>
             </div>
-          </div>
-        </div>,
-        document.body,
-      )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

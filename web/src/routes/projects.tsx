@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { DropdownMenu } from "@hermes/shared-ui";
 import {
   ExternalLink,
   FolderPlus,
@@ -75,35 +75,34 @@ interface RowMenuProps {
 
 function RowMenu({ pinned, desktopAvailable, onTogglePin, onOpenInFinder, onDelete }: RowMenuProps) {
   return (
-    <Popover.Portal>
-      <Popover.Content
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content
         className={s.rowMenu}
         align="end"
         side="bottom"
         sideOffset={4}
-        role="menu"
         onClick={(event) => event.stopPropagation()}
       >
-        <Popover.Close asChild>
-          <button type="button" onClick={onTogglePin} role="menuitem">
+        <DropdownMenu.Item asChild onSelect={onTogglePin}>
+          <button type="button">
             {pinned ? <PinOff size={13} /> : <Pin size={13} />}
             {pinned ? "取消置顶" : "置顶项目"}
           </button>
-        </Popover.Close>
+        </DropdownMenu.Item>
         {desktopAvailable ? (
-          <Popover.Close asChild>
-            <button type="button" onClick={onOpenInFinder} role="menuitem">
+          <DropdownMenu.Item asChild onSelect={onOpenInFinder}>
+            <button type="button">
               <ExternalLink size={13} /> 在 Finder 打开
             </button>
-          </Popover.Close>
+          </DropdownMenu.Item>
         ) : null}
-        <Popover.Close asChild>
-          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
+        <DropdownMenu.Item asChild onSelect={onDelete}>
+          <button type="button" data-tone="danger">
             <Trash2 size={13} /> 删除项目
           </button>
-        </Popover.Close>
-      </Popover.Content>
-    </Popover.Portal>
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
   );
 }
 
@@ -327,13 +326,13 @@ export function ProjectsRoute() {
                         {formatTokens(item.totalTokens)}
                       </td>
                       <td className={s.menuCell} onClick={(event) => event.stopPropagation()}>
-                        <Popover.Root
+                        <DropdownMenu.Root
                           open={openMenuPath === project.path}
                           onOpenChange={(open) =>
                             setOpenMenuPath(open ? project.path : null)
                           }
                         >
-                          <Popover.Trigger asChild>
+                          <DropdownMenu.Trigger asChild>
                             <button
                               type="button"
                               className={s.menuTrigger}
@@ -341,7 +340,7 @@ export function ProjectsRoute() {
                             >
                               <MoreHorizontal size={14} />
                             </button>
-                          </Popover.Trigger>
+                          </DropdownMenu.Trigger>
                           <RowMenu
                             pinned={pinned}
                             desktopAvailable={desktopAvailable}
@@ -349,7 +348,7 @@ export function ProjectsRoute() {
                             onOpenInFinder={() => handleOpenInFinder(project)}
                             onDelete={() => handleDelete(project)}
                           />
-                        </Popover.Root>
+                        </DropdownMenu.Root>
                       </td>
                     </tr>
                   );

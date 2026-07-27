@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { DropdownMenu } from "@hermes/shared-ui";
 import { Folder, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
@@ -146,13 +146,13 @@ function SessionRow({
           ) : null}
         </div>
       </div>
-      <Popover.Root
+      <DropdownMenu.Root
         open={!actionMenuDisabled && actions.openMenuId === session.id}
         onOpenChange={(open) => {
           actions.setOpenMenuId(open && !actionMenuDisabled ? session.id : null);
         }}
       >
-        <Popover.Trigger asChild>
+        <DropdownMenu.Trigger asChild>
           <button
             type="button"
             className={s.rowMore}
@@ -164,7 +164,7 @@ function SessionRow({
           >
             <MoreHorizontal size={14} />
           </button>
-        </Popover.Trigger>
+        </DropdownMenu.Trigger>
         <SessionRowMenu
           pinned={pinned}
           disabled={actionMenuDisabled}
@@ -173,7 +173,7 @@ function SessionRow({
           onArchive={() => actions.handleArchive(session)}
           onDelete={() => actions.openDeleteDialog([session])}
         />
-      </Popover.Root>
+      </DropdownMenu.Root>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { DropdownMenu, Popover } from "@hermes/shared-ui";
 import {
   Archive,
   ArchiveRestore,
@@ -841,13 +841,13 @@ export function HistoryRoute() {
                         {workspaceName || "—"}
                       </span>
                       <span className={s.cellTimestamp}>{updatedDisplay}</span>
-                      <Popover.Root
+                      <DropdownMenu.Root
                         open={!menuDisabled && openMenuId === session.id}
                         onOpenChange={(open) => {
                           setOpenMenuId(open && !menuDisabled ? session.id : null);
                         }}
                       >
-                        <Popover.Trigger asChild>
+                        <DropdownMenu.Trigger asChild>
                           <button
                             type="button"
                             className={s.cellMore}
@@ -858,7 +858,7 @@ export function HistoryRoute() {
                           >
                             <MoreHorizontal size={14} />
                           </button>
-                        </Popover.Trigger>
+                        </DropdownMenu.Trigger>
                         <SessionRowMenu
                           pinned={pinned}
                           disabled={menuDisabled}
@@ -869,7 +869,7 @@ export function HistoryRoute() {
                           onUnarchive={() => handleUnarchive(session)}
                           onDelete={() => openDeleteDialog([session])}
                         />
-                      </Popover.Root>
+                      </DropdownMenu.Root>
                     </div>
                   );
                 })}

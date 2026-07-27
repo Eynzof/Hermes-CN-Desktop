@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { DropdownMenu } from "@hermes/shared-ui";
 import {
   ChevronLeft,
   ExternalLink,
@@ -54,29 +54,28 @@ interface MenuProps {
 
 function ProjectMenu({ desktopAvailable, onOpenInFinder, onDelete }: MenuProps) {
   return (
-    <Popover.Portal>
-      <Popover.Content
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content
         className={s.menu}
         align="end"
         side="bottom"
         sideOffset={4}
-        role="menu"
         onClick={(event) => event.stopPropagation()}
       >
         {desktopAvailable ? (
-          <Popover.Close asChild>
-            <button type="button" onClick={onOpenInFinder} role="menuitem">
+          <DropdownMenu.Item asChild onSelect={onOpenInFinder}>
+            <button type="button">
               <ExternalLink size={13} /> 在 Finder 打开
             </button>
-          </Popover.Close>
+          </DropdownMenu.Item>
         ) : null}
-        <Popover.Close asChild>
-          <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
+        <DropdownMenu.Item asChild onSelect={onDelete}>
+          <button type="button" data-tone="danger">
             <Trash2 size={13} /> 删除项目
           </button>
-        </Popover.Close>
-      </Popover.Content>
-    </Popover.Portal>
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
   );
 }
 
@@ -228,18 +227,18 @@ export function ProjectDetailRoute() {
               <Plus size={13} />
               新对话
             </TopBarActionButton>
-            <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
-              <Popover.Trigger asChild>
+            <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
+              <DropdownMenu.Trigger asChild>
                 <TopBarActionButton aria-label="项目操作">
                   <MoreHorizontal size={14} />
                 </TopBarActionButton>
-              </Popover.Trigger>
+              </DropdownMenu.Trigger>
               <ProjectMenu
                 desktopAvailable={desktopAvailable}
                 onOpenInFinder={handleOpenInFinder}
                 onDelete={handleDelete}
               />
-            </Popover.Root>
+            </DropdownMenu.Root>
           </>
         }
       />

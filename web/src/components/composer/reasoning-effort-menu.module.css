@@ -98,8 +98,10 @@
   cursor: pointer;
 }
 
-.menuItem:hover {
+.menuItem:hover,
+.menuItem[data-highlighted] {
   background: var(--h-line-soft);
+  outline: none;
 }
 
 .menuItem[data-active="true"] {

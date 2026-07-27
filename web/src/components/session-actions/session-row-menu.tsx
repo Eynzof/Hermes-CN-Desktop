@@ -1,4 +1,4 @@
-import { Popover } from "@hermes/shared-ui";
+import { DropdownMenu } from "@hermes/shared-ui";
 import { Archive, ArchiveRestore, Edit3, Pin, PinOff, Trash2 } from "lucide-react";
 import s from "./session-actions.module.css";
 
@@ -17,7 +17,7 @@ export interface SessionRowMenuProps {
 
 /**
  * Dropdown body for a single session's actions (pin / rename / archive /
- * delete). Render it inside a `Popover.Root` whose `Popover.Trigger` is the
+ * delete). Render it inside a `DropdownMenu.Root` whose `DropdownMenu.Trigger` is the
  * "⋯" button — shared by the history list and the workbench sidebar. In the
  * history page's archived scope the archive item flips to "取消归档".
  */
@@ -32,49 +32,50 @@ export function SessionRowMenu({
   onDelete,
 }: SessionRowMenuProps) {
   return (
-    <Popover.Portal>
-      <Popover.Content
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content
         className={s.rowMenu}
         align="end"
         side="bottom"
         sideOffset={4}
-        role="menu"
         onClick={(event) => event.stopPropagation()}
       >
-        <Popover.Close asChild>
-          <button type="button" onClick={onTogglePin} role="menuitem" disabled={disabled}>
+        <DropdownMenu.Item asChild onSelect={onTogglePin} disabled={disabled}>
+          <button type="button" disabled={disabled}>
             {pinned ? <PinOff size={13} /> : <Pin size={13} />}
             {pinned ? "取消置顶" : "置顶"}
           </button>
-        </Popover.Close>
-        <Popover.Close asChild>
-          <button type="button" onClick={onRename} role="menuitem" disabled={disabled}>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={onRename} disabled={disabled}>
+          <button type="button" disabled={disabled}>
             <Edit3 size={13} /> 重命名
           </button>
-        </Popover.Close>
-        <Popover.Close asChild>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item
+          asChild
+          onSelect={archived ? onUnarchive : onArchive}
+          disabled={disabled}
+        >
           {archived ? (
-            <button type="button" onClick={onUnarchive} role="menuitem" disabled={disabled}>
+            <button type="button" disabled={disabled}>
               <ArchiveRestore size={13} /> 取消归档
             </button>
           ) : (
-            <button type="button" onClick={onArchive} role="menuitem" disabled={disabled}>
+            <button type="button" disabled={disabled}>
               <Archive size={13} /> 归档
             </button>
           )}
-        </Popover.Close>
-        <Popover.Close asChild>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item asChild onSelect={onDelete} disabled={disabled}>
           <button
             type="button"
-            onClick={onDelete}
-            role="menuitem"
             data-tone="danger"
             disabled={disabled}
           >
             <Trash2 size={13} /> 删除
           </button>
-        </Popover.Close>
-      </Popover.Content>
-    </Popover.Portal>
+        </DropdownMenu.Item>
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
   );
 }

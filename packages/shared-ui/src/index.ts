@@ -13,4 +13,5 @@ export { usePlatform, applyPlatformToDOM } from "./hooks/use-platform";
 export { cn, type ClassValue } from "./utils/cn";
 export * from "./components";
 export * as Dialog from "./composites/dialog";
+export * as DropdownMenu from "./composites/dropdown-menu";
 export * as Popover from "./composites/popover";

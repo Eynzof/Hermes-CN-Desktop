@@ -162,9 +162,11 @@
   cursor: pointer;
 }
 
-.menu button:hover:not(:disabled) {
+.menu button:hover:not(:disabled),
+.menu button[data-highlighted]:not(:disabled) {
   background: var(--h-bg-soft);
   color: var(--h-text);
+  outline: none;
 }
 
 .menu button:disabled {
@@ -176,7 +178,8 @@
   color: var(--h-err);
 }
 
-.menu button[data-tone="danger"]:hover:not(:disabled) {
+.menu button[data-tone="danger"]:hover:not(:disabled),
+.menu button[data-tone="danger"][data-highlighted]:not(:disabled) {
   background: color-mix(in srgb, var(--h-err) 10%, transparent);
 }
 

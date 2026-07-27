@@ -1,16 +1,15 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
   type ReactNode,
   type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
 import { ArrowRight, Brain, Check, ChevronRight, Image as ImageIcon, RotateCcw, Sparkles, Wrench, X, Zap } from "lucide-react";
 import type { GatewayModelProvider, ModelOptionsResult } from "@hermes/protocol";
+import { Dialog } from "@hermes/shared-ui";
 import {
   BUILTIN_PROVIDER_CATALOG,
   TOP5_PROVIDER_IDS,
@@ -737,84 +736,39 @@ export function ModelPickerPanel({ onClose, ...props }: ModelPickerPanelProps) {
 }
 
 export function ModelPickerModal({ onClose, ...props }: ModelPickerPanelProps) {
-  const titleId = useId();
-  const modalRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const previousActiveElement = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const previousOverflow = document.body.style.overflow;
-    const focusTimer = window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus();
-    });
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const focusable = Array.from(
-        modalRef.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((element) => element.offsetParent !== null);
-      if (!focusable.length) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.cancelAnimationFrame(focusTimer);
-      window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previousActiveElement?.focus();
-    };
-  }, [onClose]);
 
   if (typeof document === "undefined") return null;
 
-  return createPortal(
-    <div
-      className={s.modelModalBackdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={modalRef}
+  return (
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={s.modelModalBackdrop} />
+        <Dialog.Content
         className={s.modelModal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onMouseDown={(event) => event.stopPropagation()}
+        aria-describedby={undefined}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          searchInputRef.current?.focus();
+        }}
       >
         <div className={s.modelModalTitleBar}>
-          <h2 id={titleId}>选择模型</h2>
-          <button
-            type="button"
-            className={s.modelModalClose}
-            onClick={onClose}
-            aria-label="关闭模型选择"
-          >
-            <X aria-hidden="true" />
-          </button>
+          <Dialog.Title asChild>
+            <h2>选择模型</h2>
+          </Dialog.Title>
+          <Dialog.Close asChild>
+            <button
+              type="button"
+              className={s.modelModalClose}
+              aria-label="关闭模型选择"
+            >
+              <X aria-hidden="true" />
+            </button>
+          </Dialog.Close>
         </div>
         <ModelPickerBody {...props} searchInputRef={searchInputRef} />
-      </div>
-    </div>,
-    document.body,
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

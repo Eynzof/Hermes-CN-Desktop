@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { OAuthProvider } from "@hermes/protocol";
 import {
   useOAuthProviders,
@@ -11,7 +10,7 @@ import {
 } from "@/hooks/use-oauth-providers";
 import { CopyButton } from "@/components/ui/copy-button";
 import { openExternalUrl } from "@/lib/external-links";
-import { Badge, Button, Input } from "@hermes/shared-ui";
+import { Badge, Button, Dialog, Input } from "@hermes/shared-ui";
 import settings from "./settings.module.css";
 import s from "./settings-oauth-section.module.css";
 
@@ -310,24 +309,24 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
     onClose();
   }, [cancelSession, onClose, phase]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") handleClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [handleClose]);
-
   const formatCountdown = (secs: number) => {
     const m = Math.floor(secs / 60);
     const sec = secs % 60;
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
-  return createPortal(
-    <div className={s.modalBackdrop} onClick={handleClose}>
-      <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+  return (
+    <Dialog.Root open onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={s.modalBackdrop} />
+        <Dialog.Content className={s.modal} aria-describedby={undefined}>
         <div className={s.modalHeader}>
-          <div className={s.modalTitle}>登录 {provider.name}</div>
-          <Button variant="plain" size="inherit" className={s.modalClose} onClick={handleClose} aria-label="关闭">✕</Button>
+          <Dialog.Title asChild>
+            <div className={s.modalTitle}>登录 {provider.name}</div>
+          </Dialog.Title>
+          <Dialog.Close asChild>
+            <Button variant="plain" size="inherit" className={s.modalClose} aria-label="关闭">✕</Button>
+          </Dialog.Close>
         </div>
 
         {phase === "starting" && (
@@ -418,12 +417,14 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
           <>
             <div className={s.statusMessage} data-type="error">{errorMsg}</div>
             <div className={s.modalActions}>
-              <Button variant="outline" onClick={handleClose}>关闭</Button>
+              <Dialog.Close asChild>
+                <Button variant="outline">关闭</Button>
+              </Dialog.Close>
             </div>
           </>
         )}
-      </div>
-    </div>,
-    document.body,
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
