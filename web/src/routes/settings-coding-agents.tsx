@@ -76,7 +76,7 @@ function RuntimeField({ label, value, mono, wide }: {
   );
 }
 
-function SkillRow({ agent, skill, onToggle, pending }: {
+export function DelegationSkillControl({ agent, skill, onToggle, pending }: {
   agent: CodingAgentStatus;
   skill: SkillInfo | undefined;
   onToggle: (name: string, enabled: boolean) => void;
@@ -84,28 +84,98 @@ function SkillRow({ agent, skill, onToggle, pending }: {
 }) {
   if (!skill) {
     return (
-      <p className={s.desc}>
-        内核里未找到「{agent.skillName}」技能——内核版本过旧或技能未同步；升级内核后重试。
-      </p>
+      <div
+        className={s.delegationSkillControl}
+        data-delegation-skill="true"
+        data-state="missing"
+        role="status"
+      >
+        <span className={s.delegationSkillIcon} aria-hidden>
+          <AlertTriangle size={15} />
+        </span>
+        <div className={s.delegationSkillBody}>
+          <div className={s.delegationSkillMeta}>
+            <span className={s.delegationSkillEyebrow}>委派技能</span>
+            <span className={s.envStatusTag} data-status="warning">未找到</span>
+          </div>
+          <code className={s.delegationSkillName}>{agent.skillName}</code>
+          <p className={s.delegationSkillDescription}>
+            当前内核未提供此技能。请升级或重新同步内核技能后再试。
+          </p>
+        </div>
+      </div>
     );
   }
+
+  const state = skill.enabled ? "enabled" : "disabled";
   return (
-    <div className={s.envCheckHeader}>
-      <div className={s.envCheckTitle}>
-        <Bot size={13} aria-hidden />
-        <span className={s.envCheckLabel}>hermes 委派技能「{skill.name}」</span>
-        <span className={s.envStatusTag} data-status={skill.enabled ? "ok" : "warning"}>
-          {skill.enabled ? "已启用" : "已停用"}
-        </span>
+    <div
+      className={s.delegationSkillControl}
+      data-delegation-skill="true"
+      data-state={state}
+      role="group"
+      aria-label={`${agent.label} 委派技能`}
+    >
+      <span className={s.delegationSkillIcon} aria-hidden>
+        <Bot size={15} />
+      </span>
+      <div className={s.delegationSkillBody}>
+        <div className={s.delegationSkillMeta}>
+          <span className={s.delegationSkillEyebrow}>委派技能</span>
+          <span className={s.envStatusTag} data-status={skill.enabled ? "ok" : "warning"}>
+            {skill.enabled ? "已启用" : "已停用"}
+          </span>
+        </div>
+        <code className={s.delegationSkillName}>{skill.name}</code>
+        <p className={s.delegationSkillDescription}>
+          {skill.enabled
+            ? `Hermes 会通过此技能把编码任务交给 ${agent.label}。`
+            : `启用后，Hermes 才能把编码任务交给 ${agent.label}。`}
+        </p>
       </div>
       <button
-        className={s.btn}
+        className={[s.btn, s.delegationSkillAction].join(" ")}
         type="button"
         disabled={pending}
         onClick={() => onToggle(skill.name, !skill.enabled)}
       >
         {pending ? "处理中…" : skill.enabled ? "停用技能" : "启用技能"}
       </button>
+    </div>
+  );
+}
+
+export function CodingAgentToolbar({ isFetching, hasBridge, onRefresh, diagnostics }: {
+  isFetching: boolean;
+  hasBridge: boolean;
+  onRefresh: () => void;
+  diagnostics: () => string;
+}) {
+  const actionClassName = [s.btn, s.codingAgentToolbarButton].join(" ");
+  return (
+    <div className={s.codingAgentToolbar} role="toolbar" aria-label="编程Agent 操作">
+      <button
+        className={actionClassName}
+        type="button"
+        data-coding-agent-action="true"
+        onClick={onRefresh}
+        disabled={isFetching || !hasBridge}
+      >
+        <RefreshCw
+          className={s.codingAgentRefreshIcon}
+          data-spinning={isFetching ? "true" : undefined}
+          size={13}
+        />
+        {isFetching ? "检测中" : "刷新检测"}
+      </button>
+      <CopyButton
+        className={actionClassName}
+        data-coding-agent-action="true"
+        text={diagnostics}
+      >
+        <Copy size={13} />
+        复制诊断 JSON
+      </CopyButton>
     </div>
   );
 }
@@ -119,38 +189,39 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
 }) {
   const status = agentCardStatus(agent);
   return (
-    <section className={s.debugCard} data-wide="true">
-      <div className={s.debugCardHeader}>
-        <div className={s.debugCardIcon}>
-          <SquareTerminal size={15} />
-        </div>
-        <div>
-          <h3>{agent.label}</h3>
-          <p>{agent.id === "claude-code" ? "Anthropic 自主编程Agent CLI" : "OpenAI 自主编程Agent CLI"}</p>
-        </div>
-      </div>
-
-      <div className={s.envCheckItem} data-status={status}>
-        <div className={s.envCheckHeader}>
-          <div className={s.envCheckTitle}>
-            <span className={s.envCheckIcon} data-status={status}>
-              <StatusIcon status={status} />
-            </span>
-            <span className={s.envCheckLabel}>{agent.installed ? "已安装" : "未安装"}</span>
-            {agent.installed ? (
-              <span className={s.envStatusTag} data-status={agent.loginState === "logged_in" ? "ok" : status}>
-                <KeyRound size={11} aria-hidden /> {LOGIN_LABELS[agent.loginState]}
-              </span>
-            ) : null}
+    <section className={s.codingAgentCard} data-coding-agent-card="true">
+      <header className={s.codingAgentCardHeader}>
+        <div className={s.codingAgentIdentity}>
+          <div className={s.debugCardIcon}>
+            <SquareTerminal size={15} />
+          </div>
+          <div className={s.codingAgentIdentityText}>
+            <h3>{agent.label}</h3>
+            <p>{agent.id === "claude-code" ? "Anthropic 自主编程Agent CLI" : "OpenAI 自主编程Agent CLI"}</p>
           </div>
         </div>
+        <div className={s.codingAgentStatusGroup} aria-label={`${agent.label} 当前状态`}>
+          <span className={s.envStatusTag} data-status={status}>
+            <StatusIcon status={status} />
+            {agent.installed ? "已安装" : "未安装"}
+          </span>
+          {agent.installed ? (
+            <span className={s.envStatusTag} data-status={agent.loginState === "logged_in" ? "ok" : status}>
+              <KeyRound size={11} aria-hidden />
+              {LOGIN_LABELS[agent.loginState]}
+            </span>
+          ) : null}
+        </div>
+      </header>
+
+      <div className={[s.envCheckItem, s.codingAgentDetails].join(" ")} data-status={status}>
         <p className={s.envCheckSummary} data-status={status}>{agentStatusLine(agent)}</p>
 
-        <div className={[s.runtimeGrid, s.envCheckDetails].join(" ")}>
-          {agent.installed && agent.version ? <RuntimeField label="版本" value={agent.version} mono wide /> : null}
+        <div className={[s.runtimeGrid, s.envCheckDetails, s.codingAgentRuntimeGrid].join(" ")}>
+          {agent.installed && agent.version ? <RuntimeField label="版本" value={agent.version} mono /> : null}
+          {agent.loginDetail ? <RuntimeField label="登录状态" value={agent.loginDetail} /> : null}
           {agent.installed && agent.path ? <RuntimeField label="路径" value={agent.path} mono wide /> : null}
           <RuntimeField label="配置目录" value={agent.configDir} mono wide />
-          {agent.loginDetail ? <RuntimeField label="登录状态" value={agent.loginDetail} wide /> : null}
           {!agent.installed ? (
             <RuntimeField
               label="安装"
@@ -182,7 +253,12 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
         ) : null}
       </div>
 
-      <SkillRow agent={agent} skill={skill} onToggle={onToggle} pending={togglePending} />
+      <DelegationSkillControl
+        agent={agent}
+        skill={skill}
+        onToggle={onToggle}
+        pending={togglePending}
+      />
     </section>
   );
 }
@@ -215,9 +291,12 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
     JSON.stringify({ generatedAt: new Date().toISOString(), codingAgents: data ?? null }, null, 2);
 
   return (
-    <div>
+    <div className={s.codingAgentsPage}>
       {showHeading && <h2 className={s.heading}>编程Agent</h2>}
-      <div className={s.aboutHero} data-ok={allReady && data ? "true" : undefined}>
+      <div
+        className={[s.aboutHero, s.codingAgentsHero].join(" ")}
+        data-ok={allReady && data ? "true" : undefined}
+      >
         <div className={s.aboutHeroMark}>
           <SquareTerminal size={24} />
         </div>
@@ -226,12 +305,12 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
           <h3>
             {data
               ? allReady
-                ? "编程Agent 就绪，hermes 可以调度它们干活"
+                ? "编程Agent 就绪，Hermes 可以调度它们干活"
                 : "部分编程Agent 未就绪"
               : "正在检测编程Agent"}
           </h3>
           <p>
-            hermes 可以通过内置技能把编码任务委派给本机的 Claude Code 与 Codex CLI，
+            Hermes 可以通过内置技能把编码任务委派给本机的 Claude Code 与 Codex CLI，
             聊天中会以「委派卡片」实时展示它们的执行过程；侧栏「子Agent」面板可总览全部委派。
             本页只做检测与指引，不会改写 CLI 自身的配置文件（多账号/中转切换请使用 cc-switch）。
           </p>
@@ -244,21 +323,12 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
         </span>
       </div>
 
-      <div className={s.debugActionBar}>
-        <button
-          className={s.btn}
-          type="button"
-          onClick={() => void query.refetch()}
-          disabled={query.isFetching || !hasBridge}
-        >
-          <RefreshCw size={13} />
-          {query.isFetching ? "检测中" : "刷新检测"}
-        </button>
-        <CopyButton className={s.btn} text={diagnostics}>
-          <Copy size={13} />
-          复制诊断 JSON
-        </CopyButton>
-      </div>
+      <CodingAgentToolbar
+        isFetching={query.isFetching}
+        hasBridge={hasBridge}
+        onRefresh={() => void query.refetch()}
+        diagnostics={diagnostics}
+      />
 
       {!hasBridge && (
         <div className={s.runtimeMessage} data-tone="error">
@@ -272,7 +342,7 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
       )}
 
       {data && (
-        <div className={s.aboutDebugGrid}>
+        <div className={s.codingAgentList}>
           {data.agents.map((agent) => (
             <AgentCard
               key={agent.id}

@@ -934,6 +934,113 @@
   margin: 12px 0 18px;
 }
 
+.codingAgentsPage {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.codingAgentsHero {
+  margin-bottom: 0;
+  padding: 16px 18px;
+}
+
+.codingAgentToolbar {
+  display: grid;
+  grid-template-columns: repeat(2, 140px);
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.codingAgentToolbarButton {
+  box-sizing: border-box;
+  width: 140px;
+  min-height: 34px;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+.codingAgentRefreshIcon[data-spinning="true"] {
+  animation: hermesButtonSpin 0.9s linear infinite;
+}
+
+.codingAgentList {
+  display: grid;
+  gap: 16px;
+}
+
+.codingAgentCard {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--h-line);
+  border-radius: 14px;
+  background: var(--h-bg-app);
+}
+
+.codingAgentCardHeader {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.codingAgentIdentity {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.codingAgentIdentityText {
+  min-width: 0;
+}
+
+.codingAgentIdentityText h3 {
+  margin: 0;
+  color: var(--h-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.codingAgentIdentityText p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-size: 11.5px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codingAgentStatusGroup {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.codingAgentStatusGroup .envStatusTag {
+  gap: 5px;
+}
+
+.codingAgentDetails {
+  gap: 10px;
+  padding: 13px 14px;
+}
+
+.codingAgentRuntimeGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.codingAgentCard .delegationSkillControl {
+  margin-top: 12px;
+}
+
 .debugHeroActions {
   display: flex;
   flex-direction: column;
@@ -1508,6 +1615,96 @@
 .envOpenPathButton {
   align-self: flex-end;
   margin-top: 0;
+}
+
+.delegationSkillControl {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 10px;
+  background: var(--h-bg-pane);
+}
+
+.delegationSkillControl[data-state="enabled"] {
+  border-color: color-mix(in srgb, var(--h-ok) 24%, var(--h-line-soft));
+  background: color-mix(in srgb, var(--h-ok-soft) 28%, var(--h-bg-pane));
+}
+
+.delegationSkillControl[data-state="missing"] {
+  border-color: color-mix(in srgb, var(--h-warn) 28%, var(--h-line-soft));
+  background: color-mix(in srgb, var(--h-warn-soft) 22%, var(--h-bg-pane));
+}
+
+.delegationSkillIcon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--h-text-2);
+  background: var(--h-bg-chip);
+}
+
+.delegationSkillControl[data-state="enabled"] .delegationSkillIcon {
+  color: var(--h-ok);
+  background: var(--h-ok-soft);
+}
+
+.delegationSkillControl[data-state="missing"] .delegationSkillIcon {
+  color: var(--h-warn);
+  background: var(--h-warn-soft);
+}
+
+.delegationSkillBody {
+  min-width: 0;
+}
+
+.delegationSkillMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.delegationSkillEyebrow {
+  color: var(--h-text-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.delegationSkillName {
+  display: block;
+  min-width: 0;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delegationSkillDescription {
+  margin: 2px 0 0;
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.delegationSkillAction {
+  min-width: 88px;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .commitList {
@@ -2715,6 +2912,39 @@ button.providerWebsiteButton:hover {
   .debugHeroActions {
     grid-column: 1 / -1;
     align-items: flex-start;
+  }
+
+  .codingAgentToolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .codingAgentToolbarButton {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .codingAgentCardHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .codingAgentStatusGroup {
+    justify-content: flex-start;
+  }
+
+  .codingAgentRuntimeGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .delegationSkillControl {
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .delegationSkillAction {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .contactLayout {
