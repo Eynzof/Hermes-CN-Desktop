@@ -53,10 +53,10 @@ const mockStorage: Storage = {
 };
 
 beforeEach(() => {
-  // Replace the broken jsdom localStorage with a working mock
+  // Vitest runs this file in Node, so provide the browser globals used by ui-store.
   Object.keys(lsStore).forEach((k) => delete lsStore[k]);
-  Object.defineProperty(globalThis, "localStorage", { value: mockStorage, configurable: true, writable: true });
-  Object.defineProperty(window, "localStorage", { value: mockStorage, configurable: true, writable: true });
+  vi.stubGlobal("window", { localStorage: mockStorage });
+  vi.stubGlobal("localStorage", mockStorage);
 });
 
 afterEach(() => {
