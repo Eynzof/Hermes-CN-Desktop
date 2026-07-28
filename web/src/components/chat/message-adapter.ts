@@ -17,6 +17,7 @@ import {
   imagePartFromSource,
 } from "@/lib/message-images";
 import { stableTextHash, type UiTurnStats } from "@/lib/ui-store";
+import { isSkillInvocationText } from "@/lib/skill-invocation";
 import type { AssistantTurnBlock } from "@/stores/chat";
 import type { AssistantMessageStats, ChatImageItem, ChatMessage, ChatToolItem } from "./chat-types";
 
@@ -799,6 +800,11 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
   const text = msg.role === "system"
     ? noticeTextFromParts(msg.parts) ?? textFromParts(msg.parts)
     : textFromParts(msg.parts);
+  // Core 把 Skill 指令作为 user 上下文注入模型，但它不是用户在聊天框发送的
+  // 内容。进入展示模型时归一为 system，避免污染用户气泡、轮次导航和动作栏。
+  const displayRole = msg.role === "user" && isSkillInvocationText(text)
+    ? "system"
+    : msg.role;
   const reasoning = reasoningFromParts(msg.parts);
   const images = imagesFromParts(msg.parts);
   const blocks = msg.role === "assistant"
@@ -812,7 +818,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
 
   return {
     id: msg.id,
-    role: msg.role,
+    role: displayRole,
     createdAt: msg.createdAt,
     text,
     reasoning,

@@ -35,6 +35,13 @@ export interface ReattachAfterReconnectDeps {
   onResumeFailed: (error: unknown) => void;
 }
 
+/** Only explicit server-side absence is terminal; timeouts are recoverable. */
+export function isDefinitiveMissingSessionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /(?:session|conversation).*(?:not found|does not exist|unknown|gone|reaped)/i.test(message)
+    || /(?:not found|does not exist|unknown|gone|reaped).*(?:session|conversation)/i.test(message);
+}
+
 export async function reattachAfterReconnect(deps: ReattachAfterReconnectDeps): Promise<void> {
   const activeSessionId = deps.getActiveSessionId();
   // Nothing open to re-pin — a fresh connect with no session is a no-op.

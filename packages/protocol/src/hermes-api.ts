@@ -1518,7 +1518,7 @@ export const GatewayKnownEvent = z.discriminatedUnion("type", [
       flags: z.record(z.unknown()).optional(),
     }).passthrough().optional(),
   }).passthrough(),
-  // 仅后台委派：≤2Hz 合并的实时输出（chunk 已脱敏/去 ANSI），events 是后端
+  // 前后台委派：≤2Hz 合并的实时输出（chunk 已脱敏/去 ANSI），events 是后端
   // 归一化出的子事件（init/text/tool_use/result，snake_case 字段）。
   z.object({
     type: z.literal("delegation.cli.output"),
