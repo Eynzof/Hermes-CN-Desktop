@@ -66,6 +66,10 @@ describe("session activity", () => {
       ...createEmptyChatRuntime(1),
       streamStatus: "streaming" as const,
     };
+    const reconnectingRuntime = {
+      ...createEmptyChatRuntime(1),
+      streamStatus: "connecting" as const,
+    };
 
     expect(
       isSessionRunning(
@@ -74,6 +78,7 @@ describe("session activity", () => {
       ),
     ).toBe(false);
     expect(isRuntimeRunning(streamingRuntime)).toBe(true);
+    expect(isRuntimeRunning(reconnectingRuntime)).toBe(true);
     expect(
       isSessionRunning(
         session({ is_active: false, message_count: 2 }),
