@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { putJSON } from "@/lib/transport";
 import { MemoryProvidersResponse } from "@hermes/protocol";
 import {
+  MAX_MEMORY_CHAR_LIMIT,
+  memoryCharLimitConfigPayload,
   memoryProviderConfigPayload,
   memoryProviderConfigQueryKey,
   memoryProviderStatusQueryKey,
+  saveMemoryCharLimit,
   saveMemoryProviderConfig,
   toMemoryProvidersState,
 } from "./use-memory";
@@ -72,5 +75,24 @@ describe("memory provider hooks contract", () => {
       .not.toEqual(memoryProviderConfigQueryKey("work", "openviking"));
     expect(memoryProviderStatusQueryKey("default", "hindsight"))
       .not.toEqual(memoryProviderStatusQueryKey("work", "hindsight"));
+  });
+
+  it("saves the built-in memory limit through the shared config endpoint", async () => {
+    await saveMemoryCharLimit(6400);
+
+    expect(memoryCharLimitConfigPayload(6400)).toEqual({
+      config: { memory: { memory_char_limit: 6400 } },
+    });
+    expect(mockPutJSON).toHaveBeenCalledWith(
+      "/api/config",
+      { config: { memory: { memory_char_limit: 6400 } } },
+      expect.anything(),
+    );
+  });
+
+  it("rejects limits outside the hard bounds", () => {
+    expect(() => memoryCharLimitConfigPayload(0)).toThrow();
+    expect(() => memoryCharLimitConfigPayload(MAX_MEMORY_CHAR_LIMIT + 1)).toThrow();
+    expect(() => memoryCharLimitConfigPayload(2200.5)).toThrow();
   });
 });

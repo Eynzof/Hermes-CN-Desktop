@@ -8,6 +8,7 @@ import {
   useUpdateMemoryEntry,
 } from "@/hooks/use-memory";
 import { Button } from "@hermes/shared-ui";
+import { MemoryLimitControl } from "@/components/memory/memory-limit-control";
 import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
 import { SettingsHero } from "./settings-hero";
@@ -168,6 +169,8 @@ export function MemoryRoute() {
                   <Plus size={14} /> 添加记忆
                 </Button>
               </div>
+
+              <MemoryLimitControl currentLimit={data.memory.charLimit} used={data.memory.charCount} />
 
               {showAdd && (
                 <div className={s.formCard}>

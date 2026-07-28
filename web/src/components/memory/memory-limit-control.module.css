@@ -1,0 +1,87 @@
+.control {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-bg-app);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.copy label {
+  color: var(--h-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.copy span {
+  color: var(--h-text-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.copy .error {
+  color: var(--h-err);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.inputWrap {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-input);
+  overflow: hidden;
+}
+
+.inputWrap:focus-within {
+  border-color: var(--h-accent-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 12%, transparent);
+}
+
+.inputWrap input {
+  width: 92px;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0 8px 0 10px;
+  background: transparent;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.inputWrap input[aria-invalid="true"] {
+  color: var(--h-err);
+}
+
+.inputWrap span {
+  padding-right: 10px;
+  color: var(--h-text-3);
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .control {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+}

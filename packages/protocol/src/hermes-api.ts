@@ -586,6 +586,8 @@ export const ConfigSchemaField = z.object({
   description: z.string(),
   category: z.string(),
   options: z.array(z.string()).optional(),
+  minimum: z.number().optional(),
+  maximum: z.number().optional(),
 });
 export type ConfigSchemaField = z.infer<typeof ConfigSchemaField>;
 

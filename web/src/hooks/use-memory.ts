@@ -14,6 +14,8 @@ import {
 
 export const VISIBLE_MEMORY_PROVIDERS = ["openviking", "hindsight"] as const;
 export type VisibleMemoryProvider = (typeof VISIBLE_MEMORY_PROVIDERS)[number];
+export const DEFAULT_MEMORY_CHAR_LIMIT = 2200;
+export const MAX_MEMORY_CHAR_LIMIT = 8000;
 
 export interface MemoryProviderOption extends MemoryProviderListItem {
   name: VisibleMemoryProvider;
@@ -63,6 +65,17 @@ export async function saveMemoryProviderConfig(
     memoryProviderConfigPayload(values),
     MemoryProviderConfigMutationResponse,
   );
+}
+
+export function memoryCharLimitConfigPayload(limit: number) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_MEMORY_CHAR_LIMIT) {
+    throw new Error(`MEMORY.md 上限必须是 1–${MAX_MEMORY_CHAR_LIMIT.toLocaleString()} 之间的整数`);
+  }
+  return { config: { memory: { memory_char_limit: limit } } };
+}
+
+export async function saveMemoryCharLimit(limit: number) {
+  return putJSON("/api/config", memoryCharLimitConfigPayload(limit), MutationOkResponse);
 }
 
 function ensureMemoryBridge() {
@@ -122,6 +135,18 @@ export function useSaveUserProfile() {
       return result;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["memory"] }),
+  });
+}
+
+export function useSaveMemoryCharLimit() {
+  const qc = useQueryClient();
+  const profile = useActiveProfileName();
+  return useMutation({
+    mutationFn: saveMemoryCharLimit,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["config", profile] });
+      qc.invalidateQueries({ queryKey: ["memory", profile] });
+    },
   });
 }
 
