@@ -61,7 +61,7 @@ describe("command palette item building and filtering", () => {
     });
     expect(external).toMatchObject({
       label: "外置记忆",
-      action: { type: "navigate", to: "/external-memory" },
+      action: { type: "navigate", to: "/memconfig" },
     });
     expect(groupLabels("OpenViking")).toContain("外置记忆");
     expect(groupLabels("USER.md")).toContain("内置记忆");

@@ -13,20 +13,20 @@ interface ExternalMemoryItem {
 export const EXTERNAL_MEMORY_ITEMS: readonly ExternalMemoryItem[] = [
   {
     label: "配置",
-    path: "/external-memory",
+    path: "/memconfig",
     icon: SlidersHorizontal,
     exact: true,
     title: "查看当前启用后端与外置记忆总体状态",
   },
   {
     label: "OpenViking",
-    path: "/external-memory/openviking",
+    path: "/openviking",
     icon: Database,
     title: "配置并监控 OpenViking",
   },
   {
     label: "Hindsight",
-    path: "/external-memory/hindsight",
+    path: "/hindsight",
     icon: BrainCircuit,
     title: "配置并监控 Hindsight",
   },

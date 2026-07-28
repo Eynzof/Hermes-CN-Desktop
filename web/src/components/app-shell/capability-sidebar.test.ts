@@ -31,14 +31,14 @@ describe("configuration navigation", () => {
   it("keeps only built-in memory in configuration", () => {
     const config = CAPABILITY_SECTIONS.find((section) => section.label === "§021 · 配置");
     expect(config?.items.some((item) => item.path === "/memory")).toBe(true);
-    expect(config?.items.some((item) => item.path === "/external-memory")).toBe(false);
+    expect(config?.items.some((item) => item.label === "外置记忆")).toBe(false);
   });
 
   it("adds config, OpenViking and Hindsight to the external memory sidebar", () => {
     expect(EXTERNAL_MEMORY_ITEMS.map((item) => [item.label, item.path])).toEqual([
-      ["配置", "/external-memory"],
-      ["OpenViking", "/external-memory/openviking"],
-      ["Hindsight", "/external-memory/hindsight"],
+      ["配置", "/memconfig"],
+      ["OpenViking", "/openviking"],
+      ["Hindsight", "/hindsight"],
     ]);
   });
 });

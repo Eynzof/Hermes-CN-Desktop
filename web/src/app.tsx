@@ -77,9 +77,9 @@ function BackendApp() {
           <Route path="/profiles" element={withBoundary(<ProfilesRoute />)} />
           <Route path="/profiles/new" element={withBoundary(<ProfileBuilderRoute />)} />
           <Route path="/memory" element={withBoundary(<MemoryRoute />)} />
-          <Route path="/external-memory" element={withBoundary(<ExternalMemoryRoute page="config" />)} />
-          <Route path="/external-memory/openviking" element={withBoundary(<ExternalMemoryRoute page="openviking" />)} />
-          <Route path="/external-memory/hindsight" element={withBoundary(<ExternalMemoryRoute page="hindsight" />)} />
+          <Route path="/memconfig" element={withBoundary(<ExternalMemoryRoute page="config" />)} />
+          <Route path="/openviking" element={withBoundary(<ExternalMemoryRoute page="openviking" />)} />
+          <Route path="/hindsight" element={withBoundary(<ExternalMemoryRoute page="hindsight" />)} />
           <Route path="/soul" element={withBoundary(<SoulRoute />)} />
           <Route path="/cron" element={withBoundary(<CronRoute />)} />
           <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />

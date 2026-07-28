@@ -73,8 +73,8 @@ export const TOP_TABS: readonly TopTabDef[] = [
     id: "externalMemory",
     num: "04",
     label: "外置记忆",
-    href: "/external-memory",
-    matches: (path) => path.startsWith("/external-memory"),
+    href: "/memconfig",
+    matches: (path) => ["/memconfig", "/openviking", "/hindsight"].some((route) => isRoute(path, route)),
   },
   {
     id: "advanced",

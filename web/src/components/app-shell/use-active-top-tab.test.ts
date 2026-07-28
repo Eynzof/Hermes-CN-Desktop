@@ -53,11 +53,11 @@ describe("TOP_TABS", () => {
 
   it("keeps built-in memory under config and promotes external memory to 04", () => {
     expect(tabFor("/memory")).toBe("skills");
-    expect(tabFor("/external-memory")).toBe("externalMemory");
-    expect(tabFor("/external-memory/openviking")).toBe("externalMemory");
-    expect(tabFor("/external-memory/hindsight")).toBe("externalMemory");
+    expect(tabFor("/memconfig")).toBe("externalMemory");
+    expect(tabFor("/openviking")).toBe("externalMemory");
+    expect(tabFor("/hindsight")).toBe("externalMemory");
     expect(CONFIG_ITEMS.some((item) => item.label === "内置记忆" && item.path === "/memory")).toBe(true);
-    expect(CONFIG_ITEMS.some((item) => item.path === "/external-memory")).toBe(false);
+    expect(CONFIG_ITEMS.some((item) => item.label === "外置记忆")).toBe(false);
   });
 
   it("places external memory between message access and advanced", () => {

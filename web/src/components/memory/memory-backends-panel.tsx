@@ -137,7 +137,7 @@ export function MemoryBackendsPanel({ view }: MemoryBackendsPanelProps) {
             return (
               <Link
                 key={provider}
-                to={`/external-memory/${provider}`}
+                to={`/${provider}`}
                 className={s.backendLink}
                 data-active={status?.active ? "true" : undefined}
               >

@@ -253,10 +253,10 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     id: "command-external-memory",
     group: "commands",
     label: "外置记忆",
-    subtitle: "/external-memory · 配置和监控 OpenViking / Hindsight",
+    subtitle: "/memconfig · 配置和监控 OpenViking / Hindsight",
     keywords: ["external memory", "memory backend", "provider", "外置记忆", "记忆后端", "OpenViking", "Hindsight"],
     icon: "memory",
-    action: { type: "navigate", to: "/external-memory" },
+    action: { type: "navigate", to: "/memconfig" },
     priority: 16,
   },
   {

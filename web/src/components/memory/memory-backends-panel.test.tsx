@@ -48,8 +48,8 @@ describe("MemoryBackendsPanel", () => {
 
     expect(html).toContain("OpenViking");
     expect(html).toContain("Hindsight");
-    expect(html).toContain("/external-memory/openviking");
-    expect(html).toContain("/external-memory/hindsight");
+    expect(html).toContain("/openviking");
+    expect(html).toContain("/hindsight");
     expect(html).not.toContain("Honcho");
     expect(html).not.toContain("Mem0");
     expect(html).not.toContain("Supermemory");
