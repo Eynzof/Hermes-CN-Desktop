@@ -1372,6 +1372,23 @@ export const SessionCompressResult = z.object({
 }).passthrough();
 export type SessionCompressResult = z.infer<typeof SessionCompressResult>;
 
+export const GatewayModelCapabilities = z.object({
+  fast: z.boolean().optional(),
+  reasoning: z.boolean().optional(),
+  supports_tools: z.boolean().optional(),
+  supports_vision: z.boolean().optional(),
+  supports_pdf: z.boolean().optional(),
+  supports_audio: z.boolean().optional(),
+  supports_video: z.boolean().optional(),
+  supports_reasoning: z.boolean().optional(),
+  supports_reasoning_control: z.boolean().optional(),
+  open_weights: z.boolean().optional(),
+  context_window: z.number().int().nonnegative().optional(),
+  max_output_tokens: z.number().int().nonnegative().optional(),
+  model_family: z.string().optional(),
+}).passthrough();
+export type GatewayModelCapabilities = z.infer<typeof GatewayModelCapabilities>;
+
 export const GatewayModelProvider = z.object({
   slug: z.string(),
   name: z.string().optional(),
@@ -1381,6 +1398,7 @@ export const GatewayModelProvider = z.object({
   is_user_defined: z.boolean().optional(),
   source: z.string().optional(),
   warning: z.string().optional(),
+  capabilities: z.record(z.string(), GatewayModelCapabilities).optional(),
 }).passthrough();
 export type GatewayModelProvider = z.infer<typeof GatewayModelProvider>;
 

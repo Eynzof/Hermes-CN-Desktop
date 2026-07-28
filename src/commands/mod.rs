@@ -19,6 +19,7 @@ pub mod preview;
 pub mod profiles;
 pub mod restart;
 pub mod runtime_manager;
+pub mod session_export;
 pub mod terminal;
 pub mod ui_store;
 pub mod ws_proxy;

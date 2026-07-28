@@ -17,6 +17,12 @@
     background 0.15s;
 }
 
+.box[data-flush-bottom="true"] {
+  border-bottom-width: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .attachmentTray {
   display: flex;
   flex-wrap: wrap;
@@ -1078,7 +1084,13 @@
   min-height: 25px;
   border-color: transparent;
   color: var(--h-text-3);
+  line-height: 1;
   padding: 3px 8px;
+}
+
+.mpCapabilityFilters button svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .mpCapabilityFilters .mpClearFilters {
@@ -1297,6 +1309,7 @@
 
 .mpRowCaps {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
   max-width: 220px;
@@ -1312,12 +1325,15 @@
   border-radius: 999px;
   font-family: var(--h-font-mono);
   font-size: 9px;
+  line-height: 1;
   color: var(--h-text-2);
 }
 
 .mpCapChip svg {
+  display: block;
   width: 10px;
   height: 10px;
+  flex: 0 0 auto;
   stroke-width: 1.6;
   color: var(--h-text-3);
 }

@@ -66,6 +66,19 @@ export interface ExportLogSnapshotResult {
   error?: string;
 }
 
+export interface ExportSessionJsonInput {
+  fileName: string;
+  content: string;
+}
+
+export interface ExportSessionJsonResult {
+  ok: boolean;
+  canceled: boolean;
+  path?: string;
+  bytes: number;
+  error?: string;
+}
+
 export interface WorkspacePathInput {
   path: string;
 }

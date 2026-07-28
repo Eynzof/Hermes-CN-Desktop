@@ -30,7 +30,7 @@
   width: 100%;
   max-width: var(--conversation-max-width, 780px);
   margin: 0 auto;
-  padding: 10px 28px 18px;
+  padding: 10px 28px 0;
 }
 
 /* Live subagent count badge on the top-bar toggle chip. */
@@ -167,6 +167,6 @@
 
 @media (max-width: 720px) {
   .composerArea {
-    padding: 8px 16px 14px;
+    padding: 8px 16px 0;
   }
 }

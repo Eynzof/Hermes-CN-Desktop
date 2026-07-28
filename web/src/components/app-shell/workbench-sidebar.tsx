@@ -29,6 +29,7 @@ import {
 import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
 import {
   SessionDeleteModal,
+  SessionExportErrorModal,
   SessionRenameModal,
   SessionRowMenu,
   useSessionRowActions,
@@ -170,6 +171,7 @@ function SessionRow({
           disabled={actionMenuDisabled}
           onTogglePin={() => actions.togglePin(session.id)}
           onRename={() => actions.startRename(session)}
+          onExport={() => void actions.handleExport(session)}
           onArchive={() => actions.handleArchive(session)}
           onDelete={() => actions.openDeleteDialog([session])}
         />
@@ -302,6 +304,7 @@ export function WorkbenchSidebar() {
     setSessionTitle,
     resumeSession,
     archive: archiveSession.mutate,
+    profile,
     onDeleted: onSessionsDeleted,
   });
 
@@ -510,6 +513,13 @@ export function WorkbenchSidebar() {
           deleting={rowActions.isDeleting}
           onClose={rowActions.closeDeleteDialog}
           onConfirm={rowActions.confirmDelete}
+        />
+      ) : null}
+
+      {rowActions.exportError ? (
+        <SessionExportErrorModal
+          error={rowActions.exportError}
+          onClose={rowActions.clearExportError}
         />
       ) : null}
     </aside>

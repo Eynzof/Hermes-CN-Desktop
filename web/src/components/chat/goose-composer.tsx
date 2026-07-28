@@ -137,6 +137,8 @@ interface GooseComposerProps {
   loading?: boolean;
   showMeta?: boolean;
   compact?: boolean;
+  /** Remove the lower corner radius when the composer sits flush with a page edge. */
+  flushBottom?: boolean;
   /** "big" makes the composer the page hero: shows a header bar (label + char count
    * + context ring) and a row of empty-state hints; textarea is taller. */
   variant?: "default" | "big";
@@ -217,6 +219,7 @@ export function GooseComposer({
   loading = false,
   showMeta = true,
   compact = false,
+  flushBottom = false,
   variant = "default",
   headerLabel = "新任务",
   loadingPlaceholder,
@@ -591,9 +594,9 @@ export function GooseComposer({
     return () => clearTimeout(timer);
   }, [mentionTokenKey]);
 
-  // Picker now groups candidates internally (recent / configured /
-  // recommended / more) from the catalog + usage log. Composer just hands it
-  // the raw model.options payload and stays out of the way.
+  // Picker now groups candidates internally (configured / recent / MoA)
+  // from the catalog + usage log. Composer just hands it the raw
+  // model.options payload and stays out of the way.
 
   const appendAttachmentDrafts = useCallback((drafts: ComposerAttachment[]) => {
     if (!drafts.length) return;
@@ -1195,6 +1198,7 @@ export function GooseComposer({
         className={s.box}
         data-disabled={disabled}
         data-drag-active={dragActive}
+        data-flush-bottom={flushBottom}
         data-variant={variant}
         onDrop={handleDrop}
         onDragEnter={handleDragEnter}

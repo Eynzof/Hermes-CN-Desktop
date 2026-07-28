@@ -14,10 +14,15 @@ import {
   Brain,
   Check,
   CircleAlert,
+  FileText,
+  Headphones,
   Image as ImageIcon,
+  LockOpen,
   RotateCcw,
   Search,
+  SlidersHorizontal,
   Sparkles,
+  Video,
   Wrench,
   X,
   Zap,
@@ -73,7 +78,17 @@ export function modelButtonText(
 // Candidate model
 // ─────────────────────────────────────────────────────────────────────────────
 
-type CapabilityKey = "vision" | "tools" | "reasoning" | "longContext";
+type CapabilityKey =
+  | "vision"
+  | "audio"
+  | "video"
+  | "pdf"
+  | "tools"
+  | "reasoning"
+  | "reasoningControl"
+  | "openWeights"
+  | "context128k"
+  | "context1m";
 
 interface Candidate {
   key: string;
@@ -99,25 +114,41 @@ interface CapDescriptor {
 
 const CAPABILITIES: CapDescriptor[] = [
   { key: "vision", label: "视觉", Icon: ImageIcon, match: (c) => Boolean(c?.supportsVision) },
+  { key: "audio", label: "音频理解", Icon: Headphones, match: (c) => Boolean(c?.supportsAudio) },
+  { key: "video", label: "视频理解", Icon: Video, match: (c) => Boolean(c?.supportsVideo) },
+  { key: "pdf", label: "可读取 PDF", Icon: FileText, match: (c) => Boolean(c?.supportsPdf) },
   { key: "tools", label: "工具调用", Icon: Wrench, match: (c) => Boolean(c?.supportsTools) },
   { key: "reasoning", label: "深度推理", Icon: Brain, match: (c) => Boolean(c?.supportsReasoning) },
   {
-    key: "longContext",
+    key: "reasoningControl",
+    label: "可调推理",
+    Icon: SlidersHorizontal,
+    match: (c) => Boolean(c?.supportsReasoningControl),
+  },
+  { key: "openWeights", label: "开源", Icon: LockOpen, match: (c) => Boolean(c?.openWeights) },
+  {
+    key: "context128k",
     label: "≥ 128K 上下文",
     Icon: Zap,
     match: (c) => (c?.contextWindow ?? 0) >= 128_000,
   },
+  {
+    key: "context1m",
+    label: "≥ 1M 上下文",
+    Icon: Zap,
+    match: (c) => (c?.contextWindow ?? 0) >= 1_000_000,
+  },
 ];
 
-type GroupKey = "recent" | "configured" | "recommended" | "moa" | "more";
+type GroupKey = "recent" | "configured" | "moa";
 
 const GROUP_LABELS: Record<GroupKey, { name: string; subtitle: string }> = {
   recent: { name: "最近", subtitle: "近 7 日使用过的模型" },
-  configured: { name: "可用", subtitle: "已完成配置，可直接切换" },
-  recommended: { name: "推荐接入", subtitle: "常用模型平台，配置后即可使用" },
+  configured: { name: "已配置", subtitle: "已配置供应商的精选模型" },
   moa: { name: "MoA", subtitle: "多模型协作预设" },
-  more: { name: "更多平台", subtitle: "其他可接入的模型平台" },
 };
+
+const MAX_MODELS_PER_PROVIDER = 5;
 
 // 虚拟 provider：MoA 预设以 `moa` provider 的模型形式出现在 model.options
 // 里。对齐官方桌面端（model-menu-panel），它们不混入常规分桶，而是拆成
@@ -141,7 +172,12 @@ const SLUG_ALIASES: Record<string, string> = {
 };
 
 function findCatalog(slug: string): ProviderPreset | undefined {
-  return CATALOG_BY_ID.get(slug) ?? CATALOG_BY_ID.get(SLUG_ALIASES[slug] ?? "");
+  const normalizedSlug = slug.trim().toLowerCase();
+  const catalogSlug = normalizedSlug.startsWith("custom:")
+    ? normalizedSlug.slice("custom:".length)
+    : normalizedSlug;
+  return CATALOG_BY_ID.get(catalogSlug)
+    ?? CATALOG_BY_ID.get(SLUG_ALIASES[catalogSlug] ?? "");
 }
 
 function mergeModelIds(...lists: Array<readonly string[] | undefined>): string[] {
@@ -161,23 +197,81 @@ function findModelCaps(preset: ProviderPreset | undefined, modelId: string): Pro
   return preset?.models.find((m) => m.id === modelId) ?? null;
 }
 
+function resolveModelCaps(
+  provider: GatewayModelProvider,
+  preset: ProviderPreset | undefined,
+  modelId: string,
+): ProviderCatalogModel | null {
+  const fallback = findModelCaps(preset, modelId);
+  const metadata = provider.capabilities?.[modelId];
+  if (!metadata) return fallback;
+
+  const hasModelsDevMetadata = metadata.supports_tools !== undefined
+    || metadata.supports_vision !== undefined
+    || metadata.supports_pdf !== undefined
+    || metadata.supports_audio !== undefined
+    || metadata.supports_video !== undefined
+    || metadata.supports_reasoning !== undefined
+    || metadata.supports_reasoning_control !== undefined
+    || metadata.open_weights !== undefined
+    || metadata.context_window !== undefined;
+  if (!hasModelsDevMetadata) return fallback;
+
+  return {
+    id: modelId,
+    label: fallback?.label,
+    contextWindow: metadata.context_window ?? fallback?.contextWindow,
+    supportsVision: metadata.supports_vision ?? fallback?.supportsVision,
+    supportsPdf: metadata.supports_pdf ?? fallback?.supportsPdf,
+    supportsAudio: metadata.supports_audio ?? fallback?.supportsAudio,
+    supportsVideo: metadata.supports_video ?? fallback?.supportsVideo,
+    supportsTools: metadata.supports_tools ?? fallback?.supportsTools,
+    supportsReasoning: metadata.supports_reasoning
+      ?? metadata.reasoning
+      ?? fallback?.supportsReasoning,
+    supportsReasoningControl: metadata.supports_reasoning_control
+      ?? fallback?.supportsReasoningControl,
+    openWeights: metadata.open_weights ?? fallback?.openWeights,
+  };
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
+function featuredModelIds(
+  provider: GatewayModelProvider,
+  preset: ProviderPreset | undefined,
+  currentProvider: string | undefined,
+  currentModel: string | undefined,
+): string[] {
+  const catalogModels = preset?.models.map((model) => model.id) ?? [];
+  const candidates = preset
+    ? mergeModelIds(catalogModels, provider.models)
+    : mergeModelIds(provider.models);
+  const activeModel = provider.slug === currentProvider ? currentModel : undefined;
+
+  if (activeModel && !candidates.includes(activeModel)) candidates.unshift(activeModel);
+  const featured = candidates.slice(0, MAX_MODELS_PER_PROVIDER);
+  if (activeModel && !featured.includes(activeModel)) {
+    featured[featured.length - 1] = activeModel;
+  }
+  return featured;
+}
+
 export function buildCandidates(
   modelOptions: ModelOptionsResult | null,
   usageEntries: ModelUsageEntry[],
-): { all: Candidate[]; recent: Candidate[]; configured: Candidate[]; recommended: Candidate[]; moa: Candidate[]; more: Candidate[] } {
+): { all: Candidate[]; recent: Candidate[]; configured: Candidate[]; moa: Candidate[] } {
   const all: Candidate[] = [];
   const moa: Candidate[] = [];
   const seenKeys = new Set<string>();
-  const gatewayProviderSlugs = new Set<string>();
-  const gatewayCatalogIds = new Set<string>();
 
-  // 1. From gateway model.options
+  // model.options 默认只返回已经完成鉴权的供应商。兼容旧版 Core 时，
+  // 没有 authenticated 字段但返回了模型的供应商仍视为可用；显式 false
+  // 则必须排除，不能再把内置目录补成「去配置」占位卡片。
   for (const provider of modelOptions?.providers ?? []) {
     // MoA 预设走独立分组，不进常规分桶（对齐官方桌面端把 moa 行从
     // pickerProviders 里拆出的做法）。
@@ -197,49 +291,23 @@ export function buildCandidates(
       }
       continue;
     }
-    gatewayProviderSlugs.add(provider.slug);
     const preset = findCatalog(provider.slug);
-    if (preset) gatewayCatalogIds.add(preset.id);
     const extras = asRecord(provider);
     const advertisedModels = provider.models ?? [];
-    // Older Core versions did not always return `authenticated`, while a
-    // non-empty model list already means this provider is selectable.
-    const authenticated = Boolean(extras.authenticated) || advertisedModels.length > 0;
+    const authHint = extras.authenticated;
+    const authenticated = authHint === true || (
+      typeof authHint !== "boolean" && advertisedModels.length > 0
+    );
+    if (!authenticated) continue;
+
     const keyEnv = typeof extras.key_env === "string" ? extras.key_env : undefined;
     const warning = typeof extras.warning === "string" ? extras.warning : undefined;
-    const catalogModelIds = preset?.models.map((model) => model.id) ?? [];
-    if (advertisedModels.length === 0 && !authenticated) {
-      // Unconfigured provider with no advertised models — still emit catalog
-      // candidates so the default model can surface in 推荐预设 while newer
-      // non-default models remain searchable in 更多.
-      const placeholders = catalogModelIds.length > 0
-        ? catalogModelIds
-        : preset?.defaultModel
-          ? [preset.defaultModel]
-          : [];
-      for (const placeholder of placeholders) {
-        const key = `${provider.slug}:${placeholder}`;
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
-          all.push({
-            key,
-            catalogId: preset?.id ?? provider.slug,
-            providerSlug: provider.slug,
-            providerName: preset?.name ?? providerLabel(provider),
-            vendor: preset?.vendor ?? "",
-            model: placeholder,
-            baseUrl: preset?.baseUrl,
-            apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
-            iconUrl: getProviderIconUrl(preset?.icon),
-            configured: false,
-            caps: findModelCaps(preset, placeholder),
-            warning,
-          });
-        }
-      }
-      continue;
-    }
-    const models = mergeModelIds(catalogModelIds, advertisedModels);
+    const models = featuredModelIds(
+      provider,
+      preset,
+      modelOptions?.provider,
+      modelOptions?.model,
+    );
     for (const modelId of models) {
       const key = `${provider.slug}:${modelId}`;
       if (seenKeys.has(key)) continue;
@@ -255,41 +323,12 @@ export function buildCandidates(
         apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
         iconUrl: getProviderIconUrl(preset?.icon),
         configured: authenticated,
-        caps: findModelCaps(preset, modelId),
+        caps: resolveModelCaps(provider, preset, modelId),
         warning,
       });
     }
   }
 
-  // 2. From catalog Top 5: ensure they have catalog candidates even if the
-  // gateway never returned them. This guarantees the 推荐预设 group is
-  // populated for users with zero configured providers, while non-default
-  // variants remain searchable in 更多.
-  for (const topId of TOP5_PROVIDER_IDS) {
-    if (gatewayProviderSlugs.has(topId) || gatewayCatalogIds.has(topId)) continue;
-    const preset = CATALOG_BY_ID.get(topId);
-    if (!preset) continue;
-    for (const model of preset.models) {
-      const key = `${topId}:${model.id}`;
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-      all.push({
-        key,
-        catalogId: preset.id,
-        providerSlug: topId,
-        providerName: preset.name,
-        vendor: preset.vendor,
-        model: model.id,
-        baseUrl: preset.baseUrl,
-        apiKeyLabel: preset.apiKeyLabel,
-        iconUrl: getProviderIconUrl(preset.icon),
-        configured: false,
-        caps: model,
-      });
-    }
-  }
-
-  // 3. Group buckets
   const usageRanked = rankRecentModels(usageEntries, { limit: 3 });
 
   const recent: Candidate[] = usageRanked
@@ -306,29 +345,7 @@ export function buildCandidates(
       return a.providerName.localeCompare(b.providerName, "zh-Hans-CN");
     });
 
-  // 推荐: unconfigured + in Top 5 + showing only the provider's default model
-  // (don't dump every model variant into recommended — it'd look the same as
-  // 更多 and bury the actual choices).
-  const recommendedSeen = new Set<string>();
-  const recommended: Candidate[] = [];
-  for (const c of all) {
-    if (c.configured) continue;
-    if (!topSet.has(c.catalogId)) continue;
-    if (recommendedSeen.has(c.catalogId)) continue;
-    const preset = CATALOG_BY_ID.get(c.catalogId);
-    if (preset && c.model !== preset.defaultModel) continue;
-    recommendedSeen.add(c.catalogId);
-    recommended.push(c);
-  }
-
-  const placed = new Set<string>([
-    ...recent.map((c) => c.key),
-    ...configured.map((c) => c.key),
-    ...recommended.map((c) => c.key),
-  ]);
-  const more: Candidate[] = all.filter((c) => !placed.has(c.key));
-
-  return { all, recent, configured, recommended, moa, more };
+  return { all, recent, configured, moa };
 }
 
 function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
@@ -344,6 +361,11 @@ function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
     c.caps?.supportsTools ? "工具调用" : "",
     c.caps?.supportsReasoning ? "深度推理" : "",
     c.caps?.supportsVision ? "视觉" : "",
+    c.caps?.supportsAudio ? "音频理解" : "",
+    c.caps?.supportsVideo ? "视频理解" : "",
+    c.caps?.supportsPdf ? "可读取 PDF PDF 文档理解" : "",
+    c.caps?.supportsReasoningControl ? "可调推理" : "",
+    c.caps?.openWeights ? "开源 开放权重" : "",
   ]
     .filter(Boolean)
     .join(" ")
@@ -379,6 +401,13 @@ function capabilityChips(caps: ProviderCatalogModel | null): { key: string; labe
   if (caps.supportsTools) chips.push({ key: "tools", label: "工具", Icon: Wrench });
   if (caps.supportsReasoning) chips.push({ key: "reasoning", label: "推理", Icon: Brain });
   if (caps.supportsVision) chips.push({ key: "vision", label: "视觉", Icon: ImageIcon });
+  if (caps.supportsAudio) chips.push({ key: "audio", label: "音频", Icon: Headphones });
+  if (caps.supportsVideo) chips.push({ key: "video", label: "视频", Icon: Video });
+  if (caps.supportsPdf) chips.push({ key: "pdf", label: "可读取 PDF", Icon: FileText });
+  if (caps.supportsReasoningControl) {
+    chips.push({ key: "reasoning-control", label: "可调推理", Icon: SlidersHorizontal });
+  }
+  if (caps.openWeights) chips.push({ key: "open-weights", label: "开源", Icon: LockOpen });
   return chips;
 }
 
@@ -417,9 +446,8 @@ interface ModelPickerViewProps {
    * fires this when meta/ctrl is held during click; falls back to
    * onSelectModel when unset. */
   onSelectAndSetDefault?: (selection: ComposerModelSelection) => void;
-  /** When a user clicks an unconfigured-provider CTA, the host route navigates
-   * to /models with the provider id so the settings page can scroll to + focus
-   * the relevant section. */
+  /** Legacy callback kept for callers compiled against the previous picker API.
+   * The picker now renders configured providers only. */
   onConfigureProvider?: (providerId: string) => void;
 }
 
@@ -442,7 +470,6 @@ function ModelPickerBody({
   switchingModel,
   onSelectModel,
   onSelectAndSetDefault,
-  onConfigureProvider,
   searchInputRef,
   closeControl,
 }: ModelPickerBodyProps) {
@@ -502,10 +529,8 @@ function ModelPickerBody({
   const visible = useMemo(() => {
     const recent = filterGroup(buckets.recent);
     const configured = filterGroup(buckets.configured);
-    const recommended = filterGroup(buckets.recommended);
     const moa = filterGroup(buckets.moa);
-    const more = filterGroup(buckets.more);
-    return { recent, configured, recommended, moa, more };
+    return { recent, configured, moa };
   }, [buckets, filterGroup]);
 
   const recentVisibleKeys = useMemo(
@@ -518,11 +543,10 @@ function ModelPickerBody({
   const totalVisible = useMemo(() => new Set([
     ...visible.recent,
     ...visible.configured,
-    ...visible.recommended,
     ...visible.moa,
-    ...visible.more,
   ].map((candidate) => candidate.key)).size, [visible]);
   const activeVisibleCount = activeGroup === "all" ? totalVisible : visible[activeGroup].length;
+  const hasAvailableModels = buckets.all.length > 0 || buckets.moa.length > 0;
 
   function toggleCap(cap: CapabilityKey) {
     setActiveCaps((prev) => {
@@ -568,19 +592,10 @@ function ModelPickerBody({
         type="button"
         className={s.mpRow}
         data-current={isCurrent ? "true" : undefined}
-        data-unconfigured={candidate.configured ? undefined : "true"}
         disabled={switchingModel}
-        aria-label={candidate.configured
-          ? `切换到 ${candidate.providerName} 的 ${candidate.model}`
-          : `配置 ${candidate.providerName}`}
-        title={candidate.configured
-          ? "单击切换当前会话 · 按住 ⌘ 单击同时设为全局默认"
-          : `前往模型设置配置 ${candidate.providerName}`}
+        aria-label={`切换到 ${candidate.providerName} 的 ${candidate.model}`}
+        title="单击切换当前会话 · 按住 ⌘ 单击同时设为全局默认"
         onClick={(event) => {
-          if (!candidate.configured) {
-            onConfigureProvider?.(candidate.providerSlug);
-            return;
-          }
           const selection = {
             model: candidate.model,
             provider: candidate.providerSlug,
@@ -606,9 +621,6 @@ function ModelPickerBody({
             <span className={s.mpMetaDot}>·</span>
             <span>{candidate.providerSlug}</span>
             {baseUrlHost && <><span className={s.mpMetaDot}>·</span><span>{baseUrlHost}</span></>}
-            {!candidate.configured && candidate.apiKeyLabel && (
-              <><span className={s.mpMetaDot}>·</span><span className={s.mpKeyLabel}>需要 {candidate.apiKeyLabel}</span></>
-            )}
             {usage && <><span className={s.mpMetaDot}>·</span><RotateCcw aria-hidden="true" />{formatUsageMeta(usage)}</>}
           </div>
         </div>
@@ -622,8 +634,8 @@ function ModelPickerBody({
             ))}
           </div>
         )}
-        <span className={candidate.configured ? s.mpRowAction : s.mpRowSetup}>
-          {candidate.configured ? (isCurrent ? "使用中" : "切换") : "去配置"}
+        <span className={s.mpRowAction}>
+          {isCurrent ? "使用中" : "切换"}
           {!isCurrent && <ArrowRight aria-hidden="true" />}
         </span>
       </button>
@@ -684,7 +696,7 @@ function ModelPickerBody({
               <button type="button" data-active={activeGroup === "all"} aria-pressed={activeGroup === "all"} onClick={() => setActiveGroup("all")}>
                 <Sparkles aria-hidden="true" />全部 <span>{totalVisible}</span>
               </button>
-              {(["configured", "recent", "recommended", "moa", "more"] as const).map((group) => (
+              {(["configured", "recent", "moa"] as const).map((group) => (
                 <button
                   key={group}
                   type="button"
@@ -723,8 +735,10 @@ function ModelPickerBody({
             {activeVisibleCount === 0 ? (
               <div className={s.mpEmptyState}>
                 <Search aria-hidden="true" />
-                <strong>没有匹配的模型</strong>
-                <span>换个关键词或清除能力筛选后再试。</span>
+                <strong>{hasAvailableModels ? "没有匹配的模型" : "还没有可用模型"}</strong>
+                <span>{hasAvailableModels
+                  ? "换个关键词或清除能力筛选后再试。"
+                  : "请先在模型设置页配置供应商，完成后即可在这里切换。"}</span>
                 {(activeCaps.size > 0 || modelSearch) && <button type="button" onClick={clearFilters}>清除筛选</button>}
               </div>
             ) : (
@@ -732,8 +746,6 @@ function ModelPickerBody({
                 {renderSection("recent", visible.recent)}
                 {renderSection("configured", configuredForDisplay)}
                 {renderSection("moa", visible.moa)}
-                {renderSection("recommended", visible.recommended)}
-                {renderSection("more", visible.more)}
               </>
             )}
           </div>

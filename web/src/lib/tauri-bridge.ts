@@ -22,6 +22,8 @@ import type {
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
   ExportLogSnapshotResult,
+  ExportSessionJsonInput,
+  ExportSessionJsonResult,
   FilePickerResult,
   FileUploadInput,
   ImOnboardingApplyInput,
@@ -310,6 +312,10 @@ const tauriBridge = {
 
   async exportLogSnapshot(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult> {
     return invokeCommand("export_log_snapshot", { input });
+  },
+
+  async exportSessionJson(input: ExportSessionJsonInput): Promise<ExportSessionJsonResult> {
+    return invokeCommand("export_session_json", { input });
   },
 
   async exportDebugBundle(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult> {

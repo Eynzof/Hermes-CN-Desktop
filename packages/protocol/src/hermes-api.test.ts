@@ -10,6 +10,7 @@ import {
   CronRunsResponse,
   ElevenLabsVoicesResponse,
   FsListResponse,
+  GatewayModelProvider,
   MemoryProviderConfigResponse,
   MemoryProviderRuntimeStatusResponse,
   MoaConfigResponse,
@@ -25,6 +26,45 @@ import {
   SessionSummary,
   StatusResponse,
 } from "./hermes-api";
+
+
+describe("Gateway model provider schemas", () => {
+  it("parses models.dev capability metadata returned by Core", () => {
+    const parsed = GatewayModelProvider.parse({
+      slug: "deepseek",
+      models: ["deepseek-reasoner"],
+      capabilities: {
+        "deepseek-reasoner": {
+          fast: false,
+          reasoning: true,
+          supports_tools: true,
+          supports_vision: false,
+          supports_pdf: true,
+          supports_audio: true,
+          supports_video: true,
+          supports_reasoning: true,
+          supports_reasoning_control: true,
+          open_weights: true,
+          context_window: 131_072,
+          max_output_tokens: 65_536,
+          model_family: "deepseek",
+        },
+      },
+    });
+
+    expect(parsed.capabilities?.["deepseek-reasoner"]).toMatchObject({
+      supports_tools: true,
+      supports_vision: false,
+      supports_pdf: true,
+      supports_audio: true,
+      supports_video: true,
+      supports_reasoning: true,
+      supports_reasoning_control: true,
+      open_weights: true,
+      context_window: 131_072,
+    });
+  });
+});
 
 
 describe("Memory provider schemas", () => {
