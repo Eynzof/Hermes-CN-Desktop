@@ -9,7 +9,19 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Brain, Check, ChevronRight, Image as ImageIcon, RotateCcw, Sparkles, Wrench, X, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  Brain,
+  Check,
+  CircleAlert,
+  Image as ImageIcon,
+  RotateCcw,
+  Search,
+  Sparkles,
+  Wrench,
+  X,
+  Zap,
+} from "lucide-react";
 import type { GatewayModelProvider, ModelOptionsResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
@@ -24,6 +36,7 @@ import {
   type ModelUsageEntry,
 } from "@/lib/model-usage-log";
 import { expandSearchQuery } from "@/lib/model-search-aliases";
+import { getProviderIconUrl } from "@/lib/provider-icons";
 import type { ComposerModelPickerProps, ComposerModelSelection } from "./composer-types";
 import s from "./goose-composer.module.css";
 
@@ -64,12 +77,14 @@ type CapabilityKey = "vision" | "tools" | "reasoning" | "longContext";
 
 interface Candidate {
   key: string;
+  catalogId: string;
   providerSlug: string;
   providerName: string;
   vendor: string;
   model: string;
   baseUrl?: string;
   apiKeyLabel?: string;
+  iconUrl?: string;
   configured: boolean;
   caps: ProviderCatalogModel | null;
   warning?: string;
@@ -97,11 +112,11 @@ const CAPABILITIES: CapDescriptor[] = [
 type GroupKey = "recent" | "configured" | "recommended" | "moa" | "more";
 
 const GROUP_LABELS: Record<GroupKey, { name: string; subtitle: string }> = {
-  recent: { name: "最近用过", subtitle: "按 7 日内调用次数排序" },
-  configured: { name: "已配置", subtitle: "填了 Key 但本周未用" },
-  recommended: { name: "推荐预设", subtitle: "Top 5 模型平台 · 一键跳设置页填 Key" },
-  moa: { name: "MoA 预设", subtitle: "多模型混合 · 参考模型先行分析，聚合器输出最终回答" },
-  more: { name: "更多", subtitle: "全球 / 企业 / OAuth 类" },
+  recent: { name: "最近", subtitle: "近 7 日使用过的模型" },
+  configured: { name: "可用", subtitle: "已完成配置，可直接切换" },
+  recommended: { name: "推荐接入", subtitle: "常用模型平台，配置后即可使用" },
+  moa: { name: "MoA", subtitle: "多模型协作预设" },
+  more: { name: "更多平台", subtitle: "其他可接入的模型平台" },
 };
 
 // 虚拟 provider：MoA 预设以 `moa` provider 的模型形式出现在 model.options
@@ -160,6 +175,7 @@ export function buildCandidates(
   const moa: Candidate[] = [];
   const seenKeys = new Set<string>();
   const gatewayProviderSlugs = new Set<string>();
+  const gatewayCatalogIds = new Set<string>();
 
   // 1. From gateway model.options
   for (const provider of modelOptions?.providers ?? []) {
@@ -170,6 +186,7 @@ export function buildCandidates(
         if (!presetName) continue;
         moa.push({
           key: `${MOA_PROVIDER_SLUG}:${presetName}`,
+          catalogId: MOA_PROVIDER_SLUG,
           providerSlug: MOA_PROVIDER_SLUG,
           providerName: providerLabel(provider) || "Mixture of Agents",
           vendor: "MoA",
@@ -182,12 +199,15 @@ export function buildCandidates(
     }
     gatewayProviderSlugs.add(provider.slug);
     const preset = findCatalog(provider.slug);
+    if (preset) gatewayCatalogIds.add(preset.id);
     const extras = asRecord(provider);
-    const authenticated = Boolean(extras.authenticated);
+    const advertisedModels = provider.models ?? [];
+    // Older Core versions did not always return `authenticated`, while a
+    // non-empty model list already means this provider is selectable.
+    const authenticated = Boolean(extras.authenticated) || advertisedModels.length > 0;
     const keyEnv = typeof extras.key_env === "string" ? extras.key_env : undefined;
     const warning = typeof extras.warning === "string" ? extras.warning : undefined;
     const catalogModelIds = preset?.models.map((model) => model.id) ?? [];
-    const advertisedModels = provider.models ?? [];
     if (advertisedModels.length === 0 && !authenticated) {
       // Unconfigured provider with no advertised models — still emit catalog
       // candidates so the default model can surface in 推荐预设 while newer
@@ -203,12 +223,14 @@ export function buildCandidates(
           seenKeys.add(key);
           all.push({
             key,
+            catalogId: preset?.id ?? provider.slug,
             providerSlug: provider.slug,
             providerName: preset?.name ?? providerLabel(provider),
             vendor: preset?.vendor ?? "",
             model: placeholder,
             baseUrl: preset?.baseUrl,
             apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
+            iconUrl: getProviderIconUrl(preset?.icon),
             configured: false,
             caps: findModelCaps(preset, placeholder),
             warning,
@@ -224,12 +246,14 @@ export function buildCandidates(
       seenKeys.add(key);
       all.push({
         key,
+        catalogId: preset?.id ?? provider.slug,
         providerSlug: provider.slug,
         providerName: preset?.name ?? providerLabel(provider),
         vendor: preset?.vendor ?? "",
         model: modelId,
         baseUrl: preset?.baseUrl,
         apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
+        iconUrl: getProviderIconUrl(preset?.icon),
         configured: authenticated,
         caps: findModelCaps(preset, modelId),
         warning,
@@ -242,7 +266,7 @@ export function buildCandidates(
   // populated for users with zero configured providers, while non-default
   // variants remain searchable in 更多.
   for (const topId of TOP5_PROVIDER_IDS) {
-    if (gatewayProviderSlugs.has(topId)) continue;
+    if (gatewayProviderSlugs.has(topId) || gatewayCatalogIds.has(topId)) continue;
     const preset = CATALOG_BY_ID.get(topId);
     if (!preset) continue;
     for (const model of preset.models) {
@@ -251,12 +275,14 @@ export function buildCandidates(
       seenKeys.add(key);
       all.push({
         key,
+        catalogId: preset.id,
         providerSlug: topId,
         providerName: preset.name,
         vendor: preset.vendor,
         model: model.id,
         baseUrl: preset.baseUrl,
         apiKeyLabel: preset.apiKeyLabel,
+        iconUrl: getProviderIconUrl(preset.icon),
         configured: false,
         caps: model,
       });
@@ -265,7 +291,6 @@ export function buildCandidates(
 
   // 3. Group buckets
   const usageRanked = rankRecentModels(usageEntries, { limit: 3 });
-  const usageKeySet = new Set(usageRanked.map((e) => e.key));
 
   const recent: Candidate[] = usageRanked
     .map((e) => all.find((c) => c.key === e.key))
@@ -273,10 +298,10 @@ export function buildCandidates(
 
   const topSet = new Set<string>(TOP5_PROVIDER_IDS);
   const configured: Candidate[] = all
-    .filter((c) => c.configured && !usageKeySet.has(c.key))
+    .filter((c) => c.configured)
     .sort((a, b) => {
-      const aTop = topSet.has(a.providerSlug) ? 0 : 1;
-      const bTop = topSet.has(b.providerSlug) ? 0 : 1;
+      const aTop = topSet.has(a.catalogId) ? 0 : 1;
+      const bTop = topSet.has(b.catalogId) ? 0 : 1;
       if (aTop !== bTop) return aTop - bTop;
       return a.providerName.localeCompare(b.providerName, "zh-Hans-CN");
     });
@@ -288,11 +313,11 @@ export function buildCandidates(
   const recommended: Candidate[] = [];
   for (const c of all) {
     if (c.configured) continue;
-    if (!topSet.has(c.providerSlug)) continue;
-    if (recommendedSeen.has(c.providerSlug)) continue;
-    const preset = CATALOG_BY_ID.get(c.providerSlug);
+    if (!topSet.has(c.catalogId)) continue;
+    if (recommendedSeen.has(c.catalogId)) continue;
+    const preset = CATALOG_BY_ID.get(c.catalogId);
     if (preset && c.model !== preset.defaultModel) continue;
-    recommendedSeen.add(c.providerSlug);
+    recommendedSeen.add(c.catalogId);
     recommended.push(c);
   }
 
@@ -308,7 +333,18 @@ export function buildCandidates(
 
 function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
   if (!expandedQuery) return true;
-  const haystack = [c.model, c.providerName, c.vendor, c.providerSlug, c.apiKeyLabel]
+  const capabilityTerms = capabilityChips(c.caps).map((chip) => chip.label);
+  const haystack = [
+    c.model,
+    c.providerName,
+    c.vendor,
+    c.providerSlug,
+    c.apiKeyLabel,
+    ...capabilityTerms,
+    c.caps?.supportsTools ? "工具调用" : "",
+    c.caps?.supportsReasoning ? "深度推理" : "",
+    c.caps?.supportsVision ? "视觉" : "",
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -416,7 +452,6 @@ function ModelPickerBody({
   });
   const [activeGroup, setActiveGroup] = useState<"all" | GroupKey>("all");
   const [activeCaps, setActiveCaps] = useState<Set<CapabilityKey>>(new Set());
-  const [moreExpanded, setMoreExpanded] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -435,12 +470,28 @@ function ModelPickerBody({
     return map;
   }, [usageEntries]);
 
-  const currentSelectionKey = useMemo(() => {
+  const currentSelection = useMemo(() => {
     const model = selected?.model ?? modelOptions?.model;
     const provider = selected?.provider ?? modelOptions?.provider;
-    if (!model) return "";
-    return `${provider ?? ""}:${model}`;
-  }, [selected, modelOptions]);
+    if (!model) return null;
+    const candidates = [...buckets.all, ...buckets.moa];
+    const candidate = provider
+      ? candidates.find((item) => item.key === `${provider}:${model}`)
+      : candidates.find((item) => item.model === model);
+    return {
+      key: candidate?.key ?? `${provider ?? ""}:${model}`,
+      model,
+      provider: candidate?.providerName ?? provider ?? "",
+    };
+  }, [buckets, selected, modelOptions]);
+
+  const warnings = useMemo(() => {
+    const unique = new Set<string>();
+    for (const candidate of buckets.all) {
+      if (candidate.warning?.trim()) unique.add(candidate.warning.trim());
+    }
+    return [...unique];
+  }, [buckets.all]);
 
   const filterGroup = useCallback(
     (group: Candidate[]) =>
@@ -457,7 +508,21 @@ function ModelPickerBody({
     return { recent, configured, recommended, moa, more };
   }, [buckets, filterGroup]);
 
-  const totalVisible = visible.recent.length + visible.configured.length + visible.recommended.length + visible.moa.length + visible.more.length;
+  const recentVisibleKeys = useMemo(
+    () => new Set(visible.recent.map((candidate) => candidate.key)),
+    [visible.recent],
+  );
+  const configuredForDisplay = activeGroup === "all"
+    ? visible.configured.filter((candidate) => !recentVisibleKeys.has(candidate.key))
+    : visible.configured;
+  const totalVisible = useMemo(() => new Set([
+    ...visible.recent,
+    ...visible.configured,
+    ...visible.recommended,
+    ...visible.moa,
+    ...visible.more,
+  ].map((candidate) => candidate.key)).size, [visible]);
+  const activeVisibleCount = activeGroup === "all" ? totalVisible : visible[activeGroup].length;
 
   function toggleCap(cap: CapabilityKey) {
     setActiveCaps((prev) => {
@@ -473,63 +538,49 @@ function ModelPickerBody({
     [activeGroup],
   );
 
-  function renderCard(candidate: Candidate) {
-    const isCurrent = candidate.key === currentSelectionKey;
+  function clearFilters() {
+    setActiveGroup("all");
+    setActiveCaps(new Set());
+    onSearchChange("");
+  }
+
+  function renderProviderMark(candidate: Candidate) {
+    return (
+      <span className={s.mpProviderMark} aria-hidden="true">
+        {candidate.iconUrl ? (
+          <img src={candidate.iconUrl} alt="" />
+        ) : (
+          <span>{(candidate.providerName || candidate.providerSlug).slice(0, 1).toUpperCase()}</span>
+        )}
+      </span>
+    );
+  }
+
+  function renderRow(candidate: Candidate) {
+    const isCurrent = candidate.key === currentSelection?.key;
     const usage = usageByKey.get(candidate.key);
     const caps = capabilityChips(candidate.caps);
     const baseUrlHost = candidate.baseUrl ? candidate.baseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : "";
-
-    if (!candidate.configured) {
-      return (
-        <button
-          key={candidate.key}
-          type="button"
-          className={s.mpCard}
-          data-unconfigured="true"
-          onClick={() => onConfigureProvider?.(candidate.providerSlug)}
-          disabled={switchingModel}
-        >
-          <div className={s.mpCardHead}>
-            <span className={s.mpCardVendor}>{candidate.vendor || candidate.providerName}</span>
-            <span className={s.mpCardName}>{candidate.model}</span>
-            <span className={s.mpCardPillWarn}>未配置</span>
-          </div>
-          <div className={s.mpCardMeta}>
-            <span>{candidate.providerName}</span>
-            {candidate.apiKeyLabel && (
-              <>
-                <span className={s.mpCardSep}>·</span>
-                <span>需要 <code className={s.mpCardMono}>{candidate.apiKeyLabel}</code></span>
-              </>
-            )}
-          </div>
-          {caps.length > 0 && (
-            <div className={s.mpCardCaps}>
-              {caps.map(({ key, label, Icon }) => (
-                <span key={key} className={s.mpCapChip}>
-                  <Icon aria-hidden="true" />
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className={s.mpCardCta}>
-            <ArrowRight aria-hidden="true" />
-            去设置 · /models#{candidate.providerSlug}
-          </div>
-        </button>
-      );
-    }
 
     return (
       <button
         key={candidate.key}
         type="button"
-        className={s.mpCard}
+        className={s.mpRow}
         data-current={isCurrent ? "true" : undefined}
+        data-unconfigured={candidate.configured ? undefined : "true"}
         disabled={switchingModel}
-        title="↵ 仅本会话 · ⌘↵ 同时设为全局默认"
+        aria-label={candidate.configured
+          ? `切换到 ${candidate.providerName} 的 ${candidate.model}`
+          : `配置 ${candidate.providerName}`}
+        title={candidate.configured
+          ? "单击切换当前会话 · 按住 ⌘ 单击同时设为全局默认"
+          : `前往模型设置配置 ${candidate.providerName}`}
         onClick={(event) => {
+          if (!candidate.configured) {
+            onConfigureProvider?.(candidate.providerSlug);
+            return;
+          }
           const selection = {
             model: candidate.model,
             provider: candidate.providerSlug,
@@ -544,27 +595,25 @@ function ModelPickerBody({
           }
         }}
       >
-        {isCurrent && <span className={s.mpCardStrip} aria-hidden="true" />}
-        <div className={s.mpCardHead}>
-          <span className={s.mpCardVendor}>{candidate.vendor || candidate.providerName}</span>
-          <span className={s.mpCardName}>{candidate.model}</span>
-          {isCurrent && (
-            <span className={s.mpCardPillOk}>
-              <Check aria-hidden="true" /> 当前
-            </span>
-          )}
-        </div>
-        <div className={s.mpCardMeta}>
-          <span>{candidate.providerName}</span>
-          {baseUrlHost && (
-            <>
-              <span className={s.mpCardSep}>·</span>
-              <span>{baseUrlHost}</span>
-            </>
-          )}
+        {renderProviderMark(candidate)}
+        <div className={s.mpRowIdentity}>
+          <div className={s.mpRowTitle}>
+            <span>{candidate.model}</span>
+            {isCurrent && <span className={s.mpCurrentBadge}><Check aria-hidden="true" />当前</span>}
+          </div>
+          <div className={s.mpRowMeta}>
+            <span>{candidate.providerName}</span>
+            <span className={s.mpMetaDot}>·</span>
+            <span>{candidate.providerSlug}</span>
+            {baseUrlHost && <><span className={s.mpMetaDot}>·</span><span>{baseUrlHost}</span></>}
+            {!candidate.configured && candidate.apiKeyLabel && (
+              <><span className={s.mpMetaDot}>·</span><span className={s.mpKeyLabel}>需要 {candidate.apiKeyLabel}</span></>
+            )}
+            {usage && <><span className={s.mpMetaDot}>·</span><RotateCcw aria-hidden="true" />{formatUsageMeta(usage)}</>}
+          </div>
         </div>
         {caps.length > 0 && (
-          <div className={s.mpCardCaps}>
+          <div className={s.mpRowCaps}>
             {caps.map(({ key, label, Icon }) => (
               <span key={key} className={s.mpCapChip}>
                 <Icon aria-hidden="true" />
@@ -573,27 +622,55 @@ function ModelPickerBody({
             ))}
           </div>
         )}
-        {usage && (
-          <div className={s.mpCardUsage}>
-            <RotateCcw aria-hidden="true" />
-            {formatUsageMeta(usage)}
-          </div>
-        )}
+        <span className={candidate.configured ? s.mpRowAction : s.mpRowSetup}>
+          {candidate.configured ? (isCurrent ? "使用中" : "切换") : "去配置"}
+          {!isCurrent && <ArrowRight aria-hidden="true" />}
+        </span>
       </button>
+    );
+  }
+
+  function renderSection(group: GroupKey, candidates: Candidate[]) {
+    if (!showGroup(group) || candidates.length === 0) return null;
+    return (
+      <section className={s.mpGroup} key={group}>
+        <header className={s.mpGroupHeader}>
+          <span>{GROUP_LABELS[group].name}</span>
+          <span className={s.mpGroupCount}>{candidates.length}</span>
+          <span className={s.mpGroupSub}>{GROUP_LABELS[group].subtitle}</span>
+        </header>
+        <div className={s.mpRows}>{candidates.map(renderRow)}</div>
+      </section>
     );
   }
 
   return (
     <>
       <div className={s.modelPanelHeader}>
-        <input
-          ref={searchInputRef}
-          value={modelSearch}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="按名称、能力或厂商搜索 — 如 ‘128K’、‘视觉’、‘deepseek’"
-          className={s.modelSearch}
-        />
+        <div className={s.mpSearchBox}>
+          <Search aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            value={modelSearch}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="搜索模型、平台或能力"
+            aria-label="搜索模型、平台或能力"
+            className={s.modelSearch}
+          />
+          {modelSearch && (
+            <button type="button" onClick={() => onSearchChange("")} aria-label="清空搜索">清除</button>
+          )}
+        </div>
         {closeControl}
+      </div>
+
+      <div className={s.mpCurrentBar}>
+        <div>
+          <span className={s.mpCurrentLabel}>当前会话</span>
+          <strong>{currentSelection?.model || "尚未选择模型"}</strong>
+          {currentSelection?.provider && <span>{currentSelection.provider}</span>}
+        </div>
+        <span className={s.mpSwitchHint}>单击切换当前会话 · ⌘ 单击同时设为默认</span>
       </div>
 
       {loading ? (
@@ -601,117 +678,62 @@ function ModelPickerBody({
       ) : error ? (
         <div className={s.modelError}>{error}</div>
       ) : (
-        <div className={s.mpGrid}>
-          <aside className={s.mpFilters}>
-            <div className={s.mpFilterSection}>
-              <div className={s.mpFilterTitle}>分组</div>
-              <button
-                type="button"
-                className={s.mpFilterChip}
-                data-active={activeGroup === "all"}
-                onClick={() => setActiveGroup("all")}
-              >
-                <Sparkles aria-hidden="true" />
-                全部
-                <span className={s.mpFilterCount}>{totalVisible}</span>
+        <div className={s.mpLayout}>
+          <div className={s.mpFilterBar}>
+            <div className={s.mpGroupTabs} aria-label="模型分组">
+              <button type="button" data-active={activeGroup === "all"} aria-pressed={activeGroup === "all"} onClick={() => setActiveGroup("all")}>
+                <Sparkles aria-hidden="true" />全部 <span>{totalVisible}</span>
               </button>
-              {(["recent", "configured", "recommended", "moa", "more"] as const).map((group) => {
-                const count = visible[group].length;
-                return (
-                  <button
-                    key={group}
-                    type="button"
-                    className={s.mpFilterChip}
-                    data-active={activeGroup === group}
-                    onClick={() => setActiveGroup(group)}
-                  >
-                    {GROUP_LABELS[group].name}
-                    <span className={s.mpFilterCount}>{count}</span>
-                  </button>
-                );
-              })}
+              {(["configured", "recent", "recommended", "moa", "more"] as const).map((group) => (
+                <button
+                  key={group}
+                  type="button"
+                  data-active={activeGroup === group}
+                  aria-pressed={activeGroup === group}
+                  onClick={() => setActiveGroup(group)}
+                >
+                  {GROUP_LABELS[group].name}<span>{visible[group].length}</span>
+                </button>
+              ))}
             </div>
-
-            <div className={s.mpFilterSection}>
-              <div className={s.mpFilterTitle}>能力</div>
+            <div className={s.mpCapabilityFilters} aria-label="模型能力">
               {CAPABILITIES.map((cap) => (
                 <button
                   key={cap.key}
                   type="button"
-                  className={s.mpFilterChip}
                   data-active={activeCaps.has(cap.key)}
+                  aria-pressed={activeCaps.has(cap.key)}
                   onClick={() => toggleCap(cap.key)}
                 >
-                  <cap.Icon aria-hidden="true" />
-                  {cap.label}
+                  <cap.Icon aria-hidden="true" />{cap.label}
                 </button>
               ))}
+              {(activeCaps.size > 0 || modelSearch) && (
+                <button type="button" className={s.mpClearFilters} onClick={clearFilters}>重置</button>
+              )}
             </div>
-          </aside>
+          </div>
 
           <div className={s.mpCandidates}>
-            {totalVisible === 0 ? (
-              <div className={s.modelEmpty}>没有匹配的模型</div>
+            {warnings.length > 0 && (
+              <div className={s.mpWarnings}>
+                {warnings.map((warning) => <div key={warning}><CircleAlert aria-hidden="true" />{warning}</div>)}
+              </div>
+            )}
+            {activeVisibleCount === 0 ? (
+              <div className={s.mpEmptyState}>
+                <Search aria-hidden="true" />
+                <strong>没有匹配的模型</strong>
+                <span>换个关键词或清除能力筛选后再试。</span>
+                {(activeCaps.size > 0 || modelSearch) && <button type="button" onClick={clearFilters}>清除筛选</button>}
+              </div>
             ) : (
               <>
-                {showGroup("recent") && visible.recent.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.recent.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.recent.subtitle}</span>
-                    </header>
-                    {visible.recent.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("configured") && visible.configured.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.configured.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.configured.subtitle}</span>
-                    </header>
-                    {visible.configured.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("recommended") && visible.recommended.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.recommended.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.recommended.subtitle}</span>
-                    </header>
-                    {visible.recommended.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("moa") && visible.moa.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <header className={s.mpGroupHeader}>
-                      <span>{GROUP_LABELS.moa.name}</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.moa.subtitle}</span>
-                    </header>
-                    {visible.moa.map(renderCard)}
-                  </section>
-                )}
-
-                {showGroup("more") && visible.more.length > 0 && (
-                  <section className={s.mpGroup}>
-                    <button
-                      type="button"
-                      className={s.mpGroupCollapsible}
-                      onClick={() => setMoreExpanded((x) => !x)}
-                    >
-                      <ChevronRight
-                        aria-hidden="true"
-                        className={s.mpGroupChevron}
-                        data-expanded={moreExpanded ? "true" : undefined}
-                      />
-                      <span>{GROUP_LABELS.more.name} · {visible.more.length} 项</span>
-                      <span className={s.mpGroupSub}>{GROUP_LABELS.more.subtitle}</span>
-                    </button>
-                    {moreExpanded && visible.more.map(renderCard)}
-                  </section>
-                )}
+                {renderSection("recent", visible.recent)}
+                {renderSection("configured", configuredForDisplay)}
+                {renderSection("moa", visible.moa)}
+                {renderSection("recommended", visible.recommended)}
+                {renderSection("more", visible.more)}
               </>
             )}
           </div>
@@ -802,7 +824,7 @@ export function ModelPickerModal({ onClose, ...props }: ModelPickerPanelProps) {
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={s.modelModalTitleBar}>
-          <h2 id={titleId}>选择模型</h2>
+          <h2 id={titleId}>切换模型</h2>
           <button
             type="button"
             className={s.modelModalClose}

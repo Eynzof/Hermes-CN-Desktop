@@ -49,6 +49,68 @@ describe("buildCandidates", () => {
     expect(buckets.all.map((candidate) => candidate.key)).toContain("minimax-cn:MiniMax-M2.7");
   });
 
+  it("treats a provider with advertised models as available on older Core responses", () => {
+    const options = {
+      providers: [
+        {
+          slug: "deepseek",
+          name: "DeepSeek",
+          models: ["deepseek-chat"],
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const buckets = buildCandidates(options, []);
+
+    expect(buckets.configured.map((candidate) => candidate.key)).toContain("deepseek:deepseek-chat");
+    expect(buckets.recommended.some((candidate) => candidate.providerSlug === "deepseek")).toBe(false);
+  });
+
+  it("does not add a duplicate static provider when Core returns an aliased provider slug", () => {
+    const options = {
+      providers: [
+        {
+          slug: "kimi-coding",
+          name: "Kimi Coding Plan",
+          models: ["kimi-k3"],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const buckets = buildCandidates(options, []);
+
+    expect(buckets.all.some((candidate) => candidate.providerSlug === "kimi-for-coding")).toBe(false);
+    expect(buckets.all.some((candidate) => candidate.providerSlug === "kimi-coding")).toBe(true);
+  });
+
+  it("keeps recently used models in the complete available-model bucket", () => {
+    const options = {
+      providers: [
+        {
+          slug: "deepseek",
+          name: "DeepSeek",
+          models: ["deepseek-chat"],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+    const usage = [
+      {
+        key: "deepseek:deepseek-chat",
+        provider: "deepseek",
+        model: "deepseek-chat",
+        count: 2,
+        lastUsedAt: Date.now(),
+      },
+    ];
+
+    const buckets = buildCandidates(options, usage);
+
+    expect(buckets.recent.map((candidate) => candidate.key)).toContain("deepseek:deepseek-chat");
+    expect(buckets.configured.map((candidate) => candidate.key)).toContain("deepseek:deepseek-chat");
+  });
+
   it("splits the virtual moa provider into its own bucket instead of the regular groups", () => {
     const options = {
       providers: [
