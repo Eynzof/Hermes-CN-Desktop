@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { request as httpsRequest } from "node:https";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { brandedWindowsArtifactBrand } from "./windows-artifact-names.mjs";
 
@@ -83,28 +85,12 @@ function matchesBrandAsset(fileName, brand, version) {
 }
 
 async function upload(filePath, objectPath) {
-  const body = await readFile(filePath);
+  const { size } = await stat(filePath);
   const url = publicUrl(objectPath);
   let lastError;
   for (let attempt = 1; attempt <= 6; attempt += 1) {
     try {
-      const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          "cache-control": objectPath.includes("/latest/")
-            || objectPath.endsWith("latest.json")
-            || objectPath.endsWith("canary.json")
-            ? "no-cache, no-store, must-revalidate"
-            : "public, max-age=31536000, immutable",
-          "content-length": String(body.byteLength),
-          "content-type": contentTypeFor(filePath),
-        },
-        body,
-      });
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
-      }
+      await uploadFile(filePath, url, objectPath, size);
       console.log(`Uploaded ${relative(process.cwd(), filePath)} -> ${url}`);
       return url.toString();
     } catch (error) {
@@ -117,6 +103,55 @@ async function upload(filePath, objectPath) {
     }
   }
   throw new Error(`Upload failed for ${objectPath} after 6 attempts: ${lastError?.message || lastError}`);
+}
+
+function uploadFile(filePath, url, objectPath, contentLength) {
+  return new Promise((resolveUpload, rejectUpload) => {
+    let responseBody = "";
+    let settled = false;
+
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      if (error) rejectUpload(error);
+      else resolveUpload();
+    };
+
+    const request = httpsRequest(url, {
+      method: "PUT",
+      headers: {
+        "cache-control": objectPath.includes("/latest/")
+          || objectPath.endsWith("latest.json")
+          || objectPath.endsWith("canary.json")
+          ? "no-cache, no-store, must-revalidate"
+          : "public, max-age=31536000, immutable",
+        "content-length": String(contentLength),
+        "content-type": contentTypeFor(filePath),
+      },
+    }, (response) => {
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => {
+        if (responseBody.length < 64 * 1024) responseBody += chunk;
+      });
+      response.on("aborted", () => finish(new Error(`TOS response aborted for ${url}`)));
+      response.on("error", (error) => finish(error));
+      response.on("end", () => {
+        const statusCode = response.statusCode || 0;
+        if (statusCode < 200 || statusCode >= 300) {
+          const detail = responseBody.trim();
+          finish(new Error(`HTTP ${statusCode}${detail ? `: ${detail}` : ""}`));
+          return;
+        }
+        finish();
+      });
+    });
+
+    request.on("error", (error) => finish(error));
+
+    const source = createReadStream(filePath);
+    source.on("error", (error) => request.destroy(error));
+    source.pipe(request);
+  });
 }
 
 async function readBrands() {
