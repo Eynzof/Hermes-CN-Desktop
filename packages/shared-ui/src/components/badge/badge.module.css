@@ -9,7 +9,7 @@
   gap: 8px;
   max-width: 100%;
   border: 1px solid var(--h-badge-border);
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-badge-bg);
   color: var(--h-badge-fg);
   font-family: var(--h-font-ui);
@@ -79,7 +79,7 @@
   width: 8px;
   height: 8px;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-color-fg-subtle);
 }
 

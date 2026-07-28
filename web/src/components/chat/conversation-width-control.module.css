@@ -7,7 +7,7 @@
   height: var(--h-button-height-sm);
   padding: 4px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-bg-input) 82%, transparent);
   color: var(--h-text-2);
   -webkit-app-region: no-drag;
@@ -28,7 +28,7 @@
   min-width: var(--h-button-height-xs);
   height: var(--h-segment-height);
   border: 0;
-  border-radius: calc(var(--h-r-sm) - 4px);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;

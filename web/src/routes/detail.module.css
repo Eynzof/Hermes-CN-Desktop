@@ -41,7 +41,7 @@
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text-2);
   font-size: 9.5px;
@@ -71,7 +71,7 @@
 .approvalCard {
   margin: 16px 0 0;
   border: 1px solid var(--h-warn);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   box-shadow: none;
   padding: 16px;
@@ -87,7 +87,7 @@
 .approvalCommand {
   margin-bottom: 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-code);
   color: var(--h-text);
   font-family: var(--h-font-mono);
@@ -121,7 +121,7 @@
 .approvalApprove,
 .approvalDeny,
 .approvalSettings {
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   font-family: var(--h-font-cn);
   font-size: 12px;

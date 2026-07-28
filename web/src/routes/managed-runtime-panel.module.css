@@ -3,7 +3,7 @@
   gap: 16px;
   padding: 20px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
@@ -48,7 +48,7 @@
   flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   color: var(--h-text-2);
   background: var(--h-bg-pane);
   font-size: 11px;
@@ -75,7 +75,7 @@
   gap: 12px;
   padding: 12px 16px;
   border: 1px solid var(--h-accent-border);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   color: var(--h-accent);
   background: color-mix(in srgb, var(--h-accent-soft) 72%, var(--h-bg-pane));
 }
@@ -85,7 +85,7 @@
   flex: 0 0 auto;
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   place-items: center;
 }

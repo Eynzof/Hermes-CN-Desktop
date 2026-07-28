@@ -37,7 +37,7 @@
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -49,7 +49,7 @@
   flex: 0 0 auto;
   margin-left: auto;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   font-size: 11px;
@@ -270,7 +270,7 @@
 .streamDot {
   width: 4px;
   height: 4px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-text-4);
 }
 
@@ -349,7 +349,7 @@
   min-width: 0;
   min-height: 20px;
   padding: 4px 4px;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10.5px;
@@ -367,7 +367,7 @@
 }
 
 .cliDetailRow:focus-visible {
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
 }
 
 .cliDetailRow:disabled {

@@ -10,7 +10,7 @@
   padding: 0 12px;
   min-width: 0;
   border: 0;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
@@ -63,7 +63,7 @@
   padding: 4px;
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   box-shadow: none;
   font-family: var(--h-font-cn);
 }
@@ -90,7 +90,7 @@
   padding: 8px 12px;
   border: none;
   background: transparent;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   text-align: left;
   font-family: var(--h-font-cn);
   font-size: 12px;

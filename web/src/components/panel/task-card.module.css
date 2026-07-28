@@ -11,7 +11,7 @@
   text-align: left;
   background: var(--h-bg-pane);
   border: 1px solid color-mix(in srgb, var(--h-ok) 32%, var(--h-line));
-  border-radius: var(--h-r-lg, 8px);
+  border-radius: 0;
   padding: 16px 20px;
   cursor: pointer;
   transition: border-color 0.12s, background-color 0.12s;

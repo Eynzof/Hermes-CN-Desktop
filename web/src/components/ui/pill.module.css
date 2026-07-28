@@ -3,7 +3,7 @@
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-pane);
   color: var(--h-text-2);
@@ -35,7 +35,7 @@
   display: inline-block;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-text-3);
   flex: 0 0 auto;
 }

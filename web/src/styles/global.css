@@ -107,7 +107,7 @@ body[data-hermes-window-type="electron"] :where(button, input, textarea, select,
 }
 ::-webkit-scrollbar-thumb {
   background: var(--h-line);
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--h-text-3);

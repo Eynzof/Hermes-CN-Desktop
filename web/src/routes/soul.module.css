@@ -21,7 +21,7 @@
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
@@ -31,7 +31,7 @@
   gap: 8px;
   padding: 8px 16px;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -63,14 +63,14 @@
   color: var(--h-text-2);
   background: var(--h-bg-chip);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   padding: 4px 12px;
 }
 
 /* ── panel ─────────────────────────────────────────────────── */
 .panel {
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: var(--h-bg-app);
   overflow: hidden;
 }
@@ -122,7 +122,7 @@
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   color: var(--h-text-2);
   background: var(--h-bg-soft);
   font-size: 12px;
@@ -141,7 +141,7 @@
   background: var(--h-bg-input);
   color: var(--h-text);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   padding: 12px 16px;
   outline: none;
   line-height: 1.7;
@@ -186,7 +186,7 @@
   gap: 8px;
   color: var(--h-text-3);
   font-size: 13px;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
 }
 
 .errorState {

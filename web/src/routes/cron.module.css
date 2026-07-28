@@ -18,7 +18,7 @@
 .dangerButton {
   appearance: none;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   height: var(--h-button-height-md);
   min-height: var(--h-button-height-md);
   padding: 0 12px;
@@ -72,7 +72,7 @@
 .listPane,
 .historyPane {
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
   overflow: hidden;
 }
@@ -89,7 +89,7 @@
   align-items: center;
   gap: 8px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text-3);
 }
@@ -123,7 +123,7 @@
   width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-cn);
@@ -147,7 +147,7 @@
 .jobRow {
   width: 100%;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -207,7 +207,7 @@
 .runDot {
   width: 8px;
   height: 8px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   flex: 0 0 auto;
   background: var(--h-text-4);
 }
@@ -241,7 +241,7 @@
   margin-bottom: 12px;
   padding: 12px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 12px;
   line-height: 1.55;
   color: var(--h-text-2);
@@ -268,7 +268,7 @@
 
 .card {
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 24px;
   background: var(--h-bg-pane);
   box-shadow: none;
@@ -341,7 +341,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0 12px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   font-size: 12px;
   font-weight: 700;
   background: var(--h-bg-chip);
@@ -382,7 +382,7 @@
   align-items: flex-start;
   padding: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
 }
 
@@ -438,7 +438,7 @@
 .truncated,
 .errorState {
   border: 1px solid color-mix(in srgb, var(--h-err) 30%, var(--h-line));
-  border-radius: 8px;
+  border-radius: 0;
   padding: 12px 12px;
   color: var(--h-err);
   background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-app));
@@ -449,7 +449,7 @@
 .promptCard {
   margin-top: 20px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--h-bg-app);
 }
@@ -526,7 +526,7 @@
   justify-content: center;
   gap: 12px;
   border: 1px dashed var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
   text-align: center;
 }
@@ -578,7 +578,7 @@
 .runRow {
   width: 100%;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 8px 8px;
   display: grid;
   grid-template-columns: 12px minmax(0, 1fr) auto;
@@ -625,7 +625,7 @@
 .runDetailBox {
   margin: 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--h-bg-pane);
 }

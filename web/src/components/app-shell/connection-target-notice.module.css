@@ -7,7 +7,7 @@
 .detail { margin-top: 4px; overflow: hidden; color: var(--h-danger); font-size: 9px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
 .actions em { color: var(--h-text-2); font-style: normal; white-space: nowrap; }
-.actions button { padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--h-danger) 35%, transparent); border-radius: 4px; color: var(--h-danger); background: var(--h-bg-pane); font: 600 9px/1.2 inherit; cursor: pointer; }
+.actions button { padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--h-danger) 35%, transparent); border-radius: 0; color: var(--h-danger); background: var(--h-bg-pane); font: 600 9px/1.2 inherit; cursor: pointer; }
 .actions button:hover:not(:disabled) { background: color-mix(in srgb, var(--h-danger) 8%, var(--h-bg-pane)); }
 .actions button:disabled { cursor: default; opacity: .55; }
 .actions .iconButton { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; border-color: color-mix(in srgb, currentColor 24%, transparent); color: inherit; background: transparent; }

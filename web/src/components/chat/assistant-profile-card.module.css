@@ -3,7 +3,7 @@
 .card {
   width: 280px;
   padding: 20px 20px 12px;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-pane);
   box-shadow: none;
@@ -21,7 +21,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 0;
   line-height: 0;
   cursor: zoom-in;
 }
@@ -29,7 +29,7 @@
 .bigAvatar {
   width: 64px;
   height: 64px;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
   object-fit: cover;
@@ -51,7 +51,7 @@
   width: min(440px, 80vw);
   max-height: 80vh;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -118,7 +118,7 @@
   color: var(--h-accent);
   font-size: 12px;
   padding: 8px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
 }
 

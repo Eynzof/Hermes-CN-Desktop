@@ -12,7 +12,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 12px;
   line-height: 1.5;
   margin-bottom: 16px;
@@ -46,7 +46,7 @@
   flex-shrink: 0;
   font-size: 11px;
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: transparent;
   color: var(--h-text-2);
@@ -79,7 +79,7 @@
 .sectionCount {
   font-size: 11px;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-3);
 }
@@ -104,14 +104,14 @@
   color: var(--h-text-3);
   font-size: 12.5px;
   border: 1px dashed var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   line-height: 1.7;
 }
 
 .errorState {
   padding: 16px 20px;
   border: 1px solid color-mix(in srgb, var(--h-err) 35%, transparent);
-  border-radius: 8px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-err) 6%, transparent);
   color: var(--h-text);
   font-size: 12.5px;

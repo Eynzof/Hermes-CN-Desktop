@@ -197,7 +197,7 @@ export function DebugSection({ showHeading = true }: DebugSectionProps) {
                         padding: "8px 8px",
                         background: "var(--h-bg-pane)",
                         border: "4px solid var(--h-line-soft)",
-                        borderRadius: 4,
+                        borderRadius: 0,
                         overflow: "auto",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-all",

@@ -41,7 +41,7 @@
 .menu {
   min-width: 160px;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -58,7 +58,7 @@
   color: var(--h-text);
   cursor: pointer;
   text-align: left;
-  border-radius: 4px;
+  border-radius: 0;
   font-family: var(--h-font-cn);
 }
 
@@ -87,7 +87,7 @@
   gap: 16px;
   padding: 20px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
@@ -104,7 +104,7 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-accent);
   flex-shrink: 0;
@@ -151,7 +151,7 @@
 .statCard {
   padding: 16px 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -206,7 +206,7 @@
 
 .tableWrap {
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   overflow: hidden;
 }
@@ -311,7 +311,7 @@
   color: var(--h-text-2);
   padding: 4px 8px;
   background: var(--h-bg-chip);
-  border-radius: 4px;
+  border-radius: 0;
   text-align: center;
   white-space: nowrap;
   letter-spacing: 0.02em;
@@ -367,7 +367,7 @@
   color: var(--h-text-3);
   font-size: 12.5px;
   border: 1px dashed var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .errorState {
@@ -386,7 +386,7 @@
   background: var(--h-bg-input);
   color: var(--h-text);
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   font-size: 12px;
   font-family: var(--h-font-cn);

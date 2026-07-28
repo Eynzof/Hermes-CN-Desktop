@@ -698,7 +698,7 @@ function showBootstrapOverlay(initialMessage: string): {
   mark.alt = "Hermes Agent Logo";
   mark.setAttribute(
     "style",
-    "width:104px;height:104px;border:1px solid rgba(251,250,246,0.14);border-radius:8px;display:block;",
+    "width:104px;height:104px;border:1px solid rgba(251,250,246,0.14);border-radius: 0;display:block;",
   );
   panel.appendChild(mark);
 
@@ -733,7 +733,7 @@ function showBootstrapOverlay(initialMessage: string): {
   detail.setAttribute(
     "style",
     "display:none;width:100%;box-sizing:border-box;margin-top:4px;border:1px solid rgba(251,250,246,0.14);" +
-      "border-radius:8px;background:#181818;overflow:hidden;",
+      "border-radius: 0;background:#181818;overflow:hidden;",
   );
 
   const detailHeader = document.createElement("div");
@@ -757,7 +757,7 @@ function showBootstrapOverlay(initialMessage: string): {
   copyButton.setAttribute(
     "style",
     "appearance:none;border:1px solid rgba(251,250,246,0.18);background:rgba(251,250,246,0.08);" +
-      "color:#fbfaf6;border-radius:4px;padding:8px 12px;font-size:12px;font-weight:700;" +
+      "color:#fbfaf6;border-radius: 0;padding:8px 12px;font-size:12px;font-weight:700;" +
       "font-family:inherit;cursor:pointer;",
   );
   copyButton.textContent = "复制错误信息";

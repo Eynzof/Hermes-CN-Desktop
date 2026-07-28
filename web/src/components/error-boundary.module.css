@@ -13,7 +13,7 @@
   padding: 32px;
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   text-align: center;
 }
 
@@ -42,7 +42,7 @@
   background: var(--h-accent);
   color: var(--h-accent-contrast);
   border: none;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   font-size: var(--h-fs);
   cursor: pointer;
 }
@@ -56,7 +56,7 @@
   background: transparent;
   color: var(--h-text-2);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   font-size: var(--h-fs);
   cursor: pointer;
 }

@@ -63,14 +63,14 @@
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
 .periods button,
 .refreshButton {
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   color: var(--h-text-2);
   cursor: pointer;
   font-family: inherit;
@@ -131,7 +131,7 @@
 .rankingPanel,
 .stateCard {
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: var(--h-bg-pane);
   box-shadow: none;
 }
@@ -155,7 +155,7 @@
   flex: 0 0 auto;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-accent);
   background: var(--h-accent-soft);
 }
@@ -217,7 +217,7 @@
   flex: 0 0 auto;
   margin-top: 4px;
   padding: 4px 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   color: var(--h-text-3);
   background: var(--h-bg-chip);
   font-family: var(--h-font-mono);
@@ -307,7 +307,7 @@
   display: block;
   height: 8px;
   overflow: hidden;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-bg-chip);
 }
 
@@ -315,7 +315,7 @@
   display: block;
   height: 100%;
   min-width: 4px;
-  border-radius: inherit;
+  border-radius: 0;
   background: var(--h-accent);
 }
 

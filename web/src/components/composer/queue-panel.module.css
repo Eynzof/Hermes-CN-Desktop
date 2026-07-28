@@ -1,6 +1,6 @@
 .panel {
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   margin-bottom: 8px;
   overflow: hidden;
@@ -53,7 +53,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-input);
   border: 1px solid transparent;
 }
@@ -94,7 +94,7 @@
 .action {
   width: var(--h-button-height-sm);
   height: var(--h-button-height-sm);
-  border-radius: 4px;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;

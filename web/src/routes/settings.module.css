@@ -32,7 +32,7 @@
   padding: 12px 16px;
   margin: 4px 0;
   border: none;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 12.5px;
@@ -80,7 +80,7 @@
   width: var(--h-button-height-xs);
   height: var(--h-button-height-xs);
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -137,7 +137,7 @@
   position: relative;
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 12px;
   cursor: pointer;
   display: flex;
@@ -155,7 +155,7 @@
 .providerIcon {
   width: 32px;
   height: 32px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text);
   display: flex;
@@ -192,7 +192,7 @@
 .providerDetail {
   background: var(--h-bg-app);
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 20px;
 }
 
@@ -207,7 +207,7 @@
   composes: providerIcon;
   width: 36px;
   height: 36px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 14px;
 }
 
@@ -235,7 +235,7 @@
   font-size: 11px;
   line-height: 1;
   padding: 0 12px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   white-space: nowrap;
   color: var(--h-text-2);
   background: var(--h-bg-chip);
@@ -256,7 +256,7 @@
 .cronFeedback {
   margin: 12px 0;
   padding: 12px 12px;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   border: 1px solid var(--h-line);
   color: var(--h-text-2);
   background: var(--h-bg-app);
@@ -291,7 +291,7 @@
   content: "";
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   flex: 0 0 auto;
 }
 .envStatusBadge[data-on="true"]::before {
@@ -326,7 +326,7 @@
   padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--h-text);
   font-size: 12px;
   font-family: var(--h-font-cn);
@@ -358,7 +358,7 @@
   font-family: var(--h-font-mono);
   font-size: 11px;
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   border: 1px solid var(--h-line-soft);
@@ -394,7 +394,7 @@
 .modelsLoadWarning {
   margin: 16px 0;
   padding: 16px 20px;
-  border-radius: 8px;
+  border-radius: 0;
   font-family: var(--h-font-cn);
 }
 
@@ -442,7 +442,7 @@
 .localContextWarning {
   margin-top: 8px;
   border: 1px solid var(--h-color-warning-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-color-warning-bg);
   color: var(--h-text-2);
   padding: 8px 12px;
@@ -457,7 +457,7 @@
   justify-content: center;
   gap: 8px;
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
   cursor: pointer;
   font-family: var(--h-font-cn);
@@ -524,7 +524,7 @@
   overflow: hidden;
   margin: 0 0 20px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
 }
 
@@ -562,7 +562,7 @@
   min-height: 24px;
   padding: 0 12px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
@@ -633,7 +633,7 @@
   align-items: center;
   padding: 12px 12px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   cursor: pointer;
@@ -662,7 +662,7 @@
   height: 40px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--skin-text) 18%, transparent);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--skin-bg);
   box-shadow: none;
 }
@@ -683,7 +683,7 @@
 .skinPreviewBody span {
   display: block;
   height: 4px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: color-mix(in srgb, var(--skin-text) 52%, var(--skin-soft));
 }
 
@@ -703,7 +703,7 @@
   bottom: 4px;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--skin-accent);
   box-shadow: none;
 }
@@ -735,7 +735,7 @@
 .toggle {
   width: var(--h-switch-width);
   height: var(--h-switch-height);
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
   position: relative;
@@ -755,7 +755,7 @@
   left: 4px;
   width: var(--h-switch-thumb-size);
   height: var(--h-switch-thumb-size);
-  border-radius: 50%;
+  border-radius: 0;
   background: #fff;
   box-shadow: none;
   transition: left 0.15s;
@@ -802,7 +802,7 @@
   padding: 4px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--h-text);
   font-size: 12px;
   outline: none;
@@ -814,7 +814,7 @@
   padding: 4px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--h-text);
   font-size: 12px;
   outline: none;
@@ -830,7 +830,7 @@
   display: flex;
   gap: 4px;
   background: var(--h-bg-soft);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   padding: 4px;
 }
 
@@ -838,7 +838,7 @@
   height: var(--h-segment-height);
   padding: 0 12px;
   border: none;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 11.5px;
@@ -864,7 +864,7 @@
   margin-bottom: 16px;
   padding: 20px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
 }
 
@@ -878,7 +878,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-text);
   background: var(--h-bg-pane);
   box-shadow: none;
@@ -921,7 +921,7 @@
   margin-top: 8px;
   padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   color: var(--h-text-2);
   font-family: var(--h-font-mono);
   font-size: 11px;
@@ -975,7 +975,7 @@
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
 }
 
@@ -1106,7 +1106,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 20px;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-text-3);
   text-decoration: none;
   transition: color 0.16s ease, background 0.16s ease;
@@ -1163,7 +1163,7 @@
   gap: 12px;
   padding: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -1171,7 +1171,7 @@
   display: block;
   width: 148px;
   height: 148px;
-  border-radius: 4px;
+  border-radius: 0;
   background: #fff;
 }
 
@@ -1234,7 +1234,7 @@
   height: var(--h-button-height-xs);
   padding: 0 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   font-family: var(--h-font-cn);
@@ -1266,7 +1266,7 @@
   min-width: 0;
   margin: 0 0 16px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
   padding: 16px;
   break-inside: avoid;
@@ -1294,7 +1294,7 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-text);
   background: var(--h-bg-chip);
 }
@@ -1317,7 +1317,7 @@
   margin-top: 16px;
   overflow: hidden;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -1449,7 +1449,7 @@
   align-items: center;
   padding: 8px 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   font-size: 12px;
@@ -1474,7 +1474,7 @@
   min-width: 0;
   padding: 12px 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
 }
@@ -1547,7 +1547,7 @@
   justify-content: center;
   box-sizing: border-box;
   height: 20px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -1628,7 +1628,7 @@
   margin-top: 16px;
   padding: 12px 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -1648,7 +1648,7 @@
   height: 32px;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-text-2);
   background: var(--h-bg-chip);
 }
@@ -1718,7 +1718,7 @@
   min-width: 0;
   padding: 12px 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -1810,7 +1810,7 @@
   margin-bottom: 16px;
   padding: 16px 20px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 38%, var(--h-line));
-  border-radius: 8px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent) 9%, var(--h-bg-pane));
   box-shadow: none;
 }
@@ -1850,7 +1850,7 @@
   gap: 0;
   margin: 0 0 20px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   padding: 4px;
 }
@@ -1860,13 +1860,13 @@
   display: inline-flex;
   gap: 0;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   padding: 4px;
 }
 .apiModeToggle button {
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -1888,7 +1888,7 @@
 .modelTopTab {
   min-width: 132px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -2000,7 +2000,7 @@
   gap: 8px;
   flex-wrap: wrap;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid color-mix(in srgb, var(--h-accent) 26%, var(--h-line));
   background: color-mix(in srgb, var(--h-accent) 7%, var(--h-bg-pane));
   color: var(--h-text-2);
@@ -2030,7 +2030,7 @@
   width: min(520px, calc(100vw - 32px));
   max-height: min(640px, calc(100vh - 48px));
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   box-shadow: none;
   color: var(--h-text);
@@ -2058,7 +2058,7 @@
   width: var(--h-button-height-sm);
   height: var(--h-button-height-sm);
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 18px;
@@ -2090,7 +2090,7 @@
 
 .localProviderContextNotice {
   border: 1px solid var(--h-color-warning-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-color-warning-bg);
   color: var(--h-text-2);
   padding: 12px;
@@ -2141,7 +2141,7 @@
   height: 20px;
   padding: 0 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 11px;
@@ -2177,7 +2177,7 @@
   align-items: flex-start;
   gap: 4px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   padding: 12px;
@@ -2226,7 +2226,7 @@
   padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   color: var(--h-text);
   font-size: 12px;
   font-family: var(--h-font-cn);
@@ -2236,7 +2236,7 @@
   border-color: var(--h-accent);
 }
 
-/* 供应商卡片网格（对标 cc-switch：圆角填充卡片，无外框容器）。
+/* 供应商卡片网格（对标 cc-switch：直角填充卡片，无外框容器）。
    不设内部滚动：全部卡片直接展示、随页面整体滚动，避免双重滚动条。 */
 .providerPresetGrid {
   min-width: 0;
@@ -2252,7 +2252,7 @@
    providerCard* 系列类名，CSS Modules 同名规则会互相覆盖。 */
 .presetCard {
   position: relative;
-  /* 返佣星水印（presetCardBadge）探出下缘的部分由卡片圆角裁掉。 */
+  /* 返佣星水印（presetCardBadge）探出下缘的部分由卡片边界裁掉。 */
   overflow: hidden;
   min-width: 0;
   min-height: 56px;
@@ -2261,7 +2261,7 @@
   gap: 8px;
   padding: 12px 16px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text);
   cursor: pointer;
@@ -2297,7 +2297,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-size: 11px;
@@ -2313,7 +2313,7 @@
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
-  border-radius: 4px;
+  border-radius: 0;
   object-fit: contain;
 }
 
@@ -2341,7 +2341,7 @@
 .presetCardDot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-color-success-fg);
 }
 
@@ -2358,7 +2358,7 @@
   flex: 0 0 auto;
   padding: 4px 4px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-3);
   font-size: 9px;
@@ -2450,7 +2450,7 @@ button.providerWebsiteButton:hover {
 .providerPresetPanel {
   min-width: 0;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   padding: 20px;
 }
@@ -2479,7 +2479,7 @@ button.providerWebsiteButton:hover {
   height: 20px;
   border: 2px solid var(--h-accent);
   border-right-color: transparent;
-  border-radius: 50%;
+  border-radius: 0;
   animation: hermesButtonSpin 650ms linear infinite;
   flex: 0 0 auto;
 }
@@ -2506,7 +2506,7 @@ button.providerWebsiteButton:hover {
 .providerPanelSkeletonLine {
   display: block;
   height: 40px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   background-size: 220% 100%, 100% 100%;
   animation: hermesProviderSkeleton 1.1s ease-in-out infinite;
@@ -2597,7 +2597,7 @@ button.providerWebsiteButton:hover {
   gap: 20px;
   align-items: start;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   padding: 20px;
 }
@@ -2622,7 +2622,7 @@ button.providerWebsiteButton:hover {
 
 .auxImageModeBox {
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
   padding: 12px;
 }
@@ -2655,7 +2655,7 @@ button.providerWebsiteButton:hover {
 .auxTaskGroup {
   overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -2720,7 +2720,7 @@ button.providerWebsiteButton:hover {
 .auxTaskState {
   max-width: 152px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-bg-app);
   color: var(--h-text-2);
   font-family: var(--h-font-mono);
@@ -2738,7 +2738,7 @@ button.providerWebsiteButton:hover {
 .auxEditorPanel {
   min-width: 0;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   padding: 20px;
 }
@@ -2767,7 +2767,7 @@ button.providerWebsiteButton:hover {
 .auxNotice,
 .auxWarning {
   margin-top: 16px;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 12px 12px;
   font-size: 12px;
   line-height: 1.65;
@@ -2825,7 +2825,7 @@ button.providerWebsiteButton:hover {
   min-height: 132px;
   resize: vertical;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-mono);
@@ -3004,7 +3004,7 @@ button.providerWebsiteButton:hover {
 .advancedEnvBlock {
   margin-top: 20px;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -3015,14 +3015,14 @@ button.providerWebsiteButton:hover {
   margin-bottom: -4px;
 }
 .providerCard:first-child {
-  border-radius: 4px 4px 0 0;
+  border-radius: 0;
 }
 .providerCard:last-child {
-  border-radius: 0 0 4px 4px;
+  border-radius: 0;
   margin-bottom: 0;
 }
 .providerCard:only-child {
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .providerCardHeader {
@@ -3091,7 +3091,7 @@ button.providerWebsiteButton:hover {
   min-height: var(--h-button-height-md);
   padding: 0 12px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text-3);
   font-size: 12px;
@@ -3145,14 +3145,14 @@ button.providerWebsiteButton:hover {
   gap: 4px;
   padding: 4px;
   background: var(--h-bg-soft);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
 }
 
 .segmentBtn {
   height: var(--h-segment-height);
   padding: 0 8px;
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 10.5px;
@@ -3190,7 +3190,7 @@ button.providerWebsiteButton:hover {
   display: inline-block;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-ok);
 }
 
@@ -3198,7 +3198,7 @@ button.providerWebsiteButton:hover {
 .logBlock {
   background: var(--h-bg-code);
   border: 1px solid var(--h-line-soft);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 12px;
   max-height: 400px;
   overflow-y: auto;
@@ -3213,7 +3213,7 @@ button.providerWebsiteButton:hover {
   word-break: break-all;
   padding: 0 4px;
   margin: 0 -4px;
-  border-radius: 4px;
+  border-radius: 0;
   transition: background 0.1s;
 }
 .logLine:hover {
@@ -3254,7 +3254,7 @@ button.providerWebsiteButton:hover {
 
 @media (max-width: 720px) {
   .appearancePanel {
-    border-radius: 8px;
+    border-radius: 0;
   }
 
   .appearanceHeader,
@@ -3271,7 +3271,7 @@ button.providerWebsiteButton:hover {
 .approvalModePanel {
   margin-top: 28px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-pane);
   box-shadow: none;
   padding: 16px;
@@ -3324,7 +3324,7 @@ button.providerWebsiteButton:hover {
   min-height: 132px;
   padding: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   text-align: left;
@@ -3378,7 +3378,7 @@ button.providerWebsiteButton:hover {
 
 .approvalModeBadge {
   padding: 4px 8px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text-3);
   font-size: 10.5px;
@@ -3435,7 +3435,7 @@ button.providerWebsiteButton:hover {
   margin-bottom: 20px;
   padding: 12px 12px;
   border: 1px solid color-mix(in srgb, var(--h-err) 40%, var(--h-line));
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-err) 8%, transparent);
   color: var(--h-err);
   font-size: 12px;
@@ -3459,7 +3459,7 @@ button.providerWebsiteButton:hover {
   margin: 12px 0 20px;
   padding: 16px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent) 5%, transparent);
 }
 
@@ -3543,7 +3543,7 @@ button.providerWebsiteButton:hover {
 .dangerZone {
   margin-top: 28px;
   border: 1px solid color-mix(in srgb, var(--h-err) 45%, var(--h-line));
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-err) 5%, transparent);
   padding: 4px 16px 8px;
 }
@@ -3576,7 +3576,7 @@ button.providerWebsiteButton:hover {
   font-size: 11px;
   font-weight: 600;
   padding: 4px 8px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   white-space: nowrap;
 }
 
@@ -3657,7 +3657,7 @@ button.providerWebsiteButton:hover {
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-cn);
@@ -3678,7 +3678,7 @@ button.providerWebsiteButton:hover {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-3);
   cursor: pointer;
@@ -3698,7 +3698,7 @@ button.providerWebsiteButton:hover {
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
 }

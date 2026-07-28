@@ -51,7 +51,7 @@
   color: var(--h-text-2);
   padding: 0 var(--h-button-padding-x-xs);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   cursor: pointer;
   background: transparent;
   display: flex;

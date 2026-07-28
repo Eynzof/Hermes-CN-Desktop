@@ -51,13 +51,13 @@
 .gatewayButton:focus-visible {
   outline: 1px solid var(--h-accent-border);
   outline-offset: 3px;
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
 }
 
 .restartButton {
   appearance: none;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
   height: var(--h-button-height-xs);
   padding: 0 8px;
   display: inline-flex;
@@ -150,7 +150,7 @@
 .dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   display: inline-block;
   align-self: center;
   flex: 0 0 auto;
@@ -193,7 +193,7 @@
   max-width: 56ch;
   padding: 4px 8px;
   border: 1px solid color-mix(in srgb, var(--rust) 40%, var(--h-line));
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
@@ -224,7 +224,7 @@
   flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid var(--h-accent-border);
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
   color: var(--h-accent);
   background: var(--h-bg-chip);
   font: inherit;

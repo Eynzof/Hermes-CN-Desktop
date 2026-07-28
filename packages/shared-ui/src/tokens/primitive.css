@@ -1,6 +1,6 @@
 /* Hermes Community UI — Primitive values
-   设计基线来自 PrimeAPP 的 4px 网格与扁平信息层级，并在 PrimeMap 的锐角语言和
-   旧版 Desktop 的大圆角之间取中值。业务样式应消费 semantic/component token。 */
+   设计基线严格采用 PrimeAPP 的 4px 网格、扁平信息层级和直角几何。
+   业务样式应消费 semantic/component token。 */
 
 :root {
   /* Ink / bone palette kept for the warm Hermes themes. */
@@ -76,14 +76,13 @@
   --h-space-12: 48px;
   --h-space-16: 64px;
 
-  /* Small-radius scale: controls 4px, containers 8px.
-     Pill/circle geometry is reserved for badges, avatars and status dots. */
-  --h-radius-xs: 4px;
-  --h-radius-sm: 4px;
-  --h-radius-md: 8px;
-  --h-radius-lg: 8px;
-  --h-radius-xl: 8px;
-  --h-radius-pill: 999px;
+  /* PrimeAPP-aligned square geometry: every radius tier resolves to zero. */
+  --h-radius-xs: 0;
+  --h-radius-sm: 0;
+  --h-radius-md: 0;
+  --h-radius-lg: 0;
+  --h-radius-xl: 0;
+  --h-radius-pill: 0;
 
   --h-font-size-2xs: 10px;
   --h-font-size-xs: 11px;

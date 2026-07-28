@@ -91,7 +91,7 @@
   font-size: 12px;
   background: var(--ink-100);
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 16px 16px;
 }
 

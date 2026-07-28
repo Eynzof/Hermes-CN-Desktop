@@ -20,7 +20,7 @@
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
-  border-radius: 4px;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-pane);
   color: var(--h-text-3);
@@ -45,7 +45,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: 0;
   border: 1px solid currentColor;
   font-size: 10.5px;
   flex-shrink: 0;
@@ -64,7 +64,7 @@
   gap: 16px;
   padding: 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-md, 8px);
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -82,7 +82,7 @@
   max-height: 280px;
   overflow-y: auto;
   border: 1px solid var(--h-line-soft);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 4px;
 }
 
@@ -91,7 +91,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 8px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   font-size: 12px;
   color: var(--h-text-2);
@@ -148,7 +148,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 8px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
 }
 
@@ -167,7 +167,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 8px;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-soft);
   font-size: 11.5px;
@@ -207,7 +207,7 @@
   gap: 12px;
   padding: 8px 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
 }
 

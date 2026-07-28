@@ -37,7 +37,7 @@
   display: inline-flex;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -109,7 +109,7 @@
   gap: 8px;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--h-text-3);
   font-size: 12px;
 }
@@ -150,7 +150,7 @@
   height: var(--h-button-height-sm);
   padding: 0 12px;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   cursor: pointer;
@@ -184,7 +184,7 @@
 .popover {
   width: 320px;
   max-height: 460px;
-  border-radius: 4px;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
 }
@@ -257,7 +257,7 @@
   width: 16px;
   height: 16px;
   border: 1.5px solid var(--h-text-4);
-  border-radius: 4px;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -287,7 +287,7 @@
   color: var(--h-text-4);
   cursor: pointer;
   opacity: 0;
-  border-radius: 4px;
+  border-radius: 0;
   transition: opacity 0.1s, color 0.1s;
 }
 
@@ -437,7 +437,7 @@
 
 .convRow {
   padding: 12px 12px;
-  border-radius: 4px;
+  border-radius: 0;
   cursor: pointer;
   border: 1px solid transparent;
   transition: background 0.08s, border-color 0.08s;
@@ -494,7 +494,7 @@
 .dotLive {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-color-success-fg);
   flex-shrink: 0;
   box-shadow: none;
@@ -503,7 +503,7 @@
 .dotFail {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-err);
   flex-shrink: 0;
 }
@@ -536,7 +536,7 @@
   height: 24px;
   color: var(--h-text-3);
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   cursor: pointer;
 }
@@ -557,7 +557,7 @@
   color: var(--h-text-2);
   padding: 4px 8px;
   background: var(--h-bg-chip);
-  border-radius: 4px;
+  border-radius: 0;
   text-align: center;
   white-space: nowrap;
   letter-spacing: 0.02em;

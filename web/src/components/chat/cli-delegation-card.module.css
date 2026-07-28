@@ -9,7 +9,7 @@
      timeline 的邻接选择器，间距自带。 */
   margin: 12px 0;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   padding: 8px 8px;
   display: flex;
@@ -31,7 +31,7 @@
   min-height: 24px;
   max-width: 100%;
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -52,7 +52,7 @@
 .brandDot {
   width: 8px;
   height: 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   flex: 0 0 auto;
 }
 
@@ -85,7 +85,7 @@
 .badge {
   flex: 0 0 auto;
   padding: 0 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   border: 1px solid var(--h-line);
   color: var(--h-text-3);
   font-size: 11px;
@@ -164,7 +164,7 @@
   top: 0.62em;
   width: 4px;
   height: 4px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-text-3);
 }
 
@@ -204,7 +204,7 @@
 .tail {
   margin: 0;
   padding: 8px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg);
   border: 1px solid var(--h-line-soft);
   color: var(--h-text-2);

@@ -11,13 +11,13 @@
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
 .periodSwitch button {
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -43,14 +43,14 @@
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
 .tabs button {
   min-width: 104px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -83,7 +83,7 @@
 .stateCard,
 .note {
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
 }
 
@@ -194,7 +194,7 @@
 .tooltipDot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   flex: 0 0 auto;
 }
 
@@ -213,7 +213,7 @@
   min-width: 152px;
   padding: 8px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
   box-shadow: none;
   color: var(--h-text-2);
@@ -332,7 +332,7 @@
   margin: 4px 16px 16px;
   padding: 28px;
   border: 1px dashed var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-text-3);
   font-size: 12px;
   text-align: center;
@@ -389,7 +389,7 @@
   gap: 16px;
   overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
   box-shadow: none;
   text-align: center;
@@ -400,7 +400,7 @@
   position: absolute;
   inset: 20px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   pointer-events: none;
 }
 
@@ -412,7 +412,7 @@
   height: 72px;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--h-accent) 42%, var(--h-line));
-  border-radius: 50%;
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-app));
   color: var(--h-accent);
 }
@@ -424,7 +424,7 @@
   inset: -8px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent);
   border-top-color: var(--h-accent);
-  border-radius: 50%;
+  border-radius: 0;
   animation: analyticsSpin 1.35s linear infinite;
 }
 
@@ -468,7 +468,7 @@
   height: 44px;
   overflow: hidden;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
@@ -505,7 +505,7 @@
 
 .paginationButtons button {
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   cursor: pointer;

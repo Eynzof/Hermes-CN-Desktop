@@ -4,7 +4,7 @@
   gap: 12px;
   padding: 16px 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -28,7 +28,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-accent-soft);
   color: var(--h-accent);
   font-family: var(--h-font-mono);
@@ -66,7 +66,7 @@
   width: var(--h-button-height-sm);
   height: var(--h-button-height-sm);
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -105,7 +105,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-warn-soft);
   color: var(--h-text);
   font-size: 12px;
@@ -149,7 +149,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 8px;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
 }
 
 .row:hover {
@@ -186,7 +186,7 @@
   align-items: center;
   padding: 0 8px;
   height: 16px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-accent-soft);
   color: var(--h-accent);
   font-family: var(--h-font-cn);
@@ -215,7 +215,7 @@
   min-width: 0;
   height: 32px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   padding: 0 12px;
   background: var(--h-bg-input);
   color: var(--h-text);
@@ -236,7 +236,7 @@
   padding: 0 12px;
   height: 32px;
   border: 1px solid var(--h-accent-border);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-accent);
   color: var(--h-accent-contrast);
   font-size: 12.5px;
@@ -279,7 +279,7 @@
   align-items: center;
   gap: 12px;
   padding: 4px 8px;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
 }
 
 .branchRow:hover {
@@ -304,7 +304,7 @@
   flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 11px;

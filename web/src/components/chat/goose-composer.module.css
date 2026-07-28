@@ -7,7 +7,7 @@
   container: hermes-composer / inline-size;
   width: 100%;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   box-shadow: none;
   padding: 16px 16px 12px;
@@ -44,7 +44,7 @@
   max-width: min(292px, 100%);
   min-height: 40px;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-size: 12px;
@@ -71,7 +71,7 @@
 .attachmentPreview {
   width: 32px;
   height: 32px;
-  border-radius: 4px;
+  border-radius: 0;
   border: 1px solid var(--h-line-soft);
   background: var(--h-bg-chip);
 }
@@ -128,7 +128,7 @@
 
 .attachmentProgress {
   height: 4px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-line);
   overflow: hidden;
 }
@@ -136,7 +136,7 @@
 .attachmentProgress span {
   display: block;
   height: 100%;
-  border-radius: inherit;
+  border-radius: 0;
   background: var(--h-accent);
   transition: width 0.15s ease;
 }
@@ -157,7 +157,7 @@
 .attachmentChip button {
   width: var(--h-button-height-xs);
   height: var(--h-button-height-xs);
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   font-size: 15px;
   line-height: 1;
 }
@@ -192,7 +192,7 @@
   display: grid;
   place-items: center;
   border: 1px dashed var(--h-accent-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-bg-input) 84%, var(--h-accent-soft));
   color: var(--h-text);
   font-size: 13px;
@@ -221,7 +221,7 @@
 
 .box[data-variant="big"] {
   padding: 0;
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
 }
 
 .box[data-variant="big"] .textarea {
@@ -262,7 +262,7 @@
 .bigHeaderDot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-accent);
   flex: 0 0 auto;
 }
@@ -318,7 +318,7 @@
   background: var(--h-bg-soft);
   border: 1px solid var(--h-line);
   padding: 4px 4px;
-  border-radius: 4px;
+  border-radius: 0;
   line-height: 1.3;
 }
 
@@ -342,7 +342,7 @@
   max-width: min(100%, 460px);
   gap: 8px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 36%, var(--h-line));
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text);
   box-shadow: none;
@@ -361,7 +361,7 @@
 
 .selectedSkillKicker {
   flex: 0 0 auto;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent) 14%, transparent);
   color: var(--h-accent);
   font-size: 10px;
@@ -400,7 +400,7 @@
   height: 20px;
   flex: 0 0 auto;
   border: 0;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -441,7 +441,7 @@
   max-width: 100%;
   margin: 0 4px 12px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 24%, var(--h-line));
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent-soft) 54%, var(--h-bg-soft));
   color: var(--h-text-2);
   font-size: 12px;
@@ -459,7 +459,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent) 13%, transparent);
   color: var(--h-accent);
 }
@@ -499,7 +499,7 @@
 .voiceBars span {
   width: 4px;
   min-height: 4px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: currentColor;
   opacity: 0.72;
   transition: height 0.1s ease-out;
@@ -508,7 +508,7 @@
 .skillPanel {
   margin: 8px 4px 0;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-pane);
   box-shadow: none;
   color: var(--h-text);
@@ -570,7 +570,7 @@
   min-width: 0;
   min-height: 44px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -640,8 +640,8 @@
   padding: 12px 16px 12px;
   border-top: 1px solid var(--h-line-soft);
   background: var(--h-bg-soft);
-  border-bottom-left-radius: calc(var(--h-r-lg) - 4px);
-  border-bottom-right-radius: calc(var(--h-r-lg) - 4px);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .box[data-variant="big"] .attachmentTray {
@@ -672,7 +672,7 @@
 
 .errorAction {
   border: 1px solid color-mix(in srgb, var(--h-err) 34%, var(--h-line));
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-err) 8%, transparent);
   color: var(--h-err);
   cursor: pointer;
@@ -692,7 +692,7 @@
   gap: 8px;
   margin-top: 8px;
   border: 1px solid color-mix(in srgb, var(--h-warn) 38%, var(--h-line));
-  border-radius: 8px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-warn-soft) 52%, var(--h-bg-input));
   color: var(--h-text);
   font-size: 12px;
@@ -712,7 +712,7 @@
 .modelPanel {
   margin-top: 12px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   overflow: hidden;
 }
@@ -734,7 +734,7 @@
   width: min(920px, calc(100vw - 32px));
   height: min(700px, calc(100vh - 48px));
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-app);
   box-shadow: none;
   color: var(--h-text);
@@ -782,7 +782,7 @@
 .modelClose {
   width: var(--h-button-height-sm);
   height: var(--h-button-height-sm);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--h-text-2);
   font-size: 18px;
 }
@@ -790,7 +790,7 @@
 .modelModalClose {
   width: var(--h-button-height-sm);
   height: var(--h-button-height-sm);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--h-text-2);
   padding: 0;
 }
@@ -841,7 +841,7 @@
   width: 100%;
   min-width: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -914,7 +914,7 @@
   gap: 8px;
   height: 40px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   padding: 0 12px;
   transition: border-color 0.14s ease, background-color 0.14s ease;
@@ -1032,7 +1032,7 @@
   gap: 4px;
   min-height: 28px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -1104,7 +1104,7 @@
   align-items: flex-start;
   gap: 8px;
   border: 1px solid color-mix(in srgb, var(--h-warn) 34%, var(--h-line));
-  border-radius: 4px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-warn-soft) 55%, var(--h-bg));
   color: var(--h-text-2);
   font-size: 11px;
@@ -1141,7 +1141,7 @@
   justify-content: center;
   min-width: 20px;
   height: 20px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
@@ -1158,7 +1158,7 @@
 .mpRows {
   overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg);
 }
 
@@ -1210,7 +1210,7 @@
   height: 36px;
   overflow: hidden;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-family: var(--h-font-mono);
@@ -1250,7 +1250,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent) 13%, transparent);
   color: var(--h-accent);
   font-size: 9px;
@@ -1311,7 +1311,7 @@
   padding: 4px 8px;
   background: var(--h-bg-soft);
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   font-family: var(--h-font-mono);
   font-size: 9px;
   line-height: 1;
@@ -1426,7 +1426,7 @@
   justify-content: center;
   flex: 0 0 auto;
   border: 0;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   font-family: var(--h-font-cn);
   cursor: pointer;
   line-height: 1;
@@ -1460,7 +1460,7 @@
   max-width: min(232px, 34%);
   height: var(--composer-tool-height);
   gap: 8px;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-size: 12px;
@@ -1488,7 +1488,7 @@
   height: var(--h-button-height-xs);
   flex: 0 0 auto;
   border: 0;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-3);
   cursor: pointer;
@@ -1545,7 +1545,7 @@
   max-width: 160px;
   height: 28px;
   padding: 0 12px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-size: 12px;
@@ -1566,7 +1566,7 @@
   width: var(--h-button-height-lg);
   height: var(--h-button-height-lg);
   border: 0;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -1609,7 +1609,7 @@
   left: 50%;
   width: 8px;
   height: 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-ok);
   box-shadow: none;
   pointer-events: none;
@@ -1626,7 +1626,7 @@
   width: 240px;
   gap: 8px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   box-shadow: none;
   color: var(--h-text);
@@ -1653,7 +1653,7 @@
 
 .contextPopoverMeter {
   height: 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-line);
   overflow: hidden;
 }
@@ -1661,7 +1661,7 @@
 .contextPopoverMeter span {
   display: block;
   height: 100%;
-  border-radius: inherit;
+  border-radius: 0;
   background: var(--h-text);
   transition: width 0.2s ease;
 }
@@ -1700,7 +1700,7 @@
   height: var(--composer-action-height);
   gap: 8px;
   border: 1px solid var(--composer-send-accent);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--composer-send-accent);
   color: var(--h-accent-contrast, #fff);
   box-shadow: none;
@@ -1801,7 +1801,7 @@
 .liveDot {
   width: 8px;
   height: 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-ok);
 }
 
@@ -1841,7 +1841,7 @@
   }
 
   .box {
-    border-radius: 8px;
+    border-radius: 0;
   }
 
   .toolbar {
@@ -1874,7 +1874,7 @@
   .modelModal {
     width: 100%;
     height: calc(100vh - 24px);
-    border-radius: 8px;
+    border-radius: 0;
   }
 
   .modelModalTitleBar {

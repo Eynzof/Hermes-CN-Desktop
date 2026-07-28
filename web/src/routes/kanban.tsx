@@ -10,11 +10,11 @@ import s from "./kanban.module.css";
 function KanbanMark() {
   return (
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-      <rect x="4" y="5" width="20" height="18" rx="3" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="4" y="5" width="20" height="18" rx="0" stroke="currentColor" strokeWidth="1.8" />
       <path d="M10 9.5v10M18 9.5v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <rect x="6.8" y="8.5" width="4.2" height="5.2" rx="1" fill="currentColor" opacity="0.82" />
-      <rect x="12.3" y="8.5" width="4.2" height="8.4" rx="1" fill="currentColor" opacity="0.58" />
-      <rect x="17.8" y="8.5" width="4.2" height="4.1" rx="1" fill="currentColor" opacity="0.72" />
+      <rect x="6.8" y="8.5" width="4.2" height="5.2" rx="0" fill="currentColor" opacity="0.82" />
+      <rect x="12.3" y="8.5" width="4.2" height="8.4" rx="0" fill="currentColor" opacity="0.58" />
+      <rect x="17.8" y="8.5" width="4.2" height="4.1" rx="0" fill="currentColor" opacity="0.72" />
     </svg>
   );
 }

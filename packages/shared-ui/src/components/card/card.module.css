@@ -1,7 +1,7 @@
 .card {
   min-width: 0;
   border: 1px solid var(--h-color-border-default);
-  border-radius: var(--h-card-radius);
+  border-radius: 0;
   background: var(--h-color-bg-surface);
   color: var(--h-color-fg-default);
   overflow: hidden;

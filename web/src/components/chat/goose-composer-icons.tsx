@@ -28,7 +28,7 @@ export function StopIcon() {
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <rect x="6" y="6" width="12" height="12" fill="currentColor" rx="1" />
+      <rect x="6" y="6" width="12" height="12" fill="currentColor" rx="0" />
     </svg>
   );
 }

@@ -10,7 +10,7 @@
   text-align: left;
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md, 4px);
+  border-radius: 0;
   padding: 12px 16px;
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s;

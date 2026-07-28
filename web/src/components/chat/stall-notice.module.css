@@ -6,7 +6,7 @@
   max-width: var(--conversation-max-width, 780px);
   margin: 0 auto 8px;
   padding: 8px 12px;
-  border-radius: var(--h-r-pill, 8px);
+  border-radius: 0;
   border: 1px solid color-mix(in srgb, #c5462b 26%, var(--h-line));
   background: color-mix(in srgb, #c5462b 6%, var(--h-bg-pane));
   color: var(--h-text-2);
@@ -27,7 +27,7 @@
 .action {
   flex: 0 0 auto;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-pill, 4px);
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text);
   padding: 4px 12px;

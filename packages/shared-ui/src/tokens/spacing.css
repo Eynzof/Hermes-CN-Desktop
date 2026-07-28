@@ -15,7 +15,7 @@
   --h-lh: 1.6;
 }
 
-/* Single radius scale — no user-facing toggle */
+/* Square geometry aliases — every radius resolves to zero. */
 :root {
   --h-r-sm: var(--h-radius-sm);
   --h-r-md: var(--h-radius-md);

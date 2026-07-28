@@ -11,7 +11,7 @@
   gap: 24px;
   padding: 24px 24px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -71,7 +71,7 @@
   gap: 8px;
   padding: 0 12px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text-3);
 }
@@ -117,7 +117,7 @@
   gap: 8px;
   padding: 0 12px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text-3);
   font-size: 12px;
@@ -160,7 +160,7 @@
   padding: 16px;
   text-align: left;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text);
   cursor: pointer;
@@ -180,7 +180,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid color-mix(in srgb, var(--h-accent) 16%, var(--h-line));
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-accent) 8%, var(--h-bg-soft));
 }
 
@@ -226,7 +226,7 @@
 .empty {
   padding: 48px 16px;
   border: 1px dashed var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   color: var(--h-text-3);
   text-align: center;
   font-size: 13px;
@@ -310,7 +310,7 @@
   justify-content: center;
   width: var(--h-button-height-sm);
   height: var(--h-button-height-sm);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
 }
 
 .closeButton:hover {
@@ -357,7 +357,7 @@
 .applied {
   margin: 0 20px 12px;
   padding: 8px 12px;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   font-size: 12px;
 }
 
@@ -401,7 +401,7 @@
   width: 44px;
   height: 44px;
   margin-bottom: 16px;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-warn);
   background: color-mix(in srgb, var(--h-warn) 12%, var(--h-bg-pane));
 }
@@ -425,7 +425,7 @@
   margin-top: 16px;
   padding: 12px 16px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 

@@ -6,7 +6,7 @@
 .brand strong { font-size: 12px; }
 .brand small { margin-top: 4px; color: var(--h-text-3); font-size: 9px; }
 .shell nav { display: grid; gap: 4px; }
-.shell nav a { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--h-text-2); border-radius: var(--h-r-sm); text-decoration: none; font-size: 12px; }
+.shell nav a { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--h-text-2); border-radius: 0; text-decoration: none; font-size: 12px; }
 .shell nav a[data-active="true"] { color: var(--h-accent); background: var(--h-accent-soft); }
 .shell > main { min-width: 0; min-height: 0; overflow: hidden; }
 .page { height: 100%; display: flex; flex-direction: column; background: var(--h-bg-pane); }
@@ -21,7 +21,7 @@
 .empty h2 { color: var(--h-text); font-size: 17px; }
 .empty p { max-width: 480px; color: var(--h-text-2); font-size: 12px; line-height: 1.6; }
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.cards article { padding: 20px; border: 1px solid var(--h-line); border-radius: var(--h-r-md); background: var(--h-bg-soft); }
+.cards article { padding: 20px; border: 1px solid var(--h-line); border-radius: 0; background: var(--h-bg-soft); }
 .cards article > svg { color: var(--h-accent); }
 .cards h2 { margin: 12px 0 4px; font-size: 14px; }
 .cards p { margin: 0 0 16px; color: var(--h-text-2); font-size: 11px; line-height: 1.6; }

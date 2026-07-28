@@ -11,7 +11,7 @@
   width: min(680px, calc(100vw - 36px));
   max-width: min(680px, calc(100vw - 36px));
   max-height: min(620px, calc(100vh - 120px));
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   z-index: 91;
   background: color-mix(in srgb, var(--h-bg-pane) 96%, transparent);
   box-shadow: none;
@@ -84,7 +84,7 @@
 .kbd {
   flex-shrink: 0;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   padding: 4px 4px;
   background: var(--h-bg-pane);
   color: var(--h-text-3);
@@ -120,7 +120,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 8px;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   color: var(--h-text-2);
   cursor: pointer;
   user-select: none;
@@ -140,7 +140,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-3);
   border: 1px solid var(--h-line-soft);

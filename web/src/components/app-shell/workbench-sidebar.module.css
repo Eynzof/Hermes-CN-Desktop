@@ -27,7 +27,7 @@
   height: 36px;
   background: var(--h-accent);
   color: var(--h-accent-contrast, #fff);
-  border-radius: 4px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -248,7 +248,7 @@
   height: var(--h-button-height-xs);
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -299,7 +299,7 @@
 .dot {
   width: 4px;
   height: 4px;
-  border-radius: 50%;
+  border-radius: 0;
   flex-shrink: 0;
   background: transparent;
 }

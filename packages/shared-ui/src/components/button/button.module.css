@@ -15,7 +15,7 @@
   justify-content: center;
   gap: var(--h-button-gap);
   border: 1px solid transparent;
-  border-radius: var(--h-button-radius);
+  border-radius: 0;
   background: transparent;
   color: var(--h-color-fg-default);
   font-family: var(--h-font-ui);
@@ -117,7 +117,7 @@
   min-height: auto;
   padding: 0;
   border: 0;
-  border-radius: inherit;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -201,7 +201,7 @@
   height: 1em;
   border: 2px solid currentColor;
   border-right-color: transparent;
-  border-radius: 50%;
+  border-radius: 0;
   animation: hermesButtonSpin 650ms linear infinite;
 }
 

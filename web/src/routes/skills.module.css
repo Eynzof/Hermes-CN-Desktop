@@ -74,7 +74,7 @@
   color: var(--h-text-3);
   background: var(--h-bg-chip);
   padding: 4px 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
 }
 .toptab[data-active="true"] .toptabCount {
   color: var(--h-accent);
@@ -95,7 +95,7 @@
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
   padding: 4px 4px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 11px;
 }
 
@@ -129,7 +129,7 @@
   padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
   color: var(--h-text);
 }
@@ -150,7 +150,7 @@
   display: inline-flex;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
   width: 100%;
 }
@@ -276,7 +276,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 4px 8px;
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   font-weight: 600;
 }
 .rowTagBuiltin {
@@ -357,7 +357,7 @@
   cursor: pointer;
   padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   font-family: inherit;
 }
@@ -397,7 +397,7 @@
   padding: 12px 16px;
   background: color-mix(in srgb, var(--h-text-3) 6%, var(--h-bg-pane));
   border: 1px solid var(--h-line);
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
   color: var(--h-text-2);
   margin-bottom: 16px;
@@ -410,7 +410,7 @@
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
   padding: 4px 4px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 11.5px;
 }
 .readonlyLock {
@@ -476,7 +476,7 @@
   display: inline-flex;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 4px;
+  border-radius: 0;
   overflow: hidden;
   font-size: 11.5px;
 }
@@ -502,7 +502,7 @@
 .descriptionCard {
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   padding: 20px 24px;
   font-size: 14px;
   line-height: 1.78;
@@ -532,7 +532,7 @@
   overflow-x: auto;
   overflow-y: visible;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -615,7 +615,7 @@
 }
 
 .skillMarkdown code {
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--h-bg-code);
   color: var(--h-text-2);
   font-family: var(--h-font-mono);
@@ -627,7 +627,7 @@
   overflow: hidden;
   margin: 12px 0;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-code);
 }
 
@@ -719,7 +719,7 @@
   line-height: 1.45;
   color: var(--h-text-2);
   background: var(--h-bg-code);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 4px 8px;
 }
 
@@ -742,7 +742,7 @@
   min-width: 0;
   height: var(--h-button-height-md);
   padding: 0 var(--h-button-padding-x-md);
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12.5px;
   line-height: 1;
   white-space: nowrap;
@@ -783,7 +783,7 @@
 .toggle {
   width: var(--h-switch-width);
   height: var(--h-switch-height);
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-bg-chip);
   border: 1px solid var(--h-line);
   position: relative;
@@ -799,7 +799,7 @@
   left: 4px;
   width: var(--h-switch-thumb-size);
   height: var(--h-switch-thumb-size);
-  border-radius: 50%;
+  border-radius: 0;
   background: #fff;
   box-shadow: none;
   transition: left 100ms ease;
@@ -827,7 +827,7 @@
 .emptyStateIcon {
   width: 56px;
   height: 56px;
-  border-radius: 50%;
+  border-radius: 0;
   background: var(--h-bg-chip);
   display: inline-flex;
   align-items: center;
@@ -852,7 +852,7 @@
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
   color: var(--h-text);
 }
@@ -918,7 +918,7 @@
   gap: 12px;
   padding: 24px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text);
   text-decoration: none;

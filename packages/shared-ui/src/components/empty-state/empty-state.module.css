@@ -8,7 +8,7 @@
   justify-content: center;
   gap: 12px;
   border: 1px dashed var(--h-color-border-default);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-color-bg-subtle) 72%, transparent);
   color: var(--h-color-fg-muted);
   text-align: center;
