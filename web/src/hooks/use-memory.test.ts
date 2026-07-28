@@ -1,171 +1,98 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchJSON } from "@/lib/transport";
+import { putJSON } from "@/lib/transport";
+import { MemoryProvidersResponse } from "@hermes/protocol";
+import {
+  MAX_MEMORY_CHAR_LIMIT,
+  memoryCharLimitConfigPayload,
+  memoryProviderConfigPayload,
+  memoryProviderConfigQueryKey,
+  memoryProviderStatusQueryKey,
+  saveMemoryCharLimit,
+  saveMemoryProviderConfig,
+  toMemoryProvidersState,
+} from "./use-memory";
 
-// Test the response transformation logic used by useMemoryProviders.
-// We verify the shape mapping from GET /api/memory to MemoryProvidersState.
 vi.mock("@/lib/transport", () => ({
   fetchJSON: vi.fn(),
+  postJSON: vi.fn(),
   putJSON: vi.fn(),
+  raceAbort: vi.fn(),
 }));
 
-const mockFetchJSON = fetchJSON as unknown as ReturnType<typeof vi.fn>;
+const mockPutJSON = vi.mocked(putJSON);
 
-interface MemoryProviderOption {
-  name: string;
-  description: string;
-}
-
-interface MemoryProvidersState {
-  active: string;
-  options: MemoryProviderOption[];
-}
-
-/** Response shape from GET /api/memory */
-interface MemoryStatusResponse {
-  active: string;
-  providers: Array<{
-    name: string;
-    description: string;
-    available: boolean;
-    missing?: boolean;
-  }>;
-  builtin_files: Record<string, number>;
-}
-
-/** Pure transform function mirroring the logic in useMemoryProviders queryFn. */
-function transformMemoryStatus(data: MemoryStatusResponse): MemoryProvidersState {
-  return {
-    active: data.active ?? "",
-    options: (data.providers ?? []).map((p) => ({
-      name: p.name,
-      description: p.description ?? "",
-    })),
-  };
-}
-
-describe("useMemoryProviders response transformation", () => {
+describe("memory provider hooks contract", () => {
   beforeEach(() => {
-    mockFetchJSON.mockReset();
+    mockPutJSON.mockReset();
+    mockPutJSON.mockResolvedValue({ ok: true, active: "" });
   });
 
-  it("maps active provider and provider list from full response", () => {
-    const response: MemoryStatusResponse = {
-      active: "chromadb",
+  it("only exposes OpenViking and Hindsight even when Core reports legacy providers", () => {
+    const response = MemoryProvidersResponse.parse({
+      active: "hindsight",
       providers: [
-        { name: "built-in", description: "Built-in flat file", available: true },
-        {
-          name: "chromadb",
-          description: "ChromaDB vector store",
-          available: true,
-          missing: false,
-        },
-        {
-          name: "qdrant",
-          description: "Qdrant vector store",
-          available: false,
-          missing: true,
-        },
+        { name: "honcho", description: "Honcho", available: true },
+        { name: "openviking", description: "OpenViking", available: true, configured: true },
+        { name: "mem0", description: "Mem0", available: true },
+        { name: "hindsight", description: "Hindsight", available: false, configured: true },
       ],
-      builtin_files: { memory: 1234, user: 567 },
-    };
+      builtin_files: {},
+    });
 
-    const result = transformMemoryStatus(response);
+    const result = toMemoryProvidersState(response);
 
-    expect(result.active).toBe("chromadb");
-    expect(result.options).toHaveLength(3);
-    expect(result.options[0]).toEqual({
-      name: "built-in",
-      description: "Built-in flat file",
-    });
-    expect(result.options[1]).toEqual({
-      name: "chromadb",
-      description: "ChromaDB vector store",
-    });
-    expect(result.options[2]).toEqual({
-      name: "qdrant",
-      description: "Qdrant vector store",
-    });
+    expect(result.active).toBe("hindsight");
+    expect(result.options.map((provider) => provider.name)).toEqual(["openviking", "hindsight"]);
+    expect(result.options[0].configured).toBe(true);
+    expect(result.options[1].available).toBe(false);
   });
 
-  it("handles empty active provider gracefully", () => {
-    const response: MemoryStatusResponse = {
+  it("keeps both supported cards visible against an older partial Core response", () => {
+    const result = toMemoryProvidersState(MemoryProvidersResponse.parse({
       active: "",
-      providers: [{ name: "built-in", description: "Built-in", available: true }],
-      builtin_files: {},
-    };
+      providers: [{ name: "openviking", available: true }],
+    }));
 
-    const result = transformMemoryStatus(response);
-
-    expect(result.active).toBe("");
-    expect(result.options).toHaveLength(1);
+    expect(result.options.map((provider) => provider.name)).toEqual(["openviking", "hindsight"]);
+    expect(result.options[1].available).toBe(false);
   });
 
-  it("handles missing providers array gracefully", () => {
-    const response = {
-      active: "built-in",
-      providers: undefined as unknown as MemoryStatusResponse["providers"],
-      builtin_files: {},
-    } as MemoryStatusResponse;
+  it("saves provider config with activate false", async () => {
+    const values = { endpoint: "http://127.0.0.1:1933", agent: "hermes" };
 
-    const result = transformMemoryStatus(response);
+    await saveMemoryProviderConfig("openviking", values);
 
-    expect(result.active).toBe("built-in");
-    expect(result.options).toEqual([]);
+    expect(memoryProviderConfigPayload(values)).toEqual({ values, activate: false });
+    expect(mockPutJSON).toHaveBeenCalledWith(
+      "/api/memory/providers/openviking/config",
+      { values, activate: false },
+      expect.anything(),
+    );
   });
 
-  it("handles null description on providers", () => {
-    const response: MemoryStatusResponse = {
-      active: "chromadb",
-      providers: [
-        {
-          name: "chromadb",
-          description: null as unknown as string,
-          available: true,
-        },
-      ],
-      builtin_files: {},
-    };
+  it("scopes config and status query keys by profile", () => {
+    expect(memoryProviderConfigQueryKey("default", "openviking"))
+      .not.toEqual(memoryProviderConfigQueryKey("work", "openviking"));
+    expect(memoryProviderStatusQueryKey("default", "hindsight"))
+      .not.toEqual(memoryProviderStatusQueryKey("work", "hindsight"));
+  });
 
-    const result = transformMemoryStatus(response);
+  it("saves the built-in memory limit through the shared config endpoint", async () => {
+    await saveMemoryCharLimit(6400);
 
-    expect(result.options[0]).toEqual({
-      name: "chromadb",
-      description: "",
+    expect(memoryCharLimitConfigPayload(6400)).toEqual({
+      config: { memory: { memory_char_limit: 6400 } },
     });
+    expect(mockPutJSON).toHaveBeenCalledWith(
+      "/api/config",
+      { config: { memory: { memory_char_limit: 6400 } } },
+      expect.anything(),
+    );
   });
 
-  it("handles empty providers array", () => {
-    const response: MemoryStatusResponse = {
-      active: "built-in",
-      providers: [],
-      builtin_files: { memory: 0, user: 0 },
-    };
-
-    const result = transformMemoryStatus(response);
-
-    expect(result.active).toBe("built-in");
-    expect(result.options).toHaveLength(0);
-  });
-});
-
-describe("useSetMemoryProvider endpoint", () => {
-  beforeEach(() => {
-    mockFetchJSON.mockReset();
-  });
-
-  it("should call PUT /api/memory/provider with { provider } body", async () => {
-    // This test validates the endpoint contract: the write endpoint is
-    // PUT /api/memory/provider with body { provider: string }.
-    // Verified against hermes_cli/web_server.py:11903 (MemoryProviderSelect).
-    const { putJSON } = await import("@/lib/transport");
-
-    // The endpoint URL must be /api/memory/provider, not the old
-    // /api/dashboard/plugin-providers.
-    const expectedPath = "/api/memory/provider";
-    expect(expectedPath).toBe("/api/memory/provider");
-
-    // The body key must be "provider", not "memory_provider".
-    const expectedBody = { provider: "chromadb" };
-    expect(expectedBody).toEqual({ provider: "chromadb" });
+  it("rejects limits outside the hard bounds", () => {
+    expect(() => memoryCharLimitConfigPayload(0)).toThrow();
+    expect(() => memoryCharLimitConfigPayload(MAX_MEMORY_CHAR_LIMIT + 1)).toThrow();
+    expect(() => memoryCharLimitConfigPayload(2200.5)).toThrow();
   });
 });

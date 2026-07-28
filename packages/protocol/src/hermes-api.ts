@@ -442,11 +442,152 @@ export const MutationOkResponse = z.object({
 }).passthrough();
 export type MutationOkResponse = z.infer<typeof MutationOkResponse>;
 
+// ── Memory providers (/api/memory/providers/*) ───────────────────────
+
+export const MemoryProviderSetupInfo = z.object({
+  pip_dependencies: z.array(z.string()).optional().default([]),
+  external_dependencies: z.array(z.object({
+    name: z.string().optional().default(""),
+    install: z.string().optional().default(""),
+    check: z.string().optional().default(""),
+  }).passthrough()).optional().default([]),
+  required_env: z.array(z.string()).optional().default([]),
+  dependencies_installed: z.boolean().optional().default(true),
+}).passthrough();
+export type MemoryProviderSetupInfo = z.infer<typeof MemoryProviderSetupInfo>;
+
+export const MemoryProviderListItem = z.object({
+  name: z.string(),
+  description: z.string().optional().default(""),
+  available: z.boolean().optional().default(false),
+  configured: z.boolean().optional().default(false),
+  status: z.string().optional().default(""),
+  missing: z.boolean().optional().default(false),
+  setup: MemoryProviderSetupInfo.optional(),
+}).passthrough();
+export type MemoryProviderListItem = z.infer<typeof MemoryProviderListItem>;
+
+export const MemoryProvidersResponse = z.object({
+  active: z.string().optional().default(""),
+  providers: z.array(MemoryProviderListItem).optional().default([]),
+  builtin_files: z.record(z.number()).optional().default({}),
+}).passthrough();
+export type MemoryProvidersResponse = z.infer<typeof MemoryProvidersResponse>;
+
+export const MemoryProviderConfigOption = z.object({
+  value: z.string(),
+  label: z.string().optional().default(""),
+  description: z.string().optional().default(""),
+}).passthrough();
+
+export const MemoryProviderConfigField = z.object({
+  key: z.string(),
+  label: z.string(),
+  kind: z.enum(["text", "secret", "select", "boolean"]),
+  description: z.string().optional().default(""),
+  placeholder: z.string().optional().default(""),
+  required: z.boolean().optional().default(false),
+  value: z.union([z.string(), z.number(), z.boolean()]),
+  is_set: z.boolean().optional().default(false),
+  options: z.array(MemoryProviderConfigOption).optional().default([]),
+  url: z.string().optional().default(""),
+  when: z.record(z.unknown()).nullable().optional(),
+}).passthrough();
+export type MemoryProviderConfigField = z.infer<typeof MemoryProviderConfigField>;
+
+export const MemoryProviderConfigResponse = z.object({
+  name: z.string(),
+  label: z.string(),
+  fields: z.array(MemoryProviderConfigField).optional().default([]),
+  setup: MemoryProviderSetupInfo.optional(),
+}).passthrough();
+export type MemoryProviderConfigResponse = z.infer<typeof MemoryProviderConfigResponse>;
+
+const OpenVikingModelUsage = z.object({
+  kind: z.string(),
+  model: z.string(),
+  provider: z.string(),
+  calls: z.number(),
+  prompt_tokens: z.number(),
+  completion_tokens: z.number(),
+  total_tokens: z.number(),
+  last_updated: z.string(),
+}).passthrough();
+
+const OpenVikingQueueUsage = z.object({
+  queue: z.string(),
+  pending: z.number(),
+  in_progress: z.number(),
+  processed: z.number(),
+  requeued: z.number(),
+  errors: z.number(),
+  total: z.number(),
+}).passthrough();
+
+export const OpenVikingRuntimeDetails = z.object({
+  kind: z.literal("openviking"),
+  auth_mode: z.string().optional().default(""),
+  ready_checks: z.record(z.unknown()).optional().default({}),
+  system: z.record(z.unknown()).optional().default({}),
+  components: z.record(z.unknown()).optional().default({}),
+  summary: z.record(z.unknown()).optional().default({}),
+  memory_stats: z.record(z.unknown()).optional().default({}),
+  model_usage: z.array(OpenVikingModelUsage).optional().default([]),
+  queue_usage: z.array(OpenVikingQueueUsage).optional().default([]),
+  tasks: z.array(z.record(z.unknown())).optional().default([]),
+}).passthrough();
+export type OpenVikingRuntimeDetails = z.infer<typeof OpenVikingRuntimeDetails>;
+
+export const HindsightRuntimeDetails = z.object({
+  kind: z.literal("hindsight"),
+  mode: z.string().optional().default(""),
+  health: z.record(z.unknown()).optional().default({}),
+  bank_id: z.string().optional().default(""),
+  bank: z.record(z.unknown()).nullable().optional(),
+  banks_count: z.number().optional().default(0),
+  stats: z.record(z.unknown()).optional().default({}),
+  runtime_config: z.record(z.unknown()).nullable().optional(),
+}).passthrough();
+export type HindsightRuntimeDetails = z.infer<typeof HindsightRuntimeDetails>;
+
+export const MemoryProviderRuntimeStatusResponse = z.object({
+  provider: z.string(),
+  active: z.boolean(),
+  configured: z.boolean(),
+  reachable: z.boolean(),
+  healthy: z.boolean(),
+  endpoint: z.string(),
+  console_url: z.string(),
+  version: z.string(),
+  checked_at: z.string(),
+  error: z.string(),
+  details: z.discriminatedUnion("kind", [
+    OpenVikingRuntimeDetails,
+    HindsightRuntimeDetails,
+  ]).nullable(),
+}).passthrough();
+export type MemoryProviderRuntimeStatusResponse = z.infer<typeof MemoryProviderRuntimeStatusResponse>;
+
+export const MemoryProviderConfigMutationResponse = z.object({
+  ok: z.boolean(),
+  active: z.string().optional().default(""),
+}).passthrough();
+export type MemoryProviderConfigMutationResponse = z.infer<typeof MemoryProviderConfigMutationResponse>;
+
+export const MemoryProviderSetupResponse = z.object({
+  ok: z.boolean(),
+  provider: z.string(),
+  results: z.array(z.record(z.unknown())).optional().default([]),
+}).passthrough();
+export type MemoryProviderSetupResponse = z.infer<typeof MemoryProviderSetupResponse>;
+
 export const ConfigSchemaField = z.object({
   type: z.string(),
   description: z.string(),
   category: z.string(),
   options: z.array(z.string()).optional(),
+  minimum: z.number().optional(),
+  maximum: z.number().optional(),
 });
 export type ConfigSchemaField = z.infer<typeof ConfigSchemaField>;
 

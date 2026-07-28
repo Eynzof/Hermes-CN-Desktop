@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Copy,
   ExternalLink,
+  BarChart3,
   Folder,
   Info,
   Languages,
@@ -32,6 +33,7 @@ import {
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import { TopBarActions } from "@/components/top-bar/top-bar";
 import { CopyButton } from "@/components/ui/copy-button";
+import { SkillUsageStats } from "@/components/skills/skill-usage-stats";
 import {
   isUserSkill,
   resolveSkillOrigin,
@@ -40,7 +42,7 @@ import {
 } from "@/lib/skill-origin";
 import s from "./skills.module.css";
 
-type Tab = "builtin" | "user" | "market";
+type Tab = "builtin" | "market" | "stats" | "user";
 type Filter = "all" | "enabled" | "disabled";
 type Lang = "zh" | "en";
 
@@ -225,7 +227,7 @@ export function SkillsRoute() {
         />
       )}
 
-      {/* 顶部 tab：内置 / 我的 / 市场 */}
+      {/* 顶部 tab：内置 / 市场 / 统计 / 我的 */}
       <div className={s.toptabs}>
         <button
           type="button"
@@ -243,6 +245,30 @@ export function SkillsRoute() {
         <button
           type="button"
           className={s.toptab}
+          data-active={tab === "market"}
+          onClick={() => {
+            setTab("market");
+            setSelectedName(null);
+          }}
+        >
+          <Store size={14} />
+          Skill 市场
+        </button>
+        <button
+          type="button"
+          className={s.toptab}
+          data-active={tab === "stats"}
+          onClick={() => {
+            setTab("stats");
+            setSelectedName(null);
+          }}
+        >
+          <BarChart3 size={14} />
+          统计
+        </button>
+        <button
+          type="button"
+          className={s.toptab}
           data-active={tab === "user"}
           onClick={() => {
             setTab("user");
@@ -253,26 +279,18 @@ export function SkillsRoute() {
           我的 Skills
           <span className={s.toptabCount}>{user.length}</span>
         </button>
-        <button
-          type="button"
-          className={s.toptab}
-          data-active={tab === "market"}
-          onClick={() => {
-            setTab("market");
-            setSelectedName(null);
-          }}
-        >
-          <Store size={14} />
-          Skill 市场
-        </button>
         <span className={s.toptabSpacer} />
         <span className={s.toptabHint}>
           <Info size={13} />
           {tab === "builtin"
             ? "内置 Skill 由 Hermes 团队维护，仅可启用 / 禁用"
-            : tab === "user"
-              ? "自建 Skill 保存在"
-              : "精选 Skill 市场与目录，点击卡片会在外部浏览器打开"}
+            : tab === "market"
+              ? "精选 Skill 市场与目录，点击卡片会在外部浏览器打开"
+              : tab === "stats"
+                ? "按当前管理档案统计已完成的 Skill 加载调用"
+                : tab === "user"
+                  ? "自建 Skill 保存在"
+                  : null}
           {tab === "user" && <code>~/.hermes/skills/</code>}
         </span>
       </div>
@@ -280,6 +298,8 @@ export function SkillsRoute() {
       {/* 主体 */}
       {tab === "market" ? (
         <SkillMarket />
+      ) : tab === "stats" ? (
+        <SkillUsageStats profileOverride={scope} />
       ) : isLoading ? (
         <div className={s.statePane}>加载中…</div>
       ) : isError ? (

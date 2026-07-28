@@ -27,6 +27,16 @@ export function selectProviderModelIds(result: ProviderModelsListResult): string
   return Array.from(new Set(ids)).sort();
 }
 
+export function providerModelsErrorText(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/\b404\b|not found/i.test(message)) return "此服务商未提供 /models 端点";
+  if (/\b401\b|\b403\b|unauthor/i.test(message)) return "API Key 无效或未保存";
+  if (/Failed to fetch|NetworkError|TypeError|cors/i.test(message)) {
+    return "无法连接，可能被浏览器跨域策略拦截；桌面端可正常使用";
+  }
+  return message;
+}
+
 /**
  * Fetch a provider's model list through the gateway `provider.models` RPC
  * rather than the desktop `external_request` proxy. The backend has no
@@ -42,7 +52,7 @@ export function useProviderModels(
   apiMode?: string,
 ) {
   return useQuery<UseProviderModelsResult>({
-    queryKey: ["provider-models", provider, baseUrl],
+    queryKey: ["provider-models", provider, baseUrl, apiMode ?? ""],
     queryFn: async () => {
       const result = await listModels({ provider, base_url: baseUrl, api_key: apiKey, api_mode: apiMode });
       return { models: selectProviderModelIds(result), fetchedAt: Date.now() };

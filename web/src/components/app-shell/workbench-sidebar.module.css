@@ -102,17 +102,6 @@
   white-space: nowrap;
 }
 
-.newTaskKbd {
-  background: rgba(0, 0, 0, 0.2);
-  color: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  font-family: var(--h-font-mono);
-  font-size: 9.5px;
-  padding: 1px 4px;
-  border-radius: 2px;
-  letter-spacing: 0.04em;
-}
-
 .quickNav {
   margin: 0 0 4px;
   padding-bottom: 8px;

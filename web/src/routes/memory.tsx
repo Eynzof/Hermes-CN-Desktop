@@ -1,51 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Brain, Check, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Brain, Plus, RefreshCw, Trash2 } from "lucide-react";
 import {
   useAddMemoryEntry,
   useMemory,
-  useMemoryProviders,
   useRemoveMemoryEntry,
   useSaveUserProfile,
-  useSetMemoryProvider,
   useUpdateMemoryEntry,
-  type MemoryProviderOption,
 } from "@/hooks/use-memory";
 import { Button } from "@hermes/shared-ui";
+import { MemoryLimitControl } from "@/components/memory/memory-limit-control";
 import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
 import { SettingsHero } from "./settings-hero";
 import settings from "./settings.module.css";
 import s from "./memory.module.css";
-
-const PROVIDER_URLS: Record<string, string> = {
-  honcho: "https://app.honcho.dev",
-  hindsight: "https://ui.hindsight.vectorize.io",
-  mem0: "https://app.mem0.ai",
-  retaindb: "https://retaindb.com",
-  supermemory: "https://supermemory.ai",
-  byterover: "https://app.byterover.dev",
-};
-
-const PROVIDER_DESCRIPTIONS: Record<string, string> = {
-  builtin: "内置文件记忆，直接写入当前档案的 memories/MEMORY.md 与 USER.md。",
-  honcho: "基于 AI 的跨会话用户画像建模，支持语义搜索与长期偏好记录。",
-  hindsight: "长期记忆，具有知识图谱和多策略检索能力。",
-  mem0: "服务端 LLM 事实提取，支持语义搜索和自动去重。",
-  retaindb: "云端记忆 API，支持混合搜索和多类型记忆。",
-  supermemory: "语义长期记忆，支持档案回忆和实体提取。",
-  holographic: "本地 SQLite 事实存储，支持全文搜索和信任评分，无需 API Key。",
-  openviking: "会话管理的记忆，支持分层检索和知识浏览。",
-  byterover: "持久化知识树，通过 brv CLI 进行分层检索。",
-};
-
-const PROVIDER_ENV_HINTS: Record<string, string[]> = {
-  honcho: ["HONCHO_API_KEY", "HONCHO_BASE_URL"],
-  hindsight: ["HINDSIGHT_API_KEY", "HINDSIGHT_API_URL", "HINDSIGHT_BANK_ID"],
-  mem0: ["MEM0_API_KEY"],
-  retaindb: ["RETAINDB_API_KEY"],
-  supermemory: ["SUPERMEMORY_API_KEY"],
-  byterover: ["BRV_API_KEY"],
-};
 
 function timeAgo(ts: number | null | undefined): string {
   if (!ts) return "未创建";
@@ -54,12 +22,6 @@ function timeAgo(ts: number | null | undefined): string {
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
   return `${Math.floor(diff / 86400)} 天前`;
-}
-
-function providerDescription(provider: MemoryProviderOption): string {
-  const raw = provider.description || "";
-  const key = raw.startsWith("memory.providers.") ? raw.split(".").pop() || provider.name : provider.name;
-  return PROVIDER_DESCRIPTIONS[key] ?? (raw || "外置记忆系统。");
 }
 
 function errorMessage(error: unknown): string {
@@ -84,9 +46,7 @@ function CapacityBar({ label, used, limit }: { label: string; used: number; limi
 
 export function MemoryRoute() {
   const memoryQuery = useMemory();
-  const [tab, setTab] = useState<"entries" | "profile" | "providers">("entries");
-  const providersQuery = useMemoryProviders({ enabled: tab === "providers" });
-  const setProvider = useSetMemoryProvider();
+  const [tab, setTab] = useState<"entries" | "profile">("entries");
   const addEntry = useAddMemoryEntry();
   const updateEntry = useUpdateMemoryEntry();
   const removeEntry = useRemoveMemoryEntry();
@@ -109,19 +69,6 @@ export function MemoryRoute() {
 
   const stats = useMemo(() => data ? memoryPageStats(data) : [], [data]);
 
-  const providers = useMemo(() => {
-    const builtin: MemoryProviderOption = { name: "builtin", description: PROVIDER_DESCRIPTIONS.builtin };
-    const remote = providersQuery.data?.options ?? [];
-    const seen = new Set([builtin.name]);
-    return [builtin, ...remote.filter((item) => {
-      if (seen.has(item.name)) return false;
-      seen.add(item.name);
-      return true;
-    })];
-  }, [providersQuery.data?.options]);
-
-  const activeProvider = providersQuery.data?.active || "builtin";
-  const activeProviderLabel = providersQuery.data ? activeProvider : "配置";
   const isLoading = memoryQuery.isLoading;
   const error = memoryQuery.error || addEntry.error || updateEntry.error || saveUser.error;
 
@@ -164,13 +111,13 @@ export function MemoryRoute() {
   );
 
   return (
-    <SectionShell title="记忆" sub="MEMORY.md / USER.md" right={right}>
+    <SectionShell title="内置记忆" sub="MEMORY.md / USER.md" right={right}>
       <SettingsHero
         ok={!memoryQuery.isError}
         icon={<Brain size={24} />}
-        eyebrow="Hermes Agent 长期记忆"
-        title="长期记忆与用户画像"
-        description="这里管理当前档案的长期记忆。记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。"
+        eyebrow="Hermes Agent 内置记忆"
+        title="内置记忆与用户画像"
+        description="这里管理当前档案中的 MEMORY.md 与 USER.md。内置记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。"
         badge={(
           <span className={settings.statusBadge} data-on={!memoryQuery.isError}>
             {isLoading ? "读取中" : data ? `${data.memory.entries.length} 条记忆` : "记忆"}
@@ -202,13 +149,10 @@ export function MemoryRoute() {
 
           <div className={s.tabs}>
             <button type="button" data-active={tab === "entries" ? "true" : undefined} onClick={() => setTab("entries")}>
-              记忆 <span>{timeAgo(data.memory.lastModified)}</span>
+              本地记忆 <span>{timeAgo(data.memory.lastModified)}</span>
             </button>
             <button type="button" data-active={tab === "profile" ? "true" : undefined} onClick={() => setTab("profile")}>
               用户画像 <span>{timeAgo(data.user.lastModified)}</span>
-            </button>
-            <button type="button" data-active={tab === "providers" ? "true" : undefined} onClick={() => setTab("providers")}>
-              外置记忆系统 <span>{activeProviderLabel}</span>
             </button>
           </div>
 
@@ -225,6 +169,8 @@ export function MemoryRoute() {
                   <Plus size={14} /> 添加记忆
                 </Button>
               </div>
+
+              <MemoryLimitControl currentLimit={data.memory.charLimit} used={data.memory.charCount} />
 
               {showAdd && (
                 <div className={s.formCard}>
@@ -306,53 +252,6 @@ export function MemoryRoute() {
                   <span>{userContent.length} / {data.user.charLimit} 字符</span>
                   <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveUser} disabled={!userDirty || saveUser.isPending}>保存画像</Button>
                 </div>
-              </div>
-            </section>
-          )}
-
-          {tab === "providers" && (
-            <section className={s.panel}>
-              <div className={s.panelHead}>
-                <div>
-                  <strong>外置记忆系统</strong>
-                  <span>当前 {activeProvider}</span>
-                </div>
-              </div>
-              <p className={s.providerHint}>
-                内置文件记忆始终可用；外置记忆系统用于增强长期召回。部分系统需要先在 <code>.env</code> 中配置 API Key，或运行 <code>hermes memory setup</code> 完成初始化。
-              </p>
-              {providersQuery.isError && <div className={s.errorState}>无法读取外置记忆系统列表，仍可继续使用内置文件记忆。</div>}
-              <div className={s.providerGrid}>
-                {providers.map((provider) => {
-                  const active = activeProvider === provider.name || (activeProvider === "" && provider.name === "builtin");
-                  const externalUrl = PROVIDER_URLS[provider.name];
-                  const envHints = PROVIDER_ENV_HINTS[provider.name] ?? [];
-                  return (
-                    <article key={provider.name} className={s.providerCard} data-active={active ? "true" : undefined}>
-                      <div className={s.providerHead}>
-                        <strong>{provider.name === "builtin" ? "内置记忆" : provider.name}</strong>
-                        {active && <span><Check size={11} /> 当前</span>}
-                      </div>
-                      <p>{provider.name === "builtin" ? PROVIDER_DESCRIPTIONS.builtin : providerDescription(provider)}</p>
-                      {envHints.length > 0 && <div className={s.envHints}>{envHints.map((key) => <code key={key}>{key}</code>)}</div>}
-                      <div className={s.providerActions}>
-                        {externalUrl && (
-                          <a href={externalUrl} target="_blank" rel="noreferrer"><ExternalLink size={12} /> 官网</a>
-                        )}
-                        <Button
-                          type="button"
-                          variant={active ? "outline" : "solid"}
-                          tone={active ? "neutral" : "accent"}
-                          size="sm"
-                          disabled={active || setProvider.isPending}
-                          onClick={() => setProvider.mutate(provider.name === "builtin" ? "" : provider.name)}
-                        >
-                          {active ? "已启用" : "设为当前"}
-                        </Button>
-                      </div>
-                    </article>
-                  );
-                })}
               </div>
             </section>
           )}
