@@ -176,7 +176,7 @@ export function ProfileBuilderRoute() {
       title="新建档案"
       sub="分步创建"
       right={
-        <Button variant="outline" size="sm" leadingIcon={<ArrowLeft size={14} />} onClick={() => navigate("/profiles")}>
+        <Button variant="outline" size="sm" leadingIcon={<ArrowLeft size={16} />} onClick={() => navigate("/profiles")}>
           返回档案
         </Button>
       }
@@ -184,7 +184,7 @@ export function ProfileBuilderRoute() {
       <div className={s.wrap}>
         <div className={s.stepper}>
           {STEPS.map((st, i) => (
-            <span key={st.id} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span key={st.id} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               {i > 0 && <span className={s.stepSep} />}
               <button
                 type="button"
@@ -303,7 +303,7 @@ export function ProfileBuilderRoute() {
                 <Button
                   variant="outline"
                   size="sm"
-                  leadingIcon={<Search size={13} />}
+                  leadingIcon={<Search size={12} />}
                   onClick={runHubSearch}
                   loading={hubSearch.isPending}
                 >
@@ -342,7 +342,7 @@ export function ProfileBuilderRoute() {
                       onClick={() => removeHubSkill(h.identifier)}
                       aria-label={`移除 ${h.name}`}
                     >
-                      <X size={11} />
+                      <X size={12} />
                     </button>
                   </span>
                 ))}
@@ -388,7 +388,7 @@ export function ProfileBuilderRoute() {
               </Field>
             </div>
             <div>
-              <Button variant="outline" size="sm" leadingIcon={<Plus size={13} />} onClick={addMcpDraft}>
+              <Button variant="outline" size="sm" leadingIcon={<Plus size={12} />} onClick={addMcpDraft}>
                 添加 server
               </Button>
             </div>
@@ -408,7 +408,7 @@ export function ProfileBuilderRoute() {
                       onClick={() => setMcpServers((prev) => prev.filter((p) => p.name !== srv.name))}
                       aria-label={`移除 ${srv.name}`}
                     >
-                      <X size={13} />
+                      <X size={12} />
                     </button>
                   </div>
                 ))}
@@ -445,7 +445,7 @@ export function ProfileBuilderRoute() {
         <div className={s.nav}>
           <Button
             variant="outline"
-            leadingIcon={<ArrowLeft size={14} />}
+            leadingIcon={<ArrowLeft size={16} />}
             onClick={goBack}
             disabled={stepIndex === 0 || create.isPending}
           >
@@ -466,7 +466,7 @@ export function ProfileBuilderRoute() {
               <Button
                 variant="solid"
                 tone="accent"
-                trailingIcon={<ArrowRight size={14} />}
+                trailingIcon={<ArrowRight size={16} />}
                 onClick={goNext}
               >
                 下一步

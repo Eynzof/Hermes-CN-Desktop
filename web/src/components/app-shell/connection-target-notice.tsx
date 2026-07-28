@@ -51,10 +51,10 @@ export function ConnectionTargetNotice() {
   return (
     <div className={s.notice} data-tone={failed ? "error" : "normal"} role={failed ? "alert" : "status"}>
       {failed
-        ? <AlertTriangle size={15} aria-hidden="true" />
+        ? <AlertTriangle size={16} aria-hidden="true" />
         : remote
-          ? <Globe2 size={13} aria-hidden="true" />
-          : <Cable size={13} aria-hidden="true" />}
+          ? <Globe2 size={12} aria-hidden="true" />
+          : <Cable size={12} aria-hidden="true" />}
       <div className={s.copy}>
         <div className={s.heading}>
           <strong>
@@ -77,8 +77,8 @@ export function ConnectionTargetNotice() {
             title="重新检测"
           >
             {health.isFetching
-              ? <Loader2 className={s.spin} size={13} aria-hidden="true" />
-              : <RefreshCw size={13} aria-hidden="true" />}
+              ? <Loader2 className={s.spin} size={12} aria-hidden="true" />
+              : <RefreshCw size={12} aria-hidden="true" />}
           </button>
         )}
       </div>

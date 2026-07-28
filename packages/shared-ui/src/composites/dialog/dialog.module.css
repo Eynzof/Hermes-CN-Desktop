@@ -19,7 +19,6 @@
   color: var(--h-text);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
-  box-shadow: var(--h-shadow-l);
   outline: none;
   max-width: min(560px, calc(100vw - 32px));
   max-height: 85vh;

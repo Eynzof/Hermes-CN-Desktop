@@ -32,7 +32,7 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--h-text-3);
-  padding-top: 9px;
+  padding-top: 8px;
 }
 
 .sectionBody {
@@ -43,14 +43,14 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   gap: 12px;
 }
 
 .sectionLh {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
 }
 
 .sectionTag {
@@ -91,7 +91,7 @@
 .taskGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 16px;
 }
 
 @media (max-width: 900px) {

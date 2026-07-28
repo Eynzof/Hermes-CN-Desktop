@@ -8,7 +8,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 12px;
   border: 1px solid var(--h-line-soft);
   border-radius: var(--h-r-lg);
@@ -18,7 +18,7 @@
 .filterGroup {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -31,8 +31,8 @@
 .segmented {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  padding: 3px;
+  gap: 4px;
+  padding: 4px;
   border: 1px solid var(--h-line-soft);
   border-radius: var(--h-r-sm);
   background: var(--h-bg-chip);
@@ -46,7 +46,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   border: 1px solid transparent;
   border-radius: var(--h-r-sm);
   color: var(--h-text-2);
@@ -61,7 +61,8 @@
 }
 
 .segmentButton {
-  min-height: 23px;
+  height: var(--h-segment-height);
+  min-height: var(--h-segment-height);
   padding: 0 8px;
   font-family: var(--h-font-mono);
   font-size: 10.5px;
@@ -86,11 +87,11 @@
 .searchBox {
   min-width: min(320px, 100%);
   flex: 1 1 280px;
-  height: 34px;
+  height: 36px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 11px;
+  padding: 0 12px;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
   background: var(--h-bg-input);
@@ -117,8 +118,9 @@
 .actionButton,
 .toggleButton,
 .actionLink {
-  min-height: 32px;
-  padding: 0 11px;
+  height: var(--h-button-height-md);
+  min-height: var(--h-button-height-md);
+  padding: 0 12px;
   border-color: var(--h-line);
   background: var(--h-bg-pane);
 }
@@ -136,9 +138,9 @@
 }
 
 .toggleDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--h-radius-pill);
   background: var(--h-text-3);
 }
 
@@ -153,7 +155,7 @@
 .metaLine {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: 8px 16px;
   color: var(--h-text-3);
   font-size: 11.5px;
 }
@@ -201,21 +203,21 @@
 .newLogsButton {
   position: absolute;
   z-index: 2;
-  top: 10px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  height: 30px;
+  height: var(--h-button-height-md);
   padding: 0 12px;
   border: 1px solid var(--h-accent-border);
   border-radius: var(--h-r-pill);
   background: var(--h-bg-pane);
   color: var(--h-text);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
   cursor: pointer;
 }
 
 .logViewport {
-  height: calc(100vh - 330px);
+  height: calc(100vh - 332px);
   min-height: 360px;
   overflow: auto;
   padding: 12px 0;
@@ -238,9 +240,9 @@
 .logLine {
   min-width: max-content;
   display: grid;
-  grid-template-columns: 54px minmax(max-content, 1fr);
-  gap: 10px;
-  padding: 1px 14px;
+  grid-template-columns: 56px minmax(max-content, 1fr);
+  gap: 12px;
+  padding: 4px 16px;
   color: var(--h-text-2);
   white-space: pre;
 }
@@ -300,6 +302,6 @@
   }
 
   .logViewport {
-    height: calc(100vh - 390px);
+    height: calc(100vh - 392px);
   }
 }

@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   padding: 0 12px;
-  gap: 14px;
+  gap: 16px;
   font-family: var(--h-font-mono);
   font-size: 10.5px;
   line-height: 1;
@@ -17,7 +17,7 @@
 .stat {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   min-height: 12px;
   line-height: 1;
 }
@@ -30,6 +30,9 @@
 
 .gatewayButton {
   appearance: none;
+  height: var(--h-button-height-xs);
+  display: inline-flex;
+  align-items: center;
   border: 0;
   padding: 0;
   background: transparent;
@@ -55,7 +58,7 @@
   appearance: none;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-xs);
-  min-height: 20px;
+  height: var(--h-button-height-xs);
   padding: 0 8px;
   display: inline-flex;
   align-items: center;
@@ -132,7 +135,7 @@
 
 .sep {
   width: 1px;
-  height: 10px;
+  height: 12px;
   background: var(--h-line);
   flex: 0 0 auto;
 }
@@ -141,12 +144,12 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   display: inline-block;
   align-self: center;
@@ -155,7 +158,7 @@
 
 .dot[data-state="running"] {
   background: var(--moss);
-  box-shadow: 0 0 6px rgba(141, 181, 128, 0.5);
+  box-shadow: none;
 }
 
 .dot[data-state="ready"] {
@@ -164,7 +167,7 @@
 
 .dot[data-state="offline"] {
   background: var(--rust);
-  box-shadow: 0 0 6px rgba(217, 102, 102, 0.5);
+  box-shadow: none;
 }
 
 .dot[data-state="unknown"] {
@@ -188,7 +191,7 @@
   align-items: center;
   gap: 8px;
   max-width: 56ch;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border: 1px solid color-mix(in srgb, var(--rust) 40%, var(--h-line));
   border-radius: var(--h-r-xs);
   background: var(--h-bg-soft);
@@ -219,7 +222,7 @@
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--h-accent-border);
   border-radius: var(--h-r-xs);
   color: var(--h-accent);

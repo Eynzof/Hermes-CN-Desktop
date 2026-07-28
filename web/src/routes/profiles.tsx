@@ -80,7 +80,7 @@ export function ProfilesRoute() {
             <Button
               variant="outline"
               size="sm"
-              leadingIcon={<Wand2 size={14} />}
+              leadingIcon={<Wand2 size={16} />}
               onClick={() => navigate("/profiles/new")}
             >
               Build 向导
@@ -89,7 +89,7 @@ export function ProfilesRoute() {
               variant="solid"
               tone="accent"
               size="sm"
-              leadingIcon={<Plus size={14} />}
+              leadingIcon={<Plus size={16} />}
               onClick={open("create")}
             >
               新建档案

@@ -3,7 +3,7 @@
 .skeleton {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
   padding: 24px 4px;
   opacity: 0;
   animation: skeleton-appear 0.18s ease-out 0.12s forwards;
@@ -11,7 +11,7 @@
 
 .user {
   align-self: flex-end;
-  height: 34px;
+  height: 36px;
   border-radius: var(--h-r-md);
   background: var(--h-bg-chip);
   animation: skeleton-pulse 1.4s ease-in-out infinite;
@@ -20,12 +20,12 @@
 .assistant {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   align-self: stretch;
 }
 
 .line {
-  height: 14px;
+  height: 16px;
   border-radius: var(--h-r-sm);
   background: var(--h-bg-chip);
   animation: skeleton-pulse 1.4s ease-in-out infinite;

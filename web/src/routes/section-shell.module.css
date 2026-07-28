@@ -35,9 +35,7 @@
   overflow: visible;
   padding: 0;
   border-left: 1px solid var(--h-line-soft);
-  background:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--h-accent) 8%, transparent), transparent 42%),
-    linear-gradient(180deg, color-mix(in srgb, var(--h-bg-pane) 98%, transparent), var(--h-bg-pane));
+  background: var(--h-bg-soft);
 }
 
 @media (max-width: 1120px) {

@@ -1,7 +1,7 @@
 .soulPage {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   max-width: 1280px;
 }
 
@@ -28,8 +28,8 @@
 .pageTabs button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 8px;
+  padding: 8px 16px;
   border: 0;
   border-radius: var(--h-r-sm);
   background: transparent;
@@ -47,7 +47,7 @@
 .pageTabs button[data-active="true"] {
   background: var(--h-bg-pane);
   color: var(--h-text);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
 }
 
 /* ── header right slot ─────────────────────────────────────── */
@@ -64,7 +64,7 @@
   background: var(--h-bg-chip);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-pill);
-  padding: 3px 10px;
+  padding: 4px 12px;
 }
 
 /* ── panel ─────────────────────────────────────────────────── */
@@ -83,13 +83,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
 }
 
 .panelHead > div:first-child {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -106,7 +106,7 @@
 .headActions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -120,8 +120,8 @@
 .editMode {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
+  gap: 4px;
+  padding: 8px 12px;
   border-radius: var(--h-r-sm);
   color: var(--h-text-2);
   background: var(--h-bg-soft);
@@ -131,7 +131,7 @@
 
 /* ── editor body ───────────────────────────────────────────── */
 .editorBody {
-  padding: 14px 16px;
+  padding: 16px 16px;
 }
 
 .textarea {
@@ -142,7 +142,7 @@
   color: var(--h-text);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
-  padding: 12px 14px;
+  padding: 12px 16px;
   outline: none;
   line-height: 1.7;
   font-size: 13px;
@@ -151,7 +151,7 @@
 
 .textarea:focus {
   border-color: var(--h-accent-border);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 12%, transparent);
+  box-shadow: none;
 }
 
 /* ── footer ────────────────────────────────────────────────── */
@@ -191,7 +191,7 @@
 
 .errorState {
   justify-content: flex-start;
-  padding: 12px 14px;
+  padding: 12px 16px;
   color: var(--h-err);
   background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-pane));
   border: 1px solid color-mix(in srgb, var(--h-err) 24%, var(--h-line));

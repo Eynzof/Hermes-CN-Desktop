@@ -2,18 +2,18 @@
 
 .card {
   width: 280px;
-  padding: 18px 18px 10px;
-  border-radius: 14px;
+  padding: 20px 20px 12px;
+  border-radius: 8px;
   border: 1px solid var(--h-line);
   background: var(--h-bg-pane);
-  box-shadow: 0 12px 36px rgba(15, 14, 12, 0.16);
+  box-shadow: none;
   z-index: 60;
 }
 
 .head {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
 .bigAvatarButton {
@@ -21,7 +21,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  border-radius: 12px;
+  border-radius: 8px;
   line-height: 0;
   cursor: zoom-in;
 }
@@ -29,7 +29,7 @@
 .bigAvatar {
   width: 64px;
   height: 64px;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
   object-fit: cover;
@@ -51,8 +51,8 @@
   width: min(440px, 80vw);
   max-height: 80vh;
   object-fit: contain;
-  border-radius: 16px;
-  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.42);
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 .headText {
@@ -77,7 +77,7 @@
 
 .divider {
   height: 1px;
-  margin: 14px 0;
+  margin: 16px 0;
   background: color-mix(in srgb, var(--h-line-soft) 45%, transparent);
 }
 
@@ -103,7 +103,7 @@
   display: flex;
   align-items: stretch;
   justify-content: space-around;
-  padding: 2px 0 6px;
+  padding: 4px 0 8px;
 }
 
 .action {
@@ -112,13 +112,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   border: 0;
   background: transparent;
   color: var(--h-accent);
   font-size: 12px;
-  padding: 8px 6px;
-  border-radius: 8px;
+  padding: 8px 8px;
+  border-radius: 4px;
   cursor: pointer;
 }
 

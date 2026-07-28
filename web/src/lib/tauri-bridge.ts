@@ -82,8 +82,6 @@ export function isTauriDevMode(envDev = import.meta.env.DEV): boolean {
 }
 
 const BASE64_CHUNK_SIZE = 0x8000;
-const BOOTSTRAP_LOGO_GLOW_RGB = "255,255,255";
-
 type TauriFileDropPosition = {
   x: number;
   y: number;
@@ -681,10 +679,9 @@ function showBootstrapOverlay(initialMessage: string): {
   root.id = "hermes-bootstrap-overlay";
   root.setAttribute(
     "style",
-    "position:fixed;inset:0;background:" +
-      `radial-gradient(circle at 50% 40%,rgba(${BOOTSTRAP_LOGO_GLOW_RGB},0.20) 0%,rgba(${BOOTSTRAP_LOGO_GLOW_RGB},0.11) 22%,rgba(${BOOTSTRAP_LOGO_GLOW_RGB},0.05) 42%,transparent 62%),#0a0a0a;` +
+    "position:fixed;inset:0;background:#111111;" +
       "color:#fbfaf6;display:flex;align-items:center;justify-content:center;" +
-      "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
+      "font-family:'HarmonyOS Sans SC','HarmonyOS Sans','PingFang SC','Segoe UI',sans-serif;" +
       "z-index:2147483647;padding:48px;box-sizing:border-box;overflow:auto;",
   );
 
@@ -693,7 +690,7 @@ function showBootstrapOverlay(initialMessage: string): {
   panel.setAttribute(
     "style",
     "width:min(760px,calc(100vw - 64px));display:flex;flex-direction:column;" +
-      "align-items:center;gap:18px;text-align:center;",
+      "align-items:center;gap:20px;text-align:center;",
   );
 
   const mark = document.createElement("img");
@@ -701,8 +698,7 @@ function showBootstrapOverlay(initialMessage: string): {
   mark.alt = "Hermes Agent Logo";
   mark.setAttribute(
     "style",
-    "width:104px;height:104px;border-radius:24px;display:block;" +
-      `box-shadow:0 24px 60px rgba(0,0,0,0.45),0 0 80px rgba(${BOOTSTRAP_LOGO_GLOW_RGB},0.24),0 0 0 1px rgba(255,255,255,0.08);`,
+    "width:104px;height:104px;border:1px solid rgba(251,250,246,0.14);border-radius:8px;display:block;",
   );
   panel.appendChild(mark);
 
@@ -717,7 +713,7 @@ function showBootstrapOverlay(initialMessage: string): {
   const brand = document.createElement("div");
   brand.setAttribute(
     "style",
-    "margin-top:-10px;font-size:12px;font-weight:600;color:rgba(251,250,246,0.54);" +
+    "margin-top:-12px;font-size:12px;font-weight:600;color:rgba(251,250,246,0.54);" +
       "letter-spacing:0.08em;text-transform:uppercase;",
   );
   brand.textContent = "Hermes Agent 中文社区 · hermesagent.org.cn";
@@ -737,13 +733,13 @@ function showBootstrapOverlay(initialMessage: string): {
   detail.setAttribute(
     "style",
     "display:none;width:100%;box-sizing:border-box;margin-top:4px;border:1px solid rgba(251,250,246,0.14);" +
-      "border-radius:18px;background:rgba(18,18,18,0.86);box-shadow:0 18px 48px rgba(0,0,0,0.28);overflow:hidden;",
+      "border-radius:8px;background:#181818;overflow:hidden;",
   );
 
   const detailHeader = document.createElement("div");
   detailHeader.setAttribute(
     "style",
-    "display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;" +
+    "display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;" +
       "border-bottom:1px solid rgba(251,250,246,0.1);",
   );
 
@@ -761,7 +757,7 @@ function showBootstrapOverlay(initialMessage: string): {
   copyButton.setAttribute(
     "style",
     "appearance:none;border:1px solid rgba(251,250,246,0.18);background:rgba(251,250,246,0.08);" +
-      "color:#fbfaf6;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700;" +
+      "color:#fbfaf6;border-radius:4px;padding:8px 12px;font-size:12px;font-weight:700;" +
       "font-family:inherit;cursor:pointer;",
   );
   copyButton.textContent = "复制错误信息";
@@ -773,7 +769,7 @@ function showBootstrapOverlay(initialMessage: string): {
   errorText.tabIndex = 0;
   errorText.setAttribute(
     "style",
-    "margin:0;max-height:min(300px,38vh);overflow:auto;padding:14px;text-align:left;" +
+    "margin:0;max-height:min(300px,38vh);overflow:auto;padding:16px;text-align:left;" +
       "white-space:pre-wrap;word-break:break-word;user-select:text;" +
       "font-family:'JetBrains Mono','SFMono-Regular',Consolas,ui-monospace,monospace;" +
       "font-size:12px;line-height:1.6;color:rgba(251,250,246,0.88);",
@@ -784,7 +780,7 @@ function showBootstrapOverlay(initialMessage: string): {
   const versionPanel = document.createElement("div");
   versionPanel.setAttribute(
     "style",
-    "display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:2px;" +
+    "display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:4px;" +
       "font-family:'JetBrains Mono','SFMono-Regular',Consolas,ui-monospace,monospace;" +
       "font-size:10px;line-height:1.45;letter-spacing:0.06em;color:rgba(133,126,111,0.76);",
   );

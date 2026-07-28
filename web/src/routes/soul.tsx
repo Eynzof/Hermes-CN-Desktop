@@ -46,7 +46,7 @@ export function HermesPersonaEditor({
         </div>
         <div className={s.headActions}>
           {saved && <span className={s.saved}>已保存</span>}
-          <span className={s.editMode}><Pencil size={13} /> 编辑</span>
+          <span className={s.editMode}><Pencil size={12} /> 编辑</span>
         </div>
       </div>
 
@@ -136,7 +136,7 @@ export function SoulRoute() {
         onClick={() => void soulQuery.refetch()}
         disabled={soulQuery.isFetching}
       >
-        <RefreshCw size={14} />
+        <RefreshCw size={16} />
         {soulQuery.isFetching ? "刷新中" : "刷新"}
       </Button>
     </div>
@@ -175,7 +175,7 @@ export function SoulRoute() {
               data-active={page === "market" ? "true" : undefined}
               onClick={() => setPage("market")}
             >
-              <Store size={15} /> 人格市场
+              <Store size={16} /> 人格市场
             </button>
             <button
               type="button"
@@ -184,7 +184,7 @@ export function SoulRoute() {
               data-active={page === "custom" ? "true" : undefined}
               onClick={() => setPage("custom")}
             >
-              <UserRound size={15} /> {HERMES_PERSONA_TAB_LABEL}
+              <UserRound size={16} /> {HERMES_PERSONA_TAB_LABEL}
             </button>
           </div>
 

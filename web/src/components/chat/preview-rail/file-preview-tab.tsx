@@ -213,7 +213,7 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
             className={s.fileEntry}
             onClick={() => parent && setDir(parent)}
           >
-            <ChevronUp size={14} className={s.fileEntryIcon} aria-hidden />
+            <ChevronUp size={16} className={s.fileEntryIcon} aria-hidden />
             ..
           </button>
         ) : null}
@@ -236,9 +236,9 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
             title={entry.path}
           >
             {entry.is_dir ? (
-              <Folder size={14} className={s.fileEntryIcon} aria-hidden />
+              <Folder size={16} className={s.fileEntryIcon} aria-hidden />
             ) : (
-              <FileIcon size={14} className={s.fileEntryIcon} aria-hidden />
+              <FileIcon size={16} className={s.fileEntryIcon} aria-hidden />
             )}
             {entry.name}
           </button>

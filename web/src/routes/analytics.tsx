@@ -328,7 +328,7 @@ function TokenTrendChart({ daily }: { daily: AnalyticsDailyPoint[] }) {
           <ComposedChart data={daily} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--h-line-soft)" vertical={false} />
             <XAxis dataKey="label" stroke="var(--h-text-3)" tickLine={false} axisLine={false} minTickGap={18} />
-            <YAxis stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={42} />
+            <YAxis stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={44} />
             <Tooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ color: "var(--h-text-2)", fontSize: 11 }} />
             <Bar name="输入 Token" dataKey="inputTokens" stackId="tokens" fill="var(--h-accent)" radius={[0, 0, 3, 3]} />
@@ -408,8 +408,8 @@ function CachePerformanceChart({ daily }: { daily: AnalyticsPerformanceDailyPoin
           <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--h-line-soft)" vertical={false} />
             <XAxis dataKey="label" stroke="var(--h-text-3)" tickLine={false} axisLine={false} minTickGap={18} />
-            <YAxis yAxisId="tokens" stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={42} />
-            <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} width={42} />
+            <YAxis yAxisId="tokens" stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={44} />
+            <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} width={44} />
             <Tooltip content={<CacheTooltip />} />
             <Legend wrapperStyle={{ color: "var(--h-text-2)", fontSize: 11 }} />
             <Bar yAxisId="tokens" name="缓存读取" dataKey="cacheReadTokens" fill="var(--h-ok)" radius={[3, 3, 0, 0]} />
@@ -754,7 +754,7 @@ export function AnalyticsRoute() {
           <AnalyticsLoading />
         ) : query.isError ? (
           <div className={s.stateCard} data-tone="error">
-            <BarChart3 size={22} />
+            <BarChart3 size={24} />
             <div>
               <strong>无法加载数据分析</strong>
               <p>{analyticsContractErrorMessage(query.error)}</p>

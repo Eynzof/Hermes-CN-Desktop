@@ -105,7 +105,7 @@ export function MemoryRoute() {
 
   const right = (
     <Button type="button" variant="outline" onClick={() => void memoryQuery.refetch()} disabled={memoryQuery.isFetching}>
-      <RefreshCw size={14} />
+      <RefreshCw size={16} />
       {memoryQuery.isFetching ? "刷新中" : "刷新"}
     </Button>
   );
@@ -166,7 +166,7 @@ export function MemoryRoute() {
                   <span>写入当前档案的 memories/MEMORY.md</span>
                 </div>
                 <Button type="button" variant="solid" tone="accent" size="sm" onClick={() => setShowAdd((v) => !v)}>
-                  <Plus size={14} /> 添加记忆
+                  <Plus size={16} /> 添加记忆
                 </Button>
               </div>
 
@@ -191,7 +191,7 @@ export function MemoryRoute() {
 
               {data.memory.entries.length === 0 ? (
                 <div className={s.emptyState}>
-                  <Brain size={18} />
+                  <Brain size={20} />
                   暂无记忆。Hermes 会在聊天时自动沉淀重要事实，你也可以手动添加。
                 </div>
               ) : (
@@ -211,15 +211,15 @@ export function MemoryRoute() {
                         <>
                           <p>{entry.content}</p>
                           <div className={s.entryActions}>
-                            <Button type="button" variant="plain" size="inherit" onClick={() => { setEditingIndex(entry.index); setEditContent(entry.content); }}>编辑</Button>
+                            <Button type="button" variant="plain" size="xs" onClick={() => { setEditingIndex(entry.index); setEditContent(entry.content); }}>编辑</Button>
                             {confirmDelete === entry.index ? (
                               <span className={s.confirmDelete}>
                                 确认删除？
-                                <Button type="button" variant="plain" size="inherit" onClick={() => removeEntry.mutate(entry.index, { onSuccess: () => setConfirmDelete(null) })}>是</Button>
-                                <Button type="button" variant="plain" size="inherit" onClick={() => setConfirmDelete(null)}>否</Button>
+                                <Button type="button" variant="plain" size="xs" onClick={() => removeEntry.mutate(entry.index, { onSuccess: () => setConfirmDelete(null) })}>是</Button>
+                                <Button type="button" variant="plain" size="xs" onClick={() => setConfirmDelete(null)}>否</Button>
                               </span>
                             ) : (
-                              <Button type="button" variant="plain" size="inherit" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={13} /></Button>
+                              <Button type="button" variant="plain" size="xs" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={12} /></Button>
                             )}
                           </div>
                         </>

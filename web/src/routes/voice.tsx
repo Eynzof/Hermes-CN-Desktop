@@ -233,7 +233,7 @@ export function VoiceSettingsView({
         </div>
         <div className={s.heroActions}>
           <button type="button" className={s.primaryButton} onClick={onSave} disabled={saving}>
-            {saving ? <Loader2 size={14} /> : <Save size={14} />}
+            {saving ? <Loader2 size={16} /> : <Save size={16} />}
             {saving ? "保存中…" : "保存配置"}
           </button>
         </div>
@@ -284,7 +284,7 @@ export function VoiceSettingsView({
 
           <div className={s.cardActions}>
             <button type="button" className={s.button} onClick={onTestStt} disabled={sttTesting || !draft.sttEnabled}>
-              {sttTesting ? <Loader2 size={14} /> : <Mic size={14} />}
+              {sttTesting ? <Loader2 size={16} /> : <Mic size={16} />}
               {sttTesting ? "录音测试中…" : "测试识别"}
             </button>
           </div>
@@ -348,7 +348,7 @@ export function VoiceSettingsView({
           </div>
           <div className={s.cardActions}>
             <button type="button" className={s.button} onClick={onTestTts} disabled={ttsTesting}>
-              {ttsTesting ? <Loader2 size={14} /> : <Play size={14} />}
+              {ttsTesting ? <Loader2 size={16} /> : <Play size={16} />}
               {ttsTesting ? "朗读测试中…" : "测试朗读"}
             </button>
           </div>

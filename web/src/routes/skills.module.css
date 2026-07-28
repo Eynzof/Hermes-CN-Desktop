@@ -15,8 +15,8 @@
 .paneTop {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 24px;
+  gap: 16px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--h-line);
   background: var(--h-bg-pane);
 }
@@ -46,13 +46,14 @@
 }
 .toptab {
   position: relative;
-  padding: 12px 4px;
-  margin-right: 18px;
+  height: var(--h-tab-height);
+  padding: 0 4px;
+  margin-right: 20px;
   font-size: 13px;
   color: var(--h-text-3);
   cursor: pointer;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -72,8 +73,8 @@
   font-size: 11px;
   color: var(--h-text-3);
   background: var(--h-bg-chip);
-  padding: 1px 7px;
-  border-radius: 999px;
+  padding: 4px 8px;
+  border-radius: var(--h-radius-pill);
 }
 .toptab[data-active="true"] .toptabCount {
   color: var(--h-accent);
@@ -87,14 +88,14 @@
   color: var(--h-text-3);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 8px 0;
 }
 .toptabHint code {
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
-  padding: 1px 5px;
-  border-radius: 3px;
+  padding: 4px 4px;
+  border-radius: 4px;
   font-size: 11px;
 }
 
@@ -115,7 +116,7 @@
   overflow: hidden;
 }
 .listTools {
-  padding: 14px 14px 10px;
+  padding: 16px 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -125,10 +126,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 11px;
+  padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 12px;
   color: var(--h-text);
 }
@@ -149,14 +150,15 @@
   display: inline-flex;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
   width: 100%;
 }
 .seg button {
   flex: 1;
   text-align: center;
-  padding: 5px 0;
+  height: var(--h-segment-height);
+  padding: 0;
   font-size: 11px;
   color: var(--h-text-2);
   border: none;
@@ -177,13 +179,13 @@
 .skillsList {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0;
+  padding: 8px 0;
 }
 .groupHead {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 14px 18px 4px;
+  padding: 16px 20px 4px;
   font-size: 10.5px;
   color: var(--h-text-3);
   letter-spacing: 0.06em;
@@ -205,9 +207,9 @@
 }
 
 .skillRow {
-  padding: 10px 18px;
+  padding: 12px 20px;
   cursor: pointer;
-  border-left: 3px solid transparent;
+  border-left: 1px solid transparent;
   width: 100%;
   text-align: left;
   background: transparent;
@@ -239,14 +241,14 @@
   font-family: var(--h-font-mono);
   font-size: 10.5px;
   color: var(--h-text-3);
-  margin-top: 1px;
+  margin-top: 4px;
   letter-spacing: -0.01em;
 }
 .skillRowDesc {
   font-size: 11.5px;
   color: var(--h-text-2);
   line-height: 1.5;
-  max-height: 30px;
+  max-height: 32px;
   overflow: hidden;
   margin-top: 4px;
 }
@@ -254,7 +256,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-top: 6px;
+  margin-top: 8px;
   font-family: var(--h-font-mono);
   font-size: 10.5px;
   color: var(--h-text-3);
@@ -273,8 +275,8 @@
   line-height: 1.4;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 999px;
+  padding: 4px 8px;
+  border-radius: var(--h-radius-pill);
   font-weight: 600;
 }
 .rowTagBuiltin {
@@ -288,7 +290,7 @@
 
 /* 列表底部"还有 N 个未翻译"提示 */
 .listFooterHint {
-  padding: 14px 18px 24px;
+  padding: 16px 20px 24px;
   font-size: 11.5px;
   color: var(--h-text-3);
   text-align: center;
@@ -311,14 +313,14 @@
 }
 .detailHeadRow1 {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .detailHeadRow2 {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .detailHeadTitle {
   max-width: 100%;
@@ -341,7 +343,7 @@
   font-family: var(--h-font-mono);
   font-size: 13px;
   color: var(--h-text-3);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -353,7 +355,7 @@
   font-size: 11px;
   color: var(--h-text-3);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 4px 8px;
   border: 1px solid var(--h-line);
   border-radius: 4px;
   background: var(--h-bg-pane);
@@ -391,14 +393,14 @@
 .readonlyNotice {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 12px 16px;
   background: color-mix(in srgb, var(--h-text-3) 6%, var(--h-bg-pane));
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   font-size: 12px;
   color: var(--h-text-2);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   line-height: 1.55;
 }
 .readonlyNotice strong {
@@ -407,7 +409,7 @@
 .readonlyNotice code {
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
-  padding: 1px 5px;
+  padding: 4px 4px;
   border-radius: 4px;
   font-size: 11.5px;
 }
@@ -415,13 +417,13 @@
   color: var(--h-text-3);
   font-size: 13px;
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: 4px;
 }
 
 .metaRow {
   display: flex;
   align-items: baseline;
-  gap: 18px;
+  gap: 20px;
   flex-wrap: wrap;
   font-size: 12px;
   line-height: 1.5;
@@ -429,7 +431,7 @@
 }
 .metaItem {
   display: inline-flex;
-  gap: 6px;
+  gap: 8px;
   align-items: baseline;
 }
 .metaK {
@@ -465,7 +467,7 @@
 .secHeadRight {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-size: 11.5px;
   color: var(--h-text-3);
 }
@@ -474,12 +476,12 @@
   display: inline-flex;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
   font-size: 11.5px;
 }
 .langSeg button {
-  padding: 5px 12px;
+  padding: 4px 12px;
   cursor: pointer;
   color: var(--h-text-2);
   border: none;
@@ -500,7 +502,7 @@
 .descriptionCard {
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 20px 24px;
   font-size: 14px;
   line-height: 1.78;
@@ -530,12 +532,12 @@
   overflow-x: auto;
   overflow-y: visible;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
 .markdownState {
-  padding: 18px 20px;
+  padding: 20px 20px;
   color: var(--h-text-3);
   font-size: 13px;
   line-height: 1.6;
@@ -546,7 +548,7 @@
 }
 
 .skillMarkdown {
-  padding: 22px 26px;
+  padding: 24px 28px;
   color: var(--h-text);
   font-size: 13.5px;
   line-height: 1.76;
@@ -599,7 +601,7 @@
 .skillMarkdown blockquote {
   margin: 1em 0;
   padding: 0.15em 0 0.15em 1em;
-  border-left: 3px solid var(--h-line);
+  border-left: 1px solid var(--h-line);
   color: var(--h-text-2);
 }
 
@@ -613,7 +615,7 @@
 }
 
 .skillMarkdown code {
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--h-bg-code);
   color: var(--h-text-2);
   font-family: var(--h-font-mono);
@@ -625,7 +627,7 @@
   overflow: hidden;
   margin: 12px 0;
   border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-code);
 }
 
@@ -634,7 +636,7 @@
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 11px;
-  padding: 7px 12px;
+  padding: 8px 12px;
 }
 
 .skillMarkdown :global([data-streamdown="code-block-body"]) {
@@ -643,7 +645,7 @@
 
 .skillMarkdown :global([data-streamdown="code-block-body"] pre) {
   margin: 0;
-  padding: 12px 14px;
+  padding: 12px 16px;
   background: transparent;
   color: var(--h-text-2);
   font-family: var(--h-font-mono);
@@ -669,12 +671,12 @@
 .skillMarkdown th,
 .skillMarkdown td {
   border: 1px solid var(--h-line-soft);
-  padding: 6px 8px;
+  padding: 8px 8px;
   text-align: left;
 }
 
 .skillMarkdown hr {
-  margin: 18px 0;
+  margin: 20px 0;
   border: 0;
   border-top: 1px solid var(--h-line);
 }
@@ -688,7 +690,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .sourceIcon {
@@ -717,8 +719,8 @@
   line-height: 1.45;
   color: var(--h-text-2);
   background: var(--h-bg-code);
-  border-radius: 6px;
-  padding: 5px 7px;
+  border-radius: 4px;
+  padding: 4px 8px;
 }
 
 .sourceHint {
@@ -736,11 +738,11 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 8px;
+  height: var(--h-button-height-md);
+  padding: 0 var(--h-button-padding-x-md);
+  border-radius: 4px;
   font-size: 12.5px;
   line-height: 1;
   white-space: nowrap;
@@ -765,7 +767,7 @@
 }
 .btnPrimary {
   background: var(--h-accent);
-  color: #fff;
+  color: var(--h-accent-contrast);
   border-color: var(--h-accent);
 }
 .btnPrimary:hover {
@@ -779,9 +781,9 @@
 
 /* 切换开关（复用 settings 的视觉，但按按钮元素重写） */
 .toggle {
-  width: 30px;
-  height: 17px;
-  border-radius: 999px;
+  width: var(--h-switch-width);
+  height: var(--h-switch-height);
+  border-radius: var(--h-radius-pill);
   background: var(--h-bg-chip);
   border: 1px solid var(--h-line);
   position: relative;
@@ -793,13 +795,13 @@
 .toggle::after {
   content: "";
   position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 13px;
-  height: 13px;
+  top: 4px;
+  left: 4px;
+  width: var(--h-switch-thumb-size);
+  height: var(--h-switch-thumb-size);
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
   transition: left 100ms ease;
 }
 .toggle[data-on="true"] {
@@ -807,7 +809,7 @@
   border-color: var(--h-accent);
 }
 .toggle[data-on="true"]::after {
-  left: 14px;
+  left: 16px;
 }
 
 /* === 「我的 Skills」空状态 === */
@@ -831,7 +833,7 @@
   align-items: center;
   justify-content: center;
   color: var(--h-text-3);
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 .emptyStateTitle {
   font-size: 18px;
@@ -849,7 +851,7 @@
 .emptyStateBody code {
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
-  padding: 2px 7px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
   color: var(--h-text);
@@ -873,10 +875,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 34px 36px 60px;
-  background:
-    radial-gradient(circle at 15% 0, color-mix(in srgb, var(--h-accent) 12%, transparent), transparent 32%),
-    var(--h-bg-pane);
+  padding: 36px 36px 60px;
+  background: var(--h-bg-pane);
 }
 .marketHero {
   max-width: 780px;
@@ -884,7 +884,7 @@
 }
 .marketEyebrow {
   display: inline-flex;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-family: var(--h-font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -918,23 +918,21 @@
   gap: 12px;
   padding: 24px;
   border: 1px solid var(--h-line);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--h-accent) 8%, transparent), transparent 42%),
-    var(--h-bg-pane);
+  border-radius: 8px;
+  background: var(--h-bg-pane);
   color: var(--h-text);
   text-decoration: none;
-  box-shadow: 0 18px 42px color-mix(in srgb, #000 12%, transparent);
+  box-shadow: none;
   transition:
     border-color 160ms ease,
-    box-shadow 160ms ease,
+    background-color 160ms ease,
     transform 160ms ease;
 }
 .marketCard:hover,
 .marketCard:focus-visible {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
   border-color: var(--h-accent-border);
-  box-shadow: 0 24px 54px color-mix(in srgb, #000 18%, transparent);
+  box-shadow: none;
   color: var(--h-text);
   outline: none;
   text-decoration: none;
@@ -975,7 +973,7 @@
 .marketCta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-top: auto;
   color: var(--h-accent);
   font-size: 12.5px;

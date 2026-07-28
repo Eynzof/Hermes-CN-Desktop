@@ -112,7 +112,7 @@ export function CapabilitySidebar() {
                   onFocus={onPrefetch}
                 >
                   <span className={s.itemIcon}>
-                    <Icon size={14} />
+                    <Icon size={16} />
                   </span>
                   <span className={s.itemLabel}>{item.label}</span>
                   <span className={s.itemPath}>{item.shortcut ?? item.path}</span>

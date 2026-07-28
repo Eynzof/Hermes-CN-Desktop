@@ -76,7 +76,7 @@ export function McpServerCard({
           size="sm"
           tone={server.enabled ? "success" : "neutral"}
           loading={toggling}
-          leadingIcon={toggling ? undefined : <Power size={14} />}
+          leadingIcon={toggling ? undefined : <Power size={16} />}
           onClick={onToggle}
         >
           {server.enabled ? "禁用" : "启用"}
@@ -90,7 +90,7 @@ export function McpServerCard({
           loading={testing}
           onClick={onTest}
         >
-          {testing ? null : <Zap size={15} />}
+          {testing ? null : <Zap size={16} />}
         </Button>
         <Button
           iconOnly
@@ -101,7 +101,7 @@ export function McpServerCard({
           title="删除"
           onClick={onDelete}
         >
-          <Trash2 size={15} />
+          <Trash2 size={16} />
         </Button>
       </div>
     </div>

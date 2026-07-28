@@ -54,7 +54,7 @@ export function CopyButton({
   type = "button",
   variant = "plain",
   tone = "neutral",
-  size = "inherit",
+  size = "xs",
   ...buttonProps
 }: CopyButtonProps) {
   const [state, setState] = useState<CopyButtonState>("idle");

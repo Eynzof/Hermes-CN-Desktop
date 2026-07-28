@@ -26,23 +26,26 @@
 
   --h-color-success-bg: var(--h-ok-soft);
   --h-color-success-fg: var(--h-ok);
-  --h-color-success-border: color-mix(in srgb, var(--h-ok) 30%, var(--h-line));
+  --h-color-success-border: var(--h-ok-border);
 
   --h-color-warning-bg: var(--h-warn-soft);
   --h-color-warning-fg: var(--h-warn);
-  --h-color-warning-border: color-mix(in srgb, var(--h-warn) 30%, var(--h-line));
+  --h-color-warning-border: var(--h-warn-border);
 
   --h-danger: var(--h-err);
-  --h-color-danger-bg: color-mix(in srgb, var(--h-err) 12%, var(--h-bg-pane));
+  --h-color-danger-bg: var(--h-err-soft);
   --h-color-danger-fg: var(--h-err);
-  --h-color-danger-border: color-mix(in srgb, var(--h-err) 34%, var(--h-line));
+  --h-color-danger-border: var(--h-err-border);
 
-  --h-color-info-bg: color-mix(in srgb, var(--sky) 12%, var(--h-bg-pane));
-  --h-color-info-fg: var(--sky);
-  --h-color-info-border: color-mix(in srgb, var(--sky) 30%, var(--h-line));
+  --h-color-info-bg: var(--h-info-soft);
+  --h-color-info-fg: var(--h-info);
+  --h-color-info-border: var(--h-info-border);
 
-  --h-shadow-sm: var(--h-shadow);
-  --h-shadow-lg: var(--h-shadow-l);
-  --h-focus-ring: 0 0 0 2px color-mix(in srgb, var(--h-accent) 38%, transparent);
-  --h-focus-ring-danger: 0 0 0 2px color-mix(in srgb, var(--h-err) 34%, transparent);
+  /* Elevation is expressed by fill + border, never by shadow. */
+  --h-shadow-sm: none;
+  --h-shadow-lg: none;
+  --h-focus-outline: 2px solid var(--h-accent);
+  --h-focus-outline-danger: 2px solid var(--h-err);
+  --h-focus-ring: none;
+  --h-focus-ring-danger: none;
 }

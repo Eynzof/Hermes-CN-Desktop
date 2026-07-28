@@ -109,7 +109,7 @@ export function AppStatusBar() {
           aria-label={runtime.isAttached() ? "外部 Hermes 的 Gateway 由目标端管理" : restartTitle}
           aria-busy={gatewayRestart.busy}
         >
-          <RotateCcw size={11} aria-hidden="true" />
+          <RotateCcw size={12} aria-hidden="true" />
           <span>{gatewayRestartButtonLabel(gatewayRestart.phase)}</span>
         </button>
         <span className={s.srOnly} aria-live="polite">
@@ -129,7 +129,7 @@ export function AppStatusBar() {
               className={s.gatewayRetry}
               onClick={() => void gatewayRestart.restart()}
             >
-              <RotateCcw size={11} aria-hidden="true" />
+              <RotateCcw size={12} aria-hidden="true" />
               <span>重试</span>
             </button>
           </span>

@@ -8,8 +8,8 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  height: 34px;
-  padding: 6px 12px;
+  height: 36px;
+  padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
@@ -30,7 +30,7 @@
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
-  box-shadow: var(--h-shadow-l);
+  box-shadow: none;
   padding: 0;
 }
 

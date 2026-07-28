@@ -110,9 +110,9 @@ function groupSub(group: HealthGroup): string {
 }
 
 function groupIcon(group: HealthGroup): ReactNode {
-  if (group === "runtime") return <ServerCog size={15} />;
-  if (group === "model") return <SlidersHorizontal size={15} />;
-  return <Sparkles size={15} />;
+  if (group === "runtime") return <ServerCog size={16} />;
+  if (group === "model") return <SlidersHorizontal size={16} />;
+  return <Sparkles size={16} />;
 }
 
 function groupTone(items: HealthItem[]): Tone {
@@ -219,7 +219,7 @@ function HealthItemCard({ item, onNavigate }: { item: HealthItem; onNavigate: (t
       {item.actionTo && (
         <span className={s.itemAction}>
           {item.actionLabel ?? "去处理"}
-          <ArrowRight size={13} aria-hidden="true" />
+          <ArrowRight size={12} aria-hidden="true" />
         </span>
       )}
     </>
@@ -510,7 +510,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
           </div>
           <div className={s.heroActions}>
             <button className={s.actionButton} type="button" onClick={refreshAll} disabled={isRefreshing}>
-              <RefreshCw size={13} aria-hidden="true" />
+              <RefreshCw size={12} aria-hidden="true" />
               {isRefreshing ? "刷新中" : "刷新检查"}
             </button>
             <CopyButton
@@ -526,7 +526,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
                 counts: health.counts,
               })}
             >
-              <Copy size={13} aria-hidden="true" />
+              <Copy size={12} aria-hidden="true" />
               复制诊断 JSON
             </CopyButton>
             <button
@@ -535,7 +535,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
               onClick={openHermesHome}
               disabled={!status?.hermes_home || !window.hermesDesktop?.openWorkspacePath}
             >
-              <FolderOpen size={13} aria-hidden="true" />
+              <FolderOpen size={12} aria-hidden="true" />
               打开 HERMES_HOME
             </button>
           </div>
@@ -571,7 +571,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
           <aside className={s.aside} aria-label="健康检查建议">
             <div className={s.asideCard}>
               <div className={s.asideHead}>
-                <Wrench size={15} aria-hidden="true" />
+                <Wrench size={16} aria-hidden="true" />
                 <span>建议处理顺序</span>
               </div>
               {attentionItems.length > 0 ? (
@@ -590,13 +590,13 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
                         <strong>{item.label}</strong>
                         <span>{item.sub ?? item.value}</span>
                       </span>
-                      {item.actionTo && <ArrowRight size={13} aria-hidden="true" />}
+                      {item.actionTo && <ArrowRight size={12} aria-hidden="true" />}
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className={s.emptyState}>
-                  <ShieldCheck size={18} aria-hidden="true" />
+                  <ShieldCheck size={20} aria-hidden="true" />
                   <span>当前没有需要处理的健康项，可以直接新建任务。</span>
                 </div>
               )}
@@ -604,7 +604,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
 
             <div className={s.asideCard}>
               <div className={s.asideHead}>
-                <Activity size={15} aria-hidden="true" />
+                <Activity size={16} aria-hidden="true" />
                 <span>刷新节奏</span>
               </div>
               <p className={s.asideText}>

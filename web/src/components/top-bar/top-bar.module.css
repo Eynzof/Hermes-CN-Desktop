@@ -46,9 +46,10 @@
 }
 
 .chip {
+  height: var(--h-button-height-xs);
   font-size: 11px;
   color: var(--h-text-2);
-  padding: 3px 10px;
+  padding: 0 var(--h-button-padding-x-xs);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-sm);
   cursor: pointer;

@@ -87,7 +87,7 @@ export function SkillUsageStats({ profileOverride }: { profileOverride?: string 
             onClick={() => void query.refetch()}
             disabled={query.isFetching}
           >
-            <RefreshCw size={13} />
+            <RefreshCw size={12} />
             {query.isFetching ? "刷新中" : "刷新"}
           </button>
         </div>
@@ -95,7 +95,7 @@ export function SkillUsageStats({ profileOverride }: { profileOverride?: string 
 
       {query.isLoading ? (
         <div className={s.stateCard} aria-live="polite">
-          <BarChart3 size={22} />
+          <BarChart3 size={24} />
           <div>
             <strong>正在读取调用统计</strong>
             <p>正在从当前 Hermes 档案聚合 Skill 使用记录。</p>
@@ -103,7 +103,7 @@ export function SkillUsageStats({ profileOverride }: { profileOverride?: string 
         </div>
       ) : query.isError ? (
         <div className={s.stateCard} data-tone="error" role="alert">
-          <BarChart3 size={22} />
+          <BarChart3 size={24} />
           <div>
             <strong>无法加载 Skill 统计</strong>
             <p>{query.error instanceof Error ? query.error.message : "请求失败，请稍后重试。"}</p>
@@ -157,7 +157,7 @@ export function SkillUsageStats({ profileOverride }: { profileOverride?: string 
 
             {rows.length === 0 ? (
               <div className={s.emptyState}>
-                <BarChart3 size={25} />
+                <BarChart3 size={24} />
                 <strong>这个时间范围内还没有 Skill 调用</strong>
                 <p>Hermes 在对话中加载 Skill 后，统计会自动出现在这里。</p>
               </div>

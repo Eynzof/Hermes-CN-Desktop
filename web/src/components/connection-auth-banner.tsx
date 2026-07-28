@@ -83,7 +83,7 @@ export function ConnectionAuthBanner() {
             远程登录已过期，需要重新登录才能继续连接。
           </span>
           <Button type="button" variant="solid" tone="accent" onClick={() => void handleRelogin()} disabled={busy} aria-busy={busy}>
-            {busy && <Loader2 size={13} />}
+            {busy && <Loader2 size={12} />}
             重新登录
           </Button>
         </div>

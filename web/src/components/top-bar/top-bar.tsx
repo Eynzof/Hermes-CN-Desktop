@@ -25,7 +25,7 @@ export function TopBar({ title, sub, right }: TopBarProps) {
 
 export const TopBarActionButton = forwardRef<HTMLButtonElement, TopBarActionButtonProps>(
   function TopBarActionButton(
-    { className, type = "button", variant = "plain", size = "inherit", ...props },
+    { className, type = "button", variant = "plain", size = "xs", ...props },
     ref,
   ) {
     return (

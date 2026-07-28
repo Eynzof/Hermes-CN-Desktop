@@ -17,7 +17,7 @@
 
 .nav {
   width: 220px;
-  padding: 18px 12px;
+  padding: 20px 12px;
   border-right: 1px solid var(--h-line);
   background: var(--h-bg-app);
   overflow-y: auto;
@@ -29,8 +29,8 @@
 .navItem {
   display: block;
   width: 100%;
-  padding: 10px 16px;
-  margin: 2px 0;
+  padding: 12px 16px;
+  margin: 4px 0;
   border: none;
   border-radius: var(--h-r-md);
   background: transparent;
@@ -77,8 +77,8 @@
 }
 
 .settingsBackIconButton {
-  width: 24px;
-  height: 24px;
+  width: var(--h-button-height-xs);
+  height: var(--h-button-height-xs);
   border: 0;
   border-radius: var(--h-r-sm);
   display: inline-flex;
@@ -115,21 +115,21 @@
   font-size: 17px;
   font-weight: 600;
   color: var(--h-text);
-  margin: 0 0 6px;
+  margin: 0 0 8px;
 }
 
 .desc {
   font-size: 12px;
   color: var(--h-text-2);
-  margin: 0 0 22px;
+  margin: 0 0 24px;
   line-height: 1.7;
 }
 
 /* Provider mini grid */
 .providerGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(192px, 1fr));
+  gap: 12px;
   margin-bottom: 28px;
 }
 
@@ -137,12 +137,12 @@
   position: relative;
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   transition: border-color 0.15s, opacity 0.15s;
 }
 .providerMini[data-selected="true"] {
@@ -155,7 +155,7 @@
 .providerIcon {
   width: 32px;
   height: 32px;
-  border-radius: 7px;
+  border-radius: 4px;
   background: var(--h-bg-chip);
   color: var(--h-text);
   display: flex;
@@ -185,14 +185,14 @@
   display: block;
   font-size: 10.5px;
   color: var(--h-text-3);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 /* Provider detail pane */
 .providerDetail {
   background: var(--h-bg-app);
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 20px;
 }
 
@@ -207,7 +207,7 @@
   composes: providerIcon;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: 4px;
   font-size: 14px;
 }
 
@@ -231,12 +231,14 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-height: 22px;
+  min-height: 24px;
   font-size: 11px;
   line-height: 1;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: var(--h-r-pill);
   white-space: nowrap;
+  color: var(--h-text-2);
+  background: var(--h-bg-chip);
 }
 .statusBadge[data-on="true"] {
   color: var(--h-ok);
@@ -253,7 +255,7 @@
 
 .cronFeedback {
   margin: 12px 0;
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-radius: var(--h-r-md);
   border: 1px solid var(--h-line);
   color: var(--h-text-2);
@@ -263,9 +265,9 @@
 }
 
 .cronFeedback[data-tone="ok"] {
-  color: var(--h-ok);
-  border-color: color-mix(in srgb, var(--h-ok) 36%, transparent);
-  background: var(--h-ok-soft);
+  color: var(--h-color-success-fg);
+  border-color: var(--h-color-success-border);
+  background: var(--h-color-success-bg);
 }
 
 .cronFeedback[data-tone="info"] {
@@ -275,26 +277,26 @@
 }
 
 .cronFeedback[data-tone="error"] {
-  color: var(--h-danger, #d45c5c);
-  border-color: color-mix(in srgb, var(--h-danger, #d45c5c) 36%, transparent);
-  background: color-mix(in srgb, var(--h-danger, #d45c5c) 12%, transparent);
+  color: var(--h-color-danger-fg);
+  border-color: var(--h-color-danger-border);
+  background: var(--h-color-danger-bg);
 }
 
 .envStatusBadge {
   min-width: 68px;
-  gap: 6px;
+  gap: 8px;
   padding: 0 12px;
 }
 .envStatusBadge::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
 .envStatusBadge[data-on="true"]::before {
   background: var(--h-ok);
-  box-shadow: 0 0 0 2px var(--h-ok-soft);
+  box-shadow: none;
 }
 .envStatusBadge[data-on="false"] {
   color: var(--h-text-2);
@@ -314,17 +316,17 @@
 .fieldLabel {
   font-size: 11px;
   color: var(--h-text-2);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .fieldInput {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  padding: 7px 11px;
+  padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--h-text);
   font-size: 12px;
   font-family: var(--h-font-cn);
@@ -335,7 +337,7 @@
 }
 
 .modelsList {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .modelsLabel {
@@ -347,7 +349,7 @@
 .modelTags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .modelTag {
@@ -355,8 +357,8 @@
   cursor: pointer;
   font-family: var(--h-font-mono);
   font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 6px;
+  padding: 4px 12px;
+  border-radius: 4px;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   border: 1px solid var(--h-line-soft);
@@ -371,7 +373,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .modelPickerRow {
@@ -382,23 +384,23 @@
 }
 
 .modelPickerError {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 11.5px;
-  color: var(--h-warn, #c8782a);
+  color: var(--h-color-warning-fg);
   font-family: var(--h-font-cn);
 }
 
 .modelsLoadError,
 .modelsLoadWarning {
   margin: 16px 0;
-  padding: 16px 18px;
-  border-radius: 14px;
+  padding: 16px 20px;
+  border-radius: 8px;
   font-family: var(--h-font-cn);
 }
 
 .modelsLoadError {
-  border: 1px solid color-mix(in srgb, var(--h-err) 42%, var(--h-line));
-  background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-pane));
+  border: 1px solid var(--h-color-danger-border);
+  background: var(--h-color-danger-bg);
 }
 
 .modelsLoadWarning {
@@ -406,8 +408,8 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  border: 1px solid color-mix(in srgb, var(--h-warn) 42%, var(--h-line));
-  background: var(--h-warn-soft);
+  border: 1px solid var(--h-color-warning-border);
+  background: var(--h-color-warning-bg);
 }
 
 .modelsLoadError strong,
@@ -420,7 +422,7 @@
 
 .modelsLoadError p,
 .modelsLoadWarning p {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   color: var(--h-text-2);
   font-size: 12px;
   line-height: 1.6;
@@ -431,7 +433,7 @@
 }
 
 .modelPickerHint {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 11.5px;
   color: var(--h-text-3);
   font-family: var(--h-font-cn);
@@ -439,11 +441,11 @@
 
 .localContextWarning {
   margin-top: 8px;
-  border: 1px solid color-mix(in srgb, var(--h-warn, #c8782a) 42%, var(--h-line));
-  border-radius: 10px;
-  background: var(--h-warn-soft);
+  border: 1px solid var(--h-color-warning-border);
+  border-radius: 8px;
+  background: var(--h-color-warning-bg);
   color: var(--h-text-2);
-  padding: 9px 10px;
+  padding: 8px 12px;
   font-size: 11.5px;
   line-height: 1.55;
   font-family: var(--h-font-cn);
@@ -453,9 +455,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
   font-family: var(--h-font-cn);
@@ -482,7 +484,7 @@
 .btnPrimary {
   border: 1px solid var(--h-accent);
   background: var(--h-accent);
-  color: #fff;
+  color: var(--h-accent-contrast);
 }
 
 .btnDanger {
@@ -510,7 +512,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .sectionTitleRow .heading {
@@ -520,9 +522,9 @@
 /* Appearance */
 .appearancePanel {
   overflow: hidden;
-  margin: 0 0 18px;
+  margin: 0 0 20px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-app);
 }
 
@@ -531,7 +533,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 16px 18px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--h-line-soft);
   background: var(--h-bg-pane);
 }
@@ -557,8 +559,8 @@
 .appearanceMeta {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 12px;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-pill);
   background: var(--h-bg-chip);
@@ -571,10 +573,10 @@
 
 .appearanceRow {
   display: grid;
-  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(192px, 260px) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
-  padding: 16px 18px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -624,11 +626,12 @@
 
 .skinCard {
   min-width: 0;
+  min-height: 68px;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 12px 12px;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-lg);
   background: var(--h-bg-pane);
@@ -638,8 +641,7 @@
   text-align: left;
   transition:
     border-color var(--h-duration-fast) var(--h-ease-standard),
-    background var(--h-duration-fast) var(--h-ease-standard),
-    box-shadow var(--h-duration-fast) var(--h-ease-standard);
+    background var(--h-duration-fast) var(--h-ease-standard);
 }
 
 .skinCard:hover {
@@ -650,24 +652,24 @@
 .skinCard[data-active="true"] {
   border-color: var(--h-accent);
   background: color-mix(in srgb, var(--h-accent) 10%, var(--h-bg-pane));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h-accent) 26%, transparent);
+  box-shadow: none;
 }
 
 .skinPreview {
   position: relative;
   display: block;
   width: 48px;
-  height: 38px;
+  height: 40px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--skin-text) 18%, transparent);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--skin-bg);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  box-shadow: none;
 }
 
 .skinPreviewTop {
   display: block;
-  height: 9px;
+  height: 8px;
   background: var(--skin-pane);
   border-bottom: 1px solid color-mix(in srgb, var(--skin-text) 14%, transparent);
 }
@@ -675,12 +677,12 @@
 .skinPreviewBody {
   display: grid;
   gap: 4px;
-  padding: 6px 7px 0;
+  padding: 8px 8px 0;
 }
 
 .skinPreviewBody span {
   display: block;
-  height: 3px;
+  height: 4px;
   border-radius: var(--h-r-pill);
   background: color-mix(in srgb, var(--skin-text) 52%, var(--skin-soft));
 }
@@ -697,19 +699,19 @@
 
 .skinPreviewAccent {
   position: absolute;
-  right: 6px;
-  bottom: 5px;
-  width: 9px;
-  height: 9px;
+  right: 8px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--skin-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--skin-accent) 22%, transparent);
+  box-shadow: none;
 }
 
 .skinCopy {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .skinTitle {
@@ -731,8 +733,8 @@
 
 /* Toggle */
 .toggle {
-  width: 30px;
-  height: 17px;
+  width: var(--h-switch-width);
+  height: var(--h-switch-height);
   border-radius: var(--h-r-pill);
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
@@ -749,17 +751,17 @@
 
 .toggleThumb {
   position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 13px;
-  height: 13px;
+  top: 4px;
+  left: 4px;
+  width: var(--h-switch-thumb-size);
+  height: var(--h-switch-thumb-size);
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
   transition: left 0.15s;
 }
 .toggle[data-on="true"] .toggleThumb {
-  left: 14px;
+  left: 16px;
 }
 
 /* Settings rows */
@@ -784,7 +786,7 @@
 .rowSub {
   font-size: 11px;
   color: var(--h-text-3);
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .rowRight {
@@ -797,10 +799,10 @@
 .select {
   box-sizing: border-box;
   width: 100%;
-  padding: 5px 10px;
+  padding: 4px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--h-text);
   font-size: 12px;
   outline: none;
@@ -809,10 +811,10 @@
 }
 
 .input {
-  padding: 5px 10px;
+  padding: 4px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--h-text);
   font-size: 12px;
   outline: none;
@@ -829,11 +831,12 @@
   gap: 4px;
   background: var(--h-bg-soft);
   border-radius: var(--h-r-md);
-  padding: 2px;
+  padding: 4px;
 }
 
 .radioBtn {
-  padding: 4px 12px;
+  height: var(--h-segment-height);
+  padding: 0 12px;
   border: none;
   border-radius: var(--h-r-sm);
   background: transparent;
@@ -850,7 +853,7 @@
   background: var(--h-bg-pane);
   color: var(--h-text);
   font-weight: 500;
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
 }
 
 .aboutHero {
@@ -858,13 +861,11 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
-  margin-bottom: 14px;
-  padding: 18px;
+  margin-bottom: 16px;
+  padding: 20px;
   border: 1px solid var(--h-line);
-  border-radius: 16px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--h-bg-chip) 86%, transparent), transparent 62%),
-    var(--h-bg-app);
+  border-radius: 8px;
+  background: var(--h-bg-app);
 }
 
 .aboutHero[data-ok="true"] {
@@ -877,10 +878,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 13px;
+  border-radius: 8px;
   color: var(--h-text);
   background: var(--h-bg-pane);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
 }
 
 .aboutHero[data-ok="true"] .aboutHeroMark {
@@ -909,7 +910,7 @@
 }
 
 .aboutHero p {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   color: var(--h-text-2);
   font-size: 12px;
   line-height: 1.65;
@@ -918,7 +919,7 @@
 .aboutRuntimeTag {
   display: inline-block;
   margin-top: 8px;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-sm);
   color: var(--h-text-2);
@@ -931,7 +932,7 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin: 12px 0 18px;
+  margin: 12px 0 20px;
 }
 
 .codingAgentsPage {
@@ -942,21 +943,22 @@
 
 .codingAgentsHero {
   margin-bottom: 0;
-  padding: 16px 18px;
+  padding: 16px 20px;
 }
 
 .codingAgentToolbar {
   display: grid;
   grid-template-columns: repeat(2, 140px);
-  gap: 10px;
+  gap: 12px;
   margin: 12px 0 16px;
 }
 
 .codingAgentToolbarButton {
   box-sizing: border-box;
   width: 140px;
-  min-height: 34px;
-  padding: 7px 12px;
+  height: var(--h-button-height-md);
+  min-height: var(--h-button-height-md);
+  padding: 0 var(--h-button-padding-x-md);
   white-space: nowrap;
 }
 
@@ -973,7 +975,7 @@
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--h-line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--h-bg-app);
 }
 
@@ -988,7 +990,7 @@
 
 .codingAgentIdentity {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   min-width: 0;
 }
@@ -1005,7 +1007,7 @@
 }
 
 .codingAgentIdentityText p {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   overflow: hidden;
   color: var(--h-text-3);
   font-size: 11.5px;
@@ -1018,23 +1020,23 @@
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
   justify-content: flex-end;
 }
 
 .codingAgentStatusGroup .envStatusTag {
-  gap: 5px;
+  gap: 4px;
 }
 
 .codingAgentDetails {
-  gap: 10px;
-  padding: 13px 14px;
+  gap: 12px;
+  padding: 12px 16px;
 }
 
 .codingAgentRuntimeGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 18px;
+  gap: 12px 20px;
 }
 
 .codingAgentCard .delegationSkillControl {
@@ -1051,7 +1053,7 @@
 .debugHeroActions span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   color: var(--h-text-3);
   font-size: 11px;
   white-space: nowrap;
@@ -1060,7 +1062,7 @@
 .aboutDebugGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
   align-items: start;
 }
 
@@ -1076,8 +1078,8 @@
 /* 关于页「桌面端更新」卡内按钮行：默认 margin-top 18 / bottom 0 偏大且不对称，
    这里收小并上下对称（仅作用于关于页，不影响共用该类的供应商设置等处）。 */
 .aboutDebugGrid .providerActions {
-  margin-top: 10px;
-  margin-bottom: 10px;
+  margin-top: 12px;
+  margin-bottom: 12px;
 }
 
 /* 「Designed by Wanderminds」署名页脚：居中、克制，logo 单色随 currentColor
@@ -1086,9 +1088,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  margin-top: 10px;
-  padding-top: 14px;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 16px;
 }
 
 .wandermindsCopyright {
@@ -1102,9 +1104,9 @@
 .wandermindsCredit {
   display: inline-flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 18px;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 8px 20px;
+  border-radius: 8px;
   color: var(--h-text-3);
   text-decoration: none;
   transition: color 0.16s ease, background 0.16s ease;
@@ -1123,7 +1125,7 @@
 
 .wandermindsCreditLogo {
   display: block;
-  height: 30px;
+  height: 32px;
   width: auto;
   color: inherit;
 }
@@ -1143,14 +1145,14 @@
 .contactLayout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: 20px;
   align-items: start;
 }
 
 /* 微信 + 飞书两张群二维码并排（飞书在微信右侧）；窄屏可换行。 */
 .contactQrGroup {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: start;
   flex-wrap: wrap;
 }
@@ -1158,10 +1160,10 @@
 .wechatQrPanel {
   display: grid;
   justify-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
@@ -1169,7 +1171,7 @@
   display: block;
   width: 148px;
   height: 148px;
-  border-radius: 8px;
+  border-radius: 4px;
   background: #fff;
 }
 
@@ -1183,19 +1185,19 @@
 
 .contactLines {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   color: var(--h-text);
   font-size: 12px;
   line-height: 1.55;
 }
 
 .businessContactField > span {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .businessContactLines {
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .contactCopyLine {
@@ -1229,10 +1231,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 19px;
-  padding: 0 7px;
+  height: var(--h-button-height-xs);
+  padding: 0 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--h-text-3);
   font-family: var(--h-font-cn);
@@ -1262,9 +1264,9 @@
   display: inline-block;
   width: 100%;
   min-width: 0;
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   border: 1px solid var(--h-line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--h-bg-app);
   padding: 16px;
   break-inside: avoid;
@@ -1281,8 +1283,8 @@
 .debugCardHeader {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .debugCardIcon {
@@ -1292,7 +1294,7 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  border-radius: 9px;
+  border-radius: 8px;
   color: var(--h-text);
   background: var(--h-bg-chip);
 }
@@ -1305,17 +1307,17 @@
 }
 
 .debugCardHeader p {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   color: var(--h-text-3);
   font-size: 11.5px;
   line-height: 1.45;
 }
 
 .commandBlock {
-  margin-top: 14px;
+  margin-top: 16px;
   overflow: hidden;
   border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
@@ -1323,8 +1325,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 9px 11px;
+  gap: 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--h-line-soft);
   color: var(--h-text-2);
   font-size: 11px;
@@ -1333,7 +1335,7 @@
 .commandBlockHeader span {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .inlineCopyButton {
@@ -1358,9 +1360,9 @@
 
 .commandBlock code {
   display: block;
-  max-height: 118px;
+  max-height: 120px;
   overflow: auto;
-  padding: 11px;
+  padding: 12px;
   color: var(--h-text);
   font-family: var(--h-font-mono);
   font-size: 11px;
@@ -1393,7 +1395,7 @@
 
 .runtimeField > span {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   color: var(--h-text-3);
   font-size: 10.5px;
 }
@@ -1437,17 +1439,17 @@
 .platformList {
   display: grid;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .platformItem {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 10px;
+  gap: 4px 12px;
   align-items: center;
-  padding: 9px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   font-size: 12px;
@@ -1468,11 +1470,11 @@
 .envCheckItem {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
 }
@@ -1485,7 +1487,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -1494,7 +1496,7 @@
   align-items: center;
   min-width: 0;
   min-height: 24px;
-  gap: 7px;
+  gap: 8px;
   color: var(--h-text);
   font-size: 13px;
   font-weight: 600;
@@ -1513,8 +1515,8 @@
 
 .envCheckIcon svg {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
 }
 
@@ -1554,7 +1556,7 @@
 
 .envRequiredTag {
   flex: 0 0 auto;
-  padding: 0 7px;
+  padding: 0 8px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 34%, var(--h-line));
   color: var(--h-accent);
   background: color-mix(in srgb, var(--h-accent-soft) 70%, transparent);
@@ -1563,7 +1565,7 @@
 .envStatusTag {
   flex: 0 0 auto;
   min-width: 48px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 1px solid transparent;
 }
 
@@ -1592,7 +1594,7 @@
 }
 
 .envCheckSummary {
-  margin: -2px 0 0;
+  margin: -4px 0 0;
   color: var(--h-text-2);
   font-size: 12px;
   line-height: 1.55;
@@ -1607,8 +1609,8 @@
 }
 
 .envCheckDetails {
-  margin-top: 2px;
-  padding-top: 9px;
+  margin-top: 4px;
+  padding-top: 8px;
   border-top: 1px solid var(--h-line-soft);
 }
 
@@ -1620,13 +1622,13 @@
 .delegationSkillControl {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) auto;
-  gap: 11px;
+  gap: 12px;
   align-items: center;
   min-width: 0;
-  margin-top: 14px;
-  padding: 12px 14px;
+  margin-top: 16px;
+  padding: 12px 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
@@ -1646,7 +1648,7 @@
   height: 32px;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
+  border-radius: 8px;
   color: var(--h-text-2);
   background: var(--h-bg-chip);
 }
@@ -1668,7 +1670,7 @@
 .delegationSkillMeta {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
   min-width: 0;
 }
@@ -1683,7 +1685,7 @@
 .delegationSkillName {
   display: block;
   min-width: 0;
-  margin-top: 3px;
+  margin-top: 4px;
   overflow: hidden;
   color: var(--h-text);
   font-family: var(--h-font-mono);
@@ -1695,7 +1697,7 @@
 }
 
 .delegationSkillDescription {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   color: var(--h-text-3);
   font-size: 11px;
   line-height: 1.5;
@@ -1714,9 +1716,9 @@
 
 .commitItem {
   min-width: 0;
-  padding: 10px 11px;
+  padding: 12px 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
@@ -1730,7 +1732,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .commitHash code {
@@ -1789,7 +1791,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 12px;
   color: var(--h-text-2);
   font-size: 11.5px;
@@ -1806,11 +1808,11 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
-  padding: 16px 18px;
+  padding: 16px 20px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 38%, var(--h-line));
-  border-radius: 14px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--h-accent) 9%, var(--h-bg-pane));
-  box-shadow: 0 12px 28px color-mix(in srgb, #000 8%, transparent);
+  box-shadow: none;
 }
 
 .firstRunModelNotice strong {
@@ -1833,7 +1835,7 @@
   font-size: 11.5px;
   font-weight: 700;
   white-space: nowrap;
-  padding-top: 2px;
+  padding-top: 4px;
 }
 
 .modelsSettings {
@@ -1846,11 +1848,11 @@
   display: inline-flex;
   align-self: flex-start;
   gap: 0;
-  margin: 0 0 18px;
+  margin: 0 0 20px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
-  padding: 3px;
+  padding: 4px;
 }
 
 /* 自定义服务商表单的「接口格式」分段选择（OpenAI 兼容 / Anthropic）。 */
@@ -1858,17 +1860,17 @@
   display: inline-flex;
   gap: 0;
   border: 1px solid var(--h-line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
-  padding: 3px;
+  padding: 4px;
 }
 .apiModeToggle button {
   border: 0;
-  border-radius: 7px;
+  border-radius: 4px;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
-  padding: 6px 12px;
+  padding: 8px 12px;
   font-family: var(--h-font-cn);
   font-size: 12px;
   font-weight: 600;
@@ -1886,15 +1888,15 @@
 .modelTopTab {
   min-width: 132px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
-  padding: 9px 14px;
+  gap: 4px;
+  padding: 8px 16px;
   font-family: var(--h-font-cn);
   font-size: 13px;
   font-weight: 650;
@@ -1925,7 +1927,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .modelsSectionHeader .desc {
@@ -1948,7 +1950,7 @@
 .providerPresetLayout {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
   min-width: 0;
   width: 100%;
 }
@@ -1957,7 +1959,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .providerGridHeader {
@@ -1995,10 +1997,10 @@
 .providerReviewBanner {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 26%, var(--h-line));
   background: color-mix(in srgb, var(--h-accent) 7%, var(--h-bg-pane));
   color: var(--h-text-2);
@@ -2028,11 +2030,9 @@
   width: min(520px, calc(100vw - 32px));
   max-height: min(640px, calc(100vh - 48px));
   border: 1px solid var(--h-line);
-  border-radius: 18px;
+  border-radius: 8px;
   background: var(--h-bg-input);
-  box-shadow:
-    0 24px 72px rgba(31, 30, 27, 0.18),
-    0 8px 24px rgba(31, 30, 27, 0.08);
+  box-shadow: none;
   color: var(--h-text);
   overflow: hidden;
 }
@@ -2043,7 +2043,7 @@
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--h-line-soft);
-  padding: 14px 18px;
+  padding: 16px 20px;
 }
 
 .customProviderTitleBar h2 {
@@ -2055,10 +2055,10 @@
 }
 
 .customProviderClose {
-  width: 28px;
-  height: 28px;
+  width: var(--h-button-height-sm);
+  height: var(--h-button-height-sm);
   border: 0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: transparent;
   color: var(--h-text-2);
   font-size: 18px;
@@ -2075,8 +2075,8 @@
 
 .customProviderBody {
   display: grid;
-  gap: 10px;
-  padding: 16px 18px 4px;
+  gap: 12px;
+  padding: 16px 20px 4px;
   overflow-y: auto;
 }
 
@@ -2089,11 +2089,9 @@
 }
 
 .localProviderContextNotice {
-  border: 1px solid color-mix(in srgb, var(--h-warn, #c8782a) 42%, var(--h-line));
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 8% -10%, color-mix(in srgb, var(--h-warn, #c8782a) 16%, transparent), transparent 42%),
-    var(--h-warn-soft);
+  border: 1px solid var(--h-color-warning-border);
+  border-radius: 8px;
+  background: var(--h-color-warning-bg);
   color: var(--h-text-2);
   padding: 12px;
   font-size: 12px;
@@ -2109,12 +2107,12 @@
 }
 
 .localProviderContextNotice p {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
 }
 
 .localProviderDocLinks {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .localProviderDocLinkRow {
@@ -2140,10 +2138,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 19px;
-  padding: 0 7px;
+  height: 20px;
+  padding: 0 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--h-text-2);
   font-size: 11px;
@@ -2170,19 +2168,19 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin: 2px 0 6px;
+  margin: 4px 0 8px;
 }
 
 .localProviderCard {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 5px;
+  gap: 4px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
-  padding: 10px;
+  padding: 12px;
   text-align: left;
   cursor: pointer;
 }
@@ -2217,15 +2215,15 @@
   justify-content: flex-end;
   gap: 8px;
   border-top: 1px solid var(--h-line-soft);
-  padding: 12px 18px;
+  padding: 12px 20px;
 }
 
 .providerSearchInput {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  height: 34px;
-  padding: 6px 12px;
+  height: 36px;
+  padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
@@ -2245,9 +2243,9 @@
   display: grid;
   /* 最小卡宽 160→210：常规窗口宽下约 6 列（原来挤到 8 列太密），保持
      随宽度自适应。 */
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
   gap: 12px;
-  padding: 8px 6px;
+  padding: 8px 8px;
 }
 
 /* 注意：类名用 presetCard* 前缀 —— 本文件底部的高级环境变量区块已占用
@@ -2257,13 +2255,13 @@
   /* 返佣星水印（presetCardBadge）探出下缘的部分由卡片圆角裁掉。 */
   overflow: hidden;
   min-width: 0;
-  min-height: 54px;
+  min-height: 56px;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 11px 14px;
+  gap: 8px;
+  padding: 12px 16px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-chip);
   color: var(--h-text);
   cursor: pointer;
@@ -2285,7 +2283,7 @@
   background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-pane));
 }
 .presetCard[data-current] {
-  border-color: color-mix(in srgb, var(--h-ok, #3c9a5f) 65%, var(--h-line));
+  border-color: var(--h-color-success-border);
 }
 .presetCard[data-dragging="true"] {
   opacity: 0.58;
@@ -2299,7 +2297,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-size: 11px;
@@ -2315,7 +2313,7 @@
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
-  border-radius: 5px;
+  border-radius: 4px;
   object-fit: contain;
 }
 
@@ -2337,20 +2335,20 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .presetCardDot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--h-ok, #3c9a5f);
+  background: var(--h-color-success-fg);
 }
 
 .presetCardCurrent {
   font-size: 10px;
   font-weight: 650;
-  color: var(--h-ok, #3c9a5f);
+  color: var(--h-color-success-fg);
   white-space: nowrap;
 }
 
@@ -2358,7 +2356,7 @@
    是目录默认不标注，避免 30+ 张卡片全是角标。 */
 .presetCardProtoTag {
   flex: 0 0 auto;
-  padding: 1px 5px;
+  padding: 4px 4px;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-pill);
   background: var(--h-bg-soft);
@@ -2373,16 +2371,16 @@
   /* 返佣标记 = 卡片右下角探出的半颗星水印：低透明度大字符，下半由
      卡片 overflow:hidden 裁掉，只露上半。 */
   position: absolute;
-  bottom: -14px;
-  right: -6px;
-  color: color-mix(in srgb, var(--h-warn, #d4920a) 10%, transparent);
+  bottom: -16px;
+  right: -8px;
+  color: color-mix(in srgb, var(--h-color-warning-fg) 10%, transparent);
   font-size: 48px;
   line-height: 1;
   pointer-events: none;
   user-select: none;
 }
 .presetCardBadge[data-badge="prime"] {
-  color: color-mix(in srgb, var(--h-err, #c44) 10%, transparent);
+  color: color-mix(in srgb, var(--h-color-danger-fg) 10%, transparent);
 }
 
 .presetCardAdd {
@@ -2408,7 +2406,7 @@
 
 .providerPresetEmpty {
   grid-column: 1 / -1;
-  padding: 18px 12px;
+  padding: 20px 12px;
   color: var(--h-text-3);
   font-size: 12px;
 }
@@ -2420,18 +2418,12 @@ button.providerWebsiteButton {
   font-size: 13px;
   font-weight: 650;
   border: none;
-  color: #fff;
-  background-image: linear-gradient(
-    100deg,
-    var(--h-accent),
-    color-mix(in srgb, var(--h-accent) 52%, var(--h-warn, #d4920a)),
-    color-mix(in srgb, var(--h-accent) 58%, var(--h-ok, #3c9a5f)),
-    var(--h-accent)
-  );
+  color: var(--h-accent-contrast);
+  background: var(--h-accent);
   background-size: 220% 100%;
   background-position: 0% 50%;
   animation: providerWebsiteFlow 3.6s ease-in-out infinite;
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--h-accent) 35%, transparent);
+  box-shadow: none;
 }
 button.providerWebsiteButton:hover {
   filter: brightness(1.06);
@@ -2458,7 +2450,7 @@ button.providerWebsiteButton:hover {
 .providerPresetPanel {
   min-width: 0;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-pane);
   padding: 20px;
 }
@@ -2472,7 +2464,7 @@ button.providerWebsiteButton:hover {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 22px;
+  gap: 24px;
   color: var(--h-text);
 }
 
@@ -2483,8 +2475,8 @@ button.providerWebsiteButton:hover {
 }
 
 .providerPanelSpinner {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 2px solid var(--h-accent);
   border-right-color: transparent;
   border-radius: 50%;
@@ -2514,10 +2506,8 @@ button.providerWebsiteButton:hover {
 .providerPanelSkeletonLine {
   display: block;
   height: 40px;
-  border-radius: 10px;
-  background:
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.24), transparent),
-    var(--h-bg-soft);
+  border-radius: 8px;
+  background: var(--h-bg-soft);
   background-size: 220% 100%, 100% 100%;
   animation: hermesProviderSkeleton 1.1s ease-in-out infinite;
   border: 1px solid var(--h-line-soft);
@@ -2545,7 +2535,7 @@ button.providerWebsiteButton:hover {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 
 .providerPresetHeader > div {
@@ -2564,7 +2554,7 @@ button.providerWebsiteButton:hover {
 .providerFormGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -2591,7 +2581,7 @@ button.providerWebsiteButton:hover {
 }
 
 .providerPresetPanel .providerActions {
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .auxModels {
@@ -2604,12 +2594,12 @@ button.providerWebsiteButton:hover {
 .auxIntroCard {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
-  gap: 18px;
+  gap: 20px;
   align-items: start;
   border: 1px solid var(--h-line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
-  padding: 18px;
+  padding: 20px;
 }
 
 .auxIntroTitle {
@@ -2632,7 +2622,7 @@ button.providerWebsiteButton:hover {
 
 .auxImageModeBox {
   border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-app);
   padding: 12px;
 }
@@ -2665,12 +2655,12 @@ button.providerWebsiteButton:hover {
 .auxTaskGroup {
   overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
 .auxTaskGroupTitle {
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-bottom: 1px solid var(--h-line-soft);
   color: var(--h-text-3);
   font-size: 11px;
@@ -2688,7 +2678,7 @@ button.providerWebsiteButton:hover {
   cursor: pointer;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   padding: 12px;
   text-align: left;
@@ -2708,7 +2698,7 @@ button.providerWebsiteButton:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .auxTaskName {
@@ -2728,7 +2718,7 @@ button.providerWebsiteButton:hover {
 }
 
 .auxTaskState {
-  max-width: 150px;
+  max-width: 152px;
   border: 1px solid var(--h-line-soft);
   border-radius: var(--h-r-pill);
   background: var(--h-bg-app);
@@ -2748,7 +2738,7 @@ button.providerWebsiteButton:hover {
 .auxEditorPanel {
   min-width: 0;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
   padding: 20px;
 }
@@ -2758,7 +2748,7 @@ button.providerWebsiteButton:hover {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .auxEditorTitle {
@@ -2768,7 +2758,7 @@ button.providerWebsiteButton:hover {
 }
 
 .auxEditorSubtitle {
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--h-text-2);
   font-size: 12px;
   line-height: 1.6;
@@ -2776,9 +2766,9 @@ button.providerWebsiteButton:hover {
 
 .auxNotice,
 .auxWarning {
-  margin-top: 14px;
-  border-radius: 10px;
-  padding: 10px 12px;
+  margin-top: 16px;
+  border-radius: 8px;
+  padding: 12px 12px;
   font-size: 12px;
   line-height: 1.65;
 }
@@ -2790,8 +2780,8 @@ button.providerWebsiteButton:hover {
 }
 
 .auxWarning {
-  border: 1px solid color-mix(in srgb, var(--h-warn, #c8782a) 42%, var(--h-line));
-  background: color-mix(in srgb, var(--h-warn, #c8782a) 9%, var(--h-bg-pane));
+  border: 1px solid var(--h-color-warning-border);
+  background: var(--h-color-warning-bg);
   color: var(--h-text);
 }
 
@@ -2803,7 +2793,7 @@ button.providerWebsiteButton:hover {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 0;
   font-family: var(--h-font-cn);
   font-size: 12px;
@@ -2819,10 +2809,10 @@ button.providerWebsiteButton:hover {
 .auxAdvancedGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 14px;
+  gap: 16px;
+  margin-top: 16px;
   border-top: 1px solid var(--h-line-soft);
-  padding-top: 14px;
+  padding-top: 16px;
 }
 
 .auxExtraBodyField {
@@ -2835,21 +2825,21 @@ button.providerWebsiteButton:hover {
   min-height: 132px;
   resize: vertical;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-mono);
   font-size: 12px;
   line-height: 1.6;
   outline: none;
-  padding: 10px 12px;
+  padding: 12px 12px;
 }
 .auxJsonArea:focus {
   border-color: var(--h-accent);
 }
 
 .auxSavedHint {
-  margin-top: 10px;
+  margin-top: 12px;
   color: var(--h-ok);
   font-size: 12px;
   font-family: var(--h-font-cn);
@@ -2857,7 +2847,7 @@ button.providerWebsiteButton:hover {
 
 @media (max-width: 1180px) {
   .content {
-    padding: 22px 24px 36px;
+    padding: 24px 24px 36px;
   }
 
   .aboutDebugGrid {
@@ -2897,7 +2887,7 @@ button.providerWebsiteButton:hover {
   }
 
   .content {
-    padding: 18px 16px 30px;
+    padding: 20px 16px 32px;
   }
 
   .aboutHero {
@@ -2926,7 +2916,7 @@ button.providerWebsiteButton:hover {
   .codingAgentCardHeader {
     align-items: flex-start;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
   .codingAgentStatusGroup {
@@ -2962,7 +2952,7 @@ button.providerWebsiteButton:hover {
   .providerPresetHeader {
     align-items: stretch;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
   .providerPresetHeader .statusBadge {
@@ -3012,9 +3002,9 @@ button.providerWebsiteButton:hover {
 }
 
 .advancedEnvBlock {
-  margin-top: 18px;
+  margin-top: 20px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -3022,17 +3012,17 @@ button.providerWebsiteButton:hover {
 .providerCard {
   border: 1px solid var(--h-line);
   border-radius: 0;
-  margin-bottom: -1px;
+  margin-bottom: -4px;
 }
 .providerCard:first-child {
-  border-radius: 8px 8px 0 0;
+  border-radius: 4px 4px 0 0;
 }
 .providerCard:last-child {
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 4px 4px;
   margin-bottom: 0;
 }
 .providerCard:only-child {
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .providerCardHeader {
@@ -3040,7 +3030,7 @@ button.providerWebsiteButton:hover {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -3079,7 +3069,7 @@ button.providerWebsiteButton:hover {
 
 .providerCardBody {
   border-top: 1px solid var(--h-line-soft);
-  padding: 4px 14px;
+  padding: 4px 16px;
 }
 
 /* Config tabs (wrapping category chips; avoid hidden horizontal overflow) */
@@ -3087,7 +3077,7 @@ button.providerWebsiteButton:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 0 14px;
+  padding: 0 0 16px;
   margin: 0 0 16px;
   overflow: visible;
   border-bottom: 1px solid var(--h-line-soft);
@@ -3096,11 +3086,12 @@ button.providerWebsiteButton:hover {
 .configTab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
+  gap: 8px;
+  height: var(--h-button-height-md);
+  min-height: var(--h-button-height-md);
   padding: 0 12px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-pill);
+  border-radius: var(--h-r-sm);
   background: var(--h-bg-chip);
   color: var(--h-text-3);
   font-size: 12px;
@@ -3140,7 +3131,7 @@ button.providerWebsiteButton:hover {
 .filterGroup {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .filterLabel {
@@ -3151,16 +3142,17 @@ button.providerWebsiteButton:hover {
 
 .segmented {
   display: flex;
-  gap: 1px;
-  padding: 2px;
+  gap: 4px;
+  padding: 4px;
   background: var(--h-bg-soft);
   border-radius: var(--h-r-sm);
 }
 
 .segmentBtn {
-  padding: 3px 8px;
+  height: var(--h-segment-height);
+  padding: 0 8px;
   border: none;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--h-text-2);
   font-size: 10.5px;
@@ -3175,14 +3167,14 @@ button.providerWebsiteButton:hover {
   background: var(--h-bg-pane);
   color: var(--h-text);
   font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+  box-shadow: none;
 }
 
 .logToolbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .autoRefreshLabel {
@@ -3196,8 +3188,8 @@ button.providerWebsiteButton:hover {
 
 .liveDot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--h-ok);
 }
@@ -3206,7 +3198,7 @@ button.providerWebsiteButton:hover {
 .logBlock {
   background: var(--h-bg-code);
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 12px;
   max-height: 400px;
   overflow-y: auto;
@@ -3221,7 +3213,7 @@ button.providerWebsiteButton:hover {
   word-break: break-all;
   padding: 0 4px;
   margin: 0 -4px;
-  border-radius: 2px;
+  border-radius: 4px;
   transition: background 0.1s;
 }
 .logLine:hover {
@@ -3233,7 +3225,7 @@ button.providerWebsiteButton:hover {
 }
 
 .logLine_warning {
-  color: var(--h-warn, #d4920a);
+  color: var(--h-color-warning-fg);
 }
 
 .logLine_debug {
@@ -3262,12 +3254,12 @@ button.providerWebsiteButton:hover {
 
 @media (max-width: 720px) {
   .appearancePanel {
-    border-radius: 12px;
+    border-radius: 8px;
   }
 
   .appearanceHeader,
   .appearanceRow {
-    padding: 18px;
+    padding: 20px;
   }
 
   .skinPicker {
@@ -3281,26 +3273,26 @@ button.providerWebsiteButton:hover {
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
   background: var(--h-bg-pane);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
   padding: 16px;
   outline: none;
 }
 
 .approvalModePanel:focus {
   border-color: var(--h-accent-border);
-  box-shadow: 0 0 0 3px var(--h-accent-soft);
+  box-shadow: none;
 }
 
 .approvalModeHead {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .approvalModeHead svg {
   color: var(--h-accent);
-  margin-top: 2px;
+  margin-top: 4px;
   flex-shrink: 0;
 }
 
@@ -3321,7 +3313,7 @@ button.providerWebsiteButton:hover {
 .approvalModeOptions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .approvalModeOption {
@@ -3366,7 +3358,7 @@ button.providerWebsiteButton:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--h-text);
   font-size: 13px;
   font-weight: 650;
@@ -3385,7 +3377,7 @@ button.providerWebsiteButton:hover {
 }
 
 .approvalModeBadge {
-  padding: 2px 7px;
+  padding: 4px 8px;
   border-radius: var(--h-r-pill);
   background: var(--h-bg-chip);
   color: var(--h-text-3);
@@ -3396,7 +3388,7 @@ button.providerWebsiteButton:hover {
 .approvalModeFooter {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   margin-top: 12px;
   color: var(--h-text-3);
@@ -3410,7 +3402,7 @@ button.providerWebsiteButton:hover {
 }
 
 .approvalModeError {
-  margin-top: 10px;
+  margin-top: 12px;
   color: var(--h-err);
   font-size: 12px;
   line-height: 1.5;
@@ -3426,7 +3418,7 @@ button.providerWebsiteButton:hover {
 .connModeGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   margin: 4px 0 20px;
 }
 
@@ -3440,8 +3432,8 @@ button.providerWebsiteButton:hover {
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  margin-bottom: 18px;
-  padding: 10px 12px;
+  margin-bottom: 20px;
+  padding: 12px 12px;
   border: 1px solid color-mix(in srgb, var(--h-err) 40%, var(--h-line));
   border-radius: var(--h-r-md);
   background: color-mix(in srgb, var(--h-err) 8%, transparent);
@@ -3451,7 +3443,7 @@ button.providerWebsiteButton:hover {
 }
 
 .connEnvWarn svg {
-  margin-top: 2px;
+  margin-top: 4px;
   flex-shrink: 0;
 }
 
@@ -3459,11 +3451,41 @@ button.providerWebsiteButton:hover {
   font-family: var(--h-font-mono);
 }
 
+.connBrowserCompanion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0 20px;
+  padding: 16px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  background: color-mix(in srgb, var(--h-accent) 5%, transparent);
+}
+
+.connBrowserCompanionCopy {
+  min-width: 0;
+}
+
+.connBrowserCompanionTitle {
+  margin-bottom: 4px;
+  color: var(--h-text-1);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .connBrowserCompanion {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .connProbe {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 8px;
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--h-text-3);
@@ -3489,8 +3511,8 @@ button.providerWebsiteButton:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 22px;
+  gap: 12px;
+  margin-top: 24px;
 }
 
 .connFooterSpacer {
@@ -3498,7 +3520,7 @@ button.providerWebsiteButton:hover {
 }
 
 .connResult {
-  margin-top: 14px;
+  margin-top: 16px;
   font-size: 12px;
   line-height: 1.55;
   color: var(--h-text-3);
@@ -3529,7 +3551,7 @@ button.providerWebsiteButton:hover {
 .dangerZoneHead {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--h-err);
@@ -3546,14 +3568,14 @@ button.providerWebsiteButton:hover {
 .dangerActions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .dangerBadge,
 .dangerBadgePending {
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: var(--h-r-pill);
   white-space: nowrap;
 }
@@ -3570,8 +3592,8 @@ button.providerWebsiteButton:hover {
 
 /* Confirmation dialog */
 .dangerDialog {
-  padding: 20px 22px 18px;
-  gap: 14px;
+  padding: 20px 24px 20px;
+  gap: 16px;
   max-width: min(440px, calc(100vw - 32px));
 }
 
@@ -3603,8 +3625,8 @@ button.providerWebsiteButton:hover {
 }
 
 .dangerConfirmRow input {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   accent-color: var(--h-err);
   cursor: pointer;
 }
@@ -3613,7 +3635,7 @@ button.providerWebsiteButton:hover {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .assistantProfileControl,
@@ -3633,9 +3655,9 @@ button.providerWebsiteButton:hover {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  padding: 7px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-cn);
@@ -3645,18 +3667,18 @@ button.providerWebsiteButton:hover {
 
 .assistantNameInput:focus {
   border-color: color-mix(in srgb, var(--h-accent) 56%, var(--h-line));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--h-accent) 14%, transparent);
+  box-shadow: none;
 }
 
 .iconPlainButton {
-  width: 28px;
-  height: 28px;
+  width: var(--h-button-height-sm);
+  height: var(--h-button-height-sm);
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-pane);
   color: var(--h-text-3);
   cursor: pointer;
@@ -3673,8 +3695,8 @@ button.providerWebsiteButton:hover {
 
 .assistantAvatarPreview,
 .assistantAvatarPlaceholder {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
   border-radius: 50%;
   border: 1px solid var(--h-line);

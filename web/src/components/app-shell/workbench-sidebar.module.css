@@ -17,13 +17,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: linear-gradient(
-    180deg,
-    transparent,
-    color-mix(in srgb, var(--h-accent) 25%, transparent) 30%,
-    color-mix(in srgb, var(--h-accent) 25%, transparent) 70%,
-    transparent
-  );
+  background: var(--h-line-soft);
   opacity: 0.4;
   pointer-events: none;
 }
@@ -33,7 +27,7 @@
   height: 36px;
   background: var(--h-accent);
   color: var(--h-accent-contrast, #fff);
-  border-radius: 3px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,7 +75,7 @@
   overflow: hidden;
   line-height: 20px;
   text-overflow: ellipsis;
-  transform: translateY(1px);
+  transform: translateY(4px);
   white-space: nowrap;
 }
 
@@ -98,7 +92,7 @@
   line-height: 20px;
   text-align: right;
   text-overflow: ellipsis;
-  transform: translateY(1px);
+  transform: translateY(4px);
   white-space: nowrap;
 }
 
@@ -113,13 +107,13 @@
 .quickNavButton {
   appearance: none;
   box-sizing: border-box;
-  min-height: 34px;
+  height: var(--h-button-height-md);
   width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
-  border-left: 2px solid transparent;
+  padding: 0 16px;
+  border-left: 1px solid transparent;
   border-right: none;
   border-top: none;
   border-bottom: none;
@@ -151,15 +145,15 @@
 }
 
 .quickNavButton .entryIcon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   color: var(--h-text-3);
   flex-shrink: 0;
 }
 
 .quickNavButton .entryIcon svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .quickNavButton .entryLabel {
@@ -199,7 +193,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px 6px 16px;
+  padding: 12px 16px 8px 16px;
   font-family: var(--h-font-mono);
   font-size: 9.5px;
   color: var(--h-text-3);
@@ -213,8 +207,8 @@
 
 .sessionRow {
   position: relative;
-  padding: 8px 16px 8px 18px;
-  border-left: 2px solid transparent;
+  padding: 8px 16px 8px 20px;
+  border-left: 1px solid transparent;
   cursor: pointer;
   background: transparent;
   border-right: none;
@@ -226,7 +220,7 @@
   font: inherit;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 8px;
 }
 
 .sessionRow:hover {
@@ -245,13 +239,13 @@
 
 .rowMore {
   position: absolute;
-  top: 7px;
+  top: 8px;
   right: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: var(--h-button-height-xs);
+  height: var(--h-button-height-xs);
   padding: 0;
   border: none;
   border-radius: 4px;
@@ -286,11 +280,11 @@
   white-space: nowrap;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
   overflow: visible;
-  padding-right: 30px;
+  padding-right: 32px;
 }
 
 .ttlText {
@@ -303,8 +297,8 @@
 }
 
 .dot {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   flex-shrink: 0;
   background: transparent;
@@ -312,7 +306,7 @@
 
 .dot[data-state="live"] {
   background: var(--h-ok);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-ok) 22%, transparent);
+  box-shadow: none;
 }
 
 .dot[data-state="ok"] {
@@ -324,7 +318,7 @@
 }
 
 .meta {
-  margin-top: 2px;
+  margin-top: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -361,12 +355,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
+  height: var(--h-button-height-md);
+  padding: 0 16px;
   font-size: 12.5px;
   color: var(--h-text-2);
   cursor: pointer;
   position: relative;
-  border-left: 2px solid transparent;
+  border-left: 1px solid transparent;
   background: transparent;
   border-right: none;
   border-top: none;
@@ -388,8 +383,8 @@
 }
 
 .sideItemIcon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   color: var(--h-text-3);
   display: inline-flex;
   align-items: center;

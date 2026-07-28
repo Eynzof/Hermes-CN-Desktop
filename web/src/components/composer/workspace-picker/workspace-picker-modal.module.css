@@ -15,11 +15,9 @@
   width: min(640px, calc(100vw - 32px));
   max-height: min(680px, calc(100vh - 48px));
   border: 1px solid var(--h-line);
-  border-radius: 18px;
+  border-radius: 8px;
   background: var(--h-bg-input);
-  box-shadow:
-    0 24px 72px rgba(31, 30, 27, 0.18),
-    0 8px 24px rgba(31, 30, 27, 0.08);
+  box-shadow: none;
   color: var(--h-text);
   overflow: hidden;
 }
@@ -30,7 +28,7 @@
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--h-line-soft);
-  padding: 16px 18px 14px;
+  padding: 16px 20px 16px;
 }
 
 .wpTitleBar h2 {
@@ -42,9 +40,9 @@
 }
 
 .wpClose {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: var(--h-button-height-sm);
+  height: var(--h-button-height-sm);
+  border-radius: 4px;
   color: var(--h-text-2);
   padding: 0;
   background: transparent;
@@ -70,7 +68,7 @@
   display: flex;
   gap: 8px;
   border-bottom: 1px solid var(--h-line-soft);
-  padding: 10px 12px;
+  padding: 12px 12px;
 }
 
 .wpManualInput {
@@ -78,12 +76,12 @@
   min-width: 0;
   height: 32px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-soft);
   color: var(--h-text);
   font-size: 13px;
   outline: 0;
-  padding: 0 10px;
+  padding: 0 12px;
 }
 
 .wpManualInput:focus {
@@ -92,9 +90,9 @@
 
 .wpManualGo {
   height: 32px;
-  padding: 0 14px;
+  padding: 0 16px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-soft);
   color: var(--h-text);
   font-size: 13px;
@@ -121,10 +119,10 @@
 }
 
 .wpUpButton {
-  width: 28px;
-  height: 28px;
+  width: var(--h-button-height-sm);
+  height: var(--h-button-height-sm);
   border: 1px solid var(--h-line);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--h-bg-input);
   color: var(--h-text);
   display: inline-flex;
@@ -135,8 +133,8 @@
 }
 
 .wpUpButton svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
 }
 
@@ -153,7 +151,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
   overflow-x: auto;
@@ -163,14 +161,14 @@
 .wpCrumbWrap {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .wpCrumb {
   border: 0;
   background: transparent;
   color: var(--h-text-2);
-  padding: 4px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
@@ -196,7 +194,7 @@
 .wpList {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 6px;
+  padding: 8px 8px;
   min-height: 200px;
   max-height: 360px;
 }
@@ -209,8 +207,8 @@
   border: 0;
   background: transparent;
   color: var(--h-text);
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border-radius: 4px;
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -269,7 +267,7 @@
   align-items: center;
   gap: 12px;
   border-top: 1px solid var(--h-line-soft);
-  padding: 12px 14px;
+  padding: 12px 16px;
   background: var(--h-bg-soft);
 }
 
@@ -281,7 +279,7 @@
   white-space: nowrap;
   font-size: 12px;
   color: var(--h-text-2);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--h-font-mono);
 }
 
 .wpFooterButtons {
@@ -292,9 +290,9 @@
 
 .wpButtonGhost,
 .wpButtonPrimary {
-  height: 32px;
-  padding: 0 14px;
-  border-radius: 8px;
+  height: var(--h-button-height-md);
+  padding: 0 16px;
+  border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
   border: 1px solid var(--h-line);
@@ -311,7 +309,7 @@
 
 .wpButtonPrimary {
   background: var(--h-accent);
-  color: #ffffff;
+  color: var(--h-accent-contrast);
   border-color: var(--h-accent-border);
   font-weight: 600;
 }

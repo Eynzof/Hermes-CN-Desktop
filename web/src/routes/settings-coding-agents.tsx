@@ -56,10 +56,10 @@ function agentStatusLine(agent: CodingAgentStatus): string {
 }
 
 function StatusIcon({ status }: { status: CardStatus }) {
-  if (status === "ok") return <CheckCircle2 size={13} />;
-  if (status === "error") return <XCircle size={13} />;
-  if (status === "warning") return <AlertTriangle size={13} />;
-  return <CircleHelp size={13} />;
+  if (status === "ok") return <CheckCircle2 size={12} />;
+  if (status === "error") return <XCircle size={12} />;
+  if (status === "warning") return <AlertTriangle size={12} />;
+  return <CircleHelp size={12} />;
 }
 
 function RuntimeField({ label, value, mono, wide }: {
@@ -91,7 +91,7 @@ export function DelegationSkillControl({ agent, skill, onToggle, pending }: {
         role="status"
       >
         <span className={s.delegationSkillIcon} aria-hidden>
-          <AlertTriangle size={15} />
+          <AlertTriangle size={16} />
         </span>
         <div className={s.delegationSkillBody}>
           <div className={s.delegationSkillMeta}>
@@ -117,7 +117,7 @@ export function DelegationSkillControl({ agent, skill, onToggle, pending }: {
       aria-label={`${agent.label} 委派技能`}
     >
       <span className={s.delegationSkillIcon} aria-hidden>
-        <Bot size={15} />
+        <Bot size={16} />
       </span>
       <div className={s.delegationSkillBody}>
         <div className={s.delegationSkillMeta}>
@@ -164,7 +164,7 @@ export function CodingAgentToolbar({ isFetching, hasBridge, onRefresh, diagnosti
         <RefreshCw
           className={s.codingAgentRefreshIcon}
           data-spinning={isFetching ? "true" : undefined}
-          size={13}
+          size={12}
         />
         {isFetching ? "检测中" : "刷新检测"}
       </button>
@@ -173,7 +173,7 @@ export function CodingAgentToolbar({ isFetching, hasBridge, onRefresh, diagnosti
         data-coding-agent-action="true"
         text={diagnostics}
       >
-        <Copy size={13} />
+        <Copy size={12} />
         复制诊断 JSON
       </CopyButton>
     </div>
@@ -193,7 +193,7 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
       <header className={s.codingAgentCardHeader}>
         <div className={s.codingAgentIdentity}>
           <div className={s.debugCardIcon}>
-            <SquareTerminal size={15} />
+            <SquareTerminal size={16} />
           </div>
           <div className={s.codingAgentIdentityText}>
             <h3>{agent.label}</h3>
@@ -207,7 +207,7 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
           </span>
           {agent.installed ? (
             <span className={s.envStatusTag} data-status={agent.loginState === "logged_in" ? "ok" : status}>
-              <KeyRound size={11} aria-hidden />
+              <KeyRound size={12} aria-hidden />
               {LOGIN_LABELS[agent.loginState]}
             </span>
           ) : null}
@@ -247,7 +247,7 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
             type="button"
             onClick={() => void onOpenPath(agent.path)}
           >
-            <FolderOpen size={13} />
+            <FolderOpen size={12} />
             打开路径
           </button>
         ) : null}

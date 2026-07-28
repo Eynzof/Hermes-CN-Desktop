@@ -102,7 +102,7 @@ export function DebugRoute() {
         </div>
         <div className={s.debugHeroActions}>
           <button className={s.btnPrimary} type="button" onClick={handleExport} disabled={!canExport || exporting}>
-            <FileArchive size={13} />
+            <FileArchive size={12} />
             {exporting ? "导出中…" : "导出 debug 包"}
           </button>
           <span><FolderOpen size={12} /> 导出后自动打开所在文件夹</span>

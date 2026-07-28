@@ -1,13 +1,13 @@
 .dialog {
   width: min(460px, calc(100vw - 32px));
-  padding: 20px 22px 18px;
-  gap: 14px;
+  padding: 20px 24px 20px;
+  gap: 16px;
 }
 
 .title {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   margin: 0;
   color: var(--h-text);
   font-size: 16px;
@@ -15,9 +15,9 @@
 }
 
 .titleIcon {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -36,16 +36,16 @@
 .versionPanel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-app);
   padding: 12px;
 }
 
 .versionPanel span {
   display: block;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   color: var(--h-text-3);
   font-size: 10.5px;
 }
@@ -68,9 +68,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border-radius: 6px;
-  padding: 7px 14px;
+  gap: 8px;
+  border-radius: 4px;
+  height: var(--h-button-height-md);
+  padding: 0 var(--h-button-padding-x-md);
   cursor: pointer;
   font-family: var(--h-font-cn);
   font-size: 12px;

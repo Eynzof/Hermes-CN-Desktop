@@ -194,9 +194,9 @@ export function DebugSection({ showHeading = true }: DebugSectionProps) {
                     <pre
                       style={{
                         marginTop: 4,
-                        padding: "6px 8px",
+                        padding: "8px 8px",
                         background: "var(--h-bg-pane)",
-                        border: "1px solid var(--h-line-soft)",
+                        border: "4px solid var(--h-line-soft)",
                         borderRadius: 4,
                         overflow: "auto",
                         whiteSpace: "pre-wrap",

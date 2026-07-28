@@ -1,10 +1,11 @@
 .control {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 2px;
-  height: 26px;
-  padding: 2px;
+  gap: 4px;
+  height: var(--h-button-height-sm);
+  padding: 4px;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-sm);
   background: color-mix(in srgb, var(--h-bg-input) 82%, transparent);
@@ -13,7 +14,7 @@
 }
 
 .label {
-  padding: 0 5px 0 6px;
+  padding: 0 4px 0 8px;
   color: var(--h-text-3);
   font-size: 11px;
   line-height: 1;
@@ -24,16 +25,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 20px;
+  min-width: var(--h-button-height-xs);
+  height: var(--h-segment-height);
   border: 0;
-  border-radius: calc(var(--h-r-sm) - 2px);
+  border-radius: calc(var(--h-r-sm) - 4px);
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
   font-size: 11px;
   line-height: 1;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 
 .option:hover {
@@ -48,12 +49,12 @@
 
 .option[data-active="true"] {
   background: var(--h-accent);
-  color: #fff;
+  color: var(--h-accent-contrast);
 }
 
 .option[data-active="true"]:hover {
   background: var(--h-accent);
-  color: #fff;
+  color: var(--h-accent-contrast);
 }
 
 @media (max-width: 720px) {
@@ -62,7 +63,7 @@
   }
 
   .option {
-    min-width: 22px;
-    padding: 0 5px;
+    min-width: 24px;
+    padding: 0 4px;
   }
 }

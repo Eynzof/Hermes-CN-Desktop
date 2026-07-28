@@ -56,7 +56,7 @@ export function ExternalMemorySidebar() {
                 data-active={isActive(item) ? "true" : undefined}
                 title={item.title}
               >
-                <span className={s.itemIcon}><Icon size={14} /></span>
+                <span className={s.itemIcon}><Icon size={16} /></span>
                 <span className={s.itemLabel}>{item.label}</span>
                 <span className={s.itemPath}>{item.path}</span>
               </Link>

@@ -40,7 +40,7 @@
 .button {
   padding: 8px 20px;
   background: var(--h-accent);
-  color: #fff;
+  color: var(--h-accent-contrast);
   border: none;
   border-radius: var(--h-r-sm);
   font-size: var(--h-fs);

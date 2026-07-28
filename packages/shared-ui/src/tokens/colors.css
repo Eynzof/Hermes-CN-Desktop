@@ -1,7 +1,6 @@
-/* Hermes Design Tokens — Colors
-   Anthropic-flavored: warm cream / muted neutrals / single coral accent.
-
-   Dark palette aligned with hermes-cn-ui-prototypes (ink/bone/persimmon). */
+/* Hermes Community UI — Colors
+   Default modern themes are achromatic. Status colors remain semantic signals,
+   while navigation, selection and primary actions stay black / white / grey. */
 
 :root {
   /* ── Raw palette (ink/bone/accents)
@@ -55,8 +54,9 @@
   --h-warn: #c08828;
   --h-warn-soft: #f5e6c5;
   --h-err: #c4554d;
-  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --h-shadow-l: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
   --h-sidebar-stripe: #fbfaf7;
   --h-accent: #ff7a3d;
   --h-accent-contrast: #ffffff;
@@ -65,36 +65,34 @@
 }
 
 [data-theme="light-modern"] {
-  /* Modern light: a clean editor-style palette with white content surfaces,
-     subtle workbench chrome, quiet separators, and a blue command accent. */
-  --h-bg-app: #f3f3f3;
+  /* Neutral light: paper-white surfaces and graphite controls. */
+  --h-bg-app: #f4f4f3;
   --h-bg-pane: #ffffff;
-  --h-bg-soft: #f8f8f8;
+  --h-bg-soft: #f7f7f6;
   --h-bg-input: #ffffff;
-  --h-bg-chip: #f0f0f0;
-  --h-bg-code: #f6f8fa;
-  --h-line: #d7d7d7;
-  --h-line-soft: #e5e5e5;
-  --h-text: #1f1f1f;
-  --h-text-2: #3f3f46;
-  /* Deepened for WCAG AA: #6e6e6e (~4.5:1, sub-AA on chips) → #595959 (~7:1);
-     #a6a6a6 (~2.4:1) → #757575 (~4.6:1). Secondary text is the workhorse here. */
-  --h-text-3: #595959;
-  --h-text-4: #757575;
+  --h-bg-chip: #ececeb;
+  --h-bg-code: #f3f3f2;
+  --h-line: #d5d5d2;
+  --h-line-soft: #e8e8e5;
+  --h-text: #171716;
+  --h-text-2: #3f3f3d;
+  --h-text-3: #656562;
+  --h-text-4: #858581;
   --h-ok: #16825d;
   --h-ok-soft: rgba(22, 130, 93, 0.1);
   --h-warn: #9d6b00;
   --h-warn-soft: rgba(157, 107, 0, 0.1);
   --h-err: #d13438;
   --h-danger: #d13438;
-  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --h-shadow-l: 0 12px 32px rgba(0, 0, 0, 0.08);
-  --h-sidebar-stripe: #f8f8f8;
-  --h-accent: #0078d4;
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
+  --h-sidebar-stripe: #f1f1ef;
+  --h-accent: #171716;
   --h-accent-contrast: #ffffff;
-  --h-accent-soft: rgba(0, 120, 212, 0.1);
-  --h-accent-border: rgba(0, 120, 212, 0.36);
-  --sky: #0078d4;
+  --h-accent-soft: #ececeb;
+  --h-accent-border: #777773;
+  --sky: #525250;
   --plum: #8e44ad;
   --amber: #9d6b00;
   --moss: #16825d;
@@ -122,8 +120,9 @@
   --h-warn: var(--amber);
   --h-warn-soft: rgba(232, 184, 93, 0.08);
   --h-err: var(--rust);
-  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --h-shadow-l: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
   --h-sidebar-stripe: var(--ink-100);
   --h-accent: var(--persimmon);
   --h-accent-contrast: #ffffff;
@@ -132,35 +131,34 @@
 }
 
 [data-theme="dark-modern"] {
-  /* Modern dark: a neutral blue-black desktop palette inspired by current
-     code-editor surfaces, tuned to keep Hermes chrome quiet and readable. */
-  --h-bg-app: #181818;
-  --h-bg-pane: #1f1f1f;
-  --h-bg-soft: #252526;
-  --h-bg-input: #2d2d30;
-  --h-bg-chip: #2a2d2e;
-  --h-bg-code: #1e1e1e;
-  --h-line: #3c3c3c;
-  --h-line-soft: #2b2b2b;
-  --h-text: #d4d4d4;
-  --h-text-2: #c5c5c5;
-  --h-text-3: #9d9d9d;
-  /* Was #6f6f6f (~3.3:1 on #1f1f1f) → #8a8a8a (~4.9:1) for AA on small text. */
-  --h-text-4: #8a8a8a;
+  /* Neutral dark: carbon surfaces, white primary action, no blue cast. */
+  --h-bg-app: #111111;
+  --h-bg-pane: #181818;
+  --h-bg-soft: #202020;
+  --h-bg-input: #242424;
+  --h-bg-chip: #2a2a2a;
+  --h-bg-code: #151515;
+  --h-line: #3a3a3a;
+  --h-line-soft: #292929;
+  --h-text: #f1f1ef;
+  --h-text-2: #cececa;
+  --h-text-3: #a1a19d;
+  --h-text-4: #858581;
   --h-ok: #89d185;
   --h-ok-soft: rgba(137, 209, 133, 0.1);
   --h-warn: #cca700;
   --h-warn-soft: rgba(204, 167, 0, 0.12);
   --h-err: #f48771;
   --h-danger: #f48771;
-  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.62);
-  --h-sidebar-stripe: #1f1f1f;
-  --h-accent: #0078d4;
-  --h-accent-contrast: #ffffff;
-  --h-accent-soft: rgba(0, 120, 212, 0.16);
-  --h-accent-border: rgba(0, 120, 212, 0.42);
-  --sky: #4fc1ff;
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
+  --h-sidebar-stripe: #181818;
+  --h-accent: #f1f1ef;
+  --h-accent-contrast: #111111;
+  --h-accent-soft: #2a2a2a;
+  --h-accent-border: #858581;
+  --sky: #b8b8b4;
   --plum: #c586c0;
   --amber: #dcdcaa;
   --moss: #89d185;
@@ -187,8 +185,9 @@
   --h-warn-soft: rgba(241, 250, 140, 0.12);
   --h-err: #ff5555;
   --h-danger: #ff5555;
-  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.48);
-  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.64);
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
   --h-sidebar-stripe: #282a36;
   --h-accent: #bd93f9;
   --h-accent-contrast: #282a36;
@@ -221,8 +220,9 @@
   --h-warn-soft: rgba(249, 226, 175, 0.12);
   --h-err: #f38ba8;
   --h-danger: #f38ba8;
-  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.46);
-  --h-shadow-l: 0 18px 48px rgba(0, 0, 0, 0.62);
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
   --h-sidebar-stripe: #181825;
   --h-accent: #cba6f7;
   --h-accent-contrast: #1e1e2e;
@@ -233,4 +233,53 @@
   --amber: #fab387;
   --moss: #a6e3a1;
   --rust: #f38ba8;
+}
+
+/* ── Unified status palette
+   Theme accents may remain expressive, but operational states use one quiet
+   palette across the application. Legacy aliases stay mapped here so older
+   screens and new semantic components cannot drift apart. */
+:root,
+[data-theme="light"],
+[data-theme="light-modern"] {
+  --h-ok: var(--h-palette-success-light-fg);
+  --h-ok-soft: var(--h-palette-success-light-surface);
+  --h-ok-border: var(--h-palette-success-light-border);
+  --h-warn: var(--h-palette-warning-light-fg);
+  --h-warn-soft: var(--h-palette-warning-light-surface);
+  --h-warn-border: var(--h-palette-warning-light-border);
+  --h-err: var(--h-palette-danger-light-fg);
+  --h-err-soft: var(--h-palette-danger-light-surface);
+  --h-err-border: var(--h-palette-danger-light-border);
+  --h-info: var(--h-palette-info-light-fg);
+  --h-info-soft: var(--h-palette-info-light-surface);
+  --h-info-border: var(--h-palette-info-light-border);
+  --h-danger: var(--h-err);
+  --moss: var(--h-ok);
+  --amber: var(--h-warn);
+  --rust: var(--h-err);
+  --sky: var(--h-info);
+}
+
+[data-theme="dark"],
+[data-theme="dark-modern"],
+[data-theme="dracula"],
+[data-theme="catppuccin-mocha"] {
+  --h-ok: var(--h-palette-success-dark-fg);
+  --h-ok-soft: var(--h-palette-success-dark-surface);
+  --h-ok-border: var(--h-palette-success-dark-border);
+  --h-warn: var(--h-palette-warning-dark-fg);
+  --h-warn-soft: var(--h-palette-warning-dark-surface);
+  --h-warn-border: var(--h-palette-warning-dark-border);
+  --h-err: var(--h-palette-danger-dark-fg);
+  --h-err-soft: var(--h-palette-danger-dark-surface);
+  --h-err-border: var(--h-palette-danger-dark-border);
+  --h-info: var(--h-palette-info-dark-fg);
+  --h-info-soft: var(--h-palette-info-dark-surface);
+  --h-info-border: var(--h-palette-info-dark-border);
+  --h-danger: var(--h-err);
+  --moss: var(--h-ok);
+  --amber: var(--h-warn);
+  --rust: var(--h-err);
+  --sky: var(--h-info);
 }

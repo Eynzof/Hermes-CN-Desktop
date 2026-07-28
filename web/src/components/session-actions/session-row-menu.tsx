@@ -45,13 +45,13 @@ export function SessionRowMenu({
       >
         <Popover.Close asChild>
           <button type="button" onClick={onTogglePin} role="menuitem" disabled={disabled}>
-            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            {pinned ? <PinOff size={12} /> : <Pin size={12} />}
             {pinned ? "取消置顶" : "置顶"}
           </button>
         </Popover.Close>
         <Popover.Close asChild>
           <button type="button" onClick={onRename} role="menuitem" disabled={disabled}>
-            <Edit3 size={13} /> 重命名
+            <Edit3 size={12} /> 重命名
           </button>
         </Popover.Close>
         <Popover.Close asChild>
@@ -62,11 +62,11 @@ export function SessionRowMenu({
         <Popover.Close asChild>
           {archived ? (
             <button type="button" onClick={onUnarchive} role="menuitem" disabled={disabled}>
-              <ArchiveRestore size={13} /> 取消归档
+              <ArchiveRestore size={12} /> 取消归档
             </button>
           ) : (
             <button type="button" onClick={onArchive} role="menuitem" disabled={disabled}>
-              <Archive size={13} /> 归档
+              <Archive size={12} /> 归档
             </button>
           )}
         </Popover.Close>
@@ -78,7 +78,7 @@ export function SessionRowMenu({
             data-tone="danger"
             disabled={disabled}
           >
-            <Trash2 size={13} /> 删除
+            <Trash2 size={12} /> 删除
           </button>
         </Popover.Close>
       </Popover.Content>

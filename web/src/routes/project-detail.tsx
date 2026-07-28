@@ -66,13 +66,13 @@ function ProjectMenu({ desktopAvailable, onOpenInFinder, onDelete }: MenuProps) 
         {desktopAvailable ? (
           <Popover.Close asChild>
             <button type="button" onClick={onOpenInFinder} role="menuitem">
-              <ExternalLink size={13} /> 在 Finder 打开
+              <ExternalLink size={12} /> 在 Finder 打开
             </button>
           </Popover.Close>
         ) : null}
         <Popover.Close asChild>
           <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
-            <Trash2 size={13} /> 删除项目
+            <Trash2 size={12} /> 删除项目
           </button>
         </Popover.Close>
       </Popover.Content>
@@ -190,7 +190,7 @@ export function ProjectDetailRoute() {
           sub={shortenPath(workspacePath)}
           right={
             <TopBarActionButton onClick={() => navigate("/projects")}>
-              <ChevronLeft size={13} />
+              <ChevronLeft size={12} />
               返回项目
             </TopBarActionButton>
           }
@@ -225,13 +225,13 @@ export function ProjectDetailRoute() {
         right={
           <>
             <TopBarActionButton onClick={goNewTask}>
-              <Plus size={13} />
+              <Plus size={12} />
               新对话
             </TopBarActionButton>
             <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
               <Popover.Trigger asChild>
                 <TopBarActionButton aria-label="项目操作">
-                  <MoreHorizontal size={14} />
+                  <MoreHorizontal size={16} />
                 </TopBarActionButton>
               </Popover.Trigger>
               <ProjectMenu
@@ -248,7 +248,7 @@ export function ProjectDetailRoute() {
         <section className={s.hero}>
           <div className={s.heroLeft}>
             <span className={s.iconBox} aria-hidden>
-              <Folder size={22} />
+              <Folder size={24} />
             </span>
             <div className={s.heroMeta}>
               <h1>{project.name}</h1>
@@ -324,8 +324,8 @@ export function ProjectDetailRoute() {
                     <th>标题</th>
                     <th style={{ width: 80 }}>来源</th>
                     <th style={{ width: 140 }}>模型</th>
-                    <th style={{ width: 110 }}>更新</th>
-                    <th style={{ width: 90 }} className={s.numeric}>Tokens</th>
+                    <th style={{ width: 112 }}>更新</th>
+                    <th style={{ width: 92 }} className={s.numeric}>Tokens</th>
                   </tr>
                 </thead>
                 <tbody>

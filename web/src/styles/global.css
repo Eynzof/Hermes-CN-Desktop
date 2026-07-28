@@ -6,6 +6,26 @@
   box-sizing: border-box;
 }
 
+/* Community UI invariants: depth comes from surfaces and 1px separators.
+   Keep these global so legacy route CSS cannot reintroduce gradients or shadows. */
+#root,
+#root *,
+#root *::before,
+#root *::after {
+  background-image: none !important;
+  box-shadow: none;
+  text-shadow: none !important;
+}
+
+#root :focus-visible {
+  outline: var(--h-focus-outline) !important;
+  outline-offset: 2px;
+}
+
+#root :where([aria-invalid="true"], [data-invalid="true"]):focus-visible {
+  outline: var(--h-focus-outline-danger) !important;
+}
+
 html,
 body,
 #root {
@@ -65,11 +85,6 @@ select {
   font-family: inherit;
 }
 
-:where(#root em) {
-  font-family: var(--h-font-serif);
-  font-style: normal;
-}
-
 #root :where(input, textarea, select, [contenteditable="true"], [contenteditable="true"] *) {
   -webkit-user-select: text;
   user-select: text;
@@ -92,7 +107,7 @@ body[data-hermes-window-type="electron"] :where(button, input, textarea, select,
 }
 ::-webkit-scrollbar-thumb {
   background: var(--h-line);
-  border-radius: 4px;
+  border-radius: var(--h-r-xs);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--h-text-3);

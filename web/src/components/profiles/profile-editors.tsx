@@ -140,7 +140,7 @@ export function ProfileDescriptionDialog({
         <>
           <Button
             variant="soft"
-            leadingIcon={<Sparkles size={13} />}
+            leadingIcon={<Sparkles size={12} />}
             onClick={autoGen}
             loading={describe.isPending}
             disabled={busy}

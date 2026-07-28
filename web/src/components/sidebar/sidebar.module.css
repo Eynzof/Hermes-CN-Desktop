@@ -1,6 +1,6 @@
 .sidebar {
   width: 240px;
-  background: var(--h-bg-app);
+  background: var(--h-bg-soft);
   border-right: 1px solid var(--h-line);
   display: flex;
   flex-direction: column;
@@ -14,7 +14,7 @@
   display: flex;
   align-items: center;
   padding: 0 12px;
-  gap: 7px;
+  gap: 8px;
   -webkit-app-region: drag;
   -webkit-user-select: none;
   user-select: none;
@@ -22,7 +22,7 @@
 
 .trafficLights[data-native="true"] {
   height: 52px;
-  padding-left: 86px;
+  padding-left: 88px;
 }
 
 .dot {
@@ -38,15 +38,15 @@
 .topBtn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
-  margin: 1px 6px;
-  border-radius: 8px;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: 4px 8px;
+  border-radius: var(--h-r-sm);
   color: var(--h-text-2);
   font-weight: 400;
   font-size: 12.5px;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   width: calc(100% - 12px);
   text-align: left;
@@ -60,7 +60,8 @@
 .topBtn[data-active="true"] {
   color: var(--h-text);
   font-weight: 600;
-  background: var(--h-bg-chip);
+  background: var(--h-bg-pane);
+  border-color: var(--h-line);
 }
 
 .kbd {
@@ -68,9 +69,9 @@
   font-family: var(--h-font-mono);
   font-size: 10px;
   color: var(--h-text-3);
-  padding: 1px 5px;
+  padding: 4px 4px;
   border: 1px solid var(--h-line);
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--h-bg-soft);
 }
 
@@ -82,14 +83,14 @@
 }
 
 .group {
-  padding: 6px 0 4px;
+  padding: 8px 0 4px;
 }
 
 .groupHeader {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 14px 4px 18px;
+  padding: 4px 16px 4px 20px;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -106,8 +107,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: var(--h-button-height-xs);
+  height: var(--h-button-height-xs);
   border: none;
   background: transparent;
   color: var(--h-text-3);
@@ -130,11 +131,11 @@
 .navItem {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  margin: 1px 6px;
-  border-radius: 7px;
-  border: none;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: 4px 8px;
+  border-radius: var(--h-r-sm);
+  border: 1px solid transparent;
   background: transparent;
   color: var(--h-text-2);
   font-size: 12.5px;
@@ -150,7 +151,8 @@
 }
 
 .navItem[data-active="true"] {
-  background: var(--h-bg-chip);
+  background: var(--h-bg-pane);
+  border-color: var(--h-line);
   color: var(--h-text);
   font-weight: 600;
 }
@@ -187,8 +189,8 @@
 .brandStrip {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px 8px;
+  gap: 12px;
+  padding: 12px 12px 8px;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -213,7 +215,7 @@
   font-size: 10.5px;
   color: var(--h-text-3);
   line-height: 1.3;
-  margin-top: 1px;
+  margin-top: 4px;
 }
 
 .statusBar {
@@ -226,13 +228,13 @@
 .statusRow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 11px;
 }
 
 .gatewayDot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--h-text-3);
@@ -240,7 +242,6 @@
 
 .gatewayDot[data-state="running"] {
   background: var(--h-ok);
-  box-shadow: 0 0 4px var(--h-ok);
 }
 
 .gatewayDot[data-state="ready"] {
@@ -264,7 +265,7 @@
 }
 
 .settingsBtn {
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: none;
   border-top: 1px solid var(--h-line);
   font-size: 12.5px;

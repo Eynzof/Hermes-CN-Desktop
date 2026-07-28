@@ -163,7 +163,7 @@ function SessionRow({
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
-            <MoreHorizontal size={14} />
+            <MoreHorizontal size={16} />
           </button>
         </Popover.Trigger>
         <SessionRowMenu
@@ -439,7 +439,7 @@ export function WorkbenchSidebar() {
               onClick={() => navigate("/projects")}
             >
               <span className={s.sideItemIcon}>
-                <Folder size={14} />
+                <Folder size={16} />
               </span>
               <span className={s.sideItemLabel}>暂无置顶项目</span>
             </button>
@@ -456,7 +456,7 @@ export function WorkbenchSidebar() {
                   title={proj.path}
                 >
                   <span className={s.sideItemIcon}>
-                    <Folder size={14} />
+                    <Folder size={16} />
                   </span>
                   <span className={s.sideItemLabel}>{proj.name}</span>
                 </button>

@@ -86,20 +86,20 @@ function RowMenu({ pinned, desktopAvailable, onTogglePin, onOpenInFinder, onDele
       >
         <Popover.Close asChild>
           <button type="button" onClick={onTogglePin} role="menuitem">
-            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            {pinned ? <PinOff size={12} /> : <Pin size={12} />}
             {pinned ? "取消置顶" : "置顶项目"}
           </button>
         </Popover.Close>
         {desktopAvailable ? (
           <Popover.Close asChild>
             <button type="button" onClick={onOpenInFinder} role="menuitem">
-              <ExternalLink size={13} /> 在 Finder 打开
+              <ExternalLink size={12} /> 在 Finder 打开
             </button>
           </Popover.Close>
         ) : null}
         <Popover.Close asChild>
           <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
-            <Trash2 size={13} /> 删除项目
+            <Trash2 size={12} /> 删除项目
           </button>
         </Popover.Close>
       </Popover.Content>
@@ -244,7 +244,7 @@ export function ProjectsRoute() {
         }
         right={
           <TopBarActionButton onClick={handleAddProject}>
-            <FolderPlus size={13} />
+            <FolderPlus size={12} />
             添加项目
           </TopBarActionButton>
         }
@@ -252,7 +252,7 @@ export function ProjectsRoute() {
 
       <div className={s.filters}>
         <div className={s.searchBox}>
-          <Search size={13} />
+          <Search size={12} />
           <input
             type="search"
             placeholder="按名称或路径搜索…"
@@ -339,7 +339,7 @@ export function ProjectsRoute() {
                               className={s.menuTrigger}
                               aria-label="项目操作"
                             >
-                              <MoreHorizontal size={14} />
+                              <MoreHorizontal size={16} />
                             </button>
                           </Popover.Trigger>
                           <RowMenu
@@ -366,7 +366,7 @@ export function ProjectsRoute() {
           {formatTokens(aggregates.reduce((sum, item) => sum + item.totalTokens, 0))} tokens
         </span>
         <button type="button" className={s.footAction} onClick={handleAddProject}>
-          <Plus size={13} /> 添加项目
+          <Plus size={12} /> 添加项目
         </button>
       </div>
     </main>

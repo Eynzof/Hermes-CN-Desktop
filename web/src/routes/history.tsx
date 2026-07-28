@@ -154,7 +154,7 @@ function SourcePopover({
         aria-label="来源筛选"
       >
         <div className={s.popHead}>
-          <Search size={13} />
+          <Search size={12} />
           <input
             className={s.popSearch}
             placeholder="搜索来源…"
@@ -199,7 +199,7 @@ function SourcePopover({
                         aria-label={pinnedHere ? "取消置顶" : "置顶"}
                         title={pinnedHere ? "取消置顶" : "置顶"}
                       >
-                        {pinnedHere ? <Pin size={11} /> : <PinOff size={11} />}
+                        {pinnedHere ? <Pin size={12} /> : <PinOff size={12} />}
                       </button>
                       <span className={s.popCount}>{counts.get(item.key) ?? 0}</span>
                     </div>
@@ -607,7 +607,7 @@ export function HistoryRoute() {
               onClick={startBulkDeleteMode}
               disabled={bulkDeleteMode || deleteSessions.isPending || filtered.length === 0}
             >
-              <Trash2 size={13} />
+              <Trash2 size={12} />
               批量删除
             </TopBarActionButton>
           </>
@@ -690,7 +690,7 @@ export function HistoryRoute() {
         </div>
 
         <div className={s.searchBox}>
-          <Search size={13} />
+          <Search size={12} />
           <input
             type="search"
             placeholder="搜索标题与会话 ID…"
@@ -749,7 +749,7 @@ export function HistoryRoute() {
             onClick={() => openDeleteDialog(selectedSessions)}
             disabled={selectedSessions.length === 0 || deleteSessions.isPending}
           >
-            <Trash2 size={13} />
+            <Trash2 size={12} />
             删除所选
           </button>
           <button type="button" onClick={stopBulkDeleteMode} disabled={deleteSessions.isPending}>
@@ -872,7 +872,7 @@ export function HistoryRoute() {
                             disabled={menuDisabled}
                             onClick={(event) => event.stopPropagation()}
                           >
-                            <MoreHorizontal size={14} />
+                            <MoreHorizontal size={16} />
                           </button>
                         </Popover.Trigger>
                         <SessionRowMenu

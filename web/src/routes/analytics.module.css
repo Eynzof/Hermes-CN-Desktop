@@ -8,8 +8,8 @@
 .periodSwitch {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: 4px;
+  padding: 4px;
   border: 1px solid var(--h-line-soft);
   border-radius: var(--h-r-md);
   background: var(--h-bg-soft);
@@ -24,7 +24,7 @@
   font-family: var(--h-font-cn);
   font-size: 11px;
   line-height: 1;
-  padding: 5px 9px;
+  padding: 4px 8px;
 }
 
 .periodSwitch button:hover {
@@ -34,23 +34,23 @@
 .periodSwitch button[data-active="true"] {
   color: var(--h-text);
   background: var(--h-bg-pane);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
 }
 
 .tabs {
   display: inline-flex;
   align-self: flex-start;
-  gap: 3px;
-  padding: 3px;
+  gap: 4px;
+  padding: 4px;
   border: 1px solid var(--h-line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--h-bg-soft);
 }
 
 .tabs button {
   min-width: 104px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 8px;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -58,8 +58,8 @@
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
-  padding: 9px 14px;
-  transition: background 0.14s, color 0.14s, box-shadow 0.14s;
+  padding: 8px 16px;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
 }
 
 .tabs button:hover {
@@ -68,7 +68,7 @@
 
 .tabs button[data-active="true"] {
   background: var(--h-bg-pane);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
   color: var(--h-text);
 }
 
@@ -83,10 +83,8 @@
 .stateCard,
 .note {
   border: 1px solid var(--h-line);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--h-bg-chip) 34%, transparent), transparent 70%),
-    var(--h-bg-app);
+  border-radius: 8px;
+  background: var(--h-bg-app);
 }
 
 .kpiCard {
@@ -151,7 +149,7 @@
 }
 
 .panelHeader p {
-  margin: 5px 0 0;
+  margin: 4px 0 0;
   color: var(--h-text-3);
   font-size: 11px;
   line-height: 1.55;
@@ -159,19 +157,19 @@
 
 .chartBox {
   height: 300px;
-  padding: 10px 12px 14px;
+  padding: 12px 12px 16px;
 }
 
 .modelChartLayout {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: 192px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   padding: 4px 16px 16px;
 }
 
 .pieBox {
-  height: 230px;
+  height: 232px;
   min-width: 0;
 }
 
@@ -194,8 +192,8 @@
 
 .legendDot,
 .tooltipDot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
@@ -212,12 +210,12 @@
 }
 
 .tooltip {
-  min-width: 150px;
-  padding: 9px 10px;
+  min-width: 152px;
+  padding: 8px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--h-bg-app);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
   font-size: 11px;
@@ -226,13 +224,13 @@
 .tooltipTitle {
   color: var(--h-text);
   font-weight: 650;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .tooltipRow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
   margin-top: 4px;
 }
@@ -258,7 +256,7 @@
 .table th,
 .table td {
   border-bottom: 1px solid var(--h-line-soft);
-  padding: 10px 9px;
+  padding: 12px 8px;
   text-align: right;
   white-space: nowrap;
 }
@@ -308,7 +306,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 22px;
+  padding: 24px;
   color: var(--h-text-2);
 }
 
@@ -334,14 +332,14 @@
   margin: 4px 16px 16px;
   padding: 28px;
   border: 1px dashed var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--h-text-3);
   font-size: 12px;
   text-align: center;
 }
 
 .note {
-  padding: 13px 14px;
+  padding: 12px 16px;
   color: var(--h-text-3);
   font-size: 11px;
   line-height: 1.7;
@@ -373,7 +371,7 @@
 }
 
 .loadingPage {
-  min-height: min(680px, calc(100vh - 150px));
+  min-height: min(680px, calc(100vh - 152px));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -391,21 +389,18 @@
   gap: 16px;
   overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at 50% 8%, color-mix(in srgb, var(--h-accent) 18%, transparent), transparent 38%),
-    linear-gradient(180deg, color-mix(in srgb, var(--h-bg-chip) 44%, transparent), transparent 72%),
-    var(--h-bg-app);
-  box-shadow: var(--h-shadow);
+  border-radius: 8px;
+  background: var(--h-bg-app);
+  box-shadow: none;
   text-align: center;
 }
 
 .loadingCard::before {
   content: "";
   position: absolute;
-  inset: 18px;
+  inset: 20px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 18px;
+  border-radius: 8px;
   pointer-events: none;
 }
 
@@ -426,7 +421,7 @@
 .loadingOrb::after {
   content: "";
   position: absolute;
-  inset: -7px;
+  inset: -8px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent);
   border-top-color: var(--h-accent);
   border-radius: 50%;
@@ -453,7 +448,7 @@
   position: relative;
   z-index: 1;
   max-width: 360px;
-  margin: 2px auto 0;
+  margin: 4px auto 0;
   color: var(--h-text-3);
   font-size: 12px;
   line-height: 1.7;
@@ -466,14 +461,14 @@
   width: min(360px, calc(100% - 56px));
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .loadingSkeletonGrid span {
   height: 44px;
   overflow: hidden;
   border: 1px solid var(--h-line-soft);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-soft);
 }
 
@@ -482,7 +477,7 @@
   display: block;
   width: 45%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--h-accent) 18%, transparent), transparent);
+  background: var(--h-bg-chip);
   animation: analyticsShimmer 1.4s ease-in-out infinite;
 }
 
@@ -499,7 +494,7 @@
 .paginationButtons {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .pageNumbers {
@@ -517,7 +512,7 @@
   font-family: var(--h-font-cn);
   font-size: 11px;
   line-height: 1;
-  padding: 6px 9px;
+  padding: 8px 8px;
 }
 
 .paginationButtons button:hover:not(:disabled) {
@@ -529,7 +524,7 @@
   border-color: color-mix(in srgb, var(--h-accent) 52%, var(--h-line));
   background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-soft));
   color: var(--h-text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--h-accent) 18%, transparent);
+  box-shadow: none;
 }
 
 .paginationButtons button:disabled {
@@ -539,7 +534,7 @@
 
 .pageEllipsis {
   display: inline-grid;
-  min-width: 18px;
+  min-width: 20px;
   place-items: center;
   color: var(--h-text-3);
   font-family: var(--h-font-mono);

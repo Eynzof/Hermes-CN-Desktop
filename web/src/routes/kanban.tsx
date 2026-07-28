@@ -54,11 +54,11 @@ export function KanbanRoute() {
       right={
         <div className={s.topActions}>
           <CopyButton variant="outline" size="md" className={s.secondaryButton} text={kanbanUrl}>
-            <Copy size={14} />
+            <Copy size={16} />
             复制地址
           </CopyButton>
           <button type="button" className={s.primaryButton} onClick={() => void openKanban()} disabled={opening}>
-            <ExternalLink size={14} />
+            <ExternalLink size={16} />
             {opening ? "正在打开…" : "打开官方看板"}
           </button>
         </div>
@@ -89,7 +89,7 @@ export function KanbanRoute() {
               <h3>官方 Dashboard 看板</h3>
             </div>
             <button type="button" className={s.primaryButton} onClick={() => void openKanban()} disabled={opening}>
-              <ExternalLink size={14} />
+              <ExternalLink size={16} />
               {opening ? "正在打开…" : "在浏览器打开"}
             </button>
           </div>

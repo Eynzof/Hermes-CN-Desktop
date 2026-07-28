@@ -1,5 +1,6 @@
-/* Hermes Design Tokens — Primitive values
-   只在这一层维护原始色板、尺寸、圆角和排版阶梯。业务样式应消费 semantic/component token。 */
+/* Hermes Community UI — Primitive values
+   设计基线来自 PrimeAPP 的 4px 网格与扁平信息层级，并在 PrimeMap 的锐角语言和
+   旧版 Desktop 的大圆角之间取中值。业务样式应消费 semantic/component token。 */
 
 :root {
   /* Ink / bone palette kept for the warm Hermes themes. */
@@ -33,25 +34,55 @@
   --h-color-sky-500: #6e9bd1;
   --h-color-plum-500: #b58dc4;
 
+  /* Quiet status palette.
+     Status hues are deliberately greyed down so they sit inside the
+     black / white / graphite UI instead of reading as promotional colour. */
+  --h-palette-success-light-fg: #3f6357;
+  --h-palette-success-light-surface: #f2f4f3;
+  --h-palette-success-light-border: #c5ceca;
+  --h-palette-warning-light-fg: #735d35;
+  --h-palette-warning-light-surface: #f5f3ef;
+  --h-palette-warning-light-border: #d0c7b6;
+  --h-palette-danger-light-fg: #844d4a;
+  --h-palette-danger-light-surface: #f6f2f2;
+  --h-palette-danger-light-border: #d2c0bf;
+  --h-palette-info-light-fg: #4c5f6b;
+  --h-palette-info-light-surface: #f2f4f5;
+  --h-palette-info-light-border: #c5cbd0;
+
+  --h-palette-success-dark-fg: #91aa9f;
+  --h-palette-success-dark-surface: #1e2421;
+  --h-palette-success-dark-border: #46544e;
+  --h-palette-warning-dark-fg: #b8a47e;
+  --h-palette-warning-dark-surface: #25221b;
+  --h-palette-warning-dark-border: #564e3d;
+  --h-palette-danger-dark-fg: #c08e8a;
+  --h-palette-danger-dark-surface: #281f1f;
+  --h-palette-danger-dark-border: #5d4544;
+  --h-palette-info-dark-fg: #97a9b3;
+  --h-palette-info-dark-surface: #1e2326;
+  --h-palette-info-dark-border: #46515a;
+
+  /* Strict 4px grid. No half-step spacing tokens are exposed. */
   --h-space-0: 0;
-  --h-space-0-5: 2px;
   --h-space-1: 4px;
-  --h-space-1-5: 6px;
   --h-space-2: 8px;
-  --h-space-2-5: 10px;
   --h-space-3: 12px;
-  --h-space-3-5: 14px;
   --h-space-4: 16px;
   --h-space-5: 20px;
   --h-space-6: 24px;
   --h-space-8: 32px;
   --h-space-10: 40px;
+  --h-space-12: 48px;
+  --h-space-16: 64px;
 
-  --h-radius-xs: 3px;
+  /* Small-radius scale: controls 4px, containers 8px.
+     Pill/circle geometry is reserved for badges, avatars and status dots. */
+  --h-radius-xs: 4px;
   --h-radius-sm: 4px;
   --h-radius-md: 8px;
-  --h-radius-lg: 12px;
-  --h-radius-xl: 16px;
+  --h-radius-lg: 8px;
+  --h-radius-xl: 8px;
   --h-radius-pill: 999px;
 
   --h-font-size-2xs: 10px;

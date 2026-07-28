@@ -141,7 +141,7 @@ export function McpRoute() {
             <Button
               variant="outline"
               size="sm"
-              leadingIcon={<RefreshCw size={14} />}
+              leadingIcon={<RefreshCw size={16} />}
               loading={reloading}
               onClick={() => runReload("已重新载入 MCP")}
             >
@@ -151,7 +151,7 @@ export function McpRoute() {
               variant="solid"
               tone="accent"
               size="sm"
-              leadingIcon={<Plus size={14} />}
+              leadingIcon={<Plus size={16} />}
               onClick={() => setEditor({ kind: "add" })}
             >
               添加服务
@@ -175,7 +175,7 @@ export function McpRoute() {
 
       {/* ── 我的 MCP 服务 ── */}
       <div className={s.sectionHead}>
-        <Server size={15} />
+        <Server size={16} />
         <span className={s.sectionTitle}>我的 MCP 服务</span>
         {!isError && serversQuery.data && (
           <span className={s.sectionCount}>{servers.length}</span>
@@ -215,7 +215,7 @@ export function McpRoute() {
 
       {/* ── 服务目录 ── */}
       <div className={s.sectionHead}>
-        <Package size={15} />
+        <Package size={16} />
         <span className={s.sectionTitle}>服务目录</span>
         {catalogQuery.data && <span className={s.sectionCount}>{catalog.length}</span>}
       </div>

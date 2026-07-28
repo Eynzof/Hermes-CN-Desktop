@@ -6,24 +6,24 @@
 .rowMenu {
   min-width: 140px;
   padding: 4px;
-  border-radius: 8px;
+  border-radius: 4px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 
 .rowMenu button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 8px 12px;
   border: none;
   background: transparent;
   font-size: 12px;
   color: var(--h-text);
   cursor: pointer;
   text-align: left;
-  border-radius: 5px;
+  border-radius: 4px;
   font-family: var(--h-font-cn);
 }
 
@@ -50,16 +50,16 @@
 
 .renameModal {
   width: min(360px, calc(100vw - 48px));
-  padding: 18px;
+  padding: 20px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-input);
-  box-shadow: var(--h-shadow-l);
+  box-shadow: none;
   font-family: var(--h-font-cn);
 }
 
 .renameModal h2 {
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   color: var(--h-text);
   font-size: 15px;
   font-weight: 600;
@@ -67,10 +67,10 @@
 
 .renameInput {
   width: 100%;
-  height: 34px;
-  padding: 7px 10px;
+  height: 36px;
+  padding: 8px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-app);
   color: var(--h-text);
   outline: none;
@@ -98,9 +98,9 @@
 .renameCancel,
 .renameSubmit {
   min-width: 64px;
-  height: 30px;
+  height: var(--h-button-height-md);
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 4px;
   cursor: pointer;
   font-family: var(--h-font-cn);
   font-size: 12px;
@@ -122,7 +122,7 @@
 .renameSubmit {
   border: 1px solid var(--h-accent);
   background: var(--h-accent);
-  color: white;
+  color: var(--h-accent-contrast);
 }
 
 .renameSubmit:disabled,
@@ -133,16 +133,16 @@
 
 .confirmModal {
   width: min(420px, calc(100vw - 48px));
-  padding: 18px;
+  padding: 20px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-input);
-  box-shadow: var(--h-shadow-l);
+  box-shadow: none;
   font-family: var(--h-font-cn);
 }
 
 .confirmModal h2 {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   color: var(--h-text);
   font-size: 15px;
   font-weight: 600;
@@ -158,14 +158,14 @@
 .confirmList {
   margin-top: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--h-bg-app);
   overflow: hidden;
 }
 
 .confirmListItem,
 .confirmListMore {
-  padding: 8px 10px;
+  padding: 8px 12px;
   color: var(--h-text-2);
   font-size: 12px;
   white-space: nowrap;
@@ -193,9 +193,9 @@
 .confirmCancel,
 .confirmDanger {
   min-width: 72px;
-  height: 30px;
+  height: var(--h-button-height-md);
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 4px;
   cursor: pointer;
   font-family: var(--h-font-cn);
   font-size: 12px;

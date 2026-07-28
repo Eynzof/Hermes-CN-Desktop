@@ -1,7 +1,7 @@
 .memoryPage {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   max-width: 1120px;
 }
 
@@ -10,20 +10,20 @@
   background: var(--h-bg-code);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-sm);
-  padding: 1px 5px;
+  padding: 4px 4px;
 }
 
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .statCard {
   border: 1px solid var(--h-line);
   background: var(--h-bg-app);
   border-radius: var(--h-r-lg);
-  padding: 13px 16px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -46,14 +46,14 @@
 .capacityGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .capacity {
   border: 1px solid var(--h-line);
   background: var(--h-bg-app);
   border-radius: var(--h-r-lg);
-  padding: 12px 14px;
+  padding: 12px 16px;
 }
 
 .capacityHead {
@@ -77,8 +77,8 @@
 }
 
 .capacityTrack {
-  margin-top: 10px;
-  height: 6px;
+  margin-top: 12px;
+  height: 8px;
   border-radius: var(--h-r-pill);
   background: var(--h-bg-soft);
   overflow: hidden;
@@ -109,7 +109,7 @@
   border: 1px solid transparent;
   background: transparent;
   color: var(--h-text-2);
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: var(--h-r-sm);
   cursor: pointer;
   display: inline-flex;
@@ -151,13 +151,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
 }
 
 .panelHead > div {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -172,7 +172,7 @@
 }
 
 .formCard {
-  padding: 14px 16px;
+  padding: 16px 16px;
   border-bottom: 1px solid var(--h-line-soft);
   background: var(--h-bg-pane);
 }
@@ -185,7 +185,7 @@
   color: var(--h-text);
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
-  padding: 10px 12px;
+  padding: 12px 12px;
   outline: none;
   line-height: 1.7;
   font-size: 13px;
@@ -194,11 +194,11 @@
 .formCard textarea:focus,
 .profileTextarea:focus {
   border-color: var(--h-accent-border);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 12%, transparent);
+  box-shadow: none;
 }
 
 .formActions {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -218,7 +218,7 @@
 }
 
 .entryCard {
-  padding: 14px 16px;
+  padding: 16px 16px;
   border-top: 1px solid var(--h-line-soft);
 }
 
@@ -235,10 +235,10 @@
 }
 
 .entryActions {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--h-text-3);
 }
 
@@ -248,7 +248,7 @@
   color: var(--h-text-3);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 0;
   cursor: pointer;
   text-decoration: none;
@@ -282,14 +282,14 @@
 
 .errorState {
   justify-content: flex-start;
-  padding: 12px 14px;
+  padding: 12px 16px;
   color: var(--h-err);
   background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-pane));
   border: 1px solid color-mix(in srgb, var(--h-err) 24%, var(--h-line));
 }
 
 .profileEditor {
-  padding: 14px 16px 16px;
+  padding: 16px 16px 16px;
 }
 
 .profileTextarea {
@@ -297,7 +297,7 @@
 }
 
 .profileFooter {
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 0;
 }
 

@@ -123,7 +123,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
       {presentation.unavailable && (
         <div className={s.uninstalledState} role="status">
           <span className={s.uninstalledIcon} aria-hidden="true">
-            <PackageX size={22} />
+            <PackageX size={24} />
           </span>
           <div>
             <strong>{presentation.explicitlyUninstalled ? "内置内核已卸载" : "内置内核尚未安装"}</strong>
@@ -150,7 +150,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             onClick={() => void run("install", desktop?.installManagedRuntime?.bind(desktop), "内置内核已安装，暂未启动。")}
             disabled={anyBusy}
           >
-            {busy === "install" ? <Loader2 size={13} className={s.spin} /> : <Download size={13} />}
+            {busy === "install" ? <Loader2 size={12} className={s.spin} /> : <Download size={12} />}
             {presentation.installLabel}
           </Button>
         )}
@@ -161,7 +161,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             onClick={() => void run("start", desktop?.startManagedRuntime?.bind(desktop), "内置内核已启动。")}
             disabled={anyBusy}
           >
-            {busy === "start" ? <Loader2 size={13} className={s.spin} /> : <Play size={13} />}
+            {busy === "start" ? <Loader2 size={12} className={s.spin} /> : <Play size={12} />}
             启动内核
           </Button>
         )}
@@ -171,13 +171,13 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             onClick={() => void run("stop", desktop?.stopManagedRuntime?.bind(desktop), "内置内核已停止。")}
             disabled={anyBusy}
           >
-            {busy === "stop" ? <Loader2 size={13} className={s.spin} /> : <Square size={13} />}
+            {busy === "stop" ? <Loader2 size={12} className={s.spin} /> : <Square size={12} />}
             停止内核
           </Button>
         )}
         {presentation.showSwitch && (
           <Button variant="solid" tone="accent" onClick={() => void switchToManaged()} disabled={anyBusy}>
-            {busy === "switch" ? <Loader2 size={13} className={s.spin} /> : <Play size={13} />}
+            {busy === "switch" ? <Loader2 size={12} className={s.spin} /> : <Play size={12} />}
             启动并切换到内置内核
           </Button>
         )}
@@ -187,7 +187,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             onClick={() => void run("reinstall", desktop?.reinstallManagedRuntime?.bind(desktop), attached ? "内核文件已重装，未启动。" : "内置内核已重装。")}
             disabled={anyBusy}
           >
-            {busy === "reinstall" ? <Loader2 size={13} className={s.spin} /> : <RotateCcw size={13} />}
+            {busy === "reinstall" ? <Loader2 size={12} className={s.spin} /> : <RotateCcw size={12} />}
             重装内核
           </Button>
         )}
@@ -201,12 +201,12 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             }}
             disabled={anyBusy}
           >
-            {busy === "uninstall" ? <Loader2 size={13} className={s.spin} /> : <Trash2 size={13} />}
+            {busy === "uninstall" ? <Loader2 size={12} className={s.spin} /> : <Trash2 size={12} />}
             卸载内核
           </Button>
         )}
         <Button variant="ghost" onClick={() => void refresh()} disabled={anyBusy}>
-          {busy === "refresh" ? <Loader2 size={13} className={s.spin} /> : <RefreshCw size={13} />}
+          {busy === "refresh" ? <Loader2 size={12} className={s.spin} /> : <RefreshCw size={12} />}
           刷新
         </Button>
       </div>

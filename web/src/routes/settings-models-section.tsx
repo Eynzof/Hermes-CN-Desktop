@@ -2600,7 +2600,7 @@ function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEdi
           {info.tools.length > 0 && ` · 用于: ${info.tools.join(", ")}`}
         </div>
       </div>
-      <div className={s.rowRight} style={{ gap: 6, flexWrap: "wrap", minWidth: 200 }}>
+      <div className={s.rowRight} style={{ gap: 8, flexWrap: "wrap", minWidth: 200 }}>
         {isEditing ? (
           <>
             <Input mono type={info.is_password ? "password" : "text"} value={editVal} onChange={(e) => onEditChange(e.target.value)} placeholder="输入值…" style={{ width: 180 }} fullWidth={false} autoFocus />
@@ -2669,7 +2669,7 @@ function ProbeResultRow({ probe }: { probe: { status: "ok" | "error" | "pending"
   };
   const kind = result?.error_kind ? kindLabel[result.error_kind] ?? result.error_kind : "请求失败";
   return (
-    <div className={s.desc} style={{ marginTop: 8, color: "var(--h-danger, #c44)" }}>
+    <div className={s.desc} style={{ marginTop: 8, color: "var(--h-color-danger-fg)" }}>
       ✗ {kind} · {errorText}
     </div>
   );

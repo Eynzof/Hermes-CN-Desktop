@@ -58,8 +58,8 @@ export function LogsTab() {
             </button>
           ))}
         </div>
-        <label className={s.input} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Search size={13} aria-hidden />
+        <label className={s.input} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Search size={12} aria-hidden />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}

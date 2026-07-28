@@ -1,11 +1,5 @@
 .overlay {
-  background:
-    radial-gradient(
-      circle at 50% 28%,
-      color-mix(in srgb, var(--h-accent) 16%, transparent),
-      transparent 42%
-    ),
-    color-mix(in srgb, var(--h-bg-app) 70%, transparent);
+  background: color-mix(in srgb, var(--h-bg-app) 82%, transparent);
   backdrop-filter: blur(10px);
 }
 
@@ -23,15 +17,9 @@
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 16px;
-  padding: 28px 30px 24px;
+  padding: 28px 32px 24px;
   border-bottom: 1px solid var(--h-line-soft);
-  background:
-    radial-gradient(
-      circle at 100% 0,
-      color-mix(in srgb, var(--h-accent) 10%, transparent),
-      transparent 44%
-    ),
-    var(--h-bg-pane);
+  background: var(--h-bg-pane);
 }
 
 .heroIcon,
@@ -43,12 +31,12 @@
 }
 
 .heroIcon {
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   color: var(--h-accent-contrast);
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--h-accent);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--h-accent) 24%, transparent);
+  box-shadow: none;
 }
 
 .kicker,
@@ -68,7 +56,7 @@
 }
 
 .title {
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--h-text);
   font-size: 25px;
   line-height: 1.25;
@@ -76,7 +64,7 @@
 }
 
 .description {
-  max-width: 590px;
+  max-width: 592px;
   margin-top: 8px;
   color: var(--h-text-2);
   font-size: 13px;
@@ -85,7 +73,7 @@
 
 .modelPath {
   position: relative;
-  margin: 24px 30px 16px;
+  margin: 24px 32px 16px;
   padding: 20px;
   border: 1px solid var(--h-accent-border);
   border-radius: var(--h-r-lg);
@@ -104,7 +92,7 @@
   height: 40px;
   color: var(--h-accent);
   border: 1px solid var(--h-accent-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
@@ -114,7 +102,7 @@
 }
 
 .modelPath p {
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--h-text-2);
   font-size: 11px;
   line-height: 1.55;
@@ -122,10 +110,10 @@
 
 .recommended {
   align-self: start;
-  padding: 5px 9px;
+  padding: 4px 8px;
   color: var(--h-accent);
   border: 1px solid var(--h-accent-border);
-  border-radius: 999px;
+  border-radius: var(--h-radius-pill);
   background: var(--h-bg-pane);
   font-size: 9px;
   font-weight: 750;
@@ -135,18 +123,18 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .steps span {
   display: inline-flex;
-  min-height: 30px;
+  min-height: 32px;
   align-items: center;
-  gap: 6px;
-  padding: 0 10px;
+  gap: 8px;
+  padding: 0 12px;
   color: var(--h-text-2);
   border: 1px solid var(--h-line-soft);
-  border-radius: 999px;
+  border-radius: var(--h-radius-pill);
   background: var(--h-bg-pane);
   font-size: 10px;
 }
@@ -157,7 +145,7 @@
 
 .configureButton {
   width: 100%;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .ownKernel {
@@ -165,8 +153,8 @@
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
-  margin: 0 30px;
-  padding: 14px 16px;
+  margin: 0 32px;
+  padding: 16px 16px;
   border: 1px solid var(--h-line);
   border-radius: var(--h-r-md);
   background: var(--h-bg-soft);
@@ -177,13 +165,13 @@
   height: 36px;
   color: var(--h-text-2);
   border: 1px solid var(--h-line-soft);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
 }
 
 .ownKernel strong {
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   color: var(--h-text);
   font-size: 11px;
 }
@@ -207,8 +195,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 22px;
-  padding: 16px 30px 18px;
+  margin-top: 24px;
+  padding: 16px 32px 20px;
   border-top: 1px solid var(--h-line-soft);
 }
 
@@ -225,11 +213,11 @@
   }
 
   .header {
-    padding: 22px 20px 20px;
+    padding: 24px 20px 20px;
   }
 
   .modelPath {
-    margin: 18px 20px 14px;
+    margin: 20px 20px 16px;
   }
 
   .ownKernel {
@@ -245,7 +233,7 @@
   .footer {
     align-items: stretch;
     flex-direction: column;
-    padding: 14px 20px 18px;
+    padding: 16px 20px 20px;
   }
 
   .footer button {

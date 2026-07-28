@@ -12,11 +12,11 @@
 
 .primaryButton,
 .secondaryButton {
-  border-radius: 10px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
@@ -24,7 +24,8 @@
 }
 
 .primaryButton {
-  min-height: 34px;
+  height: var(--h-button-height-md);
+  min-height: var(--h-button-height-md);
   padding: 0 12px;
   border: 1px solid var(--h-accent);
   background: var(--h-accent);
@@ -38,8 +39,9 @@
 }
 
 .secondaryButton {
-  min-height: 34px;
-  padding: 0 11px;
+  height: var(--h-button-height-md);
+  min-height: var(--h-button-height-md);
+  padding: 0 12px;
 }
 
 .primaryButton:disabled,
@@ -51,18 +53,18 @@
 .hero,
 .card {
   border: 1px solid var(--h-line);
-  border-radius: 18px;
+  border-radius: 8px;
   background: var(--h-bg-surface);
-  box-shadow: var(--h-shadow-soft);
+  box-shadow: none;
 }
 
 .hero {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: 20px;
   align-items: start;
-  padding: 22px;
+  padding: 24px;
   overflow: hidden;
 }
 
@@ -70,9 +72,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--h-accent) 14%, transparent), transparent 32%),
-    linear-gradient(135deg, color-mix(in srgb, var(--h-bg-pane) 92%, transparent), transparent);
+  background: transparent;
   pointer-events: none;
 }
 
@@ -84,10 +84,10 @@
 }
 
 .heroMark {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 34%, var(--h-line));
-  border-radius: 16px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--h-accent) 10%, var(--h-bg-pane));
@@ -110,13 +110,13 @@
 }
 
 .heroCopy h2 {
-  margin-top: 7px;
+  margin-top: 8px;
   font-size: 22px;
   letter-spacing: -0.03em;
 }
 
 .heroCopy p {
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   max-width: 720px;
   color: var(--h-text-2);
   font-size: 13px;
@@ -130,8 +130,8 @@
 
 .statusBadge {
   border: 1px solid var(--h-line-soft);
-  border-radius: 999px;
-  padding: 5px 9px;
+  border-radius: var(--h-radius-pill);
+  padding: 4px 8px;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   font-size: 11px;
@@ -149,39 +149,39 @@
 }
 
 .card {
-  padding: 18px;
+  padding: 20px;
 }
 
 .cardHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 14px;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .cardHeader h3 {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 15px;
 }
 
 .urlGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .urlField {
   min-width: 0;
   border: 1px solid var(--h-line-soft);
-  border-radius: 13px;
+  border-radius: 8px;
   background: var(--h-bg-pane);
-  padding: 11px 12px;
+  padding: 12px 12px;
 }
 
 .urlField span {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   color: var(--h-text-3);
   font-size: 11px;
 }
@@ -198,7 +198,7 @@
 }
 
 .helpText {
-  margin: 14px 0 0;
+  margin: 16px 0 0;
   color: var(--h-text-2);
   font-size: 12.5px;
   line-height: 1.65;
@@ -207,10 +207,10 @@
 .errorBox {
   margin-top: 12px;
   border: 1px solid rgba(215, 111, 84, 0.34);
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(215, 111, 84, 0.1);
   color: #e18b74;
-  padding: 10px 12px;
+  padding: 12px 12px;
   font-size: 12px;
 }
 

@@ -160,7 +160,7 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
               onClick={() => handleAssistantNameChange("")}
               title="恢复默认名称"
             >
-              <X size={13} />
+              <X size={12} />
             </button>
           ) : null}
         </div>
@@ -180,7 +180,7 @@ export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
             <span className={s.assistantAvatarPlaceholder}><ImageIcon size={16} /></span>
           )}
           <button type="button" className={s.btn} onClick={() => avatarInputRef.current?.click()}>
-            <Upload size={13} /> 上传
+            <Upload size={12} /> 上传
           </button>
           {assistantAvatarDataUrl ? (
             <button type="button" className={s.btn} onClick={() => { setAssistantProfileError(""); setAssistantAvatarDataUrl(""); }}>
@@ -324,14 +324,14 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
         <div className={s.appearanceHeader}>
           <div className={s.appearanceHeaderText}>
             <h3>界面外观</h3>
-            <p>选择界面主题与外观风格。</p>
+            <p>默认社区主题采用中性黑白灰，同时保留兼容主题。</p>
           </div>
           <span className={s.appearanceMeta}>实时生效 · {densityLabel}</span>
         </div>
 
         <AppearanceRow
           label="主题"
-          sub="选择桌面端皮肤，包含现代工作台、Dracula 与 Catppuccin Mocha 色板。"
+          sub="社区浅色与社区深色遵循同一套扁平设计令牌，其他主题作为兼容选项保留。"
           right={
             <ThemeSkinPicker
               value={config.theme}
@@ -391,13 +391,13 @@ const THEME_SKINS: Array<{
   },
   {
     value: "light-modern",
-    label: "现代浅色",
-    sub: "白色工作台",
-    bg: "#f3f3f3",
+    label: "社区浅色",
+    sub: "纸白与石墨",
+    bg: "#f4f4f3",
     pane: "#ffffff",
-    soft: "#f0f0f0",
-    text: "#1f1f1f",
-    accent: "#0078d4",
+    soft: "#ececeb",
+    text: "#171716",
+    accent: "#171716",
   },
   {
     value: "dark",
@@ -411,13 +411,13 @@ const THEME_SKINS: Array<{
   },
   {
     value: "dark-modern",
-    label: "现代深色",
-    sub: "蓝黑工作台",
-    bg: "#181818",
-    pane: "#1f1f1f",
-    soft: "#252526",
-    text: "#d4d4d4",
-    accent: "#0078d4",
+    label: "社区深色",
+    sub: "炭黑与暖白",
+    bg: "#111111",
+    pane: "#181818",
+    soft: "#2a2a2a",
+    text: "#f1f1ef",
+    accent: "#f1f1ef",
   },
   {
     value: "dracula",
@@ -627,7 +627,7 @@ function ApprovalModeSection() {
       aria-labelledby="approval-mode-title"
     >
       <div className={s.approvalModeHead}>
-        <ShieldCheck size={14} aria-hidden="true" />
+        <ShieldCheck size={16} aria-hidden="true" />
         <div>
           <h3 id="approval-mode-title">危险命令审批模式</h3>
           <p>设置有风险命令的确认方式。改动只对之后的命令生效，已弹出的确认请求需单独处理。</p>
@@ -830,7 +830,7 @@ export function SkillsSection() {
   const [filter, setFilter] = useState("");
   const refreshButton = (
     <Button variant="outline" type="button" onClick={() => void refetch()} disabled={isFetching}>
-      <RefreshCw size={13} />
+      <RefreshCw size={12} />
       {isFetching ? "刷新中" : "刷新"}
     </Button>
   );
@@ -1055,7 +1055,7 @@ export function CronSection() {
               <div className={s.rowSub}>下次：{formatCronTime(job.next_run_at ?? job.next_run)} · 上次：{formatCronTime(job.last_run_at ?? job.last_run)}</div>
               {cronResultLine(job) && <div className={s.rowSub}>{cronResultLine(job)}</div>}
             </div>
-            <div className={s.rowRight} style={{ gap: 6 }}>
+            <div className={s.rowRight} style={{ gap: 8 }}>
               <span className={s.statusBadge} data-on={!paused}>{cronStateLabel(job)}</span>
               <Button variant="outline" disabled={cronAction.isPending || deleteJob.isPending} onClick={() => handleCronAction(job, paused ? "resume" : "pause")}>
                 {paused ? "恢复" : "暂停"}
@@ -1304,11 +1304,11 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
 
       <div className={s.debugActionBar}>
         <Button variant="outline" type="button" onClick={handleRefreshAll} disabled={refreshing}>
-          <RefreshCw size={13} />
+          <RefreshCw size={12} />
           {refreshing ? "刷新中" : "刷新状态"}
         </Button>
         <CopyButton variant="outline" size="md" text={() => JSON.stringify(diagnostics, null, 2)}>
-          <Copy size={13} />
+          <Copy size={12} />
           复制诊断 JSON
         </CopyButton>
         <Button
@@ -1318,7 +1318,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           disabled={isRemote || !hermesHomePath || !window.hermesDesktop?.openWorkspacePath}
           title={isRemote ? "远端 Hermes Home 不属于本机文件系统" : undefined}
         >
-          <FolderOpen size={13} />
+          <FolderOpen size={12} />
           打开 HERMES_HOME
         </Button>
         <Button
@@ -1327,7 +1327,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           onClick={() => handleOpenPath(runtimeRootPath, " runtime 根目录")}
           disabled={!runtimeRootPath || !window.hermesDesktop?.openWorkspacePath}
         >
-          <FolderOpen size={13} />
+          <FolderOpen size={12} />
           打开 runtime
         </Button>
         <Button
@@ -1338,7 +1338,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           title={isAttachedConnection ? "当前连接模式下由目标后端管理 Gateway" : gatewayRestartTitle(gatewayRestart.phase, gatewayRestart.message)}
           aria-busy={gatewayRestart.busy}
         >
-          <RotateCcw size={13} />
+          <RotateCcw size={12} />
           {gatewayRestart.phase === "idle" ? "重启 Gateway" : gatewayRestartButtonLabel(gatewayRestart.phase)}
         </Button>
       </div>
@@ -1350,7 +1350,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
       )}
 
       <div className={s.aboutDebugGrid}>
-        <DebugCard icon={<Server size={15} />} title="内核进程" sub="Dashboard 子进程与连接状态" wide>
+        <DebugCard icon={<Server size={16} />} title="内核进程" sub="Dashboard 子进程与连接状态" wide>
           <div className={s.runtimeGrid}>
             <RuntimeField label="托管方式" value={process ? (process.ownsProcess ? "桌面端独立子进程" : info?.mode === "managed" ? "连接到已存在 managed dashboard" : "复用外部进程") : "—"} />
             <RuntimeField label="PID" value={process?.pid ? String(process.pid) : "—"} mono />
@@ -1374,7 +1374,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           {process?.commandLine && (
             <div className={s.commandBlock}>
               <div className={s.commandBlockHeader}>
-                <span><Terminal size={13} /> 启动命令</span>
+                <span><Terminal size={12} /> 启动命令</span>
                 <CopyButton className={s.inlineCopyButton} text={process.commandLine}>复制</CopyButton>
               </div>
               <code>{process.commandLine}</code>
@@ -1382,7 +1382,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           )}
         </DebugCard>
 
-        <DebugCard icon={<ShieldCheck size={15} />} title="Managed Runtime" sub="当前内置 hermes-agent-cn 版本" wide>
+        <DebugCard icon={<ShieldCheck size={16} />} title="Managed Runtime" sub="当前内置 hermes-agent-cn 版本" wide>
           {hasRuntimeBridge ? (
             <>
               <div className={s.runtimeGrid}>
@@ -1412,7 +1412,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   onClick={() => handleOpenPath(runtimeVersionPath, " runtime 版本目录")}
                   disabled={!runtimeVersionPath || !window.hermesDesktop?.openWorkspacePath}
                 >
-                  <FolderOpen size={13} />
+                  <FolderOpen size={12} />
                   打开版本目录
                 </Button>
                 <Button
@@ -1421,7 +1421,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   onClick={() => handleOpenPath(currentRecordPath, " current.json")}
                   disabled={!currentRecordPath || !window.hermesDesktop?.openWorkspacePath}
                 >
-                  <FolderOpen size={13} />
+                  <FolderOpen size={12} />
                   打开 current.json
                 </Button>
                 <Button
@@ -1431,7 +1431,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   disabled={!info?.updatesConfigured || checking || isAttachedConnection}
                   title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
-                  <RefreshCw size={13} />
+                  <RefreshCw size={12} />
                   {checking ? "检查中" : "检查更新"}
                 </Button>
                 <Button
@@ -1465,7 +1465,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           )}
         </DebugCard>
 
-        <DebugCard icon={<Activity size={15} />} title="Dashboard / Gateway" sub="后端状态与网关运行态" wide>
+        <DebugCard icon={<Activity size={16} />} title="Dashboard / Gateway" sub="后端状态与网关运行态" wide>
           <div className={s.runtimeGrid}>
             <RuntimeField label="Hermes Agent" value={status ? `${status.version} (${status.release_date})` : "…"} />
             <RuntimeField label="活跃会话" value={String(status?.active_sessions ?? 0)} />
@@ -1489,7 +1489,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           )}
         </DebugCard>
 
-        <DebugCard icon={<GitCommit size={15} />} title="最近提交" sub="显示 current.json 指向仓库的最近 5 条提交" wide>
+        <DebugCard icon={<GitCommit size={16} />} title="最近提交" sub="显示 current.json 指向仓库的最近 5 条提交" wide>
           {source?.recentCommits.length ? (
             <div className={s.commitList}>
               {source.recentCommits.map((commit) => {
@@ -1511,7 +1511,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
           )}
         </DebugCard>
 
-        <DebugCard icon={<Terminal size={15} />} title="路径与隔离边界" sub="确认 runtime 没有外溢到全局 hermes-agent" wide>
+        <DebugCard icon={<Terminal size={16} />} title="路径与隔离边界" sub="确认 runtime 没有外溢到全局 hermes-agent" wide>
           <div className={s.runtimeGrid}>
             <RuntimeField label="runtimeRoot" value={info?.runtimeRoot ?? "—"} mono wide />
             <RuntimeField label="current.json" value={info?.currentRecordPath ?? "—"} mono wide />
@@ -1557,7 +1557,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     <div>
       {showHeading && <h2 className={s.heading}>关于</h2>}
       <div className={s.aboutDebugGrid}>
-        <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
+        <DebugCard icon={<Download size={16} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
           <div className={s.runtimeGrid}>
             <RuntimeField label="当前版本" value={versionLabel(DESKTOP_VERSION)} />
             <RuntimeField
@@ -1588,17 +1588,17 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               onClick={() => void handleCheckDesktopUpdate()}
               disabled={!hasDesktopUpdateBridge || desktopUpdateChecking}
             >
-              <RefreshCw size={13} />
+              <RefreshCw size={12} />
               {desktopUpdateChecking ? "检查中" : "检查更新"}
             </Button>
             <Button variant="solid" tone="accent" type="button" onClick={handleOpenDesktopDownload}>
-              <ExternalLinkIcon size={13} />
+              <ExternalLinkIcon size={12} />
               去官网下载
             </Button>
           </div>
         </DebugCard>
 
-        <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools">
+        <DebugCard icon={<Bug size={16} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools">
           <div className={s.runtimeGrid}>
             <RuntimeField label="开发者模式" value="已默认开启" />
             <RuntimeField label="打开快捷键" value={devtoolsShortcut} mono />
@@ -1609,7 +1609,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           </p>
         </DebugCard>
 
-        <DebugCard icon={<Heart size={15} />} title="致谢与许可" sub="贡献者、支持方与字体署名">
+        <DebugCard icon={<Heart size={16} />} title="致谢与许可" sub="贡献者、支持方与字体署名">
           <div className={s.thanksText}>
             <p>
               感谢 Hermes Agent 官方
@@ -1633,7 +1633,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           </div>
         </DebugCard>
 
-        <DebugCard icon={<MessageCircle size={15} />} title="联系方式" sub="社区入口和反馈渠道" wide>
+        <DebugCard icon={<MessageCircle size={16} />} title="联系方式" sub="社区入口和反馈渠道" wide>
           <div className={s.contactLayout}>
             <div className={s.runtimeGrid}>
               <ExternalLinkField label="官网" href="https://hermesagent.org.cn" text="hermesagent.org.cn" />
@@ -1664,7 +1664,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           </div>
         </DebugCard>
 
-        <DebugCard icon={<GitFork size={15} />} title="项目链接" sub="桌面端与内核仓库" wide>
+        <DebugCard icon={<GitFork size={16} />} title="项目链接" sub="桌面端与内核仓库" wide>
           <div className={s.runtimeGrid}>
             <ExternalLinkField
               label="桌面端"
@@ -1794,7 +1794,7 @@ function ExternalTextLink({ href, children }: { href: string; children: React.Re
       }}
     >
       {children}
-      <ExternalLinkIcon size={11} aria-hidden="true" />
+      <ExternalLinkIcon size={12} aria-hidden="true" />
     </a>
   );
 }
@@ -1951,13 +1951,13 @@ function ConfigFieldRow({ fieldKey, field, value, onSave, showCategory }: {
       label={label}
       sub={showCategory ? `[${CATEGORY_CN[field.category] ?? field.category}] ${fieldKey}` : fieldKey}
       right={editing ? (
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 8 }}>
           <Input mono value={localVal} onChange={(e) => setLocalVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSave()} autoFocus style={{ width: 200 }} fullWidth={false} />
           <Button variant="solid" tone="accent" onClick={handleSave}>保存</Button>
           <Button variant="outline" onClick={() => setEditing(false)}>取消</Button>
         </div>
       ) : (
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ fontFamily: "var(--h-font-mono)", fontSize: 12, color: "var(--h-text-2)" }}>{value != null ? String(value) : "—"}</span>
           <Button variant="outline" onClick={() => { setLocalVal(String(value ?? "")); setEditing(true); }}>编辑</Button>
         </div>

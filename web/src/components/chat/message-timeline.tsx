@@ -446,7 +446,7 @@ function ToolActivity({ tools }: { tools: ChatToolItem[] }) {
       >
         <ChevronRight
           className={s.toolActivityChevron}
-          size={14}
+          size={16}
           strokeWidth={2.25}
           aria-hidden="true"
         />
@@ -796,7 +796,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
         >
           <Info
             className={s.systemNoticeIcon}
-            size={15}
+            size={16}
             strokeWidth={1.75}
             aria-hidden="true"
           />
@@ -832,7 +832,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
         >
           <AlertTriangle
             className={s.systemNoticeIcon}
-            size={15}
+            size={16}
             strokeWidth={1.75}
             aria-hidden="true"
           />

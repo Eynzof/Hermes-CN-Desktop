@@ -110,7 +110,7 @@ export function MemoryProviderConfig({
           {field.description}
           {field.url && (
             <button type="button" onClick={() => void openExternalUrl(field.url)}>
-              获取凭据 <ExternalLink size={11} />
+              获取凭据 <ExternalLink size={12} />
             </button>
           )}
         </small>
@@ -159,7 +159,7 @@ export function MemoryProviderConfig({
             void onSave(values).then(() => setSaved(true)).catch(() => setSaved(false));
           }}
         >
-          <Save size={13} />
+          <Save size={12} />
           {saving ? "检测中…" : "保存并检测"}
         </Button>
       </div>

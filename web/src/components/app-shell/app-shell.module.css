@@ -29,14 +29,14 @@
 .sidebarInfoPanel {
   position: absolute;
   left: 16px;
-  right: 6px;
-  bottom: 15px;
+  right: 8px;
+  bottom: 16px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
-  color: rgba(133, 126, 111, 0.76);
+  color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10px;
   font-style: normal;
@@ -47,7 +47,7 @@
 
 .sidebarInfoMeta {
   display: grid;
-  gap: 1px;
+  gap: 4px;
   max-width: 100%;
 }
 
@@ -70,16 +70,16 @@
 
 .sidebarInfoDot {
   text-align: center;
-  color: rgba(133, 126, 111, 0.54);
+  color: var(--h-text-4);
 }
 
 .sidebarInfoVersion {
-  color: rgba(255, 122, 61, 0.78);
+  color: var(--h-text-2);
 }
 
 .sidebarInfoNote {
   max-width: 100%;
-  color: rgba(133, 126, 111, 0.5);
+  color: var(--h-text-4);
   font-family: var(--h-font-cn);
   font-size: 10px;
   font-weight: 500;

@@ -212,7 +212,7 @@ export function SkillsRoute() {
             onClick={() => void refetch()}
             disabled={isFetching}
           >
-            <RefreshCw size={13} />
+            <RefreshCw size={12} />
             {isFetching ? "刷新中" : "同步内置"}
           </button>
           <TopBarActions />
@@ -238,7 +238,7 @@ export function SkillsRoute() {
             setSelectedName(null);
           }}
         >
-          <Package size={14} />
+          <Package size={16} />
           内置 Skills
           <span className={s.toptabCount}>{builtin.length}</span>
         </button>
@@ -251,7 +251,7 @@ export function SkillsRoute() {
             setSelectedName(null);
           }}
         >
-          <Store size={14} />
+          <Store size={16} />
           Skill 市场
         </button>
         <button
@@ -263,7 +263,7 @@ export function SkillsRoute() {
             setSelectedName(null);
           }}
         >
-          <BarChart3 size={14} />
+          <BarChart3 size={16} />
           统计
         </button>
         <button
@@ -275,13 +275,13 @@ export function SkillsRoute() {
             setSelectedName(null);
           }}
         >
-          <User size={14} />
+          <User size={16} />
           我的 Skills
           <span className={s.toptabCount}>{user.length}</span>
         </button>
         <span className={s.toptabSpacer} />
         <span className={s.toptabHint}>
-          <Info size={13} />
+          <Info size={12} />
           {tab === "builtin"
             ? "内置 Skill 由 Hermes 团队维护，仅可启用 / 禁用"
             : tab === "market"
@@ -514,7 +514,7 @@ function SkillDetail({
               className={s.btn}
               title="复制原文 ID"
             >
-              <Copy size={13} />
+              <Copy size={12} />
               复制 ID
             </CopyButton>
             <button
@@ -542,7 +542,7 @@ function SkillDetail({
 
         {tab === "builtin" && (
           <div className={s.readonlyNotice}>
-            <Lock size={14} className={s.readonlyLock} />
+            <Lock size={16} className={s.readonlyLock} />
             <div>
               <strong>这是 Hermes 内置 Skill。</strong>
               只能启用 / 禁用，不能修改。下次执行 <code>同步内置</code> 时会被覆盖。
@@ -603,7 +603,7 @@ function SkillDetail({
             )}
             {isTranslated ? (
               <div className={s.descriptionCardFooter}>
-                <Languages size={13} />
+                <Languages size={12} />
                 中文版基于 SKILL.md description 字段翻译。完整 SKILL.md 内容请到来源目录查看。
               </div>
             ) : null}
@@ -616,7 +616,7 @@ function SkillDetail({
             <div className={s.secHeadRight}>
               {markdown?.content ? (
                 <CopyButton text={markdown.content} className={s.btn}>
-                  <Copy size={13} />
+                  <Copy size={12} />
                   复制 Markdown
                 </CopyButton>
               ) : null}
@@ -645,27 +645,27 @@ function SkillDetail({
           </div>
           <div className={`${s.descriptionCard} ${s.sourceCard}`}>
             <div className={s.sourceRow}>
-              <Folder size={14} className={s.sourceIcon} />
+              <Folder size={16} className={s.sourceIcon} />
               <div className={s.sourceText}>
                 <span className={s.sourceLabel}>实际安装目录</span>
                 <code>{sourcePath}</code>
               </div>
               {resolvedSourcePath && (
                 <CopyButton text={resolvedSourcePath} className={s.btn}>
-                  <Copy size={13} />
+                  <Copy size={12} />
                   复制
                 </CopyButton>
               )}
             </div>
             {skillFile && (
               <div className={s.sourceRow}>
-                <Folder size={14} className={s.sourceIcon} />
+                <Folder size={16} className={s.sourceIcon} />
                 <div className={s.sourceText}>
                   <span className={s.sourceLabel}>SKILL.md</span>
                   <code>{skillFile}</code>
                 </div>
                 <CopyButton text={skillFile} className={s.btn}>
-                  <Copy size={13} />
+                  <Copy size={12} />
                   复制
                 </CopyButton>
               </div>
@@ -687,7 +687,7 @@ function UserEmptyState() {
   return (
     <div className={s.emptyState}>
       <div className={s.emptyStateIcon}>
-        <User size={26} />
+        <User size={28} />
       </div>
       <h2 className={s.emptyStateTitle}>还没有自建 Skill</h2>
       <p className={s.emptyStateBody}>
@@ -699,11 +699,11 @@ function UserEmptyState() {
       </p>
       <div className={s.emptyStateActions}>
         <button type="button" className={s.btn}>
-          <Folder size={13} />
+          <Folder size={12} />
           打开 ~/.hermes/skills/
         </button>
         <button type="button" className={s.btnPrimary}>
-          <Plus size={13} />
+          <Plus size={12} />
           基于内置 Skill 复制
         </button>
       </div>
@@ -740,7 +740,7 @@ function SkillMarket() {
             <p className={s.marketWhy}>{item.why}</p>
             <span className={s.marketCta}>
               {item.cta}
-              <ExternalLink size={13} />
+              <ExternalLink size={12} />
             </span>
           </a>
         ))}

@@ -327,7 +327,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
       <div className={s.modal} onClick={(e) => e.stopPropagation()}>
         <div className={s.modalHeader}>
           <div className={s.modalTitle}>登录 {provider.name}</div>
-          <Button variant="plain" size="inherit" className={s.modalClose} onClick={handleClose} aria-label="关闭">✕</Button>
+          <Button variant="plain" size="xs" className={s.modalClose} onClick={handleClose} aria-label="关闭">✕</Button>
         </div>
 
         {phase === "starting" && (

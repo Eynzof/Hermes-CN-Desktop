@@ -375,10 +375,10 @@ export function CronRoute() {
   const headerRight = (
     <div className={s.headerActions}>
       <button type="button" className={s.headerButton} onClick={refetchCronData} disabled={jobsQuery.isFetching || runsQuery.isFetching}>
-        <RefreshCw size={13} /> 刷新
+        <RefreshCw size={12} /> 刷新
       </button>
       <button type="button" className={s.headerPrimary} onClick={() => setShowCreate(true)}>
-        <Plus size={13} /> 新建任务
+        <Plus size={12} /> 新建任务
       </button>
     </div>
   );
@@ -391,7 +391,7 @@ export function CronRoute() {
       <div className={s.pageGrid}>
         <aside className={s.listPane} aria-label="定时任务列表">
           <div className={s.searchBox}>
-            <Search size={14} />
+            <Search size={16} />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索任务、Prompt、Profile…" />
           </div>
           <div className={s.filters}>
@@ -516,7 +516,7 @@ export function CronRoute() {
           {selectedRun ? (
             <div className={s.runDetailBox}>
               <div className={s.runDetailHeader}>
-                <span><FileText size={13} /> 输出详情</span>
+                <span><FileText size={12} /> 输出详情</span>
                 <span>{runStatusLabel(selectedRun.status)}</span>
               </div>
               {runDetailQuery.isLoading ? <div className={s.empty}>正在读取输出…</div> : null}
@@ -615,10 +615,10 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
           <div className={s.detailActions}>
             <span className={s.statusBadge} data-tone={statusTone(job)}>{statusLabel(job)}</span>
             <button type="button" className={s.secondaryButton} onClick={onPauseResume} disabled={busy}>
-              {paused ? <Play size={14} /> : <Pause size={14} />}{paused ? "恢复" : "暂停"}
+              {paused ? <Play size={16} /> : <Pause size={16} />}{paused ? "恢复" : "暂停"}
             </button>
-            <button type="button" className={s.primaryButton} onClick={onTrigger} disabled={busy}><Zap size={14} /> 立即运行</button>
-            <button type="button" className={s.dangerButton} onClick={onDelete} disabled={busy}><Trash2 size={14} /> 删除</button>
+            <button type="button" className={s.primaryButton} onClick={onTrigger} disabled={busy}><Zap size={16} /> 立即运行</button>
+            <button type="button" className={s.dangerButton} onClick={onDelete} disabled={busy}><Trash2 size={16} /> 删除</button>
           </div>
         </div>
         <div className={s.titleBlock}>
@@ -628,10 +628,10 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
       </div>
 
       <div className={s.statsGrid}>
-        <InfoTile icon={<CalendarClock size={15} />} label="调度" value={scheduleDisplay(job)} />
-        <InfoTile icon={<Clock size={15} />} label="下次运行" value={formatTime(job.next_run_at ?? job.next_run)} />
-        <InfoTile icon={<CheckCircle2 size={15} />} label="上次运行" value={formatTime(job.last_run_at ?? job.last_run)} />
-        <InfoTile icon={<AlertCircle size={15} />} label="上次结果" value={resultLine(job)} tone={text(job.last_status) === "error" ? "err" : "neutral"} />
+        <InfoTile icon={<CalendarClock size={16} />} label="调度" value={scheduleDisplay(job)} />
+        <InfoTile icon={<Clock size={16} />} label="下次运行" value={formatTime(job.next_run_at ?? job.next_run)} />
+        <InfoTile icon={<CheckCircle2 size={16} />} label="上次运行" value={formatTime(job.last_run_at ?? job.last_run)} />
+        <InfoTile icon={<AlertCircle size={16} />} label="上次结果" value={resultLine(job)} tone={text(job.last_status) === "error" ? "err" : "neutral"} />
       </div>
 
       <div className={s.detailGrid}>

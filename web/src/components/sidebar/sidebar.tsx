@@ -66,7 +66,7 @@ function NavItem({ icon: Icon, label, active, count, onClick, title }: NavItemPr
       onClick={onClick}
       title={title ?? label}
     >
-      <Icon size={15} className={s.navIcon} />
+      <Icon size={16} className={s.navIcon} />
       <span className={s.navLabel}>{label}</span>
       {count ? <span className={s.navCount}>{count}</span> : null}
     </button>
@@ -160,10 +160,10 @@ export function Sidebar() {
           data-active={matchPath("/") ? "true" : undefined}
           onClick={goNew}
         >
-          <Edit3 size={15} className={s.navIcon} /> 新对话
+          <Edit3 size={16} className={s.navIcon} /> 新对话
         </button>
         <button type="button" className={s.topBtn} onClick={goSearch}>
-          <Search size={15} className={s.navIcon} /> 搜索
+          <Search size={16} className={s.navIcon} /> 搜索
           <span className={s.kbd}>⌘ K</span>
         </button>
       </div>
@@ -241,7 +241,7 @@ export function Sidebar() {
               data-empty="true"
               onClick={() => navigate("/projects")}
             >
-              <Folder size={15} className={s.navIcon} />
+              <Folder size={16} className={s.navIcon} />
               <span className={s.navLabel}>暂无项目</span>
             </button>
           ) : (
@@ -288,7 +288,7 @@ export function Sidebar() {
         data-active={matchPath("/settings") ? "true" : undefined}
         onClick={() => navigate("/settings")}
       >
-        <Settings size={14} /> 设置
+        <Settings size={16} /> 设置
       </button>
     </aside>
   );

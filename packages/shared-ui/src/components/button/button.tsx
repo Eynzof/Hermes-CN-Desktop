@@ -4,7 +4,7 @@ import s from "./button.module.css";
 
 export type ButtonVariant = "solid" | "soft" | "outline" | "ghost" | "plain";
 export type ButtonTone = "neutral" | "accent" | "success" | "warning" | "danger";
-export type ButtonSize = "xs" | "sm" | "md" | "lg" | "inherit";
+export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;

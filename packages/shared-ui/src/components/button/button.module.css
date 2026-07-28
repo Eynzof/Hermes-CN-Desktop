@@ -6,6 +6,8 @@
   --h-button-tone-contrast: var(--h-color-fg-default);
 
   appearance: none;
+  box-sizing: border-box;
+  height: var(--h-button-height-md);
   min-height: var(--h-button-height-md);
   padding: 0 var(--h-button-padding-x-md);
   display: inline-flex;
@@ -17,7 +19,7 @@
   background: transparent;
   color: var(--h-color-fg-default);
   font-family: var(--h-font-ui);
-  font-size: var(--h-button-font-size);
+  font-size: var(--h-button-font-size-md);
   font-weight: 550;
   line-height: 1;
   text-decoration: none;
@@ -29,7 +31,6 @@
     color var(--h-duration-fast) var(--h-ease-standard),
     background-color var(--h-duration-fast) var(--h-ease-standard),
     border-color var(--h-duration-fast) var(--h-ease-standard),
-    box-shadow var(--h-duration-fast) var(--h-ease-standard),
     transform var(--h-duration-fast) var(--h-ease-standard),
     opacity var(--h-duration-fast) var(--h-ease-standard);
 }
@@ -112,6 +113,7 @@
 }
 
 .button:where([data-variant="plain"]) {
+  height: auto;
   min-height: auto;
   padding: 0;
   border: 0;
@@ -129,27 +131,24 @@
 }
 
 .button[data-size="xs"] {
+  height: var(--h-button-height-xs);
   min-height: var(--h-button-height-xs);
   padding-inline: var(--h-button-padding-x-xs);
-  font-size: 11px;
+  font-size: var(--h-button-font-size-xs);
 }
 
 .button[data-size="sm"] {
+  height: var(--h-button-height-sm);
   min-height: var(--h-button-height-sm);
   padding-inline: var(--h-button-padding-x-sm);
-  font-size: 11.5px;
+  font-size: var(--h-button-font-size-sm);
 }
 
 .button[data-size="lg"] {
+  height: var(--h-button-height-lg);
   min-height: var(--h-button-height-lg);
   padding-inline: var(--h-button-padding-x-lg);
-  font-size: 13px;
-}
-
-.button:where([data-size="inherit"]) {
-  min-height: auto;
-  padding: 0;
-  font-size: inherit;
+  font-size: var(--h-button-font-size-lg);
 }
 
 .button[data-full-width="true"] {
@@ -174,16 +173,16 @@
 }
 
 .button:focus-visible {
-  outline: none;
-  box-shadow: var(--h-focus-ring);
+  outline: var(--h-focus-outline);
+  outline-offset: 2px;
 }
 
 .button[data-tone="danger"]:focus-visible {
-  box-shadow: var(--h-focus-ring-danger);
+  outline-color: var(--h-err);
 }
 
 .button:active:not(:disabled):not([data-variant="plain"]) {
-  transform: translateY(1px);
+  transform: translateY(4px);
 }
 
 .button:disabled,
