@@ -2,7 +2,7 @@ import ReactDOMServer from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { CodingAgentStatus, SkillInfo } from "@hermes/protocol";
-import { DelegationSkillControl } from "./settings-coding-agents";
+import { CodingAgentToolbar, DelegationSkillControl } from "./settings-coding-agents";
 
 const agent: CodingAgentStatus = {
   id: "codex",
@@ -65,5 +65,23 @@ describe("DelegationSkillControl", () => {
     expect(html).toContain("未找到");
     expect(html).toContain("请升级或重新同步内核技能后再试");
     expect(html).not.toContain("<button");
+  });
+});
+
+describe("CodingAgentToolbar", () => {
+  it("为两个顶部操作使用同一按钮规格", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <CodingAgentToolbar
+        isFetching={false}
+        hasBridge
+        onRefresh={() => undefined}
+        diagnostics={() => "{}"}
+      />,
+    );
+
+    expect(html).toContain('role="toolbar"');
+    expect(html.match(/data-coding-agent-action="true"/g)).toHaveLength(2);
+    expect(html).toContain("刷新检测");
+    expect(html).toContain("复制诊断 JSON");
   });
 });
