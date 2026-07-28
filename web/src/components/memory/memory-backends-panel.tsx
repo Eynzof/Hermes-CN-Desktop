@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Check, Database, RefreshCw } from "lucide-react";
 import { Button } from "@hermes/shared-ui";
 import {
@@ -24,13 +25,18 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function MemoryBackendsPanel() {
+export interface MemoryBackendsPanelProps {
+  view: "config" | VisibleMemoryProvider;
+}
+
+export function MemoryBackendsPanel({ view }: MemoryBackendsPanelProps) {
+  const isConfigView = view === "config";
+  const selected: VisibleMemoryProvider = view === "config" ? "openviking" : view;
   const providersQuery = useMemoryProviders({ enabled: true });
-  const openVikingStatus = useMemoryProviderStatus("openviking", true);
-  const hindsightStatus = useMemoryProviderStatus("hindsight", true);
-  const [selected, setSelected] = useState<VisibleMemoryProvider>("openviking");
+  const openVikingStatus = useMemoryProviderStatus("openviking", isConfigView || selected === "openviking");
+  const hindsightStatus = useMemoryProviderStatus("hindsight", isConfigView || selected === "hindsight");
   const [actionError, setActionError] = useState("");
-  const configQuery = useMemoryProviderConfig(selected, true);
+  const configQuery = useMemoryProviderConfig(selected, !isConfigView);
   const saveConfig = useSaveMemoryProviderConfig();
   const setupProvider = useSetupMemoryProvider();
   const setProvider = useSetMemoryProvider();
@@ -42,12 +48,6 @@ export function MemoryBackendsPanel() {
   const selectedStatusQuery = statusQueries[selected];
   const selectedStatus = selectedStatusQuery.data;
   const active = providersQuery.data?.active ?? "";
-
-  useEffect(() => {
-    if (VISIBLE_MEMORY_PROVIDERS.includes(active as VisibleMemoryProvider)) {
-      setSelected(active as VisibleMemoryProvider);
-    }
-  }, [active]);
 
   const activeStatus = VISIBLE_MEMORY_PROVIDERS.includes(active as VisibleMemoryProvider)
     ? statusQueries[active as VisibleMemoryProvider].data
@@ -89,73 +89,79 @@ export function MemoryBackendsPanel() {
     setActionError("");
     try {
       await setProvider.mutateAsync(selected);
-      await Promise.all([providersQuery.refetch(), openVikingStatus.refetch(), hindsightStatus.refetch()]);
+      await Promise.all([providersQuery.refetch(), selectedStatusQuery.refetch()]);
     } catch (error) {
       setActionError(message(error));
     }
   };
 
+  if (isConfigView) {
+    return (
+      <section className={s.backendPanel}>
+        <header className={s.backendSummary}>
+          <div className={s.summaryIcon}><Database size={18} /></div>
+          <div>
+            <small>当前启用后端</small>
+            <strong>{activeMeta?.label ?? "未启用外置后端"}</strong>
+            <span>{activeMeta ? overallState.label : "内置记忆继续可用"}</span>
+          </div>
+          <div className={s.summaryCheck}>
+            <small>总体状态</small>
+            <span className={s.stateBadge} data-tone={activeMeta ? overallState.tone : "muted"}>
+              {activeMeta ? overallState.label : "未配置"}
+            </span>
+            <em>最后检查 {formatCheckedAt(activeStatus?.checked_at)}</em>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={openVikingStatus.isFetching || hindsightStatus.isFetching}
+            onClick={refreshAll}
+          >
+            <RefreshCw size={13} /> 刷新全部
+          </Button>
+        </header>
+
+        <p className={s.backendIntro}>
+          每个 Hermes 档案只能启用一个外置记忆后端。先保存并检测，确认在线可用后再设为当前；另一个后端的配置不会被删除。
+        </p>
+
+        {providersQuery.isError && <div className={s.inlineError}>无法读取记忆后端列表：{message(providersQuery.error)}</div>}
+
+        <div className={s.backendSwitcher}>
+          {VISIBLE_MEMORY_PROVIDERS.map((provider) => {
+            const meta = MEMORY_BACKEND_META[provider];
+            const status = statusQueries[provider].data;
+            const state = memoryBackendState(status);
+            return (
+              <Link
+                key={provider}
+                to={`/external-memory/${provider}`}
+                className={s.backendLink}
+                data-active={status?.active ? "true" : undefined}
+              >
+                <span className={s.backendCardHead}>
+                  <strong>{meta.label}</strong>
+                  <em className={s.stateBadge} data-tone={state.tone}>{state.label}</em>
+                </span>
+                <span>{meta.description}</span>
+                <small>
+                  {status?.version ? `v${status.version}` : statusQueries[provider].isFetching ? "检测中…" : "尚未返回版本"}
+                  {status?.active && <b><Check size={11} /> 当前</b>}
+                </small>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className={s.backendPanel}>
-      <header className={s.backendSummary}>
-        <div className={s.summaryIcon}><Database size={18} /></div>
-        <div>
-          <small>当前启用后端</small>
-          <strong>{activeMeta?.label ?? "未启用外置后端"}</strong>
-          <span>{activeMeta ? overallState.label : "内置记忆继续可用"}</span>
-        </div>
-        <div className={s.summaryCheck}>
-          <small>总体状态</small>
-          <span className={s.stateBadge} data-tone={activeMeta ? overallState.tone : "muted"}>
-            {activeMeta ? overallState.label : "未配置"}
-          </span>
-          <em>最后检查 {formatCheckedAt(activeStatus?.checked_at)}</em>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={openVikingStatus.isFetching || hindsightStatus.isFetching}
-          onClick={refreshAll}
-        >
-          <RefreshCw size={13} /> 刷新全部
-        </Button>
-      </header>
-
-      <p className={s.backendIntro}>
-        每个 Hermes 档案只能启用一个外置记忆后端。先保存并检测，确认在线可用后再设为当前；另一个后端的配置不会被删除。
-      </p>
-
+    <section className={s.backendPanel} data-view="provider">
       {providersQuery.isError && <div className={s.inlineError}>无法读取记忆后端列表：{message(providersQuery.error)}</div>}
-
-      <div className={s.backendSwitcher}>
-        {VISIBLE_MEMORY_PROVIDERS.map((provider) => {
-          const meta = MEMORY_BACKEND_META[provider];
-          const status = statusQueries[provider].data;
-          const state = memoryBackendState(status);
-          return (
-            <button
-              key={provider}
-              type="button"
-              data-selected={selected === provider ? "true" : undefined}
-              data-active={status?.active ? "true" : undefined}
-              onClick={() => { setSelected(provider); setActionError(""); }}
-            >
-              <span className={s.backendCardHead}>
-                <strong>{meta.label}</strong>
-                <em className={s.stateBadge} data-tone={state.tone}>{state.label}</em>
-              </span>
-              <span>{meta.description}</span>
-              <small>
-                {status?.version ? `v${status.version}` : statusQueries[provider].isFetching ? "检测中…" : "尚未返回版本"}
-                {status?.active && <b><Check size={11} /> 当前</b>}
-              </small>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className={s.backendDetail}>
+      <div className={s.backendDetail} data-standalone="true">
         <div className={s.detailHeader}>
           <div>
             <small>正在配置</small>

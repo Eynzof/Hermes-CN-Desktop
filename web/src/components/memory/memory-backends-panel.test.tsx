@@ -1,4 +1,5 @@
 import ReactDOMServer from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const query = {
@@ -40,15 +41,27 @@ vi.mock("@/hooks/use-memory", () => ({
 import { MemoryBackendsPanel } from "./memory-backends-panel";
 
 describe("MemoryBackendsPanel", () => {
-  it("renders only the two supported external memory backends", () => {
-    const html = ReactDOMServer.renderToStaticMarkup(<MemoryBackendsPanel />);
+  it("renders the two supported backends as links on the config page", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MemoryRouter><MemoryBackendsPanel view="config" /></MemoryRouter>,
+    );
 
     expect(html).toContain("OpenViking");
     expect(html).toContain("Hindsight");
-    expect(html).toContain("OpenViking 控制台");
-    expect(html).not.toContain("深度控制台");
+    expect(html).toContain("/external-memory/openviking");
+    expect(html).toContain("/external-memory/hindsight");
     expect(html).not.toContain("Honcho");
     expect(html).not.toContain("Mem0");
     expect(html).not.toContain("Supermemory");
+  });
+
+  it("renders provider controls only on the provider page", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MemoryRouter><MemoryBackendsPanel view="openviking" /></MemoryRouter>,
+    );
+
+    expect(html).toContain("OpenViking 控制台");
+    expect(html).toContain("设为当前");
+    expect(html).not.toContain("深度控制台");
   });
 });

@@ -4,6 +4,7 @@ export type TopTab =
   | "workbench"
   | "skills"
   | "gateway"
+  | "externalMemory"
   | "advanced";
 
 export interface TopTabDef {
@@ -57,7 +58,6 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/config-migration") ||
       path.startsWith("/soul") ||
       path.startsWith("/memory") ||
-      path.startsWith("/external-memory") ||
       path.startsWith("/cron") ||
       path.startsWith("/console") ||
       path.startsWith("/coding-agents"),
@@ -70,8 +70,15 @@ export const TOP_TABS: readonly TopTabDef[] = [
     matches: (path) => path.startsWith("/im"),
   },
   {
-    id: "advanced",
+    id: "externalMemory",
     num: "04",
+    label: "外置记忆",
+    href: "/external-memory",
+    matches: (path) => path.startsWith("/external-memory"),
+  },
+  {
+    id: "advanced",
+    num: "05",
     label: "高级",
     href: "/health",
     matches: (path) =>

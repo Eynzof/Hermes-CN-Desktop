@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CAPABILITY_SECTIONS } from "./capability-sidebar";
 import { GATEWAY_SECTIONS } from "./gateway-sidebar";
+import { EXTERNAL_MEMORY_ITEMS } from "./external-memory-sidebar";
 import { TOP_TABS } from "./use-active-top-tab";
 
 describe("configuration navigation", () => {
@@ -27,17 +28,17 @@ describe("configuration navigation", () => {
     ]);
   });
 
-  it("places external memory directly below built-in memory", () => {
+  it("keeps only built-in memory in configuration", () => {
     const config = CAPABILITY_SECTIONS.find((section) => section.label === "§021 · 配置");
-    const memoryItems = config?.items
-      .filter((item) => item.path === "/memory" || item.path === "/external-memory")
-      .map((item) => [item.label, item.path]);
+    expect(config?.items.some((item) => item.path === "/memory")).toBe(true);
+    expect(config?.items.some((item) => item.path === "/external-memory")).toBe(false);
+  });
 
-    expect(memoryItems).toEqual([
-      ["内置记忆", "/memory"],
-      ["外置记忆", "/external-memory"],
+  it("adds config, OpenViking and Hindsight to the external memory sidebar", () => {
+    expect(EXTERNAL_MEMORY_ITEMS.map((item) => [item.label, item.path])).toEqual([
+      ["配置", "/external-memory"],
+      ["OpenViking", "/external-memory/openviking"],
+      ["Hindsight", "/external-memory/hindsight"],
     ]);
-    expect(config?.items.findIndex((item) => item.path === "/external-memory"))
-      .toBe((config?.items.findIndex((item) => item.path === "/memory") ?? -2) + 1);
   });
 });

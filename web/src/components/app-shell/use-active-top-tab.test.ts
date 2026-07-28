@@ -21,7 +21,7 @@ describe("TOP_TABS", () => {
     expect(tabFor("/kanban")).toBe("workbench");
   });
 
-  it("keeps canonical advanced pages under the 04 advanced tab", () => {
+  it("keeps canonical advanced pages under the 05 advanced tab", () => {
     expect(tabFor("/common")).toBe("advanced");
     expect(tabFor("/notifications")).toBe("advanced");
     expect(tabFor("/config")).toBe("advanced");
@@ -51,10 +51,22 @@ describe("TOP_TABS", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "人格" && item.path === "/soul")).toBe(true);
   });
 
-  it("keeps both memory pages under the 02 config tab", () => {
+  it("keeps built-in memory under config and promotes external memory to 04", () => {
     expect(tabFor("/memory")).toBe("skills");
-    expect(tabFor("/external-memory")).toBe("skills");
+    expect(tabFor("/external-memory")).toBe("externalMemory");
+    expect(tabFor("/external-memory/openviking")).toBe("externalMemory");
+    expect(tabFor("/external-memory/hindsight")).toBe("externalMemory");
     expect(CONFIG_ITEMS.some((item) => item.label === "内置记忆" && item.path === "/memory")).toBe(true);
-    expect(CONFIG_ITEMS.some((item) => item.label === "外置记忆" && item.path === "/external-memory")).toBe(true);
+    expect(CONFIG_ITEMS.some((item) => item.path === "/external-memory")).toBe(false);
+  });
+
+  it("places external memory between message access and advanced", () => {
+    expect(TOP_TABS.map((tab) => [tab.num, tab.label])).toEqual([
+      ["01", "工作台"],
+      ["02", "配置"],
+      ["03", "消息接入"],
+      ["04", "外置记忆"],
+      ["05", "高级"],
+    ]);
   });
 });

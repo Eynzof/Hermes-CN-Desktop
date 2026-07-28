@@ -12,7 +12,6 @@ import {
   Sparkles,
   SquareCode,
   TerminalSquare,
-  Database,
   type LucideIcon,
 } from "lucide-react";
 import { useActiveProfileName } from "@/hooks/use-profiles";
@@ -46,12 +45,6 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
     path: "/memory",
     icon: Brain,
     title: "MEMORY.md / USER.md：Hermes 内置记忆与用户画像",
-  },
-  {
-    label: "外置记忆",
-    path: "/external-memory",
-    icon: Database,
-    title: "OpenViking / Hindsight：外置记忆配置与监控",
   },
   {
     label: "人格",
