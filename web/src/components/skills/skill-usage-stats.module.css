@@ -11,7 +11,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  max-width: 1180px;
+  max-width: var(--h-page-content-max-width);
   margin: 0 auto 20px;
 }
 
@@ -115,7 +115,7 @@
 .rankingPanel,
 .stateCard {
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--h-page-content-max-width);
   margin-left: auto;
   margin-right: auto;
 }

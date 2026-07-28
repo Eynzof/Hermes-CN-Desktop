@@ -194,7 +194,7 @@
 .tooltipDot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   flex: 0 0 auto;
 }
 
@@ -412,7 +412,7 @@
   height: 72px;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--h-accent) 42%, var(--h-line));
-  border-radius: 0;
+  border-radius: 50%;
   background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-app));
   color: var(--h-accent);
 }
@@ -424,7 +424,7 @@
   inset: -8px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent);
   border-top-color: var(--h-accent);
-  border-radius: 0;
+  border-radius: 50%;
   animation: analyticsSpin 1.35s linear infinite;
 }
 

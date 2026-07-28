@@ -270,7 +270,7 @@
 .streamDot {
   width: 4px;
   height: 4px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-text-4);
 }
 

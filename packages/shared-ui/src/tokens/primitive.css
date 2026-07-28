@@ -26,42 +26,40 @@
   --h-color-persimmon-600: #c95722;
   --h-color-blue-500: #0078d4;
   --h-color-blue-400: #4fc1ff;
-  --h-color-amber-500: #e8b85d;
-  --h-color-green-500: #8db580;
-  --h-color-green-600: #5e7d54;
-  --h-color-red-500: #d96666;
-  --h-color-red-600: #a8413f;
+  /* PrimeAPP tri-state palette — the only chromatic status hues. */
+  --h-color-amber-500: #f59e0b;
+  --h-color-green-500: #10b981;
+  --h-color-green-600: #10b981;
+  --h-color-red-500: #ef4444;
+  --h-color-red-600: #ef4444;
   --h-color-sky-500: #6e9bd1;
   --h-color-plum-500: #b58dc4;
 
-  /* Quiet status palette.
-     Status hues are deliberately greyed down so they sit inside the
-     black / white / graphite UI instead of reading as promotional colour. */
-  --h-palette-success-light-fg: #3f6357;
-  --h-palette-success-light-surface: #f2f4f3;
-  --h-palette-success-light-border: #c5ceca;
-  --h-palette-warning-light-fg: #735d35;
-  --h-palette-warning-light-surface: #f5f3ef;
-  --h-palette-warning-light-border: #d0c7b6;
-  --h-palette-danger-light-fg: #844d4a;
-  --h-palette-danger-light-surface: #f6f2f2;
-  --h-palette-danger-light-border: #d2c0bf;
-  --h-palette-info-light-fg: #4c5f6b;
-  --h-palette-info-light-surface: #f2f4f5;
-  --h-palette-info-light-border: #c5cbd0;
+  --h-palette-success-light-fg: #10b981;
+  --h-palette-success-light-surface: rgb(16 185 129 / 10%);
+  --h-palette-success-light-border: rgb(16 185 129 / 30%);
+  --h-palette-warning-light-fg: #f59e0b;
+  --h-palette-warning-light-surface: rgb(245 158 11 / 10%);
+  --h-palette-warning-light-border: rgb(245 158 11 / 30%);
+  --h-palette-danger-light-fg: #ef4444;
+  --h-palette-danger-light-surface: rgb(239 68 68 / 10%);
+  --h-palette-danger-light-border: rgb(239 68 68 / 30%);
+  --h-palette-info-light-fg: #f59e0b;
+  --h-palette-info-light-surface: rgb(245 158 11 / 10%);
+  --h-palette-info-light-border: rgb(245 158 11 / 30%);
 
-  --h-palette-success-dark-fg: #91aa9f;
-  --h-palette-success-dark-surface: #1e2421;
-  --h-palette-success-dark-border: #46544e;
-  --h-palette-warning-dark-fg: #b8a47e;
-  --h-palette-warning-dark-surface: #25221b;
-  --h-palette-warning-dark-border: #564e3d;
-  --h-palette-danger-dark-fg: #c08e8a;
-  --h-palette-danger-dark-surface: #281f1f;
-  --h-palette-danger-dark-border: #5d4544;
-  --h-palette-info-dark-fg: #97a9b3;
-  --h-palette-info-dark-surface: #1e2326;
-  --h-palette-info-dark-border: #46515a;
+  --h-palette-success-dark-fg: #10b981;
+  --h-palette-success-dark-surface: rgb(16 185 129 / 14%);
+  --h-palette-success-dark-border: rgb(16 185 129 / 42%);
+  --h-palette-warning-dark-fg: #f59e0b;
+  --h-palette-warning-dark-surface: rgb(245 158 11 / 14%);
+  --h-palette-warning-dark-border: rgb(245 158 11 / 42%);
+  --h-palette-danger-dark-fg: #ef4444;
+  --h-palette-danger-dark-surface: rgb(239 68 68 / 14%);
+  --h-palette-danger-dark-border: rgb(239 68 68 / 42%);
+  --h-palette-info-dark-fg: #f59e0b;
+  --h-palette-info-dark-surface: rgb(245 158 11 / 14%);
+  --h-palette-info-dark-border: rgb(245 158 11 / 42%);
 
   /* Strict 4px grid. No half-step spacing tokens are exposed. */
   --h-space-0: 0;

@@ -7,8 +7,8 @@
   margin: 0 auto 8px;
   padding: 8px 12px;
   border-radius: 0;
-  border: 1px solid color-mix(in srgb, #c5462b 26%, var(--h-line));
-  background: color-mix(in srgb, #c5462b 6%, var(--h-bg-pane));
+  border: 1px solid var(--h-err-border);
+  background: var(--h-err-soft);
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
   font-size: 12.5px;
@@ -17,7 +17,7 @@
 
 .icon {
   flex: 0 0 auto;
-  color: #c5462b;
+  color: var(--h-err);
 }
 
 .text {

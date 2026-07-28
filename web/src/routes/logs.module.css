@@ -140,7 +140,7 @@
 .toggleDot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-text-3);
 }
 

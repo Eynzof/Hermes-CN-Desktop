@@ -1,7 +1,7 @@
 .layout {
   display: grid;
   gap: 16px;
-  max-width: 1040px;
+  max-width: var(--h-page-content-max-width);
 }
 
 .topActions {
@@ -139,13 +139,15 @@
 }
 
 .statusBadge[data-tone="ready"] {
-  border-color: rgba(127, 192, 131, 0.42);
-  color: #7fc083;
+  border-color: var(--h-ok-border);
+  color: var(--h-ok);
+  background: var(--h-ok-soft);
 }
 
 .statusBadge[data-tone="warn"] {
-  border-color: rgba(215, 168, 77, 0.42);
-  color: #d7a84d;
+  border-color: var(--h-warn-border);
+  color: var(--h-warn);
+  background: var(--h-warn-soft);
 }
 
 .card {
@@ -206,10 +208,10 @@
 
 .errorBox {
   margin-top: 12px;
-  border: 1px solid rgba(215, 111, 84, 0.34);
+  border: 1px solid var(--h-err-border);
   border-radius: 0;
-  background: rgba(215, 111, 84, 0.1);
-  color: #e18b74;
+  background: var(--h-err-soft);
+  color: var(--h-err);
   padding: 12px 12px;
   font-size: 12px;
 }

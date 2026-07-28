@@ -75,6 +75,9 @@
 }
 
 .scroll {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   flex: 1;
   overflow-y: auto;
   padding: 24px 24px 48px;

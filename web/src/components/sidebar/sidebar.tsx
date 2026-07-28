@@ -144,9 +144,9 @@ export function Sidebar() {
       >
         {platform === "web" && (
           <>
-            <span className={s.dot} style={{ background: "#ed6a5e" }} />
-            <span className={s.dot} style={{ background: "#f5be4f" }} />
-            <span className={s.dot} style={{ background: "#62c554" }} />
+            <span className={s.dot} style={{ background: "var(--h-err)" }} />
+            <span className={s.dot} style={{ background: "var(--h-warn)" }} />
+            <span className={s.dot} style={{ background: "var(--h-ok)" }} />
           </>
         )}
       </div>

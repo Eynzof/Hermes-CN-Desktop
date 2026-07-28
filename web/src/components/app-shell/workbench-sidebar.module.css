@@ -299,7 +299,7 @@
 .dot {
   width: 4px;
   height: 4px;
-  border-radius: 0;
+  border-radius: 50%;
   flex-shrink: 0;
   background: transparent;
 }

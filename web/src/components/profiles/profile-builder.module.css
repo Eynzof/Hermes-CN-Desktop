@@ -1,7 +1,8 @@
 /* /profiles/new 分步创建向导。全部走 shared-ui token。 */
 
 .wrap {
-  max-width: 760px;
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
   display: flex;
   flex-direction: column;
   gap: 20px;

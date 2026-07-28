@@ -201,7 +201,7 @@
   height: 1em;
   border: 2px solid currentColor;
   border-right-color: transparent;
-  border-radius: 0;
+  border-radius: 50%;
   animation: hermesButtonSpin 650ms linear infinite;
 }
 

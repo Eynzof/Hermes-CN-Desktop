@@ -568,7 +568,7 @@
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-ok);
 }
 
@@ -891,7 +891,7 @@
 .tabDirtyDot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-accent);
   flex: 0 0 auto;
 }

@@ -101,6 +101,9 @@
 
 /* 主体 split：360px 列表 + 1fr 详情 */
 .split {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -865,6 +868,9 @@
 
 /* loading / error 占位 */
 .statePane {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   padding: 28px 36px;
   color: var(--h-text-3);
   font-size: 13px;
@@ -872,6 +878,9 @@
 
 /* === Skill 市场 === */
 .marketPage {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   flex: 1;
   min-height: 0;
   overflow-y: auto;

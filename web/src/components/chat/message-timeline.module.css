@@ -49,7 +49,7 @@
   width: 8px;
   height: 8px;
   border: 1px solid color-mix(in srgb, var(--h-text-3) 55%, transparent);
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-text-3);
   padding: 0;
   cursor: pointer;
@@ -109,7 +109,7 @@
   background: transparent;
   cursor: pointer;
   display: block;
-  border-radius: 0;
+  border-radius: 50%;
 }
 
 .avatarButton:hover .rowAvatar {
@@ -119,7 +119,7 @@
 .rowAvatar {
   width: 36px;
   height: 36px;
-  border-radius: 0;
+  border-radius: 50%;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
   object-fit: cover;
@@ -162,8 +162,8 @@
 }
 
 .systemNotice[data-error="true"] {
-  background: color-mix(in srgb, #c5462b 6%, var(--h-bg-pane));
-  border-color: color-mix(in srgb, #c5462b 26%, var(--h-line));
+  background: var(--h-err-soft);
+  border-color: var(--h-err-border);
 }
 
 .systemNoticeIcon {
@@ -174,7 +174,7 @@
 }
 
 .systemNotice[data-error="true"] .systemNoticeIcon {
-  color: #c5462b;
+  color: var(--h-err);
 }
 
 .systemNoticeBody {
@@ -244,7 +244,7 @@
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 0;
+  border-radius: 50%;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
   object-fit: cover;
@@ -950,7 +950,7 @@
 .thinkingDot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-ok);
   flex: 0 0 auto;
   animation: pulse 1.6s ease-in-out infinite;

@@ -22,6 +22,12 @@
   padding: 20px 24px 48px;
 }
 
+.content {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
+}
+
 .body[data-with-rail="true"] .scroll {
   padding-right: 20px;
 }

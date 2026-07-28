@@ -44,7 +44,7 @@
   height: 16px;
   border: 2px solid var(--h-line);
   border-top-color: var(--h-text);
-  border-radius: 0;
+  border-radius: 50%;
   animation: hermesProfileSwitchSpin 700ms linear infinite;
   flex-shrink: 0;
 }

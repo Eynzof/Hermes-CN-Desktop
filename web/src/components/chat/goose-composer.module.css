@@ -262,7 +262,7 @@
 .bigHeaderDot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-accent);
   flex: 0 0 auto;
 }
@@ -1609,7 +1609,7 @@
   left: 50%;
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-ok);
   box-shadow: none;
   pointer-events: none;
@@ -1801,7 +1801,7 @@
 .liveDot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-ok);
 }
 

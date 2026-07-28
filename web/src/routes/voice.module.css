@@ -1,7 +1,7 @@
 .page {
   display: grid;
   gap: 16px;
-  max-width: 1120px;
+  max-width: var(--h-page-content-max-width);
   margin: 0 auto;
   font-family: var(--h-font-cn);
 }

@@ -17,13 +17,9 @@
   text-shadow: none !important;
 }
 
-#root :focus-visible {
+#root :focus-visible:not(input):not(textarea):not(select):not([contenteditable="true"]) {
   outline: var(--h-focus-outline) !important;
   outline-offset: 2px;
-}
-
-#root :where([aria-invalid="true"], [data-invalid="true"]):focus-visible {
-  outline: var(--h-focus-outline-danger) !important;
 }
 
 html,

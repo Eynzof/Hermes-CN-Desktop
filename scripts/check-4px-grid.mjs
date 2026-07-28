@@ -18,6 +18,8 @@ const numericStyle = new RegExp(`\\b(${styleProperty})\\s*:\\s*(-?\\d+(?:\\.\\d+
 const stringStyle = new RegExp(`\\b(${styleProperty})\\s*:\\s*(["'])([^"']+)\\2`, "g");
 const svgRadius = /\\b(rx|ry)\\s*=\\s*(?:\\{\\s*)?["']?(-?\\d+(?:\\.\\d+)?)/g;
 const layoutToken = /^--.*(?:space|gap|pad|width|height|radius|offset|inset|row|column|sidebar|bar|control|button|input|card|dialog|switch|tab)/i;
+// PrimeAPP surfaces stay square. True point/circle semantics retain 50% geometry.
+const circularSelector = /(?:dot|avatar|spinner|orb|thumb)/i;
 const violations = [];
 
 for (const file of CSS_FILES) {
@@ -78,7 +80,9 @@ function walk(dir) {
 function checkCss(source, file) {
   for (const match of source.matchAll(cssDeclaration)) {
     const property = match[2].toLowerCase();
-    if (/radius$/i.test(property)) checkRadius(file, source, match.index, property, match[3], match[0]);
+    if (/radius$/i.test(property)) {
+      checkRadius(file, source, match.index, property, match[3], match[0], selectorBefore(source, match.index));
+    }
     else checkPixels(file, source, match.index, property, match[3], match[0]);
   }
   for (const match of source.matchAll(cssMediaDimension)) {
@@ -95,10 +99,18 @@ function checkPixels(file, source, index, property, value, excerpt) {
   }
 }
 
-function checkRadius(file, source, index, property, value, excerpt) {
+function checkRadius(file, source, index, property, value, excerpt, selector = "") {
   const parts = String(value).trim().split(/\s+/);
   if (parts.length > 0 && parts.every((part) => /^(?:0|0px)$/.test(part))) return;
+  if (parts.length === 1 && parts[0] === "50%" && circularSelector.test(selector)) return;
   addViolation(file, source, index, property, String(value).trim(), excerpt);
+}
+
+function selectorBefore(source, index) {
+  const open = source.lastIndexOf("{", index);
+  if (open < 0 || source.lastIndexOf("}", index) > open) return "";
+  const previousClose = source.lastIndexOf("}", open);
+  return source.slice(previousClose + 1, open).trim();
 }
 
 function checkNumber(file, source, index, property, value, excerpt) {

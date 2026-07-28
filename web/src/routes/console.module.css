@@ -158,20 +158,20 @@
 .statusDot {
   width: 8px;
   height: 8px;
-  border-radius: 0;
-  background: #d7a84d;
+  border-radius: 50%;
+  background: var(--h-warn);
   box-shadow: none;
 }
 
 .terminalCard[data-status="ready"] .statusDot {
-  background: #7fc083;
+  background: var(--h-ok);
   box-shadow: none;
 }
 
 .terminalCard[data-status="error"] .statusDot,
 .terminalCard[data-status="closed"] .statusDot,
 .terminalCard[data-status="unsupported"] .statusDot {
-  background: #d76f54;
+  background: var(--h-err);
   box-shadow: none;
 }
 
@@ -288,9 +288,9 @@
 
 .errorBox {
   padding: 12px 16px;
-  color: #ffd1c2;
-  background: rgba(215, 111, 84, 0.1);
-  border-color: rgba(215, 111, 84, 0.24);
+  color: var(--h-err);
+  background: var(--h-err-soft);
+  border-color: var(--h-err-border);
   font-size: 12px;
 }
 

@@ -8,6 +8,9 @@
 }
 
 .filters {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -55,6 +58,9 @@
 }
 
 .scroll {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   flex: 1;
   overflow-y: auto;
   padding: 0 24px;
@@ -202,7 +208,7 @@
   display: inline-block;
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-accent);
   opacity: 0.8;
 }
@@ -301,6 +307,9 @@
 }
 
 .foot {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;

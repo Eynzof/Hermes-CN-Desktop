@@ -235,10 +235,9 @@
   --rust: #f38ba8;
 }
 
-/* ── Unified status palette
-   Theme accents may remain expressive, but operational states use one quiet
-   palette across the application. Legacy aliases stay mapped here so older
-   screens and new semantic components cannot drift apart. */
+/* ── PrimeAPP tri-state status palette
+   Black / white / grey remain the structural palette. Operational states use
+   only PrimeAPP green, yellow and red across every theme. */
 :root,
 [data-theme="light"],
 [data-theme="light-modern"] {
@@ -251,9 +250,9 @@
   --h-err: var(--h-palette-danger-light-fg);
   --h-err-soft: var(--h-palette-danger-light-surface);
   --h-err-border: var(--h-palette-danger-light-border);
-  --h-info: var(--h-palette-info-light-fg);
-  --h-info-soft: var(--h-palette-info-light-surface);
-  --h-info-border: var(--h-palette-info-light-border);
+  --h-info: var(--h-warn);
+  --h-info-soft: var(--h-warn-soft);
+  --h-info-border: var(--h-warn-border);
   --h-danger: var(--h-err);
   --moss: var(--h-ok);
   --amber: var(--h-warn);
@@ -274,9 +273,9 @@
   --h-err: var(--h-palette-danger-dark-fg);
   --h-err-soft: var(--h-palette-danger-dark-surface);
   --h-err-border: var(--h-palette-danger-dark-border);
-  --h-info: var(--h-palette-info-dark-fg);
-  --h-info-soft: var(--h-palette-info-dark-surface);
-  --h-info-border: var(--h-palette-info-dark-border);
+  --h-info: var(--h-warn);
+  --h-info-soft: var(--h-warn-soft);
+  --h-info-border: var(--h-warn-border);
   --h-danger: var(--h-err);
   --moss: var(--h-ok);
   --amber: var(--h-warn);

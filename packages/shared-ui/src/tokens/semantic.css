@@ -24,21 +24,27 @@
   --h-color-accent-soft: var(--h-accent-soft);
   --h-color-accent-border: var(--h-accent-border);
 
+  /* PrimeAPP status contract: green = normal, yellow = attention/info,
+     red = error/danger. Structural UI remains black / white / grey. */
+  --h-status-success: var(--h-ok);
+  --h-status-warning: var(--h-warn);
+  --h-status-danger: var(--h-err);
+
   --h-color-success-bg: var(--h-ok-soft);
-  --h-color-success-fg: var(--h-ok);
+  --h-color-success-fg: var(--h-status-success);
   --h-color-success-border: var(--h-ok-border);
 
   --h-color-warning-bg: var(--h-warn-soft);
-  --h-color-warning-fg: var(--h-warn);
+  --h-color-warning-fg: var(--h-status-warning);
   --h-color-warning-border: var(--h-warn-border);
 
-  --h-danger: var(--h-err);
+  --h-danger: var(--h-status-danger);
   --h-color-danger-bg: var(--h-err-soft);
-  --h-color-danger-fg: var(--h-err);
+  --h-color-danger-fg: var(--h-status-danger);
   --h-color-danger-border: var(--h-err-border);
 
   --h-color-info-bg: var(--h-info-soft);
-  --h-color-info-fg: var(--h-info);
+  --h-color-info-fg: var(--h-status-warning);
   --h-color-info-border: var(--h-info-border);
 
   /* Elevation is expressed by fill + border, never by shadow. */

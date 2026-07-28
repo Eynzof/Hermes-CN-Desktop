@@ -79,7 +79,7 @@
   width: 8px;
   height: 8px;
   flex: 0 0 auto;
-  border-radius: 0;
+  border-radius: 50%;
   background: var(--h-color-fg-subtle);
 }
 
