@@ -26,4 +26,18 @@ describe("configuration navigation", () => {
       ["配置迁移", "/config-migration"],
     ]);
   });
+
+  it("places external memory directly below built-in memory", () => {
+    const config = CAPABILITY_SECTIONS.find((section) => section.label === "§021 · 配置");
+    const memoryItems = config?.items
+      .filter((item) => item.path === "/memory" || item.path === "/external-memory")
+      .map((item) => [item.label, item.path]);
+
+    expect(memoryItems).toEqual([
+      ["内置记忆", "/memory"],
+      ["外置记忆", "/external-memory"],
+    ]);
+    expect(config?.items.findIndex((item) => item.path === "/external-memory"))
+      .toBe((config?.items.findIndex((item) => item.path === "/memory") ?? -2) + 1);
+  });
 });

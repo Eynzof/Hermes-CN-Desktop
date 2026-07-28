@@ -102,7 +102,7 @@ export function MemoryBackendsPanel() {
         <div>
           <small>当前启用后端</small>
           <strong>{activeMeta?.label ?? "未启用外置后端"}</strong>
-          <span>{activeMeta ? overallState.label : "本地记忆继续可用"}</span>
+          <span>{activeMeta ? overallState.label : "内置记忆继续可用"}</span>
         </div>
         <div className={s.summaryCheck}>
           <small>总体状态</small>

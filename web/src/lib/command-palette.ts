@@ -242,12 +242,22 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
   {
     id: "command-memory",
     group: "commands",
-    label: "记忆",
-    subtitle: "/memory · 管理记忆和用户画像",
-    keywords: ["memory", "profile", "remember", "记忆", "用户画像"],
+    label: "内置记忆",
+    subtitle: "/memory · 管理 MEMORY.md 和 USER.md",
+    keywords: ["memory", "profile", "remember", "内置记忆", "用户画像", "MEMORY.md", "USER.md"],
     icon: "memory",
     action: { type: "navigate", to: "/memory" },
     priority: 15,
+  },
+  {
+    id: "command-external-memory",
+    group: "commands",
+    label: "外置记忆",
+    subtitle: "/external-memory · 配置和监控 OpenViking / Hindsight",
+    keywords: ["external memory", "memory backend", "provider", "外置记忆", "记忆后端", "OpenViking", "Hindsight"],
+    icon: "memory",
+    action: { type: "navigate", to: "/external-memory" },
+    priority: 16,
   },
   {
     id: "command-soul",
@@ -257,7 +267,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["soul", "prompt", "persona", "system prompt", "灵魂", "人格"],
     icon: "soul",
     action: { type: "navigate", to: "/soul" },
-    priority: 16,
+    priority: 17,
   },
   {
     id: "command-console",
@@ -267,7 +277,7 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     keywords: ["console", "terminal", "command", "shell", "终端", "命令行"],
     icon: "console",
     action: { type: "navigate", to: "/console" },
-    priority: 17,
+    priority: 18,
   },
 ];
 

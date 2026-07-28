@@ -57,6 +57,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/config-migration") ||
       path.startsWith("/soul") ||
       path.startsWith("/memory") ||
+      path.startsWith("/external-memory") ||
       path.startsWith("/cron") ||
       path.startsWith("/console") ||
       path.startsWith("/coding-agents"),

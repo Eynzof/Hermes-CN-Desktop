@@ -50,4 +50,11 @@ describe("TOP_TABS", () => {
     expect(tabFor("/soul/edit")).toBe("skills");
     expect(CONFIG_ITEMS.some((item) => item.label === "人格" && item.path === "/soul")).toBe(true);
   });
+
+  it("keeps both memory pages under the 02 config tab", () => {
+    expect(tabFor("/memory")).toBe("skills");
+    expect(tabFor("/external-memory")).toBe("skills");
+    expect(CONFIG_ITEMS.some((item) => item.label === "内置记忆" && item.path === "/memory")).toBe(true);
+    expect(CONFIG_ITEMS.some((item) => item.label === "外置记忆" && item.path === "/external-memory")).toBe(true);
+  });
 });

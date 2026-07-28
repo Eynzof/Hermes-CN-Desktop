@@ -8,7 +8,6 @@ import {
   useUpdateMemoryEntry,
 } from "@/hooks/use-memory";
 import { Button } from "@hermes/shared-ui";
-import { MemoryBackendsPanel } from "@/components/memory/memory-backends-panel";
 import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
 import { SettingsHero } from "./settings-hero";
@@ -46,7 +45,7 @@ function CapacityBar({ label, used, limit }: { label: string; used: number; limi
 
 export function MemoryRoute() {
   const memoryQuery = useMemory();
-  const [tab, setTab] = useState<"entries" | "profile" | "providers">("entries");
+  const [tab, setTab] = useState<"entries" | "profile">("entries");
   const addEntry = useAddMemoryEntry();
   const updateEntry = useUpdateMemoryEntry();
   const removeEntry = useRemoveMemoryEntry();
@@ -111,13 +110,13 @@ export function MemoryRoute() {
   );
 
   return (
-    <SectionShell title="记忆" sub="MEMORY.md / USER.md" right={right}>
+    <SectionShell title="内置记忆" sub="MEMORY.md / USER.md" right={right}>
       <SettingsHero
         ok={!memoryQuery.isError}
         icon={<Brain size={24} />}
-        eyebrow="Hermes Agent 长期记忆"
-        title="长期记忆与用户画像"
-        description="这里管理当前档案的长期记忆。记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。"
+        eyebrow="Hermes Agent 内置记忆"
+        title="内置记忆与用户画像"
+        description="这里管理当前档案中的 MEMORY.md 与 USER.md。内置记忆用于保存跨会话事实，用户画像用于描述你的偏好、角色和沟通方式。"
         badge={(
           <span className={settings.statusBadge} data-on={!memoryQuery.isError}>
             {isLoading ? "读取中" : data ? `${data.memory.entries.length} 条记忆` : "记忆"}
@@ -153,9 +152,6 @@ export function MemoryRoute() {
             </button>
             <button type="button" data-active={tab === "profile" ? "true" : undefined} onClick={() => setTab("profile")}>
               用户画像 <span>{timeAgo(data.user.lastModified)}</span>
-            </button>
-            <button type="button" data-active={tab === "providers" ? "true" : undefined} onClick={() => setTab("providers")}>
-              记忆后端 <span>OpenViking / Hindsight</span>
             </button>
           </div>
 
@@ -255,10 +251,6 @@ export function MemoryRoute() {
                 </div>
               </div>
             </section>
-          )}
-
-          {tab === "providers" && (
-            <MemoryBackendsPanel />
           )}
         </div>
       )}
