@@ -200,7 +200,7 @@ function Hero({ platform, stateSub, onPrimary, primaryBusy }: {
   return (
     <div className={s.headBand}>
       <div className={s.heroCopy}>
-        <div className={s.heroKicker}><span>{isFeishu ? "№ 031A" : "№ 031B"}</span><span>IM ONBOARDING</span><em>消息接入 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
+        <div className={s.heroKicker}><span>IM ONBOARDING</span><em>消息接入 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
         <h1>将<em>{isFeishu ? "飞书消息平台" : "微信消息平台"}</em>接入<br />中文社区桌面版</h1>
         <p className={s.sub}>{isFeishu
           ? "跟着向导扫码，保存后再按提示到飞书后台勾选权限并发布即可。"
