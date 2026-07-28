@@ -322,7 +322,6 @@ export function WorkbenchSidebar() {
           </span>
           <span className={s.entryLabel}>新建对话</span>
         </span>
-        <span className={s.newTaskKbd}>⌘ N</span>
       </button>
 
       <div className={s.quickNav}>
