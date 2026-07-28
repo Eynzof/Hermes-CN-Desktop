@@ -275,6 +275,50 @@
   font-variant-east-asian: normal;
 }
 
+.skillInvocation {
+  width: min(640px, 72vw);
+  max-width: 100%;
+}
+
+.skillInvocationPreview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.skillInvocationBody {
+  min-width: 0;
+}
+
+.skillInvocationToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.skillInvocationToggle:hover {
+  color: var(--h-text);
+}
+
+.skillInvocationToggle:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--h-accent);
+  outline-offset: 2px;
+}
+
 /* global.css disables selection across the app to keep desktop chrome from
    feeling like a web page. Conversation content is the important exception:
    users need to drag-select assistant/user text, code, reasoning, and visible

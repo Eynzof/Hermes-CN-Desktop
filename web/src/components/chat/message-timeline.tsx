@@ -10,6 +10,7 @@ import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
 import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
+import { isSkillInvocationText, SkillInvocationMessage } from "./skill-invocation-message";
 import { CopyButton } from "@/components/ui/copy-button";
 import s from "./message-timeline.module.css";
 import { summarizeToolActivity } from "./tool-activity";
@@ -781,6 +782,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   const speechStatus = speech?.state.messageId === message.id ? speech.state.status : "idle";
   const speechBusy = speechStatus === "preparing" || speechStatus === "speaking";
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
+  const hasSkillInvocation = isUser && isSkillInvocationText(message.text);
   const messageStats = message.stats ?? sessionUsageFallbackStats(message, sessionUsage);
 
   if (isToolOnly) {
@@ -860,7 +862,11 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
             />
           ) : (
             <>
-              {message.text ? <MessageText text={message.text} streaming={streaming} /> : null}
+              {message.text ? (
+                hasSkillInvocation
+                  ? <SkillInvocationMessage text={message.text} />
+                  : <MessageText text={message.text} streaming={streaming} />
+              ) : null}
               {message.images?.length ? (
                 <div className={s.messageImages}>
                   {message.images.map((image, index) => (
