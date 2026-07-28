@@ -48,6 +48,8 @@ export interface UiEventInput {
 
 type Listener = () => void;
 
+const UI_STORE_BACKUP_KEY = "hermes_ui_backup";
+
 const listeners = new Set<Listener>();
 let kvCache: Record<string, unknown> = {};
 let initialized = false;
@@ -77,6 +79,21 @@ export async function initUiStore(): Promise<void> {
     try {
       const snapshot = await bridge()?.uiStoreSnapshot?.();
       kvCache = snapshot?.kv ?? {};
+
+      // Web mode: native bridge unavailable, load from localStorage backup
+      if (!bridge() && Object.keys(kvCache).length === 0) {
+        try {
+          const backup = localStorage.getItem(UI_STORE_BACKUP_KEY);
+          if (backup) {
+            const parsed = JSON.parse(backup);
+            if (typeof parsed === "object" && parsed !== null) {
+              kvCache = parsed as Record<string, unknown>;
+            }
+          }
+        } catch {
+          // Corrupted or missing backup — ignore
+        }
+      }
     } catch {
       kvCache = {};
     } finally {
@@ -103,12 +120,27 @@ export function writeUiValue(key: string, value: unknown): void {
   kvCache[key] = clone(value);
   notify();
   void bridge()?.uiStoreSetKv?.({ key, value }).catch(() => {});
+  // localStorage fallback for web mode (no native bridge)
+  if (!bridge()) {
+    try {
+      localStorage.setItem(UI_STORE_BACKUP_KEY, JSON.stringify(kvCache));
+    } catch {
+      // localStorage full or unavailable — silently skip
+    }
+  }
 }
 
 export function removeUiValue(key: string): void {
   delete kvCache[key];
   notify();
   void bridge()?.uiStoreRemoveKv?.({ key }).catch(() => {});
+  if (!bridge()) {
+    try {
+      localStorage.setItem(UI_STORE_BACKUP_KEY, JSON.stringify(kvCache));
+    } catch {
+      // localStorage full or unavailable — silently skip
+    }
+  }
 }
 
 export function subscribeUiStore(listener: Listener): () => void {
