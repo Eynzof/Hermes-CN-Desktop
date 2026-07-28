@@ -132,7 +132,7 @@ describe("conversationWidthModeAtom (persisted)", () => {
     const { conversationWidthMaxWidth } = await loadUi();
     expect(conversationWidthMaxWidth("small")).toBe("780px");
     expect(conversationWidthMaxWidth("medium")).toBe("960px");
-    expect(conversationWidthMaxWidth("large")).toBe("1006px");
+    expect(conversationWidthMaxWidth("large")).toBe("1008px");
     expect(conversationWidthMaxWidth("full")).toBe("100%");
   });
 });

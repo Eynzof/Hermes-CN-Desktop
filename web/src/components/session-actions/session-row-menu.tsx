@@ -56,7 +56,7 @@ export function SessionRowMenu({
         </Popover.Close>
         <Popover.Close asChild>
           <button type="button" onClick={onExport} role="menuitem" disabled={disabled}>
-            <Download size={13} /> 导出 JSON
+            <Download size={12} /> 导出 JSON
           </button>
         </Popover.Close>
         <Popover.Close asChild>

@@ -46,7 +46,7 @@ export function OfflineShell() {
   return (
     <div className={s.shell}>
       <aside>
-        <div className={s.brand}><HermesLogoMark className={s.brandMark} size={30} /><div><strong>Hermes Agent</strong><small>离线控制台</small></div></div>
+        <div className={s.brand}><HermesLogoMark className={s.brandMark} size={32} /><div><strong>Hermes Agent</strong><small>离线控制台</small></div></div>
         <nav>
           <Link data-active={pathname === "/" ? "true" : undefined} to="/"><CircleOff size={16} />离线状态</Link>
           <Link data-active={pathname === "/connection" ? "true" : undefined} to="/connection"><Globe2 size={16} />连接</Link>
