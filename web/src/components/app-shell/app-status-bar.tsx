@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useAtomValue } from "jotai";
 import { RotateCcw } from "lucide-react";
+import { LoadingIndicator, StatusDot } from "@hermes/shared-ui";
 import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
 import { useSessions } from "@/hooks/use-sessions";
@@ -95,7 +96,7 @@ export function AppStatusBar() {
           title={`打开 ${dashboardUrl}`}
           aria-label={`在浏览器打开 ${dashboardUrl}`}
         >
-          <span className={s.dot} data-state={gatewayOnline ? "running" : "offline"} />
+          <StatusDot tone={gatewayOnline ? "success" : "danger"} />
           <span className={s.lbl}>{modeLabel}</span>
           <span className={s.val}>{port}</span>
         </button>
@@ -109,7 +110,7 @@ export function AppStatusBar() {
           aria-label={runtime.isAttached() ? "外部 Hermes 的 Gateway 由目标端管理" : restartTitle}
           aria-busy={gatewayRestart.busy}
         >
-          <RotateCcw size={12} aria-hidden="true" />
+          {gatewayRestart.busy ? <LoadingIndicator size="xs" /> : <RotateCcw size={12} aria-hidden="true" />}
           <span>{gatewayRestartButtonLabel(gatewayRestart.phase)}</span>
         </button>
         <span className={s.srOnly} aria-live="polite">

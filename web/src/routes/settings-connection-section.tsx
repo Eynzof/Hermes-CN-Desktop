@@ -9,7 +9,6 @@ import {
   ExternalLink,
   Globe2,
   HardDrive,
-  Loader2,
   XCircle,
 } from "lucide-react";
 import type {
@@ -19,7 +18,7 @@ import type {
   ConnectionMode,
   TestConnectionResult,
 } from "@hermes/protocol";
-import { Alert, Button, Input } from "@hermes/shared-ui";
+import { Alert, Button, Input, LoadingIndicator } from "@hermes/shared-ui";
 import { notifyConnectionAuthRestored } from "@/lib/connection-auth-events";
 import { SettingsHero } from "./settings-hero";
 import { ManagedRuntimePanel } from "./managed-runtime-panel";
@@ -423,10 +422,9 @@ export function ConnectionSection({
             type="button"
             variant="outline"
             onClick={() => void handleOpenBrowser()}
-            disabled={openingBrowser}
-            aria-busy={openingBrowser}
+            loading={openingBrowser}
+            leadingIcon={<ExternalLink size={12} />}
           >
-            {openingBrowser ? <Loader2 size={12} className={s.connSpin} /> : <ExternalLink size={12} />}
             在浏览器中打开社区桌面版
           </Button>
         </div>
@@ -538,7 +536,7 @@ export function ConnectionSection({
                   data-tone={probeStatus === "reachable" ? "ok" : probeStatus === "probing" ? undefined : "error"}
                   aria-live="polite"
                 >
-                  {probeStatus === "probing" && <Loader2 size={12} className={s.connSpin} />}
+                  {probeStatus === "probing" && <LoadingIndicator size="xs" />}
                   {probeStatus === "reachable" && <CheckCircle2 size={12} />}
                   {(probeStatus === "unreachable" || probeStatus === "authRequired") && <XCircle size={12} />}
                   {probeStatus === "probing" && "正在检测连接方式…"}
@@ -610,10 +608,9 @@ export function ConnectionSection({
                           variant="solid"
                           tone="accent"
                           onClick={() => void handleOauthLogin()}
-                          disabled={disabled || loggingIn}
-                          aria-busy={loggingIn}
+                          disabled={disabled}
+                          loading={loggingIn}
                         >
-                          {loggingIn && <Loader2 size={12} className={s.connSpin} />}
                           使用 {p.displayName} 登录
                         </Button>
                       ))}
@@ -645,10 +642,9 @@ export function ConnectionSection({
                             variant="solid"
                             tone="accent"
                             onClick={() => void handlePasswordLogin(p.name)}
-                            disabled={disabled || loggingIn || !pwUser || !pwPass}
-                            aria-busy={loggingIn}
+                            disabled={disabled || !pwUser || !pwPass}
+                            loading={loggingIn}
                           >
-                            {loggingIn && <Loader2 size={12} className={s.connSpin} />}
                             登录
                           </Button>
                         </div>
@@ -671,10 +667,10 @@ export function ConnectionSection({
             className={s.connFooterSpacer}
             variant="outline"
             onClick={() => void handleTest()}
-            disabled={disabled || testing || (mode === "local" ? !trimmedLocalUrl : !trimmedRemoteUrl)}
-            aria-busy={testing}
+            disabled={disabled || (mode === "local" ? !trimmedLocalUrl : !trimmedRemoteUrl)}
+            loading={testing}
+            leadingIcon={<Cable size={12} />}
           >
-            {testing ? <Loader2 size={12} className={s.connSpin} /> : <Cable size={12} />}
             测试连接
           </Button>
         )}
@@ -705,9 +701,8 @@ export function ConnectionSection({
           tone="accent"
           onClick={() => void submit(true)}
           disabled={disabled || !canSubmit}
-          aria-busy={applying}
+          loading={applying}
         >
-          {applying && <Loader2 size={12} className={s.connSpin} />}
           {externalOnly
             ? "连接并进入桌面端"
             : mode === "remote"

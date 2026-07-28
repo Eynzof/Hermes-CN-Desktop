@@ -1,7 +1,7 @@
 .backendPanel {
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-app);
+  background: var(--h-color-bg-secondary-surface);
   overflow: hidden;
 }
 
@@ -83,7 +83,7 @@
 .backendLink {
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-pane);
+  background: var(--h-color-bg-secondary-surface);
   padding: 12px;
   text-align: left;
   cursor: pointer;
@@ -96,13 +96,13 @@
 
 .backendLink:hover {
   border-color: var(--h-line-strong, var(--h-line));
-  background: var(--h-bg-soft);
+  background: var(--h-color-bg-secondary-surface);
 }
 
 .backendLink[data-active="true"] {
   border-color: var(--h-accent-border);
   box-shadow: none;
-  background: color-mix(in srgb, var(--h-accent) 7%, var(--h-bg-pane));
+  background: var(--h-color-bg-secondary-surface);
 }
 
 .backendCardHead,

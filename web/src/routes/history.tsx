@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { LoadingState, Popover, StatusDot } from "@hermes/shared-ui";
 import {
   Archive,
   ArchiveRestore,
@@ -762,7 +762,7 @@ export function HistoryRoute() {
         {isError ? (
           <div className={s.errorState}>无法加载会话列表，请检查 Dashboard 服务。</div>
         ) : isLoading ? (
-          <div className={s.emptyState}>加载会话中…</div>
+          <LoadingState variant="page" label="正在加载会话…" />
         ) : dayGroups.length === 0 ? (
           <div className={s.emptyState}>
             {scopedSessions.length === 0
@@ -844,9 +844,9 @@ export function HistoryRoute() {
                       <span className={s.cellId}>{shortId(session.id)}</span>
                       <span className={s.cellTitle}>
                         {status.kind === "running" ? (
-                          <span className={s.dotLive} aria-hidden />
+                          <StatusDot tone="success" aria-hidden />
                         ) : status.kind === "failed" ? (
-                          <span className={s.dotFail} aria-hidden />
+                          <StatusDot tone="danger" aria-hidden />
                         ) : null}
                         {pinned ? <Pin size={12} className={s.titlePin} aria-hidden /> : null}
                         <span className={s.titleText}>{sessionDisplayTitle(session)}</span>

@@ -1,0 +1,91 @@
+.indicator {
+  display: block;
+  flex: 0 0 auto;
+  color: currentColor;
+  animation: hermes-loading-spin 800ms linear infinite;
+}
+
+.indicator[data-size="xs"] {
+  width: 12px;
+  height: 12px;
+}
+
+.indicator[data-size="sm"] {
+  width: 16px;
+  height: 16px;
+}
+
+.indicator[data-size="md"] {
+  width: 24px;
+  height: 24px;
+}
+
+.indicator[data-size="lg"] {
+  width: 32px;
+  height: 32px;
+}
+
+.state {
+  box-sizing: border-box;
+  min-width: 0;
+  color: var(--h-text-3);
+  font-family: var(--h-font-cn);
+}
+
+.state[data-variant="inline"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.state[data-variant="block"],
+.state[data-variant="page"] {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.state[data-variant="block"] {
+  min-height: 120px;
+  padding: 24px;
+}
+
+.state[data-variant="page"] {
+  min-height: min(480px, calc(100vh - 160px));
+  padding: 32px 24px;
+}
+
+.copy {
+  display: grid;
+  gap: 4px;
+  max-width: 440px;
+}
+
+.label {
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.description {
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 20px;
+}
+
+@keyframes hermes-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator {
+    animation-duration: 1600ms;
+  }
+}

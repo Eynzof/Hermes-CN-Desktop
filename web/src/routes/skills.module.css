@@ -11,87 +11,22 @@
   overflow: hidden;
 }
 
-/* 顶部标题栏（保留 window-drag 区域 + 右侧操作按钮） */
-.paneTop {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-}
-.paneTopTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--h-text);
-}
-.paneTopMeta {
-  font-size: 11.5px;
-  color: var(--h-text-3);
-}
-.paneTopActions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
+.scopeRail {
+  width: calc(100% - var(--h-page-content-gutter-x) - var(--h-page-content-gutter-x));
+  max-width: var(--h-page-content-max-width);
+  margin: 16px auto 0;
 }
 
-/* 顶部 tab：内置 / 市场 / 统计 / 我的 */
-.toptabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-}
-.toptab {
-  position: relative;
-  height: var(--h-tab-height);
-  padding: 0 4px;
-  margin-right: 20px;
-  font-size: 13px;
-  color: var(--h-text-3);
-  cursor: pointer;
-  border: none;
-  border-bottom: 1px solid transparent;
+.tabHint {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: transparent;
-  font-family: inherit;
-}
-.toptab:hover {
-  color: var(--h-text-2);
-}
-.toptab[data-active="true"] {
-  color: var(--h-text);
-  border-bottom-color: var(--h-accent);
-  font-weight: 600;
-}
-.toptabCount {
-  font-family: var(--h-font-mono);
-  font-size: 11px;
-  color: var(--h-text-3);
-  background: var(--h-bg-chip);
-  padding: 4px 8px;
-  border-radius: 0;
-}
-.toptab[data-active="true"] .toptabCount {
-  color: var(--h-accent);
-  background: var(--h-accent-soft);
-}
-.toptabSpacer {
-  flex: 1;
-}
-.toptabHint {
   font-size: 11.5px;
   color: var(--h-text-3);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
+  white-space: nowrap;
 }
-.toptabHint code {
+
+.tabHint code {
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
   padding: 4px 4px;
@@ -113,7 +48,7 @@
 /* === 左侧列表 === */
 .listSide {
   border-right: 1px solid var(--h-line);
-  background: var(--h-bg-app);
+  background: var(--h-color-bg-secondary-surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -233,12 +168,21 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 20px;
   margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 20px;
 }
 .skillRowName {
-  font-size: 13px;
+  font-size: inherit;
   font-weight: 600;
+  line-height: inherit;
   color: var(--h-text);
+}
+.skillToggleSlot {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
 }
 .skillRowNameEn {
   font-family: var(--h-font-mono);
@@ -786,6 +730,7 @@
 .toggle {
   width: var(--h-switch-width);
   height: var(--h-switch-height);
+  box-sizing: border-box;
   border-radius: 0;
   background: var(--h-bg-chip);
   border: 1px solid var(--h-line);
@@ -798,13 +743,14 @@
 .toggle::after {
   content: "";
   position: absolute;
-  top: 4px;
+  top: 50%;
   left: 4px;
   width: var(--h-switch-thumb-size);
   height: var(--h-switch-thumb-size);
   border-radius: 0;
   background: #fff;
   box-shadow: none;
+  transform: translateY(-50%);
   transition: left 100ms ease;
 }
 .toggle[data-on="true"] {

@@ -417,15 +417,3 @@
   gap: 12px;
   padding-left: 20px;
 }
-
-/* ── Spinner ─────────────────────────────────────────────────────────────── */
-
-.spin {
-  animation: subagentSpin 0.9s linear infinite;
-}
-
-@keyframes subagentSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}

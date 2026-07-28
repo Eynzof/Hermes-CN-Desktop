@@ -232,27 +232,6 @@
   font-size: 11px;
 }
 
-.gatewayDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--h-text-3);
-}
-
-.gatewayDot[data-state="running"] {
-  background: var(--h-ok);
-}
-
-.gatewayDot[data-state="ready"] {
-  background: var(--h-ok);
-}
-
-.gatewayDot[data-state="stopped"],
-.gatewayDot[data-state="offline"] {
-  background: var(--h-err);
-}
-
 .statusLabel {
   color: var(--h-text-2);
 }

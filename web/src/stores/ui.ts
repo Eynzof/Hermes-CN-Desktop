@@ -16,6 +16,19 @@ export const sessionTipRedirectAtom = atom<Record<string, string>>({});
 export const sidebarSearchAtom = atom("");
 export const commandPaletteOpenAtom = atom(false);
 
+const APP_SIDEBAR_VISIBLE_KEY = "hermes.app-sidebar-visible";
+const appSidebarVisibleBaseAtom = atom<boolean>(
+  readUiValue<unknown>(APP_SIDEBAR_VISIBLE_KEY, true) !== false,
+);
+export const appSidebarVisibleAtom = atom(
+  (get) => get(appSidebarVisibleBaseAtom),
+  (_get, set, next: boolean) => {
+    const visible = next === true;
+    set(appSidebarVisibleBaseAtom, visible);
+    writeUiValue(APP_SIDEBAR_VISIBLE_KEY, visible);
+  },
+);
+
 export const CONVERSATION_WIDTH_OPTIONS = [
   // 档位整体上调一档（用户反馈原「小/中」过窄）：大 = 960 + 头像列
   // 46px（36px 头像 + 10px gap），正文有效宽度与原「大」一致。

@@ -7,10 +7,9 @@ import {
   ExternalLink,
   Globe2,
   HeartHandshake,
-  Loader2,
   Sparkles,
 } from "lucide-react";
-import { Alert, Button, useTheme } from "@hermes/shared-ui";
+import { Alert, Button, LoadingIndicator, useTheme } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import { openExternalUrl } from "@/lib/external-links";
@@ -131,7 +130,7 @@ export function GuideRoute() {
                 <CheckCircle2 size={16} /> 下一步直接进入模型页，填写 API Key 后即可使用
               </span>
               <span className={s.choiceAction}>
-                {preparing ? <Loader2 size={16} className={s.spin} /> : <ArrowRight size={16} />}
+                {preparing ? <LoadingIndicator size="sm" /> : <ArrowRight size={16} />}
                 {preparing ? "正在为你准备 Hermes…" : "选择开箱即用"}
               </span>
             </button>

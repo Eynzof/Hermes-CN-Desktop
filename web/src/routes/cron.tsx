@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { CronJob, CronRun } from "@hermes/protocol";
+import { LoadingState, StatusDot } from "@hermes/shared-ui";
 import { useActiveProfileName, useProfiles } from "@/hooks/use-profiles";
 import {
   cronJobProfile,
@@ -406,7 +407,7 @@ export function CronRoute() {
             </select>
           </div>
 
-          {jobsQuery.isLoading ? <div className={s.empty}>正在加载定时任务…</div> : null}
+          {jobsQuery.isLoading ? <LoadingState variant="block" label="正在加载定时任务…" /> : null}
           {jobsQuery.isError ? (
             <div className={s.errorState}>加载定时任务失败：{actionError(jobsQuery.error)}</div>
           ) : null}
@@ -427,7 +428,7 @@ export function CronRoute() {
                 >
                   <span className={s.jobRowTop}>
                     <span className={s.jobTitle}>{titleOf(job)}</span>
-                    <span className={s.dot} data-tone={statusTone(job)} />
+                    <StatusDot tone={statusTone(job)} />
                   </span>
                   <span className={s.jobMeta}>{scheduleDisplay(job)}</span>
                   <span className={s.jobMeta}>{cronJobProfile(job)} · 上次 {relativeTime(job.last_run_at ?? job.last_run)}</span>
@@ -486,7 +487,7 @@ export function CronRoute() {
           </div>
 
           {!selectedJob ? <div className={s.empty}>尚未选择任务。</div> : null}
-          {selectedJob && runsQuery.isLoading ? <div className={s.empty}>正在加载运行历史…</div> : null}
+          {selectedJob && runsQuery.isLoading ? <LoadingState variant="block" label="正在加载运行历史…" /> : null}
           {selectedJob && runsQuery.isError ? (
             <div className={s.errorState}>{buildRunErrorMessage(runsQuery.error)}</div>
           ) : null}
@@ -503,7 +504,7 @@ export function CronRoute() {
                 data-selected={selectedRun?.filename === run.filename ? "true" : undefined}
                 onClick={() => setSelectedRunFilename(run.filename)}
               >
-                <span className={s.runDot} data-tone={runTone(run.status)} />
+                <StatusDot tone={runTone(run.status)} />
                 <span className={s.runMain}>
                   <span className={s.runTitle}>{runStatusLabel(run.status)} · {run.summary}</span>
                   <span className={s.runMeta}>{formatFullTime(run.started_at)} · {Math.ceil(run.size_bytes / 1024)} KB</span>
@@ -519,7 +520,7 @@ export function CronRoute() {
                 <span><FileText size={12} /> 输出详情</span>
                 <span>{runStatusLabel(selectedRun.status)}</span>
               </div>
-              {runDetailQuery.isLoading ? <div className={s.empty}>正在读取输出…</div> : null}
+              {runDetailQuery.isLoading ? <LoadingState variant="block" label="正在读取输出…" /> : null}
               {runDetailQuery.isError ? <div className={s.errorState}>读取输出失败：{actionError(runDetailQuery.error)}</div> : null}
               {runDetailQuery.data ? (
                 <>

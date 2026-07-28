@@ -5,7 +5,10 @@
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  background: var(--h-bg-app);
+  background-color: var(--h-color-bg-page-canvas);
+  background-image: var(--h-texture-pinhole-grid);
+  background-repeat: repeat;
+  background-position: 0 0;
 }
 
 .pageContent {

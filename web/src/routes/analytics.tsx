@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { BarChart3, RefreshCw } from "lucide-react";
+import { LoadingState } from "@hermes/shared-ui";
 import { SectionShell } from "./section-shell";
 import { TopBarActionButton } from "@/components/top-bar/top-bar";
 import { useAnalytics } from "@/hooks/use-analytics";
@@ -676,24 +677,7 @@ function PeriodSwitch({ days, onChange }: { days: number; onChange: (days: numbe
 }
 
 function AnalyticsLoading() {
-  return (
-    <div className={s.loadingPage} aria-live="polite" aria-busy="true">
-      <div className={s.loadingCard}>
-        <div className={s.loadingOrb}>
-          <BarChart3 size={28} />
-        </div>
-        <div>
-          <strong>正在生成数据分析</strong>
-          <p>正在读取会话、聚合 Token、缓存与性能采样，请稍候。</p>
-        </div>
-        <div className={s.loadingSkeletonGrid} aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-    </div>
-  );
+  return <LoadingState variant="page" label="正在加载数据分析…" />;
 }
 
 export function AnalyticsRoute() {
@@ -742,9 +726,12 @@ export function AnalyticsRoute() {
       right={(
         <>
           <PeriodSwitch days={days} onChange={setDays} />
-          <TopBarActionButton onClick={refreshAll} disabled={query.isFetching || statsLoading}>
-            <RefreshCw size={12} />
-            {query.isFetching || statsLoading ? "刷新中" : "刷新"}
+          <TopBarActionButton
+            onClick={refreshAll}
+            loading={query.isFetching || statsLoading}
+            leadingIcon={<RefreshCw size={12} />}
+          >
+            刷新
           </TopBarActionButton>
         </>
       )}

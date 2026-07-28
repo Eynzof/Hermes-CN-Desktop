@@ -1,5 +1,5 @@
 import { Activity, CheckCircle2, Cpu, Database, XCircle } from "lucide-react";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import type { MemoryProviderRuntimeStatusResponse } from "@hermes/protocol";
 import type { VisibleMemoryProvider } from "@/hooks/use-memory";
 import {
@@ -194,7 +194,7 @@ function HindsightStatus({ status }: { status: MemoryProviderRuntimeStatusRespon
 
 export function MemoryProviderStatus({ provider, status, loading, refreshing, onRefresh }: Props) {
   const state = memoryBackendState(status);
-  if (loading && !status) return <div className={s.loadingBlock}>正在检测运行状态…</div>;
+  if (loading && !status) return <LoadingState variant="block" label="正在检测运行状态…" />;
 
   return (
     <section className={s.statusSection}>
@@ -206,8 +206,8 @@ export function MemoryProviderStatus({ provider, status, loading, refreshing, on
         </div>
         <div>
           <MemoryConsoleDialog provider={provider} consoleUrl={status?.console_url} />
-          <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={onRefresh}>
-            {refreshing ? "刷新中…" : "刷新状态"}
+          <Button type="button" variant="outline" size="sm" loading={refreshing} onClick={onRefresh}>
+            刷新状态
           </Button>
         </div>
       </div>

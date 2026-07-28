@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "jotai";
-import { AlertCircle, Bot, CheckCircle2, ChevronRight, Copy, Loader2, SquareTerminal, X } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, ChevronRight, Copy, SquareTerminal, X } from "lucide-react";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { CopyButton } from "@/components/ui/copy-button";
 import { formatTokens } from "@/lib/format";
 import {
@@ -68,7 +69,7 @@ function fmtAge(updatedAt: number, now: number): string {
 
 function StatusIcon({ status }: { status: SubagentStatus }) {
   if (status === "running" || status === "queued") {
-    return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={16} aria-label="运行中" />;
+    return <span className={s.statusIcon} data-tone="run" aria-label="运行中"><LoadingIndicator size="sm" /></span>;
   }
   if (status === "failed" || status === "interrupted") {
     return <AlertCircle className={s.statusIcon} data-tone="err" size={16} aria-label="失败" />;
@@ -90,7 +91,7 @@ function StreamLine({ entry, active }: { entry: SubagentStreamEntry; active: boo
       <span className={s.streamGlyphWrap}>{streamGlyph(entry)}</span>
       <span className={s.streamText} data-kind={entry.kind}>
         {entry.text}
-        {active ? <Loader2 className={`${s.inlineSpin} ${s.spin}`} size={12} aria-hidden /> : null}
+        {active ? <LoadingIndicator className={s.inlineSpin} size="xs" /> : null}
       </span>
     </div>
   );
@@ -317,7 +318,7 @@ export function CliDelegationDetails({
 
 function CliStatusIcon({ status }: { status: CliDelegationEntry["status"] }) {
   if (status === "running") {
-    return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={16} aria-label="执行中" />;
+    return <span className={s.statusIcon} data-tone="run" aria-label="执行中"><LoadingIndicator size="sm" /></span>;
   }
   if (status === "failed" || status === "killed" || status === "lost") {
     return <AlertCircle className={s.statusIcon} data-tone="err" size={16} aria-label="失败" />;

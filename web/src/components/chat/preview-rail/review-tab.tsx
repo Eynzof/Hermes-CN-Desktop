@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import type { ReviewFile } from "@/lib/runtime";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import { buildReviewFlatList, buildReviewTree, type ReviewTreeNode } from "@/lib/review-tree";
 import { useReview, type CommitAction } from "@/hooks/use-review";
 import s from "./preview-rail.module.css";
@@ -137,7 +138,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
           title="刷新改动列表"
           aria-label="刷新改动列表"
         >
-          <RefreshCw size={12} aria-hidden className={loading ? s.spin : undefined} />
+          {loading ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} aria-hidden />}
         </button>
       </div>
 
@@ -162,7 +163,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
             onRevert={(path) => setRevertTarget({ path })}
           />
         ) : loading ? (
-          <div className={s.reviewHint}>读取改动中…</div>
+          <LoadingState variant="block" label="正在读取改动…" />
         ) : (
           <div className={s.reviewHint}>没有未提交的改动。</div>
         )}
@@ -200,7 +201,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
           </div>
           <div className={s.reviewDiffBody}>
             {diffLoading ? (
-              <div className={s.reviewHint}>读取差异中…</div>
+              <LoadingState variant="block" label="正在读取差异…" />
             ) : diff ? (
               <DiffView diff={diff} />
             ) : (

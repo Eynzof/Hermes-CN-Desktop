@@ -7,7 +7,7 @@
 .heroKicker { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--h-text-3); font-family: var(--h-font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .heroKicker span { color: var(--h-accent); border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent); padding: 4px 8px; border-radius: 0; background: color-mix(in srgb, var(--h-accent) 8%, transparent); }
 .heroKicker em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--h-text-2); }
-.headBand h1 { margin: 16px 0 12px; color: var(--h-text); font-family: var(--h-font-ui); font-style: normal; font-weight: 400; font-size: clamp(34px, 5vw, 58px); line-height: 1.05; letter-spacing: -.015em; }
+.headBand h1 { margin: 12px 0 8px; color: var(--h-text); font-family: var(--h-font-ui); font-style: normal; font-weight: 400; font-size: 28px; line-height: 32px; letter-spacing: -.01em; }
 .headBand h1 em { color: var(--h-accent); font-style: normal; font-weight: 650; }
 .sub { max-width: 720px; margin: 0; color: var(--h-text-2); line-height: 1.8; font-size: 13px; }
 .heroActions { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 12px; flex-shrink: 0; }
@@ -90,7 +90,7 @@
 .advancedHint b { color: var(--h-text); font-size: 12px; }
 .advancedHint span { line-height: 1.65; font-size: 12px; }
 .qrSection { grid-template-columns: 256px minmax(0, 1fr); align-items: center; gap: 20px; }
-.qrBox { width: 240px; height: 240px; display: grid; place-items: center; border-radius: 0; border: 1px solid var(--h-line); background: var(--bone-100); overflow: hidden; }
+.qrBox { width: 240px; height: 240px; display: grid; place-items: center; border-radius: 0; border: 1px solid var(--h-line); background: var(--h-color-bg-secondary-surface); overflow: hidden; }
 .qrBox img { width: 232px; height: 232px; display: block; }
 .qrPlaceholder { display: grid; place-items: center; gap: 16px; color: var(--ink-700); font-family: var(--h-font-mono); letter-spacing: .2em; }
 .qrPlaceholder span { opacity: .55; }

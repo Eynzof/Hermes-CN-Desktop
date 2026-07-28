@@ -155,26 +155,6 @@
   font-weight: 600;
 }
 
-.statusDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--h-warn);
-  box-shadow: none;
-}
-
-.terminalCard[data-status="ready"] .statusDot {
-  background: var(--h-ok);
-  box-shadow: none;
-}
-
-.terminalCard[data-status="error"] .statusDot,
-.terminalCard[data-status="closed"] .statusDot,
-.terminalCard[data-status="unsupported"] .statusDot {
-  background: var(--h-err);
-  box-shadow: none;
-}
-
 .terminalSurface {
   flex: 1 1 auto;
   min-width: 0;

@@ -118,8 +118,12 @@
 
 .navLink {
   flex: 0 0 auto;
-  padding: 8px 12px;
+  box-sizing: border-box;
+  height: var(--h-button-height-sm);
+  min-height: var(--h-button-height-sm);
+  padding: 0 12px;
   font-size: 12px;
+  line-height: 1;
   color: var(--h-text-2);
   border-radius: 0;
   letter-spacing: 0.01em;

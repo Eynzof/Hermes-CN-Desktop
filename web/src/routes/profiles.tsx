@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import { Plus, Wand2 } from "lucide-react";
 import type { ProfileSummary } from "@hermes/protocol";
 import {
@@ -153,7 +153,7 @@ export function ProfilesRoute() {
           </p>
         </div>
       ) : isLoading ? (
-        <div className={s.emptyState}>加载中…</div>
+        <LoadingState variant="page" label="正在加载档案…" />
       ) : profiles.length === 0 ? (
         <div className={s.emptyState}>
           一个档案都没有，连 default 都没有？这通常是 hermes 刚装还没初始化。运行{" "}

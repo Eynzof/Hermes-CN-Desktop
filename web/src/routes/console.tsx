@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ExternalLink, Play, Power, RotateCcw, TerminalSquare } from "lucide-react";
+import { StatusDot } from "@hermes/shared-ui";
 import type { TerminalStartResult } from "@/lib/runtime";
 import {
   EmbeddedTerminal,
@@ -158,7 +159,9 @@ export function ConsoleRoute() {
                 <span>终端</span>
               </div>
               <div className={s.terminalMeta}>
-                <span className={s.statusDot} />
+                <StatusDot
+                  tone={status === "ready" ? "success" : status === "starting" ? "warning" : "danger"}
+                />
                 {statusText}
               </div>
             </div>

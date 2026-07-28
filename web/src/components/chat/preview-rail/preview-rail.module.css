@@ -398,16 +398,6 @@
   padding-left: 4px;
 }
 
-.spin {
-  animation: reviewSpin 1s linear infinite;
-}
-
-@keyframes reviewSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .reviewError {
   flex: 0 0 auto;
   display: flex;

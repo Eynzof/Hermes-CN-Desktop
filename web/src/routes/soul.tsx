@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Pencil, RefreshCw, Sparkles, Store, UserRound } from "lucide-react";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import { PersonaMarketPanel } from "@/components/persona/persona-market-panel";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { SOUL_CHAR_LIMIT, useSaveSoul, useSoul } from "@/hooks/use-soul";
@@ -71,9 +71,10 @@ export function HermesPersonaEditor({
           tone="accent"
           size="sm"
           onClick={onSave}
-          disabled={!dirty || saving}
+          loading={saving}
+          disabled={!dirty}
         >
-          {saving ? "保存中…" : "保存人格"}
+          保存人格
         </Button>
       </div>
     </section>
@@ -133,11 +134,11 @@ export function SoulRoute() {
       <Button
         type="button"
         variant="outline"
+        loading={soulQuery.isFetching}
+        leadingIcon={<RefreshCw size={16} />}
         onClick={() => void soulQuery.refetch()}
-        disabled={soulQuery.isFetching}
       >
-        <RefreshCw size={16} />
-        {soulQuery.isFetching ? "刷新中" : "刷新"}
+        刷新
       </Button>
     </div>
   );
@@ -162,7 +163,7 @@ export function SoulRoute() {
         )}
       />
       {soulQuery.isLoading ? (
-        <div className={s.emptyState}>加载人格中…</div>
+        <LoadingState variant="page" label="正在加载人格…" />
       ) : (
         <div className={s.soulPage}>
           {errorMessage && <div className={s.errorState}>{errorMessage}</div>}

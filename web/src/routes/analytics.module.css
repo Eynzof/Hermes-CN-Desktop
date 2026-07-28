@@ -12,7 +12,7 @@
   padding: 4px;
   border: 1px solid var(--h-line-soft);
   border-radius: 0;
-  background: var(--h-bg-soft);
+  background: transparent;
 }
 
 .periodSwitch button {
@@ -32,8 +32,8 @@
 }
 
 .periodSwitch button[data-active="true"] {
-  color: var(--h-text);
-  background: var(--h-bg-pane);
+  color: var(--h-bg-pane);
+  background: var(--h-text);
   box-shadow: none;
 }
 
@@ -44,7 +44,7 @@
   padding: 4px;
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-soft);
+  background: transparent;
 }
 
 .tabs button {
@@ -67,9 +67,9 @@
 }
 
 .tabs button[data-active="true"] {
-  background: var(--h-bg-pane);
+  background: var(--h-text);
   box-shadow: none;
-  color: var(--h-text);
+  color: var(--h-bg-pane);
 }
 
 .kpiGrid {
@@ -84,7 +84,7 @@
 .note {
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-app);
+  background: transparent;
 }
 
 .kpiCard {
@@ -214,7 +214,7 @@
   padding: 8px 12px;
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-app);
+  background: var(--h-bg-pane);
   box-shadow: none;
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
@@ -370,117 +370,6 @@
   }
 }
 
-.loadingPage {
-  min-height: min(680px, calc(100vh - 152px));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 28px;
-}
-
-.loadingCard {
-  position: relative;
-  display: flex;
-  width: min(520px, 100%);
-  min-height: 260px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  overflow: hidden;
-  border: 1px solid var(--h-line);
-  border-radius: 0;
-  background: var(--h-bg-app);
-  box-shadow: none;
-  text-align: center;
-}
-
-.loadingCard::before {
-  content: "";
-  position: absolute;
-  inset: 20px;
-  border: 1px solid var(--h-line-soft);
-  border-radius: 0;
-  pointer-events: none;
-}
-
-.loadingOrb {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: 72px;
-  height: 72px;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--h-accent) 42%, var(--h-line));
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-app));
-  color: var(--h-accent);
-}
-
-.loadingOrb::before,
-.loadingOrb::after {
-  content: "";
-  position: absolute;
-  inset: -8px;
-  border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent);
-  border-top-color: var(--h-accent);
-  border-radius: 50%;
-  animation: analyticsSpin 1.35s linear infinite;
-}
-
-.loadingOrb::after {
-  inset: 8px;
-  border-color: color-mix(in srgb, var(--sky) 34%, transparent);
-  border-bottom-color: var(--sky);
-  animation-direction: reverse;
-  animation-duration: 1.9s;
-}
-
-.loadingCard strong {
-  position: relative;
-  z-index: 1;
-  color: var(--h-text);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.loadingCard p {
-  position: relative;
-  z-index: 1;
-  max-width: 360px;
-  margin: 4px auto 0;
-  color: var(--h-text-3);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.loadingSkeletonGrid {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: min(360px, calc(100% - 56px));
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.loadingSkeletonGrid span {
-  height: 44px;
-  overflow: hidden;
-  border: 1px solid var(--h-line-soft);
-  border-radius: 0;
-  background: var(--h-bg-soft);
-}
-
-.loadingSkeletonGrid span::after {
-  content: "";
-  display: block;
-  width: 45%;
-  height: 100%;
-  background: var(--h-bg-chip);
-  animation: analyticsShimmer 1.4s ease-in-out infinite;
-}
-
 .pagination {
   display: flex;
   align-items: center;
@@ -506,7 +395,7 @@
 .paginationButtons button {
   border: 1px solid var(--h-line-soft);
   border-radius: 0;
-  background: var(--h-bg-soft);
+  background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
   font-family: var(--h-font-cn);
@@ -521,9 +410,9 @@
 }
 
 .paginationButtons button[data-active="true"] {
-  border-color: color-mix(in srgb, var(--h-accent) 52%, var(--h-line));
-  background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-soft));
-  color: var(--h-text);
+  border-color: var(--h-text);
+  background: var(--h-text);
+  color: var(--h-bg-pane);
   box-shadow: none;
 }
 
@@ -540,21 +429,6 @@
   font-family: var(--h-font-mono);
 }
 
-@keyframes analyticsSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes analyticsShimmer {
-  0% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(260%);
-  }
-}
-
 @media (max-width: 720px) {
   .pagination {
     align-items: flex-start;
@@ -565,7 +439,4 @@
     flex-wrap: wrap;
   }
 
-  .loadingSkeletonGrid {
-    grid-template-columns: 1fr;
-  }
 }

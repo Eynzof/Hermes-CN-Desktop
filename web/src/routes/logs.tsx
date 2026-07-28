@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Copy, Download, FileJson, RefreshCw, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import { CopyButton } from "@/components/ui/copy-button";
 import { useLogs } from "@/hooks/use-logs";
 import {
@@ -317,8 +318,8 @@ export function LogsRoute() {
             {query.redact ? "复制/导出自动脱敏" : "复制/导出保留原文"}
           </button>
           <button type="button" className={s.actionButton} onClick={() => void logs.refetch()} disabled={logs.isFetching}>
-            <RefreshCw size={12} className={logs.isFetching ? s.spinIcon : undefined} />
-            {logs.isFetching ? "刷新中…" : "刷新"}
+            {logs.isFetching ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+            刷新
           </button>
           <CopyButton className={s.actionButton} text={copyVisibleLogs} disabled={visibleLines.length === 0}>
             <Copy size={12} />
@@ -403,7 +404,7 @@ export function LogsRoute() {
                   </div>
                 );
               })}
-              {logs.isLoading && visibleLines.length === 0 && <EmptyLine>日志加载中…</EmptyLine>}
+              {logs.isLoading && visibleLines.length === 0 && <LoadingState variant="block" label="正在加载日志…" />}
               {!logs.isLoading && rawLines.length === 0 && <EmptyLine>Hermes 还没产生日志，可能是刚启动。</EmptyLine>}
               {!logs.isLoading && rawLines.length > 0 && visibleLines.length === 0 && (
                 <EmptyLine>没有匹配的日志，请调整关键词或清空筛选。</EmptyLine>

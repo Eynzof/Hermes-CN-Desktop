@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cable, Check, ChevronsUpDown, Globe2, X } from "lucide-react";
-import { Popover } from "@hermes/shared-ui";
+import { LoadingState, Popover } from "@hermes/shared-ui";
 import {
   useActiveProfileName,
   useProfiles,
@@ -107,7 +107,7 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
           >
             <div className={s.menuTitle}>切换档案</div>
             {isLoading ? (
-              <div className={s.menuEmpty}>加载中…</div>
+              <LoadingState variant="inline" label="正在加载档案…" />
             ) : profiles.length === 0 ? (
               <div className={s.menuEmpty}>没有可用的档案</div>
             ) : (

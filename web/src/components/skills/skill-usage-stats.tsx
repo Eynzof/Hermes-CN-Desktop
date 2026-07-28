@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { BarChart3, Clock3, RefreshCw, Sparkles, Wrench } from "lucide-react";
 import type { AnalyticsResponse } from "@hermes/protocol";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { relativeTime } from "@/lib/format";
 import { skillTranslations } from "@/lib/skill-translations";
@@ -87,20 +88,14 @@ export function SkillUsageStats({ profileOverride }: { profileOverride?: string 
             onClick={() => void query.refetch()}
             disabled={query.isFetching}
           >
-            <RefreshCw size={12} />
-            {query.isFetching ? "刷新中" : "刷新"}
+            {query.isFetching ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+            刷新
           </button>
         </div>
       </header>
 
       {query.isLoading ? (
-        <div className={s.stateCard} aria-live="polite">
-          <BarChart3 size={24} />
-          <div>
-            <strong>正在读取调用统计</strong>
-            <p>正在从当前 Hermes 档案聚合 Skill 使用记录。</p>
-          </div>
-        </div>
+        <LoadingState variant="block" label="正在读取调用统计…" />
       ) : query.isError ? (
         <div className={s.stateCard} data-tone="error" role="alert">
           <BarChart3 size={24} />

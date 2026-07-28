@@ -470,11 +470,6 @@
   stroke-width: 2.2;
 }
 
-.voiceActivityIcon[data-status="transcribing"] svg,
-.iconButton[data-status="transcribing"] svg {
-  animation: spin 0.85s linear infinite;
-}
-
 .voiceActivityText {
   color: var(--h-text);
   font-weight: 600;
@@ -1803,12 +1798,6 @@
   height: 8px;
   border-radius: 50%;
   background: var(--h-ok);
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @keyframes pulse {

@@ -140,13 +140,11 @@ export function BackupRoute() {
       </Alert>
 
       <div className={s.actions}>
-        <Button type="button" variant="solid" tone="accent" onClick={exportBackup} disabled={busy}>
-          <Download size={12} />
-          {exporting ? "导出中…" : "导出当前档案备份"}
+        <Button type="button" variant="solid" tone="accent" onClick={exportBackup} loading={exporting} disabled={importing} leadingIcon={<Download size={12} />}>
+          导出当前档案备份
         </Button>
-        <Button type="button" variant="outline" onClick={importBackup} disabled={busy}>
-          <Upload size={12} />
-          {importing ? "导入中…" : "导入备份压缩包"}
+        <Button type="button" variant="outline" onClick={importBackup} loading={importing} disabled={exporting} leadingIcon={<Upload size={12} />}>
+          导入备份压缩包
         </Button>
       </div>
 

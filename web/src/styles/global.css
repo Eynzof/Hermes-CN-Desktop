@@ -17,6 +17,11 @@
   text-shadow: none !important;
 }
 
+/* Explicit design-system exception: the approved tokenized pinhole paper texture. */
+#root [data-page-texture="pinhole"] {
+  background-image: var(--h-texture-pinhole-grid) !important;
+}
+
 #root :focus-visible:not(input):not(textarea):not(select):not([contenteditable="true"]) {
   outline: var(--h-focus-outline) !important;
   outline-offset: 2px;

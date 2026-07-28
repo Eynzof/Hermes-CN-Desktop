@@ -19,7 +19,6 @@ import {
   Globe,
   Folder,
   ImagePlus,
-  Loader2,
   MessageSquare,
   Mic,
   Plus,
@@ -27,6 +26,7 @@ import {
   Square,
   X,
 } from "lucide-react";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { fileNameFromPath } from "@/lib/composer-prompt";
 import {
@@ -1268,7 +1268,7 @@ export function GooseComposer({
               {voiceStatus === "recording" ? (
                 <Mic aria-hidden="true" />
               ) : (
-                <Loader2 aria-hidden="true" />
+                <LoadingIndicator size="xs" />
               )}
             </span>
             <span className={s.voiceActivityText}>
@@ -1351,7 +1351,7 @@ export function GooseComposer({
               </div>
             ) : null}
             {skillToken && skillPicker?.loading && totalCandidates === 0 ? (
-              <div className={s.skillPanelState}>正在读取已启用 Skill…</div>
+              <LoadingState className={s.skillPanelState} variant="inline" label="正在读取已启用 Skill…" />
             ) : skillToken && skillPicker?.error && totalCandidates === 0 ? (
               <div className={s.skillPanelState} data-tone="error">
                 {skillPicker.error}
@@ -1400,7 +1400,7 @@ export function GooseComposer({
               <small>Enter / Tab 选择，Esc 关闭</small>
             </div>
             {mentionLoading && mentionCandidates.length === 0 ? (
-              <div className={s.skillPanelState}>正在检索…</div>
+              <LoadingState className={s.skillPanelState} variant="inline" label="正在检索…" />
             ) : mentionCandidates.length === 0 ? (
               <div className={s.skillPanelState}>没有匹配的引用</div>
             ) : (
@@ -1494,7 +1494,7 @@ export function GooseComposer({
               {voiceStatus === "recording" ? (
                 <Square className={s.toolIcon} aria-hidden="true" />
               ) : voiceStatus === "transcribing" ? (
-                <Loader2 className={s.toolIcon} aria-hidden="true" />
+                <LoadingIndicator className={s.toolIcon} size="sm" />
               ) : (
                 <Mic className={s.toolIcon} aria-hidden="true" />
               )}

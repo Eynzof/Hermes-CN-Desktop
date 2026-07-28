@@ -75,7 +75,6 @@
   overflow: hidden;
   line-height: 20px;
   text-overflow: ellipsis;
-  transform: translateY(4px);
   white-space: nowrap;
 }
 
@@ -296,25 +295,10 @@
   white-space: nowrap;
 }
 
-.dot {
+.dotPlaceholder {
   width: 4px;
-  height: 4px;
-  border-radius: 50%;
+  height: 1em;
   flex-shrink: 0;
-  background: transparent;
-}
-
-.dot[data-state="live"] {
-  background: var(--h-ok);
-  box-shadow: none;
-}
-
-.dot[data-state="ok"] {
-  background: var(--h-warn);
-}
-
-.dot[data-state="err"] {
-  background: var(--rust);
 }
 
 .meta {

@@ -7,7 +7,7 @@ import {
   useSaveUserProfile,
   useUpdateMemoryEntry,
 } from "@/hooks/use-memory";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import { MemoryLimitControl } from "@/components/memory/memory-limit-control";
 import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
@@ -104,9 +104,14 @@ export function MemoryRoute() {
   };
 
   const right = (
-    <Button type="button" variant="outline" onClick={() => void memoryQuery.refetch()} disabled={memoryQuery.isFetching}>
-      <RefreshCw size={16} />
-      {memoryQuery.isFetching ? "刷新中" : "刷新"}
+    <Button
+      type="button"
+      variant="outline"
+      loading={memoryQuery.isFetching}
+      leadingIcon={<RefreshCw size={16} />}
+      onClick={() => void memoryQuery.refetch()}
+    >
+      刷新
     </Button>
   );
 
@@ -130,7 +135,7 @@ export function MemoryRoute() {
           <Button type="button" variant="outline" onClick={() => void memoryQuery.refetch()}>重试</Button>
         </div>
       ) : isLoading || !data ? (
-        <div className={s.emptyState}>加载记忆中…</div>
+        <LoadingState variant="page" label="正在加载记忆…" />
       ) : (
         <div className={s.memoryPage}>
           <div className={s.statsGrid}>
@@ -184,7 +189,7 @@ export function MemoryRoute() {
                   <div className={s.formActions}>
                     <span>{newEntry.length} 字符</span>
                     <Button type="button" variant="outline" size="sm" onClick={() => { setShowAdd(false); setNewEntry(""); }}>取消</Button>
-                    <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleAdd} disabled={!newEntry.trim() || addEntry.isPending}>保存</Button>
+                    <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleAdd} loading={addEntry.isPending} disabled={!newEntry.trim()}>保存</Button>
                   </div>
                 </div>
               )}
@@ -204,7 +209,7 @@ export function MemoryRoute() {
                           <div className={s.formActions}>
                             <span>{editContent.length} 字符</span>
                             <Button type="button" variant="outline" size="sm" onClick={() => setEditingIndex(null)}>取消</Button>
-                            <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveEdit} disabled={updateEntry.isPending}>保存</Button>
+                            <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveEdit} loading={updateEntry.isPending}>保存</Button>
                           </div>
                         </div>
                       ) : (
@@ -250,7 +255,7 @@ export function MemoryRoute() {
                 />
                 <div className={`${s.formActions} ${s.profileFooter}`}>
                   <span>{userContent.length} / {data.user.charLimit} 字符</span>
-                  <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveUser} disabled={!userDirty || saveUser.isPending}>保存画像</Button>
+                  <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveUser} loading={saveUser.isPending} disabled={!userDirty}>保存画像</Button>
                 </div>
               </div>
             </section>

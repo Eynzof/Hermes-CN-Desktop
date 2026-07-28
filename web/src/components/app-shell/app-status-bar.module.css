@@ -92,11 +92,6 @@
   opacity: 0.82;
 }
 
-.restartButton[data-state="starting"] svg,
-.restartButton[data-state="running"] svg {
-  animation: gateway-restart-spin 0.9s linear infinite;
-}
-
 .restartButton[data-state="success"] {
   color: var(--moss);
   border-color: color-mix(in srgb, var(--moss) 40%, var(--h-line));
@@ -105,12 +100,6 @@
 .restartButton[data-state="error"] {
   color: var(--rust);
   border-color: color-mix(in srgb, var(--rust) 48%, var(--h-line));
-}
-
-@keyframes gateway-restart-spin {
-  to {
-    transform: rotate(-360deg);
-  }
 }
 
 .stat[data-tone="warn"] .val {
@@ -145,33 +134,6 @@
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-  align-self: center;
-  flex: 0 0 auto;
-}
-
-.dot[data-state="running"] {
-  background: var(--moss);
-  box-shadow: none;
-}
-
-.dot[data-state="ready"] {
-  background: var(--moss);
-}
-
-.dot[data-state="offline"] {
-  background: var(--rust);
-  box-shadow: none;
-}
-
-.dot[data-state="unknown"] {
-  background: var(--h-text-3);
 }
 
 .srOnly {

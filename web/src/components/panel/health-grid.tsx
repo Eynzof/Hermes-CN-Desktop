@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  Copy,
   FolderOpen,
   RefreshCw,
   ServerCog,
@@ -15,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Button } from "@hermes/shared-ui";
 import { useStatus } from "@/hooks/use-status";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useEnvVars } from "@/hooks/use-env";
@@ -22,7 +22,7 @@ import { useSkills } from "@/hooks/use-skills";
 import { useMcpServers } from "@/hooks/use-mcp-servers";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { useLastUsedModel } from "@/lib/last-used-model";
-import { CopyButton } from "@/components/ui/copy-button";
+import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import { Dot } from "@/components/ui/pill";
 import s from "./health-grid.module.css";
 
@@ -457,7 +457,6 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         { label: "正常项", value: String(counts.ok), sub: `共 ${items.length} 项`, tone: "ok" as Tone },
         { label: "注意项", value: String(counts.warn), sub: counts.warn ? "建议尽快处理" : "无需处理", tone: counts.warn ? "warn" as Tone : "ok" as Tone },
         { label: "异常项", value: String(counts.err), sub: counts.err ? "影响功能可用性" : "未发现异常", tone: counts.err ? "err" as Tone : "ok" as Tone },
-        { label: "活跃会话", value: String(status?.active_sessions ?? 0), sub: status ? `Dashboard v${status.version}` : "等待状态接口", tone: status ? "ok" as Tone : "warn" as Tone },
       ] satisfies HealthMetric[],
     };
   }, [config, env, envQuery.isError, lastUsedModel, mcp, mcpQuery.isError, modelInfo, oauthProviders, skills, skillsQuery.isError, status, statusQuery.isError]);
@@ -509,12 +508,17 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
             </p>
           </div>
           <div className={s.heroActions}>
-            <button className={s.actionButton} type="button" onClick={refreshAll} disabled={isRefreshing}>
-              <RefreshCw size={12} aria-hidden="true" />
-              {isRefreshing ? "刷新中" : "刷新检查"}
-            </button>
-            <CopyButton
-              className={s.actionButton}
+            <Button
+              variant="outline"
+              size="md"
+              type="button"
+              onClick={refreshAll}
+              loading={isRefreshing}
+              leadingIcon={<RefreshCw size={12} aria-hidden="true" />}
+            >
+              刷新检查
+            </Button>
+            <DiagnosticCopyButton
               text={() => buildDiagnosticsPayload({
                 status,
                 modelInfo,
@@ -525,19 +529,17 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
                 invalidProviders: health.invalidProviders,
                 counts: health.counts,
               })}
-            >
-              <Copy size={12} aria-hidden="true" />
-              复制诊断 JSON
-            </CopyButton>
-            <button
-              className={s.actionButton}
+            />
+            <Button
+              variant="outline"
+              size="md"
               type="button"
               onClick={openHermesHome}
               disabled={!status?.hermes_home || !window.hermesDesktop?.openWorkspacePath}
+              leadingIcon={<FolderOpen size={12} aria-hidden="true" />}
             >
-              <FolderOpen size={12} aria-hidden="true" />
               打开 HERMES_HOME
-            </button>
+            </Button>
           </div>
         </div>
 

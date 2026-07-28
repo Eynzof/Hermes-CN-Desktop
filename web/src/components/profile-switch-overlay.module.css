@@ -39,20 +39,6 @@
   color: var(--h-text);
 }
 
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--h-line);
-  border-top-color: var(--h-text);
-  border-radius: 50%;
-  animation: hermesProfileSwitchSpin 700ms linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes hermesProfileSwitchSpin {
-  to { transform: rotate(360deg); }
-}
-
 .body {
   font-size: 12.5px;
   color: var(--h-text-2);

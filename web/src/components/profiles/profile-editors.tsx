@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Field, Textarea } from "@hermes/shared-ui";
+import { Button, Field, LoadingState, Textarea } from "@hermes/shared-ui";
 import { Sparkles } from "lucide-react";
 import type { ProfileSummary } from "@hermes/protocol";
 import {
@@ -227,7 +227,7 @@ export function ProfileSoulDialog({
       }
     >
       {loading ? (
-        <p className={s.modelEmpty}>加载中…</p>
+        <LoadingState variant="block" label="正在加载人格…" />
       ) : (
         <Field
           label="SOUL.md"

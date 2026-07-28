@@ -497,23 +497,6 @@
   text-overflow: ellipsis;
 }
 
-.dotLive {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--h-color-success-fg);
-  flex-shrink: 0;
-  box-shadow: none;
-}
-
-.dotFail {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--h-err);
-  flex-shrink: 0;
-}
-
 .titlePin {
   color: var(--h-accent);
   flex-shrink: 0;

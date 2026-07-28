@@ -503,10 +503,6 @@
   opacity: 0.55;
 }
 
-@keyframes hermesButtonSpin {
-  to { transform: rotate(360deg); }
-}
-
 .sectionTitleRow {
   display: flex;
   align-items: center;
@@ -525,7 +521,7 @@
   margin: 0 0 20px;
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-app);
+  background: var(--h-color-bg-secondary-surface);
 }
 
 .appearanceHeader {
@@ -535,7 +531,7 @@
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--h-line-soft);
-  background: var(--h-bg-pane);
+  background: var(--h-color-bg-secondary-surface);
 }
 
 .appearanceHeaderText {
@@ -563,7 +559,7 @@
   padding: 0 12px;
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-chip);
+  background: var(--h-color-bg-secondary-surface);
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10.5px;
@@ -578,6 +574,7 @@
   align-items: start;
   padding: 16px 20px;
   border-bottom: 1px solid var(--h-line-soft);
+  background: var(--h-color-bg-secondary-surface);
 }
 
 .appearanceRow:last-child {
@@ -735,6 +732,7 @@
 .toggle {
   width: var(--h-switch-width);
   height: var(--h-switch-height);
+  box-sizing: border-box;
   border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-chip);
@@ -751,13 +749,14 @@
 
 .toggleThumb {
   position: absolute;
-  top: 4px;
+  top: 50%;
   left: 4px;
   width: var(--h-switch-thumb-size);
   height: var(--h-switch-thumb-size);
   border-radius: 50%;
   background: #fff;
   box-shadow: none;
+  transform: translateY(-50%);
   transition: left 0.15s;
 }
 .toggle[data-on="true"] .toggleThumb {
@@ -956,14 +955,7 @@
 .codingAgentToolbarButton {
   box-sizing: border-box;
   width: 140px;
-  height: var(--h-button-height-md);
-  min-height: var(--h-button-height-md);
-  padding: 0 var(--h-button-padding-x-md);
   white-space: nowrap;
-}
-
-.codingAgentRefreshIcon[data-spinning="true"] {
-  animation: hermesButtonSpin 0.9s linear infinite;
 }
 
 .codingAgentList {
@@ -1080,6 +1072,20 @@
 .aboutDebugGrid .providerActions {
   margin-top: 12px;
   margin-bottom: 12px;
+}
+
+/* 关于页以白色页面本身承载内容，卡片与图标不再叠加偏灰填充。 */
+.aboutSection .aboutDebugGrid {
+  align-items: stretch;
+}
+
+.aboutSection .debugCard,
+.aboutSection .debugCardIcon {
+  background: var(--h-color-bg-secondary-surface);
+}
+
+.aboutSection .debugCard {
+  height: 100%;
 }
 
 /* 「Designed by Wanderminds」署名页脚：居中、克制，logo 单色随 currentColor
@@ -1271,6 +1277,10 @@
   padding: 16px;
   break-inside: avoid;
   box-sizing: border-box;
+}
+
+.kernelSection .debugCard {
+  background: transparent;
 }
 
 .debugCard[data-wide="true"] {
@@ -2254,15 +2264,17 @@
   position: relative;
   /* 返佣星水印（presetCardBadge）探出下缘的部分由卡片边界裁掉。 */
   overflow: hidden;
+  box-sizing: border-box;
   min-width: 0;
-  min-height: 56px;
+  height: 48px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
-  border: 1px solid transparent;
+  padding: 8px 12px;
+  border: 1px solid var(--h-color-border-subtle);
   border-radius: 0;
-  background: var(--h-bg-chip);
+  background: var(--h-color-bg-secondary-surface);
   color: var(--h-text);
   cursor: pointer;
   text-align: left;
@@ -2272,7 +2284,8 @@
   transition: background 120ms ease, border-color 120ms ease;
 }
 .presetCard:hover {
-  background: color-mix(in srgb, var(--h-text) 7%, var(--h-bg-chip));
+  border-color: var(--h-color-border-default);
+  background: var(--h-color-bg-secondary-surface);
 }
 .presetCard:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--h-accent) 54%, transparent);
@@ -2280,7 +2293,7 @@
 }
 .presetCard[data-active="true"] {
   border-color: var(--h-accent);
-  background: color-mix(in srgb, var(--h-accent) 13%, var(--h-bg-pane));
+  background: var(--h-color-bg-secondary-surface);
 }
 .presetCard[data-current] {
   border-color: var(--h-color-success-border);
@@ -2298,14 +2311,14 @@
   align-items: center;
   justify-content: center;
   border-radius: 0;
-  background: var(--h-bg-soft);
+  background: var(--h-color-bg-secondary-surface);
   color: var(--h-text-2);
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
 }
 .presetCard[data-active="true"] .presetCardIcon {
-  background: color-mix(in srgb, var(--h-accent) 22%, var(--h-bg-pane));
+  background: var(--h-color-bg-secondary-surface);
   color: var(--h-accent);
 }
 
@@ -2457,77 +2470,6 @@ button.providerWebsiteButton:hover {
 
 .providerPresetPanel[data-loading="true"] {
   min-height: 360px;
-}
-
-.providerPanelLoading {
-  min-height: 320px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 24px;
-  color: var(--h-text);
-}
-
-.providerPanelLoadingHeader {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.providerPanelSpinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--h-accent);
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: hermesButtonSpin 650ms linear infinite;
-  flex: 0 0 auto;
-}
-
-.providerPanelLoadingTitle {
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--h-text);
-  font-family: var(--h-font-cn);
-}
-
-.providerPanelLoadingDesc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--h-text-3);
-  font-family: var(--h-font-cn);
-}
-
-.providerPanelSkeleton {
-  display: grid;
-  gap: 12px;
-}
-
-.providerPanelSkeletonLine {
-  display: block;
-  height: 40px;
-  border-radius: 0;
-  background: var(--h-bg-soft);
-  background-size: 220% 100%, 100% 100%;
-  animation: hermesProviderSkeleton 1.1s ease-in-out infinite;
-  border: 1px solid var(--h-line-soft);
-}
-
-.providerPanelSkeletonLine[data-width="long"] {
-  width: min(360px, 72%);
-}
-
-.providerPanelSkeletonLine[data-width="full"] {
-  width: 100%;
-}
-
-.providerPanelSkeletonLine[data-width="medium"] {
-  width: min(520px, 88%);
-}
-
-@keyframes hermesProviderSkeleton {
-  0% { background-position: 120% 0, 0 0; }
-  100% { background-position: -120% 0, 0 0; }
 }
 
 .providerPresetHeader {
@@ -3092,7 +3034,7 @@ button.providerWebsiteButton:hover {
   padding: 0 12px;
   border: 1px solid var(--h-line);
   border-radius: 0;
-  background: var(--h-bg-chip);
+  background: var(--h-color-bg-secondary-surface);
   color: var(--h-text-3);
   font-size: 12px;
   cursor: pointer;
@@ -3107,7 +3049,7 @@ button.providerWebsiteButton:hover {
 .configTab[data-active="true"] {
   color: var(--h-text);
   border-color: var(--h-accent-border);
-  background: var(--h-accent-soft);
+  background: var(--h-color-bg-secondary-surface);
   font-weight: 500;
 }
 
@@ -3184,14 +3126,6 @@ button.providerWebsiteButton:hover {
   font-size: 12px;
   color: var(--h-text-2);
   cursor: pointer;
-}
-
-.liveDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--h-ok);
 }
 
 /* Log viewer */
@@ -3501,10 +3435,6 @@ button.providerWebsiteButton:hover {
 
 .connProbe svg {
   flex-shrink: 0;
-}
-
-.connSpin {
-  animation: hermesButtonSpin 0.7s linear infinite;
 }
 
 .connFooter {

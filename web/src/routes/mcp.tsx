@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import { Package, Plus, RefreshCw, Server } from "lucide-react";
 import type { McpCatalogEntry, McpServer, McpTestResult } from "@hermes/protocol";
 import {
@@ -191,7 +191,7 @@ export function McpRoute() {
           </p>
         </div>
       ) : isLoading ? (
-        <div className={s.emptyState}>加载中…</div>
+        <LoadingState variant="block" label="正在加载 MCP 服务…" />
       ) : servers.length === 0 ? (
         <div className={s.emptyState}>
           还没有任何 MCP 服务。点右上角「添加服务」，或从下方目录一键安装。
@@ -224,7 +224,7 @@ export function McpRoute() {
       {catalogQuery.isError ? (
         <div className={s.emptyState}>目录暂不可用。</div>
       ) : catalogQuery.isLoading ? (
-        <div className={s.emptyState}>加载中…</div>
+        <LoadingState variant="block" label="正在加载 MCP 目录…" />
       ) : catalog.length === 0 ? (
         <div className={s.emptyState}>目录暂无可用条目。</div>
       ) : (

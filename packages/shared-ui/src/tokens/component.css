@@ -21,9 +21,10 @@
   /* Button-shaped controls with distinct semantics. */
   --h-segment-height: 24px;
   --h-tab-height: 40px;
-  --h-switch-width: 36px;
-  --h-switch-height: 24px;
-  --h-switch-thumb-size: 16px;
+  --h-switch-width: 32px;
+  --h-switch-height: 20px;
+  --h-switch-thumb-size: 12px;
+  --h-status-dot-size: 8px;
 }
 
 :root,

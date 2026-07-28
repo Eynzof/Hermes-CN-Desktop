@@ -90,16 +90,6 @@
   margin-left: auto;
 }
 
-.spin {
-  animation: worktreeSpin 1s linear infinite;
-}
-
-@keyframes worktreeSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .error {
   display: flex;
   align-items: flex-start;

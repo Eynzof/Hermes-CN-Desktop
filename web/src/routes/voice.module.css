@@ -287,6 +287,7 @@
 .toggle {
   width: var(--h-switch-width);
   height: var(--h-switch-height);
+  box-sizing: border-box;
   border: 1px solid var(--h-line);
   border-radius: 0;
   background: var(--h-bg-chip);
@@ -298,12 +299,13 @@
 .toggle::after {
   content: "";
   position: absolute;
-  top: 4px;
+  top: 50%;
   left: 4px;
   width: var(--h-switch-thumb-size);
   height: var(--h-switch-thumb-size);
   border-radius: 0;
   background: #fff;
+  transform: translateY(-50%);
   transition: left 0.14s;
 }
 

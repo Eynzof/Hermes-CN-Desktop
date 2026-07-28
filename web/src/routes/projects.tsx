@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { LoadingState, Popover } from "@hermes/shared-ui";
 import {
   ExternalLink,
   FolderPlus,
@@ -264,7 +264,9 @@ export function ProjectsRoute() {
       </div>
 
       <div className={s.scroll}>
-        {projects.length === 0 ? (
+        {isLoading ? (
+          <LoadingState variant="page" label="正在加载项目…" />
+        ) : projects.length === 0 ? (
           <div className={s.emptyState}>
             <FolderPlus size={28} />
             <p>还没有项目</p>

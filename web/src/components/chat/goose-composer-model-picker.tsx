@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { LoadingState } from "@hermes/shared-ui";
 import {
   ArrowRight,
   Brain,
@@ -686,7 +687,7 @@ function ModelPickerBody({
       </div>
 
       {loading ? (
-        <div className={s.modelEmpty}>加载模型…</div>
+        <LoadingState variant="block" label="正在加载模型…" />
       ) : error ? (
         <div className={s.modelError}>{error}</div>
       ) : (

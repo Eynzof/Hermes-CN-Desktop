@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Field, Input, Textarea } from "@hermes/shared-ui";
+import { Badge, Button, Field, Input, LoadingState, Textarea } from "@hermes/shared-ui";
 import { ArrowLeft, ArrowRight, Plus, Search, X } from "lucide-react";
 import type { McpServerCreate, SkillHubResult } from "@hermes/protocol";
 import { useCreateProfile, useProfiles } from "@/hooks/use-profiles";
@@ -257,7 +257,7 @@ export function ProfileBuilderRoute() {
                 />
                 <div className={s.list}>
                   {skillsQuery.isLoading ? (
-                    <div className={s.emptyHint}>加载中…</div>
+                    <LoadingState variant="block" label="正在加载技能…" />
                   ) : filteredSkills.length === 0 ? (
                     <div className={s.emptyHint}>没有匹配的技能</div>
                   ) : (

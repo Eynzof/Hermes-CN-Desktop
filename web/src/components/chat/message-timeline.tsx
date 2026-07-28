@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
-import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info, Volume2, VolumeX } from "lucide-react";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { assistantAvatarEffectiveAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { AssistantProfileCard } from "./assistant-profile-card";
@@ -928,7 +929,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
                 title={speechBusy ? "停止朗读" : "朗读回复"}
               >
                 {speechStatus === "preparing" ? (
-                  <Loader2 aria-hidden="true" />
+                  <LoadingIndicator size="xs" />
                 ) : speechStatus === "speaking" ? (
                   <VolumeX aria-hidden="true" />
                 ) : (

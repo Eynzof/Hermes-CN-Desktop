@@ -16,7 +16,7 @@ import {
   Settings,
   Sparkles,
 } from "lucide-react";
-import { usePlatform } from "@hermes/shared-ui";
+import { StatusDot, usePlatform } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
@@ -272,7 +272,9 @@ export function Sidebar() {
 
       <div className={s.statusBar}>
         <div className={s.statusRow}>
-          <span className={s.gatewayDot} data-state={gatewayState} />
+          <StatusDot
+            tone={gatewayState === "offline" ? "danger" : gatewayState === "unknown" ? "neutral" : "success"}
+          />
           <span className={s.statusLabel}>{gatewayLabel}</span>
           <span
             className={s.statusModel}

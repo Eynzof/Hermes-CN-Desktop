@@ -195,16 +195,3 @@
 .button[data-loading="true"] {
   cursor: wait;
 }
-
-.spinner {
-  width: 1em;
-  height: 1em;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: hermesButtonSpin 650ms linear infinite;
-}
-
-@keyframes hermesButtonSpin {
-  to { transform: rotate(360deg); }
-}

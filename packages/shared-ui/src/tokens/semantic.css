@@ -4,6 +4,11 @@
 :root {
   --h-color-bg-app: var(--h-bg-app);
   --h-color-bg-surface: var(--h-bg-pane);
+  /* Secondary split panes inherit the page canvas instead of adding grey fill. */
+  --h-color-bg-secondary-surface: transparent;
+  /* PrimeAPP paper canvas with the approved 24px pinhole-grid texture. */
+  --h-color-bg-page-canvas: #ffffff;
+  --h-texture-pinhole-grid: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M0 0H24M0 0V24' fill='none' stroke='%233f3f3c' stroke-opacity='.055' stroke-width='1'/%3E%3Ccircle cx='0' cy='0' r='1.5' fill='%233f3f3c' fill-opacity='.18'/%3E%3C/svg%3E");
   --h-color-bg-subtle: var(--h-bg-soft);
   --h-color-bg-input: var(--h-bg-input);
   --h-color-bg-chip: var(--h-bg-chip);
@@ -54,4 +59,12 @@
   --h-focus-outline-danger: 2px solid var(--h-err);
   --h-focus-ring: none;
   --h-focus-ring-danger: none;
+}
+
+[data-theme="dark"],
+[data-theme="dark-modern"],
+[data-theme="dracula"],
+[data-theme="catppuccin-mocha"] {
+  --h-color-bg-page-canvas: var(--h-bg-pane);
+  --h-texture-pinhole-grid: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M0 0H24M0 0V24' fill='none' stroke='%23f1f1ef' stroke-opacity='.055' stroke-width='1'/%3E%3Ccircle cx='0' cy='0' r='1.5' fill='%23f1f1ef' fill-opacity='.16'/%3E%3C/svg%3E");
 }

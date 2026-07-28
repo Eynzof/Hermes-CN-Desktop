@@ -118,9 +118,8 @@ function MigrationPreview({
         </ul>
       )}
       <div className={s.actions}>
-        <Button type="button" variant="solid" tone="accent" onClick={onImport} disabled={importing}>
-          <ShieldCheck size={12} />
-          {importing ? "迁移中…" : "确认迁移并切换"}
+        <Button type="button" variant="solid" tone="accent" onClick={onImport} loading={importing} leadingIcon={<ShieldCheck size={12} />}>
+          确认迁移并切换
         </Button>
       </div>
     </section>
@@ -246,9 +245,8 @@ function LegacyConfigMigrationRoute() {
       />
 
       <div className={s.actions}>
-        <Button type="button" variant="outline" onClick={() => scan()} disabled={loading || importing}>
-          <RefreshCw size={12} />
-          {loading ? "扫描中…" : "重新扫描"}
+        <Button type="button" variant="outline" onClick={() => scan()} disabled={importing} loading={loading} leadingIcon={<RefreshCw size={12} />}>
+          重新扫描
         </Button>
         <Button type="button" variant="outline" onClick={chooseManualDirectory} disabled={loading || importing}>
           <FolderOpen size={12} />

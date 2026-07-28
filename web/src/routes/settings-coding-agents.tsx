@@ -18,7 +18,9 @@ import {
   XCircle,
 } from "lucide-react";
 import type { CodingAgentStatus, SkillInfo } from "@hermes/protocol";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import { CopyButton } from "@/components/ui/copy-button";
+import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import { useCodingAgentsCheck } from "@/hooks/use-coding-agents";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import s from "./settings.module.css";
@@ -151,31 +153,26 @@ export function CodingAgentToolbar({ isFetching, hasBridge, onRefresh, diagnosti
   onRefresh: () => void;
   diagnostics: () => string;
 }) {
-  const actionClassName = [s.btn, s.codingAgentToolbarButton].join(" ");
   return (
     <div className={s.codingAgentToolbar} role="toolbar" aria-label="编程Agent 操作">
-      <button
-        className={actionClassName}
+      <Button
+        className={s.codingAgentToolbarButton}
+        variant="outline"
+        size="md"
         type="button"
         data-coding-agent-action="true"
         onClick={onRefresh}
-        disabled={isFetching || !hasBridge}
+        disabled={!hasBridge}
+        loading={isFetching}
+        leadingIcon={<RefreshCw size={12} />}
       >
-        <RefreshCw
-          className={s.codingAgentRefreshIcon}
-          data-spinning={isFetching ? "true" : undefined}
-          size={12}
-        />
-        {isFetching ? "检测中" : "刷新检测"}
-      </button>
-      <CopyButton
-        className={actionClassName}
+        刷新检测
+      </Button>
+      <DiagnosticCopyButton
+        className={s.codingAgentToolbarButton}
         data-coding-agent-action="true"
         text={diagnostics}
-      >
-        <Copy size={12} />
-        复制诊断 JSON
-      </CopyButton>
+      />
     </div>
   );
 }
@@ -356,7 +353,7 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
         </div>
       )}
 
-      {!data && query.isLoading && <p className={s.desc}>正在检测本机编程Agent…</p>}
+      {!data && query.isLoading && <LoadingState variant="block" label="正在检测本机编程 Agent…" />}
     </div>
   );
 }

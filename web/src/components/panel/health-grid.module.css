@@ -99,40 +99,9 @@
   min-width: 220px;
 }
 
-.actionButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: var(--h-button-height-lg);
-  min-height: var(--h-button-height-lg);
-  padding: 0 var(--h-button-padding-x-lg);
-  border: 1px solid var(--h-line);
-  border-radius: 0;
-  background: color-mix(in srgb, var(--h-bg-pane) 92%, transparent);
-  color: var(--h-text-2);
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.12s;
-}
-
-.actionButton:hover:not(:disabled) {
-  background: var(--h-bg-soft);
-  border-color: color-mix(in srgb, var(--h-accent) 34%, var(--h-line));
-  color: var(--h-text);
-  transform: translateY(-4px);
-}
-
-.actionButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 

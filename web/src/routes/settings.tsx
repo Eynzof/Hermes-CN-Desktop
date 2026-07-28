@@ -26,7 +26,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Alert, Button, Dialog, Field, Input, Select, useTheme, type ThemeConfig } from "@hermes/shared-ui";
+import { Alert, Button, Dialog, Field, Input, LoadingState, Select, StatusDot, useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import { cronJobProfile, useCronJobs, useCreateCronJob, useDeleteCronJob, useCronAction } from "@/hooks/use-cron";
@@ -77,6 +77,7 @@ import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-re
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
+import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import feishuCommunityQr from "@/assets/feishu-community-qr.png";
 import { WandermindsMark } from "@/components/brand/wanderminds-mark";
@@ -294,10 +295,10 @@ export function NotificationSection({ showHeading = true }: SettingsSectionProps
         <Button
           type="button"
           variant="outline"
-          disabled={testState.phase === "sending"}
+          loading={testState.phase === "sending"}
           onClick={() => void handleTestNotification()}
         >
-          {testState.phase === "sending" ? "发送中…" : "测试"}
+          测试
         </Button>
       } />
     </div>
@@ -753,7 +754,7 @@ export function ConfigSection({ showHeading = true }: SettingsSectionProps) {
     if (categories.length > 0 && !activeCategory) setActiveCategory(categories[0]);
   }, [categories, activeCategory]);
 
-  if (!config || !schema) return <div className={s.desc}>加载中…</div>;
+  if (!config || !schema) return <LoadingState variant="block" label="正在加载配置…" />;
 
   const isSearching = searchQuery.trim().length > 0;
   const lowerSearch = searchQuery.toLowerCase();
@@ -829,13 +830,12 @@ export function SkillsSection() {
   const toggleSkill = useToggleSkill();
   const [filter, setFilter] = useState("");
   const refreshButton = (
-    <Button variant="outline" type="button" onClick={() => void refetch()} disabled={isFetching}>
-      <RefreshCw size={12} />
-      {isFetching ? "刷新中" : "刷新"}
+    <Button variant="outline" type="button" onClick={() => void refetch()} loading={isFetching} leadingIcon={<RefreshCw size={12} />}>
+      刷新
     </Button>
   );
 
-  if (isLoading) return <div className={s.desc}>加载中…</div>;
+  if (isLoading) return <LoadingState variant="block" label="正在加载技能…" />;
   if (isError) {
     const message = error instanceof Error ? error.message : "unknown error";
     return (
@@ -1037,7 +1037,7 @@ export function CronSection() {
           {feedback.message}
         </Alert>
       )}
-      {isLoading && <div className={s.desc}>加载中…</div>}
+      {isLoading && <LoadingState variant="block" label="正在加载定时任务…" />}
       {isError && (
         <div className={s.providerDetail} style={{ marginTop: 12 }}>
           <div className={s.desc}>加载定时任务失败：{error instanceof Error ? error.message : String(error)}</div>
@@ -1150,10 +1150,10 @@ export function LogsSection() {
             <span className={s.toggleThumb} />
           </button>
           <span>自动刷新</span>
-          {autoRefresh && <span className={s.liveDot} />}
+          {autoRefresh && <StatusDot tone="success" />}
         </label>
-        <Button variant="outline" onClick={() => void refetch()} disabled={isLoading}>
-          {isLoading ? "加载中…" : "刷新"}
+        <Button variant="outline" onClick={() => void refetch()} loading={isLoading}>
+          刷新
         </Button>
       </div>
 
@@ -1163,7 +1163,7 @@ export function LogsSection() {
           return <div key={i} className={`${s.logLine} ${s[`logLine_${cls}`] ?? ""}`}>{line}</div>;
         })}
         {data && data.lines.length === 0 && <div className={s.logLine}>（无日志）</div>}
-        {!data && isLoading && <div className={s.logLine}>加载中…</div>}
+        {!data && isLoading && <LoadingState variant="block" label="正在加载日志…" />}
       </div>
     </div>
   );
@@ -1271,7 +1271,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   };
 
   return (
-    <div>
+    <div className={s.kernelSection}>
       {showHeading && <h2 className={s.heading}>内核</h2>}
       <SettingsHero
         ok={isAttachedConnection || isolationOk}
@@ -1303,14 +1303,10 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
       <ManagedRuntimePanel />
 
       <div className={s.debugActionBar}>
-        <Button variant="outline" type="button" onClick={handleRefreshAll} disabled={refreshing}>
-          <RefreshCw size={12} />
-          {refreshing ? "刷新中" : "刷新状态"}
+        <Button variant="outline" type="button" onClick={handleRefreshAll} loading={refreshing} leadingIcon={<RefreshCw size={12} />}>
+          刷新状态
         </Button>
-        <CopyButton variant="outline" size="md" text={() => JSON.stringify(diagnostics, null, 2)}>
-          <Copy size={12} />
-          复制诊断 JSON
-        </CopyButton>
+        <DiagnosticCopyButton text={() => JSON.stringify(diagnostics, null, 2)} />
         <Button
           variant="outline"
           type="button"
@@ -1428,30 +1424,33 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                   variant="outline"
                   type="button"
                   onClick={handleCheckRuntime}
-                  disabled={!info?.updatesConfigured || checking || isAttachedConnection}
+                  loading={checking}
+                  disabled={!info?.updatesConfigured || isAttachedConnection}
+                  leadingIcon={<RefreshCw size={12} />}
                   title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
-                  <RefreshCw size={12} />
-                  {checking ? "检查中" : "检查更新"}
+                  检查更新
                 </Button>
                 <Button
                   variant="solid"
                   tone="accent"
                   type="button"
                   onClick={handleInstallRuntime}
-                  disabled={!canInstall || installing || isAttachedConnection}
+                  loading={installing}
+                  disabled={!canInstall || isAttachedConnection}
                   title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
-                  {installing ? "安装中…" : "安装更新"}
+                  安装更新
                 </Button>
                 <Button
                   variant="outline"
                   type="button"
                   onClick={handleRollbackRuntime}
-                  disabled={!info?.current?.previousRuntimeVersion || rollingBack || isAttachedConnection}
+                  loading={rollingBack}
+                  disabled={!info?.current?.previousRuntimeVersion || isAttachedConnection}
                   title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
                 >
-                  {rollingBack ? "回滚中…" : "回滚 Runtime"}
+                  回滚 Runtime
                 </Button>
               </div>
               {!info?.updatesConfigured && (
@@ -1554,7 +1553,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     detectHostOS() === "macos" ? "F12 或 ⌘ + ⌥ + I" : "F12 或 Ctrl + Shift + I";
 
   return (
-    <div>
+    <div className={s.aboutSection}>
       {showHeading && <h2 className={s.heading}>关于</h2>}
       <div className={s.aboutDebugGrid}>
         <DebugCard icon={<Download size={16} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
@@ -1586,10 +1585,11 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               variant="outline"
               type="button"
               onClick={() => void handleCheckDesktopUpdate()}
-              disabled={!hasDesktopUpdateBridge || desktopUpdateChecking}
+              loading={desktopUpdateChecking}
+              disabled={!hasDesktopUpdateBridge}
+              leadingIcon={<RefreshCw size={12} />}
             >
-              <RefreshCw size={12} />
-              {desktopUpdateChecking ? "检查中" : "检查更新"}
+              检查更新
             </Button>
             <Button variant="solid" tone="accent" type="button" onClick={handleOpenDesktopDownload}>
               <ExternalLinkIcon size={12} />

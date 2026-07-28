@@ -8,6 +8,7 @@
 }
 
 .body {
+  position: relative;
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -19,7 +20,8 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 20px 24px 48px;
+  scrollbar-gutter: stable both-edges;
+  padding: 20px var(--h-page-content-gutter-x) 48px;
 }
 
 .content {
@@ -28,12 +30,20 @@
   margin-inline: auto;
 }
 
-.body[data-with-rail="true"] .scroll {
-  padding-right: 20px;
+/* 页面宽度由 SectionShell 唯一管理。页面根节点不得再用局部 720/880px
+   max-width 形成第二套版心；更窄的说明、表单等应在页面内部自行约束。 */
+.page .content > :where(*) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .rail {
-  position: relative;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   z-index: 12;
   flex: 0 0 56px;
   width: 56px;
@@ -44,13 +54,8 @@
   background: var(--h-bg-soft);
 }
 
-@media (max-width: 1120px) {
-  .body[data-with-rail="true"] .scroll {
-    padding-right: 16px;
-  }
-}
-
-@media (max-width: 920px) {
+/* 1120px 正文 + 双侧 24px 出血 + 56px 诊断栏 + 8px 安全余量。 */
+@media (max-width: 1232px) {
   .body[data-with-rail="true"] {
     flex-direction: column;
     overflow: hidden;
@@ -60,11 +65,13 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding-right: 24px;
+    padding-right: var(--h-page-content-gutter-x);
     padding-bottom: 88px;
   }
 
   .rail {
+    position: relative;
+    inset: auto;
     flex: 0 0 56px;
     width: 100%;
     overflow: visible;

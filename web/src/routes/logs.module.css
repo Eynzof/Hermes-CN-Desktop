@@ -148,10 +148,6 @@
   background: var(--h-ok);
 }
 
-.spinIcon {
-  animation: spin 0.9s linear infinite;
-}
-
 .metaLine {
   display: flex;
   flex-wrap: wrap;
@@ -278,12 +274,6 @@
   padding: 28px 16px;
   color: var(--h-text-3);
   text-align: center;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @media (max-width: 980px) {

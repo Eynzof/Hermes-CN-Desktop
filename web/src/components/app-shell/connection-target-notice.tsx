@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Cable, Globe2, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Cable, Globe2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import {
   externalConnectionFailureSummary,
   summarizeExternalConnectionHealth,
@@ -77,7 +78,7 @@ export function ConnectionTargetNotice() {
             title="重新检测"
           >
             {health.isFetching
-              ? <Loader2 className={s.spin} size={12} aria-hidden="true" />
+              ? <LoadingIndicator size="xs" />
               : <RefreshCw size={12} aria-hidden="true" />}
           </button>
         )}

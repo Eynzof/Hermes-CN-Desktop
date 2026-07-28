@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { ChevronUp, File as FileIcon, Folder, Pencil, RefreshCw } from "lucide-react";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import { useFsList } from "@/hooks/use-fs-list";
 import type { FilePreview } from "@/lib/runtime";
 import {
@@ -217,7 +218,7 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
             ..
           </button>
         ) : null}
-        {list.isLoading ? <div className={s.crumb}>加载目录中…</div> : null}
+        {list.isLoading ? <LoadingState variant="inline" label="正在加载目录…" /> : null}
         {entries.map((entry) => (
           <button
             key={entry.path}
@@ -293,7 +294,9 @@ function FileContent({
   loading: boolean;
 }) {
   if (error) return <div className={s.notice}>读取失败：{error}</div>;
-  if (!preview) return <div className={s.notice}>{loading ? "读取中…" : "暂无内容"}</div>;
+  if (!preview) return loading
+    ? <LoadingState variant="block" label="正在读取文件…" />
+    : <div className={s.notice}>暂无内容</div>;
 
   if (preview.dataUrl) {
     return <img className={s.fileImage} src={preview.dataUrl} alt={basename(path)} />;
@@ -519,7 +522,8 @@ function FileViewer({
               onClick={() => void saveEdit()}
               disabled={!dirty || saving}
             >
-              {saving ? "保存中…" : "保存"}
+              {saving ? <LoadingIndicator size="xs" /> : null}
+              保存
             </button>
             <button
               type="button"

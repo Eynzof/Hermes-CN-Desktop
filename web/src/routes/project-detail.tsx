@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { LoadingState, Popover } from "@hermes/shared-ui";
 import {
   ChevronLeft,
   ExternalLink,
@@ -312,7 +312,7 @@ export function ProjectDetailRoute() {
             ) : null}
           </div>
           {isLoading ? (
-            <div className={s.emptyHint}>加载会话中…</div>
+            <LoadingState variant="block" label="正在加载会话…" />
           ) : projectSessions.length === 0 ? (
             <div className={s.emptyHint}>这个项目下还没有会话。点上方「新对话」开始。</div>
           ) : (

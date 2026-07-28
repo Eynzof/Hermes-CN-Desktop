@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import type { GitBranch, Worktree } from "@/lib/runtime";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { useWorktrees } from "@/hooks/use-worktrees";
 import { shortenPath } from "@/lib/paths";
 import s from "./worktree-panel.module.css";
@@ -80,7 +81,7 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
           title="刷新"
           aria-label="刷新工作树"
         >
-          <RefreshCw size={12} aria-hidden className={wt.loading ? s.spin : undefined} />
+          {wt.loading ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} aria-hidden />}
         </button>
       </div>
 

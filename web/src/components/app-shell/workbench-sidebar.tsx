@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { Popover, StatusDot, type StatusDotTone } from "@hermes/shared-ui";
 import { Folder, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
@@ -114,6 +114,13 @@ function SessionRow({
 }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
   const dotState = state === "idle" ? undefined : state;
+  const dotTone: StatusDotTone | null = dotState === "live"
+    ? "success"
+    : dotState === "ok"
+      ? "warning"
+      : dotState === "err"
+        ? "danger"
+        : null;
   const actionMenuDisabled = menuDisabled || actions.isDeleting;
   return (
     // role=button (not a real <button>) so the "⋯" trigger can nest inside it.
@@ -135,7 +142,7 @@ function SessionRow({
     >
       <div className={s.rowMain}>
         <div className={s.ttl}>
-          <span className={s.dot} data-state={dotState} />
+          {dotTone ? <StatusDot tone={dotTone} size="xs" /> : <span className={s.dotPlaceholder} />}
           <span className={s.ttlText}>{title}</span>
         </div>
         <div className={s.meta}>

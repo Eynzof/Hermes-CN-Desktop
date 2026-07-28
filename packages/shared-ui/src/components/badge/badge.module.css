@@ -75,54 +75,67 @@
 }
 
 .dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
+  --h-status-dot-color: var(--h-color-fg-subtle);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-status-dot-size);
+  height: 1em;
   flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.dot::before {
+  content: "";
+  display: block;
+  width: var(--h-status-dot-size);
+  height: var(--h-status-dot-size);
   border-radius: 50%;
-  background: var(--h-color-fg-subtle);
+  background: var(--h-status-dot-color);
+}
+
+.dot[data-size="xs"] {
+  --h-status-dot-size: 4px;
 }
 
 .dot[data-size="sm"] {
-  width: 8px;
-  height: 8px;
+  --h-status-dot-size: 8px;
 }
 
 .dot[data-size="md"] {
-  width: 8px;
-  height: 8px;
+  --h-status-dot-size: 8px;
 }
 
 .dot[data-size="lg"] {
-  width: 8px;
-  height: 8px;
+  --h-status-dot-size: 8px;
 }
 
 .dot[data-tone="accent"] {
-  background: var(--h-color-accent-fg);
+  --h-status-dot-color: var(--h-color-accent-fg);
 }
 
 .dot[data-tone="info"] {
-  background: var(--h-color-info-fg);
+  --h-status-dot-color: var(--h-color-info-fg);
 }
 
 .dot[data-tone="success"],
 .dot[data-tone="ok"],
 .dot[data-tone="live"] {
-  background: var(--h-color-success-fg);
+  --h-status-dot-color: var(--h-color-success-fg);
 }
 
 .dot[data-tone="warning"],
 .dot[data-tone="warn"] {
-  background: var(--h-color-warning-fg);
+  --h-status-dot-color: var(--h-color-warning-fg);
 }
 
 .dot[data-tone="danger"],
 .dot[data-tone="err"] {
-  background: var(--h-color-danger-fg);
+  --h-status-dot-color: var(--h-color-danger-fg);
 }
 
-.dot[data-tone="live"] {
+.dot[data-tone="live"]::before {
   animation: hermesStatusPulse 1.6s ease-in-out infinite;
 }
 

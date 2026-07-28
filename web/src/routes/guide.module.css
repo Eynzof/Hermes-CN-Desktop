@@ -300,14 +300,6 @@
   cursor: pointer;
 }
 
-.spin {
-  animation: spin .8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 @media (max-width: 760px) {
   .header {
     padding-right: 20px;
