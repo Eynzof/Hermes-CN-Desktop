@@ -1,11 +1,8 @@
 import ReactDOMServer from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import {
-  isSkillInvocationText,
-  SkillInvocationMessage,
-  skillInvocationPreview,
-} from "./skill-invocation-message";
+import { isSkillInvocationText, skillInvocationPreview } from "@/lib/skill-invocation";
+import { SkillInvocationMessage } from "./skill-invocation-message";
 
 const singleSkill = [
   '[IMPORTANT: The user has invoked the "codex" skill, indicating they want you to follow its instructions. The full skill content is loaded below.]',

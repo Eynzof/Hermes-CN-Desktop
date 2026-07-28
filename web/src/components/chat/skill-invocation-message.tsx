@@ -1,18 +1,9 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
+import { skillInvocationPreview } from "@/lib/skill-invocation";
 import { MessageText } from "./message-text";
 import s from "./message-timeline.module.css";
-
-const SKILL_INVOCATION_RE = /^\s*\[IMPORTANT:\s*The user has invoked the "[^"\r\n]+" (?:stacked skill bundle|skill bundle|skill)\b/i;
-
-export function isSkillInvocationText(text: string | null | undefined): boolean {
-  return SKILL_INVOCATION_RE.test(text ?? "");
-}
-
-export function skillInvocationPreview(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
 
 export function SkillInvocationMessage({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);

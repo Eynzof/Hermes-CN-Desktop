@@ -157,6 +157,10 @@
   font-family: var(--h-font-cn);
 }
 
+.systemNotice[data-kind="skill-invocation"] {
+  max-width: none;
+}
+
 .systemNotice[data-error="true"] {
   background: color-mix(in srgb, #c5462b 6%, var(--h-bg-pane));
   border-color: color-mix(in srgb, #c5462b 26%, var(--h-line));
@@ -276,7 +280,7 @@
 }
 
 .skillInvocation {
-  width: min(640px, 72vw);
+  width: 100%;
   max-width: 100%;
 }
 
@@ -288,6 +292,9 @@
   line-clamp: 2;
   overflow-wrap: anywhere;
   white-space: normal;
+  color: var(--h-text-2);
+  font-size: var(--conversation-font-size, 12.5px);
+  line-height: var(--conversation-line-height, 1.6);
 }
 
 .skillInvocationBody {
@@ -328,6 +335,7 @@
 :global(#root) .messageText *,
 :global(#root) .systemNoticeText,
 :global(#root) .systemNoticeText *,
+:global(#root) .skillInvocationPreview,
 :global(#root) .reasoningBody,
 :global(#root) .reasoningBody *,
 :global(#root) .toolBody pre,
