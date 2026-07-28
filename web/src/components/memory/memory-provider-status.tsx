@@ -1,7 +1,7 @@
-import { Activity, CheckCircle2, Cpu, Database, ExternalLink, XCircle } from "lucide-react";
+import { Activity, CheckCircle2, Cpu, Database, XCircle } from "lucide-react";
 import { Button } from "@hermes/shared-ui";
 import type { MemoryProviderRuntimeStatusResponse } from "@hermes/protocol";
-import { openExternalUrl } from "@/lib/external-links";
+import type { VisibleMemoryProvider } from "@/hooks/use-memory";
 import {
   asRecord,
   compactHealthDetail,
@@ -10,9 +10,11 @@ import {
   memoryBackendState,
   numericValue,
 } from "./memory-backend-utils";
+import { MemoryConsoleDialog } from "./memory-console-dialog";
 import s from "./memory-backends.module.css";
 
 interface Props {
+  provider: VisibleMemoryProvider;
   status?: MemoryProviderRuntimeStatusResponse;
   loading: boolean;
   refreshing: boolean;
@@ -190,7 +192,7 @@ function HindsightStatus({ status }: { status: MemoryProviderRuntimeStatusRespon
   );
 }
 
-export function MemoryProviderStatus({ status, loading, refreshing, onRefresh }: Props) {
+export function MemoryProviderStatus({ provider, status, loading, refreshing, onRefresh }: Props) {
   const state = memoryBackendState(status);
   if (loading && !status) return <div className={s.loadingBlock}>正在检测运行状态…</div>;
 
@@ -203,11 +205,7 @@ export function MemoryProviderStatus({ status, loading, refreshing, onRefresh }:
           <small>最后检查 {formatCheckedAt(status?.checked_at)}</small>
         </div>
         <div>
-          {status?.console_url && (
-            <Button type="button" variant="plain" size="sm" onClick={() => void openExternalUrl(status.console_url)}>
-              深度控制台 <ExternalLink size={12} />
-            </Button>
-          )}
+          <MemoryConsoleDialog provider={provider} consoleUrl={status?.console_url} />
           <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={onRefresh}>
             {refreshing ? "刷新中…" : "刷新状态"}
           </Button>

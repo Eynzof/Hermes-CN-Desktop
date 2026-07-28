@@ -45,6 +45,8 @@ describe("MemoryBackendsPanel", () => {
 
     expect(html).toContain("OpenViking");
     expect(html).toContain("Hindsight");
+    expect(html).toContain("OpenViking 控制台");
+    expect(html).not.toContain("深度控制台");
     expect(html).not.toContain("Honcho");
     expect(html).not.toContain("Mem0");
     expect(html).not.toContain("Supermemory");

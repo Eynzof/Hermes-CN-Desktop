@@ -178,6 +178,7 @@ export function MemoryBackendsPanel() {
         )}
 
         <MemoryProviderStatus
+          provider={selected}
           status={selectedStatus}
           loading={selectedStatusQuery.isLoading}
           refreshing={selectedStatusQuery.isFetching}
