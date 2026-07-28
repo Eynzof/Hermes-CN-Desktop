@@ -8,12 +8,14 @@ const checkOnly = process.argv.includes("--check");
 const validateAll = process.argv.includes("--validate-all");
 const DEFAULT_BRAND = "huanxingcomhermes";
 const STABLE_BUNDLE_IDENTIFIER = "cn.org.hermesagent.desktop";
+const MAIN_BINARY_NAME = "hermesagent";
 
 const REQUIRED_STRING_FIELDS = [
   "id",
   "appName",
   "appNameEn",
   "productName",
+  "artifactBrandName",
   "identifier",
   "dataDirName",
   "providerKey",
@@ -169,6 +171,7 @@ function replaceOrThrow(text, pattern, replacement, label) {
 
 updateJson("tauri.conf.json", (config) => {
   config.productName = brand.productName;
+  config.mainBinaryName = MAIN_BINARY_NAME;
   config.identifier = STABLE_BUNDLE_IDENTIFIER;
   if (Array.isArray(config.app?.windows) && config.app.windows[0]) {
     config.app.windows[0].title = windowTitle;

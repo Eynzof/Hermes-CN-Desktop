@@ -37,6 +37,8 @@ function requireDesktopVersion() {
 
 const desktopVersion = requireDesktopVersion();
 const desktopTag = `v${desktopVersion}`;
+const defaultBrand = readJson("brands/huanxingcomhermes.json");
+const windowsInstallerPrefix = `Hermes-${defaultBrand.artifactBrandName}-`;
 const changed = [];
 
 function updateText(relativePath, updater) {
@@ -101,7 +103,11 @@ function syncReadme(text, currentVersionLabelPattern) {
   );
   next = next.replace(
     /(Hermes\.Agent\.CN\.Desktop_)[^_]+(_x64-setup\.exe)/g,
-    `$1${desktopVersion}$2`,
+    `${windowsInstallerPrefix}${desktopVersion}$2`,
+  );
+  next = next.replace(
+    /(Hermes-[A-Za-z0-9.-]+-)[^_]+(_x64-setup\.exe)/g,
+    `${windowsInstallerPrefix}${desktopVersion}$2`,
   );
   return next;
 }

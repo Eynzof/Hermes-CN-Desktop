@@ -7,12 +7,18 @@ import { extname, join, relative, resolve, sep } from "node:path";
 const SOURCE_DIR = resolve(process.env.DESKTOP_ASSET_DIR || "assets");
 const BRANDS_DIR = resolve(process.env.DESKTOP_BRANDS_DIR || "brands");
 const VERSION_TAG = (process.env.DESKTOP_VERSION_TAG || "").trim();
+const SELECTED_BRAND = (process.env.DESKTOP_BRAND || "").trim();
+const RELEASE_CHANNEL = (process.env.DESKTOP_RELEASE_CHANNEL || "stable").trim().toLowerCase();
+const OMIT_SOURCE_URL = process.env.DESKTOP_OMIT_SOURCE_URL === "1";
 const TOS_BASE_URL = requiredHttpsUrl(
     process.env.DESKTOP_TOS_BASE_URL || "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent",
 );
 const REPOSITORY = process.env.GITHUB_REPOSITORY || "Eynzof/Hermes-CN-Desktop";
 
 if (!VERSION_TAG) throw new Error("DESKTOP_VERSION_TAG is required (for example v0.6.3)");
+if (!new Set(["stable", "canary"]).has(RELEASE_CHANNEL)) {
+  throw new Error(`DESKTOP_RELEASE_CHANNEL must be stable or canary, got ${RELEASE_CHANNEL}`);
+}
 
 function requiredHttpsUrl(value) {
   const url = new URL(value.trim());
@@ -75,7 +81,9 @@ async function upload(filePath, objectPath) {
       const response = await fetch(url, {
         method: "PUT",
         headers: {
-          "cache-control": objectPath.includes("/latest/") || objectPath.endsWith("latest.json")
+          "cache-control": objectPath.includes("/latest/")
+            || objectPath.endsWith("latest.json")
+            || objectPath.endsWith("canary.json")
             ? "no-cache, no-store, must-revalidate"
             : "public, max-age=31536000, immutable",
           "content-length": String(body.byteLength),
@@ -106,12 +114,22 @@ async function readBrands() {
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
     .map((entry) => entry.name)
     .sort();
-  return Promise.all(names.map(async (name) => JSON.parse(await readFile(join(BRANDS_DIR, name), "utf8"))));
+  const brands = await Promise.all(
+    names.map(async (name) => JSON.parse(await readFile(join(BRANDS_DIR, name), "utf8"))),
+  );
+  if (!SELECTED_BRAND) return brands;
+  const selected = brands.filter((brand) => brand.id === SELECTED_BRAND);
+  if (selected.length !== 1) {
+    throw new Error(`DESKTOP_BRAND does not match exactly one brand config: ${SELECTED_BRAND}`);
+  }
+  return selected;
 }
 
 async function main() {
   const files = (await readdir(SOURCE_DIR, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && entry.name !== "builder-debug.yml")
+    .filter((entry) => entry.isFile()
+      && entry.name !== "builder-debug.yml"
+      && !entry.name.toLowerCase().endsWith(".json"))
     .map((entry) => entry.name)
     .sort();
   if (files.length === 0) throw new Error(`No desktop release assets found under ${SOURCE_DIR}`);
@@ -122,7 +140,8 @@ async function main() {
   const uploaded = new Set();
 
   for (const brand of brands) {
-    const needles = [brand.productName, brand.appName, brand.appNameEn, brand.id]
+    const channelRoot = RELEASE_CHANNEL === "stable" ? brand.id : `${brand.id}/canary`;
+    const needles = [brand.artifactBrandName, brand.productName, brand.appName, brand.appNameEn, brand.id]
       .map(normalized)
       .filter(Boolean);
     const brandFiles = files.filter((fileName) => needles.some((needle) => normalized(fileName).includes(needle)));
@@ -133,8 +152,8 @@ async function main() {
     const assets = {};
     for (const fileName of brandFiles) {
       const filePath = join(SOURCE_DIR, fileName);
-      const latestPath = `${brand.id}/latest/${fileName}`;
-      const versionedPath = `${brand.id}/releases/v${version}/${fileName}`;
+      const latestPath = `${channelRoot}/latest/${fileName}`;
+      const versionedPath = `${channelRoot}/releases/v${version}/${fileName}`;
       await upload(filePath, latestPath);
       await upload(filePath, versionedPath);
       uploaded.add(fileName);
@@ -148,9 +167,11 @@ async function main() {
         fileName,
         size: body.byteLength,
         sha256: createHash("sha256").update(body).digest("hex"),
-        url: publicUrl(`${brand.id}/latest/${fileName}`).toString(),
-        versionedUrl: publicUrl(`${brand.id}/releases/v${version}/${fileName}`).toString(),
-        sourceUrl: `https://github.com/${REPOSITORY}/releases/download/${encodeURIComponent(VERSION_TAG)}/${encodedFileName(fileName)}`,
+        url: publicUrl(`${channelRoot}/latest/${fileName}`).toString(),
+        versionedUrl: publicUrl(`${channelRoot}/releases/v${version}/${fileName}`).toString(),
+        ...(!OMIT_SOURCE_URL ? {
+          sourceUrl: `https://github.com/${REPOSITORY}/releases/download/${encodeURIComponent(VERSION_TAG)}/${encodedFileName(fileName)}`,
+        } : {}),
       };
     }
 
@@ -159,14 +180,23 @@ async function main() {
       version: VERSION_TAG,
       semver: version,
       publishedAt: now,
-      sourceUrl: `https://github.com/${REPOSITORY}/releases/tag/${encodeURIComponent(VERSION_TAG)}`,
+      channel: RELEASE_CHANNEL,
+      ...(!OMIT_SOURCE_URL ? {
+        sourceUrl: `https://github.com/${REPOSITORY}/releases/tag/${encodeURIComponent(VERSION_TAG)}`,
+      } : {}),
       updatedAt: now,
       assets,
     };
-    const manifestPath = join(SOURCE_DIR, `${brand.id}-latest.json`);
+    const manifestFileName = RELEASE_CHANNEL === "stable"
+      ? `${brand.id}-latest.json`
+      : `${brand.id}-canary.json`;
+    const manifestPath = join(SOURCE_DIR, manifestFileName);
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-    await upload(manifestPath, `${brand.id}/latest.json`);
-    await upload(manifestPath, `${brand.id}/releases/v${version}/latest.json`);
+    const latestManifestPath = RELEASE_CHANNEL === "stable"
+      ? `${brand.id}/latest.json`
+      : `${brand.id}/canary.json`;
+    await upload(manifestPath, latestManifestPath);
+    await upload(manifestPath, `${channelRoot}/releases/v${version}/latest.json`);
   }
 
   if (files.includes("checksums.txt")) {

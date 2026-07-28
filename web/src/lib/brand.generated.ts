@@ -6,6 +6,7 @@ export interface BrandConfig {
   appName: string;
   appNameEn: string;
   productName: string;
+  artifactBrandName: string;
   identifier: string;
   dataDirName: string;
   providerKey: string;
@@ -31,6 +32,7 @@ export const BRAND: BrandConfig = {
   "appName": "HermesAgent",
   "appNameEn": "HermesAgent",
   "productName": "HuanxingHermes Desktop",
+  "artifactBrandName": "Huanxing",
   "identifier": "cn.org.hermesagent.desktop",
   "dataDirName": ".huanxinghermes",
   "providerKey": "huanxinghermes",

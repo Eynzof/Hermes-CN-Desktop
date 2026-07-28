@@ -98,7 +98,7 @@ Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外�
 
 - macOS Apple Silicon DMG：`Hermes.Agent.CN.Desktop_0.6.5_aarch64.dmg`
 - macOS Intel DMG：`Hermes.Agent.CN.Desktop_0.6.5_x64.dmg`
-- Windows x64 安装器：`Hermes.Agent.CN.Desktop_0.6.5_x64-setup.exe`
+- Windows x64 安装器：`Hermes-Huanxing-0.6.5_x64-setup.exe`
 
 当前 Windows 与 macOS 安装包都会预置 `Hermes-CN-Core` runtime，安装后优先从包内 runtime 完成本地内核初始化；托管 runtime 下载与更新流程只作为升级或兜底路径使用。
 

@@ -354,6 +354,36 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
+      - name: Rename branded Windows installer
+        id: windows_installer
+        if: matrix.runtime_platform == 'win32'
+        shell: bash
+        env:
+          BRAND: ${{ matrix.brand }}
+        run: |
+          set -euo pipefail
+          node scripts/rename-windows-artifacts.mjs \
+            --target "${{ matrix.target }}" \
+            --brand "$BRAND"
+
+      - name: Upload branded Windows installer
+        if: matrix.runtime_platform == 'win32'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release upload \
+            "$RELEASE_TAG" \
+            "${{ steps.windows_installer.outputs.installer_path }}" \
+            --clobber
+          previous_name="${{ steps.windows_installer.outputs.previous_installer_name }}"
+          installer_name="${{ steps.windows_installer.outputs.installer_name }}"
+          if [ "$previous_name" != "$installer_name" ]; then
+            gh release delete-asset "$RELEASE_TAG" "$previous_name" --yes || true
+          fi
+
       - name: Package + upload Windows portable zip
         if: matrix.runtime_platform == 'win32'
         shell: bash

@@ -3,6 +3,7 @@
   "appName": "HermesAgent",
   "appNameEn": "HermesAgent",
   "productName": "FengchiHermes Desktop",
+  "artifactBrandName": "Fengchi",
   "identifier": "cn.org.hermesagent.desktop",
   "dataDirName": ".fengchihermes",
   "providerKey": "fengchihermes",

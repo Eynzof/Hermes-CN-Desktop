@@ -97,7 +97,7 @@ The current release includes:
 
 - macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.6.5_aarch64.dmg`
 - macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.6.5_x64.dmg`
-- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.6.5_x64-setup.exe`
+- Windows x64 installer: `Hermes-Huanxing-0.6.5_x64-setup.exe`
 
 Both the Windows and macOS installers include a bundled `Hermes-CN-Core` runtime. On first launch, the app initializes the local core from the bundled runtime first; managed runtime download/update is only used for upgrades or fallback repair.
 
