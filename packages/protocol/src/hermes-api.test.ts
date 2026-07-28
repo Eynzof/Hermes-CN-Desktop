@@ -10,6 +10,8 @@ import {
   CronRunsResponse,
   ElevenLabsVoicesResponse,
   FsListResponse,
+  MemoryProviderConfigResponse,
+  MemoryProviderRuntimeStatusResponse,
   MoaConfigResponse,
   ProviderModelsListResult,
   ProfileCreateResponse,
@@ -23,6 +25,90 @@ import {
   SessionSummary,
   StatusResponse,
 } from "./hermes-api";
+
+
+describe("Memory provider schemas", () => {
+  it("parses generic provider config fields without exposing a secret value", () => {
+    const parsed = MemoryProviderConfigResponse.parse({
+      name: "openviking",
+      label: "OpenViking",
+      fields: [
+        {
+          key: "endpoint",
+          label: "Endpoint",
+          kind: "text",
+          value: "http://127.0.0.1:1933",
+          is_set: true,
+        },
+        {
+          key: "api_key",
+          label: "API Key",
+          kind: "secret",
+          value: "",
+          is_set: true,
+        },
+      ],
+      setup: { dependencies_installed: true },
+    });
+
+    expect(parsed.fields[0].value).toBe("http://127.0.0.1:1933");
+    expect(parsed.fields[1].value).toBe("");
+    expect(parsed.fields[1].is_set).toBe(true);
+  });
+
+  it("discriminates OpenViking runtime details", () => {
+    const parsed = MemoryProviderRuntimeStatusResponse.parse({
+      provider: "openviking",
+      active: true,
+      configured: true,
+      reachable: true,
+      healthy: true,
+      endpoint: "http://127.0.0.1:1933",
+      console_url: "http://127.0.0.1:1933/studio",
+      version: "0.3.26.dev3",
+      checked_at: "2026-07-28T12:00:00Z",
+      error: "",
+      details: {
+        kind: "openviking",
+        auth_mode: "dev",
+        memory_stats: { total_memories: 12 },
+        model_usage: [],
+        queue_usage: [],
+        tasks: [],
+      },
+    });
+
+    expect(parsed.details?.kind).toBe("openviking");
+    if (parsed.details?.kind === "openviking") {
+      expect(parsed.details.memory_stats.total_memories).toBe(12);
+    }
+  });
+
+  it("accepts a healthy Hindsight response without runtime config", () => {
+    const parsed = MemoryProviderRuntimeStatusResponse.parse({
+      provider: "hindsight",
+      active: false,
+      configured: true,
+      reachable: true,
+      healthy: true,
+      endpoint: "http://localhost:8888",
+      console_url: "http://localhost:9999/dashboard",
+      version: "0.5.0",
+      checked_at: "2026-07-28T12:00:00Z",
+      error: "",
+      details: {
+        kind: "hindsight",
+        mode: "local_external",
+        bank_id: "hermes",
+        stats: { total_nodes: 8 },
+        runtime_config: null,
+      },
+    });
+
+    expect(parsed.healthy).toBe(true);
+    expect(parsed.details?.kind).toBe("hindsight");
+  });
+});
 
 
 describe("Audio API schemas", () => {

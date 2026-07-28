@@ -1,12 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchJSON, putJSON, raceAbort } from "@/lib/transport";
+import { fetchJSON, postJSON, putJSON, raceAbort } from "@/lib/transport";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import type { MemoryInfo, MemoryMutationResult } from "@/lib/runtime";
-import { MutationOkResponse } from "@hermes/protocol";
+import {
+  MemoryProviderConfigMutationResponse,
+  MemoryProviderConfigResponse,
+  MemoryProviderRuntimeStatusResponse,
+  MemoryProvidersResponse,
+  MemoryProviderSetupResponse,
+  MutationOkResponse,
+  type MemoryProviderListItem,
+} from "@hermes/protocol";
 
-export interface MemoryProviderOption {
-  name: string;
-  description: string;
+export const VISIBLE_MEMORY_PROVIDERS = ["openviking", "hindsight"] as const;
+export type VisibleMemoryProvider = (typeof VISIBLE_MEMORY_PROVIDERS)[number];
+
+export interface MemoryProviderOption extends MemoryProviderListItem {
+  name: VisibleMemoryProvider;
 }
 
 export interface MemoryProvidersState {
@@ -14,16 +24,45 @@ export interface MemoryProvidersState {
   options: MemoryProviderOption[];
 }
 
-/** Response shape from GET /api/memory (the correct endpoint for runtime memory state). */
-interface MemoryStatusResponse {
-  active: string;
-  providers: Array<{
-    name: string;
-    description: string;
-    available: boolean;
-    missing?: boolean;
-  }>;
-  builtin_files: Record<string, number>;
+export function toMemoryProvidersState(data: MemoryProvidersResponse): MemoryProvidersState {
+  return {
+    active: data.active ?? "",
+    options: VISIBLE_MEMORY_PROVIDERS.map((name) => {
+      const provider = (data.providers ?? []).find((item) => item.name === name);
+      return {
+        name,
+        description: provider?.description ?? "",
+        available: provider?.available ?? false,
+        configured: provider?.configured ?? false,
+        status: provider?.status ?? "",
+        missing: provider?.missing ?? false,
+        setup: provider?.setup,
+      };
+    }),
+  };
+}
+
+export function memoryProviderConfigPayload(values: Record<string, unknown>) {
+  return { values, activate: false as const };
+}
+
+export function memoryProviderConfigQueryKey(profile: string, provider: VisibleMemoryProvider) {
+  return ["memory-provider-config", profile, provider] as const;
+}
+
+export function memoryProviderStatusQueryKey(profile: string, provider: VisibleMemoryProvider) {
+  return ["memory-provider-status", profile, provider] as const;
+}
+
+export async function saveMemoryProviderConfig(
+  provider: VisibleMemoryProvider,
+  values: Record<string, unknown>,
+) {
+  return putJSON(
+    `/api/memory/providers/${encodeURIComponent(provider)}/config`,
+    memoryProviderConfigPayload(values),
+    MemoryProviderConfigMutationResponse,
+  );
 }
 
 function ensureMemoryBridge() {
@@ -91,27 +130,84 @@ export function useMemoryProviders(options: { enabled?: boolean } = {}) {
   return useQuery<MemoryProvidersState>({
     queryKey: ["memory-providers", profile],
     queryFn: async ({ signal }) => {
-      const data = await fetchJSON<MemoryStatusResponse>("/api/memory", { signal });
-      return {
-        active: data.active ?? "",
-        options: (data.providers ?? []).map((p) => ({
-          name: p.name,
-          description: p.description ?? "",
-        })),
-      };
+      const data = await fetchJSON("/api/memory", { signal }, MemoryProvidersResponse);
+      return toMemoryProvidersState(data);
     },
     staleTime: 30_000,
     enabled: options.enabled,
   });
 }
 
+export function useMemoryProviderConfig(provider: VisibleMemoryProvider, enabled: boolean) {
+  const profile = useActiveProfileName();
+  return useQuery({
+    queryKey: memoryProviderConfigQueryKey(profile, provider),
+    queryFn: ({ signal }) => fetchJSON(
+      `/api/memory/providers/${encodeURIComponent(provider)}/config`,
+      { signal },
+      MemoryProviderConfigResponse,
+    ),
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function useMemoryProviderStatus(provider: VisibleMemoryProvider, enabled: boolean) {
+  const profile = useActiveProfileName();
+  return useQuery({
+    queryKey: memoryProviderStatusQueryKey(profile, provider),
+    queryFn: ({ signal }) => fetchJSON(
+      `/api/memory/providers/${encodeURIComponent(provider)}/status`,
+      { signal },
+      MemoryProviderRuntimeStatusResponse,
+    ),
+    enabled,
+    staleTime: 10_000,
+    refetchInterval: enabled ? 30_000 : false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useSaveMemoryProviderConfig() {
+  const qc = useQueryClient();
+  const profile = useActiveProfileName();
+  return useMutation({
+    mutationFn: ({ provider, values }: { provider: VisibleMemoryProvider; values: Record<string, unknown> }) =>
+      saveMemoryProviderConfig(provider, values),
+    onSuccess: (_result, input) => {
+      qc.invalidateQueries({ queryKey: ["memory-provider-config", profile, input.provider] });
+      qc.invalidateQueries({ queryKey: ["memory-provider-status", profile, input.provider] });
+      qc.invalidateQueries({ queryKey: ["memory-providers", profile] });
+    },
+  });
+}
+
+export function useSetupMemoryProvider() {
+  const qc = useQueryClient();
+  const profile = useActiveProfileName();
+  return useMutation({
+    mutationFn: (provider: VisibleMemoryProvider) => postJSON(
+      `/api/memory/providers/${encodeURIComponent(provider)}/setup`,
+      { values: {} },
+      MemoryProviderSetupResponse,
+    ),
+    onSuccess: (_result, provider) => {
+      qc.invalidateQueries({ queryKey: ["memory-provider-config", profile, provider] });
+      qc.invalidateQueries({ queryKey: ["memory-provider-status", profile, provider] });
+      qc.invalidateQueries({ queryKey: ["memory-providers", profile] });
+    },
+  });
+}
+
 export function useSetMemoryProvider() {
   const qc = useQueryClient();
+  const profile = useActiveProfileName();
   return useMutation({
     mutationFn: (provider: string) =>
       putJSON("/api/memory/provider", { provider }, MutationOkResponse),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["memory-providers"] });
+      qc.invalidateQueries({ queryKey: ["memory-providers", profile] });
+      qc.invalidateQueries({ queryKey: ["memory-provider-status", profile] });
       qc.invalidateQueries({ queryKey: ["config"] });
     },
   });
