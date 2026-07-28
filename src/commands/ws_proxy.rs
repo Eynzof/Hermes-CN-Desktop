@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
 use tokio::sync::{mpsc, Notify};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::error::AppError;
 use crate::process::dashboard::{
@@ -85,6 +86,95 @@ fn shutdown_active(state: &State<'_, AppState>) -> Result<(), AppError> {
     Ok(())
 }
 
+pub type GatewayWebSocket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// Open the currently configured Core gateway with the desktop-owned auth.
+/// Both the webview relay and the browser companion use this one path so token
+/// refresh and gated-remote OAuth ticket behavior cannot drift apart.
+pub async fn connect_gateway_stream(
+    app: &tauri::AppHandle,
+    state: &AppState,
+) -> Result<GatewayWebSocket, AppError> {
+    let (api_base_url, auth, is_remote) = {
+        let inner = state.inner.lock()?;
+        (
+            inner.api_base_url.clone(),
+            inner.dashboard_auth(),
+            inner.connection_mode == crate::connection::ConnectionMode::Remote,
+        )
+    };
+
+    match &auth {
+        // Gated remote: mint a single-use 30s ticket per connect. A 401 mint
+        // means the session is dead → surface an auth error (frontend prompts
+        // re-login); one retry covers a TTL race between mint and connect.
+        crate::state::DashboardAuth::Oauth(session) => {
+            let ticket = match session.mint_ws_ticket().await {
+                Ok(t) => t,
+                Err(err) => {
+                    if let AppError::AuthSessionExpired(_) = &err {
+                        emit_ws_auth_expired(app, &api_base_url);
+                    }
+                    return Err(err);
+                }
+            };
+            let url = build_gateway_ws_url_with_ticket(&api_base_url, &ticket);
+            match tokio_tungstenite::connect_async(url).await {
+                Ok((ws, _)) => Ok(ws),
+                Err(_) => {
+                    // Ticket may have expired (single-use, 30s); mint fresh once.
+                    let ticket2 = match session.mint_ws_ticket().await {
+                        Ok(t) => t,
+                        Err(err) => {
+                            if let AppError::AuthSessionExpired(_) = &err {
+                                emit_ws_auth_expired(app, &api_base_url);
+                            }
+                            return Err(err);
+                        }
+                    };
+                    let url2 = build_gateway_ws_url_with_ticket(&api_base_url, &ticket2);
+                    tokio_tungstenite::connect_async(url2)
+                        .await
+                        .map(|(ws, _)| ws)
+                        .map_err(map_ws_connect_error)
+                }
+            }
+        }
+        crate::state::DashboardAuth::Token(token) => {
+            let token = token.clone();
+            match tokio_tungstenite::connect_async(build_gateway_url(
+                &api_base_url,
+                token.as_deref(),
+            ))
+            .await
+            {
+                Ok((ws, _resp)) => Ok(ws),
+                // Remote tokens are static; scraping the remote's HTML for a
+                // fresh one would just hammer it with a doomed retry.
+                Err(first_err) if is_remote => Err(AppError::GatewayWs(first_err.to_string())),
+                Err(first_err) => {
+                    // Token may have rotated (dashboard restarted). Refresh once.
+                    match fetch_session_token(&api_base_url).await {
+                        Some(fresh) => {
+                            let fresh_url = build_gateway_url(&api_base_url, Some(&fresh));
+                            {
+                                let mut inner = state.inner.lock()?;
+                                inner.session_token = Some(fresh.clone());
+                                inner.gateway_url = fresh_url.clone();
+                            }
+                            tokio_tungstenite::connect_async(fresh_url)
+                                .await
+                                .map(|(ws, _)| ws)
+                                .map_err(|e| AppError::GatewayWs(e.to_string()))
+                        }
+                        None => Err(AppError::GatewayWs(first_err.to_string())),
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Open the official `/api/ws` WebSocket from Rust and start relaying frames.
 ///
 /// Resolves once the handshake completes; the JS shim treats that as `onopen`.
@@ -98,87 +188,7 @@ pub async fn gateway_ws_open(
 ) -> Result<(), AppError> {
     let connection_id = input.connection_id;
     shutdown_active(&state)?;
-
-    let (api_base_url, auth, is_remote) = {
-        let inner = state.inner.lock()?;
-        (
-            inner.api_base_url.clone(),
-            inner.dashboard_auth(),
-            inner.connection_mode == crate::connection::ConnectionMode::Remote,
-        )
-    };
-
-    let stream = match &auth {
-        // Gated remote: mint a single-use 30s ticket per connect. A 401 mint
-        // means the session is dead → surface an auth error (frontend prompts
-        // re-login); one retry covers a TTL race between mint and connect.
-        crate::state::DashboardAuth::Oauth(session) => {
-            let ticket = match session.mint_ws_ticket().await {
-                Ok(t) => t,
-                Err(err) => {
-                    if let AppError::AuthSessionExpired(_) = &err {
-                        emit_ws_auth_expired(&app, &api_base_url);
-                    }
-                    return Err(err);
-                }
-            };
-            let url = build_gateway_ws_url_with_ticket(&api_base_url, &ticket);
-            match tokio_tungstenite::connect_async(url).await {
-                Ok((ws, _)) => ws,
-                Err(_) => {
-                    // Ticket may have expired (single-use, 30s); mint fresh once.
-                    let ticket2 = match session.mint_ws_ticket().await {
-                        Ok(t) => t,
-                        Err(err) => {
-                            if let AppError::AuthSessionExpired(_) = &err {
-                                emit_ws_auth_expired(&app, &api_base_url);
-                            }
-                            return Err(err);
-                        }
-                    };
-                    let url2 = build_gateway_ws_url_with_ticket(&api_base_url, &ticket2);
-                    match tokio_tungstenite::connect_async(url2).await {
-                        Ok((ws, _)) => ws,
-                        Err(e) => return Err(map_ws_connect_error(e)),
-                    }
-                }
-            }
-        }
-        crate::state::DashboardAuth::Token(token) => {
-            let token = token.clone();
-            match tokio_tungstenite::connect_async(build_gateway_url(
-                &api_base_url,
-                token.as_deref(),
-            ))
-            .await
-            {
-                Ok((ws, _resp)) => ws,
-                // Remote tokens are static; scraping the remote's HTML for a
-                // fresh one would just hammer it with a doomed retry.
-                Err(first_err) if is_remote => {
-                    return Err(AppError::GatewayWs(first_err.to_string()))
-                }
-                Err(first_err) => {
-                    // Token may have rotated (dashboard restarted). Refresh once.
-                    match fetch_session_token(&api_base_url).await {
-                        Some(fresh) => {
-                            let fresh_url = build_gateway_url(&api_base_url, Some(&fresh));
-                            {
-                                let mut inner = state.inner.lock()?;
-                                inner.session_token = Some(fresh.clone());
-                                inner.gateway_url = fresh_url.clone();
-                            }
-                            match tokio_tungstenite::connect_async(fresh_url).await {
-                                Ok((ws, _resp)) => ws,
-                                Err(e) => return Err(AppError::GatewayWs(e.to_string())),
-                            }
-                        }
-                        None => return Err(AppError::GatewayWs(first_err.to_string())),
-                    }
-                }
-            }
-        }
-    };
+    let stream = connect_gateway_stream(&app, &state).await?;
 
     let (mut sink, mut read) = stream.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();

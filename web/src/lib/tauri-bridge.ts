@@ -306,6 +306,10 @@ const tauriBridge = {
     return invokeCommand("open_external_url", { input });
   },
 
+  async openBrowserCompanion(): Promise<{ ok: boolean; url: string; port: number }> {
+    return invokeCommand("open_browser_companion");
+  },
+
   async toggleDevtools(): Promise<void> {
     return invokeCommand("toggle_devtools");
   },
