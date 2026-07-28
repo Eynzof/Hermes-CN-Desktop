@@ -30,6 +30,7 @@ import {
   type EnterpriseBinding,
   type EnterpriseSyncMeta,
 } from "@/lib/enterprise-sync";
+import { savedCustomProviderIdsFromConfig } from "@/lib/model-provider-visibility";
 import s from "./custom-models-pane.module.css";
 
 /* ── 工具 ─────────────────────────────────────────────────────── */
@@ -268,7 +269,8 @@ function CustomModelEditDialog({ title, initial, saving, error, onClose, onSave 
 /* ── 企业模型下发 ─────────────────────────────────────────────── */
 
 function EnterpriseSection() {
-  const { data: config } = useConfig();
+  const configQuery = useConfig();
+  const { data: config } = configQuery;
   const saveConfig = useSaveConfig();
   const { setRuntimeModel } = useGateway();
   const [binding, setBinding] = useState<EnterpriseBinding | null>(readEnterpriseBinding);
@@ -288,9 +290,18 @@ function EnterpriseSection() {
   );
 
   const handleSync = async () => {
-    if (!config) {
-      setError("配置尚未加载完成，请稍后再试。");
-      return;
+    // Settings can be opened immediately after the managed runtime becomes
+    // ready, before the shared config query has completed. Refetch here so a
+    // valid device token is not rejected just because the panel raced startup.
+    let currentConfig = config;
+    if (!currentConfig) {
+      setError("正在加载配置…");
+      const result = await configQuery.refetch();
+      currentConfig = result.data;
+      if (!currentConfig) {
+        setError("配置加载失败，请确认工作台已连接后重试。");
+        return;
+      }
     }
     const nextBinding: EnterpriseBinding = {
       serverUrl: serverUrl.trim().replace(/\/+$/, ""),
@@ -304,7 +315,7 @@ function EnterpriseSection() {
     setError("");
     try {
       const data = await syncEnterpriseModels(nextBinding);
-      const next = applyEnterpriseSync(config, nextBinding, data);
+      const next = applyEnterpriseSync(currentConfig, nextBinding, data);
       await saveConfig.mutateAsync(next);
       if (!data.cleanupOnly && data.defaultModel) {
         try {
@@ -331,11 +342,16 @@ function EnterpriseSection() {
   };
 
   const handleUnbind = async () => {
-    if (!binding || !config) return;
+    if (!binding) return;
     setBusy(true);
     setError("");
     try {
-      const next = applyEnterpriseSync(config, binding, { cleanupOnly: true });
+      const currentConfig = config ?? (await configQuery.refetch()).data;
+      if (!currentConfig) {
+        setError("配置加载失败，请确认工作台已连接后重试。");
+        return;
+      }
+      const next = applyEnterpriseSync(currentConfig, binding, { cleanupOnly: true });
       await saveConfig.mutateAsync(next);
       setBinding(null);
       setMeta(null);
@@ -418,8 +434,8 @@ function EnterpriseSection() {
                 <PlusCircle size={15} />
               </span>
               <div className={s.modelText}>
-                <div className={s.modelName}>{preset.defaultModel}</div>
-                <div className={s.modelSub}>企业下发{ preset.vendor && preset.vendor !== "自定义" ? ` · ${preset.vendor}` : "" }</div>
+                <div className={s.modelName}>{preset.name || preset.defaultModel}</div>
+                <div className={s.modelSub}>企业下发 · {preset.defaultModel}{preset.vendor && preset.vendor !== "自定义" ? ` · ${preset.vendor}` : ""}</div>
               </div>
             </div>
           ))}
@@ -443,10 +459,12 @@ export function CustomModelsPane() {
   const [error, setError] = useState("");
 
   const customPresets = useMemo(
-    () =>
-      customProviderPresetsFromConfig(config, [], undefined).filter(
-        (preset) => !preset.id.startsWith(ENTERPRISE_PROVIDER_PREFIX),
-      ),
+    () => {
+      const savedIds = savedCustomProviderIdsFromConfig(config);
+      return customProviderPresetsFromConfig(config, [], undefined).filter(
+        (preset) => savedIds.has(preset.id.toLowerCase()),
+      );
+    },
     [config],
   );
 

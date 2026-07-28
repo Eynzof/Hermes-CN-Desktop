@@ -20,13 +20,19 @@
   "updateManifestUrl": "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent/frogclawhermes/latest.json",
   "updateDownloadUrl": "https://frogclaw.com/hermes-client",
   "accountDefaultModels": [
-    "claude-opus-4-8",
     "deepseek-v4-flash",
     "deepseek-v4-pro",
-    "gpt-5.5",
-    "kimi-k2.6",
-    "minimax-m3",
-    "mimo-v2.5-pro",
-    "glm-5.1"
-  ]
+    "gpt-5.6-sol",
+    "kimi-k3",
+    "glm-5.2",
+    "claude-opus-5"
+  ],
+  "accountModelDescriptions": {
+    "deepseek-v4-flash": "响应快、成本低，适合日常问答、轻量代码修改和批量文本处理。",
+    "deepseek-v4-pro": "更强的推理和代码能力，适合复杂开发、长链路分析和高质量写作。",
+    "gpt-5.6-sol": "通用能力强，适合综合任务、工具调用、多轮规划和复杂问题拆解。",
+    "kimi-k3": "长文本阅读和中文理解表现稳定，适合资料分析、总结和知识密集型任务。",
+    "glm-5.2": "中文场景均衡，适合办公写作、问答和常规 Agent 任务。",
+    "claude-opus-5": "复杂推理、代码架构和长上下文任务表现突出"
+  }
 }

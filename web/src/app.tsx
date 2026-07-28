@@ -47,8 +47,6 @@ import {
 } from "@/stores/settings-dialog";
 import { getTeamDeviceTokenStatus } from "@/lib/tauri-bridge";
 import {
-  dismissTeamDeviceTokenOnboarding,
-  isTeamDeviceTokenOnboardingDismissed,
   resetTeamDeviceTokenOnboarding,
 } from "@/stores/auth";
 
@@ -144,10 +142,6 @@ export function App() {
   }, []);
   useEffect(() => {
     if (gate !== "ready" || teamTokenGate !== "checking") return;
-    if (isTeamDeviceTokenOnboardingDismissed()) {
-      setTeamTokenGate("done");
-      return;
-    }
     let cancelled = false;
     void getTeamDeviceTokenStatus()
       .then((status) => {
@@ -183,7 +177,6 @@ export function App() {
             open
             onConnected={() => setTeamTokenGate("done")}
             onSkip={() => {
-              dismissTeamDeviceTokenOnboarding();
               setTeamTokenGate("done");
             }}
           />

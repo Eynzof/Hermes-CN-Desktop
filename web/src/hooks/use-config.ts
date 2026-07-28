@@ -61,6 +61,11 @@ export function useSaveConfig() {
       invalidateModelOptionsCache();
       qc.invalidateQueries({ queryKey: ["config"] });
       qc.invalidateQueries({ queryKey: ["model-info"] });
+      // The chat picker keeps model.options in a shared React Query cache.
+      // Config saves (including Team enterprise sync) change the provider
+      // list, so invalidate that query as well instead of waiting five
+      // minutes for its staleTime to expire.
+      qc.invalidateQueries({ queryKey: ["model-options"] });
     },
   });
 }

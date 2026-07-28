@@ -1170,11 +1170,12 @@ export function GooseComposer({
     };
   }, [loadModelOptions, modelOptions, modelPicker?.loadOptions, modelPickerDisabled]);
 
-  // When the parent's useModelOptions query resolves *after* this composer
-  // mounts (cache miss on first ever load), backfill our local state so the
-  // picker opens with data instead of a spinner.
+  // Keep the local picker state in sync when the parent's useModelOptions query
+  // changes. This matters after a config save (for example Team enterprise
+  // sync): the shared query is invalidated and refetched, but the composer
+  // may already have mounted with the previous provider list.
   useEffect(() => {
-    if (modelPicker?.initialOptions && !modelOptions) {
+    if (modelPicker?.initialOptions && modelPicker.initialOptions !== modelOptions) {
       setModelOptions(modelPicker.initialOptions);
     }
   }, [modelPicker?.initialOptions, modelOptions]);

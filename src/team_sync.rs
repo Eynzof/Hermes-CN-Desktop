@@ -149,8 +149,16 @@ fn merge_config(home: &Path, token: &str, manifest: &TeamManifest) -> Result<(),
                 "-"
             )
         );
+        let display_name = model.name.trim();
         let mut entry = serde_yaml::Mapping::new();
-        entry.insert("name".into(), name.clone().into());
+        entry.insert(
+            "name".into(),
+            if display_name.is_empty() {
+                name.clone().into()
+            } else {
+                display_name.into()
+            },
+        );
         entry.insert("provider_key".into(), name.clone().into());
         entry.insert("base_url".into(), model.url.clone().into());
         entry.insert("api_key".into(), token.into());
@@ -210,12 +218,18 @@ fn parse_manifest_response(
     status: reqwest::StatusCode,
     bytes: &[u8],
 ) -> Result<TeamManifest, String> {
+    // The launcher treats both unauthorized and forbidden responses as an
+    // invalid/revoked device token.  Check the status before decoding the
+    // body because gateways sometimes return plain text or an empty body.
+    if matches!(
+        status,
+        reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
+    ) {
+        return Err("Team device token was rejected".into());
+    }
     let env: TeamManifestEnvelope =
         serde_json::from_slice(bytes).map_err(|e| format!("parse Team manifest: {e}"))?;
     if !status.is_success() || env.success == Some(false) {
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            return Err("Team device token was rejected".into());
-        }
         return Err(env.message.unwrap_or_else(|| {
             format!("Team manifest request failed (HTTP {})", status.as_u16())
         }));
@@ -237,15 +251,26 @@ async fn sync_skills(
         if id.is_empty() || id.contains("..") || id.contains('/') || id.contains('\\') {
             return Err("unsafe Team skill id".into());
         }
-        let bytes = client
+        let response = client
             .get(resolve_url(&skill.download_url)?)
             .bearer_auth(token)
             .send()
             .await
-            .map_err(|e| e.to_string())?
-            .bytes()
-            .await
             .map_err(|e| e.to_string())?;
+        let status = response.status();
+        if matches!(
+            status,
+            reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
+        ) {
+            return Err("Team device token was rejected".into());
+        }
+        if !status.is_success() {
+            return Err(format!(
+                "Team skill download failed (HTTP {})",
+                status.as_u16()
+            ));
+        }
+        let bytes = response.bytes().await.map_err(|e| e.to_string())?;
         if bytes.len() > MAX_SKILL {
             return Err("Team skill archive is too large".into());
         }
@@ -504,6 +529,14 @@ mod tests {
     }
 
     #[test]
+    fn forbidden_manifest_is_reported_as_a_rejected_token_even_without_json() {
+        let error =
+            parse_manifest_response(reqwest::StatusCode::FORBIDDEN, b"forbidden").unwrap_err();
+
+        assert_eq!(error, "Team device token was rejected");
+    }
+
+    #[test]
     fn status_requires_both_token_and_committed_sync_state() {
         let temp = tempfile::TempDir::new().unwrap();
         let home = temp.path();
@@ -546,5 +579,35 @@ mod tests {
         let status = status_for_home(home);
         assert!(!status.configured);
         assert_eq!(status.synced_models, 1);
+    }
+
+    #[test]
+    fn managed_provider_keeps_stable_key_and_uses_manifest_display_name() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let home = temp.path();
+        merge_config(
+            home,
+            "wbd_test",
+            &TeamManifest {
+                models: vec![TeamModel {
+                    id: "mdl_opaque_id".into(),
+                    name: "rightcodegpt".into(),
+                    url: "https://team.example/api/workbuddy/proxy/v1".into(),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let config: serde_yaml::Value =
+            serde_yaml::from_slice(&fs::read(home.join("config.yaml")).unwrap()).unwrap();
+        let provider = &config["custom_providers"][0];
+        assert_eq!(
+            provider["provider_key"].as_str(),
+            Some("team-mdl_opaque_id")
+        );
+        assert_eq!(provider["name"].as_str(), Some("rightcodegpt"));
+        assert_eq!(provider["model"].as_str(), Some("mdl_opaque_id"));
     }
 }

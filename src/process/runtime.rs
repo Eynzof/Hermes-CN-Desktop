@@ -2104,16 +2104,14 @@ pub async fn install_bundled_runtime_if_needed(
                 };
             }
         } else if current.runtime_version == manifest.runtime_version {
-            if let Err(e) =
-                sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
-            {
-                return RuntimeInstallUpdateResult {
-                    ok: false,
-                    installed: None,
-                    previous: Some(current),
-                    error: Some(format!("Bundled runtime resource sync failed: {}", e)),
-                };
-            }
+            // The bootstrap pipeline calls `sync_runtime_resources_if_available`
+            // immediately after this install check. Refreshing the same dashboard,
+            // skills, and plugins tree here as well performs two destructive
+            // remove-and-copy passes on every launch. Apart from doubling startup
+            // I/O, Windows endpoint protection can keep a just-scanned file open
+            // between those passes and leave bootstrap stuck before dashboard
+            // spawn. Treat an already-current runtime as the no-install fast path;
+            // the caller's normal resource-sync stage remains authoritative.
             return RuntimeInstallUpdateResult {
                 ok: true,
                 installed: None,
@@ -3943,6 +3941,95 @@ mod tests {
         assert!(synced.bundled_skills.is_none());
         assert!(synced.bundled_plugins.is_none());
         assert!(!runtime.join("_internal").exists());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn already_current_bundled_runtime_defers_resource_sync_to_bootstrap_stage() {
+        let dir = TempDir::new().unwrap();
+        let runtime_root = dir.path().join("runtime-root");
+        let runtime_dir = runtime_root.join("versions").join("1.2.3-cn.1");
+        let resource = dir.path().join("resources");
+        let bundled = resource.join("bundled-runtime");
+        let expanded = bundled_expanded_runtime_dir(&bundled);
+        let source_web_dist = resource
+            .join(DASHBOARD_RESOURCE_DIR)
+            .join(DASHBOARD_WEB_DIST_DIR);
+        let source_skill = resource
+            .join(BUNDLED_SKILLS_RESOURCE_DIR)
+            .join("creative")
+            .join("demo");
+        let target_web_dist = runtime_dashboard_web_dist_dir(&runtime_dir);
+        let target_skill = runtime_bundled_skills_dir(&runtime_dir)
+            .join("creative")
+            .join("demo");
+
+        for path in [
+            &expanded,
+            &source_web_dist,
+            &source_skill,
+            &target_web_dist,
+            &target_skill,
+        ] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        std::fs::write(source_web_dist.join("index.html"), b"new dashboard").unwrap();
+        std::fs::write(source_skill.join("SKILL.md"), b"new skill").unwrap();
+        std::fs::write(target_web_dist.join("index.html"), b"old dashboard").unwrap();
+        std::fs::write(target_skill.join("SKILL.md"), b"old skill").unwrap();
+        std::fs::write(runtime_dir.join(primary_runtime_name()), b"runtime").unwrap();
+
+        let mut manifest = fixture_manifest();
+        manifest.platform = current_platform().to_string();
+        manifest.arch = current_arch().to_string();
+        write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
+
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+        write_json_file(
+            &current_record_path(),
+            &RuntimeInstallRecord {
+                schema_version: MANIFEST_SCHEMA_VERSION,
+                runtime_version: manifest.runtime_version.clone(),
+                kernel_version: manifest.kernel_version.clone(),
+                runtime_flavor: manifest.runtime_flavor.clone(),
+                runtime_revision: manifest.runtime_revision,
+                platform: manifest.platform.clone(),
+                arch: manifest.arch.clone(),
+                path: runtime_dir.to_string_lossy().to_string(),
+                executable_path: runtime_dir
+                    .join(primary_runtime_name())
+                    .to_string_lossy()
+                    .to_string(),
+                source: "bundled".to_string(),
+                installed_at: chrono_now(),
+                source_repo: Some(manifest.source_repo.clone()),
+                source_commit: Some(manifest.source_commit.clone()),
+                local_dirty_hash: None,
+                artifact_sha256: Some(manifest.sha256.clone()),
+                previous_runtime_version: None,
+            },
+        )
+        .unwrap();
+
+        let install = install_bundled_runtime_if_needed(Some(&resource)).await;
+        assert!(install.ok, "unexpected install error: {:?}", install.error);
+        assert!(install.installed.is_none());
+        assert_eq!(
+            std::fs::read(target_web_dist.join("index.html")).unwrap(),
+            b"old dashboard"
+        );
+        assert_eq!(
+            std::fs::read(target_skill.join("SKILL.md")).unwrap(),
+            b"old skill"
+        );
+
+        sync_runtime_resources_if_available(Some(&resource)).unwrap();
+        let synced_dashboard = std::fs::read(target_web_dist.join("index.html")).unwrap();
+        let synced_skill = std::fs::read(target_skill.join("SKILL.md")).unwrap();
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        assert_eq!(synced_dashboard, b"new dashboard");
+        assert_eq!(synced_skill, b"new skill");
     }
 
     #[test]

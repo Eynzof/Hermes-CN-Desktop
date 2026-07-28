@@ -7,7 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Check, PencilLine, X } from "lucide-react";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import type { GatewayModelProvider, ModelOptionsResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
@@ -21,7 +21,13 @@ import {
 } from "@/lib/model-usage-log";
 import { BRAND } from "@/lib/brand.generated";
 import { ENTERPRISE_PROVIDER_PREFIX } from "@/lib/enterprise-sync";
+import {
+  enterpriseProviderIdsFromConfig,
+  savedCustomProviderIdsFromConfig,
+} from "@/lib/model-provider-visibility";
 import { getProviderIconUrl } from "@/lib/provider-icons";
+import { useConfig } from "@/hooks/use-config";
+import { huanxingAuthAtom } from "@/stores/auth";
 import { openSettingsDialogAtom } from "@/stores/settings-dialog";
 import type { ComposerModelPickerProps, ComposerModelSelection } from "./composer-types";
 import s from "./goose-composer.module.css";
@@ -65,8 +71,12 @@ export interface Candidate {
   providerName: string;
   vendor: string;
   model: string;
+  displayName?: string;
+  subtitle?: string;
   baseUrl?: string;
   apiKeyLabel?: string;
+  apiUrl?: string;
+  enterprise?: boolean;
   configured: boolean;
   caps: ProviderCatalogModel | null;
   warning?: string;
@@ -154,6 +164,12 @@ export function buildCandidates(
     const authenticated = Boolean(extras.authenticated);
     const keyEnv = typeof extras.key_env === "string" ? extras.key_env : undefined;
     const warning = typeof extras.warning === "string" ? extras.warning : undefined;
+    const apiUrl = typeof extras.api_url === "string"
+      ? extras.api_url
+      : typeof extras.apiUrl === "string"
+        ? extras.apiUrl
+        : undefined;
+    const enterprise = isTeamServiceProviderUrl(apiUrl);
     const catalogModelIds = preset?.models.map((model) => model.id) ?? [];
     const advertisedModels = provider.models ?? [];
     if (advertisedModels.length === 0 && !authenticated) {
@@ -177,6 +193,8 @@ export function buildCandidates(
             model: placeholder,
             baseUrl: preset?.baseUrl,
             apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
+            apiUrl,
+            enterprise,
             configured: false,
             caps: findModelCaps(preset, placeholder),
             warning,
@@ -198,9 +216,32 @@ export function buildCandidates(
         model: modelId,
         baseUrl: preset?.baseUrl,
         apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
+        apiUrl,
+        enterprise,
         configured: authenticated,
         caps: findModelCaps(preset, modelId),
         warning,
+      });
+    }
+  }
+
+  // Brand account providers are the built-in model catalog for this desktop
+  // brand. Older Core configs may advertise only the two models that happened
+  // to be provisioned at the time, so fill the rest from brands/*.json instead
+  // of making the picker appear to have an incomplete built-in catalog.
+  const brandProvider = all.find((candidate) =>
+    isBrandProvider(candidate.providerSlug.toLowerCase()),
+  );
+  if (brandProvider) {
+    for (const modelId of BRAND.accountDefaultModels) {
+      const key = `${brandProvider.providerSlug}:${modelId}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      all.push({
+        ...brandProvider,
+        key,
+        model: modelId,
+        caps: null,
       });
     }
   }
@@ -315,23 +356,54 @@ function modelNameOrder(a: Candidate, b: Candidate): number {
   return a.model.localeCompare(b.model, "zh-Hans-CN");
 }
 
-export function groupCandidates(modelOptions: ModelOptionsResult | null): ModelGroups {
+export interface ModelGroupingOptions {
+  showEnterprise?: boolean;
+  enterpriseProviderIds?: ReadonlySet<string>;
+  savedCustomProviderIds?: ReadonlySet<string>;
+}
+
+export function isTeamServiceProviderUrl(value: unknown): boolean {
+  if (typeof value !== "string" || !value.trim() || !BRAND.teamServiceUrl.trim()) return false;
+  try {
+    return new URL(value).origin === new URL(BRAND.teamServiceUrl).origin;
+  } catch {
+    return false;
+  }
+}
+
+export function groupCandidates(
+  modelOptions: ModelOptionsResult | null,
+  options: ModelGroupingOptions = {},
+): ModelGroups {
   const groups: ModelGroups = { enterprise: [], custom: [], builtin: [] };
   const { all } = buildCandidates(modelOptions, []);
   const brandCandidates: Candidate[] = [];
   const otherBuiltinCandidates: Candidate[] = [];
+  const showEnterprise = options.showEnterprise ?? true;
 
   for (const candidate of all) {
     if (!candidate.configured) continue;
     const providerSlug = candidate.providerSlug.toLowerCase();
-    if (providerSlug.startsWith(ENTERPRISE_PROVIDER_PREFIX)) {
-      groups.enterprise.push(candidate);
+    if (
+      candidate.enterprise === true
+      || providerSlug.startsWith(ENTERPRISE_PROVIDER_PREFIX)
+      || options.enterpriseProviderIds?.has(providerSlug)
+    ) {
+      if (showEnterprise) {
+        groups.enterprise.push({
+          ...candidate,
+          displayName: candidate.providerName.replace(/^team-/i, "") || candidate.model,
+          subtitle: "由企业管理员下发",
+        });
+      }
     } else if (isBrandProvider(providerSlug)) {
       if (BRAND_MODEL_ORDER.has(candidate.model.toLowerCase())) {
         brandCandidates.push(candidate);
       }
     } else if (providerSlug.startsWith(CUSTOM_PROVIDER_PREFIX)) {
-      groups.custom.push(candidate);
+      if (options.savedCustomProviderIds?.has(providerSlug) ?? true) {
+        groups.custom.push(candidate);
+      }
     } else {
       otherBuiltinCandidates.push(candidate);
     }
@@ -360,8 +432,17 @@ function CandidateIcon({ candidate }: { candidate: Candidate }) {
     return <img className={s.modelMenuItemIcon} src={url} alt="" aria-hidden="true" />;
   }
   return (
-    <span className={s.modelMenuItemIcon} data-tone={candidate.providerSlug.toLowerCase().startsWith(ENTERPRISE_PROVIDER_PREFIX) ? "enterprise" : "custom"} aria-hidden="true">
-      {candidate.model.trim()[0]?.toUpperCase() ?? "M"}
+    <span
+      className={s.modelMenuItemIcon}
+      data-tone={
+        candidate.enterprise === true
+        || candidate.providerSlug.toLowerCase().startsWith(ENTERPRISE_PROVIDER_PREFIX)
+          ? "enterprise"
+          : "custom"
+      }
+      aria-hidden="true"
+    >
+      {(candidate.displayName || candidate.model).trim()[0]?.toUpperCase() ?? "M"}
     </span>
   );
 }
@@ -378,10 +459,27 @@ export function ModelPickerModal({
   anchorRef,
 }: ModelMenuProps) {
   const openSettingsDialog = useSetAtom(openSettingsDialogAtom);
+  const huanxingAccount = useAtomValue(huanxingAuthAtom);
+  const { data: config } = useConfig();
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ bottom: number; left: number } | null>(null);
 
-  const groups = useMemo(() => groupCandidates(modelOptions), [modelOptions]);
+  const savedCustomProviderIds = useMemo(
+    () => savedCustomProviderIdsFromConfig(config),
+    [config],
+  );
+  const enterpriseProviderIds = useMemo(
+    () => enterpriseProviderIdsFromConfig(config),
+    [config],
+  );
+  const groups = useMemo(
+    () => groupCandidates(modelOptions, {
+      showEnterprise: Boolean(huanxingAccount),
+      enterpriseProviderIds,
+      savedCustomProviderIds,
+    }),
+    [enterpriseProviderIds, huanxingAccount, modelOptions, savedCustomProviderIds],
+  );
   const isEmpty = groups.enterprise.length + groups.custom.length + groups.builtin.length === 0;
 
   const currentSelectionKey = useMemo(() => {
@@ -450,8 +548,10 @@ export function ModelPickerModal({
             >
               <CandidateIcon candidate={candidate} />
               <span className={s.modelMenuItemText}>
-                <span className={s.modelMenuItemName}>{candidate.model}</span>
-                <span className={s.modelMenuItemProvider}>{candidate.providerName}</span>
+                <span className={s.modelMenuItemName}>{candidate.displayName || candidate.model}</span>
+                <span className={s.modelMenuItemProvider}>
+                  {candidate.subtitle || candidate.providerName}
+                </span>
               </span>
               {isCurrent ? <Check size={14} className={s.modelMenuItemCheck} aria-hidden="true" /> : null}
             </button>

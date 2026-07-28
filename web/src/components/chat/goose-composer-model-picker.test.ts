@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { BRAND } from "@/lib/brand.generated";
-import { buildCandidates, groupCandidates } from "./goose-composer-model-picker";
+import {
+  buildCandidates,
+  groupCandidates,
+  isTeamServiceProviderUrl,
+} from "./goose-composer-model-picker";
 
 describe("buildCandidates", () => {
   it("augments a stale MiniMax gateway model list with MiniMax-M3 from the desktop catalog", () => {
@@ -112,7 +116,7 @@ describe("buildCandidates", () => {
 });
 
 describe("groupCandidates", () => {
-  it("groups brand, Team, and user models by source and keeps brand JSON order", () => {
+  it("groups brand defaults as built-in and Team models as enterprise", () => {
     const [firstBrandModel, secondBrandModel] = BRAND.accountDefaultModels;
     const brandProvider = `custom:${BRAND.providerKey}`;
     const options = {
@@ -144,7 +148,10 @@ describe("groupCandidates", () => {
       ],
     } as ModelOptionsResult;
 
-    const groups = groupCandidates(options);
+    const groups = groupCandidates(options, {
+      showEnterprise: true,
+      savedCustomProviderIds: new Set(["custom:my-endpoint"]),
+    });
 
     expect(groups.enterprise.map((candidate) => candidate.key)).toEqual([
       `custom:team-company-model:${firstBrandModel}`,
@@ -153,13 +160,30 @@ describe("groupCandidates", () => {
       "custom:my-endpoint:local-model",
     ]);
     expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
-      `${brandProvider}:${firstBrandModel}`,
-      `${brandProvider}:${secondBrandModel}`,
+      ...BRAND.accountDefaultModels.map((model) => `${brandProvider}:${model}`),
       "official-provider:official-only",
     ]);
   });
 
-  it("treats the brand messages provider as built-in and hides unconfigured rows", () => {
+  it("fills the complete built-in brand catalog when Core advertises only two models", () => {
+    const brandProvider = `custom:${BRAND.providerKey}`;
+    const options = {
+      providers: [{
+        slug: brandProvider,
+        name: BRAND.appName,
+        models: BRAND.accountDefaultModels.slice(0, 2),
+        authenticated: true,
+      }],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options);
+
+    expect(groups.builtin.map((candidate) => candidate.model)).toEqual(
+      [...BRAND.accountDefaultModels],
+    );
+  });
+
+  it("keeps brand defaults but hides Team models while logged out", () => {
     const brandModel = BRAND.accountDefaultModels[0];
     const messagesProvider = `custom:${BRAND.providerKey}-messages`;
     const options = {
@@ -176,15 +200,108 @@ describe("groupCandidates", () => {
           models: ["not-ready"],
           authenticated: false,
         },
+        {
+          slug: "custom:team-company-model",
+          name: "Enterprise",
+          models: [brandModel],
+          authenticated: true,
+        },
       ],
     } as ModelOptionsResult;
 
-    const groups = groupCandidates(options);
+    const groups = groupCandidates(options, { showEnterprise: false });
 
-    expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
-      `${messagesProvider}:${brandModel}`,
-    ]);
+    expect(groups.builtin.map((candidate) => candidate.key)).toEqual(
+      BRAND.accountDefaultModels.map((model) => `${messagesProvider}:${model}`),
+    );
     expect(groups.enterprise).toEqual([]);
+    expect(groups.custom).toEqual([]);
+  });
+
+  it("only shows custom providers that exist in the saved custom-model set", () => {
+    const options = {
+      providers: [
+        {
+          slug: "custom:old-account-provider",
+          name: "Managed account",
+          models: ["managed-model"],
+          authenticated: true,
+        },
+        {
+          slug: "custom:my-endpoint",
+          name: "My endpoint",
+          models: ["my-model"],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options, {
+      savedCustomProviderIds: new Set(["custom:my-endpoint"]),
+    });
+
+    expect(groups.custom.map((candidate) => candidate.key)).toEqual([
+      "custom:my-endpoint:my-model",
+    ]);
+  });
+
+  it("groups a Team-managed friendly-name gateway slug as enterprise", () => {
+    const options = {
+      providers: [
+        {
+          slug: "custom:rightcodegpt",
+          name: "rightcodegpt",
+          models: ["mdl_opaque_id"],
+          authenticated: true,
+          source: "user-config",
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options, {
+      showEnterprise: true,
+      enterpriseProviderIds: new Set([
+        "custom:team-mdl_opaque_id",
+        "custom:rightcodegpt",
+      ]),
+      savedCustomProviderIds: new Set(),
+    });
+
+    expect(groups.enterprise.map((candidate) => candidate.key)).toEqual([
+      "custom:rightcodegpt:mdl_opaque_id",
+    ]);
+    expect(groups.custom).toEqual([]);
+  });
+
+  it("groups a provider served by the brand Team service as enterprise", () => {
+    const apiUrl = `${BRAND.teamServiceUrl}/api/workbuddy/proxy/v1`;
+    const options = {
+      providers: [
+        {
+          slug: "custom:rightcodegpt",
+          name: "rightcodegpt",
+          models: ["mdl_opaque_id"],
+          authenticated: true,
+          source: "user-config",
+          api_url: apiUrl,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    expect(isTeamServiceProviderUrl(apiUrl)).toBe(true);
+
+    const groups = groupCandidates(options, {
+      showEnterprise: true,
+      savedCustomProviderIds: new Set(),
+    });
+
+    expect(groups.enterprise).toMatchObject([
+      {
+        key: "custom:rightcodegpt:mdl_opaque_id",
+        displayName: "rightcodegpt",
+        subtitle: "由企业管理员下发",
+      },
+    ]);
     expect(groups.custom).toEqual([]);
   });
 });

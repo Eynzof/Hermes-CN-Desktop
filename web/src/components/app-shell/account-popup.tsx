@@ -20,6 +20,7 @@ import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
 import { useCommandPalette } from "@/components/command-palette";
 import { openSettingsDialogAtom } from "@/stores/settings-dialog";
+import { gwConnectionAtom } from "@/stores/chat";
 import {
   authDialogOpenAtom,
   deviceTokenDialogOpenAtom,
@@ -29,6 +30,7 @@ import { huanxingAccountTypeLabel } from "@/lib/huanxing-auth";
 import { getTeamDeviceTokenStatus, type TeamDeviceTokenStatus } from "@/lib/tauri-bridge";
 import { dashboardPortFromUrl, dashboardUrlFromInputs } from "@/lib/dashboard-url";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
+import { runtime } from "@/lib/runtime";
 import s from "./account-popup.module.css";
 
 const DESKTOP_VERSION_LABEL = versionLabel(DESKTOP_VERSION);
@@ -55,6 +57,7 @@ export function AccountPopup() {
   const { openCommandPalette } = useCommandPalette();
   const openSettingsDialog = useSetAtom(openSettingsDialogAtom);
   const huanxingAccount = useAtomValue(huanxingAuthAtom);
+  const gatewayConnection = useAtomValue(gwConnectionAtom);
   const setHuanxingAccount = useSetAtom(huanxingAuthAtom);
   const openAuthDialog = useSetAtom(authDialogOpenAtom);
   const openDeviceTokenDialog = useSetAtom(deviceTokenDialogOpenAtom);
@@ -70,10 +73,20 @@ export function AccountPopup() {
     envOrigin: import.meta.env.VITE_HERMES_DASHBOARD_ORIGIN,
   });
   const port = dashboardPortFromUrl(dashboardUrl);
-  const gatewayOnline = !!status && !statusError;
+  // BackendApp only mounts after the managed runtime gate is ready. During the
+  // first status refetch, keep the account strip online instead of flashing a
+  // false "offline" state; a live WS connection also wins over a stale REST
+  // error after login/reconnect.
+  const gatewayOnline = gatewayConnection === "open"
+    || Boolean(status)
+    || (runtime.isBackendReady() && !statusError);
   const dark = isDarkTheme(themeConfig.theme);
   const profiles = profilesQuery.data ?? [];
-  const avatarLetter = (activeProfile.trim()[0] ?? "H").toUpperCase();
+  // The lower-left account area is for the Huanxing account, not the active
+  // Hermes profile.  The profile atom defaults to `default`, which is an
+  // internal runtime name and must not be presented as a username.
+  const accountDisplayName = huanxingAccount?.username?.trim() || "登录 / 注册";
+  const avatarLetter = (huanxingAccount?.username?.trim()[0] ?? "H").toUpperCase();
   const statusLine = gatewayOnline
     ? `网关已连接 · 端口 ${port} · ${modelShort(modelInfo?.model)}`
     : "网关未连接";
@@ -103,7 +116,7 @@ export function AccountPopup() {
         <button type="button" className={s.account} title="账号与设置">
           <span className={s.avatar} aria-hidden="true">{avatarLetter}</span>
           <span className={s.accountText}>
-            <span className={s.accountName}>{activeProfile}</span>
+            <span className={s.accountName}>{accountDisplayName}</span>
             <span className={s.accountStatus}>
               <span className={s.statusDot} data-online={gatewayOnline ? "true" : undefined} />
               {gatewayOnline ? "已连接" : "离线"} · {modelShort(modelInfo?.model)}
@@ -116,7 +129,7 @@ export function AccountPopup() {
           <div className={s.head}>
             <span className={s.avatar} data-size="lg" aria-hidden="true">{avatarLetter}</span>
             <div className={s.headText}>
-              <div className={s.headName}>{activeProfile}</div>
+              <div className={s.headName}>{accountDisplayName}</div>
               <div className={s.headStatus}>
                 <span className={s.statusDot} data-online={gatewayOnline ? "true" : undefined} />
                 {statusLine}
