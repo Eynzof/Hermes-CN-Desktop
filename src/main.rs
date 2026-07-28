@@ -511,6 +511,7 @@ fn main() {
             commands::connection_auth::connection_oauth_logout,
             commands::backup::backup_export_profile,
             commands::backup::backup_import_profile,
+            commands::browser_companion::open_browser_companion,
             commands::config_migration::config_migration_scan,
             commands::config_migration::config_migration_import,
             commands::im_onboarding::im_onboarding_state,

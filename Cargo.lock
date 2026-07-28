@@ -1984,6 +1984,7 @@ name = "hermes-agent-cn-desktop"
 version = "0.7.0"
 dependencies = [
  "base64 0.22.1",
+ "bytes",
  "cookie",
  "dirs",
  "dotenvy",
@@ -1992,6 +1993,9 @@ dependencies = [
  "fs2",
  "futures-util",
  "getrandom 0.3.4",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "libc",
  "log",
  "notify",

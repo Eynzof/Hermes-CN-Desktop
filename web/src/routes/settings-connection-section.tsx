@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Cable,
   CheckCircle2,
+  ExternalLink,
   Globe2,
   HardDrive,
   Loader2,
@@ -107,6 +108,7 @@ export function ConnectionSection({
 }: SettingsSectionProps) {
   const desktop = typeof window !== "undefined" ? window.hermesDesktop : undefined;
   const supported = Boolean(desktop?.getConnectionConfig);
+  const browserCompanion = Boolean(window.__HERMES_RUNTIME__?.browserCompanion);
 
   const [config, setConfig] = useState<ConnectionConfigView | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -127,6 +129,7 @@ export function ConnectionSection({
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [openingBrowser, setOpeningBrowser] = useState(false);
   const [message, setMessage] = useState<ConnectionMessage | null>(null);
 
   useEffect(() => {
@@ -333,7 +336,39 @@ export function ConnectionSection({
     }
   };
 
+  const handleOpenBrowser = async () => {
+    if (!desktop?.openBrowserCompanion) return;
+    setOpeningBrowser(true);
+    setMessage(null);
+    try {
+      await desktop.openBrowserCompanion();
+      setMessage({ tone: "ok", text: "已在系统浏览器中打开社区桌面版" });
+    } catch (error) {
+      setMessage({
+        tone: "error",
+        text: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setOpeningBrowser(false);
+    }
+  };
+
   if (!supported) {
+    if (browserCompanion) {
+      return (
+        <div>
+          {showHeading && <h2 className={s.heading}>连接</h2>}
+          <SettingsHero
+            ok
+            icon={<Globe2 size={24} />}
+            eyebrow="浏览器伴生模式"
+            title="已通过社区桌面版连接"
+            description="当前浏览器的 REST 与实时网关通信均由桌面端安全转发；连接目标由桌面端统一管理。需要切换内核时，请回到桌面端的连接页面操作。"
+            badge={<span className={s.statusBadge} data-on="true">已连接</span>}
+          />
+        </div>
+      );
+    }
     return (
       <div>
         {showHeading && <h2 className={s.heading}>连接</h2>}
@@ -373,6 +408,27 @@ export function ConnectionSection({
           description={connectionDescription}
           badge={<span className={s.statusBadge} data-on={connectionLoaded}>{connectionBadge}</span>}
         />
+      )}
+
+      {!externalOnly && desktop?.openBrowserCompanion && (
+        <div className={s.row}>
+          <div className={s.rowLeft}>
+            <div className={s.rowLabel}>在浏览器中使用社区桌面版</div>
+            <div className={s.rowSub}>由当前桌面端安全转发内核连接，无需在浏览器里复制会话令牌。</div>
+          </div>
+          <div className={s.rowRight}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleOpenBrowser()}
+              disabled={openingBrowser}
+              aria-busy={openingBrowser}
+            >
+              {openingBrowser ? <Loader2 size={13} className={s.connSpin} /> : <ExternalLink size={13} />}
+              在浏览器中打开社区桌面版
+            </Button>
+          </div>
+        </div>
       )}
 
       {loadError && <div className={s.connResult} data-tone="error">{loadError}</div>}
