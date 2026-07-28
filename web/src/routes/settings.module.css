@@ -1510,6 +1510,96 @@
   margin-top: 0;
 }
 
+.delegationSkillControl {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  min-width: 0;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 10px;
+  background: var(--h-bg-pane);
+}
+
+.delegationSkillControl[data-state="enabled"] {
+  border-color: color-mix(in srgb, var(--h-ok) 24%, var(--h-line-soft));
+  background: color-mix(in srgb, var(--h-ok-soft) 28%, var(--h-bg-pane));
+}
+
+.delegationSkillControl[data-state="missing"] {
+  border-color: color-mix(in srgb, var(--h-warn) 28%, var(--h-line-soft));
+  background: color-mix(in srgb, var(--h-warn-soft) 22%, var(--h-bg-pane));
+}
+
+.delegationSkillIcon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--h-text-2);
+  background: var(--h-bg-chip);
+}
+
+.delegationSkillControl[data-state="enabled"] .delegationSkillIcon {
+  color: var(--h-ok);
+  background: var(--h-ok-soft);
+}
+
+.delegationSkillControl[data-state="missing"] .delegationSkillIcon {
+  color: var(--h-warn);
+  background: var(--h-warn-soft);
+}
+
+.delegationSkillBody {
+  min-width: 0;
+}
+
+.delegationSkillMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.delegationSkillEyebrow {
+  color: var(--h-text-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.delegationSkillName {
+  display: block;
+  min-width: 0;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delegationSkillDescription {
+  margin: 2px 0 0;
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.delegationSkillAction {
+  min-width: 88px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .commitList {
   display: grid;
   gap: 8px;
@@ -2715,6 +2805,16 @@ button.providerWebsiteButton:hover {
   .debugHeroActions {
     grid-column: 1 / -1;
     align-items: flex-start;
+  }
+
+  .delegationSkillControl {
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .delegationSkillAction {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .contactLayout {

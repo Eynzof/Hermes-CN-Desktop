@@ -76,7 +76,7 @@ function RuntimeField({ label, value, mono, wide }: {
   );
 }
 
-function SkillRow({ agent, skill, onToggle, pending }: {
+export function DelegationSkillControl({ agent, skill, onToggle, pending }: {
   agent: CodingAgentStatus;
   skill: SkillInfo | undefined;
   onToggle: (name: string, enabled: boolean) => void;
@@ -84,22 +84,57 @@ function SkillRow({ agent, skill, onToggle, pending }: {
 }) {
   if (!skill) {
     return (
-      <p className={s.desc}>
-        内核里未找到「{agent.skillName}」技能——内核版本过旧或技能未同步；升级内核后重试。
-      </p>
+      <div
+        className={s.delegationSkillControl}
+        data-delegation-skill="true"
+        data-state="missing"
+        role="status"
+      >
+        <span className={s.delegationSkillIcon} aria-hidden>
+          <AlertTriangle size={15} />
+        </span>
+        <div className={s.delegationSkillBody}>
+          <div className={s.delegationSkillMeta}>
+            <span className={s.delegationSkillEyebrow}>委派技能</span>
+            <span className={s.envStatusTag} data-status="warning">未找到</span>
+          </div>
+          <code className={s.delegationSkillName}>{agent.skillName}</code>
+          <p className={s.delegationSkillDescription}>
+            当前内核未提供此技能。请升级或重新同步内核技能后再试。
+          </p>
+        </div>
+      </div>
     );
   }
+
+  const state = skill.enabled ? "enabled" : "disabled";
   return (
-    <div className={s.envCheckHeader}>
-      <div className={s.envCheckTitle}>
-        <Bot size={13} aria-hidden />
-        <span className={s.envCheckLabel}>hermes 委派技能「{skill.name}」</span>
-        <span className={s.envStatusTag} data-status={skill.enabled ? "ok" : "warning"}>
-          {skill.enabled ? "已启用" : "已停用"}
-        </span>
+    <div
+      className={s.delegationSkillControl}
+      data-delegation-skill="true"
+      data-state={state}
+      role="group"
+      aria-label={`${agent.label} 委派技能`}
+    >
+      <span className={s.delegationSkillIcon} aria-hidden>
+        <Bot size={15} />
+      </span>
+      <div className={s.delegationSkillBody}>
+        <div className={s.delegationSkillMeta}>
+          <span className={s.delegationSkillEyebrow}>委派技能</span>
+          <span className={s.envStatusTag} data-status={skill.enabled ? "ok" : "warning"}>
+            {skill.enabled ? "已启用" : "已停用"}
+          </span>
+        </div>
+        <code className={s.delegationSkillName}>{skill.name}</code>
+        <p className={s.delegationSkillDescription}>
+          {skill.enabled
+            ? `Hermes 会通过此技能把编码任务交给 ${agent.label}。`
+            : `启用后，Hermes 才能把编码任务交给 ${agent.label}。`}
+        </p>
       </div>
       <button
-        className={s.btn}
+        className={[s.btn, s.delegationSkillAction].join(" ")}
         type="button"
         disabled={pending}
         onClick={() => onToggle(skill.name, !skill.enabled)}
@@ -182,7 +217,12 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
         ) : null}
       </div>
 
-      <SkillRow agent={agent} skill={skill} onToggle={onToggle} pending={togglePending} />
+      <DelegationSkillControl
+        agent={agent}
+        skill={skill}
+        onToggle={onToggle}
+        pending={togglePending}
+      />
     </section>
   );
 }
