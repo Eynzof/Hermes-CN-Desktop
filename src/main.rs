@@ -523,6 +523,7 @@ fn main() {
             commands::file_dialogs::open_workspace_path,
             commands::file_dialogs::open_external_url,
             commands::log_export::export_log_snapshot,
+            commands::session_export::export_session_json,
             commands::debug_bundle::export_debug_bundle,
             commands::desktop_update::desktop_check_update,
             commands::devtools::toggle_devtools,

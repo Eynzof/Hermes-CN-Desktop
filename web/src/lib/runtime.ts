@@ -14,6 +14,8 @@ import type {
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
   ExportLogSnapshotResult,
+  ExportSessionJsonInput,
+  ExportSessionJsonResult,
   FileUploadInput,
   HermesMessageMetadata,
   ImOnboardingApplyInput,
@@ -450,6 +452,7 @@ declare global {
       openWorkspacePath?(input: { path: string }): Promise<ElectronApiRequestResult>;
       openExternalUrl?(input: { url: string }): Promise<ElectronSimpleResult>;
       exportLogSnapshot?(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult>;
+      exportSessionJson?(input: ExportSessionJsonInput): Promise<ExportSessionJsonResult>;
       exportDebugBundle?(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult>;
       environmentCheck?(): Promise<EnvironmentCheckResult>;
       codingAgentsCheck?(): Promise<CodingAgentsCheckResult>;

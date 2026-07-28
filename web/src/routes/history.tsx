@@ -55,8 +55,10 @@ import {
   togglePinnedSource,
 } from "@/lib/source-pin";
 import { renameSession } from "@/lib/session-rename";
+import { exportSessionJson } from "@/lib/session-export";
 import {
   SessionDeleteModal,
+  SessionExportErrorModal,
   SessionRenameModal,
   SessionRowMenu,
 } from "@/components/session-actions";
@@ -254,6 +256,7 @@ export function HistoryRoute() {
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
   const [deleteTargets, setDeleteTargets] = useState<SessionSummary[] | null>(null);
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
+  const [exportError, setExportError] = useState("");
 
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [workspaceMap, setWorkspaceMap] = useState(readSessionWorkspaceMap);
@@ -510,6 +513,19 @@ export function HistoryRoute() {
       archiveSession.mutate(session.id);
     },
     [archiveSession],
+  );
+
+  const handleExport = useCallback(
+    async (session: SessionSummary) => {
+      setOpenMenuId(null);
+      setExportError("");
+      try {
+        await exportSessionJson(session.id, activeProfile);
+      } catch (error) {
+        setExportError(error instanceof Error ? error.message : "导出会话失败");
+      }
+    },
+    [activeProfile],
   );
 
   const handleUnarchive = useCallback(
@@ -865,6 +881,7 @@ export function HistoryRoute() {
                           archived={archiveScope === "archived"}
                           onTogglePin={() => onTogglePinSession(session.id)}
                           onRename={() => startRename(session)}
+                          onExport={() => void handleExport(session)}
                           onArchive={() => handleArchive(session)}
                           onUnarchive={() => handleUnarchive(session)}
                           onDelete={() => openDeleteDialog([session])}
@@ -909,6 +926,10 @@ export function HistoryRoute() {
           onClose={closeDeleteDialog}
           onConfirm={confirmDelete}
         />
+      ) : null}
+
+      {exportError ? (
+        <SessionExportErrorModal error={exportError} onClose={() => setExportError("")} />
       ) : null}
     </main>
   );

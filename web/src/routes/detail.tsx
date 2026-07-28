@@ -733,6 +733,7 @@ export function DetailRoute() {
             />
             <GooseComposer
               key={taskId}
+              flushBottom
               initialWorkspacePath={sessionWorkspace}
               initial={composerPrefill.text}
               initialNonce={composerPrefill.nonce}

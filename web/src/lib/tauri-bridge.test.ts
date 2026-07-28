@@ -125,6 +125,22 @@ describe("isTauriDevMode", () => {
     });
   });
 
+  it("exposes session JSON export through Tauri IPC", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.exportSessionJson?.({
+      fileName: "session-abc.json",
+      content: "{\n  \"id\": \"abc\"\n}\n",
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("export_session_json", {
+      input: {
+        fileName: "session-abc.json",
+        content: "{\n  \"id\": \"abc\"\n}\n",
+      },
+    });
+  });
+
   it("exposes external URL opening through Tauri IPC", async () => {
     await installTauriBridge();
 
