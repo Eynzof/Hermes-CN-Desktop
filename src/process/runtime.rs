@@ -17,6 +17,7 @@ use sha2::{Digest, Sha256};
 use tokio::process::Command;
 
 const RUNTIME_BASENAME: &str = "hermes-agent-cn-runtime";
+const DESKTOP_HOST_BASENAME: &str = "hermes-core-host";
 /// Managed runtime tree used by release / packaged installs.
 const RUNTIME_SUBDIR_RELEASE: &str = "runtime";
 /// Isolated tree for `tauri dev` and debug builds so dev-local kernels never
@@ -278,6 +279,23 @@ fn runtime_binary_names() -> Vec<String> {
         ),
         format!("{}{}", RUNTIME_BASENAME, ext),
     ]
+}
+
+fn desktop_host_path_for(executable_path: &Path, platform: &str) -> PathBuf {
+    let extension = if platform == "win32" { ".exe" } else { "" };
+    executable_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(format!("{}{}", DESKTOP_HOST_BASENAME, extension))
+}
+
+/// Return the narrow Desktop host shipped beside the generic runtime CLI.
+///
+/// Older runtime payloads do not contain it; callers must preserve the legacy
+/// `hermes dashboard` path as a compatibility fallback.
+pub fn desktop_host_executable(record: &RuntimeInstallRecord) -> Option<PathBuf> {
+    let path = desktop_host_path_for(Path::new(&record.executable_path), &record.platform);
+    path.is_file().then_some(path)
 }
 
 /// Get the runtime root directory.
@@ -1560,7 +1578,11 @@ async fn wait_for_smoke_child(
     }
 }
 
-async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
+async fn smoke_check_command(
+    executable_path: &Path,
+    args: &[&str],
+    label: &str,
+) -> Result<(), String> {
     let workdir = executable_path.parent().unwrap_or_else(|| Path::new("."));
     let executable_display = executable_path.display().to_string();
     let workdir_display = workdir.display().to_string();
@@ -1575,7 +1597,7 @@ async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
     let child = loop {
         match Command::new(executable_path)
             .current_dir(workdir)
-            .args(["dashboard", "--help"])
+            .args(args)
             .env("HERMES_DISABLE_LAZY_INSTALLS", "1")
             .env("HERMES_DASHBOARD_PREWARM_AGENT", "0")
             .stdout(Stdio::null())
@@ -1589,7 +1611,8 @@ async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
             }
             Err(e) => {
                 return Err(format!(
-                    "Smoke check spawn failed for {} (exists={}, file_size={}, cwd={}, workdir={}): {}",
+                    "{} smoke check spawn failed for {} (exists={}, file_size={}, cwd={}, workdir={}): {}",
+                    label,
                     executable_display,
                     executable_path.is_file(),
                     size,
@@ -1602,6 +1625,17 @@ async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
     };
 
     wait_for_smoke_child(child, SMOKE_TIMEOUT).await
+}
+
+async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
+    smoke_check_command(executable_path, &["dashboard", "--help"], "Runtime CLI").await?;
+
+    let desktop_host = desktop_host_path_for(executable_path, current_platform());
+    if desktop_host.is_file() {
+        smoke_check_command(&desktop_host, &["--smoke-check"], "Desktop host").await?;
+    }
+
+    Ok(())
 }
 
 /// True when the spawn error is ETXTBSY ("Text file busy"), which can briefly
@@ -2687,6 +2721,53 @@ mod tests {
     use serial_test::serial;
     use std::io::Write;
     use tempfile::TempDir;
+
+    fn fixture_install_record(executable_path: &Path, platform: &str) -> RuntimeInstallRecord {
+        RuntimeInstallRecord {
+            schema_version: MANIFEST_SCHEMA_VERSION,
+            runtime_version: "test-runtime".to_string(),
+            kernel_version: "1.0.0".to_string(),
+            runtime_flavor: "cn-local".to_string(),
+            runtime_revision: 0,
+            platform: platform.to_string(),
+            arch: "x64".to_string(),
+            path: executable_path
+                .parent()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+            executable_path: executable_path.to_string_lossy().to_string(),
+            source: "test".to_string(),
+            installed_at: "2026-01-01T00:00:00Z".to_string(),
+            source_repo: None,
+            source_commit: None,
+            local_dirty_hash: None,
+            artifact_sha256: None,
+            previous_runtime_version: None,
+        }
+    }
+
+    #[test]
+    fn desktop_host_is_resolved_beside_runtime_cli() {
+        let dir = TempDir::new().unwrap();
+        let runtime_cli = dir.path().join("hermes-agent-cn-runtime-win32-x64.exe");
+        let desktop_host = dir.path().join("hermes-core-host.exe");
+        std::fs::write(&runtime_cli, b"runtime").unwrap();
+        std::fs::write(&desktop_host, b"host").unwrap();
+
+        let record = fixture_install_record(&runtime_cli, "win32");
+        assert_eq!(desktop_host_executable(&record), Some(desktop_host));
+    }
+
+    #[test]
+    fn desktop_host_missing_preserves_legacy_runtime_compatibility() {
+        let dir = TempDir::new().unwrap();
+        let runtime_cli = dir.path().join("hermes-agent-cn-runtime-linux-x64");
+        std::fs::write(&runtime_cli, b"runtime").unwrap();
+
+        let record = fixture_install_record(&runtime_cli, "linux");
+        assert_eq!(desktop_host_executable(&record), None);
+    }
 
     #[test]
     fn format_rfc3339_utc_emits_parseable_timestamps() {

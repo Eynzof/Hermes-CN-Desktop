@@ -12,7 +12,11 @@ import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { composerSubmitShortcutHint } from "@/lib/composer-submit-shortcut";
-import { shouldPrewarmDraftSession } from "@/lib/draft-session-prewarm";
+import {
+  draftSessionMatches,
+  shouldPrewarmDraftSession,
+} from "@/lib/draft-session-prewarm";
+import type { CreateSessionOptions } from "@/lib/session-create";
 import {
   normalizeWorkspacePath,
   rememberWorkspaceProject,
@@ -57,13 +61,29 @@ export function PanelComposer() {
   // Pre-warmed draft session (created by the effect below). Holds the backend
   // session id + the cwd it was built for, so send only reuses it while the
   // requested workspace still matches.
-  const draftRef = useRef<{ id: string; cwd: string } | null>(null);
+  const draftRef = useRef<{
+    id: string;
+    cwd: string;
+    model: string;
+    provider: string;
+  } | null>(null);
   const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
   const submitShortcutHint = composerSubmitShortcutHint(composerSubmitShortcut);
   const enabledSkills = useMemo(
     () => (skillsQuery.data ?? []).filter((skill) => skill.enabled),
     [skillsQuery.data],
   );
+
+  const contextSelection = useMemo(() => {
+    const model = selectedModel?.model ?? modelInfo?.model;
+    if (!model) return null;
+    return {
+      model,
+      provider: selectedModel?.provider ?? modelInfo?.provider,
+      providerName: selectedModel?.providerName,
+      contextWindow: selectedModel?.contextWindow,
+    };
+  }, [modelInfo?.model, modelInfo?.provider, selectedModel]);
 
   useEffect(() => {
     if (!initialWorkspacePath) return;
@@ -89,18 +109,26 @@ export function PanelComposer() {
   // draftRef null and send falls back to a normal cold create.
   useEffect(() => {
     if (!shouldPrewarmDraftSession(window.__HERMES_RUNTIME__?.connectionMode)) return;
+    if (!contextSelection?.model) return;
     const cwd = initialWorkspacePath || "";
+    const model = contextSelection.model.trim();
+    const provider = contextSelection.provider?.trim() || "";
     let cancelled = false;
     void (async () => {
       try {
         await connect();
         if (cancelled) return;
-        const id = await createSession({ cwd: cwd || undefined, activate: false });
+        const id = await createSession({
+          cwd: cwd || undefined,
+          model,
+          provider: provider || undefined,
+          activate: false,
+        });
         if (cancelled) {
           void closeSession(id).catch(() => {});
           return;
         }
-        draftRef.current = { id, cwd };
+        draftRef.current = { id, cwd, model, provider };
       } catch {
         draftRef.current = null;
       }
@@ -111,18 +139,14 @@ export function PanelComposer() {
       draftRef.current = null;
       if (draft) void closeSession(draft.id).catch(() => {});
     };
-  }, [connect, createSession, closeSession, initialWorkspacePath]);
-
-  const contextSelection = useMemo(() => {
-    const model = selectedModel?.model ?? modelInfo?.model;
-    if (!model) return null;
-    return {
-      model,
-      provider: selectedModel?.provider ?? modelInfo?.provider,
-      providerName: selectedModel?.providerName,
-      contextWindow: selectedModel?.contextWindow,
-    };
-  }, [modelInfo?.model, modelInfo?.provider, selectedModel]);
+  }, [
+    closeSession,
+    connect,
+    contextSelection?.model,
+    contextSelection?.provider,
+    createSession,
+    initialWorkspacePath,
+  ]);
 
   const contextMax = useMemo(
     () =>
@@ -170,8 +194,16 @@ export function PanelComposer() {
     try {
       const draft = draftRef.current;
       const requestedCwd = payload.workspacePath?.trim() || "";
-      let options: { createSession: () => Promise<string> } | undefined;
-      if (draft && draft.cwd === requestedCwd) {
+      const requestedModel = payload.modelSelection?.model ?? contextSelection?.model;
+      const requestedProvider = payload.modelSelection?.provider ?? contextSelection?.provider;
+      let options: {
+        createSession: (sessionOptions?: CreateSessionOptions) => Promise<string>;
+      } | undefined;
+      if (draft && draftSessionMatches(draft, {
+        cwd: requestedCwd,
+        model: requestedModel,
+        provider: requestedProvider,
+      })) {
         // Reuse the pre-warmed draft — its agent has been building for this exact
         // cwd. Claim it (null the ref so unmount cleanup won't close it) and
         // adopt it as the live session, mirroring a normal create.
@@ -201,6 +233,8 @@ export function PanelComposer() {
     createAndSendSession,
     adoptCreatedSession,
     closeSession,
+    contextSelection?.model,
+    contextSelection?.provider,
   ]);
 
   return (
