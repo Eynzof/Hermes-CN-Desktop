@@ -387,6 +387,64 @@
   font-size: 11px;
 }
 
+.confirmDialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: 440px;
+  padding: 22px;
+}
+
+.confirmIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  color: var(--h-warn);
+  background: color-mix(in srgb, var(--h-warn) 12%, var(--h-bg-pane));
+}
+
+.confirmDialog h2 {
+  margin: 0;
+  color: var(--h-text);
+  font-size: 18px;
+}
+
+.confirmDialog > p {
+  margin: 8px 0 0;
+  color: var(--h-text-2);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.confirmContext {
+  display: grid;
+  gap: 4px;
+  margin-top: 17px;
+  padding: 12px 14px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-md);
+  background: var(--h-bg-soft);
+}
+
+.confirmContext span,
+.confirmContext small {
+  color: var(--h-text-3);
+  font-size: 10.5px;
+}
+
+.confirmContext strong {
+  color: var(--h-text);
+  font-size: 13px;
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 20px;
+}
+
 @media (max-width: 920px) {
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

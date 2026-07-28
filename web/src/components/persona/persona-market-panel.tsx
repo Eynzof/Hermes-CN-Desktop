@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronRight, ExternalLink, Search, Sparkles, X } from "lucide-react";
+import { Check, ChevronRight, ExternalLink, Search, Sparkles, TriangleAlert, X } from "lucide-react";
 import { Button, Dialog } from "@hermes/shared-ui";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import {
@@ -13,6 +13,12 @@ import {
 import s from "./persona-market-panel.module.css";
 
 const PAGE_SIZE = 24;
+export const PERSONA_OVERWRITE_DIALOG_TITLE = "覆盖当前人格？";
+export const PERSONA_OVERWRITE_DIALOG_DESCRIPTION = "当前人格不为空，应用模板会完整替换现有 SOUL.md。是否继续覆盖？";
+
+export function shouldConfirmPersonaOverwrite(currentSoul: string, dirty: boolean): boolean {
+  return currentSoul.trim().length > 0 || dirty;
+}
 
 interface PersonaMarketPanelProps {
   profile: string;
@@ -37,6 +43,7 @@ export function PersonaMarketPanel({
   const [loadingPrompt, setLoadingPrompt] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [appliedId, setAppliedId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const filtered = useMemo(() => filterPersonaMarket(query, category), [query, category]);
   const visible = filtered.slice(0, visibleCount);
@@ -69,19 +76,26 @@ export function PersonaMarketPanel({
     };
   }, [selected]);
 
-  const handleApply = async () => {
+  const applySelected = async () => {
     if (!selected || !prompt || applying) return;
-    if ((currentSoul.trim() || dirty) && !window.confirm(
-      `将「${selected.name}」应用到档案「${profile}」？\n\n当前 SOUL.md${dirty ? "及未保存修改" : ""}将被替换。`,
-    )) return;
 
     setDialogError(null);
     try {
       await onApply(prompt, selected);
       setAppliedId(selected.id);
+      setConfirmOpen(false);
     } catch (error) {
       setDialogError(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const handleApply = () => {
+    if (!selected || !prompt || applying) return;
+    if (shouldConfirmPersonaOverwrite(currentSoul, dirty)) {
+      setConfirmOpen(true);
+      return;
+    }
+    void applySelected();
   };
 
   const openPersona = (persona: PersonaMarketItem) => {
@@ -183,7 +197,15 @@ export function PersonaMarketPanel({
         </a>
       </div>
 
-      <Dialog.Root open={selected !== null} onOpenChange={(open) => { if (!open) setSelected(null); }}>
+      <Dialog.Root
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmOpen(false);
+            setSelected(null);
+          }
+        }}
+      >
         <Dialog.Portal>
           <Dialog.Overlay />
           <Dialog.Content className={s.dialog} aria-describedby="persona-detail-description">
@@ -230,7 +252,7 @@ export function PersonaMarketPanel({
                     variant="solid"
                     tone="accent"
                     disabled={!prompt || loadingPrompt || applying}
-                    onClick={() => void handleApply()}
+                    onClick={handleApply}
                   >
                     <Sparkles size={14} />
                     {applying ? "应用中…" : appliedId === selected.id ? "再次应用" : "立即应用"}
@@ -238,6 +260,44 @@ export function PersonaMarketPanel({
                 </footer>
               </>
             )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content
+            className={s.confirmDialog}
+            aria-describedby="persona-overwrite-description"
+            data-testid="persona-overwrite-dialog"
+          >
+            <div className={s.confirmIcon}><TriangleAlert size={22} /></div>
+            <Dialog.Title>{PERSONA_OVERWRITE_DIALOG_TITLE}</Dialog.Title>
+            <Dialog.Description id="persona-overwrite-description">
+              {PERSONA_OVERWRITE_DIALOG_DESCRIPTION}
+            </Dialog.Description>
+            <div className={s.confirmContext}>
+              <span>即将应用</span>
+              <strong>{selected?.name ?? "所选人格"}</strong>
+              <small>
+                档案：{profile}{dirty ? " · 包含未保存修改" : ""}
+              </small>
+            </div>
+            <div className={s.confirmActions}>
+              <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
+                取消
+              </Button>
+              <Button
+                type="button"
+                variant="solid"
+                tone="accent"
+                disabled={applying}
+                onClick={() => void applySelected()}
+              >
+                {applying ? "应用中…" : "确认覆盖并应用"}
+              </Button>
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
