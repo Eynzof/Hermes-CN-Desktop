@@ -521,6 +521,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Remove legacy Tauri installer assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          legacy_assets="$RUNNER_TEMP/legacy-installer-assets.txt"
+          current_assets="$RUNNER_TEMP/current-release-assets.txt"
+          node > "$legacy_assets" <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const version = process.env.RELEASE_TAG.replace(/^v/u, "");
+          const names = new Set(
+            fs.readdirSync("brands")
+              .filter((name) => name.endsWith(".json"))
+              .map((name) => JSON.parse(fs.readFileSync(path.join("brands", name), "utf8")))
+              .map((brand) => `${brand.productName}_${version}_x64-setup.exe`),
+          );
+          console.log([...names].sort().join("\n"));
+          NODE
+
+          gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets[].name' > "$current_assets"
+          while IFS= read -r asset_name; do
+            if [ -n "$asset_name" ] && grep -Fqx -- "$asset_name" "$current_assets"; then
+              gh release delete-asset "$RELEASE_TAG" "$asset_name" \
+                -R "$GITHUB_REPOSITORY" --yes
+            fi
+          done < "$legacy_assets"
+
       - name: Download all release assets
         run: |
           mkdir -p assets && cd assets
