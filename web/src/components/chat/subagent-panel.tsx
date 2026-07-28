@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "jotai";
-import { AlertCircle, Bot, CheckCircle2, ChevronRight, Loader2, SquareTerminal, X } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, ChevronRight, Copy, Loader2, SquareTerminal, X } from "lucide-react";
+import { CopyButton } from "@/components/ui/copy-button";
 import { formatTokens } from "@/lib/format";
 import {
   activeCliDelegationCount,
@@ -238,6 +239,82 @@ function cliTokenTotal(entry: Pick<CliDelegationEntry, "result">): number {
   );
 }
 
+function CliDetailRow({
+  label,
+  value,
+  placeholder,
+}: {
+  label: string;
+  value?: string;
+  placeholder: string;
+}) {
+  const content = (
+    <>
+      <span className={s.cliDetailLabel}>{label}</span>
+      <span className={s.cliDetailValue}>{value ?? placeholder}</span>
+    </>
+  );
+
+  if (!value) {
+    return (
+      <span className={s.cliDetailRow} data-cli-detail-row={label} data-copyable="false">
+        {content}
+      </span>
+    );
+  }
+
+  return (
+    <CopyButton
+      className={s.cliDetailRow}
+      text={value}
+      showStatusIcon={false}
+      copiedLabel={(
+        <>
+          <span className={s.cliDetailLabel}>{label}</span>
+          <span className={s.cliDetailValue}>已复制</span>
+          <CheckCircle2 className={s.cliDetailAction} size={11} aria-hidden />
+        </>
+      )}
+      errorLabel={(
+        <>
+          <span className={s.cliDetailLabel}>{label}</span>
+          <span className={s.cliDetailValue}>复制失败</span>
+          <AlertCircle className={s.cliDetailAction} size={11} aria-hidden />
+        </>
+      )}
+      title={`点击复制${label}：${value}`}
+      aria-label={`复制${label}：${value}`}
+      data-cli-detail-row={label}
+      data-copyable="true"
+    >
+      {content}
+      <Copy className={s.cliDetailAction} size={11} aria-hidden />
+    </CopyButton>
+  );
+}
+
+/** Codex / Claude Code 委派详情：固定三行，长值单行省略，可用整行复制。 */
+export function CliDelegationDetails({
+  entry,
+  running,
+}: {
+  entry: CliDelegationEntry;
+  running: boolean;
+}) {
+  const tokens = cliTokenTotal(entry);
+  const sessionId = entry.result?.sessionId;
+  const workdir = entry.result?.workdir ?? entry.workdir ?? undefined;
+  const tokenLabel = tokens > 0 ? formatTokens(tokens) : undefined;
+
+  return (
+    <div className={s.cliDetailList}>
+      <CliDetailRow label="会话" value={sessionId} placeholder={running ? "获取中" : "未提供"} />
+      <CliDetailRow label="目录" value={workdir} placeholder={running ? "获取中" : "未提供"} />
+      <CliDetailRow label="Token" value={tokenLabel} placeholder={running ? "统计中" : "未提供"} />
+    </div>
+  );
+}
+
 function CliStatusIcon({ status }: { status: CliDelegationEntry["status"] }) {
   if (status === "running") {
     return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={14} aria-label="执行中" />;
@@ -324,12 +401,7 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
   const metaParts = open
     ? [
         entry.mode ? (CLI_MODE_LABELS[entry.mode] ?? "") : "",
-        entry.result?.sessionId ? `会话 ${entry.result.sessionId}` : "",
         entry.result?.numTurns !== undefined ? `${entry.result.numTurns} 轮` : "",
-        (entry.result?.workdir ?? entry.workdir)
-          ? `目录 ${entry.result?.workdir ?? entry.workdir}`
-          : (running ? "目录获取中" : "目录未提供"),
-        tokens > 0 ? `Token ${formatTokens(tokens)}` : (running ? "Token 统计中" : "Token 未提供"),
         entry.exitCode !== undefined && entry.exitCode !== null && entry.exitCode !== 0
           ? `退出码 ${entry.exitCode}`
           : "",
@@ -358,10 +430,12 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
         </div>
       ) : null}
 
-      {metaParts.length > 0 ? (
+      {open ? (
         <div className={s.files}>
-          <span className={s.filesLabel}>详情</span>
-          <span className={s.fileLine}>{metaParts.join(" · ")}</span>
+          <span className={s.filesLabel}>
+            详情{metaParts.length > 0 ? ` · ${metaParts.join(" · ")}` : ""}
+          </span>
+          <CliDelegationDetails entry={entry} running={running} />
         </div>
       ) : null}
     </div>

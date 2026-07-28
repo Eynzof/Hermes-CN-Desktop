@@ -332,6 +332,84 @@
   overflow-wrap: anywhere;
 }
 
+/* Codex / Claude Code 元信息固定为会话、目录、Token 三行。整行都是复制
+   热区；值列必须 minmax(0, 1fr)，否则长路径会撑宽面板而不是省略。 */
+.cliDetailList {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cliDetailRow {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 20px;
+  padding: 2px 4px;
+  border-radius: var(--h-r-sm);
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.cliDetailRow[data-copyable="true"] {
+  cursor: copy;
+}
+
+.cliDetailRow[data-copyable="true"]:hover {
+  background: var(--h-bg-soft);
+  color: var(--h-text-2);
+}
+
+.cliDetailRow:focus-visible {
+  border-radius: var(--h-r-sm);
+}
+
+.cliDetailRow:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.cliDetailLabel {
+  color: var(--h-text-4);
+  white-space: nowrap;
+}
+
+.cliDetailValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cliDetailAction {
+  justify-self: end;
+  color: var(--h-text-4);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.cliDetailRow[data-copyable="true"]:hover .cliDetailAction,
+.cliDetailRow[data-copy-state="copied"] .cliDetailAction,
+.cliDetailRow[data-copy-state="error"] .cliDetailAction {
+  opacity: 1;
+}
+
+.cliDetailRow[data-copy-state="copied"] .cliDetailValue,
+.cliDetailRow[data-copy-state="copied"] .cliDetailAction {
+  color: var(--h-ok);
+}
+
+.cliDetailRow[data-copy-state="error"] .cliDetailValue,
+.cliDetailRow[data-copy-state="error"] .cliDetailAction {
+  color: var(--h-err);
+}
+
 /* ── Children ────────────────────────────────────────────────────────────── */
 
 .children {
