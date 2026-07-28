@@ -262,8 +262,8 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
   {
     id: "command-soul",
     group: "commands",
-    label: "灵魂 SOUL.md",
-    subtitle: "/soul · 编辑智能体核心人格",
+    label: "人格市场与 SOUL.md",
+    subtitle: "/soul · 选择或编辑智能体人格",
     keywords: ["soul", "prompt", "persona", "system prompt", "灵魂", "人格"],
     icon: "soul",
     action: { type: "navigate", to: "/soul" },

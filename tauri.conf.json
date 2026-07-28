@@ -52,6 +52,7 @@
       "static/dashboard/": "dashboard/",
       "static/bundled-skills/": "bundled-skills/",
       "static/bundled-plugins/": "bundled-plugins/",
+      "legal/agency-agents.MIT.txt": "agency-agents.MIT.txt",
       "legal/HarmonyOS_Sans_LICENSE.txt": "HarmonyOS_Sans_LICENSE.txt"
     },
     "windows": {

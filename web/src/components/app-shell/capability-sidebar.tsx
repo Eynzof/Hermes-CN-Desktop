@@ -57,7 +57,7 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
     label: "人格",
     path: "/soul",
     icon: Ghost,
-    title: "SOUL.md：智能体的核心人格设定",
+    title: "人格市场与 SOUL.md 自定义设定",
     prefetch: prefetchSoul,
   },
   {

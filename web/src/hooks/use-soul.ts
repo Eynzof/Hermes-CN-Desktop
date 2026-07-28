@@ -64,6 +64,9 @@ export function useSaveSoul() {
         { content },
         MutationOkResponse,
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["soul", profile] }),
+    onSuccess: (_result, content) => {
+      qc.setQueryData<ProfileSoulResponse>(["soul", profile], { content, exists: true });
+      void qc.invalidateQueries({ queryKey: ["soul", profile] });
+    },
   });
 }

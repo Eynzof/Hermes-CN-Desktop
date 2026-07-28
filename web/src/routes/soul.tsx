@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Eye, FileText, Pencil, RefreshCw } from "lucide-react";
+import { Eye, FileText, Pencil, RefreshCw, Sparkles, Store, UserRound } from "lucide-react";
 import { Button } from "@hermes/shared-ui";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
+import { PersonaMarketPanel } from "@/components/persona/persona-market-panel";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { SOUL_CHAR_LIMIT, SOUL_TEMPLATE, useSaveSoul, useSoul } from "@/hooks/use-soul";
 import { SectionShell } from "./section-shell";
@@ -18,6 +19,7 @@ export function SoulRoute() {
   const [text, setText] = useState("");
   const [dirty, setDirty] = useState(false);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
+  const [page, setPage] = useState<"market" | "custom">("market");
   const [savedFlash, setSavedFlash] = useState(false);
 
   const data = soulQuery.data;
@@ -55,6 +57,14 @@ export function SoulRoute() {
     setMode("edit");
   };
 
+  const handleApplyPersona = async (prompt: string) => {
+    await saveSoul.mutateAsync(prompt);
+    setText(prompt);
+    setDirty(false);
+    setSavedFlash(true);
+    window.setTimeout(() => setSavedFlash(false), 2200);
+  };
+
   const right = (
     <div className={s.headRight}>
       <span className={s.profileChip} title="当前档案">
@@ -73,25 +83,60 @@ export function SoulRoute() {
   );
 
   return (
-    <SectionShell title="灵魂" sub="SOUL.md · 智能体的核心人格（系统提示词第一身份）" right={right}>
+    <SectionShell title="人格" sub="内置人格市场与 SOUL.md 自定义设定" right={right}>
       <SettingsHero
         ok={!errorMessage}
-        icon={<FileText size={24} />}
-        eyebrow="Hermes Agent 灵魂设定"
-        title="当前档案的核心人格"
+        icon={<Sparkles size={24} />}
+        eyebrow="Hermes Agent 人格中心"
+        title="选择专家人格，或者创造你自己的"
         description={(
           <>
-            灵魂（SOUL.md）会被原样注入系统提示词的第一块，定义「这个智能体是谁、怎么说话」。这里编辑的是当前档案 <strong>{profile}</strong> 的灵魂；切换档案请前往{" "}
+            应用人格后，完整中文提示词会写入当前档案 <strong>{profile}</strong> 的 SOUL.md，并作为智能体的第一身份。切换档案请前往{" "}
             <Link to="/profiles" className={s.inlineLink}>档案</Link> 页。
           </>
         )}
-        badge={<span className={settings.statusBadge} data-on={!dirty}>{dirty ? "未保存" : "已同步"}</span>}
+        badge={(
+          <span className={settings.statusBadge} data-on={!dirty && !errorMessage}>
+            {errorMessage ? "读取失败" : savedFlash ? "人格已应用" : dirty ? "未保存" : "已同步"}
+          </span>
+        )}
       />
       {soulQuery.isLoading ? (
-        <div className={s.emptyState}>加载灵魂中…</div>
+        <div className={s.emptyState}>加载人格中…</div>
       ) : (
         <div className={s.soulPage}>
           {errorMessage && <div className={s.errorState}>{errorMessage}</div>}
+
+          <div className={s.pageTabs} role="tablist" aria-label="人格市场或自定义人格">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={page === "market"}
+              data-active={page === "market" ? "true" : undefined}
+              onClick={() => setPage("market")}
+            >
+              <Store size={15} /> 人格市场
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={page === "custom"}
+              data-active={page === "custom" ? "true" : undefined}
+              onClick={() => setPage("custom")}
+            >
+              <UserRound size={15} /> 我的人格
+            </button>
+          </div>
+
+          {page === "market" ? (
+            <PersonaMarketPanel
+              profile={profile}
+              currentSoul={text}
+              dirty={dirty}
+              applying={saveSoul.isPending}
+              onApply={handleApplyPersona}
+            />
+          ) : (
 
           <section className={s.panel}>
             <div className={s.panelHead}>
@@ -100,7 +145,7 @@ export function SoulRoute() {
                 <span>
                   {data && !data.exists
                     ? "尚未创建，保存后将在当前档案生成 SOUL.md"
-                    : "原样注入系统提示词第一块，定义智能体的核心身份与语气"}
+                    : "可继续编辑市场人格，或完全自定义智能体的核心身份与语气"}
                 </span>
               </div>
               <div className={s.headActions}>
@@ -178,10 +223,11 @@ export function SoulRoute() {
                 onClick={handleSave}
                 disabled={!dirty || saveSoul.isPending}
               >
-                {saveSoul.isPending ? "保存中…" : "保存灵魂"}
+                {saveSoul.isPending ? "保存中…" : "保存人格"}
               </Button>
             </div>
           </section>
+          )}
         </div>
       )}
     </SectionShell>
