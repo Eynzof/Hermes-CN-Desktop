@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Activity,
   AlertTriangle,
-  Brush,
   Bug,
   Cable,
   CheckCircle2,
@@ -316,20 +315,11 @@ const UI_SCALE_OPTIONS: Array<{ value: ThemeConfig["scale"]; label: string }> = 
 export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [conversationFontSize, setConversationFontSize] = useAtom(conversationFontSizeAtom);
-  const activeSkin = THEME_SKINS.find((skin) => skin.value === config.theme);
   const densityLabel = config.density === "compact" ? "紧凑" : "舒适";
 
   return (
     <div>
       {showHeading && <h2 className={s.heading}>主题</h2>}
-      <SettingsHero
-        ok
-        icon={<Brush size={24} />}
-        eyebrow="Hermes Agent 视觉系统"
-        title="主题与显示偏好"
-        description="调整界面主题、密度和阅读字号，修改即时生效。"
-        badge={<span className={s.statusBadge} data-on="true">{activeSkin?.label ?? "主题"}</span>}
-      />
       <div className={s.appearancePanel}>
         <div className={s.appearanceHeader}>
           <div className={s.appearanceHeaderText}>
@@ -1566,12 +1556,6 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   return (
     <div>
       {showHeading && <h2 className={s.heading}>关于</h2>}
-      <SettingsHero
-        icon={<Heart size={24} />}
-        eyebrow="Hermes Agent 中文社区桌面版"
-        title="联系与致谢"
-      />
-
       <div className={s.aboutDebugGrid}>
         <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
           <div className={s.runtimeGrid}>
@@ -1661,10 +1645,9 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
                   到桌面端内核仓库提交 issue 或建议
                 </ExternalTextLink>
               </ContactField>
-              <ContactField label="商务合作、企业定制化开发等" className={s.businessContactField}>
+              <ContactField label="商务合作、企业服务" className={s.businessContactField}>
                 <div className={s.businessContactLines}>
-                  <ContactCopyLine label="电子邮箱" value="eynzof@gmail.com" />
-                  <ContactCopyLine label="微信号" value="Eynzof" />
+                  <ContactCopyLine label="电子邮箱" value="hello@wanderminds.ai" />
                 </div>
               </ContactField>
             </div>
@@ -1714,7 +1697,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
           <span className={s.wandermindsCreditLabel}>Designed by</span>
           <WandermindsMark className={s.wandermindsCreditLogo} />
         </a>
-        <p className={s.wandermindsCopyright}>© 2026 Wanderminds · All rights reserved</p>
+        <p className={s.wandermindsCopyright}>© 2026 Wanderminds, LLC · All rights reserved</p>
       </footer>
     </div>
   );
