@@ -68,8 +68,11 @@ function capture(command, args, options = {}) {
 }
 
 function findPython() {
+  const uvPython = capture("uv", ["python", "find", "3.14"]);
   const candidates = [
     process.env.PYTHON,
+    uvPython,
+    "python3.14",
     process.platform === "win32" ? "python" : "python3",
     "python",
   ].filter(Boolean);
@@ -77,9 +80,9 @@ function findPython() {
     const version = capture(candidate, ["-c", "import sys; print('.'.join(map(str, sys.version_info[:2])))"]);
     if (!version) continue;
     const [major, minor] = version.split(".").map(Number);
-    if (major > 3 || (major === 3 && minor >= 11)) return candidate;
+    if (major > 3 || (major === 3 && minor >= 14)) return candidate;
   }
-  throw new Error("Python 3.11+ was not found. Set PYTHON=/path/to/python3.11 and retry.");
+  throw new Error("Python 3.14+ was not found. Set PYTHON=/path/to/python3.14 and retry.");
 }
 
 function dataDir() {
@@ -132,6 +135,12 @@ function hermesExecutable(venv) {
     : join(venv, "bin", "hermes");
 }
 
+function desktopHostExecutable(venv) {
+  return process.platform === "win32"
+    ? join(venv, "Scripts", "hermes-core-host.exe")
+    : join(venv, "bin", "hermes-core-host");
+}
+
 function readCurrent(currentPath) {
   try {
     return JSON.parse(readFileSync(currentPath, "utf8"));
@@ -178,7 +187,8 @@ const currentMatchesSource =
   && currentSourceCommit === commit
   && (current?.localDirtyHash ?? null) === dirtyHash
   && current.executablePath
-  && existsSync(current.executablePath);
+  && existsSync(current.executablePath)
+  && existsSync(desktopHostExecutable(join(target, "venv")));
 
 function currentRecordIsV2(record) {
   return record?.schemaVersion === 2
@@ -186,7 +196,8 @@ function currentRecordIsV2(record) {
     && record?.kernelVersion === kernelVersion
     && record?.runtimeFlavor
     && record?.executablePath
-    && existsSync(record.executablePath);
+    && existsSync(record.executablePath)
+    && existsSync(desktopHostExecutable(join(target, "venv")));
 }
 
 function writeCurrentRecord(installedExecutable, installedAt = new Date().toISOString()) {
@@ -260,12 +271,23 @@ rmSync(join(sourceRoot, "build"), { recursive: true, force: true });
 if (!existsSync(hermesExecutable(venv))) {
   throw new Error(`hermes console script was not created at ${hermesExecutable(venv)}`);
 }
+if (!existsSync(desktopHostExecutable(venv))) {
+  throw new Error(`Desktop host script was not created at ${desktopHostExecutable(venv)}`);
+}
 
 run(hermesExecutable(venv), ["dashboard", "--help"], {
   env: {
     ...process.env,
     HERMES_HOME: join(target, "smoke-home"),
     HERMES_DASHBOARD_TUI: "1",
+  },
+});
+run(desktopHostExecutable(venv), ["--smoke-check"], {
+  env: {
+    ...process.env,
+    HERMES_HOME: join(target, "smoke-home"),
+    HERMES_DESKTOP: "1",
+    HERMES_DESKTOP_MANAGED: "1",
   },
 });
 
@@ -285,3 +307,4 @@ writeFileSync(join(target, "manifest.json"), `${JSON.stringify({
 
 console.log(`wrote ${currentPath}`);
 console.log(`managed runtime executable: ${installedExecutable}`);
+console.log(`managed Desktop host: ${desktopHostExecutable(join(target, "venv"))}`);

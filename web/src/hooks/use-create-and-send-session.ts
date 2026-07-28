@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useSetAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
+import { useModelInfo } from "@/hooks/use-config";
 import type {
   ComposerSubmitControls,
   ComposerSubmitPayload,
@@ -12,13 +13,14 @@ import { resolveComposerSkillCommand } from "@/lib/composer-skills";
 import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
 import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
+import type { CreateSessionOptions } from "@/lib/session-create";
 import {
   rememberSessionWorkspace,
   rememberWorkspaceProject,
 } from "@/lib/workspaces";
 
 interface CreateAndSendOptions {
-  createSession?: (options?: { cwd?: string }) => Promise<string>;
+  createSession?: (options?: CreateSessionOptions) => Promise<string>;
 }
 
 export function useCreateAndSendSession() {
@@ -29,12 +31,12 @@ export function useCreateAndSendSession() {
     failPrompt,
     sendPrompt,
     setSessionTitle,
-    setSessionModel,
     dispatchCommand,
     attachImage,
     attachImageBytes,
     detectDroppedPath,
   } = useGateway();
+  const { data: modelInfo } = useModelInfo();
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
 
   return useCallback(async (
@@ -44,7 +46,13 @@ export function useCreateAndSendSession() {
   ) => {
     const submittedAt = Date.now();
     const workspacePath = payload.workspacePath?.trim() || undefined;
-    const sessionId = await (options?.createSession ?? createSession)({ cwd: workspacePath });
+    const requestedModel = payload.modelSelection?.model ?? modelInfo?.model;
+    const requestedProvider = payload.modelSelection?.provider ?? modelInfo?.provider;
+    const sessionId = await (options?.createSession ?? createSession)({
+      cwd: workspacePath,
+      model: requestedModel,
+      provider: requestedProvider,
+    });
     const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
     const optimisticDisplayText = buildComposerDisplayText(payload);
     const optimisticDisplayImages = payload.attachments
@@ -73,18 +81,6 @@ export function useCreateAndSendSession() {
 
     void (async () => {
       try {
-        if (payload.modelSelection?.model) {
-          // Composer selection is the user's explicit source of truth.  Do not
-          // skip this just because /api/model/info already reports the same
-          // model: that REST value comes from config.yaml, while the live
-          // gateway process may still carry an older HERMES_MODEL or a
-          // prewarmed draft session built before the config save.
-          await setSessionModel(
-            sessionId,
-            payload.modelSelection.model,
-            payload.modelSelection.provider,
-          );
-        }
         let transportText: string | undefined;
         const skillCommand = resolveComposerSkillCommand(
           payload.text,
@@ -142,10 +138,11 @@ export function useCreateAndSendSession() {
     detectDroppedPath,
     dispatchCommand,
     failPrompt,
+    modelInfo?.model,
+    modelInfo?.provider,
     navigate,
     sendPrompt,
     setActiveSessionId,
-    setSessionModel,
     setSessionTitle,
   ]);
 }

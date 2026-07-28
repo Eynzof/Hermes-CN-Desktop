@@ -946,12 +946,21 @@ pub fn dev_external_dashboard_enabled() -> bool {
 /// are not accepted, even in dev mode.
 fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<String>), AppError> {
     if let Some(record) = crate::process::runtime::read_current_record() {
-        log::info!(
-            "Using managed runtime v{} at {}",
+        if let Some(host) = crate::process::runtime::desktop_host_executable(&record) {
+            log::info!(
+                "Using dedicated managed Desktop host for runtime v{} at {}",
+                record.runtime_version,
+                host.display()
+            );
+            return Ok((host.to_string_lossy().to_string(), vec![]));
+        }
+
+        log::warn!(
+            "Managed runtime v{} has no dedicated Desktop host; using compatible CLI fallback at {}",
             record.runtime_version,
             record.executable_path
         );
-        return Ok((record.executable_path, vec![]));
+        return Ok((record.executable_path, vec!["dashboard".to_string()]));
     }
 
     if allow_external_agent || std::env::var("HERMES_DESKTOP_AGENT_COMMAND").is_ok() {
@@ -975,7 +984,6 @@ fn spawn_dashboard(
     let (program, mut prefix_args) = resolve_hermes_command(options.allow_external_agent)?;
 
     let api_args = vec![
-        "dashboard".to_string(),
         "--host".to_string(),
         options.host.clone(),
         "--port".to_string(),
@@ -1691,10 +1699,105 @@ pub async fn ensure_hermes_dashboard(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::runtime::RuntimeInstallRecord;
     use pretty_assertions::assert_eq;
     use serial_test::serial;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn test_runtime_platform() -> &'static str {
+        if cfg!(target_os = "windows") {
+            "win32"
+        } else if cfg!(target_os = "macos") {
+            "darwin"
+        } else {
+            "linux"
+        }
+    }
+
+    fn test_runtime_arch() -> &'static str {
+        if cfg!(target_arch = "x86_64") {
+            "x64"
+        } else if cfg!(target_arch = "aarch64") {
+            "arm64"
+        } else {
+            std::env::consts::ARCH
+        }
+    }
+
+    fn write_managed_runtime_record(
+        runtime_root: &Path,
+        with_desktop_host: bool,
+    ) -> (String, String) {
+        let runtime_dir = runtime_root.join("versions").join("test-runtime");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        let extension = if cfg!(target_os = "windows") {
+            ".exe"
+        } else {
+            ""
+        };
+        let runtime_cli = runtime_dir.join(format!("hermes-agent-cn-runtime{extension}"));
+        let desktop_host = runtime_dir.join(format!("hermes-core-host{extension}"));
+        std::fs::write(&runtime_cli, b"runtime").unwrap();
+        if with_desktop_host {
+            std::fs::write(&desktop_host, b"host").unwrap();
+        }
+
+        let record = RuntimeInstallRecord {
+            schema_version: 2,
+            runtime_version: "test-runtime".to_string(),
+            kernel_version: "1.0.0".to_string(),
+            runtime_flavor: "cn-local".to_string(),
+            runtime_revision: 0,
+            platform: test_runtime_platform().to_string(),
+            arch: test_runtime_arch().to_string(),
+            path: runtime_dir.to_string_lossy().to_string(),
+            executable_path: runtime_cli.to_string_lossy().to_string(),
+            source: "test".to_string(),
+            installed_at: "2026-01-01T00:00:00Z".to_string(),
+            source_repo: None,
+            source_commit: None,
+            local_dirty_hash: None,
+            artifact_sha256: None,
+            previous_runtime_version: None,
+        };
+        std::fs::write(
+            runtime_root.join("current.json"),
+            serde_json::to_vec_pretty(&record).unwrap(),
+        )
+        .unwrap();
+
+        (
+            runtime_cli.to_string_lossy().to_string(),
+            desktop_host.to_string_lossy().to_string(),
+        )
+    }
+
+    #[test]
+    #[serial]
+    fn managed_runtime_prefers_dedicated_desktop_host() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (_runtime_cli, desktop_host) = write_managed_runtime_record(dir.path(), true);
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", dir.path());
+
+        let resolved = resolve_hermes_command(false).unwrap();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert_eq!(resolved, (desktop_host, vec![]));
+    }
+
+    #[test]
+    #[serial]
+    fn managed_runtime_falls_back_to_legacy_dashboard_cli() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (runtime_cli, _desktop_host) = write_managed_runtime_record(dir.path(), false);
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", dir.path());
+
+        let resolved = resolve_hermes_command(false).unwrap();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert_eq!(resolved, (runtime_cli, vec!["dashboard".to_string()]));
+    }
 
     #[test]
     #[serial]

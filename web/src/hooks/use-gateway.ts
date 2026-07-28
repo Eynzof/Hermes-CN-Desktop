@@ -60,6 +60,10 @@ import {
   gatewayEventChangesSessionList,
   invalidateSessionListQueries,
 } from "@/lib/session-query-sync";
+import {
+  buildSessionCreateParams,
+  type CreateSessionOptions,
+} from "@/lib/session-create";
 
 type GatewayState = ReturnType<typeof getGatewayClient>["state"];
 
@@ -250,11 +254,6 @@ async function rememberPersistentSessionKey(gatewaySessionId: string) {
   } catch {}
 }
 
-interface CreateSessionOptions {
-  activate?: boolean;
-  cwd?: string;
-}
-
 export function useGateway() {
   const queryClient = useQueryClient();
   const connectionState = useAtomValue(gwConnectionAtom);
@@ -312,7 +311,7 @@ export function useGateway() {
     const result = parseGatewayResult(
       SessionCreateResult,
       await getGatewayClient().request("session.create",
-        options?.cwd?.trim() ? { cwd: options.cwd.trim() } : {},
+        buildSessionCreateParams(options),
       ),
       "session.create",
     );

@@ -11,3 +11,24 @@ export function shouldPrewarmDraftSession(mode: ConnectionMode | undefined): boo
   // startup, before the desktop has exposed that it is actually local/remote.
   return mode === "managed";
 }
+
+export interface DraftSessionIdentity {
+  cwd?: string;
+  model?: string;
+  provider?: string;
+}
+
+function normalizeIdentityValue(value: string | undefined): string {
+  return value?.trim() ?? "";
+}
+
+export function draftSessionMatches(
+  draft: DraftSessionIdentity,
+  requested: DraftSessionIdentity,
+): boolean {
+  return (
+    normalizeIdentityValue(draft.cwd) === normalizeIdentityValue(requested.cwd)
+    && normalizeIdentityValue(draft.model) === normalizeIdentityValue(requested.model)
+    && normalizeIdentityValue(draft.provider) === normalizeIdentityValue(requested.provider)
+  );
+}
