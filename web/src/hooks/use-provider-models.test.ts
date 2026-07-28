@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectProviderModelIds } from "./use-provider-models";
+import { providerModelsErrorText, selectProviderModelIds } from "./use-provider-models";
 
 describe("selectProviderModelIds", () => {
   it("sorts and de-dupes the returned ids", () => {
@@ -50,5 +50,20 @@ describe("selectProviderModelIds", () => {
         error_kind: null,
       }),
     ).toThrow("模型列表获取失败");
+  });
+});
+
+describe("providerModelsErrorText", () => {
+  it("translates common model discovery failures", () => {
+    expect(providerModelsErrorText(new Error("HTTP 404 Not Found"))).toBe(
+      "此服务商未提供 /models 端点",
+    );
+    expect(providerModelsErrorText(new Error("API key rejected (HTTP 401)"))).toBe(
+      "API Key 无效或未保存",
+    );
+  });
+
+  it("keeps an unknown backend error intact", () => {
+    expect(providerModelsErrorText(new Error("upstream unavailable"))).toBe("upstream unavailable");
   });
 });
