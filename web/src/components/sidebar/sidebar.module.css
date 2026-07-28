@@ -195,11 +195,6 @@
 
 .brandMark {
   flex-shrink: 0;
-  display: inline-flex;
-}
-
-.brandMark svg {
-  display: block;
 }
 
 .brandText {

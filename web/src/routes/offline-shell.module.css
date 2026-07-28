@@ -1,7 +1,7 @@
 .shell { width: 100vw; height: 100vh; display: grid; grid-template-columns: 220px 1fr; color: var(--h-text); background: var(--h-bg-app); font-family: var(--h-font-ui); overflow: hidden; }
 .shell > aside { display: flex; flex-direction: column; gap: 22px; padding: calc(24px + var(--h-window-control-safe-top, 0px)) 14px 18px; border-right: 1px solid var(--h-line); background: var(--h-bg-pane); }
 .brand { display: flex; align-items: center; gap: 9px; padding: 0 7px; }
-.brand > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; color: var(--h-accent-contrast); background: var(--h-accent); font-weight: 800; }
+.brandMark { flex-shrink: 0; }
 .brand strong, .brand small { display: block; }
 .brand strong { font-size: 12px; }
 .brand small { margin-top: 2px; color: var(--h-text-3); font-size: 9px; }
