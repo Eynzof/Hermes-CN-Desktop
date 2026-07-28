@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hermes 状态纹理样板</title>
+    <style>
+      @font-face {
+        font-family: "HarmonyOS Sans SC";
+        src: url("/@fs/Users/enzo/.codex/worktrees/8e02/Hermes-CN-Desktop/packages/shared-ui/src/tokens/fonts/HarmonyOS_Sans_SC_Regular.woff2") format("woff2");
+        font-style: normal;
+        font-weight: 400;
+      }
+
+      @font-face {
+        font-family: "HarmonyOS Sans SC";
+        src: url("/@fs/Users/enzo/.codex/worktrees/8e02/Hermes-CN-Desktop/packages/shared-ui/src/tokens/fonts/HarmonyOS_Sans_SC_Bold.woff2") format("woff2");
+        font-style: normal;
+        font-weight: 700;
+      }
+
+      :root {
+        color-scheme: light;
+        --page: #f4f4f3;
+        --surface: #ffffff;
+        --surface-muted: #f8f8f7;
+        --ink: #151515;
+        --ink-2: #5f5f5b;
+        --ink-3: #858581;
+        --line: #d5d5d1;
+        --line-strong: #8a8a84;
+        --pattern-ink: #3f3f3c;
+        --button-active: #1c1c1b;
+        --button-active-ink: #ffffff;
+      }
+
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --page: #111110;
+        --surface: #1a1a19;
+        --surface-muted: #20201f;
+        --ink: #f3f3f0;
+        --ink-2: #b5b5b0;
+        --ink-3: #858580;
+        --line: #393936;
+        --line-strong: #777771;
+        --pattern-ink: #d4d4ce;
+        --button-active: #eeeeea;
+        --button-active-ink: #171716;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--page);
+      }
+
+      body {
+        color: var(--ink);
+        font-family: "HarmonyOS Sans SC", "HarmonyOS Sans", "PingFang SC", system-ui, sans-serif;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .page {
+        width: min(1440px, 100%);
+        margin: 0 auto;
+        padding: 40px 40px 64px;
+      }
+
+      .intro {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 32px;
+        align-items: end;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow,
+      .sample-number,
+      .rule-label {
+        color: var(--ink-3);
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 8px 0 12px;
+        font-size: clamp(32px, 4vw, 52px);
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        line-height: 1.08;
+      }
+
+      .intro p {
+        max-width: 720px;
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      .theme-switch {
+        display: inline-grid;
+        grid-template-columns: repeat(2, 64px);
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .theme-switch button {
+        height: 32px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--ink-2);
+        cursor: pointer;
+        font-size: 12px;
+      }
+
+      .theme-switch button[aria-pressed="true"] {
+        background: var(--button-active);
+        color: var(--button-active-ink);
+      }
+
+      .rules {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin: 24px 0 32px;
+      }
+
+      .rule {
+        min-height: 64px;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .rule strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .samples {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+
+      .sample {
+        display: grid;
+        gap: 12px;
+      }
+
+      .sample-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 4px;
+      }
+
+      .sample-title {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .sample-title h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .tag {
+        min-height: 24px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        color: var(--ink-2);
+        background: var(--surface);
+        font-size: 11px;
+      }
+
+      .metric {
+        --pattern: none;
+        position: relative;
+        isolation: isolate;
+        min-height: 184px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px 28px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .metric::before {
+        content: "";
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        background-image: var(--pattern);
+        background-repeat: repeat;
+        opacity: 0.78;
+        pointer-events: none;
+      }
+
+      .metric-label {
+        color: var(--ink-2);
+        font-size: 18px;
+        line-height: 1.4;
+      }
+
+      .metric-value {
+        font-size: 48px;
+        font-weight: 400;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+
+      .metric-detail {
+        color: var(--ink-2);
+        font-size: 18px;
+        line-height: 1.4;
+      }
+
+      .pattern-dots {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='4' cy='4' r='1' fill='%233f3f3c' fill-opacity='.16'/%3E%3C/svg%3E");
+      }
+
+      .pattern-diagonal {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M-4 16L16-4M4 20L20 4' fill='none' stroke='%233f3f3c' stroke-opacity='.075' stroke-width='1'/%3E%3C/svg%3E");
+      }
+
+      .pattern-grid {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M20 0H0V20' fill='none' stroke='%233f3f3c' stroke-opacity='.06' stroke-width='1'/%3E%3C/svg%3E");
+      }
+
+      .pattern-dashes {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Cpath d='M4 4H12M12 12H20' fill='none' stroke='%233f3f3c' stroke-opacity='.085' stroke-width='1'/%3E%3C/svg%3E");
+      }
+
+      .pattern-crosses {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 8V4H8M16 20H20V16' fill='none' stroke='%233f3f3c' stroke-opacity='.08' stroke-width='1'/%3E%3C/svg%3E");
+      }
+
+      .pattern-bricks {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='16' viewBox='0 0 32 16'%3E%3Cpath d='M0 8H32M8 0V8M24 8V16' fill='none' stroke='%233f3f3c' stroke-opacity='.065' stroke-width='1'/%3E%3C/svg%3E");
+      }
+
+      .pattern-dots-compact {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Ccircle cx='3' cy='3' r='1' fill='%233f3f3c' fill-opacity='.13'/%3E%3C/svg%3E");
+      }
+
+      .pattern-dots-offset {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='4' cy='4' r='1' fill='%233f3f3c' fill-opacity='.14'/%3E%3Ccircle cx='12' cy='12' r='1' fill='%233f3f3c' fill-opacity='.14'/%3E%3C/svg%3E");
+      }
+
+      .pattern-dots-dual {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Ccircle cx='4' cy='4' r='1.5' fill='%233f3f3c' fill-opacity='.13'/%3E%3Ccircle cx='16' cy='12' r='1' fill='%233f3f3c' fill-opacity='.09'/%3E%3C/svg%3E");
+      }
+
+      .pattern-rings {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Ccircle cx='5' cy='5' r='2' fill='none' stroke='%233f3f3c' stroke-opacity='.12' stroke-width='1'/%3E%3C/svg%3E");
+      }
+
+      .pattern-dot-cluster {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg fill='%233f3f3c' fill-opacity='.11'%3E%3Ccircle cx='4' cy='4' r='1'/%3E%3Ccircle cx='8' cy='4' r='1'/%3E%3Ccircle cx='4' cy='8' r='1'/%3E%3C/g%3E%3C/svg%3E");
+      }
+
+      .pattern-constellation {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='%233f3f3c'%3E%3Ccircle cx='4' cy='8' r='1' fill-opacity='.14'/%3E%3Ccircle cx='20' cy='4' r='1' fill-opacity='.08'/%3E%3Ccircle cx='12' cy='24' r='1' fill-opacity='.11'/%3E%3Ccircle cx='28' cy='20' r='1' fill-opacity='.07'/%3E%3C/g%3E%3C/svg%3E");
+      }
+
+      .pattern-dotted-lanes {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Cpath d='M0 4H24M0 12H24' fill='none' stroke='%233f3f3c' stroke-opacity='.09' stroke-width='1' stroke-dasharray='1 7' stroke-linecap='round'/%3E%3C/svg%3E");
+      }
+
+      .pattern-pin-grid {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M0 0H24M0 0V24' fill='none' stroke='%233f3f3c' stroke-opacity='.055' stroke-width='1'/%3E%3Ccircle cx='0' cy='0' r='1.5' fill='%233f3f3c' fill-opacity='.18'/%3E%3C/svg%3E");
+      }
+
+      .pattern-dot-dash {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='16' viewBox='0 0 24 16'%3E%3Ccircle cx='4' cy='4' r='1' fill='%233f3f3c' fill-opacity='.14'/%3E%3Cpath d='M12 12H20' stroke='%233f3f3c' stroke-opacity='.08' stroke-width='1'/%3E%3C/svg%3E");
+      }
+
+      .pattern-pixels {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='3' y='3' width='2' height='2' fill='%233f3f3c' fill-opacity='.13'/%3E%3C/svg%3E");
+      }
+
+      .pattern-diamonds {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath d='M5 2L8 5L5 8L2 5Z' fill='%233f3f3c' fill-opacity='.09'/%3E%3C/svg%3E");
+      }
+
+      .pattern-plus-dust {
+        --pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M4 1V7M1 4H7' fill='none' stroke='%233f3f3c' stroke-opacity='.09' stroke-width='1'/%3E%3Ccircle cx='16' cy='16' r='1' fill='%233f3f3c' fill-opacity='.09'/%3E%3C/svg%3E");
+      }
+
+      html[data-theme="dark"] .metric::before {
+        filter: invert(1);
+        opacity: 0.64;
+      }
+
+      .recommendation {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 24px;
+        margin-top: 40px;
+        padding: 24px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--surface-muted);
+      }
+
+      .recommendation h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .recommendation p {
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 13px;
+        line-height: 1.8;
+      }
+
+      .references {
+        margin-top: 40px;
+        padding-top: 24px;
+        border-top: 1px solid var(--line);
+      }
+
+      .references-head {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 24px;
+        margin-bottom: 16px;
+      }
+
+      .references h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .references-head p {
+        margin: 0;
+        color: var(--ink-2);
+        font-size: 13px;
+        line-height: 1.8;
+      }
+
+      .reference-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .reference {
+        min-height: 104px;
+        display: grid;
+        align-content: start;
+        gap: 8px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        text-decoration: none;
+      }
+
+      .reference:hover {
+        border-color: var(--line-strong);
+        background: var(--surface-muted);
+      }
+
+      .reference strong {
+        font-size: 13px;
+      }
+
+      .reference span {
+        color: var(--ink-3);
+        font-size: 11px;
+        line-height: 1.6;
+      }
+
+      @media (max-width: 880px) {
+        .page {
+          padding: 24px 20px 48px;
+        }
+
+        .intro,
+        .samples,
+        .recommendation,
+        .references-head {
+          grid-template-columns: 1fr;
+        }
+
+        .rules {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .theme-switch {
+          justify-self: start;
+        }
+
+        .reference-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .rules {
+          grid-template-columns: 1fr;
+        }
+
+        .reference-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .metric {
+          min-height: 168px;
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="intro">
+        <div>
+          <div class="eyebrow">Hermes Community UI · Semantic Texture Study</div>
+          <h1>黑白灰状态纹理</h1>
+          <p>颜色全部退出语义表达。注意、异常和提示改由重复纹理、图标与文字共同编码；所有边框统一保持 1px，不再增加左侧强调轨，布局严格遵守 4px 网格。</p>
+        </div>
+        <div class="theme-switch" aria-label="主题预览">
+          <button type="button" data-theme-button="light" aria-pressed="true">浅色</button>
+          <button type="button" data-theme-button="dark" aria-pressed="false">深色</button>
+        </div>
+      </header>
+
+      <section class="rules" aria-label="设计规则">
+        <div class="rule"><span class="rule-label">Color</span><strong>仅黑 · 白 · 灰</strong></div>
+        <div class="rule"><span class="rule-label">Grid</span><strong>严格 4px 基线</strong></div>
+        <div class="rule"><span class="rule-label">Stroke</span><strong>全部边框统一 1px</strong></div>
+        <div class="rule"><span class="rule-label">Depth</span><strong>无阴影 · 无渐变</strong></div>
+      </section>
+
+      <section class="samples" aria-label="纹理候选">
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">01</span><h2>微点阵</h2></div><span class="tag">已选基调 · 加深</span></div>
+          <div class="metric pattern-dots"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">02</span><h2>45° 细斜线</h2></div><span class="tag">信号明确</span></div>
+          <div class="metric pattern-diagonal"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">03</span><h2>工程网格</h2></div><span class="tag">理性 · 系统感</span></div>
+          <div class="metric pattern-grid"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">04</span><h2>错位短划</h2></div><span class="tag">轻量 · 有节奏</span></div>
+          <div class="metric pattern-dashes"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">05</span><h2>定位十字</h2></div><span class="tag">技术感较强</span></div>
+          <div class="metric pattern-crosses"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">06</span><h2>砌块线</h2></div><span class="tag">结构感最强</span></div>
+          <div class="metric pattern-bricks"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">07</span><h2>紧密点阵</h2></div><span class="tag">高密度</span></div>
+          <div class="metric pattern-dots-compact"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">08</span><h2>错位点阵</h2></div><span class="tag">更有节奏</span></div>
+          <div class="metric pattern-dots-offset"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">09</span><h2>双尺度点阵</h2></div><span class="tag">主次明确</span></div>
+          <div class="metric pattern-dots-dual"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">10</span><h2>空心环点</h2></div><span class="tag">更轻盈</span></div>
+          <div class="metric pattern-rings"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">11</span><h2>三点簇</h2></div><span class="tag">有方向性</span></div>
+          <div class="metric pattern-dot-cluster"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">12</span><h2>稀疏星点</h2></div><span class="tag">自然随机感</span></div>
+          <div class="metric pattern-constellation"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">13</span><h2>点线轨道</h2></div><span class="tag">横向秩序</span></div>
+          <div class="metric pattern-dotted-lanes"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">14</span><h2>针孔网格</h2></div><span class="tag">工程制图感</span></div>
+          <div class="metric pattern-pin-grid"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">15</span><h2>点划矩阵</h2></div><span class="tag">信息感更强</span></div>
+          <div class="metric pattern-dot-dash"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">16</span><h2>微像素</h2></div><span class="tag">数字界面感</span></div>
+          <div class="metric pattern-pixels"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">17</span><h2>菱形粒子</h2></div><span class="tag">更具装饰性</span></div>
+          <div class="metric pattern-diamonds"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+
+        <article class="sample">
+          <div class="sample-head"><div class="sample-title"><span class="sample-number">18</span><h2>十字微尘</h2></div><span class="tag">识别度最高</span></div>
+          <div class="metric pattern-plus-dust"><div class="metric-label">注意项</div><div class="metric-value">1</div><div class="metric-detail">建议尽快处理</div></div>
+        </article>
+      </section>
+
+      <section class="recommendation">
+        <h2>当前建议</h2>
+        <p>「01 微点阵」已经按你的意见加深，并取消左侧强调轨。正式系统可以用同一套微点阵，通过密度、点径和间距区分注意与异常；正常状态保持纯净无纹理，所有文字、图标和边框始终使用中性灰。</p>
+      </section>
+
+      <section class="references">
+        <div class="references-head">
+          <h2>在线项目参考</h2>
+          <p>扩展方案主要借鉴这些项目的“可重复 SVG 单元、尺度可调、低对比纹理”方法。CSS 渐变类项目只用于观察图案分类，不采用其渐变实现。</p>
+        </div>
+        <div class="reference-grid">
+          <a class="reference" href="https://pattern.monster/" target="_blank" rel="noreferrer"><strong>Pattern Monster</strong><span>可调 SVG 无缝纹理生成器，图案数量丰富。</span></a>
+          <a class="reference" href="https://github.com/sschoger/hero-patterns" target="_blank" rel="noreferrer"><strong>Hero Patterns</strong><span>适合网页背景的可重复 SVG 图案集合。</span></a>
+          <a class="reference" href="https://github.com/iros/patternfills" target="_blank" rel="noreferrer"><strong>PatternFills</strong><span>面向状态与图表区分的 SVG pattern fill。</span></a>
+          <a class="reference" href="https://github.com/btmills/geopattern" target="_blank" rel="noreferrer"><strong>GeoPattern</strong><span>根据字符串种子生成平铺 SVG 几何纹理。</span></a>
+          <a class="reference" href="https://github.com/Afif13/CSS-Pattern" target="_blank" rel="noreferrer"><strong>CSS Pattern</strong><span>大规模图案分类参考；本方案不采用其渐变实现。</span></a>
+          <a class="reference" href="https://bgjar.com/" target="_blank" rel="noreferrer"><strong>BGJar</strong><span>在线生成可导出的 SVG 背景与覆盖纹理。</span></a>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const root = document.documentElement;
+      const buttons = Array.from(document.querySelectorAll("[data-theme-button]"));
+      for (const button of buttons) {
+        button.addEventListener("click", () => {
+          const theme = button.dataset.themeButton;
+          root.dataset.theme = theme;
+          for (const item of buttons) item.setAttribute("aria-pressed", String(item === button));
+        });
+      }
+    </script>
+  </body>
+</html>
