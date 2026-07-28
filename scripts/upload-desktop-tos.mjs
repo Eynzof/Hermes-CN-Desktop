@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
+import { brandedWindowsArtifactBrand } from "./windows-artifact-names.mjs";
 
 const SOURCE_DIR = resolve(process.env.DESKTOP_ASSET_DIR || "assets");
 const BRANDS_DIR = resolve(process.env.DESKTOP_BRANDS_DIR || "brands");
@@ -70,6 +71,15 @@ function labelFor(platform) {
     "macos-x64": "macOS Intel DMG",
     linux: "Linux installer",
   }[platform] || platform;
+}
+
+function matchesBrandAsset(fileName, brand, version) {
+  const artifactBrand = brandedWindowsArtifactBrand(fileName, version);
+  if (artifactBrand !== null) return artifactBrand === brand.artifactBrandName;
+  return [brand.productName, brand.appName, brand.appNameEn, brand.id]
+    .map(normalized)
+    .filter(Boolean)
+    .some((needle) => normalized(fileName).includes(needle));
 }
 
 async function upload(filePath, objectPath) {
@@ -141,10 +151,7 @@ async function main() {
 
   for (const brand of brands) {
     const channelRoot = RELEASE_CHANNEL === "stable" ? brand.id : `${brand.id}/canary`;
-    const needles = [brand.artifactBrandName, brand.productName, brand.appName, brand.appNameEn, brand.id]
-      .map(normalized)
-      .filter(Boolean);
-    const brandFiles = files.filter((fileName) => needles.some((needle) => normalized(fileName).includes(needle)));
+    const brandFiles = files.filter((fileName) => matchesBrandAsset(fileName, brand, version));
     if (brandFiles.length === 0) {
       throw new Error(`No release assets matched brand ${brand.id} (${brand.productName})`);
     }

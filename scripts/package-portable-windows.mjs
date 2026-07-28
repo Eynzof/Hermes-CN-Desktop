@@ -11,6 +11,7 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { windowsPortableName } from "./windows-artifact-names.mjs";
 
 function usage() {
   console.log(`Usage: node scripts/package-portable-windows.mjs [options]
@@ -51,6 +52,8 @@ if (hasFlag("--help") || hasFlag("-h")) {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 const tauriConf = JSON.parse(readFileSync(join(repoRoot, "tauri.conf.json"), "utf8"));
+const brandId = process.env.BRAND || "huanxingcomhermes";
+const brand = JSON.parse(readFileSync(join(repoRoot, "brands", `${brandId}.json`), "utf8"));
 
 const version = pkg.version;
 const productName = tauriConf.productName;
@@ -88,7 +91,11 @@ const resourceDests = Object.values(tauriConf.bundle.resources).map((dest) =>
 const archLabel = (target ?? "x86_64").startsWith("aarch64") ? "arm64" : "x64";
 const stagingName = `${productName} Portable`;
 const stagingDir = join(outRoot, stagingName);
-const zipName = `${productName.replaceAll(" ", ".")}_${version}_${archLabel}-windows-portable.zip`;
+const zipName = windowsPortableName({
+  artifactBrandName: brand.artifactBrandName,
+  version,
+  arch: archLabel,
+});
 const zipPath = join(outRoot, zipName);
 
 rmSync(outRoot, { recursive: true, force: true });

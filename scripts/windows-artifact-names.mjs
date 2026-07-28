@@ -24,6 +24,24 @@ export function windowsInstallerName({ artifactBrandName, version, arch = "x64" 
   return `Hermes-${brand}-${releaseVersion}_${architecture}-setup.exe`;
 }
 
+export function windowsPortableName({ artifactBrandName, version, arch = "x64" }) {
+  const brand = requireMatch(artifactBrandName, SAFE_BRAND_NAME, "artifact brand name");
+  const releaseVersion = requireMatch(version, SEMVER, "desktop version");
+  const architecture = requireMatch(arch, SAFE_ARCH, "Windows architecture");
+  return `Hermes-${brand}-${releaseVersion}_${architecture}-windows-portable.zip`;
+}
+
+export function brandedWindowsArtifactBrand(fileName, version) {
+  const releaseVersion = requireMatch(version, SEMVER, "desktop version");
+  const name = String(fileName ?? "");
+  if (!name.startsWith("Hermes-")) return null;
+  const versionMarker = `-${releaseVersion}_`;
+  const markerIndex = name.indexOf(versionMarker, "Hermes-".length);
+  if (markerIndex === -1) return null;
+  const brand = name.slice("Hermes-".length, markerIndex);
+  return SAFE_BRAND_NAME.test(brand) ? brand : null;
+}
+
 export function tauriDefaultWindowsInstallerName({ productName, version, arch = "x64" }) {
   const product = String(productName ?? "").trim();
   if (!product || /[\\/:*?"<>|]/u.test(product)) {

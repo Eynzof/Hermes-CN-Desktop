@@ -58,7 +58,7 @@ jobs:
           const fs = require("node:fs");
           const path = require("node:path");
 
-          const platforms = [
+          const allPlatforms = [
             {
               runner: "windows-latest",
               target: "x86_64-pc-windows-msvc",
@@ -88,6 +88,13 @@ jobs:
               bundles: "deb,appimage",
             },
           ];
+
+          // This fork publishes the Windows desktop consumed by the Huanxing
+          // Team site. It has no Apple notarization secrets; limiting tag
+          // builds here also ensures mirror-sync is not blocked by macOS jobs.
+          const platforms = process.env.GITHUB_REPOSITORY === "nevermorewish/HuanXing-Hermes"
+            ? allPlatforms.filter((platform) => platform.runtime_platform === "win32")
+            : allPlatforms;
 
           const brandsDir = path.join(process.cwd(), "brands");
           const brands = fs.readdirSync(brandsDir)
@@ -388,6 +395,7 @@ jobs:
         if: matrix.runtime_platform == 'win32'
         shell: bash
         env:
+          BRAND: ${{ matrix.brand }}
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
@@ -511,6 +519,8 @@ jobs:
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       DESKTOP_TOS_BASE_URL: https://huanxing.tos-cn-beijing.volces.com/package/hermesagent
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all release assets
         run: |
           mkdir -p assets && cd assets
