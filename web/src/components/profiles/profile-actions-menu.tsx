@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { Popover } from "@hermes/shared-ui";
 import {
   AlignLeft,
-  Check,
   Cpu,
   MoreVertical,
   Package,
@@ -17,7 +16,6 @@ import s from "./profiles.module.css";
 export interface ProfileActionsMenuProps {
   profile: ProfileSummary;
   isActive: boolean;
-  onSetActive: () => void;
   onEditModel: () => void;
   onEditDescription: () => void;
   onEditSoul: () => void;
@@ -30,13 +28,12 @@ export interface ProfileActionsMenuProps {
 
 /**
  * 单个档案的 ⋯ 动作菜单（自带 Popover 触发器）。对齐官方桌面端 ProfileActionsMenu：
- * 设为默认 / 改模型 / 改描述 / 编辑 SOUL / 复制 CLI 命令 / 重命名 / 删除。
- * default 档案不可重命名/删除；当前档案不可「设为默认」、且要切走后才能删。
+ * 改模型 / 改描述 / 编辑 SOUL / 管理技能 / 复制 CLI 命令 / 重命名 / 删除。
+ * 高频切换动作由卡片一级按钮承载；default 档案不可重命名/删除，当前档案要切走后才能删。
  */
 export function ProfileActionsMenu({
   profile,
   isActive,
-  onSetActive,
   onEditModel,
   onEditDescription,
   onEditSoul,
@@ -83,19 +80,6 @@ export function ProfileActionsMenu({
           sideOffset={4}
           role="menu"
         >
-          <Popover.Close asChild>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={onSetActive}
-              disabled={isActive}
-            >
-              <Check size={13} /> 设为默认
-            </button>
-          </Popover.Close>
-
-          <div className={s.menuSep} />
-
           <Popover.Close asChild>
             <button type="button" role="menuitem" onClick={onEditModel}>
               <Cpu size={13} /> 改模型
