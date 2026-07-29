@@ -51,21 +51,21 @@ describe("TOP_TABS", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "人格" && item.path === "/soul")).toBe(true);
   });
 
-  it("keeps built-in memory under config and promotes external memory to 04", () => {
-    expect(tabFor("/memory")).toBe("skills");
+  it("keeps built-in and external memory together under 04 memory", () => {
+    expect(tabFor("/memory")).toBe("externalMemory");
     expect(tabFor("/memconfig")).toBe("externalMemory");
     expect(tabFor("/openviking")).toBe("externalMemory");
     expect(tabFor("/hindsight")).toBe("externalMemory");
-    expect(CONFIG_ITEMS.some((item) => item.label === "内置记忆" && item.path === "/memory")).toBe(true);
+    expect(CONFIG_ITEMS.some((item) => item.path === "/memory")).toBe(false);
     expect(CONFIG_ITEMS.some((item) => item.label === "外置记忆")).toBe(false);
   });
 
-  it("places external memory between message access and advanced", () => {
+  it("places memory between message access and advanced", () => {
     expect(TOP_TABS.map((tab) => [tab.num, tab.label])).toEqual([
       ["01", "工作台"],
       ["02", "配置"],
       ["03", "消息接入"],
-      ["04", "外置记忆"],
+      ["04", "记忆"],
       ["05", "高级"],
     ]);
   });

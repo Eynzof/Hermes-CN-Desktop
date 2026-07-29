@@ -3,7 +3,6 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   Archive,
   Boxes,
-  Brain,
   Clock,
   Ghost,
   Cpu,
@@ -40,12 +39,6 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
   { label: "技能", path: "/skills", icon: Sparkles },
   { label: "MCP", path: "/mcp", icon: Puzzle },
   { label: "终端", path: "/console", icon: TerminalSquare, title: "Hermes Console：直接运行 Hermes 命令" },
-  {
-    label: "内置记忆",
-    path: "/memory",
-    icon: Brain,
-    title: "MEMORY.md / USER.md：Hermes 内置记忆与用户画像",
-  },
   {
     label: "人格",
     path: "/soul",

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { BrainCircuit, Database, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { Brain, BrainCircuit, Database, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import s from "./debug-sidebar.module.css";
 
 interface ExternalMemoryItem {
@@ -11,6 +11,13 @@ interface ExternalMemoryItem {
 }
 
 export const EXTERNAL_MEMORY_ITEMS: readonly ExternalMemoryItem[] = [
+  {
+    label: "内置记忆",
+    path: "/memory",
+    icon: Brain,
+    exact: true,
+    title: "MEMORY.md / USER.md：Hermes 内置记忆与用户画像",
+  },
   {
     label: "配置",
     path: "/memconfig",
@@ -39,11 +46,11 @@ export function ExternalMemorySidebar() {
     : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
 
   return (
-    <aside className={s.sidebar} aria-label="外置记忆侧栏">
+    <aside className={s.sidebar} aria-label="记忆侧栏">
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§041 · 外置记忆</span>
+            <span>§041 · 记忆</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
           {EXTERNAL_MEMORY_ITEMS.map((item) => {
