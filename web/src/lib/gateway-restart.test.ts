@@ -41,10 +41,10 @@ describe("gateway restart helpers", () => {
   });
 
   it("builds compact button labels and titles", () => {
-    expect(gatewayRestartButtonLabel("idle")).toBe("重启");
-    expect(gatewayRestartButtonLabel("running")).toBe("重启中…");
-    expect(gatewayRestartButtonLabel("success")).toBe("已完成");
-    expect(gatewayRestartButtonLabel("error")).toBe("重试");
+    expect(gatewayRestartButtonLabel("idle")).toBe("重启网关");
+    expect(gatewayRestartButtonLabel("running")).toBe("网关重启中…");
+    expect(gatewayRestartButtonLabel("success")).toBe("网关已重启");
+    expect(gatewayRestartButtonLabel("error")).toBe("重试网关");
     expect(gatewayRestartTitle("running", "自定义状态")).toBe("自定义状态");
   });
 
