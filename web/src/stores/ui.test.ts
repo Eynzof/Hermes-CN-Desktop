@@ -334,3 +334,59 @@ describe("assistant display profile atoms (persisted)", () => {
     expect(uiStore.readUiValue("hermes.assistant-avatar-data-url", "fallback")).toBe("");
   });
 });
+
+describe("persisted atoms follow late ui-store hydration (#480)", () => {
+  it("restores common settings when the snapshot arrives after module evaluation", async () => {
+    const {
+      assistantAvatarDataUrlAtom,
+      assistantDisplayNameAtom,
+      composerSubmitShortcutAtom,
+      showReasoningAtom,
+      uiStore,
+    } = await loadUi();
+    const store = createStore();
+    const atoms = [
+      showReasoningAtom,
+      composerSubmitShortcutAtom,
+      assistantDisplayNameAtom,
+      assistantAvatarDataUrlAtom,
+    ] as const;
+    const unsubscribes = atoms.map((targetAtom) => store.sub(targetAtom, () => {}));
+
+    expect(store.get(showReasoningAtom)).toBe(false);
+    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe("");
+
+    const avatar = "data:image/png;base64,AAAA";
+    uiStore.__resetUiStoreForTests({
+      "hermes.show-reasoning": true,
+      "hermes.composer-submit-shortcut": "ctrl-enter",
+      "hermes.assistant-display-name": "Claudia",
+      "hermes.assistant-avatar-data-url": avatar,
+    });
+
+    expect(store.get(showReasoningAtom)).toBe(true);
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Claudia");
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe(avatar);
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
+  });
+
+  it("reads hydrated values on first mount without another notification", async () => {
+    const { composerSubmitShortcutAtom, showReasoningAtom, uiStore } = await loadUi();
+    uiStore.__resetUiStoreForTests({
+      "hermes.show-reasoning": true,
+      "hermes.composer-submit-shortcut": "ctrl-enter",
+    });
+
+    const store = createStore();
+    const unsubscribes = [
+      store.sub(showReasoningAtom, () => {}),
+      store.sub(composerSubmitShortcutAtom, () => {}),
+    ];
+    expect(store.get(showReasoningAtom)).toBe(true);
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
+  });
+});
