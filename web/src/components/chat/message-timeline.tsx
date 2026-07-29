@@ -100,6 +100,18 @@ export function shouldDetachOnScroll(
   return scrollTop < lastScrollTop - 1;
 }
 
+export function shouldForceBottomOnMessageChange(
+  previousMessageCount: number,
+  nextMessageCount: number,
+  sessionChanged: boolean,
+  previousLastUserMessageId: string | undefined,
+  nextLastUserMessageId: string | undefined,
+): boolean {
+  if (nextMessageCount === 0) return false;
+  if (previousMessageCount === 0 || sessionChanged) return true;
+  return nextLastUserMessageId !== undefined && nextLastUserMessageId !== previousLastUserMessageId;
+}
+
 function formatDay(timestamp: number): string {
   const date = new Date(timestamp);
   const now = new Date();
@@ -349,7 +361,7 @@ function ToolCard({ tool }: { tool: ChatToolItem }) {
         disabled={!hasBody}
         data-open={open}
       >
-        <span className={s.toolStatus} data-status={tool.status} />
+        <span className={s.toolStatusDot} data-status={tool.status} />
         <span className={s.toolName}>{tool.name}</span>
         {tool.context ? (
           <span className={s.toolContext} title={tool.context}>
@@ -393,7 +405,7 @@ function ToolGroupCard({ tools }: { tools: ChatToolItem[] }) {
         onClick={() => setOpen((value) => !value)}
         data-open={open}
       >
-        <span className={s.toolStatus} data-status="done" />
+        <span className={s.toolStatusDot} data-status="done" />
         <span className={s.toolName}>{head.name}</span>
         {head.context ? (
           <span className={s.toolContext} title={head.context}>
@@ -451,7 +463,7 @@ function ToolActivity({ tools }: { tools: ChatToolItem[] }) {
           strokeWidth={2.25}
           aria-hidden="true"
         />
-        <span className={s.toolStatus} data-status={summary.status} />
+        <span className={s.toolStatusDot} data-status={summary.status} />
         <span className={s.toolActivityLabel}>{summary.label}</span>
         {summary.meta ? <span className={s.toolActivityMeta}>{summary.meta}</span> : null}
         {elapsedLabel ? <span className={s.toolElapsed}>{elapsedLabel}</span> : null}
@@ -974,6 +986,7 @@ export function MessageTimeline({
   const programmaticTimerRef = useRef<number | null>(null);
   const messageCountRef = useRef(0);
   const firstMessageIdRef = useRef<string | undefined>(undefined);
+  const lastUserMessageIdRef = useRef<string | undefined>(undefined);
   const speechAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechStopRef = useRef<(() => void) | null>(null);
   const speechSequenceRef = useRef(0);
@@ -1187,11 +1200,21 @@ export function MessageTimeline({
     setActiveTurnId(id);
   }, []);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto", force = false) => {
     const container = containerRef.current;
     if (!container) return;
+    if (force) {
+      programmaticScrollRef.current = false;
+      if (programmaticTimerRef.current !== null) {
+        window.clearTimeout(programmaticTimerRef.current);
+        programmaticTimerRef.current = null;
+      }
+      nearBottomRef.current = true;
+      userDetachedFromBottomRef.current = false;
+    }
     if (userDetachedFromBottomRef.current) return;
     userDetachedFromBottomRef.current = false;
+    nearBottomRef.current = true;
     container.scrollTo({
       top: container.scrollHeight,
       behavior,
@@ -1252,14 +1275,24 @@ export function MessageTimeline({
   useIsomorphicLayoutEffect(() => {
     const previousMessageCount = messageCountRef.current;
     const previousFirstMessageId = firstMessageIdRef.current;
+    const previousLastUserMessageId = lastUserMessageIdRef.current;
     const nextFirstMessageId = visibleMessages[0]?.id;
+    const nextLastUserMessageId = turnAnchors[turnAnchors.length - 1]?.id;
     const sessionChanged =
       previousFirstMessageId !== undefined &&
       nextFirstMessageId !== undefined &&
       previousFirstMessageId !== nextFirstMessageId;
+    const forceBottom = shouldForceBottomOnMessageChange(
+      previousMessageCount,
+      visibleMessages.length,
+      sessionChanged,
+      previousLastUserMessageId,
+      nextLastUserMessageId,
+    );
 
     messageCountRef.current = visibleMessages.length;
     firstMessageIdRef.current = nextFirstMessageId;
+    lastUserMessageIdRef.current = nextLastUserMessageId;
 
     if (visibleMessages.length === 0) {
       nearBottomRef.current = true;
@@ -1275,13 +1308,13 @@ export function MessageTimeline({
     }
 
     const container = containerRef.current;
-    if (!container || !nearBottomRef.current) return;
+    if (!container || (!forceBottom && !nearBottomRef.current)) return;
     const initialHistoryRender = previousMessageCount === 0 || sessionChanged;
     // Bottom-follow must move synchronously. A smooth scroll targets the current
     // scrollHeight, but streaming can grow the message again before the animation
     // arrives; the intermediate scroll event then looks far from the bottom and
     // disables its own ResizeObserver follow-up even though the user never scrolled.
-    scrollToBottom("auto");
+    scrollToBottom("auto", forceBottom);
 
     // 长会话里 Markdown、表格、代码块等内容会在本次提交后继续改变实际高度。
     // 初次进入历史会话时不要依赖一次平滑滚动，否则 WebKit/Tauri 里可能先滚到
@@ -1306,7 +1339,7 @@ export function MessageTimeline({
         autoAnchorTimerRef.current = null;
       }, 650);
     }
-  }, [clearAutoAnchor, pendingApproval, scrollToBottom, statusMessage, visibleMessages]);
+  }, [clearAutoAnchor, pendingApproval, scrollToBottom, statusMessage, turnAnchors, visibleMessages]);
 
   useEffect(() => {
     const container = containerRef.current;

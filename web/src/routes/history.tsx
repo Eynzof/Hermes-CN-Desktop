@@ -25,6 +25,7 @@ import {
   useUnarchiveSession,
 } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
+import { useSessionBranch } from "@/hooks/use-session-branch";
 import { isSessionRunning } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
@@ -58,6 +59,7 @@ import { renameSession } from "@/lib/session-rename";
 import { exportSessionJson } from "@/lib/session-export";
 import {
   SessionDeleteModal,
+  SessionBranchErrorModal,
   SessionExportErrorModal,
   SessionRenameModal,
   SessionRowMenu,
@@ -241,6 +243,7 @@ export function HistoryRoute() {
   const unarchiveSession = useUnarchiveSession();
   const deleteSessions = useDeleteSessions();
   const { setSessionTitle, resumeSession } = useGateway();
+  const sessionBranch = useSessionBranch();
 
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -877,10 +880,11 @@ export function HistoryRoute() {
                         </Popover.Trigger>
                         <SessionRowMenu
                           pinned={pinned}
-                          disabled={menuDisabled}
+                          disabled={menuDisabled || sessionBranch.branchingSessionId === session.id}
                           archived={archiveScope === "archived"}
                           onTogglePin={() => onTogglePinSession(session.id)}
                           onRename={() => startRename(session)}
+                          onBranch={() => void sessionBranch.branchSession(session)}
                           onExport={() => void handleExport(session)}
                           onArchive={() => handleArchive(session)}
                           onUnarchive={() => handleUnarchive(session)}
@@ -930,6 +934,13 @@ export function HistoryRoute() {
 
       {exportError ? (
         <SessionExportErrorModal error={exportError} onClose={() => setExportError("")} />
+      ) : null}
+
+      {sessionBranch.error ? (
+        <SessionBranchErrorModal
+          error={sessionBranch.error}
+          onClose={sessionBranch.clearError}
+        />
       ) : null}
     </main>
   );

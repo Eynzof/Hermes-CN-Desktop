@@ -20,6 +20,7 @@ export function HermesLogoMark({ size = 22, className, title }: HermesLogoMarkPr
       aria-hidden={title ? undefined : true}
       style={{
         borderRadius: 0,
+        background: "var(--h-color-bg-avatar)",
         objectFit: "cover",
         display: "block",
       }}

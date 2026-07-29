@@ -4,7 +4,12 @@ import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { MarkdownText } from "./markdown-renderer";
-import { MessageTimeline, resolveBottomFollowState, shouldDetachOnScroll } from "./message-timeline";
+import {
+  MessageTimeline,
+  resolveBottomFollowState,
+  shouldDetachOnScroll,
+  shouldForceBottomOnMessageChange,
+} from "./message-timeline";
 import type { ChatMessage } from "./chat-types";
 
 // MessageTimeline 内部的资料卡用到 useNavigate，SSR 渲染需要 Router 上下文。
@@ -46,6 +51,19 @@ describe("MessageTimeline", () => {
 
   it("does not detach when scrolling downward", () => {
     expect(shouldDetachOnScroll(1000, 800, false)).toBe(false);
+  });
+
+  it("forces bottom positioning when history first loads or the session changes", () => {
+    expect(shouldForceBottomOnMessageChange(0, 8, false, undefined, "user-4")).toBe(true);
+    expect(shouldForceBottomOnMessageChange(8, 6, true, "user-4", "user-3")).toBe(true);
+  });
+
+  it("forces bottom positioning for a newly appended user message", () => {
+    expect(shouldForceBottomOnMessageChange(8, 10, false, "user-4", "user-5")).toBe(true);
+  });
+
+  it("keeps an upward-scrolled user detached for assistant-only updates", () => {
+    expect(shouldForceBottomOnMessageChange(8, 9, false, "user-4", "user-4")).toBe(false);
   });
 
   it("uses the optimistic progress model instead of stale session usage", () => {

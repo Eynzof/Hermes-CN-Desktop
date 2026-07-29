@@ -48,13 +48,15 @@
 .turnDot {
   width: 8px;
   height: 8px;
+  flex: 0 0 8px;
+  aspect-ratio: 1;
   border: 1px solid color-mix(in srgb, var(--h-text-3) 55%, transparent);
   border-radius: 50%;
   background: var(--h-text-3);
   padding: 0;
   cursor: pointer;
   opacity: 0.46;
-  transition: width 0.14s ease, height 0.14s ease, opacity 0.14s ease, background-color 0.14s ease, transform 0.14s ease;
+  transition: opacity 0.14s ease, background-color 0.14s ease, transform 0.14s ease;
 }
 
 .turnDot:hover {
@@ -64,8 +66,6 @@
 }
 
 .turnDot[data-active="true"] {
-  width: 8px;
-  height: 20px;
   border-color: var(--h-accent);
   background: var(--h-accent);
   opacity: 1;
@@ -104,12 +104,16 @@
 
 
 .avatarButton {
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
-  background: transparent;
+  background: var(--h-color-bg-avatar);
   cursor: pointer;
   display: block;
-  border-radius: 50%;
+  border-radius: 0;
+  overflow: hidden;
 }
 
 .avatarButton:hover .rowAvatar {
@@ -117,11 +121,12 @@
 }
 
 .rowAvatar {
+  box-sizing: border-box;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: 0;
   border: 1px solid var(--h-line);
-  background: var(--h-bg-chip);
+  background: var(--h-color-bg-avatar);
   object-fit: cover;
   display: block;
 }
@@ -241,12 +246,13 @@
 }
 
 .assistantAvatar {
+  box-sizing: border-box;
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: 0;
   border: 1px solid var(--h-line);
-  background: var(--h-bg-chip);
+  background: var(--h-color-bg-avatar);
   object-fit: cover;
 }
 
@@ -1010,7 +1016,7 @@
 
 .toolActivitySummary {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   max-width: 100%;
   gap: 8px;
   border: 0;
@@ -1121,25 +1127,26 @@
   background: var(--h-bg-soft);
 }
 
-.toolStatus {
-  width: 8px;
-  height: 8px;
-  border-radius: 0;
+.toolStatusDot {
+  display: block;
+  width: var(--h-status-dot-size);
+  height: var(--h-status-dot-size);
+  border-radius: 50%;
   background: var(--h-text-3);
   align-self: center;
   flex: 0 0 auto;
 }
 
-.toolStatus[data-status="running"] {
+.toolStatusDot[data-status="running"] {
   background: var(--h-ok);
   animation: pulse 1.6s ease-in-out infinite;
 }
 
-.toolStatus[data-status="done"] {
+.toolStatusDot[data-status="done"] {
   background: var(--h-ok);
 }
 
-.toolStatus[data-status="error"] {
+.toolStatusDot[data-status="error"] {
   background: var(--h-err);
 }
 

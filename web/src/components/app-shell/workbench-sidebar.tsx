@@ -14,6 +14,7 @@ import {
   useSessions,
 } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
+import { useSessionBranch } from "@/hooks/use-session-branch";
 import {
   isSessionRunning,
   mergeLiveRuntimeSessions,
@@ -29,6 +30,7 @@ import {
 import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
 import {
   SessionDeleteModal,
+  SessionBranchErrorModal,
   SessionExportErrorModal,
   SessionRenameModal,
   SessionRowMenu,
@@ -98,6 +100,8 @@ interface SessionRowProps {
   actions: UseSessionRowActions;
   onClick: () => void;
   onHover?: () => void;
+  onBranch: () => void;
+  branching?: boolean;
 }
 
 function SessionRow({
@@ -111,6 +115,8 @@ function SessionRow({
   actions,
   onClick,
   onHover,
+  onBranch,
+  branching = false,
 }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
   const dotState = state === "idle" ? undefined : state;
@@ -121,7 +127,7 @@ function SessionRow({
       : dotState === "err"
         ? "danger"
         : null;
-  const actionMenuDisabled = menuDisabled || actions.isDeleting;
+  const actionMenuDisabled = menuDisabled || actions.isDeleting || branching;
   return (
     // role=button (not a real <button>) so the "⋯" trigger can nest inside it.
     <div
@@ -178,6 +184,7 @@ function SessionRow({
           disabled={actionMenuDisabled}
           onTogglePin={() => actions.togglePin(session.id)}
           onRename={() => actions.startRename(session)}
+          onBranch={onBranch}
           onExport={() => void actions.handleExport(session)}
           onArchive={() => actions.handleArchive(session)}
           onDelete={() => actions.openDeleteDialog([session])}
@@ -198,6 +205,7 @@ export function WorkbenchSidebar() {
   const archiveSession = useArchiveSession();
   const deleteSessions = useDeleteSessions();
   const { setSessionTitle, resumeSession } = useGateway();
+  const sessionBranch = useSessionBranch();
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
@@ -395,6 +403,8 @@ export function WorkbenchSidebar() {
                 actions={rowActions}
                 onClick={() => goSession(sess)}
                 onHover={() => hoverSession(sess)}
+                onBranch={() => void sessionBranch.branchSession(sess)}
+                branching={sessionBranch.branchingSessionId === sess.id}
               />
             ))
           )}
@@ -428,6 +438,8 @@ export function WorkbenchSidebar() {
                   actions={rowActions}
                   onClick={() => goSession(sess)}
                   onHover={() => hoverSession(sess)}
+                  onBranch={() => void sessionBranch.branchSession(sess)}
+                  branching={sessionBranch.branchingSessionId === sess.id}
                 />
               );
             })}
@@ -496,6 +508,8 @@ export function WorkbenchSidebar() {
                   actions={rowActions}
                   onClick={() => goSession(sess)}
                   onHover={() => hoverSession(sess)}
+                  onBranch={() => void sessionBranch.branchSession(sess)}
+                  branching={sessionBranch.branchingSessionId === sess.id}
                 />
               );
             })
@@ -527,6 +541,13 @@ export function WorkbenchSidebar() {
         <SessionExportErrorModal
           error={rowActions.exportError}
           onClose={rowActions.clearExportError}
+        />
+      ) : null}
+
+      {sessionBranch.error ? (
+        <SessionBranchErrorModal
+          error={sessionBranch.error}
+          onClose={sessionBranch.clearError}
         />
       ) : null}
     </aside>

@@ -17,21 +17,26 @@
 }
 
 .bigAvatarButton {
+  box-sizing: border-box;
   flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
   padding: 0;
   border: 0;
-  background: transparent;
-  border-radius: 50%;
+  background: var(--h-color-bg-avatar);
+  border-radius: 0;
   line-height: 0;
   cursor: zoom-in;
+  overflow: hidden;
 }
 
 .bigAvatar {
+  box-sizing: border-box;
   width: 64px;
   height: 64px;
-  border-radius: 50%;
+  border-radius: 0;
   border: 1px solid var(--h-line);
-  background: var(--h-bg-chip);
+  background: var(--h-color-bg-avatar);
   object-fit: cover;
   display: block;
 }
@@ -52,6 +57,7 @@
   max-height: 80vh;
   object-fit: contain;
   border-radius: 0;
+  background: var(--h-color-bg-avatar);
   box-shadow: none;
 }
 

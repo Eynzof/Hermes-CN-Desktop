@@ -1654,11 +1654,11 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             <div className={s.contactQrGroup}>
               <div className={s.wechatQrPanel}>
                 <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
-                <p>微信扫码即可加入 Hermes Agent 中文社区微信群</p>
+                <p>微信扫码加入 Hermes Agent 中文社区</p>
               </div>
               <div className={s.wechatQrPanel}>
                 <img src={feishuCommunityQr} alt="Hermes Agent 中文社区飞书群二维码" />
-                <p>飞书扫码即可加入 Hermes Agent 中文社区飞书群</p>
+                <p>飞书扫码加入 Hermes Agent 中文社区</p>
               </div>
             </div>
           </div>

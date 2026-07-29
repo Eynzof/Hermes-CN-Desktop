@@ -38,8 +38,14 @@ import {
 import { mirrorSessionWorkspaceMapping } from "@/lib/workspaces";
 import { humanizeGatewayError, parseGatewayResult } from "@/lib/gateway-result";
 import {
+  branchRuntimeMessages,
+  sessionBranchCreateParams,
+  type SessionBranchMessage,
+} from "@/lib/session-branch";
+import {
   applyGatewayEventAtom,
   chatRuntimeBySessionAtom,
+  createEmptyChatRuntime,
   ensureChatSessionAtom,
   gwConnectionAtom,
   gwSessionIdAtom,
@@ -255,11 +261,23 @@ interface CreateSessionOptions {
   cwd?: string;
 }
 
+export interface CreateBranchSessionOptions {
+  parentSessionId: string;
+  cwd?: string | null;
+  messages: SessionBranchMessage[];
+}
+
+export interface CreatedBranchSession {
+  runtimeSessionId: string;
+  storedSessionId: string;
+}
+
 export function useGateway() {
   const queryClient = useQueryClient();
   const connectionState = useAtomValue(gwConnectionAtom);
   const gwSessionId = useAtomValue(gwSessionIdAtom);
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
+  const setRuntimeBySession = useSetAtom(chatRuntimeBySessionAtom);
   const setConnectionState = useSetAtom(gwConnectionAtom);
   const setGwSessionId = useSetAtom(gwSessionIdAtom);
   const applyGatewayEvent = useSetAtom(applyGatewayEventAtom);
@@ -321,6 +339,40 @@ export function useGateway() {
     }
     return result.session_id;
   }, [adoptCreatedSession, ensureSubscribed]);
+
+  const createBranchSession = useCallback(async (
+    options: CreateBranchSessionOptions,
+  ): Promise<CreatedBranchSession> => {
+    const parentSessionId = options.parentSessionId.trim();
+    if (!parentSessionId) throw new Error("缺少待分叉的会话 ID");
+    if (options.messages.length === 0) throw new Error("当前会话没有可用于分叉的对话内容");
+
+    ensureSubscribed();
+    const result = parseGatewayResult(
+      SessionCreateResult,
+      await getGatewayClient().request(
+        "session.create",
+        sessionBranchCreateParams(parentSessionId, options.cwd, options.messages),
+      ),
+      "session.create",
+    );
+    const storedSessionId = result.stored_session_id?.trim() || result.session_id;
+
+    rememberSessionMapping(result.session_id, storedSessionId);
+    setGwSessionId(result.session_id);
+    setRuntimeBySession((state) => ({
+      ...state,
+      [result.session_id]: {
+        ...createEmptyChatRuntime(),
+        messages: branchRuntimeMessages(options.messages, result.session_id),
+      },
+    }));
+
+    return {
+      runtimeSessionId: result.session_id,
+      storedSessionId,
+    };
+  }, [ensureSubscribed, setGwSessionId, setRuntimeBySession]);
 
   const closeSession = useCallback(async (sessionId: string) => {
     if (!sessionId) return;
@@ -767,6 +819,7 @@ export function useGateway() {
     streamStatus,
     connect,
     createSession,
+    createBranchSession,
     adoptCreatedSession,
     closeSession,
     beginPrompt,

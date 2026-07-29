@@ -3625,12 +3625,13 @@ button.providerWebsiteButton:hover {
 
 .assistantAvatarPreview,
 .assistantAvatarPlaceholder {
+  box-sizing: border-box;
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: 0;
   border: 1px solid var(--h-line);
-  background: var(--h-bg-chip);
+  background: var(--h-color-bg-avatar);
 }
 
 .assistantAvatarPreview {
