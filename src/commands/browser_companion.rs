@@ -98,7 +98,7 @@ pub async fn open_browser_companion(
     // the live Vite page there, while keeping API/WS on the companion origin.
     // Debug bundles and release builds have web/dist and stay same-origin.
     let page_origin = if cfg!(dev) {
-        "http://localhost:9545".to_string()
+        current_dev_page_origin(&app)?
     } else {
         companion_origin.clone()
     };
@@ -117,6 +117,25 @@ pub async fn open_browser_companion(
         url: page_origin,
         port: handle.port,
     })
+}
+
+fn current_dev_page_origin(app: &tauri::AppHandle) -> Result<String, AppError> {
+    let window = app
+        .get_webview_window(crate::tray::MAIN_WINDOW_LABEL)
+        .ok_or_else(|| AppError::Internal("无法读取社区桌面版主窗口".to_string()))?;
+    let current_url = window
+        .url()
+        .map_err(|error| AppError::Internal(format!("无法读取社区桌面版当前地址: {error}")))?;
+    loopback_page_origin(&current_url).ok_or_else(|| {
+        AppError::Internal(format!(
+            "社区桌面版当前地址不是本机 HTTP 地址: {current_url}"
+        ))
+    })
+}
+
+fn loopback_page_origin(current_url: &url::Url) -> Option<String> {
+    let origin = current_url.origin().ascii_serialization();
+    is_loopback_origin(&origin).then_some(origin)
 }
 
 async fn start_companion_server(
@@ -661,7 +680,7 @@ fn serve_asset(app: &tauri::AppHandle, request_path: &str) -> Response<Companion
     let Some(asset) = asset else {
         return text_response(
             StatusCode::NOT_FOUND,
-            "Browser UI assets are unavailable; start the desktop dev server on port 9545.",
+            "Browser UI assets are unavailable; start the desktop dev server.",
         );
     };
 
@@ -759,6 +778,25 @@ mod tests {
         assert!(is_loopback_origin("http://127.0.0.1:9546"));
         assert!(!is_loopback_origin("https://example.com"));
         assert!(!is_loopback_origin("http://example.com"));
+    }
+
+    #[test]
+    fn browser_page_origin_follows_the_current_webview_port() {
+        let url = url::Url::parse("http://localhost:9546/connection?tab=advanced#/health")
+            .expect("valid dev URL");
+        assert_eq!(
+            loopback_page_origin(&url),
+            Some("http://localhost:9546".to_string())
+        );
+    }
+
+    #[test]
+    fn browser_page_origin_rejects_non_loopback_pages() {
+        let remote = url::Url::parse("https://example.com/connection").expect("valid remote URL");
+        let local_https =
+            url::Url::parse("https://localhost:9546/connection").expect("valid local URL");
+        assert_eq!(loopback_page_origin(&remote), None);
+        assert_eq!(loopback_page_origin(&local_https), None);
     }
 
     #[test]
