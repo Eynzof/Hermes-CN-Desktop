@@ -166,6 +166,8 @@ export function ProfilesRoute() {
               key={p.name}
               profile={p}
               isActive={p.name === active}
+              isSwitching={setActive.isPending && setActive.variables === p.name}
+              switchDisabled={setActive.isPending}
               onSetActive={() => handleSetActive(p.name)}
               onEditModel={open("model", p)}
               onEditDescription={open("description", p)}

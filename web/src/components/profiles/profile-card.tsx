@@ -1,5 +1,5 @@
-import { Badge, StatusDot } from "@hermes/shared-ui";
-import { Package } from "lucide-react";
+import { Badge, Button, StatusDot } from "@hermes/shared-ui";
+import { ArrowRightLeft, Package } from "lucide-react";
 import type { ProfileSummary } from "@hermes/protocol";
 import { ProfileActionsMenu } from "./profile-actions-menu";
 import s from "./profiles.module.css";
@@ -7,6 +7,8 @@ import s from "./profiles.module.css";
 export interface ProfileCardProps {
   profile: ProfileSummary;
   isActive: boolean;
+  isSwitching: boolean;
+  switchDisabled: boolean;
   onSetActive: () => void;
   onEditModel: () => void;
   onEditDescription: () => void;
@@ -19,12 +21,14 @@ export interface ProfileCardProps {
 
 /**
  * 单个档案卡片：名称 + 状态 badges（当前/默认/alias/.env/distribution）、gateway 运行
- * 状态点、描述（自动生成时带「待复核」标）、底部模型/技能/路径，以及 ⋯ 动作菜单。
+ * 状态点、描述（自动生成时带「待复核」标）、底部模型/技能/路径，以及切换/⋯ 操作。
  * 对齐官方桌面端 ProfilesPage 的卡片信息密度。
  */
 export function ProfileCard({
   profile: p,
   isActive,
+  isSwitching,
+  switchDisabled,
   onSetActive,
   onEditModel,
   onEditDescription,
@@ -73,18 +77,33 @@ export function ProfileCard({
             </Badge>
           )}
         </div>
-        <ProfileActionsMenu
-          profile={p}
-          isActive={isActive}
-          onSetActive={onSetActive}
-          onEditModel={onEditModel}
-          onEditDescription={onEditDescription}
-          onEditSoul={onEditSoul}
-          onManageSkills={onManageSkills}
-          onRename={onRename}
-          onDelete={onDelete}
-          fetchSetupCommand={fetchSetupCommand}
-        />
+        <div className={s.cardActions}>
+          {!isActive && (
+            <Button
+              variant="soft"
+              tone="accent"
+              size="sm"
+              leadingIcon={<ArrowRightLeft size={16} />}
+              loading={isSwitching}
+              disabled={switchDisabled}
+              aria-label={`切换到 ${p.name} 档案`}
+              onClick={onSetActive}
+            >
+              {isSwitching ? "切换中…" : "切换"}
+            </Button>
+          )}
+          <ProfileActionsMenu
+            profile={p}
+            isActive={isActive}
+            onEditModel={onEditModel}
+            onEditDescription={onEditDescription}
+            onEditSoul={onEditSoul}
+            onManageSkills={onManageSkills}
+            onRename={onRename}
+            onDelete={onDelete}
+            fetchSetupCommand={fetchSetupCommand}
+          />
+        </div>
       </div>
 
       <span className={s.gatewayRow} data-running={p.gateway_running ? "true" : undefined}>
