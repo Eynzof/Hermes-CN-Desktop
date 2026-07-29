@@ -9,7 +9,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px 12px;
+  padding: 16px 20px 12px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -26,7 +26,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 0;
   border: 1px solid transparent;
   background: transparent;
   color: var(--h-text-3);
@@ -47,8 +47,8 @@
 .dialogBody {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 16px;
+  padding: 16px 20px;
   overflow-y: auto;
 }
 
@@ -56,7 +56,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 18px 16px;
+  padding: 12px 20px 16px;
   border-top: 1px solid var(--h-line-soft);
 }
 
@@ -84,9 +84,9 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -99,7 +99,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .cardHead {
@@ -148,7 +148,7 @@
 
 .testOk {
   font-size: 11.5px;
-  color: var(--h-ok, #22c55e);
+  color: var(--h-color-success-fg);
   line-height: 1.5;
 }
 
@@ -195,7 +195,7 @@
   padding-left: 16px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .detailsList code {
@@ -212,7 +212,7 @@
 
 .diag {
   font-size: 11.5px;
-  color: var(--h-warn, #f59e0b);
+  color: var(--h-color-warning-fg);
   line-height: 1.5;
 }
 

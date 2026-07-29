@@ -1,10 +1,18 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "../../utils/cn";
+import { LoadingIndicator, type LoadingIndicatorSize } from "../loading";
 import s from "./button.module.css";
 
 export type ButtonVariant = "solid" | "soft" | "outline" | "ghost" | "plain";
 export type ButtonTone = "neutral" | "accent" | "success" | "warning" | "danger";
-export type ButtonSize = "xs" | "sm" | "md" | "lg" | "inherit";
+export type ButtonSize = "xs" | "sm" | "md" | "lg";
+
+const LOADING_SIZE: Record<ButtonSize, LoadingIndicatorSize> = {
+  xs: "xs",
+  sm: "xs",
+  md: "sm",
+  lg: "sm",
+};
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -50,7 +58,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       data-loading={loading ? "true" : undefined}
       className={cn(s.button, className)}
     >
-      {loading ? <span className={s.spinner} aria-hidden="true" /> : leadingIcon}
+      {loading ? <LoadingIndicator size={LOADING_SIZE[size]} /> : leadingIcon}
       {children}
       {trailingIcon}
     </button>

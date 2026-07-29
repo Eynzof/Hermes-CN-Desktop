@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 import { BarChart3, RefreshCw } from "lucide-react";
+import { LoadingState } from "@hermes/shared-ui";
 import { SectionShell } from "./section-shell";
 import { TopBarActionButton } from "@/components/top-bar/top-bar";
 import { useAnalytics } from "@/hooks/use-analytics";
@@ -328,7 +329,7 @@ function TokenTrendChart({ daily }: { daily: AnalyticsDailyPoint[] }) {
           <ComposedChart data={daily} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--h-line-soft)" vertical={false} />
             <XAxis dataKey="label" stroke="var(--h-text-3)" tickLine={false} axisLine={false} minTickGap={18} />
-            <YAxis stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={42} />
+            <YAxis stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={44} />
             <Tooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ color: "var(--h-text-2)", fontSize: 11 }} />
             <Bar name="输入 Token" dataKey="inputTokens" stackId="tokens" fill="var(--h-accent)" radius={[0, 0, 3, 3]} />
@@ -408,8 +409,8 @@ function CachePerformanceChart({ daily }: { daily: AnalyticsPerformanceDailyPoin
           <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--h-line-soft)" vertical={false} />
             <XAxis dataKey="label" stroke="var(--h-text-3)" tickLine={false} axisLine={false} minTickGap={18} />
-            <YAxis yAxisId="tokens" stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={42} />
-            <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} width={42} />
+            <YAxis yAxisId="tokens" stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => formatTokens(Number(v))} width={44} />
+            <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} stroke="var(--h-text-3)" tickLine={false} axisLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} width={44} />
             <Tooltip content={<CacheTooltip />} />
             <Legend wrapperStyle={{ color: "var(--h-text-2)", fontSize: 11 }} />
             <Bar yAxisId="tokens" name="缓存读取" dataKey="cacheReadTokens" fill="var(--h-ok)" radius={[3, 3, 0, 0]} />
@@ -676,24 +677,7 @@ function PeriodSwitch({ days, onChange }: { days: number; onChange: (days: numbe
 }
 
 function AnalyticsLoading() {
-  return (
-    <div className={s.loadingPage} aria-live="polite" aria-busy="true">
-      <div className={s.loadingCard}>
-        <div className={s.loadingOrb}>
-          <BarChart3 size={28} />
-        </div>
-        <div>
-          <strong>正在生成数据分析</strong>
-          <p>正在读取会话、聚合 Token、缓存与性能采样，请稍候。</p>
-        </div>
-        <div className={s.loadingSkeletonGrid} aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-      </div>
-    </div>
-  );
+  return <LoadingState variant="page" label="正在加载数据分析…" />;
 }
 
 export function AnalyticsRoute() {
@@ -742,9 +726,12 @@ export function AnalyticsRoute() {
       right={(
         <>
           <PeriodSwitch days={days} onChange={setDays} />
-          <TopBarActionButton onClick={refreshAll} disabled={query.isFetching || statsLoading}>
-            <RefreshCw size={12} />
-            {query.isFetching || statsLoading ? "刷新中" : "刷新"}
+          <TopBarActionButton
+            onClick={refreshAll}
+            loading={query.isFetching || statsLoading}
+            leadingIcon={<RefreshCw size={12} />}
+          >
+            刷新
           </TopBarActionButton>
         </>
       )}
@@ -754,7 +741,7 @@ export function AnalyticsRoute() {
           <AnalyticsLoading />
         ) : query.isError ? (
           <div className={s.stateCard} data-tone="error">
-            <BarChart3 size={22} />
+            <BarChart3 size={24} />
             <div>
               <strong>无法加载数据分析</strong>
               <p>{analyticsContractErrorMessage(query.error)}</p>

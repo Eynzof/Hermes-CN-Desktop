@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import type { ReviewFile } from "@/lib/runtime";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import { buildReviewFlatList, buildReviewTree, type ReviewTreeNode } from "@/lib/review-tree";
 import { useReview, type CommitAction } from "@/hooks/use-review";
 import s from "./preview-rail.module.css";
@@ -108,7 +109,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
           title={treeMode === "tree" ? "切换为列表视图" : "切换为树状视图"}
           aria-label={treeMode === "tree" ? "切换为列表视图" : "切换为树状视图"}
         >
-          {treeMode === "tree" ? <List size={13} aria-hidden /> : <ListTree size={13} aria-hidden />}
+          {treeMode === "tree" ? <List size={12} aria-hidden /> : <ListTree size={12} aria-hidden />}
         </button>
         <button
           type="button"
@@ -118,7 +119,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
           title="暂存全部"
           aria-label="暂存全部"
         >
-          <Plus size={13} aria-hidden />
+          <Plus size={12} aria-hidden />
         </button>
         <button
           type="button"
@@ -128,7 +129,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
           title="还原全部改动"
           aria-label="还原全部改动"
         >
-          <Undo2 size={13} aria-hidden />
+          <Undo2 size={12} aria-hidden />
         </button>
         <button
           type="button"
@@ -137,7 +138,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
           title="刷新改动列表"
           aria-label="刷新改动列表"
         >
-          <RefreshCw size={13} aria-hidden className={loading ? s.spin : undefined} />
+          {loading ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} aria-hidden />}
         </button>
       </div>
 
@@ -162,7 +163,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
             onRevert={(path) => setRevertTarget({ path })}
           />
         ) : loading ? (
-          <div className={s.reviewHint}>读取改动中…</div>
+          <LoadingState variant="block" label="正在读取改动…" />
         ) : (
           <div className={s.reviewHint}>没有未提交的改动。</div>
         )}
@@ -186,7 +187,7 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
               title={selectedFile.staged ? "取消暂存" : "暂存"}
               aria-label={selectedFile.staged ? "取消暂存" : "暂存"}
             >
-              {selectedFile.staged ? <Minus size={13} aria-hidden /> : <Plus size={13} aria-hidden />}
+              {selectedFile.staged ? <Minus size={12} aria-hidden /> : <Plus size={12} aria-hidden />}
             </button>
             <button
               type="button"
@@ -195,12 +196,12 @@ export function ReviewTab({ workspaceRoot, active }: ReviewTabProps) {
               title="关闭"
               aria-label="关闭差异"
             >
-              <X size={13} aria-hidden />
+              <X size={12} aria-hidden />
             </button>
           </div>
           <div className={s.reviewDiffBody}>
             {diffLoading ? (
-              <div className={s.reviewHint}>读取差异中…</div>
+              <LoadingState variant="block" label="正在读取差异…" />
             ) : diff ? (
               <DiffView diff={diff} />
             ) : (
@@ -322,7 +323,7 @@ function ReviewDirRow({
         onClick={() => setOpen((value) => !value)}
         title={node.name}
       >
-        {open ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
+        {open ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
         <span className={s.reviewRowName}>{node.name}</span>
         <DiffCount added={node.added} removed={node.removed} />
       </button>
@@ -534,7 +535,7 @@ function ReviewShipBar({
           title={ghReady ? prLabel : "需要安装并登录 GitHub CLI（gh）"}
           aria-label={prLabel}
         >
-          <GitPullRequest size={14} aria-hidden />
+          <GitPullRequest size={16} aria-hidden />
         </button>
       </div>
     </div>

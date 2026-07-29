@@ -70,7 +70,7 @@ function CandidateCard({
     >
       <div className={s.candidateHead}>
         <span className={s.candidateTitle}>{candidate.label}</span>
-        {active && <CheckCircle2 size={15} />}
+        {active && <CheckCircle2 size={16} />}
       </div>
       <div className={s.pathText}>{candidate.path}</div>
       <div className={s.badgeRow}>
@@ -101,7 +101,7 @@ function MigrationPreview({
       </p>
       {hasSecrets && (
         <Alert tone="warning" size="sm">
-          <AlertTriangle size={14} /> 此来源包含 <code>.env</code> 或 <code>auth.json</code>，导入后这些密钥只会写入桌面端的独立目录。
+          <AlertTriangle size={16} /> 此来源包含 <code>.env</code> 或 <code>auth.json</code>，导入后这些密钥只会写入桌面端的独立目录。
         </Alert>
       )}
       <div className={s.entryList}>
@@ -118,9 +118,8 @@ function MigrationPreview({
         </ul>
       )}
       <div className={s.actions}>
-        <Button type="button" variant="solid" tone="accent" onClick={onImport} disabled={importing}>
-          <ShieldCheck size={13} />
-          {importing ? "迁移中…" : "确认迁移并切换"}
+        <Button type="button" variant="solid" tone="accent" onClick={onImport} loading={importing} leadingIcon={<ShieldCheck size={12} />}>
+          确认迁移并切换
         </Button>
       </div>
     </section>
@@ -246,12 +245,11 @@ function LegacyConfigMigrationRoute() {
       />
 
       <div className={s.actions}>
-        <Button type="button" variant="outline" onClick={() => scan()} disabled={loading || importing}>
-          <RefreshCw size={13} />
-          {loading ? "扫描中…" : "重新扫描"}
+        <Button type="button" variant="outline" onClick={() => scan()} disabled={importing} loading={loading} leadingIcon={<RefreshCw size={12} />}>
+          重新扫描
         </Button>
         <Button type="button" variant="outline" onClick={chooseManualDirectory} disabled={loading || importing}>
-          <FolderOpen size={13} />
+          <FolderOpen size={12} />
           手动选择目录
         </Button>
       </div>
@@ -350,11 +348,11 @@ function ConfigMigrationAssistantRoute() {
 
       <div className={s.actions}>
         <Button type="button" variant="solid" tone="accent" onClick={startMigrationGuide} disabled={preparing}>
-          <Sparkles size={13} />
+          <Sparkles size={12} />
           {preparing ? "正在准备…" : "开始迁移向导"}
         </Button>
         <Button type="button" variant="outline" onClick={copyPrompt} disabled={preparing || copying}>
-          <Copy size={13} />
+          <Copy size={12} />
           {copying ? "正在复制…" : "复制迁移说明"}
         </Button>
       </div>

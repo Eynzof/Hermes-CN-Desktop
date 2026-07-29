@@ -23,7 +23,7 @@ export function AutomationSidebar() {
             title="/cron"
           >
             <span className={s.itemIcon}>
-              <Clock size={14} />
+              <Clock size={16} />
             </span>
             <span className={s.itemLabel}>定时任务</span>
             <span className={s.itemPath}>/cron</span>

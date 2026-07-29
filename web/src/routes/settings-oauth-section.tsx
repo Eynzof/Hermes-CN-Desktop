@@ -11,7 +11,7 @@ import {
 } from "@/hooks/use-oauth-providers";
 import { CopyButton } from "@/components/ui/copy-button";
 import { openExternalUrl } from "@/lib/external-links";
-import { Badge, Button, Input } from "@hermes/shared-ui";
+import { Badge, Button, Input, LoadingState } from "@hermes/shared-ui";
 import settings from "./settings.module.css";
 import s from "./settings-oauth-section.module.css";
 
@@ -92,7 +92,7 @@ export function OAuthProvidersSection() {
     [disconnect],
   );
 
-  if (isLoading) return <div className={s.oauthBlock}><span className={settings.desc}>加载 OAuth 状态…</span></div>;
+  if (isLoading) return <LoadingState variant="block" label="正在加载 OAuth 状态…" />;
   if (isError) {
     return (
       <div className={s.oauthBlock}>
@@ -327,7 +327,7 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
       <div className={s.modal} onClick={(e) => e.stopPropagation()}>
         <div className={s.modalHeader}>
           <div className={s.modalTitle}>登录 {provider.name}</div>
-          <Button variant="plain" size="inherit" className={s.modalClose} onClick={handleClose} aria-label="关闭">✕</Button>
+          <Button variant="plain" size="xs" className={s.modalClose} onClick={handleClose} aria-label="关闭">✕</Button>
         </div>
 
         {phase === "starting" && (
@@ -354,10 +354,11 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
               <Button
                 variant="solid"
                 tone="accent"
-                disabled={!code.trim() || submitCode.isPending}
+                loading={submitCode.isPending}
+                disabled={!code.trim()}
                 onClick={handleSubmitCode}
               >
-                {submitCode.isPending ? "验证中…" : "提交"}
+                提交
               </Button>
               <button
                 className={s.linkBtn}

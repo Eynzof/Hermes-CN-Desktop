@@ -1,8 +1,8 @@
 .soulPage {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  max-width: 1280px;
+  gap: 16px;
+  max-width: var(--h-page-content-max-width);
 }
 
 .inlineLink {
@@ -21,17 +21,17 @@
   gap: 4px;
   padding: 4px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
 .pageTabs button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 8px;
+  padding: 8px 16px;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
@@ -47,7 +47,7 @@
 .pageTabs button[data-active="true"] {
   background: var(--h-bg-pane);
   color: var(--h-text);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
 }
 
 /* ── header right slot ─────────────────────────────────────── */
@@ -63,14 +63,14 @@
   color: var(--h-text-2);
   background: var(--h-bg-chip);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-pill);
-  padding: 3px 10px;
+  border-radius: 0;
+  padding: 4px 12px;
 }
 
 /* ── panel ─────────────────────────────────────────────────── */
 .panel {
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: var(--h-bg-app);
   overflow: hidden;
 }
@@ -83,13 +83,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
 }
 
 .panelHead > div:first-child {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -106,7 +106,7 @@
 .headActions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -120,9 +120,9 @@
 .editMode {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
-  border-radius: var(--h-r-sm);
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 0;
   color: var(--h-text-2);
   background: var(--h-bg-soft);
   font-size: 12px;
@@ -131,7 +131,7 @@
 
 /* ── editor body ───────────────────────────────────────────── */
 .editorBody {
-  padding: 14px 16px;
+  padding: 16px 16px;
 }
 
 .textarea {
@@ -141,8 +141,8 @@
   background: var(--h-bg-input);
   color: var(--h-text);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
-  padding: 12px 14px;
+  border-radius: 0;
+  padding: 12px 16px;
   outline: none;
   line-height: 1.7;
   font-size: 13px;
@@ -151,7 +151,7 @@
 
 .textarea:focus {
   border-color: var(--h-accent-border);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 12%, transparent);
+  box-shadow: none;
 }
 
 /* ── footer ────────────────────────────────────────────────── */
@@ -186,12 +186,12 @@
   gap: 8px;
   color: var(--h-text-3);
   font-size: 13px;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
 }
 
 .errorState {
   justify-content: flex-start;
-  padding: 12px 14px;
+  padding: 12px 16px;
   color: var(--h-err);
   background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-pane));
   border: 1px solid color-mix(in srgb, var(--h-err) 24%, var(--h-line));

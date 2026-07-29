@@ -61,8 +61,8 @@
 .sectionHead {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .tag {
@@ -85,14 +85,14 @@
 .kv {
   display: grid;
   grid-template-columns: 160px 1fr;
-  row-gap: 6px;
+  row-gap: 8px;
   column-gap: 16px;
   font-family: var(--h-font-mono);
   font-size: 12px;
   background: var(--ink-100);
   border: 1px solid var(--h-line);
-  border-radius: 3px;
-  padding: 14px 16px;
+  border-radius: 0;
+  padding: 16px 16px;
 }
 
 .kvKey {

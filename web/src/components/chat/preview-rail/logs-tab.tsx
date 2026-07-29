@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { LoadingState } from "@hermes/shared-ui";
 import { useLogs } from "@/hooks/use-logs";
 import {
   DEFAULT_LOGS_QUERY,
@@ -58,8 +59,8 @@ export function LogsTab() {
             </button>
           ))}
         </div>
-        <label className={s.input} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Search size={13} aria-hidden />
+        <label className={s.input} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Search size={12} aria-hidden />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -76,7 +77,7 @@ export function LogsTab() {
             <span className={s.lineText}>{line}</span>
           </div>
         ))}
-        {logs.isLoading && visible.length === 0 ? <div className={s.crumb}>日志加载中…</div> : null}
+        {logs.isLoading && visible.length === 0 ? <LoadingState variant="inline" label="正在加载日志…" /> : null}
         {!logs.isLoading && rawLines.length === 0 ? <div className={s.crumb}>暂无日志。</div> : null}
         {!logs.isLoading && rawLines.length > 0 && visible.length === 0 ? (
           <div className={s.crumb}>没有匹配的日志。</div>

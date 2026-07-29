@@ -19,38 +19,24 @@
 .card {
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 24px 28px;
   min-width: 320px;
   max-width: 440px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
   font-family: var(--h-font-cn);
 }
 
 .title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-size: 14px;
   font-weight: 600;
   color: var(--h-text);
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--h-line);
-  border-top-color: var(--h-text);
-  border-radius: 50%;
-  animation: hermesProfileSwitchSpin 700ms linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes hermesProfileSwitchSpin {
-  to { transform: rotate(360deg); }
 }
 
 .body {
@@ -63,7 +49,7 @@
   font-family: var(--h-font-mono);
   font-size: 12px;
   background: var(--h-bg-soft);
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 4px 8px;
+  border-radius: 0;
   color: var(--h-text);
 }

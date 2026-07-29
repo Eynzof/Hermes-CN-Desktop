@@ -6,3 +6,5 @@ export * from "./copy-button";
 export * from "./empty-state";
 export * from "./field";
 export * from "./input";
+export * from "./loading";
+export * from "./page-tabs";

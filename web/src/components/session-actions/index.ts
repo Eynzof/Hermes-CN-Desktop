@@ -1,5 +1,6 @@
 export { SessionRowMenu, type SessionRowMenuProps } from "./session-row-menu";
 export { SessionExportErrorModal } from "./session-export-error-modal";
+export { SessionBranchErrorModal } from "./session-branch-error-modal";
 export { SessionRenameModal, type SessionRenameModalProps } from "./session-rename-modal";
 export { SessionDeleteModal, type SessionDeleteModalProps } from "./session-delete-modal";
 export {

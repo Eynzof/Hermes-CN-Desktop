@@ -8,11 +8,11 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  height: 34px;
-  padding: 6px 12px;
+  height: 36px;
+  padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   color: var(--h-text);
   font-size: 12px;
   font-family: var(--h-font-mono, monospace);
@@ -29,8 +29,8 @@
   overflow: hidden auto;
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
-  box-shadow: var(--h-shadow-l);
+  border-radius: 0;
+  box-shadow: none;
   padding: 0;
 }
 

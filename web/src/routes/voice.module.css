@@ -1,7 +1,7 @@
 .page {
   display: grid;
   gap: 16px;
-  max-width: 1120px;
+  max-width: var(--h-page-content-max-width);
   margin: 0 auto;
   font-family: var(--h-font-cn);
 }
@@ -9,15 +9,12 @@
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: 20px;
   align-items: start;
-  padding: 18px 20px;
+  padding: 20px 20px;
   border: 1px solid color-mix(in srgb, var(--h-accent) 24%, var(--h-line));
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 12% -20%, color-mix(in srgb, var(--h-accent) 14%, transparent), transparent 42%),
-    linear-gradient(180deg, color-mix(in srgb, var(--h-bg-pane) 96%, var(--h-bg-app)), var(--h-bg-app));
-  box-shadow: var(--h-shadow);
+  border-radius: 0;
+  background: var(--h-bg-pane);
 }
 
 .hero h2,
@@ -41,7 +38,7 @@
 }
 
 .hero p {
-  margin: 7px 0 0;
+  margin: 8px 0 0;
 }
 
 .heroActions,
@@ -62,9 +59,9 @@
 
 .card {
   min-width: 0;
-  padding: 18px;
+  padding: 20px;
   border: 1px solid var(--h-line);
-  border-radius: 16px;
+  border-radius: 0;
   background: var(--h-bg-app);
 }
 
@@ -76,9 +73,9 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .cardHead > div {
@@ -107,8 +104,8 @@
 
 .providerGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+  gap: 12px;
   margin: 12px 0 16px;
 }
 
@@ -117,7 +114,7 @@
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text);
   cursor: pointer;
@@ -156,17 +153,17 @@
 }
 
 .providerCard p {
-  margin: 7px 0 0;
+  margin: 8px 0 0;
   color: var(--h-text-3);
   font-size: 11px;
   line-height: 1.55;
 }
 
 .providerNotice {
-  margin: 0 0 14px;
-  padding: 9px 10px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--h-warn) 28%, var(--h-line));
-  border-radius: 10px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-warn) 8%, var(--h-bg-pane));
   color: var(--h-text-2);
   font-size: 11px;
@@ -177,12 +174,12 @@
   display: inline-block;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(100%, 190px);
+  max-width: min(100%, 192px);
   box-sizing: border-box;
   min-height: 20px;
   overflow: hidden;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text-3);
   font-size: 10.5px;
@@ -198,7 +195,7 @@
 }
 
 .providerName .badge {
-  max-width: min(62%, 190px);
+  max-width: min(62%, 192px);
 }
 
 .badge[data-tone="ok"] {
@@ -224,7 +221,7 @@
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -240,7 +237,7 @@
   width: 100%;
   min-width: 0;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-cn);
@@ -250,13 +247,13 @@
 
 .input,
 .select {
-  height: 34px;
-  padding: 0 10px;
+  height: 36px;
+  padding: 0 12px;
 }
 
 .textarea {
-  min-height: 78px;
-  padding: 9px 10px;
+  min-height: 80px;
+  padding: 8px 12px;
   resize: vertical;
   line-height: 1.6;
 }
@@ -266,7 +263,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -278,7 +275,7 @@
   display: block;
   color: var(--h-text);
   font-size: 13px;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 .switchText span {
@@ -288,10 +285,11 @@
 }
 
 .toggle {
-  width: 34px;
-  height: 19px;
+  width: var(--h-switch-width);
+  height: var(--h-switch-height);
+  box-sizing: border-box;
   border: 1px solid var(--h-line);
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--h-bg-chip);
   cursor: pointer;
   padding: 0;
@@ -301,12 +299,13 @@
 .toggle::after {
   content: "";
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 13px;
-  height: 13px;
-  border-radius: 999px;
+  top: 50%;
+  left: 4px;
+  width: var(--h-switch-thumb-size);
+  height: var(--h-switch-thumb-size);
+  border-radius: 0;
   background: #fff;
+  transform: translateY(-50%);
   transition: left 0.14s;
 }
 
@@ -316,7 +315,7 @@
 }
 
 .toggle[data-on="true"]::after {
-  left: 17px;
+  left: 16px;
 }
 
 .button,
@@ -324,10 +323,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 13px;
-  border-radius: 8px;
+  gap: 8px;
+  height: var(--h-button-height-md);
+  min-height: var(--h-button-height-md);
+  padding: 0 12px;
+  border-radius: 0;
   font-family: var(--h-font-cn);
   font-size: 12px;
   cursor: pointer;
@@ -342,7 +342,7 @@
 .primaryButton {
   border: 1px solid var(--h-accent);
   background: var(--h-accent);
-  color: #fff;
+  color: var(--h-accent-contrast);
 }
 
 .button:disabled,
@@ -353,8 +353,8 @@
 
 .feedback {
   margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 12px 12px;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   background: var(--h-bg-pane);
   color: var(--h-text-2);

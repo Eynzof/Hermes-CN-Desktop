@@ -69,7 +69,7 @@ export function ProfileCard({
           )}
           {distribution && (
             <Badge variant="outline" size="sm" title={p.distribution_source ?? undefined}>
-              <Package size={10} /> {distribution}
+              <Package size={12} /> {distribution}
             </Badge>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ExternalLink, Play, Power, RotateCcw, TerminalSquare } from "lucide-react";
+import { StatusDot } from "@hermes/shared-ui";
 import type { TerminalStartResult } from "@/lib/runtime";
 import {
   EmbeddedTerminal,
@@ -115,15 +116,15 @@ export function ConsoleRoute() {
             onClick={openExternalTerminal}
             disabled={!isExternalTerminalAvailable || externalOpening}
           >
-            <ExternalLink size={13} />
+            <ExternalLink size={12} />
             {externalOpening ? "正在打开…" : "在外部终端打开"}
           </button>
           <button type="button" className={s.secondaryButton} onClick={restartTerminal}>
-            <RotateCcw size={13} />
+            <RotateCcw size={12} />
             重新打开
           </button>
           <button type="button" className={s.dangerButton} onClick={closeTerminal} disabled={status !== "ready"}>
-            <Power size={13} />
+            <Power size={12} />
             关闭终端
           </button>
         </div>
@@ -154,11 +155,13 @@ export function ConsoleRoute() {
           <div className={s.terminalCard} data-status={status}>
             <div className={s.terminalHeader}>
               <div className={s.terminalTitle}>
-                <TerminalSquare size={15} />
+                <TerminalSquare size={16} />
                 <span>终端</span>
               </div>
               <div className={s.terminalMeta}>
-                <span className={s.statusDot} />
+                <StatusDot
+                  tone={status === "ready" ? "success" : status === "starting" ? "warning" : "danger"}
+                />
                 {statusText}
               </div>
             </div>

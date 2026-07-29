@@ -1,10 +1,10 @@
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 16px 16px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-pane);
 }
 
@@ -17,7 +17,7 @@
 .title {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
   font-size: 14px;
   font-weight: 600;
@@ -27,8 +27,8 @@
 .branchChip {
   display: inline-flex;
   align-items: center;
-  padding: 1px 8px;
-  border-radius: var(--h-r-pill);
+  padding: 4px 8px;
+  border-radius: 0;
   background: var(--h-accent-soft);
   color: var(--h-accent);
   font-family: var(--h-font-mono);
@@ -63,10 +63,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: var(--h-button-height-sm);
+  height: var(--h-button-height-sm);
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -90,22 +90,12 @@
   margin-left: auto;
 }
 
-.spin {
-  animation: worktreeSpin 1s linear infinite;
-}
-
-@keyframes worktreeSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .error {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 6px 10px;
-  border-radius: var(--h-r-sm);
+  padding: 8px 12px;
+  border-radius: 0;
   background: var(--h-warn-soft);
   color: var(--h-text);
   font-size: 12px;
@@ -141,15 +131,15 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: var(--h-r-sm);
+  gap: 12px;
+  padding: 8px 8px;
+  border-radius: 0;
 }
 
 .row:hover {
@@ -161,13 +151,13 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 
 .rowBranch {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-family: var(--h-font-mono);
   font-size: 12.5px;
   color: var(--h-text);
@@ -184,9 +174,9 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0 6px;
+  padding: 0 8px;
   height: 16px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-accent-soft);
   color: var(--h-accent);
   font-family: var(--h-font-cn);
@@ -202,7 +192,7 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .createRow {
@@ -215,8 +205,8 @@
   min-width: 0;
   height: 32px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
-  padding: 0 10px;
+  border-radius: 0;
+  padding: 0 12px;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-cn);
@@ -236,7 +226,7 @@
   padding: 0 12px;
   height: 32px;
   border: 1px solid var(--h-accent-border);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-accent);
   color: var(--h-accent-contrast);
   font-size: 12.5px;
@@ -271,15 +261,15 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .branchRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 4px 8px;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
 }
 
 .branchRow:hover {
@@ -291,7 +281,7 @@
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -302,9 +292,9 @@
 
 .miniBtn {
   flex: 0 0 auto;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 11px;

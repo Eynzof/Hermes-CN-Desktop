@@ -1,4 +1,4 @@
-import { Dialog } from "@hermes/shared-ui";
+import { Dialog, LoadingIndicator } from "@hermes/shared-ui";
 import s from "./session-actions.module.css";
 
 const RENAME_ERROR_ID = "session-rename-error";
@@ -68,7 +68,8 @@ export function SessionRenameModal({
                 </button>
               </Dialog.Close>
               <button type="submit" className={s.renameSubmit} disabled={saving}>
-                {saving ? "保存中…" : "保存"}
+                {saving ? <LoadingIndicator size="xs" /> : null}
+                保存
               </button>
             </div>
           </form>

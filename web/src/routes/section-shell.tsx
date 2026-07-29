@@ -23,7 +23,9 @@ export function SectionShell({
     <main className={s.page}>
       <TopBar title={title} sub={sub} right={right} />
       <div className={s.body} data-with-rail={rail ? "true" : undefined}>
-        <div className={s.scroll}>{children}</div>
+        <div className={s.scroll}>
+          <div className={s.content}>{children}</div>
+        </div>
         {rail ? (
           <aside className={s.rail} aria-label={railLabel}>
             {rail}

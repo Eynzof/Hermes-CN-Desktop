@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "jotai";
-import { AlertCircle, Bot, CheckCircle2, ChevronRight, Copy, Loader2, SquareTerminal, X } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, ChevronRight, Copy, SquareTerminal, X } from "lucide-react";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { CopyButton } from "@/components/ui/copy-button";
 import { formatTokens } from "@/lib/format";
 import {
@@ -68,18 +69,18 @@ function fmtAge(updatedAt: number, now: number): string {
 
 function StatusIcon({ status }: { status: SubagentStatus }) {
   if (status === "running" || status === "queued") {
-    return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={14} aria-label="运行中" />;
+    return <span className={s.statusIcon} data-tone="run" aria-label="运行中"><LoadingIndicator size="sm" /></span>;
   }
   if (status === "failed" || status === "interrupted") {
-    return <AlertCircle className={s.statusIcon} data-tone="err" size={14} aria-label="失败" />;
+    return <AlertCircle className={s.statusIcon} data-tone="err" size={16} aria-label="失败" />;
   }
-  return <CheckCircle2 className={s.statusIcon} data-tone="ok" size={14} aria-label="已完成" />;
+  return <CheckCircle2 className={s.statusIcon} data-tone="ok" size={16} aria-label="已完成" />;
 }
 
 function streamGlyph(entry: SubagentStreamEntry): ReactNode {
-  if (entry.isError) return <AlertCircle className={s.streamGlyph} data-tone="err" size={11} aria-hidden />;
+  if (entry.isError) return <AlertCircle className={s.streamGlyph} data-tone="err" size={12} aria-hidden />;
   if (entry.kind === "summary") {
-    return <CheckCircle2 className={s.streamGlyph} data-tone="ok" size={11} aria-hidden />;
+    return <CheckCircle2 className={s.streamGlyph} data-tone="ok" size={12} aria-hidden />;
   }
   return <span className={s.streamDot} data-kind={entry.kind} aria-hidden />;
 }
@@ -90,7 +91,7 @@ function StreamLine({ entry, active }: { entry: SubagentStreamEntry; active: boo
       <span className={s.streamGlyphWrap}>{streamGlyph(entry)}</span>
       <span className={s.streamText} data-kind={entry.kind}>
         {entry.text}
-        {active ? <Loader2 className={`${s.inlineSpin} ${s.spin}`} size={10} aria-hidden /> : null}
+        {active ? <LoadingIndicator className={s.inlineSpin} size="xs" /> : null}
       </span>
     </div>
   );
@@ -122,9 +123,9 @@ function SubagentRow({ node, depth, now }: { node: SubagentNode; depth: number; 
   const fileLines = [...node.filesWritten.map((p) => `+ ${p}`), ...node.filesRead.map((p) => `· ${p}`)];
 
   return (
-    <div className={s.row} style={depth > 0 ? { paddingLeft: 14 } : undefined} data-running={running ? "true" : undefined}>
+    <div className={s.row} style={depth > 0 ? { paddingLeft: 16 } : undefined} data-running={running ? "true" : undefined}>
       <button className={s.rowHead} type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={13} aria-hidden />
+        <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={12} aria-hidden />
         <StatusIcon status={node.status} />
         <span className={s.rowMain}>
           <span className={s.goal} data-running={running ? "true" : undefined}>
@@ -272,14 +273,14 @@ function CliDetailRow({
         <>
           <span className={s.cliDetailLabel}>{label}</span>
           <span className={s.cliDetailValue}>已复制</span>
-          <CheckCircle2 className={s.cliDetailAction} size={11} aria-hidden />
+          <CheckCircle2 className={s.cliDetailAction} size={12} aria-hidden />
         </>
       )}
       errorLabel={(
         <>
           <span className={s.cliDetailLabel}>{label}</span>
           <span className={s.cliDetailValue}>复制失败</span>
-          <AlertCircle className={s.cliDetailAction} size={11} aria-hidden />
+          <AlertCircle className={s.cliDetailAction} size={12} aria-hidden />
         </>
       )}
       title={`点击复制${label}：${value}`}
@@ -288,7 +289,7 @@ function CliDetailRow({
       data-copyable="true"
     >
       {content}
-      <Copy className={s.cliDetailAction} size={11} aria-hidden />
+      <Copy className={s.cliDetailAction} size={12} aria-hidden />
     </CopyButton>
   );
 }
@@ -317,15 +318,15 @@ export function CliDelegationDetails({
 
 function CliStatusIcon({ status }: { status: CliDelegationEntry["status"] }) {
   if (status === "running") {
-    return <Loader2 className={`${s.statusIcon} ${s.spin}`} data-tone="run" size={14} aria-label="执行中" />;
+    return <span className={s.statusIcon} data-tone="run" aria-label="执行中"><LoadingIndicator size="sm" /></span>;
   }
   if (status === "failed" || status === "killed" || status === "lost") {
-    return <AlertCircle className={s.statusIcon} data-tone="err" size={14} aria-label="失败" />;
+    return <AlertCircle className={s.statusIcon} data-tone="err" size={16} aria-label="失败" />;
   }
   if (status === "detached") {
-    return <SquareTerminal className={s.statusIcon} size={14} aria-label="后台运行" />;
+    return <SquareTerminal className={s.statusIcon} size={16} aria-label="后台运行" />;
   }
-  return <CheckCircle2 className={s.statusIcon} data-tone="ok" size={14} aria-label="已完成" />;
+  return <CheckCircle2 className={s.statusIcon} data-tone="ok" size={16} aria-label="已完成" />;
 }
 
 function cliStreamEntries(entry: CliDelegationEntry): SubagentStreamEntry[] {
@@ -411,7 +412,7 @@ function CliDelegationRow({ entry, now }: { entry: CliDelegationEntry; now: numb
   return (
     <div className={s.row} data-running={running ? "true" : undefined}>
       <button className={s.rowHead} type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={13} aria-hidden />
+        <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={12} aria-hidden />
         <CliStatusIcon status={entry.status} />
         <span className={s.rowMain}>
           <span className={s.goal} data-running={running ? "true" : undefined}>
@@ -521,7 +522,7 @@ export function SubagentPanel({
       <PanelResizeHandle ariaLabel="调整子Agent 面板宽度" onPointerDown={onResizeStart} />
       <header className={s.header}>
         <span className={s.headerTitle}>
-          <Bot size={14} aria-hidden />
+          <Bot size={16} aria-hidden />
           子Agent 监视
         </span>
         {onClearFinished && finishedCount > 0 ? (
@@ -535,13 +536,13 @@ export function SubagentPanel({
           </button>
         ) : null}
         <button className={s.close} type="button" onClick={onClose} aria-label="关闭子Agent 监视">
-          <X size={14} aria-hidden />
+          <X size={16} aria-hidden />
         </button>
       </header>
 
       {flat.length === 0 && cliDelegations.length === 0 ? (
         <div className={s.empty}>
-          <Bot size={26} className={s.emptyIcon} aria-hidden />
+          <Bot size={28} className={s.emptyIcon} aria-hidden />
           <p className={s.emptyTitle}>暂无子Agent 活动</p>
           <p className={s.emptyDesc}>
             当本会话派生子Agent（委派/并行任务）或调度 Claude Code / Codex 等外部编程Agent 时，

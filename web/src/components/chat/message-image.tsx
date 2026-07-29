@@ -31,7 +31,7 @@ function ImagePlaceholder({
 
   return (
     <div className={s.imageFallback} role={reason === "failed" ? "alert" : "status"}>
-      <ImageOff size={18} strokeWidth={1.8} aria-hidden="true" />
+      <ImageOff size={20} strokeWidth={1.8} aria-hidden="true" />
       <span className={s.imageFallbackBody}>
         <span className={s.imageFallbackTitle}>
           {reason === "loading"

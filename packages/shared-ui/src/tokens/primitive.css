@@ -1,5 +1,6 @@
-/* Hermes Design Tokens — Primitive values
-   只在这一层维护原始色板、尺寸、圆角和排版阶梯。业务样式应消费 semantic/component token。 */
+/* Hermes Community UI — Primitive values
+   设计基线严格采用 PrimeAPP 的 4px 网格、扁平信息层级和直角几何。
+   业务样式应消费 semantic/component token。 */
 
 :root {
   /* Ink / bone palette kept for the warm Hermes themes. */
@@ -25,34 +26,61 @@
   --h-color-persimmon-600: #c95722;
   --h-color-blue-500: #0078d4;
   --h-color-blue-400: #4fc1ff;
-  --h-color-amber-500: #e8b85d;
-  --h-color-green-500: #8db580;
-  --h-color-green-600: #5e7d54;
-  --h-color-red-500: #d96666;
-  --h-color-red-600: #a8413f;
+  /* PrimeAPP tri-state palette — the only chromatic status hues. */
+  --h-color-amber-500: #f59e0b;
+  --h-color-green-500: #10b981;
+  --h-color-green-600: #10b981;
+  --h-color-red-500: #ef4444;
+  --h-color-red-600: #ef4444;
   --h-color-sky-500: #6e9bd1;
   --h-color-plum-500: #b58dc4;
 
+  --h-palette-success-light-fg: #10b981;
+  --h-palette-success-light-surface: rgb(16 185 129 / 10%);
+  --h-palette-success-light-border: rgb(16 185 129 / 30%);
+  --h-palette-warning-light-fg: #f59e0b;
+  --h-palette-warning-light-surface: rgb(245 158 11 / 10%);
+  --h-palette-warning-light-border: rgb(245 158 11 / 30%);
+  --h-palette-danger-light-fg: #ef4444;
+  --h-palette-danger-light-surface: rgb(239 68 68 / 10%);
+  --h-palette-danger-light-border: rgb(239 68 68 / 30%);
+  --h-palette-info-light-fg: #f59e0b;
+  --h-palette-info-light-surface: rgb(245 158 11 / 10%);
+  --h-palette-info-light-border: rgb(245 158 11 / 30%);
+
+  --h-palette-success-dark-fg: #10b981;
+  --h-palette-success-dark-surface: rgb(16 185 129 / 14%);
+  --h-palette-success-dark-border: rgb(16 185 129 / 42%);
+  --h-palette-warning-dark-fg: #f59e0b;
+  --h-palette-warning-dark-surface: rgb(245 158 11 / 14%);
+  --h-palette-warning-dark-border: rgb(245 158 11 / 42%);
+  --h-palette-danger-dark-fg: #ef4444;
+  --h-palette-danger-dark-surface: rgb(239 68 68 / 14%);
+  --h-palette-danger-dark-border: rgb(239 68 68 / 42%);
+  --h-palette-info-dark-fg: #f59e0b;
+  --h-palette-info-dark-surface: rgb(245 158 11 / 14%);
+  --h-palette-info-dark-border: rgb(245 158 11 / 42%);
+
+  /* Strict 4px grid. No half-step spacing tokens are exposed. */
   --h-space-0: 0;
-  --h-space-0-5: 2px;
   --h-space-1: 4px;
-  --h-space-1-5: 6px;
   --h-space-2: 8px;
-  --h-space-2-5: 10px;
   --h-space-3: 12px;
-  --h-space-3-5: 14px;
   --h-space-4: 16px;
   --h-space-5: 20px;
   --h-space-6: 24px;
   --h-space-8: 32px;
   --h-space-10: 40px;
+  --h-space-12: 48px;
+  --h-space-16: 64px;
 
-  --h-radius-xs: 3px;
-  --h-radius-sm: 4px;
-  --h-radius-md: 8px;
-  --h-radius-lg: 12px;
-  --h-radius-xl: 16px;
-  --h-radius-pill: 999px;
+  /* PrimeAPP-aligned square geometry: every radius tier resolves to zero. */
+  --h-radius-xs: 0;
+  --h-radius-sm: 0;
+  --h-radius-md: 0;
+  --h-radius-lg: 0;
+  --h-radius-xl: 0;
+  --h-radius-pill: 0;
 
   --h-font-size-2xs: 10px;
   --h-font-size-xs: 11px;

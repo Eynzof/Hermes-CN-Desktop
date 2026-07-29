@@ -17,14 +17,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
 .headerTitle {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--h-text);
   font-size: 13px;
   font-weight: 600;
@@ -37,7 +37,7 @@
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -49,11 +49,11 @@
   flex: 0 0 auto;
   margin-left: auto;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   font-size: 11px;
-  padding: 3px 6px;
+  padding: 4px 8px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -70,7 +70,7 @@
 
 .summary {
   flex: 0 0 auto;
-  padding: 8px 14px;
+  padding: 8px 16px;
   margin: 0;
   color: var(--h-text-3);
   font-size: 11px;
@@ -85,7 +85,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 14px;
+  padding: 16px;
 }
 
 /* ── Empty state ─────────────────────────────────────────────────────────── */
@@ -95,7 +95,7 @@
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 32px 24px;
   text-align: center;
 }
@@ -148,14 +148,14 @@
 
 .row {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .rowHead {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
   border: 0;
   background: transparent;
@@ -169,7 +169,7 @@
   flex: 0 0 auto;
   /* 3px 让图标视觉中心贴住 goal 首行中线（12.5px×1.4 行高）；lucide 图形
      在盒内内缩，2px 时中文行看着图标偏上。 */
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--h-text-4);
   transition: transform 0.12s ease;
 }
@@ -180,7 +180,7 @@
 
 .statusIcon {
   flex: 0 0 auto;
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 .statusIcon[data-tone="run"] {
@@ -199,7 +199,7 @@
 .rowMain {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
@@ -225,7 +225,7 @@
 
 .timer {
   flex: 0 0 auto;
-  margin-top: 1px;
+  margin-top: 4px;
   color: var(--h-accent);
   font-family: var(--h-font-mono);
   font-size: 10px;
@@ -236,8 +236,8 @@
 
 .stream {
   display: grid;
-  gap: 3px;
-  padding-left: 21px;
+  gap: 4px;
+  padding-left: 20px;
 }
 
 .streamLine {
@@ -246,7 +246,7 @@
      点会相对文字偏上。改为首行锚定：flex-start + 点容器高度锁一行文字高
      （1.5em = line-height），内部居中 → 点中心恰在首行文字中线。 */
   align-items: flex-start;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   font-size: 11px;
   line-height: 1.5;
@@ -275,8 +275,8 @@
 }
 
 .streamDot[data-kind="tool"] {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   background: var(--h-text-2);
 }
 
@@ -302,7 +302,7 @@
 }
 
 .inlineSpin {
-  margin-left: 5px;
+  margin-left: 4px;
   vertical-align: middle;
   color: var(--h-text-3);
 }
@@ -311,8 +311,8 @@
 
 .files {
   display: grid;
-  gap: 1px;
-  padding-left: 21px;
+  gap: 4px;
+  padding-left: 20px;
 }
 
 .filesLabel {
@@ -336,20 +336,20 @@
    热区；值列必须 minmax(0, 1fr)，否则长路径会撑宽面板而不是省略。 */
 .cliDetailList {
   display: grid;
-  gap: 1px;
+  gap: 4px;
   min-width: 0;
 }
 
 .cliDetailRow {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 12px;
+  grid-template-columns: 40px minmax(0, 1fr) 12px;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
   min-height: 20px;
-  padding: 2px 4px;
-  border-radius: var(--h-r-sm);
+  padding: 4px 4px;
+  border-radius: 0;
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10.5px;
@@ -367,7 +367,7 @@
 }
 
 .cliDetailRow:focus-visible {
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
 }
 
 .cliDetailRow:disabled {
@@ -415,17 +415,5 @@
 .children {
   display: grid;
   gap: 12px;
-  padding-left: 21px;
-}
-
-/* ── Spinner ─────────────────────────────────────────────────────────────── */
-
-.spin {
-  animation: subagentSpin 0.9s linear infinite;
-}
-
-@keyframes subagentSpin {
-  to {
-    transform: rotate(360deg);
-  }
+  padding-left: 20px;
 }

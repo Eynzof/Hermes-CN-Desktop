@@ -16,7 +16,7 @@ import {
   Settings,
   Sparkles,
 } from "lucide-react";
-import { usePlatform } from "@hermes/shared-ui";
+import { StatusDot, usePlatform } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
@@ -66,7 +66,7 @@ function NavItem({ icon: Icon, label, active, count, onClick, title }: NavItemPr
       onClick={onClick}
       title={title ?? label}
     >
-      <Icon size={15} className={s.navIcon} />
+      <Icon size={16} className={s.navIcon} />
       <span className={s.navLabel}>{label}</span>
       {count ? <span className={s.navCount}>{count}</span> : null}
     </button>
@@ -144,9 +144,9 @@ export function Sidebar() {
       >
         {platform === "web" && (
           <>
-            <span className={s.dot} style={{ background: "#ed6a5e" }} />
-            <span className={s.dot} style={{ background: "#f5be4f" }} />
-            <span className={s.dot} style={{ background: "#62c554" }} />
+            <span className={s.dot} style={{ background: "var(--h-err)" }} />
+            <span className={s.dot} style={{ background: "var(--h-warn)" }} />
+            <span className={s.dot} style={{ background: "var(--h-ok)" }} />
           </>
         )}
       </div>
@@ -160,10 +160,10 @@ export function Sidebar() {
           data-active={matchPath("/") ? "true" : undefined}
           onClick={goNew}
         >
-          <Edit3 size={15} className={s.navIcon} /> 新对话
+          <Edit3 size={16} className={s.navIcon} /> 新对话
         </button>
         <button type="button" className={s.topBtn} onClick={goSearch}>
-          <Search size={15} className={s.navIcon} /> 搜索
+          <Search size={16} className={s.navIcon} /> 搜索
           <span className={s.kbd}>⌘ K</span>
         </button>
       </div>
@@ -241,7 +241,7 @@ export function Sidebar() {
               data-empty="true"
               onClick={() => navigate("/projects")}
             >
-              <Folder size={15} className={s.navIcon} />
+              <Folder size={16} className={s.navIcon} />
               <span className={s.navLabel}>暂无项目</span>
             </button>
           ) : (
@@ -263,7 +263,7 @@ export function Sidebar() {
       </nav>
 
       <div className={s.brandStrip}>
-        <HermesLogoMark className={s.brandMark} size={22} />
+        <HermesLogoMark className={s.brandMark} size={24} />
         <div className={s.brandText}>
           <div className={s.brandName}>Hermes Agent</div>
           <div className={s.brandSub}>中文社区桌面版</div>
@@ -272,7 +272,9 @@ export function Sidebar() {
 
       <div className={s.statusBar}>
         <div className={s.statusRow}>
-          <span className={s.gatewayDot} data-state={gatewayState} />
+          <StatusDot
+            tone={gatewayState === "offline" ? "danger" : gatewayState === "unknown" ? "neutral" : "success"}
+          />
           <span className={s.statusLabel}>{gatewayLabel}</span>
           <span
             className={s.statusModel}
@@ -288,7 +290,7 @@ export function Sidebar() {
         data-active={matchPath("/settings") ? "true" : undefined}
         onClick={() => navigate("/settings")}
       >
-        <Settings size={14} /> 设置
+        <Settings size={16} /> 设置
       </button>
     </aside>
   );

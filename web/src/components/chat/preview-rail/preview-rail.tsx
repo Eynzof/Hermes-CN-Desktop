@@ -97,7 +97,7 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
               title={remote && (key === "files" || key === "review" || key === "terminal") ? "远端模式下禁用桌面端本机文件与进程能力" : undefined}
               onClick={() => setActive(key)}
             >
-              <Icon size={13} aria-hidden />
+              <Icon size={12} aria-hidden />
               {label}
               {key === "files" && editorDirty ? (
                 <span className={s.tabDirtyDot} aria-label="有未保存的修改" title="有未保存的修改" />
@@ -112,13 +112,13 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
               disabled
               title="依赖后端能力，后续提供"
             >
-              <Icon size={13} aria-hidden />
+              <Icon size={12} aria-hidden />
               {label}
             </button>
           ))}
         </div>
         <button className={s.close} type="button" onClick={onClose} aria-label="关闭预览面板">
-          <X size={14} aria-hidden />
+          <X size={16} aria-hidden />
         </button>
       </header>
 

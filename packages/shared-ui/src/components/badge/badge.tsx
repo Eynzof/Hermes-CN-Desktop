@@ -48,7 +48,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
 });
 
 export type StatusDotTone = StatusTone;
-export type StatusDotSize = "sm" | "md" | "lg";
+export type StatusDotSize = "xs" | "sm" | "md" | "lg";
 
 export interface StatusDotProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: StatusDotTone;

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { BarChart3, Clock3, RefreshCw, Sparkles, Wrench } from "lucide-react";
 import type { AnalyticsResponse } from "@hermes/protocol";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { relativeTime } from "@/lib/format";
 import { skillTranslations } from "@/lib/skill-translations";
@@ -87,23 +88,17 @@ export function SkillUsageStats({ profileOverride }: { profileOverride?: string 
             onClick={() => void query.refetch()}
             disabled={query.isFetching}
           >
-            <RefreshCw size={13} />
-            {query.isFetching ? "刷新中" : "刷新"}
+            {query.isFetching ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+            刷新
           </button>
         </div>
       </header>
 
       {query.isLoading ? (
-        <div className={s.stateCard} aria-live="polite">
-          <BarChart3 size={22} />
-          <div>
-            <strong>正在读取调用统计</strong>
-            <p>正在从当前 Hermes 档案聚合 Skill 使用记录。</p>
-          </div>
-        </div>
+        <LoadingState variant="block" label="正在读取调用统计…" />
       ) : query.isError ? (
         <div className={s.stateCard} data-tone="error" role="alert">
-          <BarChart3 size={22} />
+          <BarChart3 size={24} />
           <div>
             <strong>无法加载 Skill 统计</strong>
             <p>{query.error instanceof Error ? query.error.message : "请求失败，请稍后重试。"}</p>
@@ -157,7 +152,7 @@ export function SkillUsageStats({ profileOverride }: { profileOverride?: string 
 
             {rows.length === 0 ? (
               <div className={s.emptyState}>
-                <BarChart3 size={25} />
+                <BarChart3 size={24} />
                 <strong>这个时间范围内还没有 Skill 调用</strong>
                 <p>Hermes 在对话中加载 Skill 后，统计会自动出现在这里。</p>
               </div>

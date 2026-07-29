@@ -1,5 +1,5 @@
 import { Activity, CheckCircle2, Cpu, Database, XCircle } from "lucide-react";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import type { MemoryProviderRuntimeStatusResponse } from "@hermes/protocol";
 import type { VisibleMemoryProvider } from "@/hooks/use-memory";
 import {
@@ -48,7 +48,7 @@ function HealthRows({ values }: { values: Record<string, unknown> }) {
           && !["error", "failed", "unhealthy"].includes(status.toLowerCase());
         return (
           <div key={key} data-healthy={healthy ? "true" : "false"}>
-            {healthy ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+            {healthy ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
             <span>{humanizeKey(key)}</span>
             <small>{compactHealthDetail(record.status, healthy)}</small>
           </div>
@@ -92,18 +92,18 @@ function OpenVikingStatus({ status }: { status: MemoryProviderRuntimeStatusRespo
 
       <div className={s.monitorGrid}>
         <section className={s.monitorCard}>
-          <h4><Activity size={14} /> 就绪检查</h4>
+          <h4><Activity size={16} /> 就绪检查</h4>
           <HealthRows values={details.ready_checks} />
         </section>
         <section className={s.monitorCard}>
-          <h4><Database size={14} /> 组件健康</h4>
+          <h4><Database size={16} /> 组件健康</h4>
           <HealthRows values={details.components} />
         </section>
       </div>
 
       {(Object.keys(categories).length > 0 || Object.keys(staleness).length > 0) && (
         <section className={s.monitorCard}>
-          <h4><Database size={14} /> 记忆分布</h4>
+          <h4><Database size={16} /> 记忆分布</h4>
           <div className={s.tagMetrics}>
             {Object.entries(categories).map(([key, value]) => <span key={key}>{humanizeKey(key)} <strong>{textValue(value)}</strong></span>)}
             {Object.entries(staleness).map(([key, value]) => <span key={`stale-${key}`}>{humanizeKey(key)} <strong>{textValue(value)}</strong></span>)}
@@ -113,7 +113,7 @@ function OpenVikingStatus({ status }: { status: MemoryProviderRuntimeStatusRespo
 
       {details.model_usage.length > 0 && (
         <section className={s.monitorCard}>
-          <h4><Cpu size={14} /> 模型使用</h4>
+          <h4><Cpu size={16} /> 模型使用</h4>
           <div className={s.tableWrap}>
             <table><thead><tr><th>类型</th><th>模型</th><th>Provider</th><th>调用</th><th>Token</th></tr></thead>
               <tbody>{details.model_usage.map((item, index) => (
@@ -125,7 +125,7 @@ function OpenVikingStatus({ status }: { status: MemoryProviderRuntimeStatusRespo
 
       {details.queue_usage.length > 0 && (
         <section className={s.monitorCard}>
-          <h4><Activity size={14} /> 队列</h4>
+          <h4><Activity size={16} /> 队列</h4>
           <div className={s.tableWrap}>
             <table><thead><tr><th>队列</th><th>等待</th><th>处理中</th><th>已处理</th><th>错误</th></tr></thead>
               <tbody>{details.queue_usage.map((item) => (
@@ -157,11 +157,11 @@ function HindsightStatus({ status }: { status: MemoryProviderRuntimeStatusRespon
 
       <div className={s.monitorGrid}>
         <section className={s.monitorCard}>
-          <h4><Activity size={14} /> API 与数据库</h4>
+          <h4><Activity size={16} /> API 与数据库</h4>
           <HealthRows values={details.health} />
         </section>
         <section className={s.monitorCard}>
-          <h4><Database size={14} /> 当前 Bank</h4>
+          <h4><Database size={16} /> 当前 Bank</h4>
           <div className={s.bankSummary}>
             <strong>{details.bank_id || "—"}</strong>
             <span>{String(asRecord(details.bank).name ?? "未返回 bank 详情")}</span>
@@ -172,7 +172,7 @@ function HindsightStatus({ status }: { status: MemoryProviderRuntimeStatusRespon
 
       {models.length > 0 && (
         <section className={s.monitorCard}>
-          <h4><Cpu size={14} /> 模型栈</h4>
+          <h4><Cpu size={16} /> 模型栈</h4>
           <div className={s.modelGrid}>
             {models.map((model, index) => (
               <div key={`${model.label}-${index}`}>
@@ -194,7 +194,7 @@ function HindsightStatus({ status }: { status: MemoryProviderRuntimeStatusRespon
 
 export function MemoryProviderStatus({ provider, status, loading, refreshing, onRefresh }: Props) {
   const state = memoryBackendState(status);
-  if (loading && !status) return <div className={s.loadingBlock}>正在检测运行状态…</div>;
+  if (loading && !status) return <LoadingState variant="block" label="正在检测运行状态…" />;
 
   return (
     <section className={s.statusSection}>
@@ -206,8 +206,8 @@ export function MemoryProviderStatus({ provider, status, loading, refreshing, on
         </div>
         <div>
           <MemoryConsoleDialog provider={provider} consoleUrl={status?.console_url} />
-          <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={onRefresh}>
-            {refreshing ? "刷新中…" : "刷新状态"}
+          <Button type="button" variant="outline" size="sm" loading={refreshing} onClick={onRefresh}>
+            刷新状态
           </Button>
         </div>
       </div>
