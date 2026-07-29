@@ -5,7 +5,7 @@
 // re-login that reuses the existing OAuth window / cookie session, then forces
 // the gateway to reconnect.
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Alert, Button } from "@hermes/shared-ui";
 import {
   notifyConnectionAuthRestored,
@@ -82,8 +82,7 @@ export function ConnectionAuthBanner() {
             <AlertTriangle size={16} />
             远程登录已过期，需要重新登录才能继续连接。
           </span>
-          <Button type="button" variant="solid" tone="accent" onClick={() => void handleRelogin()} disabled={busy} aria-busy={busy}>
-            {busy && <Loader2 size={13} />}
+          <Button type="button" variant="solid" tone="accent" onClick={() => void handleRelogin()} loading={busy}>
             重新登录
           </Button>
         </div>

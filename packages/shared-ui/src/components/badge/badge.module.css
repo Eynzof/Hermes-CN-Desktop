@@ -6,10 +6,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   max-width: 100%;
   border: 1px solid var(--h-badge-border);
-  border-radius: var(--h-radius-pill);
+  border-radius: 0;
   background: var(--h-badge-bg);
   color: var(--h-badge-fg);
   font-family: var(--h-font-ui);
@@ -21,20 +21,25 @@
 
 .badge[data-size="sm"] {
   min-height: 20px;
-  padding: 2px 8px;
+  padding: 4px 8px;
   font-size: 11px;
 }
 
 .badge[data-size="md"] {
-  min-height: 22px;
-  padding: 3px 9px;
+  min-height: 24px;
+  padding: 4px 8px;
 }
 
-.badge[data-tone="accent"],
-.badge[data-tone="info"] {
+.badge[data-tone="accent"] {
   --h-badge-fg: var(--h-color-accent-fg);
   --h-badge-bg: var(--h-color-accent-soft);
   --h-badge-border: var(--h-color-accent-border);
+}
+
+.badge[data-tone="info"] {
+  --h-badge-fg: var(--h-color-info-fg);
+  --h-badge-bg: var(--h-color-info-bg);
+  --h-badge-border: var(--h-color-info-border);
 }
 
 .badge[data-tone="success"],
@@ -70,52 +75,67 @@
 }
 
 .dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
+  --h-status-dot-color: var(--h-color-fg-subtle);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-status-dot-size);
+  height: 1em;
   flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.dot::before {
+  content: "";
+  display: block;
+  width: var(--h-status-dot-size);
+  height: var(--h-status-dot-size);
   border-radius: 50%;
-  background: var(--h-color-fg-subtle);
+  background: var(--h-status-dot-color);
+}
+
+.dot[data-size="xs"] {
+  --h-status-dot-size: 4px;
 }
 
 .dot[data-size="sm"] {
-  width: 6px;
-  height: 6px;
+  --h-status-dot-size: 8px;
 }
 
 .dot[data-size="md"] {
-  width: 7px;
-  height: 7px;
+  --h-status-dot-size: 8px;
 }
 
 .dot[data-size="lg"] {
-  width: 9px;
-  height: 9px;
+  --h-status-dot-size: 8px;
 }
 
-.dot[data-tone="accent"],
+.dot[data-tone="accent"] {
+  --h-status-dot-color: var(--h-color-accent-fg);
+}
+
 .dot[data-tone="info"] {
-  background: var(--h-color-accent-fg);
+  --h-status-dot-color: var(--h-color-info-fg);
 }
 
 .dot[data-tone="success"],
 .dot[data-tone="ok"],
 .dot[data-tone="live"] {
-  background: var(--h-color-success-fg);
+  --h-status-dot-color: var(--h-color-success-fg);
 }
 
 .dot[data-tone="warning"],
 .dot[data-tone="warn"] {
-  background: var(--h-color-warning-fg);
+  --h-status-dot-color: var(--h-color-warning-fg);
 }
 
 .dot[data-tone="danger"],
 .dot[data-tone="err"] {
-  background: var(--h-color-danger-fg);
+  --h-status-dot-color: var(--h-color-danger-fg);
 }
 
-.dot[data-tone="live"] {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--h-color-success-fg) 25%, transparent);
+.dot[data-tone="live"]::before {
   animation: hermesStatusPulse 1.6s ease-in-out infinite;
 }
 

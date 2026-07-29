@@ -39,6 +39,27 @@ describe("sidebarSearchAtom", () => {
   });
 });
 
+describe("appSidebarVisibleAtom (persisted)", () => {
+  it("defaults to visible and restores a hidden sidebar", async () => {
+    const visibleUi = await loadUi();
+    expect(createStore().get(visibleUi.appSidebarVisibleAtom)).toBe(true);
+
+    const hiddenUi = await loadUi({ "hermes.app-sidebar-visible": false });
+    expect(createStore().get(hiddenUi.appSidebarVisibleAtom)).toBe(false);
+  });
+
+  it("persists visibility changes", async () => {
+    const { appSidebarVisibleAtom, uiStore } = await loadUi();
+    const store = createStore();
+    store.set(appSidebarVisibleAtom, false);
+    expect(store.get(appSidebarVisibleAtom)).toBe(false);
+    expect(uiStore.readUiValue("hermes.app-sidebar-visible", true)).toBe(false);
+
+    store.set(appSidebarVisibleAtom, true);
+    expect(uiStore.readUiValue("hermes.app-sidebar-visible", false)).toBe(true);
+  });
+});
+
 describe("activeProfileAtom (persisted)", () => {
   it("defaults to 'default' when nothing is stored", async () => {
     const { activeProfileAtom } = await loadUi();
@@ -132,7 +153,7 @@ describe("conversationWidthModeAtom (persisted)", () => {
     const { conversationWidthMaxWidth } = await loadUi();
     expect(conversationWidthMaxWidth("small")).toBe("780px");
     expect(conversationWidthMaxWidth("medium")).toBe("960px");
-    expect(conversationWidthMaxWidth("large")).toBe("1006px");
+    expect(conversationWidthMaxWidth("large")).toBe("1008px");
     expect(conversationWidthMaxWidth("full")).toBe("100%");
   });
 });

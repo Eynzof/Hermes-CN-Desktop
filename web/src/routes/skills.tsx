@@ -15,6 +15,7 @@ import {
   User,
 } from "lucide-react";
 import type { SkillInfo } from "@hermes/protocol";
+import { LoadingState, PageTabs, type PageTabItem } from "@hermes/shared-ui";
 import { useSkillMarkdown, useSkills, useToggleSkill } from "@/hooks/use-skills";
 import {
   useActiveProfileName,
@@ -31,7 +32,7 @@ import {
   translateSkill,
 } from "@/lib/skill-translations";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
-import { TopBarActions } from "@/components/top-bar/top-bar";
+import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
 import { CopyButton } from "@/components/ui/copy-button";
 import { SkillUsageStats } from "@/components/skills/skill-usage-stats";
 import {
@@ -194,106 +195,67 @@ export function SkillsRoute() {
   const selected =
     filtered.find((sk) => sk.name === selectedName) ?? filtered[0] ?? null;
 
+  const tabHint = (
+    <span className={s.tabHint}>
+      <Info size={12} />
+      {tab === "builtin"
+        ? "内置 Skill 由 Hermes 团队维护，仅可启用 / 禁用"
+        : tab === "market"
+          ? "精选 Skill 市场与目录，点击卡片会在外部浏览器打开"
+          : tab === "stats"
+            ? "按当前管理档案统计已完成的 Skill 加载调用"
+            : "自建 Skill 保存在"}
+      {tab === "user" && <code>~/.hermes/skills/</code>}
+    </span>
+  );
+
   return (
     <main className={s.page}>
-      <div className={s.paneTop} data-window-drag data-tauri-drag-region="deep">
-        <span className={s.paneTopTitle}>技能</span>
-        <span className={s.paneTopMeta}>
-          {skills
-            ? `${builtin.length} 个内置 · ${user.length} 个自建 · ${enabledCount} 已启用`
-            : isLoading
-              ? "加载中…"
-              : "—"}
-        </span>
-        <div className={s.paneTopActions}>
-          <button
-            className={s.btn}
+      <TopBar
+        title="技能"
+        sub={skills
+          ? `${builtin.length} 个内置 · ${user.length} 个自建 · ${enabledCount} 已启用`
+          : isLoading
+            ? "加载中…"
+            : "—"}
+        right={
+          <TopBarActionButton
             type="button"
             onClick={() => void refetch()}
             disabled={isFetching}
+            loading={isFetching}
+            leadingIcon={<RefreshCw size={12} />}
           >
-            <RefreshCw size={13} />
-            {isFetching ? "刷新中" : "同步内置"}
-          </button>
-          <TopBarActions />
-        </div>
-      </div>
+            同步内置
+          </TopBarActionButton>
+        }
+      />
+
+      <PageTabs
+        aria-label="技能页面"
+        items={[
+          { value: "builtin", label: "内置 Skills", icon: <Package />, count: builtin.length },
+          { value: "market", label: "Skill 市场", icon: <Store /> },
+          { value: "stats", label: "统计", icon: <BarChart3 /> },
+          { value: "user", label: "我的 Skills", icon: <User />, count: user.length },
+        ] satisfies readonly PageTabItem<Tab>[]}
+        value={tab}
+        onValueChange={(nextTab) => {
+          setTab(nextTab);
+          setSelectedName(null);
+        }}
+        end={tabHint}
+      />
 
       {scope && (
-        <ProfileScopeBanner
-          scope={scope}
-          profileNames={profileNames}
-          onSelect={(name) => setMgmt(name && name !== active ? name : null)}
-        />
+        <div className={s.scopeRail}>
+          <ProfileScopeBanner
+            scope={scope}
+            profileNames={profileNames}
+            onSelect={(name) => setMgmt(name && name !== active ? name : null)}
+          />
+        </div>
       )}
-
-      {/* 顶部 tab：内置 / 市场 / 统计 / 我的 */}
-      <div className={s.toptabs}>
-        <button
-          type="button"
-          className={s.toptab}
-          data-active={tab === "builtin"}
-          onClick={() => {
-            setTab("builtin");
-            setSelectedName(null);
-          }}
-        >
-          <Package size={14} />
-          内置 Skills
-          <span className={s.toptabCount}>{builtin.length}</span>
-        </button>
-        <button
-          type="button"
-          className={s.toptab}
-          data-active={tab === "market"}
-          onClick={() => {
-            setTab("market");
-            setSelectedName(null);
-          }}
-        >
-          <Store size={14} />
-          Skill 市场
-        </button>
-        <button
-          type="button"
-          className={s.toptab}
-          data-active={tab === "stats"}
-          onClick={() => {
-            setTab("stats");
-            setSelectedName(null);
-          }}
-        >
-          <BarChart3 size={14} />
-          统计
-        </button>
-        <button
-          type="button"
-          className={s.toptab}
-          data-active={tab === "user"}
-          onClick={() => {
-            setTab("user");
-            setSelectedName(null);
-          }}
-        >
-          <User size={14} />
-          我的 Skills
-          <span className={s.toptabCount}>{user.length}</span>
-        </button>
-        <span className={s.toptabSpacer} />
-        <span className={s.toptabHint}>
-          <Info size={13} />
-          {tab === "builtin"
-            ? "内置 Skill 由 Hermes 团队维护，仅可启用 / 禁用"
-            : tab === "market"
-              ? "精选 Skill 市场与目录，点击卡片会在外部浏览器打开"
-              : tab === "stats"
-                ? "按当前管理档案统计已完成的 Skill 加载调用"
-                : tab === "user"
-                  ? "自建 Skill 保存在"
-                  : null}
-          {tab === "user" && <code>~/.hermes/skills/</code>}
-        </span>
-      </div>
 
       {/* 主体 */}
       {tab === "market" ? (
@@ -301,7 +263,7 @@ export function SkillsRoute() {
       ) : tab === "stats" ? (
         <SkillUsageStats profileOverride={scope} />
       ) : isLoading ? (
-        <div className={s.statePane}>加载中…</div>
+        <LoadingState variant="page" label="正在加载技能…" />
       ) : isError ? (
         <div className={s.statePane}>
           技能加载失败：{error instanceof Error ? error.message : "unknown error"}
@@ -438,7 +400,7 @@ function SkillRow({ skill, active, onSelect, onToggle, showBuiltinTag }: SkillRo
         <Dot tone={skill.enabled ? "ok" : "neutral"} />
         <span className={s.skillRowName}>{tr.displayName}</span>
         {showBuiltinTag && <span className={`${s.rowTag} ${s.rowTagBuiltin}`}>内置</span>}
-        <span style={{ marginLeft: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <span className={s.skillToggleSlot} onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             className={s.toggle}
@@ -514,7 +476,7 @@ function SkillDetail({
               className={s.btn}
               title="复制原文 ID"
             >
-              <Copy size={13} />
+              <Copy size={12} />
               复制 ID
             </CopyButton>
             <button
@@ -542,7 +504,7 @@ function SkillDetail({
 
         {tab === "builtin" && (
           <div className={s.readonlyNotice}>
-            <Lock size={14} className={s.readonlyLock} />
+            <Lock size={16} className={s.readonlyLock} />
             <div>
               <strong>这是 Hermes 内置 Skill。</strong>
               只能启用 / 禁用，不能修改。下次执行 <code>同步内置</code> 时会被覆盖。
@@ -603,7 +565,7 @@ function SkillDetail({
             )}
             {isTranslated ? (
               <div className={s.descriptionCardFooter}>
-                <Languages size={13} />
+                <Languages size={12} />
                 中文版基于 SKILL.md description 字段翻译。完整 SKILL.md 内容请到来源目录查看。
               </div>
             ) : null}
@@ -616,7 +578,7 @@ function SkillDetail({
             <div className={s.secHeadRight}>
               {markdown?.content ? (
                 <CopyButton text={markdown.content} className={s.btn}>
-                  <Copy size={13} />
+                  <Copy size={12} />
                   复制 Markdown
                 </CopyButton>
               ) : null}
@@ -624,7 +586,7 @@ function SkillDetail({
           </div>
           <div className={s.markdownCard} aria-busy={markdownQuery.isFetching}>
             {markdownQuery.isLoading ? (
-              <div className={s.markdownState}>正在读取 SKILL.md…</div>
+              <LoadingState variant="block" label="正在读取 SKILL.md…" />
             ) : markdownQuery.isError ? (
               <div className={s.markdownState} data-tone="error">
                 读取失败：{markdownQuery.error instanceof Error ? markdownQuery.error.message : "unknown error"}
@@ -645,27 +607,27 @@ function SkillDetail({
           </div>
           <div className={`${s.descriptionCard} ${s.sourceCard}`}>
             <div className={s.sourceRow}>
-              <Folder size={14} className={s.sourceIcon} />
+              <Folder size={16} className={s.sourceIcon} />
               <div className={s.sourceText}>
                 <span className={s.sourceLabel}>实际安装目录</span>
                 <code>{sourcePath}</code>
               </div>
               {resolvedSourcePath && (
                 <CopyButton text={resolvedSourcePath} className={s.btn}>
-                  <Copy size={13} />
+                  <Copy size={12} />
                   复制
                 </CopyButton>
               )}
             </div>
             {skillFile && (
               <div className={s.sourceRow}>
-                <Folder size={14} className={s.sourceIcon} />
+                <Folder size={16} className={s.sourceIcon} />
                 <div className={s.sourceText}>
                   <span className={s.sourceLabel}>SKILL.md</span>
                   <code>{skillFile}</code>
                 </div>
                 <CopyButton text={skillFile} className={s.btn}>
-                  <Copy size={13} />
+                  <Copy size={12} />
                   复制
                 </CopyButton>
               </div>
@@ -687,7 +649,7 @@ function UserEmptyState() {
   return (
     <div className={s.emptyState}>
       <div className={s.emptyStateIcon}>
-        <User size={26} />
+        <User size={28} />
       </div>
       <h2 className={s.emptyStateTitle}>还没有自建 Skill</h2>
       <p className={s.emptyStateBody}>
@@ -699,11 +661,11 @@ function UserEmptyState() {
       </p>
       <div className={s.emptyStateActions}>
         <button type="button" className={s.btn}>
-          <Folder size={13} />
+          <Folder size={12} />
           打开 ~/.hermes/skills/
         </button>
         <button type="button" className={s.btnPrimary}>
-          <Plus size={13} />
+          <Plus size={12} />
           基于内置 Skill 复制
         </button>
       </div>
@@ -740,7 +702,7 @@ function SkillMarket() {
             <p className={s.marketWhy}>{item.why}</p>
             <span className={s.marketCta}>
               {item.cta}
-              <ExternalLink size={13} />
+              <ExternalLink size={12} />
             </span>
           </a>
         ))}

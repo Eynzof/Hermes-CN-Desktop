@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Field, Input, Select } from "@hermes/shared-ui";
+import { Alert, Button, Field, Input, LoadingState, Select } from "@hermes/shared-ui";
 import type { MoaConfigResponse, MoaModelSlot, MoaPresetConfig } from "@hermes/protocol";
 import { useMoaConfig, useSaveMoaConfig } from "@/hooks/use-moa-config";
 import { useModelOptions } from "@/hooks/use-model-options";
@@ -215,7 +215,7 @@ export function MoaPanel() {
   };
 
   if (isLoading) {
-    return <div className={s.desc}>加载 MoA 配置…</div>;
+    return <LoadingState variant="block" label="正在加载 MoA 配置…" />;
   }
   if (isError || !moa || !currentPreset) {
     return (
@@ -341,10 +341,10 @@ export function MoaPanel() {
           type="button"
           variant="solid"
           tone="accent"
-          disabled={saveMoaConfig.isPending}
+          loading={saveMoaConfig.isPending}
           onClick={() => void saveNow(moa)}
         >
-          {saveMoaConfig.isPending ? "保存中…" : "保存 MoA 配置"}
+          保存 MoA 配置
         </Button>
         <div className={s.modelPickerHint}>
           预设的新建 / 删除 / 设为默认会立即保存；参考模型与聚合器的修改需点击「保存 MoA 配置」。

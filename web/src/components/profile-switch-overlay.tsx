@@ -1,4 +1,5 @@
 import { useAtomValue } from "jotai";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { profileSwitchingAtom } from "@/stores/ui";
 import s from "./profile-switch-overlay.module.css";
 
@@ -12,7 +13,7 @@ export function ProfileSwitchOverlay() {
     <div className={s.backdrop} role="alert" aria-live="assertive">
       <div className={s.card}>
         <div className={s.title}>
-          <span className={s.spinner} aria-hidden="true" />
+          <LoadingIndicator size="sm" />
           {state.title ?? "正在切换档案…"}
         </div>
         <div className={s.body}>

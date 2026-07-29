@@ -54,7 +54,7 @@ export function McpDialogShell({
               disabled={busy}
               aria-label="关闭"
             >
-              <X size={15} />
+              <X size={16} />
             </button>
           </div>
           <div className={s.dialogBody}>{children}</div>

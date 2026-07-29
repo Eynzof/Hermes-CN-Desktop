@@ -48,7 +48,7 @@ export function ObservabilitySidebar() {
                 title={item.path}
               >
                 <span className={s.itemIcon}>
-                  <Icon size={14} />
+                  <Icon size={16} />
                 </span>
                 <span className={s.itemLabel}>{item.label}</span>
                 <span className={s.itemPath}>{item.path}</span>

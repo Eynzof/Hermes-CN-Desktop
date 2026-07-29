@@ -1,4 +1,4 @@
-/* Hero — left ".num" gutter + right big serif title + greet meta row.
+/* Hero — left ".num" gutter + right large Harmony title + greet meta row.
    Mirrors prototypes/.hero */
 
 .hero {
@@ -30,7 +30,7 @@
 
 .title {
   margin: 0;
-  font-family: var(--h-font-display-cn);
+  font-family: var(--h-font-ui);
   /* CN locale: never italic — west italic on CJK glyphs looks broken.
      Prototype uses persimmon-bold em as the "accent" instead. */
   font-style: normal;
@@ -52,7 +52,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 16px;
   font-family: var(--h-font-mono);
   font-size: 11px;
   color: var(--h-text-3);

@@ -4,6 +4,7 @@
 .shell {
   width: 100vw;
   height: 100vh;
+  position: relative;
   display: grid;
   grid-template-rows: calc(var(--h-topbar-h) + var(--h-window-control-safe-top, 0px)) 1fr var(--h-statusbar-h);
   grid-template-columns: var(--h-sidebar-w) 1fr;
@@ -11,6 +12,11 @@
   background: var(--h-bg-app);
   color: var(--h-text);
   font-family: var(--h-font-ui);
+  transition: grid-template-columns var(--h-duration-normal) var(--h-ease-standard);
+}
+
+.shell[data-sidebar-visible="false"] {
+  grid-template-columns: 0 1fr;
 }
 
 .topbarSlot {
@@ -21,22 +27,83 @@
 .sidebarSlot {
   grid-column: 1;
   grid-row: 2;
+  width: var(--h-sidebar-w);
   min-height: 0;
   overflow: hidden;
   position: relative;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition:
+    transform var(--h-duration-normal) var(--h-ease-standard),
+    opacity var(--h-duration-fast) var(--h-ease-standard),
+    visibility 0s linear 0s;
+}
+
+.shell[data-sidebar-visible="false"] .sidebarSlot {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-100%);
+  pointer-events: none;
+  transition:
+    transform var(--h-duration-normal) var(--h-ease-standard),
+    opacity var(--h-duration-fast) var(--h-ease-standard),
+    visibility 0s linear var(--h-duration-normal);
+}
+
+.sidebarSlot > aside {
+  padding-bottom: 32px;
+}
+
+.sidebarToggle,
+.sidebarRestoreButton {
+  position: absolute;
+  z-index: 20;
+  background: var(--h-bg-pane);
+}
+
+.sidebarToggle {
+  right: 4px;
+  bottom: 4px;
+}
+
+.sidebarRestoreButton {
+  left: 4px;
+  bottom: calc(var(--h-statusbar-h) + 4px);
+  opacity: 0;
+  visibility: hidden;
+  translate: -8px 0;
+  pointer-events: none;
+  transition:
+    opacity var(--h-duration-fast) var(--h-ease-standard),
+    translate var(--h-duration-normal) var(--h-ease-standard),
+    transform var(--h-duration-fast) var(--h-ease-standard),
+    visibility 0s linear var(--h-duration-normal);
+}
+
+.sidebarRestoreButton[data-visible="true"] {
+  opacity: 1;
+  visibility: visible;
+  translate: 0 0;
+  pointer-events: auto;
+  transition-delay: var(--h-duration-fast), var(--h-duration-fast), 0s, 0s;
+}
+
+.sidebarRestoreButton[data-visible="true"]:active:not(:disabled) {
+  transform: translateY(4px);
 }
 
 .sidebarInfoPanel {
   position: absolute;
   left: 16px;
-  right: 6px;
-  bottom: 15px;
+  right: 8px;
+  bottom: 16px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
-  color: rgba(133, 126, 111, 0.76);
+  color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10px;
   font-style: normal;
@@ -47,7 +114,7 @@
 
 .sidebarInfoMeta {
   display: grid;
-  gap: 1px;
+  gap: 4px;
   max-width: 100%;
 }
 
@@ -70,16 +137,16 @@
 
 .sidebarInfoDot {
   text-align: center;
-  color: rgba(133, 126, 111, 0.54);
+  color: var(--h-text-4);
 }
 
 .sidebarInfoVersion {
-  color: rgba(255, 122, 61, 0.78);
+  color: var(--h-text-2);
 }
 
 .sidebarInfoNote {
   max-width: 100%;
-  color: rgba(133, 126, 111, 0.5);
+  color: var(--h-text-4);
   font-family: var(--h-font-cn);
   font-size: 10px;
   font-weight: 500;
@@ -100,6 +167,15 @@
   display: flex;
   flex-direction: column;
   background: var(--h-bg-app);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .sidebarSlot,
+  .sidebarRestoreButton {
+    transition-duration: 0.01ms;
+    transition-delay: 0s;
+  }
 }
 
 .statusbarSlot {

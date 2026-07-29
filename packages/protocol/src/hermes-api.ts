@@ -163,6 +163,10 @@ export type MessagingPlatformTestResponse = z.infer<typeof MessagingPlatformTest
 
 export const SessionSummary = z.object({
   id: z.string(),
+  // Core uses this lineage link for official desktop session branching. Keep
+  // it in the parsed summary so branch drafts and persisted children retain
+  // their relationship to the source conversation.
+  parent_session_id: z.string().nullable().optional(),
   source: z.string().optional(),
   user_id: z.string().nullable().optional(),
   model: NullableStringAsEmpty,
@@ -1282,6 +1286,8 @@ export type ProfileSetupCommandResponse = z.infer<typeof ProfileSetupCommandResp
 
 export const SessionCreateResult = z.object({
   session_id: z.string(),
+  stored_session_id: z.string().nullable().optional(),
+  message_count: z.number().optional(),
 }).passthrough();
 export type SessionCreateResult = z.infer<typeof SessionCreateResult>;
 

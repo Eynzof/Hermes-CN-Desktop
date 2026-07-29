@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   padding: 0 12px;
-  gap: 14px;
+  gap: 16px;
   font-family: var(--h-font-mono);
   font-size: 10.5px;
   line-height: 1;
@@ -17,7 +17,7 @@
 .stat {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   min-height: 12px;
   line-height: 1;
 }
@@ -30,6 +30,9 @@
 
 .gatewayButton {
   appearance: none;
+  height: var(--h-button-height-xs);
+  display: inline-flex;
+  align-items: center;
   border: 0;
   padding: 0;
   background: transparent;
@@ -48,14 +51,14 @@
 .gatewayButton:focus-visible {
   outline: 1px solid var(--h-accent-border);
   outline-offset: 3px;
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
 }
 
 .restartButton {
   appearance: none;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-xs);
-  min-height: 20px;
+  border-radius: 0;
+  height: var(--h-button-height-xs);
   padding: 0 8px;
   display: inline-flex;
   align-items: center;
@@ -89,11 +92,6 @@
   opacity: 0.82;
 }
 
-.restartButton[data-state="starting"] svg,
-.restartButton[data-state="running"] svg {
-  animation: gateway-restart-spin 0.9s linear infinite;
-}
-
 .restartButton[data-state="success"] {
   color: var(--moss);
   border-color: color-mix(in srgb, var(--moss) 40%, var(--h-line));
@@ -102,12 +100,6 @@
 .restartButton[data-state="error"] {
   color: var(--rust);
   border-color: color-mix(in srgb, var(--rust) 48%, var(--h-line));
-}
-
-@keyframes gateway-restart-spin {
-  to {
-    transform: rotate(-360deg);
-  }
 }
 
 .stat[data-tone="warn"] .val {
@@ -132,7 +124,7 @@
 
 .sep {
   width: 1px;
-  height: 10px;
+  height: 12px;
   background: var(--h-line);
   flex: 0 0 auto;
 }
@@ -141,34 +133,7 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 14px;
-}
-
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: inline-block;
-  align-self: center;
-  flex: 0 0 auto;
-}
-
-.dot[data-state="running"] {
-  background: var(--moss);
-  box-shadow: 0 0 6px rgba(141, 181, 128, 0.5);
-}
-
-.dot[data-state="ready"] {
-  background: var(--moss);
-}
-
-.dot[data-state="offline"] {
-  background: var(--rust);
-  box-shadow: 0 0 6px rgba(217, 102, 102, 0.5);
-}
-
-.dot[data-state="unknown"] {
-  background: var(--h-text-3);
+  gap: 16px;
 }
 
 .srOnly {
@@ -188,9 +153,9 @@
   align-items: center;
   gap: 8px;
   max-width: 56ch;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border: 1px solid color-mix(in srgb, var(--rust) 40%, var(--h-line));
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
   background: var(--h-bg-soft);
 }
 
@@ -219,9 +184,9 @@
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--h-accent-border);
-  border-radius: var(--h-r-xs);
+  border-radius: 0;
   color: var(--h-accent);
   background: var(--h-bg-chip);
   font: inherit;

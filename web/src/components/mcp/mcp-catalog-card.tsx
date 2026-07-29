@@ -127,7 +127,7 @@ export function McpCatalogCard({
             loading={installing}
             onClick={onInstall}
           >
-            {installing ? "安装中…" : "安装"}
+            安装
           </Button>
         )}
       </div>

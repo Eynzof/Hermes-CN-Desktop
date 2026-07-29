@@ -18,6 +18,9 @@
 }
 
 .filters {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -29,7 +32,7 @@
 .filtersRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -37,15 +40,15 @@
   display: inline-flex;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
 }
 
 .segItem {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
+  gap: 4px;
+  padding: 4px 12px;
   font-size: 11.5px;
   color: var(--h-text-2);
   border: none;
@@ -74,7 +77,7 @@
   font-family: var(--h-font-mono);
   font-size: 10.5px;
   color: var(--h-text-3);
-  margin-left: 1px;
+  margin-left: 4px;
 }
 
 .segItem[data-active="true"] .segCount {
@@ -85,7 +88,7 @@
   font-family: var(--h-font-mono);
   font-size: 10.5px;
   color: var(--h-text-3);
-  margin: 0 2px;
+  margin: 0 4px;
 }
 
 .chevOpen {
@@ -100,16 +103,16 @@
 
 .searchBox {
   margin-left: auto;
-  height: 30px;
+  height: 32px;
   flex: 0 1 320px;
   min-width: 220px;
-  padding: 0 10px;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   gap: 8px;
   border: 1px solid var(--h-line);
   background: var(--h-bg-input);
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-text-3);
   font-size: 12px;
 }
@@ -133,7 +136,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
+  min-height: 40px;
   padding: 8px 24px;
   border-bottom: 1px solid var(--h-line-soft);
   background: var(--h-bg-soft);
@@ -147,10 +150,10 @@
 }
 
 .bulkBar button {
-  height: 26px;
-  padding: 0 10px;
+  height: var(--h-button-height-sm);
+  padding: 0 12px;
   border: 1px solid var(--h-line);
-  border-radius: 7px;
+  border-radius: 0;
   background: var(--h-bg-pane);
   color: var(--h-text-2);
   cursor: pointer;
@@ -171,7 +174,7 @@
 .bulkDanger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--h-err) !important;
   margin-left: auto;
 }
@@ -184,7 +187,7 @@
 .popover {
   width: 320px;
   max-height: 460px;
-  border-radius: 8px;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
 }
@@ -193,7 +196,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-bottom: 1px solid var(--h-line-soft);
   color: var(--h-text-3);
 }
@@ -216,11 +219,11 @@
 .popBody {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0;
+  padding: 8px 0;
 }
 
 .popEmpty {
-  padding: 22px 14px;
+  padding: 24px 16px;
   text-align: center;
   font-size: 12px;
   color: var(--h-text-3);
@@ -235,15 +238,15 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--h-text-3);
-  padding: 6px 14px 4px;
+  padding: 8px 16px 4px;
   font-family: var(--h-font-mono);
 }
 
 .popRow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 14px;
+  gap: 12px;
+  padding: 8px 16px;
   font-size: 12.5px;
   color: var(--h-text);
   cursor: pointer;
@@ -254,10 +257,10 @@
 }
 
 .popCheck {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border: 1.5px solid var(--h-text-4);
-  border-radius: 3px;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -280,14 +283,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
   color: var(--h-text-4);
   cursor: pointer;
   opacity: 0;
-  border-radius: 4px;
+  border-radius: 0;
   transition: opacity 0.1s, color 0.1s;
 }
 
@@ -315,7 +318,7 @@
 .popFoot {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 8px 12px;
   border-top: 1px solid var(--h-line-soft);
   font-size: 11.5px;
@@ -344,6 +347,9 @@
 
 /* scroll body */
 .scroll {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   flex: 1;
   overflow-y: auto;
   padding: 8px 0 32px;
@@ -362,16 +368,16 @@
 }
 
 .dayGroup {
-  padding: 18px 24px 0;
+  padding: 20px 24px 0;
 }
 
 .dayHead {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding-bottom: 10px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--h-line);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .dayLabel {
@@ -436,8 +442,8 @@
 }
 
 .convRow {
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 12px 12px;
+  border-radius: 0;
   cursor: pointer;
   border: 1px solid transparent;
   transition: background 0.08s, border-color 0.08s;
@@ -464,8 +470,8 @@
 }
 
 .cellSelect input {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   accent-color: var(--h-accent);
   cursor: pointer;
 }
@@ -489,23 +495,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.dotLive {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--h-ok, #22c55e);
-  flex-shrink: 0;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--h-ok, #22c55e) 25%, transparent);
-}
-
-.dotFail {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--h-err);
-  flex-shrink: 0;
 }
 
 .titlePin {
@@ -536,7 +525,7 @@
   height: 24px;
   color: var(--h-text-3);
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   cursor: pointer;
 }
@@ -555,9 +544,9 @@
 .sourceChip {
   font-size: 10.5px;
   color: var(--h-text-2);
-  padding: 2px 6px;
+  padding: 4px 8px;
   background: var(--h-bg-chip);
-  border-radius: 4px;
+  border-radius: 0;
   text-align: center;
   white-space: nowrap;
   letter-spacing: 0.02em;
@@ -624,7 +613,7 @@
   color: var(--h-text-2);
   background: var(--h-bg-soft);
   border: 1px dashed var(--h-line);
-  padding: 1px 5px;
+  padding: 4px 4px;
 }
 
 .sourceChip[data-tone="unknown"] {
@@ -633,10 +622,13 @@
 
 /* footer */
 .foot {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px;
+  padding: 16px 24px;
   border-top: 1px solid var(--h-line);
   font-size: 11.5px;
   color: var(--h-text-3);

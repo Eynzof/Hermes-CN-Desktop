@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Bug, FileArchive, FolderOpen } from "lucide-react";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { debugBus } from "@/lib/debug-bus";
 import { BUILD_COMMIT, BUILD_DATE, DESKTOP_VERSION } from "@/lib/build-info";
 import { runtime } from "@/lib/runtime";
@@ -102,8 +103,8 @@ export function DebugRoute() {
         </div>
         <div className={s.debugHeroActions}>
           <button className={s.btnPrimary} type="button" onClick={handleExport} disabled={!canExport || exporting}>
-            <FileArchive size={13} />
-            {exporting ? "导出中…" : "导出 debug 包"}
+            {exporting ? <LoadingIndicator size="xs" /> : <FileArchive size={12} />}
+            导出 debug 包
           </button>
           <span><FolderOpen size={12} /> 导出后自动打开所在文件夹</span>
         </div>

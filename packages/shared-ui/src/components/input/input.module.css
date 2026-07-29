@@ -2,7 +2,7 @@
   width: 100%;
   min-width: 0;
   border: 1px solid var(--h-color-border-default);
-  border-radius: var(--h-input-radius);
+  border-radius: 0;
   background: var(--h-color-bg-input);
   color: var(--h-color-fg-default);
   font-family: var(--h-font-ui);
@@ -11,7 +11,6 @@
   outline: none;
   transition:
     border-color var(--h-duration-fast) var(--h-ease-standard),
-    box-shadow var(--h-duration-fast) var(--h-ease-standard),
     background-color var(--h-duration-fast) var(--h-ease-standard);
 }
 
@@ -26,7 +25,6 @@
 .control:focus,
 .control:focus-visible {
   border-color: var(--h-color-accent-border);
-  box-shadow: var(--h-focus-ring);
 }
 
 .control:disabled,
@@ -37,11 +35,6 @@
 
 .control[data-invalid="true"] {
   border-color: var(--h-color-danger-border);
-}
-
-.control[data-invalid="true"]:focus,
-.control[data-invalid="true"]:focus-visible {
-  box-shadow: var(--h-focus-ring-danger);
 }
 
 .control[data-mono="true"] {
@@ -61,7 +54,7 @@
 
 .control[data-size="lg"] {
   min-height: var(--h-input-height-lg);
-  padding: 0 calc(var(--h-input-padding-x) + 2px);
+  padding: 0 calc(var(--h-input-padding-x) + 4px);
   font-size: 13px;
 }
 
@@ -72,16 +65,8 @@
 }
 
 .select {
-  appearance: none;
-  padding-right: 28px;
-  background-image:
-    linear-gradient(45deg, transparent 50%, currentColor 50%),
-    linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position:
-    calc(100% - 15px) 50%,
-    calc(100% - 10px) 50%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
+  appearance: auto;
+  padding-right: 8px;
 }
 
 .control[data-full-width="false"] {

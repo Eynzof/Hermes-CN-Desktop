@@ -94,7 +94,7 @@ export function ModelOnboardingDialog() {
         >
           <header className={s.header}>
             <span className={s.heroIcon} aria-hidden="true">
-              <Sparkles size={26} />
+              <Sparkles size={28} />
             </span>
             <div>
               <p className={s.kicker}>首次使用</p>
@@ -109,7 +109,7 @@ export function ModelOnboardingDialog() {
           <section className={s.modelPath} aria-labelledby="model-path-title">
             <div className={s.modelPathHeader}>
               <span className={s.pathIcon} aria-hidden="true">
-                <KeyRound size={21} />
+                <KeyRound size={20} />
               </span>
               <div>
                 <h3 id="model-path-title">先配置模型</h3>
@@ -119,9 +119,9 @@ export function ModelOnboardingDialog() {
             </div>
 
             <div className={s.steps} aria-label="模型配置步骤">
-              <span><KeyRound size={14} /> 选择服务商</span>
-              <span><Settings2 size={14} /> 填写 API Key</span>
-              <span><CheckCircle2 size={14} /> 验证并设为当前模型</span>
+              <span><KeyRound size={16} /> 选择服务商</span>
+              <span><Settings2 size={16} /> 填写 API Key</span>
+              <span><CheckCircle2 size={16} /> 验证并设为当前模型</span>
             </div>
 
             <Button
@@ -129,7 +129,7 @@ export function ModelOnboardingDialog() {
               variant="solid"
               tone="accent"
               size="lg"
-              trailingIcon={<ArrowRight size={15} />}
+              trailingIcon={<ArrowRight size={16} />}
               onClick={goModels}
               autoFocus
             >
@@ -149,7 +149,7 @@ export function ModelOnboardingDialog() {
             <Button
               variant="outline"
               size="sm"
-              trailingIcon={<ArrowRight size={13} />}
+              trailingIcon={<ArrowRight size={12} />}
               onClick={goConnection}
             >
               连接自己的内核

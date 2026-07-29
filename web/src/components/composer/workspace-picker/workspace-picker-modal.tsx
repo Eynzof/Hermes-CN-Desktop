@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { LoadingState } from "@hermes/shared-ui";
 import { ArrowUp, Folder, X } from "lucide-react";
 import type { FsEntry } from "@hermes/protocol";
 import { useFsList } from "@/hooks/use-fs-list";
@@ -318,7 +319,7 @@ export function WorkspacePickerModal({
 
         <div ref={listRef} className={s.wpList}>
           {isInitialLoad ? (
-            <div className={s.wpEmpty}>加载中...</div>
+            <LoadingState variant="block" label="正在加载目录…" />
           ) : errorText ? (
             <div className={s.wpError}>{errorText}</div>
           ) : directoryEntries.length === 0 ? (

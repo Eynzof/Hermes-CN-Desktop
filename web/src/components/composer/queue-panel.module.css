@@ -1,6 +1,6 @@
 .panel {
   border: 1px solid var(--h-line-soft);
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--h-bg-soft);
   margin-bottom: 8px;
   overflow: hidden;
@@ -21,8 +21,8 @@
 }
 
 .head svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
 }
 
@@ -42,7 +42,7 @@
 .list {
   list-style: none;
   margin: 0;
-  padding: 0 6px 6px;
+  padding: 0 8px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -52,8 +52,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
+  padding: 8px 8px;
+  border-radius: 0;
   background: var(--h-bg-input);
   border: 1px solid transparent;
 }
@@ -75,7 +75,7 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   font-size: 11px;
   color: var(--h-text-2);
 }
@@ -88,13 +88,13 @@
 
 .rowActions {
   display: inline-flex;
-  gap: 2px;
+  gap: 4px;
 }
 
 .action {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: var(--h-button-height-sm);
+  height: var(--h-button-height-sm);
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -105,8 +105,8 @@
 }
 
 .action svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
 }
 
@@ -121,5 +121,5 @@
 }
 
 .action[data-danger]:hover {
-  color: var(--h-danger, #dc2626);
+  color: var(--h-color-danger-fg);
 }

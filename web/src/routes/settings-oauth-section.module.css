@@ -6,7 +6,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .oauthTitle {
@@ -18,14 +18,14 @@
 .oauthDesc {
   font-size: 11px;
   color: var(--h-text-3);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .providerRow {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
+  padding: 12px 0;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -47,22 +47,22 @@
 .providerMeta {
   font-size: 11px;
   color: var(--h-text-3);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .providerMeta code {
   font-family: var(--h-font-mono, monospace);
   font-size: 10px;
   background: var(--h-bg-input);
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 4px 4px;
+  border-radius: 0;
 }
 
 .providerRight {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* ── Modal ──────────────────────────────────────────────────────────── */
@@ -80,8 +80,8 @@
 .modal {
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  border-radius: 0;
+  box-shadow: none;
   max-width: 440px;
   width: 90vw;
   padding: 24px;
@@ -106,8 +106,8 @@
   font-size: 18px;
   color: var(--h-text-3);
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 4px 8px;
+  border-radius: 0;
 }
 
 .modalClose:hover {
@@ -133,7 +133,7 @@
   padding: 16px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--h-text);
   margin: 12px 0;
 }
@@ -144,7 +144,7 @@
   padding: 8px 12px;
   background: var(--h-bg-input);
   border: 1px solid var(--h-line);
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--h-text);
   font-size: 13px;
   font-family: var(--h-font-mono, monospace);
@@ -171,8 +171,8 @@
 
 .statusMessage {
   font-size: 13px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 12px 12px;
+  border-radius: 0;
   margin-top: 12px;
 }
 

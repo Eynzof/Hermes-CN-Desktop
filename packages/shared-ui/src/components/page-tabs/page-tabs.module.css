@@ -1,0 +1,131 @@
+.root {
+  width: 100%;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--h-line);
+  background: var(--h-bg-pane);
+  font-family: var(--h-font-ui);
+}
+
+.inner {
+  width: calc(100% - var(--h-page-content-gutter-x) - var(--h-page-content-gutter-x));
+  max-width: var(--h-page-content-max-width);
+  min-height: var(--h-tab-height);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.list {
+  min-width: 0;
+  height: var(--h-tab-height);
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.list::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  height: var(--h-tab-height);
+  margin-right: 20px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--h-text-3);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  outline: none;
+  transition:
+    color var(--h-duration-fast) var(--h-ease-standard),
+    border-color var(--h-duration-fast) var(--h-ease-standard),
+    background-color var(--h-duration-fast) var(--h-ease-standard);
+}
+
+.tab:last-child {
+  margin-right: 0;
+}
+
+.tab:hover:not(:disabled),
+.tab:focus-visible {
+  color: var(--h-text-2);
+  background: var(--h-bg-soft);
+}
+
+.tab[data-active="true"] {
+  border-bottom-color: var(--h-accent);
+  color: var(--h-text);
+  font-weight: 600;
+}
+
+.tab:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon > :where(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.count {
+  min-width: 24px;
+  padding: 4px 8px;
+  background: var(--h-bg-chip);
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
+}
+
+.tab[data-active="true"] .count {
+  background: var(--h-accent-soft);
+  color: var(--h-accent);
+}
+
+.end {
+  min-width: 0;
+  margin-left: auto;
+  flex: 0 1 auto;
+  color: var(--h-text-3);
+}
+
+@media (max-width: 840px) {
+  .inner {
+    gap: 0;
+  }
+
+  .end {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab {
+    transition-duration: 0.01ms;
+  }
+}

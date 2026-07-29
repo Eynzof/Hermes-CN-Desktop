@@ -7,11 +7,11 @@
   max-width: 100%;
   /* 与时间线相邻块的 10px 节奏对齐——卡片是独立 css module，吃不到
      timeline 的邻接选择器，间距自带。 */
-  margin: 10px 0;
+  margin: 12px 0;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-soft);
-  padding: 6px 8px;
+  padding: 8px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -27,15 +27,15 @@
   /* 行内有胶囊徽标（badge）会把 flex line 撑高，baseline 对齐下品牌点的
      align-self:center 会相对文字偏上——header 单行不换行，直接整体居中。 */
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-height: 24px;
   max-width: 100%;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 4px;
   font-size: 12px;
   line-height: 1.45;
   text-align: left;
@@ -52,7 +52,7 @@
 .brandDot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: 50%;
   flex: 0 0 auto;
 }
 
@@ -84,8 +84,8 @@
 
 .badge {
   flex: 0 0 auto;
-  padding: 0 6px;
-  border-radius: 999px;
+  padding: 0 8px;
+  border-radius: 0;
   border: 1px solid var(--h-line);
   color: var(--h-text-3);
   font-size: 11px;
@@ -130,8 +130,8 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 2px 4px 4px;
+  gap: 8px;
+  padding: 4px 4px 4px;
 }
 
 .timeline {
@@ -140,7 +140,7 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   max-height: 220px;
   overflow-y: auto;
   font-size: 12px;
@@ -149,7 +149,7 @@
 .timelineRow {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   padding-left: 12px;
   position: relative;
@@ -160,11 +160,11 @@
 .timelineRow::before {
   content: "";
   position: absolute;
-  left: 2px;
+  left: 4px;
   top: 0.62em;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
+  width: 4px;
+  height: 4px;
+  border-radius: 0;
   background: var(--h-text-3);
 }
 
@@ -203,8 +203,8 @@
 
 .tail {
   margin: 0;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 8px 8px;
+  border-radius: 0;
   background: var(--h-bg);
   border: 1px solid var(--h-line-soft);
   color: var(--h-text-2);
@@ -235,7 +235,7 @@
 .actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 

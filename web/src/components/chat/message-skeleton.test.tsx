@@ -1,5 +1,5 @@
 // 与 pill.test.tsx 同款：ReactDOMServer.renderToStaticMarkup，不引 jsdom /
-// @testing-library，只锁渲染契约（无障碍语义 + 对话骨架结构）。
+// @testing-library，只锁统一 Loading 的无障碍语义与文案。
 import ReactDOMServer from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -9,14 +9,13 @@ describe("MessageSkeleton", () => {
   it("renders an accessible loading status container", () => {
     const html = ReactDOMServer.renderToStaticMarkup(<MessageSkeleton />);
     expect(html).toContain('role="status"');
-    expect(html).toContain('aria-label="加载对话中"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain("正在加载对话…");
   });
 
-  it("mimics the conversation layout with user bubbles and assistant lines", () => {
+  it("uses the shared loading indicator instead of a pulsing skeleton", () => {
     const html = ReactDOMServer.renderToStaticMarkup(<MessageSkeleton />);
-    // 2 组用户气泡 + 2 组助手段落（共 5 行）——结构变了说明骨架被改动，
-    // 需要同步确认视觉效果仍接近真实对话布局。
-    expect(html.match(/user/g)?.length).toBe(2);
-    expect(html.match(/line/g)?.length).toBe(5);
+    expect(html).toContain("<svg");
+    expect(html).not.toContain("skeleton-pulse");
   });
 });

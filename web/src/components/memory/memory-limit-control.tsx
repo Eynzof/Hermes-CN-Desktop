@@ -68,8 +68,14 @@ export function MemoryLimitControl({ currentLimit, used }: MemoryLimitControlPro
           />
           <span>字符</span>
         </div>
-        <Button type="submit" variant="outline" size="sm" disabled={invalid || unchanged || saveLimit.isPending}>
-          {saveLimit.isPending ? "保存中" : saved ? "已保存" : "保存上限"}
+        <Button
+          type="submit"
+          variant="outline"
+          size="sm"
+          loading={saveLimit.isPending}
+          disabled={invalid || unchanged}
+        >
+          {saved ? "已保存" : "保存上限"}
         </Button>
       </div>
     </form>

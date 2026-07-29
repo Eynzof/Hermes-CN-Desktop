@@ -3,8 +3,7 @@
   background: var(--h-bg-pane);
   color: var(--h-text);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
-  box-shadow: var(--h-shadow-l);
+  border-radius: 0;
   outline: none;
   overflow: hidden;
   animation: hermesPopoverIn 120ms ease-out;

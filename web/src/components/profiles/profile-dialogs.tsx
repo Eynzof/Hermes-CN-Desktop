@@ -146,7 +146,7 @@ export function ProfileCreateDialog({
         className={s.advancedToggle}
         onClick={() => setShowAdvanced((v) => !v)}
       >
-        {showAdvanced ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        {showAdvanced ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         高级选项
       </button>
       {showAdvanced && (

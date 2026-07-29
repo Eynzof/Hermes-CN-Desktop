@@ -66,8 +66,8 @@
   <polygon points="192,280 320,280 256,184" fill="none" stroke="url(#gradTop)" stroke-width="0.8" opacity="0.35" />
 
   <!-- Central "S" with glow -->
-  <text x="256" y="316" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="120" font-weight="bold" fill="url(#gradS)" filter="url(#glow)">S</text>
+  <text x="256" y="316" text-anchor="middle" font-family="'HarmonyOS Sans SC', 'HarmonyOS Sans', 'PingFang SC', 'Segoe UI', sans-serif" font-size="120" font-weight="bold" fill="url(#gradS)" filter="url(#glow)">S</text>
 
   <!-- "SSSAiCode" text -->
-  <text x="256" y="425" text-anchor="middle" font-family="'Helvetica Neue', 'Segoe UI', Arial, sans-serif" font-size="40" font-weight="300" letter-spacing="5" fill="url(#gradText)">SSSAiCode</text>
+  <text x="256" y="425" text-anchor="middle" font-family="'HarmonyOS Sans SC', 'HarmonyOS Sans', 'PingFang SC', 'Segoe UI', sans-serif" font-size="40" font-weight="300" letter-spacing="5" fill="url(#gradText)">SSSAiCode</text>
 </svg>

@@ -57,7 +57,6 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/voice") ||
       path.startsWith("/config-migration") ||
       path.startsWith("/soul") ||
-      path.startsWith("/memory") ||
       path.startsWith("/cron") ||
       path.startsWith("/console") ||
       path.startsWith("/coding-agents"),
@@ -72,9 +71,9 @@ export const TOP_TABS: readonly TopTabDef[] = [
   {
     id: "externalMemory",
     num: "04",
-    label: "外置记忆",
-    href: "/memconfig",
-    matches: (path) => ["/memconfig", "/openviking", "/hindsight"].some((route) => isRoute(path, route)),
+    label: "记忆",
+    href: "/memory",
+    matches: (path) => ["/memory", "/memconfig", "/openviking", "/hindsight"].some((route) => isRoute(path, route)),
   },
   {
     id: "advanced",

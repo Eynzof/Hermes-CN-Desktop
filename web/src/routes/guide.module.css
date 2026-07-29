@@ -8,9 +8,7 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   color: var(--h-text);
-  background:
-    radial-gradient(circle at 82% -8%, color-mix(in srgb, var(--h-accent) 13%, transparent), transparent 36%),
-    var(--h-bg-app);
+  background: var(--h-bg-app);
   font-family: var(--h-font-ui);
 }
 
@@ -18,7 +16,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: calc(22px + var(--h-window-control-safe-top, 0px)) max(28px, calc((100vw - 1080px) / 2)) 22px;
+  padding: calc(24px + var(--h-window-control-safe-top, 0px)) max(28px, calc((100vw - 1080px) / 2)) 24px;
   border-bottom: 1px solid var(--h-line-soft);
   background: color-mix(in srgb, var(--h-bg-app) 94%, transparent);
 }
@@ -28,7 +26,7 @@
   width: 44px;
   height: 44px;
   flex: none;
-  border-radius: 12px;
+  border-radius: 0;
 }
 
 .header p,
@@ -52,7 +50,7 @@
 
 .header span {
   display: block;
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--h-text-2);
   font-size: 13px;
 }
@@ -67,9 +65,9 @@
 .externalSetup {
   padding: 28px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: color-mix(in srgb, var(--h-bg-pane) 97%, transparent);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, .07);
+  box-shadow: none;
 }
 
 .introCopy {
@@ -85,14 +83,14 @@
 
 .introCopy h2,
 .externalHeader h2 {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 20px;
   letter-spacing: -.02em;
 }
 
 .introCopy p,
 .externalHeader p {
-  margin-top: 7px;
+  margin-top: 8px;
   color: var(--h-text-2);
   font-size: 13px;
   line-height: 1.6;
@@ -121,18 +119,18 @@
   text-align: left;
   color: var(--h-text);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   background: var(--h-bg-soft);
   cursor: pointer;
-  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+  transition: border-color .16s ease, background-color .16s ease, transform .16s ease;
 }
 
 .choiceCard:hover:not(:disabled),
 .choiceCard:focus-visible,
 .choiceCard[data-active="true"] {
   border-color: var(--h-accent-border);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--h-accent) 12%, transparent);
-  transform: translateY(-2px);
+  box-shadow: none;
+  transform: translateY(-4px);
   outline: none;
 }
 
@@ -154,19 +152,19 @@
 
 .choiceIcon {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   place-items: center;
-  border-radius: 13px;
+  border-radius: 0;
   color: var(--h-accent);
   background: var(--h-bg-pane);
-  box-shadow: inset 0 0 0 1px var(--h-line-soft);
+  box-shadow: none;
 }
 
 .recommendedBadge,
 .advancedBadge {
-  padding: 5px 9px;
-  border-radius: 999px;
+  padding: 4px 8px;
+  border-radius: 0;
   font-size: 10px;
   font-weight: 700;
 }
@@ -179,7 +177,7 @@
 .advancedBadge {
   color: var(--h-text-2);
   background: var(--h-bg-pane);
-  box-shadow: inset 0 0 0 1px var(--h-line-soft);
+  box-shadow: none;
 }
 
 .choiceCard > strong {
@@ -188,7 +186,7 @@
 }
 
 .choiceLead {
-  min-height: 42px;
+  min-height: 44px;
   color: var(--h-text-2);
   font-size: 13px;
   line-height: 1.6;
@@ -205,7 +203,7 @@
 
 .choiceDetail svg {
   flex: none;
-  margin-top: 1px;
+  margin-top: 4px;
   color: var(--h-ok);
 }
 
@@ -213,14 +211,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  min-height: 38px;
+  gap: 8px;
+  height: var(--h-button-height-lg);
+  min-height: var(--h-button-height-lg);
   margin-top: 4px;
-  padding: 0 14px;
-  border-radius: var(--h-r-sm);
+  padding: 0 16px;
+  border-radius: 0;
   color: var(--h-text);
   background: var(--h-bg-pane);
-  box-shadow: inset 0 0 0 1px var(--h-line);
+  box-shadow: none;
   font-size: 12px;
   font-weight: 700;
 }
@@ -237,7 +236,7 @@
 
 .externalSetup {
   margin-top: 20px;
-  scroll-margin-top: 18px;
+  scroll-margin-top: 20px;
 }
 
 .externalHeader {
@@ -252,19 +251,19 @@
   display: grid;
   grid-template-columns: auto auto 1fr auto;
   align-items: center;
-  gap: 14px;
-  margin-top: 18px;
-  padding: 14px 18px;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 16px 20px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   color: var(--h-text-2);
   background: color-mix(in srgb, var(--h-bg-pane) 88%, transparent);
 }
 
 .support img {
-  width: 62px;
-  height: 62px;
-  border-radius: 7px;
+  width: 64px;
+  height: 64px;
+  border-radius: 0;
   object-fit: cover;
   background: white;
 }
@@ -292,8 +291,8 @@
 .support button {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 8px 10px;
+  gap: 4px;
+  padding: 8px 12px;
   color: var(--h-accent);
   border: 0;
   background: transparent;
@@ -301,18 +300,10 @@
   cursor: pointer;
 }
 
-.spin {
-  animation: spin .8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 @media (max-width: 760px) {
   .header {
-    padding-right: 18px;
-    padding-left: 18px;
+    padding-right: 20px;
+    padding-left: 20px;
   }
 
   .header h1 {

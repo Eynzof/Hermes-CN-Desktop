@@ -77,7 +77,7 @@ export function DesktopUpdateNotifier() {
         <Dialog.Overlay />
         <Dialog.Content className={s.dialog} aria-describedby="desktop-update-desc">
           <Dialog.Title className={s.title}>
-            <span className={s.titleIcon}><Sparkles size={17} aria-hidden="true" /></span>
+            <span className={s.titleIcon}><Sparkles size={16} aria-hidden="true" /></span>
             发现 Hermes Agent 桌面端新版本
           </Dialog.Title>
           <Dialog.Description id="desktop-update-desc" className={s.body}>
@@ -98,7 +98,7 @@ export function DesktopUpdateNotifier() {
           <div className={s.actions}>
             <button className={s.btn} type="button" onClick={close}>本版本不再提醒</button>
             <button className={s.btnPrimary} type="button" onClick={() => void download()}>
-              <Download size={13} /> 去官网下载
+              <Download size={12} /> 去官网下载
             </button>
           </div>
         </Dialog.Content>
