@@ -223,6 +223,7 @@ async function invokeCommand<T = any>(command: string, args?: Record<string, unk
 
 export interface TeamDeviceTokenStatus {
   configured: boolean;
+  invalidated?: boolean;
   syncedModels: number;
   syncedSkills: number;
 }

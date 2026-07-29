@@ -40,6 +40,43 @@
   color: var(--h-text-2);
 }
 
+.progressPanel {
+  width: min(360px, 72vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progressTrack {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--h-line);
+}
+
+.progressBar {
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--h-accent);
+  animation: bootTokenProgress 1.15s ease-in-out infinite;
+}
+
+.progressStages {
+  color: var(--h-text-4);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+@keyframes bootTokenProgress {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(340%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressBar { animation-duration: 2.5s; }
+}
+
 .hint {
   font-size: 12px;
   color: var(--h-text-4);

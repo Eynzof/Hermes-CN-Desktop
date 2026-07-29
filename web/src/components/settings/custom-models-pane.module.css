@@ -179,6 +179,15 @@
   background: var(--h-text);
 }
 
+.btn[data-variant="danger"] {
+  color: var(--h-err);
+  border-color: var(--h-color-danger-border);
+}
+
+.btn[data-variant="danger"]:hover:not(:disabled) {
+  background: var(--h-color-danger-bg);
+}
+
 .btn:disabled {
   opacity: 0.55;
   cursor: default;

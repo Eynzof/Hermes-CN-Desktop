@@ -51,7 +51,12 @@ export function DeviceTokenDialog({
     setError("");
     setNotice("");
     void getTeamDeviceTokenStatus()
-      .then(setStatus)
+      .then((next) => {
+        setStatus(next);
+        if (next.invalidated) {
+          setError("已保存的设备令牌已失效，请输入新令牌或清除令牌。");
+        }
+      })
       .catch((err) =>
         setError(err instanceof Error ? err.message : "无法读取设备令牌状态。"),
       );
@@ -87,7 +92,7 @@ export function DeviceTokenDialog({
     try {
       await clearTeamDeviceToken();
       setDeviceToken("");
-      setStatus({ configured: false, syncedModels: 0, syncedSkills: 0 });
+      setStatus({ configured: false, invalidated: false, syncedModels: 0, syncedSkills: 0 });
       dismissTeamDeviceTokenOnboarding();
       if (isStartup) {
         onSkip?.();

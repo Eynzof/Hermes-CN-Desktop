@@ -6,9 +6,11 @@ import s from "./boot-splash.module.css";
 export function BootSplash({
   statusText: statusOverride,
   hint = "启动完成后会自动进入工作台",
+  progressStages,
 }: {
   statusText?: string;
   hint?: string;
+  progressStages?: string;
 } = {}) {
   const lifecycle = runtime.getManagedRuntimeLifecycleState();
   const statusText = statusOverride ?? (
@@ -26,6 +28,14 @@ export function BootSplash({
       <div className={s.status} role="status">
         {statusText}
       </div>
+      {progressStages ? (
+        <div className={s.progressPanel}>
+          <div className={s.progressTrack} role="progressbar" aria-label="企业设备令牌加载进度">
+            <div className={s.progressBar} />
+          </div>
+          <div className={s.progressStages}>{progressStages}</div>
+        </div>
+      ) : null}
       <div className={s.hint}>{hint}</div>
     </div>
   );

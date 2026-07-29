@@ -31,6 +31,8 @@ import {
   type EnterpriseSyncMeta,
 } from "@/lib/enterprise-sync";
 import { savedCustomProviderIdsFromConfig } from "@/lib/model-provider-visibility";
+import { clearTeamDeviceToken } from "@/lib/tauri-bridge";
+import { dismissTeamDeviceTokenOnboarding } from "@/stores/auth";
 import s from "./custom-models-pane.module.css";
 
 /* ── 工具 ─────────────────────────────────────────────────────── */
@@ -341,24 +343,30 @@ function EnterpriseSection() {
     }
   };
 
-  const handleUnbind = async () => {
-    if (!binding) return;
+  const handleClearToken = async () => {
     setBusy(true);
     setError("");
     try {
-      const currentConfig = config ?? (await configQuery.refetch()).data;
-      if (!currentConfig) {
-        setError("配置加载失败，请确认工作台已连接后重试。");
-        return;
+      if (binding) {
+        const currentConfig = config ?? (await configQuery.refetch()).data;
+        if (!currentConfig) {
+          setError("配置加载失败，请确认工作台已连接后重试。");
+          return;
+        }
+        const next = applyEnterpriseSync(currentConfig, binding, { cleanupOnly: true });
+        await saveConfig.mutateAsync(next);
       }
-      const next = applyEnterpriseSync(currentConfig, binding, { cleanupOnly: true });
-      await saveConfig.mutateAsync(next);
+      if (window.__TAURI_INTERNALS__ != null) {
+        await clearTeamDeviceToken();
+      }
+      setDeviceToken("");
       setBinding(null);
       setMeta(null);
       writeEnterpriseBinding(null);
       writeEnterpriseSyncMeta(null);
+      dismissTeamDeviceTokenOnboarding();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "清理失败，请稍后重试。");
+      setError(err instanceof Error ? err.message : "清除令牌失败，请稍后重试。");
     } finally {
       setBusy(false);
     }
@@ -408,11 +416,16 @@ function EnterpriseSection() {
             <RefreshCw size={13} />
             {busy ? "同步中…" : binding ? "重新同步" : "绑定并同步"}
           </button>
-          {binding ? (
-            <button type="button" className={s.btn} onClick={() => void handleUnbind()} disabled={busy}>
-              解除绑定
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={s.btn}
+            data-variant="danger"
+            onClick={() => void handleClearToken()}
+            disabled={busy}
+          >
+            <Trash2 size={13} />
+            清除令牌
+          </button>
         </div>
         <div className={s.syncMeta}>
           {meta

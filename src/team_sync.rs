@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 use zip::ZipArchive;
 
 const TOKEN_FILE: &str = ".team-device-token";
+const INVALID_TOKEN_FILE: &str = ".team-device-token-invalid";
 const STATE_FILE: &str = ".team-sync-state.json";
 const MAX_MANIFEST: usize = 10 * 1024 * 1024;
 const MAX_SKILL: usize = 100 * 1024 * 1024;
@@ -68,6 +69,7 @@ struct SyncState {
 #[serde(rename_all = "camelCase")]
 pub struct TeamSyncStatus {
     pub configured: bool,
+    pub invalidated: bool,
     pub synced_models: usize,
     pub synced_skills: usize,
 }
@@ -114,6 +116,7 @@ fn status_for_home(home: &Path) -> TeamSyncStatus {
         // committed; otherwise one failed first-run attempt suppresses the
         // onboarding dialog forever.
         configured: read_token(home).is_some() && state.is_some(),
+        invalidated: home.join(INVALID_TOKEN_FILE).is_file(),
         synced_models: state.as_ref().map_or(0, |value| value.models.len()),
         synced_skills: state.as_ref().map_or(0, |value| value.skills.len()),
     }
@@ -378,6 +381,7 @@ pub async fn sync_home(home: &Path, token: &str) -> Result<TeamSyncStatus, Strin
     )?;
     Ok(TeamSyncStatus {
         configured: true,
+        invalidated: false,
         synced_models: state.models.len(),
         synced_skills: state.skills.len(),
     })
@@ -418,6 +422,7 @@ pub async fn set_team_device_token(
             return Err(crate::error::AppError::ProxyError(error));
         }
     };
+    let _ = fs::remove_file(home.join(INVALID_TOKEN_FILE));
     // The managed runtime reads config.yaml at process start. Restart it so a
     // first-time token takes effect immediately, matching the WorkBuddy
     // launcher's "sync before launch" behaviour.
@@ -433,6 +438,7 @@ pub async fn clear_team_device_token(
 ) -> Result<(), crate::error::AppError> {
     let home = { state.inner.lock()?.hermes_home.clone() };
     let _ = fs::remove_file(token_path(Path::new(&home)));
+    let _ = fs::remove_file(Path::new(&home).join(INVALID_TOKEN_FILE));
     let _ = clear_managed(Path::new(&home));
     if let Err(error) = crate::commands::runtime_manager::restart_dashboard(&state).await {
         log::warn!("Team device unbind succeeded but dashboard restart failed: {error}");
@@ -480,11 +486,15 @@ fn clear_managed(home: &Path) -> Result<(), String> {
 pub async fn sync_if_configured(home: &str) -> Result<(), String> {
     if let Some(token) = read_token(Path::new(home)) {
         match sync_home(Path::new(home), &token).await {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                let _ = fs::remove_file(Path::new(home).join(INVALID_TOKEN_FILE));
+                Ok(())
+            }
             Err(error) => {
                 if error.contains("rejected") || error.contains("disabled") {
                     let _ = fs::remove_file(token_path(Path::new(home)));
                     let _ = clear_managed(Path::new(home));
+                    let _ = atomic_write(&Path::new(home).join(INVALID_TOKEN_FILE), b"invalid\n");
                 }
                 Err(error)
             }
@@ -579,6 +589,17 @@ mod tests {
         let status = status_for_home(home);
         assert!(!status.configured);
         assert_eq!(status.synced_models, 1);
+    }
+
+    #[test]
+    fn status_reports_a_token_invalidated_during_startup_sync() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let home = temp.path();
+        atomic_write(&home.join(INVALID_TOKEN_FILE), b"invalid\n").unwrap();
+
+        let status = status_for_home(home);
+        assert!(!status.configured);
+        assert!(status.invalidated);
     }
 
     #[test]

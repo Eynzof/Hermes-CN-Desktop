@@ -133,7 +133,7 @@ export function App() {
   const platform = usePlatform();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
   const gate = useBackendGate();
-  const [teamTokenGate, setTeamTokenGate] = useState<"checking" | "prompt" | "done">(
+  const [teamTokenGate, setTeamTokenGate] = useState<"checking" | "loading" | "prompt" | "done">(
     () => window.__TAURI_INTERNALS__ == null ? "done" : "checking",
   );
   useEffect(() => {
@@ -153,7 +153,12 @@ export function App() {
         // it here; every launch with no token therefore reopened the dialog.
         if (status.configured) {
           resetTeamDeviceTokenOnboarding();
-          setTeamTokenGate("done");
+          setTeamTokenGate("loading");
+        } else if (status.invalidated) {
+          // A rejected/revoked token must override an earlier "skip" choice.
+          // The user needs a replacement token or an explicit clear action.
+          resetTeamDeviceTokenOnboarding();
+          setTeamTokenGate("prompt");
         } else if (isTeamDeviceTokenOnboardingDismissed()) {
           setTeamTokenGate("done");
         } else {
@@ -165,6 +170,11 @@ export function App() {
       });
     return () => { cancelled = true; };
   }, [gate, teamTokenGate]);
+  useEffect(() => {
+    if (teamTokenGate !== "loading") return;
+    const timer = window.setTimeout(() => setTeamTokenGate("done"), 900);
+    return () => window.clearTimeout(timer);
+  }, [teamTokenGate]);
 
   let content: ReactNode;
   if (gate === "booting") {
@@ -175,8 +185,9 @@ export function App() {
     content = (
       <>
         <BootSplash
-          statusText="工作台已就绪"
-          hint="可连接企业设备，也可以直接进入工作台"
+          statusText={teamTokenGate === "loading" ? "设备令牌有效，正在加载企业配置…" : "工作台已就绪"}
+          hint={teamTokenGate === "loading" ? "加载完成后将自动进入工作台" : "可连接企业设备，也可以直接进入工作台"}
+          progressStages={teamTokenGate === "loading" ? "令牌验证 · 企业模型 · Skills · 进入工作台" : undefined}
         />
         {teamTokenGate === "prompt" ? (
           <DeviceTokenDialog
