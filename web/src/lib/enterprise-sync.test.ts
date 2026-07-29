@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   applyEnterpriseSync,
+  deviceTokenManagementUrl,
   ENTERPRISE_PROVIDER_PREFIX,
   enterpriseProviderId,
 } from "./enterprise-sync";
 
 const BINDING = { serverUrl: "http://localhost:3100", deviceToken: "wbd_test_token" };
+
+describe("deviceTokenManagementUrl", () => {
+  it("points to the WorkBuddy device management page", () => {
+    expect(deviceTokenManagementUrl("https://team.example.com/"))
+      .toBe("https://team.example.com/workbuddy");
+  });
+});
 
 function baseConfig(): Record<string, any> {
   return {

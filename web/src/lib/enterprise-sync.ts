@@ -18,6 +18,10 @@ import { BRAND } from "./brand.generated";
 export const DEFAULT_TEAM_SERVER_URL = BRAND.teamServiceUrl;
 export const ENTERPRISE_PROVIDER_PREFIX = "custom:team-";
 
+export function deviceTokenManagementUrl(serverUrl = DEFAULT_TEAM_SERVER_URL): string {
+  return `${serverUrl.trim().replace(/\/+$/, "")}/workbuddy`;
+}
+
 export interface EnterpriseBinding {
   serverUrl: string;
   deviceToken: string;

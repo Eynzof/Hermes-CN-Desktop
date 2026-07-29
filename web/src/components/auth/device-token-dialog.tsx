@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { Dialog } from "@hermes/shared-ui";
-import { ArrowRight, Eye, EyeOff, KeyRound, X } from "lucide-react";
+import { ArrowRight, ExternalLink, Eye, EyeOff, KeyRound, Trash2, X } from "lucide-react";
 import {
   deviceTokenDialogOpenAtom,
   dismissTeamDeviceTokenOnboarding,
@@ -13,6 +13,8 @@ import {
   setTeamDeviceToken,
   type TeamDeviceTokenStatus,
 } from "@/lib/tauri-bridge";
+import { deviceTokenManagementUrl } from "@/lib/enterprise-sync";
+import { openExternalUrl } from "@/lib/external-links";
 import s from "./device-token-dialog.module.css";
 
 export interface DeviceTokenDialogProps {
@@ -37,6 +39,7 @@ export function DeviceTokenDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const managementUrl = deviceTokenManagementUrl();
 
   const setOpen = (next: boolean) => {
     if (controlledOpen !== undefined || (isStartup && !next)) return;
@@ -83,9 +86,14 @@ export function DeviceTokenDialog({
     setNotice("");
     try {
       await clearTeamDeviceToken();
+      setDeviceToken("");
       setStatus({ configured: false, syncedModels: 0, syncedSkills: 0 });
       dismissTeamDeviceTokenOnboarding();
-      setNotice("已解除企业设备绑定，本地下发内容已清理。");
+      if (isStartup) {
+        onSkip?.();
+      } else {
+        setNotice("设备令牌已清除，本地下发内容已清理。");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "解除绑定失败，请重试。");
     } finally {
@@ -129,6 +137,30 @@ export function DeviceTokenDialog({
               if (!busy) void handleSave();
             }}
           >
+            <div className={s.field}>
+              <span className={s.label}>连接地址</span>
+              <div className={s.addressRow}>
+                <input
+                  className={`${s.input} ${s.addressInput}`}
+                  value={managementUrl}
+                  readOnly
+                  aria-label="设备令牌连接地址"
+                />
+                <button
+                  type="button"
+                  className={s.visit}
+                  disabled={busy}
+                  onClick={() => void openExternalUrl(managementUrl)}
+                >
+                  <ExternalLink size={14} aria-hidden="true" />
+                  访问
+                </button>
+              </div>
+              <span className={s.adminHint}>
+                提示：只有企业管理员才能访问该页面并获取设备令牌；没有令牌请联系管理员。
+              </span>
+            </div>
+
             <label className={s.field}>
               <span className={s.label}>设备令牌</span>
               <span className={s.passwordWrap}>
@@ -161,6 +193,24 @@ export function DeviceTokenDialog({
             {error ? <div className={s.error}>{error}</div> : null}
             {notice ? <div className={s.notice}>{notice}</div> : null}
 
+            {busy ? (
+              <div className={s.progressPanel} role="status" aria-live="polite">
+                <div className={s.progressText}>
+                  {isStartup ? "正在验证令牌并准备进入工作台…" : "正在验证令牌并同步企业配置…"}
+                </div>
+                <div
+                  className={s.progressTrack}
+                  role="progressbar"
+                  aria-label="设备令牌验证与同步进度"
+                >
+                  <div className={s.progressBar} />
+                </div>
+                <div className={s.progressStages}>
+                  {isStartup ? "安全连接 · 配置同步 · 进入工作台" : "安全连接 · 配置校验 · 完成同步"}
+                </div>
+              </div>
+            ) : null}
+
             <button type="submit" className={s.submit} disabled={busy}>
               {busy
                 ? "正在验证并同步..."
@@ -176,16 +226,15 @@ export function DeviceTokenDialog({
                 跳过，进入工作台
               </button>
             ) : null}
-            {status?.configured ? (
-              <button
-                type="button"
-                className={s.secondary}
-                disabled={busy}
-                onClick={() => void handleClear()}
-              >
-                解除设备绑定
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className={s.secondary}
+              disabled={busy}
+              onClick={() => void handleClear()}
+            >
+              <Trash2 size={13} aria-hidden="true" />
+              清除令牌
+            </button>
           </form>
         </Dialog.Content>
       </Dialog.Portal>

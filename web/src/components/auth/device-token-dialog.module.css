@@ -1,6 +1,6 @@
 .dialog.dialog {
-  width: min(420px, 92vw);
-  max-width: min(420px, 92vw);
+  width: min(480px, 92vw);
+  max-width: min(480px, 92vw);
   background: var(--h-bg-app);
   border-radius: var(--h-radius-xl);
   padding: 26px 26px 24px;
@@ -64,6 +64,35 @@
 }
 
 .input:focus { border-color: var(--h-accent-border); }
+.addressRow { display: flex; align-items: stretch; gap: 8px; }
+.addressInput {
+  min-width: 0;
+  flex: 1;
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 12.5px;
+}
+
+.visit {
+  min-width: 78px;
+  height: 36px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-md);
+  background: var(--h-bg-soft);
+  color: var(--h-text-2);
+  font-family: var(--h-font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.visit:hover:not(:disabled) { color: var(--h-text); border-color: var(--h-accent-border); }
+.visit:disabled { opacity: 0.55; cursor: default; }
+.adminHint { color: var(--h-warn); font-size: 12px; line-height: 1.45; }
 .passwordWrap { position: relative; display: block; }
 .passwordWrap .input { padding-right: 34px; }
 
@@ -95,6 +124,43 @@
 .error { color: var(--h-err); background: var(--h-color-danger-bg); border: 1px solid var(--h-color-danger-border); }
 .notice { color: var(--h-ok); background: var(--h-color-success-bg); border: 1px solid var(--h-color-success-border); }
 .status { color: var(--h-text-3); background: var(--h-bg-soft); }
+
+.progressPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-radius-md);
+  background: var(--h-bg-soft);
+}
+
+.progressText { color: var(--h-text-2); font-size: 12.5px; font-weight: 600; text-align: center; }
+.progressTrack {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--h-line);
+}
+
+.progressBar {
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--h-accent);
+  animation: deviceTokenProgress 1.15s ease-in-out infinite;
+}
+
+.progressStages { color: var(--h-text-4); font-size: 11.5px; text-align: center; }
+
+@keyframes deviceTokenProgress {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(340%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressBar { animation-duration: 2.5s; }
+}
 
 .submit {
   margin-top: 4px;
@@ -138,6 +204,10 @@
   font-size: 13px;
   cursor: pointer;
   font-family: var(--h-font-ui);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .secondary:hover:not(:disabled) { background: var(--h-color-danger-bg); }
