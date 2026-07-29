@@ -22,7 +22,7 @@ import { useSession, useSessionMessages, useSessions } from "@/hooks/use-session
 import { useSkills } from "@/hooks/use-skills";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { useGateway } from "@/hooks/use-gateway";
-import { useConfig, useModelInfo } from "@/hooks/use-config";
+import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { useComposerTimer } from "@/hooks/use-composer-timer";
 import { useStallWatchdog } from "@/hooks/use-stall-watchdog";
@@ -42,6 +42,7 @@ import {
   estimateRenderedContextTokens,
 } from "@/lib/context-usage";
 import { resolveModelContextWindow } from "@/lib/model-context";
+import { ensureBrandProviderModelDeclared } from "@/lib/provider-catalog";
 import { reasoningEffortFromConfig, type ReasoningEffort } from "@/lib/reasoning-effort";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
@@ -119,6 +120,7 @@ export function DetailRoute() {
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
+  const saveConfig = useSaveConfig();
   const { data: modelInfo } = useModelInfo();
   const { data: modelOptionsCache } = useModelOptions();
   const skillsQuery = useSkills();
@@ -528,6 +530,18 @@ export function DetailRoute() {
   );
 
   const onModelSelect = useCallback(async (selection: ComposerModelSelection) => {
+    if (config) {
+      const nextConfig = ensureBrandProviderModelDeclared(
+        config,
+        selection.provider,
+        selection.model,
+      );
+      if (nextConfig && nextConfig !== config) {
+        // The session switch is validated against the persisted provider
+        // declaration, so save the brand alias before calling config.set.
+        await saveConfig.mutateAsync(nextConfig);
+      }
+    }
     const gatewaySessionId = await ensureGatewaySession();
     await setSessionModel(gatewaySessionId, selection.model, selection.provider);
     setSelectedModel({
@@ -538,7 +552,7 @@ export function DetailRoute() {
     await getSessionUsage(gatewaySessionId)
       .then(setSessionUsage)
       .catch(() => {});
-  }, [config, ensureGatewaySession, getSessionUsage, setSessionModel, setSessionUsage]);
+  }, [config, ensureGatewaySession, getSessionUsage, saveConfig, setSessionModel, setSessionUsage]);
 
   const onConfigureProvider = useCallback((providerId: string) => {
     navigate(`/models#provider-${providerId}`);

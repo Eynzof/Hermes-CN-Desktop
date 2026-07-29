@@ -47,6 +47,8 @@ import {
 } from "@/stores/settings-dialog";
 import { getTeamDeviceTokenStatus } from "@/lib/tauri-bridge";
 import {
+  dismissTeamDeviceTokenOnboarding,
+  isTeamDeviceTokenOnboardingDismissed,
   resetTeamDeviceTokenOnboarding,
 } from "@/stores/auth";
 
@@ -146,8 +148,13 @@ export function App() {
     void getTeamDeviceTokenStatus()
       .then((status) => {
         if (cancelled) return;
+        // A skipped startup prompt is a persisted user choice.  Previously we
+        // only reset the flag after a successful binding, but never consulted
+        // it here; every launch with no token therefore reopened the dialog.
         if (status.configured) {
           resetTeamDeviceTokenOnboarding();
+          setTeamTokenGate("done");
+        } else if (isTeamDeviceTokenOnboardingDismissed()) {
           setTeamTokenGate("done");
         } else {
           setTeamTokenGate("prompt");
@@ -177,6 +184,7 @@ export function App() {
             open
             onConnected={() => setTeamTokenGate("done")}
             onSkip={() => {
+              dismissTeamDeviceTokenOnboarding();
               setTeamTokenGate("done");
             }}
           />

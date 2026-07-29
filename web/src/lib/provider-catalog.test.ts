@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchExternalJSON } from "./transport";
+import { BRAND } from "./brand.generated";
 import {
   BUILTIN_PROVIDER_CATALOG,
   buildCurrentModelConfigUpdate,
@@ -12,6 +13,7 @@ import {
   chatEndpointPreviewUrl,
   customProviderPresetsFromConfig,
   detectCustomApiModeFromUrl,
+  ensureBrandProviderModelDeclared,
   fetchRemoteProviderCatalog,
   mergeProviderCatalog,
   getProviderCredentialPreview,
@@ -36,6 +38,40 @@ const mockedFetchExternalJSON = vi.mocked(fetchExternalJSON);
 
 beforeEach(() => {
   mockedFetchExternalJSON.mockReset();
+});
+
+describe("ensureBrandProviderModelDeclared", () => {
+  it("pins a hidden brand alias and disables live discovery", () => {
+    const providerId = `custom:${BRAND.providerKey}`;
+    const config = {
+      providers: {
+        [providerId]: {
+          name: BRAND.appName,
+          base_url: `${BRAND.serviceUrl}v1`,
+          api_key: "sk-test",
+          models: { "deepseek-v4-flash": {} },
+        },
+      },
+    };
+
+    const next = ensureBrandProviderModelDeclared(config, providerId, "claude-opus-5");
+    expect(next?.providers[providerId]).toMatchObject({
+      discover_models: false,
+      models: {
+        "deepseek-v4-flash": {},
+        "claude-opus-5": {},
+      },
+    });
+  });
+
+  it("does not create or modify unrelated providers", () => {
+    const config = {
+      providers: {
+        "custom:other": { base_url: "https://example.com/v1", models: {} },
+      },
+    };
+    expect(ensureBrandProviderModelDeclared(config, "custom:other", "claude-opus-5")).toBe(config);
+  });
 });
 
 describe("provider catalog config updates", () => {

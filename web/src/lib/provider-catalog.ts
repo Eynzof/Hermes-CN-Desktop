@@ -1,4 +1,5 @@
 import { fetchExternalJSON } from "./transport";
+import { BRAND } from "./brand.generated";
 
 export type ProviderTransport = "openai_chat" | "anthropic_messages" | "codex_responses";
 export type ProviderApiMode = "chat_completions" | "anthropic_messages" | "codex_responses";
@@ -1340,6 +1341,68 @@ function legacyCustomProviderIndex(config: Record<string, any> | undefined, prov
   });
 }
 
+/**
+ * Brand account providers are allowed to expose aliases that are not returned
+ * by the relay's `/v1/models` catalog (for example a vendor-side Claude alias).
+ * Core rejects a model switch when the alias is neither in the live catalog nor
+ * explicitly declared in the provider config.  Pin the selected alias in the
+ * config and turn off live discovery for that managed provider so the desktop
+ * can still switch to the model the brand intentionally advertises.
+ *
+ * This only touches an already-configured brand provider; it never creates a
+ * provider or invents credentials.  It is therefore safe to call immediately
+ * before a session-scoped model switch.
+ */
+export function ensureBrandProviderModelDeclared(
+  config: Record<string, any> | undefined,
+  providerId: string | undefined,
+  modelId: string,
+): Record<string, any> | undefined {
+  const provider = String(providerId ?? "").trim().toLowerCase();
+  const brandIds = new Set([
+    `custom:${BRAND.providerKey}`.toLowerCase(),
+    `custom:${BRAND.providerKey}-messages`.toLowerCase(),
+  ]);
+  if (!config || !brandIds.has(provider) || !modelId.trim()) return config;
+
+  const entry = getProviderEntry(config, provider);
+  if (!configuredProviderBaseUrl(entry)) return config;
+
+  const models = asRecord(entry.models);
+  const model = modelId.trim();
+  const nextModels = {
+    ...models,
+    ...(Object.hasOwn(models, model) ? {} : { [model]: {} }),
+  };
+  const nextEntry = {
+    ...entry,
+    models: nextModels,
+    discover_models: false,
+  };
+
+  const configKey = providerConfigKey(config, provider);
+  if (configKey) {
+    return {
+      ...config,
+      providers: {
+        ...asRecord(config.providers),
+        [configKey]: nextEntry,
+      },
+    };
+  }
+
+  const legacyIndex = legacyCustomProviderIndex(config, provider);
+  if (legacyIndex >= 0) {
+    const customProviders = Array.isArray(config.custom_providers)
+      ? [...config.custom_providers]
+      : [];
+    customProviders[legacyIndex] = nextEntry;
+    return { ...config, custom_providers: customProviders };
+  }
+
+  return config;
+}
+
 export function getProviderEntry(config: Record<string, any> | undefined, providerId: string): Record<string, any> {
   const configKey = providerConfigKey(config, providerId);
   if (configKey) return asRecord(asRecord(config?.providers)[configKey]);
@@ -1442,6 +1505,16 @@ export function buildProviderSettingsUpdate(
     String(existingProvider.api_key || existingModel.api_key || "");
   const baseUrl = input.baseUrl.trim() || preset.baseUrl;
   const model = input.model.trim() || preset.defaultModel;
+  const isBrandProvider = new Set([
+    `custom:${BRAND.providerKey}`.toLowerCase(),
+    `custom:${BRAND.providerKey}-messages`.toLowerCase(),
+  ]).has(preset.id.trim().toLowerCase());
+  const declaredModels = cleanModels(preset.models);
+  if (isBrandProvider && model) {
+    // Brand aliases may be intentionally hidden from the relay catalog. Keep
+    // the selected alias declared so Core's model switch does not reject it.
+    declaredModels[model] ??= {};
+  }
   const providerEntry: Record<string, any> = {
     ...existingProvider,
     name: preset.name,
@@ -1449,7 +1522,8 @@ export function buildProviderSettingsUpdate(
     api_mode: preset.apiMode,
     transport: preset.transport,
     model,
-    models: cleanModels(preset.models),
+    models: declaredModels,
+    ...(isBrandProvider ? { discover_models: false } : {}),
   };
 
   if (nextApiKey) providerEntry.api_key = nextApiKey;

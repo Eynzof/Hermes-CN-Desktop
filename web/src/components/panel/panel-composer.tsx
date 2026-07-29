@@ -9,6 +9,7 @@ import { useSkills } from "@/hooks/use-skills";
 import { useSessions } from "@/hooks/use-sessions";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { resolveModelContextWindow } from "@/lib/model-context";
+import { ensureBrandProviderModelDeclared } from "@/lib/provider-catalog";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { composerSubmitShortcutHint } from "@/lib/composer-submit-shortcut";
@@ -132,7 +133,21 @@ export function PanelComposer() {
     [config, contextSelection, modelInfo?.auto_context_length, modelInfo?.effective_context_length],
   );
 
-  const onModelSelect = useCallback((selection: ComposerModelSelection) => {
+  const onModelSelect = useCallback(async (selection: ComposerModelSelection) => {
+    // Brand catalogs intentionally include stable aliases that may be hidden
+    // from the relay's `/v1/models` response.  Declare the selected alias
+    // before the session config.set reaches Core; otherwise Core rejects the
+    // switch as an unverified custom-endpoint model.
+    if (config) {
+      const nextConfig = ensureBrandProviderModelDeclared(
+        config,
+        selection.provider,
+        selection.model,
+      );
+      if (nextConfig && nextConfig !== config) {
+        await saveConfig.mutateAsync(nextConfig);
+      }
+    }
     const enriched: ComposerModelSelection = {
       ...selection,
       contextWindow: resolveModelContextWindow(config, selection),
@@ -140,17 +155,22 @@ export function PanelComposer() {
     setSelectedModel(enriched);
     rememberLastUsedModel(enriched);
     recordModelUsage(enriched);
-  }, [config]);
+  }, [config, saveConfig]);
 
   const onConfigureProvider = useCallback((providerId: string) => {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
 
-  const onSelectAndSetDefault = useCallback((selection: ComposerModelSelection) => {
-    onModelSelect(selection);
+  const onSelectAndSetDefault = useCallback(async (selection: ComposerModelSelection) => {
+    await onModelSelect(selection);
     if (!config) return;
-    saveConfig.mutate({
-      ...config,
+    const declaredConfig = ensureBrandProviderModelDeclared(
+      config,
+      selection.provider,
+      selection.model,
+    ) ?? config;
+    await saveConfig.mutateAsync({
+      ...declaredConfig,
       model: {
         ...(typeof config.model === "object" && config.model !== null && !Array.isArray(config.model)
           ? config.model as Record<string, unknown>
