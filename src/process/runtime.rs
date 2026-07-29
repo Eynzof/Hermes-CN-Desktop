@@ -721,6 +721,12 @@ const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
     "-----END PUBLIC KEY-----\n"
 );
 
+const DEFAULT_MIRROR_SOURCES: &[&str] = &[
+    "https://ghproxy.net/https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download",
+    "https://ghproxy.com/https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download",
+    "https://gh.api.99988866.xyz/https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download",
+];
+
 fn configured_manifest_url() -> Option<String> {
     // 1. Fully-formed URL via runtime env (highest precedence)
     if let Ok(explicit) = std::env::var("HERMES_RUNTIME_UPDATE_MANIFEST_URL") {
@@ -765,6 +771,53 @@ fn configured_manifest_url() -> Option<String> {
     ))
 }
 
+fn build_manifest_url_from_base(base: &str) -> String {
+    let base = if base.ends_with('/') {
+        base.trim_end_matches('/').to_string()
+    } else {
+        base.to_string()
+    };
+    let channel = std::env::var("HERMES_RUNTIME_UPDATE_CHANNEL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| BAKED_MANIFEST_CHANNEL.map(|s| s.to_string()))
+        .unwrap_or_else(|| DEFAULT_CHANNEL.to_string());
+    format!(
+        "{}/{}-{}-{}.json",
+        base,
+        channel,
+        current_platform(),
+        current_arch()
+    )
+}
+
+fn get_manifest_candidates() -> Vec<String> {
+    let mut candidates = Vec::new();
+
+    if let Some(primary) = configured_manifest_url() {
+        candidates.push(primary);
+    }
+
+    if let Ok(mirror_prefix) = std::env::var("HERMES_UPDATE_MIRROR") {
+        let trimmed = mirror_prefix.trim();
+        if !trimmed.is_empty() {
+            let mirror_url = build_manifest_url_from_base(trimmed);
+            if !candidates.contains(&mirror_url) {
+                candidates.push(mirror_url);
+            }
+        }
+    }
+
+    for mirror_source in DEFAULT_MIRROR_SOURCES {
+        let mirror_url = build_manifest_url_from_base(mirror_source);
+        if !candidates.contains(&mirror_url) {
+            candidates.push(mirror_url);
+        }
+    }
+
+    candidates
+}
+
 fn configured_public_key() -> Option<String> {
     // 1. PEM via runtime env (highest precedence)
     if let Ok(direct) = std::env::var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM") {
@@ -794,9 +847,10 @@ fn configured_public_key() -> Option<String> {
 pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
     let current = read_current_record();
     let external_allowed = crate::process::dashboard::external_agent_allowed();
+    let external_command = std::env::var("HERMES_DESKTOP_AGENT_COMMAND").ok();
     let mode = if current.is_some() {
         "managed"
-    } else if external_allowed && std::env::var("HERMES_DESKTOP_AGENT_COMMAND").is_ok() {
+    } else if external_allowed && external_command.is_some() {
         "external-command"
     } else if external_allowed {
         "external-path"
@@ -804,20 +858,28 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         "managed-pending"
     };
 
+    let effective_current = if current.is_some() {
+        current
+    } else if mode == "external-command" || mode == "external-path" {
+        external_runtime_record(external_command.as_deref())
+    } else {
+        None
+    };
+
     let manifest_url = configured_manifest_url();
-    let executable_sha256 = current
+    let executable_sha256 = effective_current
         .as_ref()
         .and_then(|record| file_sha256(Path::new(&record.executable_path)));
-    let source = current.as_ref().and_then(runtime_source_info);
+    let source = effective_current.as_ref().and_then(runtime_source_info);
     let control = crate::desktop_control::read();
     let lifecycle =
-        crate::desktop_control::managed_runtime_lifecycle_state(current.is_some(), false);
+        crate::desktop_control::managed_runtime_lifecycle_state(effective_current.is_some(), false);
     RuntimeInfo {
         mode: mode.to_string(),
         packaged: false, // Tauri's `is_packaged` equivalent checked at runtime
         platform: current_platform().to_string(),
         arch: current_arch().to_string(),
-        current,
+        current: effective_current,
         runtime_root: runtime_root().to_string_lossy().to_string(),
         current_record_path: current_record_path_display(),
         versions_dir: versions_dir_display(),
@@ -833,6 +895,90 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         managed_runtime_desired_state: control.managed_runtime_desired_state.as_str().to_string(),
         managed_runtime_lifecycle_state: lifecycle.to_string(),
     }
+}
+
+fn external_runtime_record(external_command: Option<&str>) -> Option<RuntimeInstallRecord> {
+    let cmd = external_command?;
+    let output = StdCommand::new(cmd)
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{}\n{}", stdout.trim(), stderr.trim());
+
+    let runtime_version = extract_version(&combined).unwrap_or_else(|| "unknown".to_string());
+    let kernel_version = extract_kernel_version(&combined).unwrap_or_else(|| runtime_version.clone());
+    let source_commit = extract_commit(&combined);
+    let installed_at = chrono_now();
+
+    Some(RuntimeInstallRecord {
+        schema_version: MANIFEST_SCHEMA_VERSION,
+        runtime_version,
+        kernel_version,
+        runtime_flavor: "external".to_string(),
+        runtime_revision: 0,
+        platform: current_platform().to_string(),
+        arch: current_arch().to_string(),
+        path: cmd.to_string(),
+        executable_path: cmd.to_string(),
+        source: "external".to_string(),
+        installed_at,
+        source_repo: Some("external-agent".to_string()),
+        source_commit,
+        local_dirty_hash: None,
+        artifact_sha256: None,
+        previous_runtime_version: None,
+    })
+}
+
+fn extract_version(input: &str) -> Option<String> {
+    for line in input.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("Hermes Agent v") {
+            let version_end = rest.find(' ').unwrap_or(rest.len());
+            return Some(rest[..version_end].to_string());
+        }
+        if let Some(rest) = trimmed.strip_prefix("hermes-agent v") {
+            let version_end = rest.find(' ').unwrap_or(rest.len());
+            return Some(rest[..version_end].to_string());
+        }
+    }
+    None
+}
+
+fn extract_kernel_version(input: &str) -> Option<String> {
+    for line in input.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("Hermes Agent v") {
+            let version_end = rest.find(' ').unwrap_or(rest.len());
+            return Some(rest[..version_end].to_string());
+        }
+        if let Some(rest) = trimmed.strip_prefix("hermes-agent v") {
+            let version_end = rest.find(' ').unwrap_or(rest.len());
+            return Some(rest[..version_end].to_string());
+        }
+    }
+    None
+}
+
+fn extract_commit(input: &str) -> Option<String> {
+    for line in input.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("Install directory: ") {
+            let dir = rest.trim();
+            if let Some(hash_start) = dir.find('-') {
+                let hash_part = &dir[hash_start + 1..];
+                if !hash_part.is_empty() && hash_part.chars().all(|c| c.is_alphanumeric()) {
+                    return Some(hash_part.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 fn file_sha256(path: &Path) -> Option<String> {
@@ -1270,27 +1416,25 @@ fn git_recent_commits(repo: &Path) -> Vec<RuntimeSourceCommit> {
 }
 
 /// Check for a runtime update by fetching the remote manifest.
+/// Tries primary source first, then falls back to mirror sources automatically.
 pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
-    let url = match configured_manifest_url() {
-        Some(u) => u,
-        None => {
-            return RuntimeUpdateCheckResult {
-                ok: false,
-                update_available: false,
-                current_runtime_version: None,
-                manifest: None,
-                error: Some("Runtime update manifest URL is not configured".to_string()),
-            };
-        }
-    };
+    let candidates = get_manifest_candidates();
+    if candidates.is_empty() {
+        return RuntimeUpdateCheckResult {
+            ok: false,
+            update_available: false,
+            current_runtime_version: None,
+            manifest: None,
+            error: Some("Runtime update manifest URL is not configured".to_string()),
+        };
+    }
 
-    match RUNTIME_HTTP_CLIENT
-        .get(&url)
-        .timeout(RUNTIME_MANIFEST_HTTP_TIMEOUT)
-        .send()
-        .await
-    {
-        Ok(res) if res.status().is_success() => match res.json::<RuntimeUpdateManifest>().await {
+    let mut last_error: Option<String> = None;
+
+    for (index, url) in candidates.iter().enumerate() {
+        let is_primary = index == 0;
+
+        match fetch_and_parse_manifest(url).await {
             Ok(manifest) => {
                 if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
                     return RuntimeUpdateCheckResult {
@@ -1324,37 +1468,55 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
                     .as_ref()
                     .map(|c| c.runtime_version != manifest.runtime_version)
                     .unwrap_or(true);
-                RuntimeUpdateCheckResult {
+                return RuntimeUpdateCheckResult {
                     ok: true,
                     update_available,
                     current_runtime_version: current.map(|c| c.runtime_version),
                     manifest: Some(manifest),
                     error: None,
+                };
+            }
+            Err(e) => {
+                last_error = Some(e);
+                if is_primary {
+                    log::warn!(
+                        "Primary manifest source failed: {}, falling back to mirrors",
+                        url
+                    );
+                } else {
+                    log::debug!("Mirror source failed: {}", url);
                 }
             }
-            Err(e) => RuntimeUpdateCheckResult {
-                ok: false,
-                update_available: false,
-                current_runtime_version: None,
-                manifest: None,
-                error: Some(format!("Failed to parse manifest: {}", e)),
-            },
-        },
-        Ok(res) => RuntimeUpdateCheckResult {
-            ok: false,
-            update_available: false,
-            current_runtime_version: None,
-            manifest: None,
-            error: Some(format!("HTTP {}", res.status())),
-        },
-        Err(e) => RuntimeUpdateCheckResult {
-            ok: false,
-            update_available: false,
-            current_runtime_version: None,
-            manifest: None,
-            error: Some(e.to_string()),
-        },
+        }
     }
+
+    RuntimeUpdateCheckResult {
+        ok: false,
+        update_available: false,
+        current_runtime_version: None,
+        manifest: None,
+        error: last_error.or_else(|| Some("All manifest sources failed".to_string())),
+    }
+}
+
+async fn fetch_and_parse_manifest(url: &str) -> Result<RuntimeUpdateManifest, String> {
+    let res = RUNTIME_HTTP_CLIENT
+        .get(url)
+        .timeout(RUNTIME_MANIFEST_HTTP_TIMEOUT)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("HTTP {}", res.status()));
+    }
+
+    let manifest: RuntimeUpdateManifest = res
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse manifest: {}", e))?;
+
+    Ok(manifest)
 }
 
 #[cfg(test)]

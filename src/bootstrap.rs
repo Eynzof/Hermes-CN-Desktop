@@ -148,12 +148,19 @@ pub async fn acquire_managed_dashboard(
             let msg = install
                 .error
                 .unwrap_or_else(|| "unknown install error".into());
-            return Err(record_bootstrap_error(
+            log::warn!(
+                "Managed runtime install failed ({}); falling back to offline mode. \
+                 The dashboard will start but local runtime features may be limited. \
+                 Try setting HERMES_UPDATE_MIRROR or install hermes-agent-cn manually.",
+                msg
+            );
+            let warning_msg = format!("runtime 下载失败 ({}), 降级为离线模式", msg);
+            emit_runtime_status(
                 app,
-                format!("runtime 安装失败: {}", msg),
-            ));
-        }
-        if let Some(installed) = &install.installed {
+                "warning",
+                &warning_msg,
+            );
+        } else if let Some(installed) = &install.installed {
             log::info!("Installed managed runtime v{}", installed.runtime_version);
         }
     } else if info.current.is_none() {
@@ -169,9 +176,15 @@ pub async fn acquire_managed_dashboard(
     }
 
     emit_runtime_status(app, "starting-dashboard", "正在启动 dashboard...");
-    dashboard::ensure_hermes_dashboard(options)
-        .await
-        .map_err(|e| record_bootstrap_error(app, format!("dashboard 启动失败: {}", e)))
+    match dashboard::ensure_hermes_dashboard(options).await {
+        Ok(handle) => Ok(handle),
+        Err(e) => {
+            let msg = format!("dashboard 启动失败: {}", e);
+            log::warn!("{}; allowing UI to start in limited mode", msg);
+            emit_runtime_status(app, "warning", &msg);
+            Err(record_bootstrap_error(app, msg))
+        }
+    }
 }
 
 /// Attach to a remote Hermes Agent: no runtime install, no spawn, no ownership

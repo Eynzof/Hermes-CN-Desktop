@@ -15,6 +15,7 @@ import {
   dedupeImageParts,
   imagePartFromSource,
 } from "@/lib/message-images";
+import { stripImageMetadataFromText } from "@/components/chat/message-adapter";
 import { notifyFromGatewayEvent } from "@/lib/notifications";
 import { resolvePersistentSessionId } from "@/lib/session-map";
 import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
@@ -257,12 +258,14 @@ function terminateRunningTools(parts: HermesMessagePart[]): HermesMessagePart[] 
 
 function appendTextPart(parts: HermesMessagePart[], text: string): HermesMessagePart[] {
   if (!text) return parts;
+  const filtered = stripImageMetadataFromText(text);
+  if (!filtered) return parts;
   const next = withoutProgressParts(parts);
   const last = next[next.length - 1];
   if (last?.type === "text") {
-    next[next.length - 1] = { ...last, text: last.text + text };
+    next[next.length - 1] = { ...last, text: last.text + filtered };
   } else {
-    next.push({ type: "text", text });
+    next.push({ type: "text", text: filtered });
   }
   return next;
 }
