@@ -888,6 +888,7 @@ export function GooseComposer({
       attachments,
       workspacePath: workspacePath.trim() || undefined,
       modelSelection: selectedModelRef.current ?? undefined,
+      reasoningEffort: reasoningPicker?.value ?? undefined,
       skillCommandNames: skillPicker?.skills.map((skill) => skill.name),
     };
 

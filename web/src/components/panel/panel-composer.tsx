@@ -11,6 +11,10 @@ import { useActiveProfileName } from "@/hooks/use-profiles";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
+import {
+  reasoningEffortFromConfig,
+  type ReasoningEffort,
+} from "@/lib/reasoning-effort";
 import { composerSubmitShortcutHint } from "@/lib/composer-submit-shortcut";
 import { shouldPrewarmDraftSession } from "@/lib/draft-session-prewarm";
 import {
@@ -50,6 +54,8 @@ export function PanelComposer() {
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
     () => readLastUsedModel(),
   );
+  const [reasoningEffortOverride, setReasoningEffortOverride] =
+    useState<ReasoningEffort | null>(null);
   const [prefilledDraft, setPrefilledDraft] = useState({ text: "", nonce: 0 });
   const [prefill, setPrefill] = useAtom(composerPrefillAtom);
   const composerSubmitShortcut = useAtomValue(composerSubmitShortcutAtom);
@@ -146,6 +152,13 @@ export function PanelComposer() {
     navigate(`/models#provider-${providerId}`);
   }, [navigate]);
 
+  const configReasoningEffort = useMemo(() => reasoningEffortFromConfig(config), [config]);
+  const reasoningEffort = reasoningEffortOverride ?? configReasoningEffort;
+
+  const onReasoningEffortSelect = useCallback((effort: ReasoningEffort) => {
+    setReasoningEffortOverride(effort);
+  }, []);
+
   const onSelectAndSetDefault = useCallback((selection: ComposerModelSelection) => {
     onModelSelect(selection);
     if (!config) return;
@@ -226,6 +239,11 @@ export function PanelComposer() {
           onSelect: onModelSelect,
           onSelectAndSetDefault,
           onConfigureProvider,
+          disabled: sending,
+        }}
+        reasoningPicker={{
+          value: reasoningEffort,
+          onSelect: onReasoningEffortSelect,
           disabled: sending,
         }}
         skillPicker={{
