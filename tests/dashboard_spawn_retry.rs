@@ -139,7 +139,7 @@ async fn ready_file_completes_spawn_without_http() {
     // completes the wait. argv: dashboard --host H --port P --no-open → $5.
     install_fake_runtime(
         runtime.path(),
-        "#!/bin/sh\nprintf '{\"port\": %s}' \"$5\" > \"$HERMES_DESKTOP_READY_FILE\"\nsleep 30\n",
+        "#!/bin/sh\nprintf '%s\n%s\n' \"$HERMES_DESKTOP_MANAGED\" \"$HERMES_HOME\" > \"$HERMES_HOME/spawn-env.txt\"\nprintf '{\"port\": %s}' \"$5\" > \"$HERMES_DESKTOP_READY_FILE\"\nsleep 30\n",
     );
 
     let port = free_port();
@@ -165,6 +165,13 @@ async fn ready_file_completes_spawn_without_http() {
     assert!(
         ready_file_leftovers(runtime.path()).is_empty(),
         "consumed ready file must be deleted"
+    );
+    let spawn_env = std::fs::read_to_string(home.join("spawn-env.txt"))
+        .expect("fake kernel should record Desktop/Core profile-routing contract");
+    assert_eq!(
+        spawn_env,
+        format!("1\n{}\n", home.to_string_lossy()),
+        "managed dashboard must receive the exact HERMES_HOME and managed marker"
     );
 
     // Reap the fake kernel so the sleep doesn't outlive the test.
