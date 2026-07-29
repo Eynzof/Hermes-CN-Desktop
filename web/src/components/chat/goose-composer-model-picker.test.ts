@@ -218,6 +218,39 @@ describe("groupCandidates", () => {
     expect(groups.custom).toEqual([]);
   });
 
+  it("shows one row per branded model when chat and Messages providers overlap", () => {
+    const [flash, pro, sol, kimi, glm, claude] = BRAND.accountDefaultModels;
+    const regularProvider = `custom:${BRAND.providerKey}`;
+    const messagesProvider = `custom:${BRAND.providerKey}-messages`;
+    const options = {
+      providers: [
+        {
+          slug: regularProvider,
+          name: BRAND.appName,
+          models: [flash, pro, sol],
+          authenticated: true,
+        },
+        {
+          slug: messagesProvider,
+          name: `${BRAND.appName} Messages`,
+          models: [flash, pro, sol, kimi, glm, claude],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options);
+
+    expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
+      `${regularProvider}:${flash}`,
+      `${regularProvider}:${pro}`,
+      `${regularProvider}:${sol}`,
+      `${messagesProvider}:${kimi}`,
+      `${messagesProvider}:${glm}`,
+      `${messagesProvider}:${claude}`,
+    ]);
+  });
+
   it("only shows custom providers that exist in the saved custom-model set", () => {
     const options = {
       providers: [

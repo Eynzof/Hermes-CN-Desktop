@@ -409,6 +409,42 @@ export function groupCandidates(
     }
   }
 
+  // A branded account can expose the same model through both its regular
+  // chat-completions provider and the `-messages` provider.  The gateway
+  // keeps those providers separate because they use different transports,
+  // but the picker should present one row per model.  Prefer a provider that
+  // explicitly advertised the model over a catalog fallback, then prefer the
+  // regular transport when both providers advertise it.  Models available
+  // only through Messages (for example Claude aliases) still retain that
+  // provider so selecting them uses the correct API mode.
+  const advertisedBrandModels = new Map<string, Set<string>>();
+  for (const provider of modelOptions?.providers ?? []) {
+    const providerSlug = provider.slug.toLowerCase();
+    if (!isBrandProvider(providerSlug)) continue;
+    advertisedBrandModels.set(
+      providerSlug,
+      new Set((provider.models ?? []).map((model) => model.toLowerCase())),
+    );
+  }
+  const brandCandidateScore = (candidate: Candidate): number => {
+    const providerSlug = candidate.providerSlug.toLowerCase();
+    const advertised = advertisedBrandModels.get(providerSlug)?.has(candidate.model.toLowerCase())
+      ? 0
+      : 2;
+    const messages = providerSlug.endsWith("-messages") ? 1 : 0;
+    return advertised + messages;
+  };
+  const uniqueBrandCandidates = new Map<string, Candidate>();
+  for (const candidate of brandCandidates) {
+    const modelKey = candidate.model.toLowerCase();
+    const previous = uniqueBrandCandidates.get(modelKey);
+    if (!previous || brandCandidateScore(candidate) < brandCandidateScore(previous)) {
+      uniqueBrandCandidates.set(modelKey, candidate);
+    }
+  }
+  brandCandidates.length = 0;
+  brandCandidates.push(...uniqueBrandCandidates.values());
+
   brandCandidates.sort((a, b) =>
     (BRAND_MODEL_ORDER.get(a.model.toLowerCase()) ?? Number.MAX_SAFE_INTEGER)
     - (BRAND_MODEL_ORDER.get(b.model.toLowerCase()) ?? Number.MAX_SAFE_INTEGER));
