@@ -48,6 +48,7 @@ export interface ComposerSubmitPayload {
   attachments: ComposerAttachment[];
   workspacePath?: string;
   modelSelection?: ComposerModelSelection;
+  reasoningEffort?: ReasoningEffort;
   skillCommandNames?: string[];
 }
 
