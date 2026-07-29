@@ -4,6 +4,7 @@ import {
   installTauriBridge,
   isTauriDevMode,
   normalizeTauriInvokeError,
+  shouldWaitForManagedRuntimeConfig,
 } from "./tauri-bridge";
 
 const mockInvoke = vi.fn();
@@ -244,6 +245,27 @@ describe("isTauriDevMode", () => {
       managedRuntimeLifecycleState: "stopped",
     });
     expect(mockInvoke).not.toHaveBeenCalledWith("runtime_info", undefined);
+  });
+
+  it("waits for apiBaseUrl when managed runtime is still starting", () => {
+    expect(shouldWaitForManagedRuntimeConfig({
+      apiBaseUrl: "",
+      connectionMode: "managed",
+      backendReady: false,
+      managedRuntimeDesiredState: "running",
+    })).toBe(true);
+    expect(shouldWaitForManagedRuntimeConfig({
+      apiBaseUrl: "",
+      connectionMode: "managed",
+      backendReady: false,
+      managedRuntimeDesiredState: "stopped",
+    })).toBe(false);
+    expect(shouldWaitForManagedRuntimeConfig({
+      apiBaseUrl: "http://127.0.0.1:9120",
+      connectionMode: "managed",
+      backendReady: true,
+      managedRuntimeDesiredState: "running",
+    })).toBe(false);
   });
 
   it("exposes persisted guide and managed runtime lifecycle commands", async () => {

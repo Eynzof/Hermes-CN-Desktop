@@ -21,7 +21,7 @@ interface FixtureExpect {
   agent: "claude-code" | "codex";
   mode: string;
   prompt: string;
-  workdir?: string;
+  workdir?: string | null;
   flags?: Record<string, unknown>;
 }
 
@@ -189,6 +189,12 @@ const FIXTURES: Fixture[] = [
     expect: { agent: "codex", mode: "exec", prompt: "task", flags: { json: true, full_auto: true } },
   },
   {
+    name: "codex-dynamic-cd-not-reported-as-dollar",
+    command: "cd $(mktemp -d) && git init -q && codex exec 'task'",
+    args: {},
+    expect: { agent: "codex", mode: "exec", prompt: "task", workdir: null },
+  },
+  {
     name: "codex-review",
     command: "codex review --base origin/main",
     args: {},
@@ -292,9 +298,16 @@ describe("输出归一化", () => {
     expect(tool).toContainEqual({ kind: "text", text: "running" });
 
     const result = parseClaudeStreamJsonLine(
-      '{"type":"result","subtype":"success","session_id":"s-1","num_turns":3,"total_cost_usd":0.01,"is_error":false}',
+      '{"type":"result","subtype":"success","session_id":"s-1","num_turns":3,"total_cost_usd":0.01,"is_error":false,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":20}}',
     );
-    expect(result[0]).toMatchObject({ kind: "result", sessionId: "s-1", numTurns: 3 });
+    expect(result[0]).toMatchObject({
+      kind: "result",
+      sessionId: "s-1",
+      numTurns: 3,
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadInputTokens: 20,
+    });
 
     expect(
       parseClaudeStreamJsonLine('{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"h"}}}'),
@@ -311,8 +324,8 @@ describe("输出归一化", () => {
     );
     expect(begin[0]).toMatchObject({ kind: "tool_use", toolName: "shell", text: "git status" });
 
-    expect(parseCodexJsonlLine('{"type":"thread.started","thread_id":"t-1"}')).toEqual([
-      { kind: "init", sessionId: "t-1" },
+    expect(parseCodexJsonlLine('{"type":"thread.started","thread_id":"t-1","cwd":"/repo"}')).toEqual([
+      { kind: "init", sessionId: "t-1", workdir: "/repo" },
     ]);
     const turn = parseCodexJsonlLine('{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}');
     expect(turn[0]).toMatchObject({ kind: "result", inputTokens: 10, outputTokens: 5 });
@@ -345,6 +358,27 @@ describe("输出归一化", () => {
     expect(extractCodexResult("no json here")).toBeUndefined();
   });
 
+  it("extractCodexResult 从人类可读输出恢复目录、模型、会话和总 Token", () => {
+    const output = [
+      "OpenAI Codex v0.145.0",
+      "--------",
+      "workdir: /private/tmp/codex-run",
+      "model: gpt-5.6-sol",
+      "session id: 019fa2c2-test",
+      "--------",
+      "tokens used",
+      "10,654",
+      "你好",
+    ].join("\n");
+    expect(extractCodexResult(output)).toEqual({
+      workdir: "/private/tmp/codex-run",
+      model: "gpt-5.6-sol",
+      sessionId: "019fa2c2-test",
+      totalTokens: 10654,
+    });
+    expect(timelineFromOutput("codex", output).some((event) => event.kind === "raw")).toBe(true);
+  });
+
   it("timelineFromOutput 整段解析并 cap", () => {
     const line = '{"type":"assistant","message":{"content":[{"type":"text","text":"t"}]}}';
     const timeline = timelineFromOutput("claude-code", Array(300).fill(line).join("\n"), 200);
@@ -354,8 +388,14 @@ describe("输出归一化", () => {
 
   it("subEventFromWire 转换 snake_case 线上事件", () => {
     expect(
-      subEventFromWire({ kind: "result", session_id: "s", num_turns: 2, total_cost_usd: 0.1 }),
-    ).toMatchObject({ kind: "result", sessionId: "s", numTurns: 2, totalCostUsd: 0.1 });
+      subEventFromWire({
+        kind: "result",
+        session_id: "s",
+        workdir: "/repo",
+        num_turns: 2,
+        total_tokens: 123,
+      }),
+    ).toMatchObject({ kind: "result", sessionId: "s", workdir: "/repo", numTurns: 2, totalTokens: 123 });
     expect(subEventFromWire({ kind: "nope" })).toBeNull();
     expect(subEventFromWire("str")).toBeNull();
   });

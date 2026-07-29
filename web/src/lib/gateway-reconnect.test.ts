@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { reattachAfterReconnect, type ReattachAfterReconnectDeps } from "./gateway-reconnect";
+import {
+  isDefinitiveMissingSessionError,
+  reattachAfterReconnect,
+  type ReattachAfterReconnectDeps,
+} from "./gateway-reconnect";
 
 function makeDeps(overrides: Partial<ReattachAfterReconnectDeps> = {}): {
   deps: ReattachAfterReconnectDeps;
@@ -66,5 +70,23 @@ describe("reattachAfterReconnect", () => {
     await reattachAfterReconnect(deps);
     expect(onResumed).not.toHaveBeenCalled();
     expect(onResumeFailed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("isDefinitiveMissingSessionError", () => {
+  it.each([
+    new Error("Session not found"),
+    new Error("unknown conversation id"),
+    "conversation was reaped",
+  ])("accepts explicit missing-session failures", (error) => {
+    expect(isDefinitiveMissingSessionError(error)).toBe(true);
+  });
+
+  it.each([
+    new Error("Request timed out after 300000ms"),
+    new Error("WebSocket disconnected"),
+    new Error("HTTP 503 Service Unavailable"),
+  ])("keeps transient resume failures recoverable", (error) => {
+    expect(isDefinitiveMissingSessionError(error)).toBe(false);
   });
 });

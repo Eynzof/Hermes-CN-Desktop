@@ -1,14 +1,84 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Eye, FileText, Pencil, RefreshCw } from "lucide-react";
+import { Pencil, RefreshCw, Sparkles, Store, UserRound } from "lucide-react";
 import { Button } from "@hermes/shared-ui";
-import { MarkdownText } from "@/components/chat/markdown-renderer";
+import { PersonaMarketPanel } from "@/components/persona/persona-market-panel";
 import { useActiveProfileName } from "@/hooks/use-profiles";
-import { SOUL_CHAR_LIMIT, SOUL_TEMPLATE, useSaveSoul, useSoul } from "@/hooks/use-soul";
+import { SOUL_CHAR_LIMIT, useSaveSoul, useSoul } from "@/hooks/use-soul";
 import { SectionShell } from "./section-shell";
 import { SettingsHero } from "./settings-hero";
 import settings from "./settings.module.css";
 import s from "./soul.module.css";
+
+export const HERMES_PERSONA_TAB_LABEL = "Hermes 人格";
+
+interface HermesPersonaEditorProps {
+  exists: boolean;
+  text: string;
+  dirty: boolean;
+  over: boolean;
+  saving: boolean;
+  saved: boolean;
+  onTextChange(value: string): void;
+  onSave(): void;
+}
+
+export function HermesPersonaEditor({
+  exists,
+  text,
+  dirty,
+  over,
+  saving,
+  saved,
+  onTextChange,
+  onSave,
+}: HermesPersonaEditorProps) {
+  return (
+    <section className={s.panel}>
+      <div className={s.panelHead}>
+        <div>
+          <strong>核心人格 · SOUL.md</strong>
+          <span>
+            {exists
+              ? "直接编辑 Hermes 的核心身份、判断方式与沟通风格"
+              : "尚未创建，保存后将在当前档案生成 SOUL.md"}
+          </span>
+        </div>
+        <div className={s.headActions}>
+          {saved && <span className={s.saved}>已保存</span>}
+          <span className={s.editMode}><Pencil size={13} /> 编辑</span>
+        </div>
+      </div>
+
+      <div className={s.editorBody}>
+        <textarea
+          className={s.textarea}
+          value={text}
+          onChange={(event) => onTextChange(event.target.value)}
+          placeholder={"# 人格\n你是一个务实、直接、有判断力的助手……"}
+          spellCheck={false}
+        />
+      </div>
+
+      <div className={s.footer}>
+        <span className={s.count} data-over={over ? "true" : undefined}>
+          {text.length.toLocaleString()} / {SOUL_CHAR_LIMIT.toLocaleString()} 字符
+          {over ? " · 超出部分将在注入时截断" : ""}
+        </span>
+        <Button
+          type="button"
+          variant="solid"
+          tone="accent"
+          size="sm"
+          onClick={onSave}
+          disabled={!dirty || saving}
+        >
+          {saving ? "保存中…" : "保存人格"}
+        </Button>
+      </div>
+    </section>
+  );
+}
 
 export function SoulRoute() {
   const profile = useActiveProfileName();
@@ -17,7 +87,7 @@ export function SoulRoute() {
 
   const [text, setText] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [mode, setMode] = useState<"edit" | "preview">("edit");
+  const [page, setPage] = useState<"market" | "custom">("market");
   const [savedFlash, setSavedFlash] = useState(false);
 
   const data = soulQuery.data;
@@ -33,7 +103,6 @@ export function SoulRoute() {
     setDirty(false);
   }, [profile]);
 
-  const isEmpty = text.trim().length === 0;
   const over = text.length > SOUL_CHAR_LIMIT;
   const error = soulQuery.error || saveSoul.error;
   const errorMessage = error instanceof Error ? error.message : error ? String(error) : null;
@@ -48,11 +117,12 @@ export function SoulRoute() {
     });
   };
 
-  const handleInsertTemplate = () => {
-    if (!isEmpty) return;
-    setText(SOUL_TEMPLATE);
-    setDirty(true);
-    setMode("edit");
+  const handleApplyPersona = async (prompt: string) => {
+    await saveSoul.mutateAsync(prompt);
+    setText(prompt);
+    setDirty(false);
+    setSavedFlash(true);
+    window.setTimeout(() => setSavedFlash(false), 2200);
   };
 
   const right = (
@@ -73,115 +143,74 @@ export function SoulRoute() {
   );
 
   return (
-    <SectionShell title="灵魂" sub="SOUL.md · 智能体的核心人格（系统提示词第一身份）" right={right}>
+    <SectionShell title="人格" sub="内置人格市场与 SOUL.md 自定义设定" right={right}>
       <SettingsHero
         ok={!errorMessage}
-        icon={<FileText size={24} />}
-        eyebrow="Hermes Agent 灵魂设定"
-        title="当前档案的核心人格"
+        icon={<Sparkles size={24} />}
+        eyebrow="Hermes Agent 人格中心"
+        title="选择专家人格，或者创造你自己的"
         description={(
           <>
-            灵魂（SOUL.md）会被原样注入系统提示词的第一块，定义「这个智能体是谁、怎么说话」。这里编辑的是当前档案 <strong>{profile}</strong> 的灵魂；切换档案请前往{" "}
+            应用人格后，完整中文提示词会写入当前档案 <strong>{profile}</strong> 的 SOUL.md，并作为智能体的第一身份。切换档案请前往{" "}
             <Link to="/profiles" className={s.inlineLink}>档案</Link> 页。
           </>
         )}
-        badge={<span className={settings.statusBadge} data-on={!dirty}>{dirty ? "未保存" : "已同步"}</span>}
+        badge={(
+          <span className={settings.statusBadge} data-on={!dirty && !errorMessage}>
+            {errorMessage ? "读取失败" : savedFlash ? "人格已应用" : dirty ? "未保存" : "已同步"}
+          </span>
+        )}
       />
       {soulQuery.isLoading ? (
-        <div className={s.emptyState}>加载灵魂中…</div>
+        <div className={s.emptyState}>加载人格中…</div>
       ) : (
         <div className={s.soulPage}>
           {errorMessage && <div className={s.errorState}>{errorMessage}</div>}
 
-          <section className={s.panel}>
-            <div className={s.panelHead}>
-              <div>
-                <strong>核心人格 · SOUL.md</strong>
-                <span>
-                  {data && !data.exists
-                    ? "尚未创建，保存后将在当前档案生成 SOUL.md"
-                    : "原样注入系统提示词第一块，定义智能体的核心身份与语气"}
-                </span>
-              </div>
-              <div className={s.headActions}>
-                {savedFlash && <span className={s.saved}>已保存</span>}
-                <div className={s.segmented} role="tablist" aria-label="编辑或预览">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === "edit"}
-                    data-active={mode === "edit" ? "true" : undefined}
-                    onClick={() => setMode("edit")}
-                  >
-                    <Pencil size={13} /> 编辑
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === "preview"}
-                    data-active={mode === "preview" ? "true" : undefined}
-                    onClick={() => setMode("preview")}
-                  >
-                    <Eye size={13} /> 预览
-                  </button>
-                </div>
-              </div>
-            </div>
+          <div className={s.pageTabs} role="tablist" aria-label="人格市场或自定义人格">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={page === "market"}
+              data-active={page === "market" ? "true" : undefined}
+              onClick={() => setPage("market")}
+            >
+              <Store size={15} /> 人格市场
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={page === "custom"}
+              data-active={page === "custom" ? "true" : undefined}
+              onClick={() => setPage("custom")}
+            >
+              <UserRound size={15} /> {HERMES_PERSONA_TAB_LABEL}
+            </button>
+          </div>
 
-            <div className={s.toolbar}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleInsertTemplate}
-                disabled={!isEmpty}
-                title={isEmpty ? "插入结构化人格模板" : "仅在内容为空时可用"}
-              >
-                <FileText size={13} /> 插入模板
-              </Button>
-              <span className={s.toolbarHint}>建议分节：人格 / 风格 / 避免 / 技术取向</span>
-            </div>
-
-            <div className={s.editorBody}>
-              {mode === "edit" ? (
-                <textarea
-                  className={s.textarea}
-                  value={text}
-                  onChange={(event) => {
-                    setText(event.target.value);
-                    setDirty(true);
-                  }}
-                  placeholder={"# 人格\n你是一个务实、直接、有判断力的助手……"}
-                  spellCheck={false}
-                />
-              ) : (
-                <div className={s.preview}>
-                  {text.trim() ? (
-                    <MarkdownText text={text} />
-                  ) : (
-                    <div className={s.previewEmpty}>暂无内容可预览</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className={s.footer}>
-              <span className={s.count} data-over={over ? "true" : undefined}>
-                {text.length.toLocaleString()} / {SOUL_CHAR_LIMIT.toLocaleString()} 字符
-                {over ? " · 超出部分将在注入时截断" : ""}
-              </span>
-              <Button
-                type="button"
-                variant="solid"
-                tone="accent"
-                size="sm"
-                onClick={handleSave}
-                disabled={!dirty || saveSoul.isPending}
-              >
-                {saveSoul.isPending ? "保存中…" : "保存灵魂"}
-              </Button>
-            </div>
-          </section>
+          {page === "market" ? (
+            <PersonaMarketPanel
+              profile={profile}
+              currentSoul={text}
+              dirty={dirty}
+              applying={saveSoul.isPending}
+              onApply={handleApplyPersona}
+            />
+          ) : (
+            <HermesPersonaEditor
+              exists={data?.exists ?? false}
+              text={text}
+              dirty={dirty}
+              over={over}
+              saving={saveSoul.isPending}
+              saved={savedFlash}
+              onTextChange={(value) => {
+                setText(value);
+                setDirty(true);
+              }}
+              onSave={handleSave}
+            />
+          )}
         </div>
       )}
     </SectionShell>

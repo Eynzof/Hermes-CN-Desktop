@@ -11,6 +11,14 @@ import type { ChatMessage } from "./chat-types";
 const renderTimeline = (node: ReactElement) =>
   ReactDOMServer.renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>);
 
+const skillInvocationText = [
+  '[IMPORTANT: The user has invoked the "codex" skill, indicating they want you to follow its instructions. The full skill content is loaded below.]',
+  "",
+  "# Codex",
+  "",
+  "Always use a PTY.",
+].join("\n");
+
 describe("MessageTimeline", () => {
   it("keeps bottom auto-follow disabled after an explicit upward scroll", () => {
     expect(resolveBottomFollowState(40, true)).toEqual({
@@ -240,6 +248,7 @@ describe("MessageTimeline", () => {
     const messages: ChatMessage[] = [
       { id: "user-1", role: "user", createdAt: 1, text: "第一轮问题" },
       { id: "assistant-1", role: "assistant", createdAt: 2, text: "第一轮回答" },
+      { id: "skill-1", role: "user", createdAt: 2.5, text: skillInvocationText },
       { id: "user-2", role: "user", createdAt: 3, text: "第二轮追问" },
       { id: "assistant-2", role: "assistant", createdAt: 4, text: "第二轮回答" },
     ];
@@ -251,6 +260,31 @@ describe("MessageTimeline", () => {
     expect(html).toContain("aria-label=\"对话轮次定位\"");
     expect(html).toContain("aria-label=\"定位到第 1 轮对话\"");
     expect(html).toContain("aria-label=\"定位到第 2 轮对话\"");
+    expect(html).not.toContain("aria-label=\"定位到第 3 轮对话\"");
+    expect(html.match(/data-turn-anchor=\"true\"/g)).toHaveLength(2);
+  });
+
+  it("renders injected Skill content as a full-width system notice without user actions", () => {
+    const html = renderTimeline(
+      <MessageTimeline
+        messages={[{
+          id: "skill-1",
+          role: "user",
+          createdAt: 1,
+          text: skillInvocationText,
+        }]}
+      />,
+    );
+
+    expect(html).toContain('data-role="system"');
+    expect(html).toContain('data-system-kind="skill-invocation"');
+    expect(html).toContain('data-kind="skill-invocation"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Skill 指令已加载");
+    expect(html).toContain('data-skill-invocation="true"');
+    expect(html).not.toContain('data-role="user"');
+    expect(html).not.toContain('data-turn-anchor="true"');
+    expect(html).not.toContain("复制");
   });
 
   it("does not show turn navigation for a single user turn", () => {

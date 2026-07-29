@@ -181,6 +181,22 @@ describe("message adapter", () => {
     expect(message?.text).toBe("阅读这张图片的内容\n\n附件：ga.png");
   });
 
+  it("normalizes injected Skill instructions from user to system messages", () => {
+    const message = hermesUIMessageToChatMessage(uiMessage({
+      id: "skill-invocation",
+      role: "user",
+      parts: [{
+        type: "text",
+        text: '[IMPORTANT: The user has invoked the "codex" skill, indicating they want you to follow its instructions.]',
+      }],
+    }));
+
+    expect(message).toMatchObject({
+      id: "skill-invocation",
+      role: "system",
+    });
+  });
+
   it("deduplicates stored image transport prompts against live display prompts", () => {
     const stored = [
       uiMessage({

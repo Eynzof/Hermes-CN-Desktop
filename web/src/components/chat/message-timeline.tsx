@@ -10,12 +10,14 @@ import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
 import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
+import { SkillInvocationMessage } from "./skill-invocation-message";
 import { CopyButton } from "@/components/ui/copy-button";
 import s from "./message-timeline.module.css";
 import { summarizeToolActivity } from "./tool-activity";
 import { groupConsecutiveTools, groupElapsedMs } from "./group-tools";
 import { truncateMiddle } from "@/lib/truncate-middle";
 import { sanitizeTextForSpeech, speakText, voiceErrorMessage } from "@/lib/voice";
+import { isSkillInvocationText } from "@/lib/skill-invocation";
 import {
   formatDurationMs,
   formatElapsedTimer,
@@ -781,7 +783,31 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   const speechStatus = speech?.state.messageId === message.id ? speech.state.status : "idle";
   const speechBusy = speechStatus === "preparing" || speechStatus === "speaking";
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
+  const hasSkillInvocation = isSkillInvocationText(message.text);
   const messageStats = message.stats ?? sessionUsageFallbackStats(message, sessionUsage);
+
+  if (hasSkillInvocation) {
+    return (
+      <div className={s.messageRow} data-role="system" data-system-kind="skill-invocation">
+        <div
+          className={s.systemNotice}
+          data-kind="skill-invocation"
+          role="status"
+        >
+          <Info
+            className={s.systemNoticeIcon}
+            size={15}
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          <div className={s.systemNoticeBody}>
+            <div className={s.systemNoticeTitle}>Skill 指令已加载</div>
+            <SkillInvocationMessage text={message.text ?? ""} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isToolOnly) {
     return (
@@ -973,7 +999,7 @@ export function MessageTimeline({
   const turnAnchors = useMemo<TurnAnchor[]>(() => {
     const anchors: TurnAnchor[] = [];
     for (const message of visibleMessages) {
-      if (message.role !== "user") continue;
+      if (message.role !== "user" || isSkillInvocationText(message.text)) continue;
       const index = anchors.length;
       anchors.push({
         id: message.id,
@@ -1410,11 +1436,12 @@ export function MessageTimeline({
           const previous = visibleMessages[index - 1];
           const showDate = !previous || formatDay(previous.createdAt) !== formatDay(message.createdAt);
           const isLast = index === visibleMessages.length - 1;
+          const isUserTurn = message.role === "user" && !isSkillInvocationText(message.text);
           return (
             <div
               key={message.id}
-              ref={message.role === "user" ? (node) => setTurnAnchorNode(message.id, node) : undefined}
-              data-turn-anchor={message.role === "user" ? "true" : undefined}
+              ref={isUserTurn ? (node) => setTurnAnchorNode(message.id, node) : undefined}
+              data-turn-anchor={isUserTurn ? "true" : undefined}
             >
               {showDate ? <div className={s.dateSeparator}>{formatDay(message.createdAt)}</div> : null}
               <MessageBubble

@@ -20,7 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useDeleteEnv, useEnvVars, useRevealEnv, useSetEnv } from "@/hooks/use-env";
 import { useGateway } from "@/hooks/use-gateway";
-import { useProviderModels } from "@/hooks/use-provider-models";
+import { providerModelsErrorText, useProviderModels } from "@/hooks/use-provider-models";
 import type { ModelInfo, ProviderProbeResult } from "@hermes/protocol";
 import {
   apiModeBadgeLabel,
@@ -858,6 +858,13 @@ export function ModelsSection() {
     listProviderModels,
     selectedProvider?.apiMode,
   );
+  const customModelsQuery = useProviderModels(
+    "custom-draft",
+    customForm.baseUrl,
+    customForm.apiKey.trim() || undefined,
+    listProviderModels,
+    customProviderMode === "local" ? "chat_completions" : customForm.apiMode,
+  );
   const liveModelIds = supportsModelListing ? modelsQuery.data?.models ?? [] : [];
   const mergedModelOptions = useMemo(() => {
     const set = new Set<string>();
@@ -866,6 +873,11 @@ export function ModelsSection() {
     if (providerForm.model) set.add(providerForm.model);
     return Array.from(set);
   }, [liveModelIds, selectedProvider, providerForm.model]);
+  const customModelOptions = useMemo(() => {
+    const set = new Set(customModelsQuery.data?.models ?? []);
+    if (customForm.model) set.add(customForm.model);
+    return Array.from(set);
+  }, [customModelsQuery.data?.models, customForm.model]);
 
   const refreshLabel = modelsQuery.isFetching
     ? "刷新中…"
@@ -877,14 +889,19 @@ export function ModelsSection() {
 
   const refreshErrorText = useMemo(() => {
     if (!supportsModelListing || !modelsQuery.isError) return "";
-    const msg = modelsQuery.error instanceof Error ? modelsQuery.error.message : String(modelsQuery.error);
-    if (/\b404\b|not found/i.test(msg)) return "此服务商未提供 /models 端点";
-    if (/\b401\b|\b403\b|unauthor/i.test(msg)) return "API Key 无效或未保存";
-    if (/Failed to fetch|NetworkError|TypeError|cors/i.test(msg)) {
-      return "无法连接，可能被浏览器跨域策略拦截；桌面端可正常使用";
-    }
-    return msg;
+    return providerModelsErrorText(modelsQuery.error);
   }, [supportsModelListing, modelsQuery.isError, modelsQuery.error]);
+
+  const customRefreshLabel = customModelsQuery.isFetching
+    ? "刷新中…"
+    : customModelsQuery.isError
+      ? "刷新失败 重试"
+      : customModelsQuery.data
+        ? `已加载 ${customModelsQuery.data.models.length} 个`
+        : "刷新模型列表";
+  const customRefreshErrorText = customModelsQuery.isError
+    ? providerModelsErrorText(customModelsQuery.error)
+    : "";
 
   useEffect(() => {
     if (!selectedProvider) return;
@@ -1453,8 +1470,8 @@ export function ModelsSection() {
   const customProviderIsAnthropic = !customProviderIsLocal && customForm.apiMode === "anthropic_messages";
   const customProviderTitle = customProviderIsLocal ? "添加本地部署服务商" : "添加自定义服务商";
   const customProviderHint = customProviderIsLocal
-    ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务、加载模型并把上下文窗口设到至少 64K，再选择下面的端点或手动填写。"
-    : "支持 OpenAI Chat Completions 兼容服务（百度千帆 / SiliconFlow / 私有部署等）与 Anthropic 格式的 Claude Code 中转站，请求协议在「接口格式」里选择。提交后可在网格里随时切换。";
+    ? "适合 LM Studio、Ollama、vLLM、llama.cpp 等本地 OpenAI 兼容服务。先启动本地服务、加载模型并把上下文窗口设到至少 64K，再填写端点、刷新模型列表并选择默认模型。"
+    : "先填写接口格式、Base URL 和 API Key，再刷新模型列表并选择默认模型；如果服务商不提供 /models，也可以手动输入。支持 OpenAI 兼容服务与 Anthropic 格式的 Claude Code 中转站。";
   const customProviderPlaceholders = customProviderIsLocal
     ? {
         name: "例如：LM Studio",
@@ -2057,14 +2074,44 @@ export function ModelsSection() {
                   已存在同 Base URL：{duplicateBaseUrlProvider.name}。如果只是换模型，可以直接编辑现有服务商。
                 </div>
               )}
-              <Field label="默认模型" className={s.fieldRow}>
+              <Field label="API Key" className={s.fieldRow}>
                 <Input
                   mono
-                  value={customForm.model}
-                  placeholder={customProviderPlaceholders.model}
-                  onChange={(e) => setCustomForm((p) => ({ ...p, model: e.target.value }))}
+                  type="password"
+                  value={customForm.apiKey}
+                  placeholder={customProviderPlaceholders.apiKey}
+                  onChange={(e) => setCustomForm((p) => ({ ...p, apiKey: e.target.value }))}
                 />
               </Field>
+              <div className={s.modelPickerHint}>
+                部分模型服务商需要先填写有效的 API Key，才能获取模型列表。
+              </div>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>默认模型</div>
+                <div className={s.modelPickerRow}>
+                  <ModelCombobox
+                    value={customForm.model}
+                    options={customModelOptions}
+                    placeholder={customProviderPlaceholders.model}
+                    onChange={(model) => setCustomForm((p) => ({ ...p, model }))}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={customModelsQuery.isFetching || !customBaseUrl || !customBaseUrlValid}
+                    onClick={() => void customModelsQuery.refetch()}
+                    title="从服务商读取模型列表"
+                  >
+                    {customRefreshLabel}
+                  </Button>
+                </div>
+              </label>
+              {customRefreshErrorText && (
+                <div className={s.modelPickerError}>{customRefreshErrorText}</div>
+              )}
+              {customModelsQuery.data?.models.length === 0 && (
+                <div className={s.modelPickerHint}>服务端返回了空模型列表，也可以继续手动输入模型 ID。</div>
+              )}
               {customProviderIsLocal && (
                 <>
                   <Field label="上下文窗口" className={s.fieldRow}>
@@ -2086,15 +2133,6 @@ export function ModelsSection() {
                   )}
                 </>
               )}
-              <Field label="API Key" className={s.fieldRow}>
-                <Input
-                  mono
-                  type="password"
-                  value={customForm.apiKey}
-                  placeholder={customProviderPlaceholders.apiKey}
-                  onChange={(e) => setCustomForm((p) => ({ ...p, apiKey: e.target.value }))}
-                />
-              </Field>
             </div>
             <div className={s.customProviderActions}>
               <Button type="button" variant="outline" onClick={closeCustomForm}>取消</Button>

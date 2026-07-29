@@ -88,6 +88,33 @@ const appendTimeline = (
   return [...timeline, ...events].slice(-TIMELINE_CAP);
 };
 
+const mergeResult = (
+  base: CliDelegationResult | undefined,
+  patch: CliDelegationResult | undefined,
+): CliDelegationResult | undefined => {
+  if (!patch) return base;
+  const defined = Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as CliDelegationResult;
+  return { ...(base ?? {}), ...defined };
+};
+
+const resultFromEvents = (
+  events: readonly CliDelegationSubEvent[],
+): CliDelegationResult | undefined => {
+  let result: CliDelegationResult | undefined;
+  for (const event of events) {
+    if (event.kind !== "init" && event.kind !== "result") continue;
+    const {
+      kind: _kind,
+      toolName: _toolName,
+      ...fields
+    } = event;
+    result = mergeResult(result, fields);
+  }
+  return result;
+};
+
 const capList = (list: CliDelegationEntry[]): CliDelegationEntry[] =>
   list.length > MAX_ENTRIES_PER_SESSION ? list.slice(-MAX_ENTRIES_PER_SESSION) : list;
 
@@ -141,10 +168,13 @@ export function applyOutput(
   const wireEvents = Array.isArray(payload.events)
     ? payload.events.map(subEventFromWire).filter((e): e is CliDelegationSubEvent => e !== null)
     : [];
+  const liveResult = resultFromEvents(wireEvents);
   const next: CliDelegationEntry = {
     ...prev,
+    workdir: liveResult?.workdir ?? prev.workdir,
     outputTail: appendTail(prev.outputTail, str(payload.chunk)),
     timeline: appendTimeline(prev.timeline, wireEvents),
+    result: mergeResult(prev.result, liveResult),
     truncated: payload.truncated === true ? true : prev.truncated,
   };
   return list.map((item) => (item.id === id ? next : item));
@@ -161,6 +191,7 @@ export function applyCompleted(
   if (idx < 0) return list;
   const prev = list[idx]!;
   const outputTail = str(payload.output_tail);
+  const completedResult = resultFromWire(payload.result);
   const next: CliDelegationEntry = {
     ...prev,
     status: asStatus(payload.status),
@@ -169,7 +200,8 @@ export function applyCompleted(
     exitCode:
       typeof payload.exit_code === "number" ? payload.exit_code : payload.exit_code === null ? null : prev.exitCode,
     outputTail: outputTail || prev.outputTail,
-    result: resultFromWire(payload.result) ?? prev.result,
+    workdir: completedResult?.workdir ?? prev.workdir,
+    result: mergeResult(prev.result, completedResult),
     timeline:
       prev.timeline.length === 0 && outputTail
         ? timelineFromOutput(prev.agent, outputTail, TIMELINE_CAP)
@@ -220,7 +252,7 @@ export function applyFallbackToolComplete(
   if (!id) return list;
   const idx = list.findIndex((item) => item.id === id);
   const prev = idx >= 0 ? list[idx]! : undefined;
-  if (prev && prev.origin === "events") return list; // 事件源不被回退降级
+  if (prev && TERMINAL_STATUSES.has(prev.status)) return list;
 
   const args = isRecord(payload.args) ? payload.args : undefined;
   const command = args ? str(args.command) : "";
@@ -240,6 +272,9 @@ export function applyFallbackToolComplete(
     (exitCode !== undefined && exitCode !== 0);
 
   const background = Boolean(spec.flags.background);
+  // 新内核后台 tool.complete 只是“进程已启动”，真正终态仍由原生 watcher
+  // 事件给出；仅启动失败时用通用 tool.complete 立即收口。
+  if (prev?.origin === "events" && background && !failed) return list;
   const status: CliDelegationStatus = background
     ? failed
       ? "failed"
@@ -247,25 +282,29 @@ export function applyFallbackToolComplete(
     : failed
       ? "failed"
       : "completed";
+  const extractedResult = background ? undefined : extractResult(spec.agent, output);
+  const parsedTimeline = background ? [] : timelineFromOutput(spec.agent, output, TIMELINE_CAP);
 
   const entry: CliDelegationEntry = {
     id,
     agent: spec.agent,
-    origin: "fallback",
+    origin: prev?.origin ?? "fallback",
     execution: background ? "background" : "foreground",
     status,
     mode: spec.mode,
     promptExcerpt: spec.promptExcerpt || prev?.promptExcerpt || "",
     command,
-    workdir: spec.workdir ?? prev?.workdir ?? null,
+    workdir: extractedResult?.workdir ?? spec.workdir ?? prev?.workdir ?? null,
     flags: spec.flags,
     startedAt: prev?.startedAt ?? now,
     completedAt: background && !failed ? undefined : now,
     durationS: numOrUndef(payload.duration_s),
     exitCode: exitCode ?? null,
-    outputTail: background ? "" : output.slice(-OUTPUT_TAIL_CAP),
-    timeline: background ? [] : timelineFromOutput(spec.agent, output, TIMELINE_CAP),
-    result: background ? undefined : extractResult(spec.agent, output),
+    outputTail: background ? (prev?.outputTail ?? "") : (output.slice(-OUTPUT_TAIL_CAP) || prev?.outputTail || ""),
+    timeline: background
+      ? (prev?.timeline ?? [])
+      : (parsedTimeline.length ? parsedTimeline : (prev?.timeline ?? [])),
+    result: background ? prev?.result : mergeResult(prev?.result, extractedResult),
   };
   return prev ? list.map((item) => (item.id === id ? entry : item)) : capList([...list, entry]);
 }
@@ -292,6 +331,7 @@ export function entryFromHistoryToolPart(part: {
 
   const output = isRecord(part.output) ? str((part.output as Record<string, unknown>).output) : str(part.output);
   const background = Boolean(spec.flags.background);
+  const extractedResult = background || !output ? undefined : extractResult(spec.agent, output);
   const status: CliDelegationStatus =
     part.state === "error" ? "failed" : part.state === "running" ? "running" : background ? "detached" : "completed";
   return {
@@ -303,13 +343,13 @@ export function entryFromHistoryToolPart(part: {
     mode: spec.mode,
     promptExcerpt: spec.promptExcerpt,
     command,
-    workdir: spec.workdir,
+    workdir: extractedResult?.workdir ?? spec.workdir,
     flags: spec.flags,
     startedAt: part.startedAt ?? 0,
     completedAt: part.completedAt,
     outputTail: background ? "" : output.slice(-OUTPUT_TAIL_CAP),
     timeline: background ? [] : timelineFromOutput(spec.agent, output, TIMELINE_CAP),
-    result: background || !output ? undefined : extractResult(spec.agent, output),
+    result: extractedResult,
   };
 }
 
@@ -377,7 +417,7 @@ export const routeCliDelegationGatewayEventAtom = atom(
       return;
     }
 
-    if (nativeCliSessions.has(sid)) return;
+    if (nativeCliSessions.has(sid) && type === "tool.start") return;
     if (type !== "tool.start" && type !== "tool.complete") return;
     if (payload.name !== "terminal") return;
 

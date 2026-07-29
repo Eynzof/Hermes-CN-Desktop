@@ -90,7 +90,7 @@ describe("事件源路径（新内核 delegation.cli.*）", () => {
         exit_code: 0,
         duration_s: 12.5,
         output_tail: "final tail",
-        result: { session_id: "cc-1", num_turns: 3, total_cost_usd: 0.02 },
+        result: { session_id: "cc-1", num_turns: 3, input_tokens: 120, output_tokens: 30 },
       }),
       2000,
     );
@@ -100,7 +100,7 @@ describe("事件源路径（新内核 delegation.cli.*）", () => {
       durationS: 12.5,
       outputTail: "final tail",
       completedAt: 2000,
-      result: { sessionId: "cc-1", numTurns: 3, totalCostUsd: 0.02 },
+      result: { sessionId: "cc-1", numTurns: 3, inputTokens: 120, outputTokens: 30 },
     });
   });
 
@@ -126,7 +126,7 @@ describe("事件源路径（新内核 delegation.cli.*）", () => {
     expect(list()[0]).toMatchObject({ origin: "events", startedAt: 500, promptExcerpt: "do it" });
   });
 
-  it("原生会话跳过 tool.complete 回退合成", () => {
+  it("原生终态丢失时由 tool.complete 收口，不再永久转圈", () => {
     const { route, list } = makeStore();
     route(ev("delegation.cli.started", { delegation_id: "call-3", agent: "codex", execution: "foreground" }));
     route(
@@ -134,10 +134,55 @@ describe("事件源路径（新内核 delegation.cli.*）", () => {
         tool_id: "call-3",
         name: "terminal",
         args: { command: "codex exec 'x'" },
-        result: { output: "done", exit_code: 0 },
+        result: {
+          output: "workdir: /repo\nmodel: gpt-5.6-sol\ntokens used\n1,024\ndone",
+          exit_code: 0,
+        },
       }),
     );
-    // 回退路径没跑：状态仍是 running（等 delegation.cli.completed）。
+    expect(list()[0]).toMatchObject({
+      status: "completed",
+      origin: "events",
+      workdir: "/repo",
+      result: { model: "gpt-5.6-sol", totalTokens: 1024 },
+    });
+  });
+
+  it("原生 completed 已到达时忽略晚到的 tool.complete", () => {
+    const { route, list } = makeStore();
+    route(ev("delegation.cli.started", { delegation_id: "call-3b", agent: "codex", execution: "foreground" }));
+    route(ev("delegation.cli.completed", {
+      delegation_id: "call-3b",
+      status: "completed",
+      output_tail: "native",
+      result: { total_tokens: 42 },
+    }));
+    route(ev("tool.complete", {
+      tool_id: "call-3b",
+      name: "terminal",
+      args: { command: "codex exec 'x'" },
+      result: { output: "fallback", exit_code: 0 },
+    }));
+    expect(list()[0]).toMatchObject({
+      status: "completed",
+      outputTail: "native",
+      result: { totalTokens: 42 },
+    });
+  });
+
+  it("原生后台的启动 tool.complete 不会提前标记结束", () => {
+    const { route, list } = makeStore();
+    route(ev("delegation.cli.started", {
+      delegation_id: "call-3c",
+      agent: "claude-code",
+      execution: "background",
+    }));
+    route(ev("tool.complete", {
+      tool_id: "call-3c",
+      name: "terminal",
+      args: { command: "claude -p x", background: true },
+      result: { output: "Background process started", session_id: "proc-1", exit_code: 0 },
+    }));
     expect(list()[0]!.status).toBe("running");
   });
 });

@@ -734,8 +734,8 @@
 .modelModal {
   display: flex;
   flex-direction: column;
-  width: min(760px, calc(100vw - 32px));
-  height: min(720px, calc(100vh - 48px));
+  width: min(920px, calc(100vw - 32px));
+  height: min(700px, calc(100vh - 48px));
   border: 1px solid var(--h-line);
   border-radius: 18px;
   background: var(--h-bg-app);
@@ -767,22 +767,21 @@
 .modelPanelHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   border-bottom: 1px solid var(--h-line-soft);
-  padding: 9px;
+  padding: 11px 16px;
 }
 
 .modelSearch {
   flex: 1;
   min-width: 0;
-  height: 32px;
-  border: 1px solid var(--h-line);
-  border-radius: 8px;
-  background: var(--h-bg-soft);
+  height: 34px;
+  border: 0;
+  background: transparent;
   color: var(--h-text);
   font-size: 13px;
   outline: 0;
-  padding: 0 10px;
+  padding: 0;
 }
 
 .modelClose {
@@ -910,298 +909,409 @@
   padding: 12px 14px;
 }
 
-/* ─── Model picker v2 (P1 redesign) ────────────────────────────────────── */
+/* ─── Model picker ─────────────────────────────────────────────────────── */
 
-.mpGrid {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  min-height: 0;
+.mpSearchBox {
+  display: flex;
   flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  height: 38px;
+  border: 1px solid var(--h-line);
+  border-radius: 10px;
+  background: var(--h-bg-soft);
+  padding: 0 11px;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.mpSearchBox:focus-within {
+  border-color: color-mix(in srgb, var(--h-accent) 60%, var(--h-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--h-accent) 10%, transparent);
+}
+
+.mpSearchBox > svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  color: var(--h-text-3);
+}
+
+.mpSearchBox button {
+  border: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px;
+}
+
+.mpSearchBox button:hover {
+  color: var(--h-text);
+}
+
+.mpCurrentBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: color-mix(in srgb, var(--h-bg-soft) 72%, transparent);
+  padding: 8px 18px;
+}
+
+.mpCurrentBar > div {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 8px;
+}
+
+.mpCurrentBar strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mpCurrentBar > div > span:last-child,
+.mpSwitchHint {
+  color: var(--h-text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mpCurrentLabel {
+  flex: 0 0 auto;
+  color: var(--h-text-2);
+  font-size: 11px;
+}
+
+.mpLayout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
   overflow: hidden;
 }
 
-.modelModal .mpGrid {
-  min-height: 0;
+.modelPanel .mpLayout {
+  max-height: 420px;
 }
 
-.mpFilters {
-  border-right: 1px solid var(--h-line-soft);
-  padding: 12px 12px 10px;
-  overflow-y: auto;
-  background: var(--h-bg-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.modelModal .mpLayout {
+  max-height: none;
 }
 
-.mpFilterSection {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.mpFilterBar {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--h-line-soft);
+  padding: 10px 14px;
 }
 
-.mpFilterTitle {
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  color: var(--h-text-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-
-.mpFilterChip {
+.mpGroupTabs,
+.mpCapabilityFilters {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 9px;
-  background: transparent;
-  border: 1px solid var(--h-line);
-  border-radius: 6px;
-  color: var(--h-text-2);
-  font-family: var(--h-font-cn);
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.12s ease, color 0.12s ease;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.mpFilterChip:hover {
+.mpGroupTabs::-webkit-scrollbar,
+.mpCapabilityFilters::-webkit-scrollbar {
+  display: none;
+}
+
+.mpGroupTabs button,
+.mpCapabilityFilters button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  border: 1px solid var(--h-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.mpGroupTabs button:hover,
+.mpCapabilityFilters button:hover {
+  border-color: var(--h-text-3);
   background: var(--h-bg-soft);
   color: var(--h-text);
 }
 
-.mpFilterChip[data-active="true"] {
-  background: var(--h-accent);
-  color: #fff;
-  border-color: var(--h-accent);
+.mpGroupTabs button[data-active="true"],
+.mpCapabilityFilters button[data-active="true"] {
+  border-color: color-mix(in srgb, var(--h-accent) 42%, var(--h-line));
+  background: color-mix(in srgb, var(--h-accent) 11%, var(--h-bg));
+  color: var(--h-accent);
   font-weight: 600;
 }
 
-.mpFilterChip svg {
+.mpGroupTabs button span {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+}
+
+.mpGroupTabs button svg,
+.mpCapabilityFilters button svg {
   width: 12px;
   height: 12px;
-  stroke-width: 1.6;
-  flex: 0 0 auto;
+  stroke-width: 1.7;
 }
 
-.mpFilterCount {
-  margin-left: auto;
-  font-size: 11px;
+.mpCapabilityFilters button {
+  min-height: 25px;
+  border-color: transparent;
   color: var(--h-text-3);
+  padding: 3px 8px;
 }
 
-.mpFilterChip[data-active="true"] .mpFilterCount {
-  color: rgba(255, 255, 255, 0.75);
+.mpCapabilityFilters .mpClearFilters {
+  color: var(--h-accent);
 }
 
 .mpCandidates {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 6px 0 12px;
+  padding: 10px 14px 18px;
 }
 
-.mpGroup {
-  padding: 6px 0;
-  border-bottom: 1px solid var(--h-line-soft);
+.mpWarnings {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
-.mpGroup:last-child {
-  border-bottom: none;
+.mpWarnings > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--h-warn) 34%, var(--h-line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--h-warn-soft) 55%, var(--h-bg));
+  color: var(--h-text-2);
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 7px 9px;
+}
+
+.mpWarnings svg {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  color: var(--h-warn);
+  margin-top: 1px;
+}
+
+.mpGroup + .mpGroup {
+  margin-top: 16px;
 }
 
 .mpGroupHeader {
   display: flex;
-  gap: 10px;
-  align-items: baseline;
-  padding: 10px 16px 6px;
-  font-family: var(--h-font-mono);
-  font-size: 10px;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  color: var(--h-text);
+  font-size: 12px;
+  font-weight: 650;
+  padding: 0 4px 7px;
+}
+
+.mpGroupCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--h-bg-soft);
   color: var(--h-text-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-family: var(--h-font-mono);
+  font-size: 9px;
+  padding: 0 5px;
 }
 
 .mpGroupSub {
-  text-transform: none;
-  letter-spacing: 0.02em;
-  font-size: 11px;
   color: var(--h-text-3);
+  font-size: 11px;
+  font-weight: 400;
 }
 
-.mpGroupCollapsible {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  padding: 10px 16px;
-  color: var(--h-text-2);
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-align: left;
-}
-
-.mpGroupCollapsible:hover {
-  background: var(--h-bg-soft);
-  color: var(--h-text);
-}
-
-.mpGroupChevron {
-  width: 12px;
-  height: 12px;
-  stroke-width: 1.6;
-  flex: 0 0 auto;
-  transform: translateY(3px);
-  transition: transform 0.12s ease;
-}
-
-.mpGroupChevron[data-expanded="true"] {
-  transform: translateY(3px) rotate(90deg);
-}
-
-.mpCard {
-  position: relative;
-  display: block;
-  width: calc(100% - 24px);
-  margin: 4px 12px;
-  padding: 10px 12px 11px 14px;
+.mpRows {
+  overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 8px;
+  border-radius: 11px;
   background: var(--h-bg);
-  color: var(--h-text);
-  cursor: pointer;
-  text-align: left;
-  font-family: var(--h-font-cn);
-  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.mpCard:hover {
-  border-color: var(--h-text-3);
+.mpRow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto 64px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 60px;
+  border: 0;
+  border-bottom: 1px solid var(--h-line-soft);
+  background: transparent;
+  color: var(--h-text);
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  padding: 8px 10px;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.mpRow:last-child {
+  border-bottom: 0;
+}
+
+.mpRow:hover {
   background: var(--h-bg-soft);
 }
 
-.mpCard:disabled {
+.mpRow:disabled {
   cursor: wait;
   opacity: 0.6;
 }
 
-.mpCard[data-current="true"] {
-  border-color: var(--h-accent);
-  background: color-mix(in srgb, var(--h-accent) 6%, var(--h-bg));
+.mpRow[data-current="true"] {
+  background: color-mix(in srgb, var(--h-accent) 7%, var(--h-bg));
+  box-shadow: inset 3px 0 0 var(--h-accent);
 }
 
-.mpCard[data-unconfigured="true"] {
-  background: transparent;
-  border-style: dashed;
+.mpRow[data-unconfigured="true"] {
+  background: color-mix(in srgb, var(--h-bg-soft) 48%, transparent);
 }
 
-.mpCardStrip {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--h-accent);
-  border-radius: 8px 0 0 8px;
-}
-
-.mpCardHead {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.mpCardVendor {
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  color: var(--h-text-3);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.mpCardName {
-  font-family: var(--h-font-cn);
-  font-size: 15px;
-  font-weight: 650;
-  color: var(--h-text);
-  line-height: 1.2;
-}
-
-.mpCardPillOk {
+.mpProviderMark {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--h-accent) 14%, transparent);
-  color: var(--h-accent);
-  border: 1px solid color-mix(in srgb, var(--h-accent) 30%, transparent);
-  margin-left: auto;
-}
-
-.mpCardPillOk svg {
-  width: 10px;
-  height: 10px;
-  stroke-width: 2;
-}
-
-.mpCardPillWarn {
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 999px;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 9px;
   background: var(--h-bg-soft);
-  color: #c98d2c;
-  border: 1px solid color-mix(in srgb, #c98d2c 30%, transparent);
-  margin-left: auto;
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.mpCardMeta {
+.mpProviderMark img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.mpRowIdentity {
+  min-width: 0;
+}
+
+.mpRowTitle {
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.mpRowTitle > span:first-child {
+  overflow: hidden;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mpCurrentBadge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--h-accent) 13%, transparent);
+  color: var(--h-accent);
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 6px;
+}
+
+.mpCurrentBadge svg {
+  width: 9px;
+  height: 9px;
+}
+
+.mpRowMeta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
   margin-top: 4px;
-  font-family: var(--h-font-mono);
-  font-size: 11px;
-  color: var(--h-text-3);
+  white-space: nowrap;
 }
 
-.mpCardSep {
-  color: var(--h-text-3);
-  opacity: 0.5;
+.mpRowMeta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.mpCardMono {
-  font-family: var(--h-font-mono);
-  background: var(--h-bg-soft);
-  padding: 1px 5px;
-  border-radius: 3px;
+.mpRowMeta svg {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+}
+
+.mpMetaDot {
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
+.mpRowMeta .mpKeyLabel {
   color: var(--h-accent);
 }
 
-.mpCardCaps {
+.mpRowCaps {
   display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  margin-top: 7px;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 220px;
 }
 
 .mpCapChip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px;
+  padding: 2px 6px;
   background: var(--h-bg-soft);
   border: 1px solid var(--h-line-soft);
   border-radius: 999px;
   font-family: var(--h-font-mono);
-  font-size: 10px;
+  font-size: 9px;
   color: var(--h-text-2);
 }
 
@@ -1212,40 +1322,63 @@
   color: var(--h-text-3);
 }
 
-.mpCardUsage {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px dashed var(--h-line-soft);
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  color: var(--h-text-3);
-}
-
-.mpCardUsage svg {
-  width: 10px;
-  height: 10px;
-  stroke-width: 1.6;
-  color: var(--h-accent);
-}
-
-.mpCardCta {
+.mpRowAction,
+.mpRowSetup {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  color: var(--h-accent);
-  font-family: var(--h-font-mono);
-  font-size: 11px;
+  justify-content: flex-end;
+  gap: 4px;
+  color: var(--h-text-3);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
-.mpCardCta svg {
-  width: 11px;
-  height: 11px;
+.mpRow:hover .mpRowAction,
+.mpRowSetup {
+  color: var(--h-accent);
+}
+
+.mpRowAction svg,
+.mpRowSetup svg {
+  width: 10px;
+  height: 10px;
   stroke-width: 2;
+}
+
+.mpEmptyState {
+  display: flex;
+  min-height: 230px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  text-align: center;
+}
+
+.mpEmptyState > svg {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 10px;
+  opacity: 0.65;
+}
+
+.mpEmptyState strong {
+  color: var(--h-text-2);
+  font-size: 13px;
+}
+
+.mpEmptyState span {
+  font-size: 11px;
+  margin-top: 5px;
+}
+
+.mpEmptyState button {
+  border: 0;
+  background: transparent;
+  color: var(--h-accent);
+  cursor: pointer;
+  font-size: 11px;
+  margin-top: 10px;
 }
 
 .toolbar {
@@ -1741,6 +1874,39 @@
 
   .modelModalTitleBar {
     padding: 14px 14px 12px;
+  }
+
+  .modelPanelHeader {
+    padding: 10px 12px;
+  }
+
+  .mpCurrentBar {
+    padding: 8px 13px;
+  }
+
+  .mpSwitchHint {
+    display: none;
+  }
+
+  .mpFilterBar {
+    padding: 9px 10px;
+  }
+
+  .mpCandidates {
+    padding: 9px 10px 16px;
+  }
+
+  .mpRow {
+    grid-template-columns: 34px minmax(0, 1fr) 56px;
+    gap: 9px;
+  }
+
+  .mpRowCaps {
+    display: none;
+  }
+
+  .mpGroupSub {
+    display: none;
   }
 
   .modelModal .modelGrid {

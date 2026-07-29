@@ -2,6 +2,7 @@ import { useActiveTopTab } from "./use-active-top-tab";
 import { WorkbenchSidebar } from "./workbench-sidebar";
 import { CapabilitySidebar } from "./capability-sidebar";
 import { GatewaySidebar } from "./gateway-sidebar";
+import { ExternalMemorySidebar } from "./external-memory-sidebar";
 import { AdvancedSidebar } from "./advanced-sidebar";
 import { PlaceholderSidebar } from "./placeholder-sidebar";
 
@@ -10,6 +11,7 @@ export function AppSidebar() {
   if (tab === "workbench") return <WorkbenchSidebar />;
   if (tab === "skills") return <CapabilitySidebar />;
   if (tab === "gateway") return <GatewaySidebar />;
+  if (tab === "externalMemory") return <ExternalMemorySidebar />;
   if (tab === "advanced") return <AdvancedSidebar />;
   return <PlaceholderSidebar tab={tab} />;
 }

@@ -20,7 +20,10 @@ import {
 } from "@hermes/protocol";
 import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
 import { getGatewayClient } from "@/lib/gateway-client";
-import { reattachAfterReconnect } from "@/lib/gateway-reconnect";
+import {
+  isDefinitiveMissingSessionError,
+  reattachAfterReconnect,
+} from "@/lib/gateway-reconnect";
 import {
   getCachedModelOptions,
   invalidateModelOptionsCache,
@@ -52,6 +55,11 @@ import {
 import { sessionTipRedirectAtom } from "@/stores/ui";
 import { recordTipRedirect } from "@/lib/session-tip-redirect";
 import { createDeltaCoalescer } from "@/lib/gateway-delta-coalescer";
+import { queryClient as appQueryClient } from "@/lib/query-client";
+import {
+  gatewayEventChangesSessionList,
+  invalidateSessionListQueries,
+} from "@/lib/session-query-sync";
 
 type GatewayState = ReturnType<typeof getGatewayClient>["state"];
 
@@ -115,14 +123,19 @@ async function reattachActiveSessionAfterReconnect(): Promise<void> {
         store.set(gwSessionIdAtom, gatewaySessionId);
         rememberSessionMapping(gatewaySessionId, persistentId);
       },
-      onResumeFailed: () => {
-        // The backend session is genuinely gone (reaped / crashed) — escalate
-        // the transient "reconnecting" turns to a real error so the UI is honest.
-        store.set(terminateAllStreamsAtom);
+      onResumeFailed: (error) => {
+        // A timeout or temporarily wedged backend does not mean the persistent
+        // session vanished. Keep the runtime in reconnecting state so it stays
+        // visible and can recover on the next reconnect. Only an explicit
+        // server-side "session missing" response is terminal.
+        if (isDefinitiveMissingSessionError(error)) {
+          store.set(terminateAllStreamsAtom);
+        }
       },
     });
   } finally {
     reattachInFlight = false;
+    void invalidateSessionListQueries(appQueryClient);
   }
 }
 
@@ -158,6 +171,9 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
 
   bridge.unsubscribeState = client.onState((state) => {
     forEachSubscriber(bridge, (sub) => sub.setConnectionState(state));
+    if (state === "open") {
+      void invalidateSessionListQueries(appQueryClient);
+    }
     if (state === "open" && needsResumeOnReopen) {
       needsResumeOnReopen = false;
       void reattachActiveSessionAfterReconnect();
@@ -256,12 +272,19 @@ export function useGateway() {
   const setSessionTipRedirect = useSetAtom(sessionTipRedirectAtom);
   const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);
 
+  const applyGatewayEventAndSync = useCallback((event: GatewayEvent) => {
+    applyGatewayEvent(event);
+    if (gatewayEventChangesSessionList(event)) {
+      void invalidateSessionListQueries(queryClient);
+    }
+  }, [applyGatewayEvent, queryClient]);
+
   const activeRuntime = gwSessionId ? runtimeBySession[gwSessionId] : undefined;
   const streamStatus = activeRuntime?.streamStatus ?? "idle";
 
   useEffect(() => {
-    return subscribeGateway(setConnectionState, applyGatewayEvent, terminateAllStreams);
-  }, [applyGatewayEvent, setConnectionState, terminateAllStreams]);
+    return subscribeGateway(setConnectionState, applyGatewayEventAndSync, terminateAllStreams);
+  }, [applyGatewayEventAndSync, setConnectionState, terminateAllStreams]);
 
   const ensureSubscribed = useCallback(() => {
     ensureGatewayBridge();
@@ -281,7 +304,8 @@ export function useGateway() {
     setGwSessionId(sessionId);
     resetChatSession(sessionId);
     void rememberPersistentSessionKey(sessionId);
-  }, [resetChatSession, setGwSessionId]);
+    void invalidateSessionListQueries(queryClient);
+  }, [queryClient, resetChatSession, setGwSessionId]);
 
   const createSession = useCallback(async (options?: CreateSessionOptions): Promise<string> => {
     ensureSubscribed();
@@ -303,7 +327,8 @@ export function useGateway() {
     ensureSubscribed();
     await getGatewayClient().request("session.close", { session_id: sessionId });
     setGwSessionId((current) => current === sessionId ? null : current);
-  }, [ensureSubscribed, setGwSessionId]);
+    void invalidateSessionListQueries(queryClient);
+  }, [ensureSubscribed, queryClient, setGwSessionId]);
 
   const beginPrompt = useCallback(
     (sessionId: string, text: string, now?: number, images?: ImageEntry[]) => {
@@ -340,8 +365,9 @@ export function useGateway() {
     // for. Record it so the detail route can project onto the live tip instead
     // of stranding the user on the now-empty pre-compression id (issue #305).
     setSessionTipRedirect((prev) => recordTipRedirect(prev, persistentSessionId, result.resumed));
+    void invalidateSessionListQueries(queryClient);
     return result.session_id;
-  }, [ensureSubscribed, resetChatSession, setGwSessionId, setSessionTipRedirect]);
+  }, [ensureSubscribed, queryClient, resetChatSession, setGwSessionId, setSessionTipRedirect]);
 
   const sendPrompt = useCallback(
     async (

@@ -27,6 +27,7 @@ import { McpRoute } from "@/routes/mcp";
 import { ProfilesRoute } from "@/routes/profiles";
 import { ProfileBuilderRoute } from "@/routes/profile-builder";
 import { MemoryRoute } from "@/routes/memory";
+import { ExternalMemoryRoute } from "@/routes/external-memory";
 import { SoulRoute } from "@/routes/soul";
 import { CronRoute } from "@/routes/cron";
 import { ConsoleRoute } from "@/routes/console";
@@ -76,6 +77,9 @@ function BackendApp() {
           <Route path="/profiles" element={withBoundary(<ProfilesRoute />)} />
           <Route path="/profiles/new" element={withBoundary(<ProfileBuilderRoute />)} />
           <Route path="/memory" element={withBoundary(<MemoryRoute />)} />
+          <Route path="/memconfig" element={withBoundary(<ExternalMemoryRoute page="config" />)} />
+          <Route path="/openviking" element={withBoundary(<ExternalMemoryRoute page="openviking" />)} />
+          <Route path="/hindsight" element={withBoundary(<ExternalMemoryRoute page="hindsight" />)} />
           <Route path="/soul" element={withBoundary(<SoulRoute />)} />
           <Route path="/cron" element={withBoundary(<CronRoute />)} />
           <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />
@@ -118,12 +122,9 @@ export function App() {
     void sendTelemetryPingIfDue();
   }, []);
 
-  const guideState = runtime.getGuideState();
   const isGuide = location.pathname === "/guide";
   let content: ReactNode;
-  if (guideState === "pending" && !isGuide) {
-    content = <Navigate to="/guide" replace />;
-  } else if (isGuide) {
+  if (isGuide) {
     content = withBoundary(<GuideRoute />);
   } else if (!runtime.isBackendReady()) {
     content = <OfflineShell />;

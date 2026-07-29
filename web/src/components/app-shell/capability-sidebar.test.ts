@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CAPABILITY_SECTIONS } from "./capability-sidebar";
 import { GATEWAY_SECTIONS } from "./gateway-sidebar";
+import { EXTERNAL_MEMORY_ITEMS } from "./external-memory-sidebar";
 import { TOP_TABS } from "./use-active-top-tab";
 
 describe("configuration navigation", () => {
@@ -24,6 +25,20 @@ describe("configuration navigation", () => {
     expect(backup?.items.map((item) => [item.label, item.path])).toEqual([
       ["备份恢复", "/backup"],
       ["配置迁移", "/config-migration"],
+    ]);
+  });
+
+  it("keeps only built-in memory in configuration", () => {
+    const config = CAPABILITY_SECTIONS.find((section) => section.label === "§021 · 配置");
+    expect(config?.items.some((item) => item.path === "/memory")).toBe(true);
+    expect(config?.items.some((item) => item.label === "外置记忆")).toBe(false);
+  });
+
+  it("adds config, OpenViking and Hindsight to the external memory sidebar", () => {
+    expect(EXTERNAL_MEMORY_ITEMS.map((item) => [item.label, item.path])).toEqual([
+      ["配置", "/memconfig"],
+      ["OpenViking", "/openviking"],
+      ["Hindsight", "/hindsight"],
     ]);
   });
 });

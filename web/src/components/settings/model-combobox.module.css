@@ -23,6 +23,7 @@
 }
 
 .panel {
+  z-index: calc(var(--h-z-dialog) + 1);
   width: var(--radix-popover-trigger-width);
   max-height: 280px;
   overflow: hidden auto;

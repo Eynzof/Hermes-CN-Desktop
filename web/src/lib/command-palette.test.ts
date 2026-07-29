@@ -51,6 +51,22 @@ describe("command palette item building and filtering", () => {
     expect(groupLabels("看板")).toContain("看板 Kanban");
   });
 
+  it("provides separate built-in and external memory commands", () => {
+    const builtIn = COMMAND_PALETTE_COMMANDS.find((item) => item.id === "command-memory");
+    const external = COMMAND_PALETTE_COMMANDS.find((item) => item.id === "command-external-memory");
+
+    expect(builtIn).toMatchObject({
+      label: "内置记忆",
+      action: { type: "navigate", to: "/memory" },
+    });
+    expect(external).toMatchObject({
+      label: "外置记忆",
+      action: { type: "navigate", to: "/memconfig" },
+    });
+    expect(groupLabels("OpenViking")).toContain("外置记忆");
+    expect(groupLabels("USER.md")).toContain("内置记忆");
+  });
+
   it("matches sessions by title, preview and id", () => {
     const items = buildCommandPaletteItems({
       sessions: [session("session-abc123", "修复登录问题", "检查 token 刷新")],

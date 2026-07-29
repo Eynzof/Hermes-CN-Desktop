@@ -5,18 +5,6 @@
   max-width: 1120px;
 }
 
-.providerHint {
-  margin: 0;
-  color: var(--h-text-2);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.providerHint {
-  padding: 14px 16px 0;
-}
-
-.providerHint code,
 .emptyState code {
   font-family: var(--h-font-mono);
   background: var(--h-bg-code);
@@ -254,8 +242,7 @@
   color: var(--h-text-3);
 }
 
-.entryActions button,
-.providerActions a {
+.entryActions button {
   border: none;
   background: transparent;
   color: var(--h-text-3);
@@ -268,8 +255,7 @@
   font-size: 12px;
 }
 
-.entryActions button:hover,
-.providerActions a:hover {
+.entryActions button:hover {
   color: var(--h-text);
 }
 
@@ -320,77 +306,9 @@
   font-weight: 650;
 }
 
-.providerGrid {
-  padding: 14px 16px 16px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 420px));
-  gap: 12px;
-}
-
-.providerCard {
-  border: 1px solid var(--h-line);
-  background: var(--h-bg-pane);
-  border-radius: var(--h-r-lg);
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.providerCard[data-active="true"] {
-  border-color: var(--h-accent-border);
-  background: color-mix(in srgb, var(--h-accent) 8%, var(--h-bg-pane));
-}
-
-.providerHead,
-.providerActions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.providerHead strong {
-  color: var(--h-text);
-  font-size: 14px;
-}
-
-.providerHead span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--h-accent);
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.providerCard p {
-  margin: 0;
-  color: var(--h-text-2);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.envHints {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.envHints code {
-  font-family: var(--h-font-mono);
-  color: var(--h-text-2);
-  background: var(--h-bg-code);
-  border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
-  padding: 2px 6px;
-  font-size: 10px;
-}
-
 @media (max-width: 900px) {
   .statsGrid,
-  .capacityGrid,
-  .providerGrid {
+  .capacityGrid {
     grid-template-columns: 1fr;
   }
 

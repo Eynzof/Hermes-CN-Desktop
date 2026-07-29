@@ -259,9 +259,9 @@ fn main() {
             }
 
             // Persist the first-install/migration decision before resolving or
-            // installing any backend. Existing users are marked complete;
-            // genuinely clean installs stay shell-only until `/guide` chooses
-            // a mode.
+            // installing any backend. Standard clean installs start the
+            // managed workspace; model onboarding is presented inside AppShell
+            // once the dashboard is ready.
             let control = match desktop_control::initialize() {
                 Ok(control) => control,
                 Err(error) => {
