@@ -1,9 +1,9 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { DEFAULT_THEME_CONFIG, hydrateThemeAtom, usePlatform, type ThemeConfig } from "@hermes/shared-ui";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
-import { readUiValue } from "@/lib/ui-store";
+import { initUiStore, readUiValue } from "@/lib/ui-store";
 import { sendTelemetryPingIfDue } from "@/lib/telemetry";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
@@ -115,6 +115,10 @@ export function App() {
   const platform = usePlatform();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
   const location = useLocation();
+  const [uiReady, setUiReady] = useState(false);
+  useEffect(() => {
+    initUiStore().then(() => setUiReady(true));
+  }, []);
   useEffect(() => {
     hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
   }, [hydrateTheme]);
@@ -124,7 +128,9 @@ export function App() {
 
   const isGuide = location.pathname === "/guide";
   let content: ReactNode;
-  if (isGuide) {
+  if (!uiReady) {
+    content = null;
+  } else if (isGuide) {
     content = withBoundary(<GuideRoute />);
   } else if (!runtime.isBackendReady()) {
     content = <OfflineShell />;
