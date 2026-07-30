@@ -917,33 +917,38 @@ pub fn yolo_mode_effective(hermes_home: &str) -> bool {
     }
 }
 
+fn which_hermes() -> Result<String, String> {
+    let hermes_name = if cfg!(windows) { "hermes.exe" } else { "hermes" };
+    let path_var = std::env::var("PATH").map_err(|_| "PATH not set".to_string())?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(hermes_name);
+        if candidate.exists() {
+            return Ok(candidate.to_string_lossy().to_string());
+        }
+    }
+    Err("hermes not found in PATH".to_string())
+}
+
 pub fn external_agent_allowed() -> bool {
     if env_flag("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT")
         || env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD")
     {
-        log::warn!(
-            "Ignoring external desktop-agent flags; desktop is locked to the managed runtime"
-        );
+        return true;
     }
     false
 }
 
 pub fn dev_external_dashboard_enabled() -> bool {
     if env_flag("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD") {
-        log::warn!(
-            "Ignoring HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD; desktop is locked to the managed runtime"
-        );
+        return true;
     }
     false
 }
 
 /// Find and resolve the hermes executable path.
-/// Order: managed runtime (current.json) only.
-///
-/// The desktop is deliberately locked to the fork-specific managed runtime so
-/// the kernel, HERMES_HOME, gateway pid/lock/status files, and runtime assets
-/// stay under one desktop-owned runtime root. External PATH / shell commands
-/// are not accepted, even in dev mode.
+/// Order: managed runtime (current.json) first, then fall back to external agent
+/// if explicitly allowed via HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT or
+/// HERMES_DESKTOP_AGENT_COMMAND env var.
 fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<String>), AppError> {
     if let Some(record) = crate::process::runtime::read_current_record() {
         log::info!(
@@ -954,15 +959,31 @@ fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<Str
         return Ok((record.executable_path, vec![]));
     }
 
-    if allow_external_agent || std::env::var("HERMES_DESKTOP_AGENT_COMMAND").is_ok() {
-        log::warn!(
-            "Ignoring external agent configuration; desktop requires managed runtime at {}",
-            crate::process::runtime::current_record_path_display()
-        );
+    // Fallback: try HERMES_DESKTOP_AGENT_COMMAND env var
+    if let Ok(cmd) = std::env::var("HERMES_DESKTOP_AGENT_COMMAND") {
+        let cmd = cmd.trim();
+        if !cmd.is_empty() {
+            log::warn!(
+                "No managed runtime found, using HERMES_DESKTOP_AGENT_COMMAND: {}",
+                cmd
+            );
+            return Ok((cmd.to_string(), vec![]));
+        }
+    }
+
+    // Fallback: allow external agent from PATH
+    if allow_external_agent || external_agent_allowed() {
+        if let Ok(path) = which_hermes() {
+            log::warn!(
+                "No managed runtime found, falling back to external hermes at PATH: {}",
+                path
+            );
+            return Ok((path, vec![]));
+        }
     }
 
     Err(AppError::RuntimeUnavailable(format!(
-        "Managed runtime is not installed at {}. The desktop is locked to its bundled managed runtime and will not fall back to PATH or HERMES_DESKTOP_AGENT_COMMAND.",
+        "Managed runtime is not installed at {}. Set HERMES_DESKTOP_AGENT_COMMAND or HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT=1 to use an external hermes binary.",
         crate::process::runtime::current_record_path_display()
     )))
 }

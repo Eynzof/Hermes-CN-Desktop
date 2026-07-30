@@ -136,15 +136,28 @@ function imagePartsFromTransportText(text: string | null | undefined): HermesIma
   return dedupeImageParts(parts);
 }
 
+export function stripImageMetadataFromText(text: string): string {
+  return text
+    .replace(IMAGE_FALLBACK_RE, "")
+    .replace(HERMES_UI_IMAGE_BLOCK_RE, "")
+    .replace(/\n?\[The user attached an image(?: but analysis failed)?\.\]\n?/g, "")
+    .replace(/\n?\[If you need a closer look,? use vision_analyze (?:with |using )?image_url: [^\]\n]+\]\n?/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function textAndImagesFromStructuredContent(content: string | null | undefined): {
   text?: string;
   images: HermesImagePart[];
 } {
   const parsed = parseJsonContent(content);
   if (parsed === undefined) {
+    const raw = content ?? "";
+    const images = imagePartsFromTransportText(raw);
+    const cleaned = stripImageMetadataFromText(raw);
     return {
-      text: content ?? undefined,
-      images: imagePartsFromTransportText(content),
+      text: cleaned || undefined,
+      images,
     };
   }
 
@@ -314,15 +327,26 @@ function normalizeProcessNotificationText(text: string): string | null {
 // blank the whole history, but we drop them here cleanly.
 const RENDERABLE_LEGACY_ROLES = new Set(["user", "assistant", "system", "tool"]);
 
+const SYSTEM_METADATA_PATTERNS: RegExp[] = [
+  /^\[System:\s.*\]/s,
+  /^\[Note:\s.*\]/s,
+  /^\[The user attached an image?:\s.*\]/s,
+  /^\[You can examine it with vision_analyze.*\]/s,
+  /^\[.*vision_analyze.*\]/s,
+  /image_url:\s*[A-Za-z]:\\/s,
+];
+
+function isSystemMetadataMessage(content: string): boolean {
+  const trimmed = content.trim();
+  return SYSTEM_METADATA_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
 export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): HermesUIMessage | null {
   const createdAt = msg.timestamp ? msg.timestamp * 1000 : Date.now();
 
   if (!RENDERABLE_LEGACY_ROLES.has(msg.role)) return null;
 
-  // Belt-and-suspenders: drop metadata-only user messages that slipped past
-  // the Core API-boundary filter (_normalize_message_content in web_server.py).
-  const METADATA_ONLY_RE = /^\[(?:System|Note):\s.*\]/;
-  if (msg.role === "user" && msg.content && METADATA_ONLY_RE.test(msg.content.trim())) {
+  if (msg.content && isSystemMetadataMessage(msg.content)) {
     return null;
   }
 
