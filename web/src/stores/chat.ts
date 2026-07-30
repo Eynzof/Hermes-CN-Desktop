@@ -17,7 +17,7 @@ import {
 } from "@/lib/message-images";
 import { notifyFromGatewayEvent } from "@/lib/notifications";
 import { resolvePersistentSessionId } from "@/lib/session-map";
-import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
+import { readUiValue, recordUiTurnStats, removeUiValue, stableTextHash, writeUiValue } from "@/lib/ui-store";
 import { routeCliDelegationGatewayEventAtom } from "@/stores/cli-delegations";
 import { routeSubagentGatewayEventAtom } from "@/stores/subagents";
 
@@ -85,7 +85,32 @@ export type ChatRuntimeBySession = Record<string, ChatSessionRuntime>;
 type HermesToolPart = Extract<HermesMessagePart, { type: "tool" }>;
 
 export const gwConnectionAtom = atom<ConnectionState>("idle");
-export const gwSessionIdAtom = atom<string | null>(null);
+const GW_SESSION_ID_KEY = "hermes.gateway-session-id";
+
+const gwSessionIdBaseAtom = atom<string | null>(
+  readUiValue<string | null>(GW_SESSION_ID_KEY, null),
+);
+
+/**
+ * The live gateway session ID assigned by the backend on session.create or
+ * session.resume. Persisted to the UI store so an in-flight turn can be
+ * reattached after page refresh (F5).
+ *
+ * Setting to `null` removes the persisted key so a stale gateway session ID
+ * doesn't linger after the turn completes or is explicitly closed.
+ */
+export const gwSessionIdAtom = atom(
+  (get) => get(gwSessionIdBaseAtom),
+  (_get, set, next: string | null) => {
+    set(gwSessionIdBaseAtom, next);
+    if (next) {
+      writeUiValue(GW_SESSION_ID_KEY, next);
+    } else {
+      removeUiValue(GW_SESSION_ID_KEY);
+    }
+  },
+);
+
 export const chatRuntimeBySessionAtom = atom<ChatRuntimeBySession>({});
 
 const GENERIC_TURN_FAILURE_TEXT =
@@ -1408,3 +1433,29 @@ export const removeApprovalAtom = atom(
     );
   },
 );
+
+// ── Hydration ────────────────────────────────────────────────────────────────
+
+/**
+ * Re-read persisted chat atoms from the UI store's current kvCache.
+ *
+ * Call this AFTER `initUiStore()` completes to ensure atoms reflect
+ * persisted values even if they were created at module-import time
+ * before the UI store was initialized.
+ *
+ * Currently handles:
+ * - gwSessionIdAtom: so an in-flight gateway session can be reattached
+ *   after page refresh (F5).
+ */
+export function hydratePersistedChatAtoms(
+  store: ReturnType<typeof import("jotai/vanilla")["createStore"]>,
+): void {
+  // Gateway session ID
+  const gwId = readUiValue<string | null>(GW_SESSION_ID_KEY, undefined);
+  if (gwId !== undefined) {
+    const current = store.get(gwSessionIdAtom);
+    if (current !== gwId) {
+      store.set(gwSessionIdAtom, gwId);
+    }
+  }
+}

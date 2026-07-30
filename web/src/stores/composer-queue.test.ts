@@ -4,6 +4,7 @@ import {
   deserializeQueue,
   enqueue,
   entriesFor,
+  hasNonSerializableAttachments,
   removeEntry,
   serializeQueue,
   shouldAutoDrainOnSettle,
@@ -108,5 +109,57 @@ describe("serialization", () => {
     expect(deserializeQueue("[]")).toEqual({});
     expect(deserializeQueue("42")).toEqual({});
     expect(deserializeQueue('"str"')).toEqual({});
+  });
+
+  it("preserves already-uploaded attachments through serialization round-trip", () => {
+    const uploadedAttachment = { id: "u1", source: "uploaded", uploadedPath: "/tmp/x.pdf", uploadedName: "x.pdf", name: "x.pdf", kind: "file", status: "done" } as ComposerAttachment;
+    const state = enqueue({}, "s1", entry({ attachments: [uploadedAttachment] }));
+    const restored = deserializeQueue(serializeQueue(state));
+    expect(entriesFor(restored, "s1")[0]!.attachments).toHaveLength(1);
+    expect(entriesFor(restored, "s1")[0]!.attachments[0]!.source).toBe("uploaded");
+    expect(entriesFor(restored, "s1")[0]!.attachments[0]!.uploadedPath).toBe("/tmp/x.pdf");
+  });
+
+  it("strips browser attachments without uploadedPath during deserialization", () => {
+    const browserAttachment = { id: "b1", source: "browser", name: "img.png", kind: "image", status: "ready", file: {} as File } as ComposerAttachment;
+    const pathAttachment = { id: "p1", source: "path", path: "/a/b.txt", name: "b.txt", kind: "file", status: "ready" } as ComposerAttachment;
+    const state = enqueue({}, "s1", entry({ attachments: [browserAttachment, pathAttachment] }));
+    const restored = deserializeQueue(serializeQueue(state));
+    // Browser attachments still dropped (no way to recover the File data),
+    // but path attachments survive.
+    expect(entriesFor(restored, "s1")[0]!.attachments).toHaveLength(1);
+    expect(entriesFor(restored, "s1")[0]!.attachments[0]!.source).toBe("path");
+  });
+});
+
+describe("hasNonSerializableAttachments", () => {
+  it("returns false for empty state", () => {
+    expect(hasNonSerializableAttachments({})).toBe(false);
+  });
+
+  it("returns false when all attachments are path or uploaded", () => {
+    const state = enqueue({}, "s1", {
+      id: "q1", text: "hi", attachments: [
+        { source: "path", path: "/a/b.txt", name: "b.txt", kind: "file", status: "ready" } as ComposerAttachment,
+        { source: "uploaded", uploadedPath: "/tmp/x.pdf", name: "x.pdf", kind: "file", status: "done" } as ComposerAttachment,
+      ], queuedAt: 1,
+    });
+    expect(hasNonSerializableAttachments(state)).toBe(false);
+  });
+
+  it("returns true when any attachment is browser-sourced", () => {
+    const state = enqueue({}, "s1", {
+      id: "q1", text: "hi", attachments: [
+        { source: "browser", name: "img.png", kind: "image", status: "ready" } as ComposerAttachment,
+      ], queuedAt: 1,
+    });
+    expect(hasNonSerializableAttachments(state)).toBe(true);
+  });
+
+  it("returns false for null / malformed attachments (tolerated)", () => {
+    // hasNonSerializableAttachments iterates safely and doesn't throw
+    const state = { s1: [{ id: "q1", text: "hi", attachments: [null, undefined, "x" as any], queuedAt: 1 }] };
+    expect(() => hasNonSerializableAttachments(state)).not.toThrow();
+    expect(hasNonSerializableAttachments(state)).toBe(false);
   });
 });

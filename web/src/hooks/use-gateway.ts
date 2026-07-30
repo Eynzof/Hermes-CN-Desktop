@@ -52,7 +52,8 @@ import {
   terminateAllStreamsAtom,
   type ImageEntry,
 } from "@/stores/chat";
-import { sessionTipRedirectAtom } from "@/stores/ui";
+import { activeProfileAtom, sessionTipRedirectAtom } from "@/stores/ui";
+import { activeSessionIdAtom } from "@/stores/ui";
 import { recordTipRedirect } from "@/lib/session-tip-redirect";
 import { createDeltaCoalescer } from "@/lib/gateway-delta-coalescer";
 import { queryClient as appQueryClient } from "@/lib/query-client";
@@ -122,6 +123,7 @@ async function reattachActiveSessionAfterReconnect(): Promise<void> {
       onResumed: (gatewaySessionId, persistentId) => {
         store.set(gwSessionIdAtom, gatewaySessionId);
         rememberSessionMapping(gatewaySessionId, persistentId);
+        mirrorSessionWorkspaceMapping(gatewaySessionId, persistentId);
       },
       onResumeFailed: (error) => {
         // A timeout or temporarily wedged backend does not mean the persistent
@@ -167,12 +169,36 @@ function ensureGatewayBridge(): GatewaySubscriptionBridge {
   // case. The server re-pins events to the new socket only via session.resume —
   // without it the remaining deltas of an in-flight turn are silently dropped.
   // See docs/gateway-connection-overhaul.md (C2).
+  //
+  // However, after a page refresh (F5) the module-level state is reset. If
+  // gwSessionIdAtom was persisted to the UI store (via Bug #3 fix), we can
+  // recover the in-flight turn on the very first connect after page load.
   let needsResumeOnReopen = false;
+  let isFirstConnect = true;
 
   bridge.unsubscribeState = client.onState((state) => {
     forEachSubscriber(bridge, (sub) => sub.setConnectionState(state));
     if (state === "open") {
       void invalidateSessionListQueries(appQueryClient);
+      // First connect after page load: check if a persisted gateway session
+      // ID was restored, and if so attempt to reattach the in-flight turn.
+      // As a fallback, also check activeSessionIdAtom (persisted via Bug #2)
+      // through the session map to find a recoverable gateway session ID.
+      if (isFirstConnect) {
+        isFirstConnect = false;
+        const store = getDefaultStore();
+        let restoredGwId = store.get(gwSessionIdAtom);
+        if (!restoredGwId) {
+          // Fallback: activeSessionId → resolveGatewaySessionId
+          const activeId = store.get(activeSessionIdAtom);
+          if (activeId) {
+            restoredGwId = resolveGatewaySessionId(activeId) ?? null;
+          }
+        }
+        if (restoredGwId) {
+          void reattachActiveSessionAfterReconnect();
+        }
+      }
     }
     if (state === "open" && needsResumeOnReopen) {
       needsResumeOnReopen = false;

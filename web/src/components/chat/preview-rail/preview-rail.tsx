@@ -1,4 +1,5 @@
 import { useAtom, useAtomValue } from "jotai";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   FileText,
@@ -59,6 +60,22 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
   const editorDirty = useAtomValue(previewEditorDirtyAtom);
   const remote = runtime.isRemote();
   const localOnlyPanel = active === "files" || active === "review" || active === "terminal";
+  const didInitPanel = useRef(false);
+
+  // On mount, ensure the URL has a ?panel= parameter so the tab selection
+  // survives page refresh (F5). The browser preserves the URL, so a tab
+  // explicitly set via setActive() already persists — this handles the
+  // case where the panel opens programmatically (⌘B / TopBar button) without
+  // any tab having been clicked yet.
+  useEffect(() => {
+    if (didInitPanel.current) return;
+    didInitPanel.current = true;
+    if (!searchParams.has(PREVIEW_PANEL_QUERY_KEY)) {
+      const next = new URLSearchParams(searchParams);
+      next.set(PREVIEW_PANEL_QUERY_KEY, DEFAULT_PREVIEW_PANEL);
+      setSearchParams(next, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setActive = (panel: PreviewPanel) => {
     if (panel === active) return;

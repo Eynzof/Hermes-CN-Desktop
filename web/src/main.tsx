@@ -53,6 +53,18 @@ async function bootstrap() {
   installDebugCapture();
 
   const { App } = await import("./app");
+  // Hydrate persisted atoms after UI store is initialized and App modules
+  // are loaded. This is a safety net: in the normal flow, atoms are created
+  // by the dynamic import above — after initUiStore() — so kvCache is already
+  // populated and atoms get correct values. But if any code path imports
+  // stores/ui before initUiStore() completes (module-import race), this
+  // re-reads all persisted values from kvCache and updates the atoms.
+  const { hydratePersistedUiAtoms } = await import("./stores/ui");
+  hydratePersistedUiAtoms(jotaiStore);
+  // Hydrate chat atoms (gwSessionIdAtom) from the same populated kvCache
+  const { hydratePersistedChatAtoms } = await import("./stores/chat");
+  hydratePersistedChatAtoms(jotaiStore);
+
   const Router = runtime.platform !== "web" ? HashRouter : BrowserRouter;
 
   createRoot(document.getElementById("root")!).render(
