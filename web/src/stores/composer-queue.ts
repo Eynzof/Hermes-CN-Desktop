@@ -105,13 +105,34 @@ function isQueuedEntry(value: unknown): value is QueuedPromptEntry {
 }
 
 /** Drop attachments that can't survive a reload (browser File objects lose
- *  their data); path-based attachments keep working. Tolerates malformed
- *  elements (null / non-objects) without throwing. */
+ *  their data); path-based and already-uploaded attachments keep working.
+ *  Tolerates malformed elements (null / non-objects) without throwing. */
 function sanitizeAttachments(attachments: ComposerAttachment[]): ComposerAttachment[] {
   return attachments.filter(
     (a): a is ComposerAttachment =>
-      Boolean(a) && typeof a === "object" && a.source === "path" && Boolean(a.path),
+      Boolean(a) && typeof a === "object" && (
+        (a.source === "path" && Boolean(a.path)) ||
+        (a.source === "uploaded" && Boolean(a.uploadedPath))
+      ),
   );
+}
+
+/**
+ * Check whether any queued entry has attachments that cannot survive a page
+ * refresh (browser File / blob URLs). Callers can use this to warn the user
+ * before unload — see the `beforeunload` listener in this module.
+ */
+export function hasNonSerializableAttachments(state: QueueState): boolean {
+  for (const entries of Object.values(state)) {
+    for (const entry of entries) {
+      for (const att of entry.attachments) {
+        if (att && typeof att === "object" && att.source !== "path" && att.source !== "uploaded") {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 export function deserializeQueue(raw: string | null): QueueState {
@@ -176,6 +197,20 @@ function subscribe(listener: () => void): () => void {
 function getSnapshot(): QueueState {
   return liveState;
 }
+
+// Warn before page refresh when queued prompts have non-serializable
+// attachments (browser File objects / blob URLs that would be lost).
+function installBeforeUnloadWarning() {
+  if (typeof window === "undefined") return;
+  const handler = (event: BeforeUnloadEvent) => {
+    if (hasNonSerializableAttachments(liveState)) {
+      event.preventDefault();
+      event.returnValue = "有暂存的附件可能丢失";
+    }
+  };
+  window.addEventListener("beforeunload", handler);
+}
+installBeforeUnloadWarning();
 
 export function enqueueQueuedPrompt(
   key: string | null | undefined,
