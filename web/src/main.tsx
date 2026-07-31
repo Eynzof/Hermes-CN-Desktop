@@ -10,6 +10,7 @@ import { installDebugCapture } from "./lib/debug-install";
 import { installExternalLinkHandling } from "./lib/external-links";
 import { initUiStore, readUiValue } from "./lib/ui-store";
 import { ErrorBoundary } from "./components/error-boundary";
+import { ConfirmProvider } from "./lib/use-confirm";
 import "./styles/global.css";
 
 applyPlatformToDOM(runtime.platform);
@@ -77,9 +78,11 @@ async function bootstrap() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <JotaiProvider store={jotaiStore}>
-            <Router>
-              <App />
-            </Router>
+            <ConfirmProvider>
+              <Router>
+                <App />
+              </Router>
+            </ConfirmProvider>
           </JotaiProvider>
         </QueryClientProvider>
       </ErrorBoundary>

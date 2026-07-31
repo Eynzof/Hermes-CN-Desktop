@@ -404,9 +404,9 @@ export function useGateway() {
     if (!sessionId) return;
     ensureSubscribed();
     await getGatewayClient().request("session.close", { session_id: sessionId });
-    setGwSessionId((current) => current === sessionId ? null : current);
+    if (gwSessionId === sessionId) setGwSessionId(null);
     void invalidateSessionListQueries(queryClient);
-  }, [ensureSubscribed, queryClient, setGwSessionId]);
+  }, [ensureSubscribed, gwSessionId, queryClient, setGwSessionId]);
 
   const beginPrompt = useCallback(
     (sessionId: string, text: string, now?: number, images?: ImageEntry[]) => {

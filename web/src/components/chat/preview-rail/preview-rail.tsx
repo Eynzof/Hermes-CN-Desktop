@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  DEFAULT_PREVIEW_PANEL,
   PREVIEW_PANEL_QUERY_KEY,
   UNSAVED_DISCARD_CONFIRM,
   normalizePreviewPanel,
@@ -22,6 +23,7 @@ import {
   previewRailSelectionMapAtom,
   type PreviewRailSelection,
 } from "@/stores/preview-rail";
+import { useConfirm } from "@/lib/use-confirm";
 import { WebPreviewTab } from "./web-preview-tab";
 import { FilePreviewTab } from "./file-preview-tab";
 import { ReviewTab } from "./review-tab";
@@ -61,6 +63,7 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
   const remote = runtime.isRemote();
   const localOnlyPanel = active === "files" || active === "review" || active === "terminal";
   const didInitPanel = useRef(false);
+  const { confirm } = useConfirm();
 
   // On mount, ensure the URL has a ?panel= parameter so the tab selection
   // survives page refresh (F5). The browser preserves the URL, so a tab
@@ -77,11 +80,19 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setActive = (panel: PreviewPanel) => {
+  const setActive = async (panel: PreviewPanel) => {
     if (panel === active) return;
     // Leaving 文件 unmounts FilePreviewTab and drops any unsaved draft —
     // confirm first instead of losing it silently.
-    if (active === "files" && editorDirty && !window.confirm(UNSAVED_DISCARD_CONFIRM)) return;
+    if (active === "files" && editorDirty) {
+      const confirmed = await confirm({
+        title: "放弃未保存的修改",
+        body: UNSAVED_DISCARD_CONFIRM,
+        confirmLabel: "放弃修改",
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
     const next = new URLSearchParams(searchParams);
     next.set(PREVIEW_PANEL_QUERY_KEY, panel);
     setSearchParams(next, { replace: true });
@@ -112,7 +123,7 @@ export function PreviewRail({ sessionId, workspaceRoot, onClose }: PreviewRailPr
               data-active={active === key ? "true" : undefined}
               disabled={remote && (key === "files" || key === "review" || key === "terminal")}
               title={remote && (key === "files" || key === "review" || key === "terminal") ? "远端模式下禁用桌面端本机文件与进程能力" : undefined}
-              onClick={() => setActive(key)}
+              onClick={() => void setActive(key)}
             >
               <Icon size={12} aria-hidden />
               {label}
