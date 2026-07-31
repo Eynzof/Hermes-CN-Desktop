@@ -43,11 +43,14 @@ import {
   ensureChatSessionAtom,
   gwConnectionAtom,
   gwSessionIdAtom,
+  hideMessageRangeAtom,
+  hideMessagesAfterAtom,
   markSessionInterruptedAtom,
   markStreamsReconnectingAtom,
   resetChatSessionAtom,
   resetStreamStateAtom,
   setSessionErrorAtom,
+  showToastAtom,
   startPromptAtom,
   terminateAllStreamsAtom,
   type ImageEntry,
@@ -271,6 +274,9 @@ export function useGateway() {
   const setSessionError = useSetAtom(setSessionErrorAtom);
   const setSessionTipRedirect = useSetAtom(sessionTipRedirectAtom);
   const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);
+  const hideMessagesAfter = useSetAtom(hideMessagesAfterAtom);
+  const hideMessageRange = useSetAtom(hideMessageRangeAtom);
+  const showToast = useSetAtom(showToastAtom);
 
   const applyGatewayEventAndSync = useCallback((event: GatewayEvent) => {
     applyGatewayEvent(event);
@@ -761,6 +767,93 @@ export function useGateway() {
     setGwSessionId(null);
   }, [setGwSessionId]);
 
+  // 回退到指定消息位置：保留该消息及之前的，隐藏之后的所有消息
+  const undoTurn = useCallback(
+    async (sessionId: string, messageId?: string) => {
+      if (!sessionId) return;
+      const runtime = runtimeBySession[sessionId];
+      if (!runtime) return;
+      if (runtime.streamStatus === "streaming" || runtime.streamStatus === "connecting") {
+        return;
+      }
+
+      const messages = runtime.messages;
+      let keepMessageId = messageId;
+
+      if (!keepMessageId) {
+        // 没有指定消息ID，找到最后一条AI回复
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === "assistant") {
+            keepMessageId = messages[i].id;
+            break;
+          }
+        }
+      }
+      if (!keepMessageId) return;
+
+      hideMessagesAfter({ sessionId, keepMessageId });
+      showToast({ text: "已回退到该对话位置", type: "info" });
+    },
+    [hideMessagesAfter, runtimeBySession, showToast],
+  );
+
+  // 重新生成指定AI回复：隐藏用户消息到AI回复的范围，重新发送用户消息
+  const regenerateResponse = useCallback(
+    async (sessionId: string, assistantMessageId?: string) => {
+      if (!sessionId) return;
+      const runtime = runtimeBySession[sessionId];
+      if (!runtime) return;
+      if (runtime.streamStatus === "streaming" || runtime.streamStatus === "connecting") {
+        return;
+      }
+
+      const messages = runtime.messages;
+
+      // 如果没有指定消息ID，使用最后一条AI回复
+      let targetAssistantId = assistantMessageId;
+      if (!targetAssistantId) {
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === "assistant" && messages[i].status !== "streaming") {
+            targetAssistantId = messages[i].id;
+            break;
+          }
+        }
+      }
+      if (!targetAssistantId) return;
+
+      // 找到目标AI回复的位置
+      const assistantIndex = messages.findIndex((m) => m.id === targetAssistantId);
+      if (assistantIndex === -1) return;
+
+      // 从AI回复位置往前找对应的用户消息
+      let lastUserText: string | null = null;
+      let userMessageId: string | null = null;
+      for (let i = assistantIndex - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          userMessageId = messages[i].id;
+          const text = messages[i].parts
+            .filter((p: any) => p.type === "text")
+            .map((p: any) => p.text)
+            .join("");
+          if (text.trim()) {
+            lastUserText = text.trim();
+          }
+          break;
+        }
+      }
+      if (!lastUserText) return;
+
+      // 隐藏用户消息到AI回复的所有消息
+      const startMessageId = userMessageId ?? targetAssistantId;
+      hideMessageRange({ sessionId, startMessageId, endMessageId: targetAssistantId });
+      showToast({ text: "正在重新生成回复...", type: "info" });
+
+      // 重新发送用户消息
+      await sendPrompt(sessionId, lastUserText, { displayText: lastUserText });
+    },
+    [hideMessageRange, runtimeBySession, sendPrompt, showToast],
+  );
+
   return {
     connectionState,
     gwSessionId,
@@ -790,5 +883,7 @@ export function useGateway() {
     interruptSession,
     setSessionTitle,
     disconnect,
+    undoTurn,
+    regenerateResponse,
   };
 }

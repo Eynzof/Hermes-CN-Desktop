@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
-import { AlertTriangle, ChevronRight, Info, Loader2, Volume2, VolumeX } from "lucide-react";
+import { AlertTriangle, ChevronRight, Info, Loader2, RefreshCw, Undo2, Volume2, VolumeX } from "lucide-react";
 import { assistantAvatarEffectiveAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
 import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
 import { AssistantProfileCard } from "./assistant-profile-card";
@@ -39,6 +39,9 @@ interface MessageTimelineProps {
   sessionUsage?: SessionUsageResult | null;
   progressModel?: string;
   autoTts?: boolean;
+  hiddenMessageIds?: Set<string>;
+  onUndoTurn?: (messageId: string) => void;
+  onRegenerateResponse?: (messageId: string) => void;
 }
 
 interface TurnAnchor {
@@ -766,9 +769,12 @@ interface MessageBubbleProps {
   sessionUsage?: SessionUsageResult | null;
   progressModel?: string;
   speech?: SpeechPlaybackControls;
+  onUndoTurn?: (messageId: string) => void;
+  onRegenerateResponse?: (messageId: string) => void;
+  showTurnActions?: boolean;
 }
 
-function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
+function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech, onUndoTurn, onRegenerateResponse, showTurnActions }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
   const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
   const assistantAvatarDataUrl = useAtomValue(assistantAvatarEffectiveAtom);
@@ -785,6 +791,11 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
   const hasBlocks = !isUser && Boolean(message.blocks?.length);
   const hasSkillInvocation = isSkillInvocationText(message.text);
   const messageStats = message.stats ?? sessionUsageFallbackStats(message, sessionUsage);
+  const isError = message.status === "error";
+  // 显示操作按钮：assistant消息（非streaming），包括错误状态（错误时只显示重新生成）
+  const showAssistantActions = showTurnActions && !isUser && !isSystem && !isToolOnly && !streaming;
+  const showUndoButton = showAssistantActions && !isError;
+  const showRegenerateButton = showAssistantActions;
 
   if (hasSkillInvocation) {
     return (
@@ -913,6 +924,28 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
                 复制
               </CopyButton>
             ) : null}
+            {showUndoButton && onUndoTurn ? (
+              <button
+                type="button"
+                onClick={() => onUndoTurn(message.id)}
+                title="回退到此对话位置"
+                aria-label="回退到此对话位置"
+              >
+                <Undo2 aria-hidden="true" />
+                <span>回退</span>
+              </button>
+            ) : null}
+            {showRegenerateButton && onRegenerateResponse ? (
+              <button
+                type="button"
+                onClick={() => onRegenerateResponse(message.id)}
+                title="重新生成回复"
+                aria-label="重新生成回复"
+              >
+                <RefreshCw aria-hidden="true" />
+                <span>重新生成</span>
+              </button>
+            ) : null}
             {readable && speech ? (
               <button
                 type="button"
@@ -957,6 +990,9 @@ export function MessageTimeline({
   sessionUsage,
   progressModel,
   autoTts = false,
+  hiddenMessageIds,
+  onUndoTurn,
+  onRegenerateResponse,
 }: MessageTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -984,17 +1020,20 @@ export function MessageTimeline({
     status: "idle",
   });
   const [speechError, setSpeechError] = useState<SpeechPlaybackError | null>(null);
+  const [confirmUndoMessageId, setConfirmUndoMessageId] = useState<string | null>(null);
   const visibleMessages = useMemo(
     () =>
-      messages.filter(
-        (message) =>
-          message.text ||
-          message.reasoning ||
-          message.images?.length ||
-          message.tools?.length ||
-          message.blocks?.length,
-      ),
-    [messages],
+      messages
+        .filter(
+          (message) =>
+            (!hiddenMessageIds || !hiddenMessageIds.has(message.id)) &&
+            (message.text ||
+              message.reasoning ||
+              message.images?.length ||
+              message.tools?.length ||
+              message.blocks?.length),
+        ),
+    [messages, hiddenMessageIds],
   );
   const turnAnchors = useMemo<TurnAnchor[]>(() => {
     const anchors: TurnAnchor[] = [];
@@ -1010,6 +1049,24 @@ export function MessageTimeline({
     return anchors;
   }, [visibleMessages]);
   const showTurnRail = turnAnchors.length > 1;
+
+  // 处理回退按钮点击 - 先显示确认弹窗
+  const handleUndoTurn = useCallback((messageId: string) => {
+    setConfirmUndoMessageId(messageId);
+  }, []);
+
+  // 确认回退
+  const confirmUndoTurn = useCallback(() => {
+    if (confirmUndoMessageId && onUndoTurn) {
+      onUndoTurn(confirmUndoMessageId);
+    }
+    setConfirmUndoMessageId(null);
+  }, [confirmUndoMessageId, onUndoTurn]);
+
+  // 取消回退
+  const cancelUndoTurn = useCallback(() => {
+    setConfirmUndoMessageId(null);
+  }, []);
 
   const stopSpeech = useCallback(() => {
     speechSequenceRef.current += 1;
@@ -1437,6 +1494,8 @@ export function MessageTimeline({
           const showDate = !previous || formatDay(previous.createdAt) !== formatDay(message.createdAt);
           const isLast = index === visibleMessages.length - 1;
           const isUserTurn = message.role === "user" && !isSkillInvocationText(message.text);
+          const isAssistantMessage = message.role === "assistant";
+          const isLastAssistant = isLast && isAssistantMessage;
           return (
             <div
               key={message.id}
@@ -1450,6 +1509,9 @@ export function MessageTimeline({
                 sessionUsage={isLast ? sessionUsage : undefined}
                 progressModel={isLast ? progressModel : undefined}
                 speech={speechControls}
+                onUndoTurn={isAssistantMessage ? handleUndoTurn : undefined}
+                onRegenerateResponse={isLastAssistant ? onRegenerateResponse : undefined}
+                showTurnActions={isAssistantMessage}
               />
             </div>
           );
@@ -1458,6 +1520,25 @@ export function MessageTimeline({
         {statusMessage ? <div className={s.statusMessage}>{statusMessage}</div> : null}
         {pendingApproval}
       </div>
+      {/* 回退确认弹窗 */}
+      {confirmUndoMessageId ? (
+        <div className={s.confirmOverlay} onClick={cancelUndoTurn}>
+          <div className={s.confirmDialog} onClick={(e) => e.stopPropagation()}>
+            <div className={s.confirmTitle}>确认回退</div>
+            <div className={s.confirmMessage}>
+              回退后将<strong>删除该消息之后的所有对话记录</strong>，此操作不可撤销。
+              <br />
+              你确定要回退到这条消息吗？
+            </div>
+            <div className={s.confirmActions}>
+              <button type="button" onClick={cancelUndoTurn}>取消</button>
+              <button type="button" className={s.confirmDanger} onClick={confirmUndoTurn}>
+                确认回退
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1411,3 +1411,231 @@ export const removeApprovalAtom = atom(
     );
   },
 );
+
+// 回退到上一轮对话：删除最后一条用户消息及其对应的AI回复
+export const undoLastTurnAtom = atom(
+  null,
+  (_get, set, sessionId: string) => {
+    const now = Date.now();
+    set(chatRuntimeBySessionAtom, (state) =>
+      updateSessionRuntime(state, sessionId, (runtime) => {
+        if (runtime.streamStatus === "streaming" || runtime.streamStatus === "connecting") {
+          return runtime;
+        }
+        const messages = [...runtime.messages];
+        if (messages.length < 2) return runtime;
+        let userIndex = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === "user") {
+            userIndex = i;
+            break;
+          }
+        }
+        if (userIndex === -1) return runtime;
+        const newMessages = messages.slice(0, userIndex);
+        return {
+          ...runtime,
+          messages: newMessages,
+          streamStatus: "idle",
+          statusMessage: "",
+          statusKind: undefined,
+          statusUpdatedAt: undefined,
+          activeAssistantId: undefined,
+          updatedAt: now,
+        };
+      }),
+    );
+  },
+);
+
+// 获取最后一条用户消息的文本内容（普通函数，接受 getter 作为参数）
+export function getLastUserMessageText(get: (atom: typeof chatRuntimeBySessionAtom) => ChatRuntimeBySession, sessionId: string): string | null {
+  const runtime = get(chatRuntimeBySessionAtom)[sessionId];
+  if (!runtime || runtime.messages.length === 0) return null;
+  const messages = [...runtime.messages].reverse();
+  for (const message of messages) {
+    if (message.role === "user") {
+      const text = message.parts
+        .filter((p): p is Extract<HermesMessagePart, { type: "text" }> => p.type === "text")
+        .map((p) => p.text)
+        .join("");
+      if (text.trim()) return text.trim();
+    }
+  }
+  return null;
+}
+
+// 重新生成回复：删除最后一条AI回复（保留用户消息），然后重新发送用户消息
+export const regenerateLastResponseAtom = atom(
+  null,
+  (_get, set, sessionId: string) => {
+    const now = Date.now();
+    set(chatRuntimeBySessionAtom, (state) =>
+      updateSessionRuntime(state, sessionId, (runtime) => {
+        if (runtime.streamStatus === "streaming" || runtime.streamStatus === "connecting") {
+          return runtime;
+        }
+        const messages = [...runtime.messages];
+        let lastAssistantIndex = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === "assistant") {
+            lastAssistantIndex = i;
+            break;
+          }
+        }
+        if (lastAssistantIndex === -1) return runtime;
+        const newMessages = messages.slice(0, lastAssistantIndex);
+        return {
+          ...runtime,
+          messages: newMessages,
+          streamStatus: "idle",
+          statusMessage: "",
+          statusKind: undefined,
+          statusUpdatedAt: undefined,
+          activeAssistantId: undefined,
+          updatedAt: now,
+        };
+      }),
+    );
+  },
+);
+
+// Toast 通知状态
+export interface ToastState {
+  id: number;
+  text: string;
+  type: "info" | "success" | "error";
+}
+
+export const toastMessagesAtom = atom<ToastState[]>([]);
+
+export const showToastAtom = atom(null, (_get, set, payload: { text: string; type?: "info" | "success" | "error" }) => {
+  const id = Date.now() + Math.random();
+  set(toastMessagesAtom, (prev) => [...prev, { id, text: payload.text, type: payload.type ?? "info" }]);
+  setTimeout(() => {
+    set(toastMessagesAtom, (prev) => prev.filter((t) => t.id !== id));
+  }, 2500);
+});
+
+export const dismissToastAtom = atom(null, (_get, set, id: number) => {
+  set(toastMessagesAtom, (prev) => prev.filter((t) => t.id !== id));
+});
+
+// 被折叠/隐藏的消息ID（用于回退和重新生成功能）
+// Key: sessionId, Value: Set of hidden message IDs
+export const hiddenMessageIdsAtom = atom<Map<string, Set<string>>>(new Map());
+
+// 回退：保留目标消息及之前的，隐藏目标消息之后的所有消息
+export const hideMessagesAfterAtom = atom(
+  null,
+  (_get, set, payload: { sessionId: string; keepMessageId: string }) => {
+    const { sessionId, keepMessageId } = payload;
+    set(chatRuntimeBySessionAtom, (state) => {
+      const runtime = state[sessionId];
+      if (!runtime) return state;
+
+      // 找到 keepMessageId 在消息列表中的位置
+      const messages = runtime.messages;
+      let targetIndex = -1;
+      for (let i = 0; i < messages.length; i++) {
+        if (messages[i].id === keepMessageId) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) return state;
+
+      // 获取需要隐藏的所有消息ID（从目标消息的下一条开始到结尾）
+      const idsToHide = new Set<string>();
+      for (let i = targetIndex + 1; i < messages.length; i++) {
+        idsToHide.add(messages[i].id);
+      }
+
+      // 更新 hiddenMessageIdsAtom
+      set(hiddenMessageIdsAtom, (prev) => {
+        const next = new Map(prev);
+        const existing = next.get(sessionId) ?? new Set<string>();
+        const merged = new Set([...existing, ...idsToHide]);
+        next.set(sessionId, merged);
+        return next;
+      });
+
+      // 重置流状态
+      const now = Date.now();
+      return {
+        ...state,
+        [sessionId]: {
+          ...runtime,
+          streamStatus: "idle",
+          statusMessage: "",
+          statusKind: undefined,
+          statusUpdatedAt: now,
+          activeAssistantId: undefined,
+          updatedAt: now,
+        },
+      };
+    });
+  },
+);
+
+// 重新生成：隐藏指定范围内的消息（用户消息到AI回复）
+export const hideMessageRangeAtom = atom(
+  null,
+  (_get, set, payload: { sessionId: string; startMessageId: string; endMessageId: string }) => {
+    const { sessionId, startMessageId, endMessageId } = payload;
+    set(chatRuntimeBySessionAtom, (state) => {
+      const runtime = state[sessionId];
+      if (!runtime) return state;
+
+      const messages = runtime.messages;
+      let startIndex = -1;
+      let endIndex = -1;
+      for (let i = 0; i < messages.length; i++) {
+        if (messages[i].id === startMessageId) startIndex = i;
+        if (messages[i].id === endMessageId) endIndex = i;
+      }
+      if (startIndex === -1 || endIndex === -1) return state;
+
+      // 获取需要隐藏的所有消息ID（从 start 到 end）
+      const idsToHide = new Set<string>();
+      for (let i = startIndex; i <= endIndex; i++) {
+        idsToHide.add(messages[i].id);
+      }
+
+      set(hiddenMessageIdsAtom, (prev) => {
+        const next = new Map(prev);
+        const existing = next.get(sessionId) ?? new Set<string>();
+        const merged = new Set([...existing, ...idsToHide]);
+        next.set(sessionId, merged);
+        return next;
+      });
+
+      const now = Date.now();
+      return {
+        ...state,
+        [sessionId]: {
+          ...runtime,
+          streamStatus: "idle",
+          statusMessage: "",
+          statusKind: undefined,
+          statusUpdatedAt: now,
+          activeAssistantId: undefined,
+          updatedAt: now,
+        },
+      };
+    });
+  },
+);
+
+// 清除指定会话的隐藏消息记录（在新对话时调用）
+export const clearHiddenMessagesAtom = atom(
+  null,
+  (_get, set, sessionId: string) => {
+    set(hiddenMessageIdsAtom, (prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Map(prev);
+      next.delete(sessionId);
+      return next;
+    });
+  },
+);

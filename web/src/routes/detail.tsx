@@ -15,8 +15,11 @@ import {
 import { pickTipRedirect } from "@/lib/session-tip-redirect";
 import {
   appendNoticeAtom,
+  dismissToastAtom,
+  hiddenMessageIdsAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
   removeApprovalAtom,
+  toastMessagesAtom,
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
 import { useSkills } from "@/hooks/use-skills";
@@ -78,6 +81,7 @@ import { PREVIEW_PANEL_QUERY_KEY } from "@/lib/preview-rail";
 import { activeCliDelegationCount, clearFinishedCliDelegationsAtom } from "@/stores/cli-delegations";
 import { activeSubagentCount, clearFinishedSubagentsAtom } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
+import { ToastContainer } from "@/components/ui/toast";
 import {
   hermesUIMessagesToChatMessages,
   attachTurnStatsMetadata,
@@ -117,6 +121,8 @@ export function DetailRoute() {
     attachImage,
     attachImageBytes,
     detectDroppedPath,
+    undoTurn,
+    regenerateResponse,
   } = useGateway();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
@@ -137,6 +143,9 @@ export function DetailRoute() {
   const sessionIdCopyTimer = useRef<number | null>(null);
   const recoverCompletedTurnFromStoredMessages = useSetAtom(recoverCompletedTurnFromStoredMessagesAtom);
   const appendNotice = useSetAtom(appendNoticeAtom);
+  const toastMessages = useAtomValue(toastMessagesAtom);
+  const dismissToast = useSetAtom(dismissToastAtom);
+  const hiddenMessageIdsMap = useAtomValue(hiddenMessageIdsAtom);
 
   const {
     restSessionId,
@@ -718,6 +727,9 @@ export function DetailRoute() {
             sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
             progressModel={runtimeIsBusy ? model || undefined : undefined}
             autoTts={autoTts}
+            hiddenMessageIds={runtimeSessionId ? hiddenMessageIdsMap.get(runtimeSessionId) : undefined}
+            onUndoTurn={runtimeSessionId ? (messageId) => undoTurn(runtimeSessionId, messageId) : undefined}
+            onRegenerateResponse={runtimeSessionId ? (messageId) => regenerateResponse(runtimeSessionId, messageId) : undefined}
           />
           <div className={s.composerArea}>
             {runtimeIsBusy && stall.isStalled ? (
@@ -795,6 +807,7 @@ export function DetailRoute() {
         ) : null}
 
       </div>
+      <ToastContainer messages={toastMessages} onDismiss={dismissToast} />
     </div>
   );
 }
