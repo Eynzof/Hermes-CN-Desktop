@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { putJSON } from "@/lib/transport";
 import { MemoryProvidersResponse } from "@hermes/protocol";
 import {
-  MAX_MEMORY_CHAR_LIMIT,
   memoryCharLimitConfigPayload,
   memoryProviderConfigPayload,
   memoryProviderConfigQueryKey,
@@ -90,9 +89,18 @@ describe("memory provider hooks contract", () => {
     );
   });
 
-  it("rejects limits outside the hard bounds", () => {
+  it("rejects non-positive limits", () => {
     expect(() => memoryCharLimitConfigPayload(0)).toThrow();
-    expect(() => memoryCharLimitConfigPayload(MAX_MEMORY_CHAR_LIMIT + 1)).toThrow();
+    expect(() => memoryCharLimitConfigPayload(-1)).toThrow();
     expect(() => memoryCharLimitConfigPayload(2200.5)).toThrow();
+  });
+
+  it("accepts higher limits previously rejected by hard upper bound", () => {
+    // Regression: the old MAX_MEMORY_CHAR_LIMIT (8000) prevented users
+    // from matching a backend-configured higher limit via the UI.
+    expect(() => memoryCharLimitConfigPayload(20000)).not.toThrow();
+    expect(memoryCharLimitConfigPayload(20000)).toEqual({
+      config: { memory: { memory_char_limit: 20000 } },
+    });
   });
 });
