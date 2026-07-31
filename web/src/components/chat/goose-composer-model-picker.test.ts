@@ -30,6 +30,7 @@ describe("buildCandidates", () => {
       contextWindow: 1_000_000,
       supportsTools: true,
       supportsReasoning: true,
+      supportsVision: true,
     });
   });
 
