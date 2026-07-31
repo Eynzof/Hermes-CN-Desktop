@@ -7,6 +7,7 @@ import {
   Clock,
   FileText,
   Pause,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
   useCronRunDetail,
   useCronRuns,
   useDeleteCronJob,
+  useUpdateCronJob,
 } from "@/hooks/use-cron";
 import { SectionShell } from "./section-shell";
 import s from "./cron.module.css";
@@ -199,6 +201,7 @@ export function CronRoute() {
   const profilesQuery = useProfiles();
   const activeProfile = useActiveProfileName();
   const createJob = useCreateCronJob();
+  const updateJob = useUpdateCronJob();
   const deleteJob = useDeleteCronJob();
   const cronAction = useCronAction();
   const queryClient = useQueryClient();
@@ -209,11 +212,17 @@ export function CronRoute() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedRunFilename, setSelectedRunFilename] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [newProfile, setNewProfile] = useState(activeProfile || "default");
   const [newName, setNewName] = useState("");
   const [newSchedule, setNewSchedule] = useState("");
   const [newPrompt, setNewPrompt] = useState("");
   const [newDeliver, setNewDeliver] = useState("local");
+  const [editProfile, setEditProfile] = useState("default");
+  const [editName, setEditName] = useState("");
+  const [editSchedule, setEditSchedule] = useState("");
+  const [editPrompt, setEditPrompt] = useState("");
+  const [editDeliver, setEditDeliver] = useState("local");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const refreshTimersRef = useRef<number[]>([]);
 
@@ -335,6 +344,38 @@ export function CronRoute() {
     );
   };
 
+  const handleEdit = (job: CronJob) => {
+    setEditProfile(cronJobProfile(job));
+    setEditName(text(job.name));
+    setEditSchedule(typeof job.schedule === "string" ? text(job.schedule) : text((job.schedule as any)?.value ?? (job.schedule as any)?.expr ?? ""));
+    setEditPrompt(text(job.prompt));
+    setEditDeliver(text(job.deliver) || "local");
+    setShowEdit(true);
+  };
+
+  const handleUpdate = (job: CronJob) => {
+    const schedule = editSchedule.trim();
+    const prompt = editPrompt.trim();
+    if (!schedule || !prompt) {
+      setFeedback({ tone: "error", message: "请填写调度表达式和 Prompt。" });
+      return;
+    }
+    const updates: Record<string, any> = { schedule, prompt };
+    if (editName.trim()) updates.name = editName.trim();
+    updates.deliver = editDeliver;
+    updateJob.mutate(
+      { id: job.id, profile: editProfile || "default", updates },
+      {
+        onSuccess: (updated) => {
+          setShowEdit(false);
+          setSelectedKey(jobKey(updated));
+          setFeedback({ tone: "ok", message: `已更新定时任务「${titleOf(updated)}」。` });
+        },
+        onError: (err) => setFeedback({ tone: "error", message: `更新定时任务失败：${actionError(err)}` }),
+      },
+    );
+  };
+
   const handleAction = (job: CronJob, action: "pause" | "resume" | "trigger") => {
     cronAction.mutate(
       { id: job.id, profile: cronJobProfile(job), action },
@@ -443,6 +484,10 @@ export function CronRoute() {
 
           {showCreate ? (
             <CreateJobPanel
+              title="新建定时任务"
+              description="保持任务指令自包含；系统会按计划唤起 Agent 执行。"
+              submitLabel="创建任务"
+              submitting={createJob.isPending}
               profiles={profiles.map((profile) => profile.name)}
               activeProfile={activeProfile || "default"}
               profile={newProfile}
@@ -450,7 +495,6 @@ export function CronRoute() {
               schedule={newSchedule}
               prompt={newPrompt}
               deliver={newDeliver}
-              creating={createJob.isPending}
               onProfile={setNewProfile}
               onName={setNewName}
               onSchedule={setNewSchedule}
@@ -459,13 +503,35 @@ export function CronRoute() {
               onCancel={() => setShowCreate(false)}
               onSubmit={handleCreate}
             />
+          ) : showEdit && selectedJob ? (
+            <CreateJobPanel
+              title="修改定时任务"
+              description="修改任务配置后保存即可生效。"
+              submitLabel="保存修改"
+              submitting={updateJob.isPending}
+              profiles={profiles.map((profile) => profile.name)}
+              activeProfile={activeProfile || "default"}
+              profile={editProfile}
+              name={editName}
+              schedule={editSchedule}
+              prompt={editPrompt}
+              deliver={editDeliver}
+              onProfile={setEditProfile}
+              onName={setEditName}
+              onSchedule={setEditSchedule}
+              onPrompt={setEditPrompt}
+              onDeliver={setEditDeliver}
+              onCancel={() => setShowEdit(false)}
+              onSubmit={() => handleUpdate(selectedJob)}
+            />
           ) : selectedJob ? (
             <JobDetail
               job={selectedJob}
-              busy={cronAction.isPending || deleteJob.isPending}
+              busy={cronAction.isPending || deleteJob.isPending || updateJob.isPending}
               onPauseResume={() => handleAction(selectedJob, isPaused(selectedJob) ? "resume" : "pause")}
               onTrigger={() => handleAction(selectedJob, "trigger")}
               onDelete={() => handleDelete(selectedJob)}
+              onEdit={() => handleEdit(selectedJob)}
             />
           ) : (
             <div className={s.detailEmpty}>
@@ -537,6 +603,10 @@ export function CronRoute() {
 }
 
 interface CreateJobPanelProps {
+  title: string;
+  description: string;
+  submitLabel: string;
+  submitting: boolean;
   profiles: string[];
   activeProfile: string;
   profile: string;
@@ -544,7 +614,6 @@ interface CreateJobPanelProps {
   schedule: string;
   prompt: string;
   deliver: string;
-  creating: boolean;
   onProfile: (value: string) => void;
   onName: (value: string) => void;
   onSchedule: (value: string) => void;
@@ -560,8 +629,8 @@ function CreateJobPanel(props: CreateJobPanelProps) {
     <section className={s.card}>
       <div className={s.cardHeader}>
         <div>
-          <h1>新建定时任务</h1>
-          <p>保持任务指令自包含；系统会按计划唤起 Agent 执行。</p>
+          <h1>{props.title}</h1>
+          <p>{props.description}</p>
         </div>
       </div>
       <div className={s.formGrid}>
@@ -591,8 +660,8 @@ function CreateJobPanel(props: CreateJobPanelProps) {
         </label>
       </div>
       <div className={s.formActions}>
-        <button type="button" className={s.secondaryButton} onClick={props.onCancel} disabled={props.creating}>取消</button>
-        <button type="button" className={s.primaryButton} onClick={props.onSubmit} disabled={props.creating}>{props.creating ? "创建中…" : "创建任务"}</button>
+        <button type="button" className={s.secondaryButton} onClick={props.onCancel} disabled={props.submitting}>取消</button>
+        <button type="button" className={s.primaryButton} onClick={props.onSubmit} disabled={props.submitting}>{props.submitting ? "处理中…" : props.submitLabel}</button>
       </div>
     </section>
   );
@@ -604,9 +673,10 @@ interface JobDetailProps {
   onPauseResume: () => void;
   onTrigger: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }
 
-function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailProps) {
+function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete, onEdit }: JobDetailProps) {
   const paused = isPaused(job);
   return (
     <section className={s.card}>
@@ -615,6 +685,9 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
           <div className={s.breadcrumb}>自动化功能 / {cronJobProfile(job)}</div>
           <div className={s.detailActions}>
             <span className={s.statusBadge} data-tone={statusTone(job)}>{statusLabel(job)}</span>
+            <button type="button" className={s.secondaryButton} onClick={onEdit} disabled={busy}>
+              <Pencil size={16} /> 修改
+            </button>
             <button type="button" className={s.secondaryButton} onClick={onPauseResume} disabled={busy}>
               {paused ? <Play size={16} /> : <Pause size={16} />}{paused ? "恢复" : "暂停"}
             </button>
