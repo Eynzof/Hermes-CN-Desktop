@@ -2,20 +2,20 @@
 
 :root,
 [data-density="comfortable"] {
-  --h-row-h: 30px;
-  --h-pad: 14px;
+  --h-row-h: 32px;
+  --h-pad: 16px;
   --h-fs: 12.5px;
   --h-lh: 1.75;
 }
 
 [data-density="compact"] {
-  --h-row-h: 26px;
-  --h-pad: 10px;
+  --h-row-h: 24px;
+  --h-pad: 12px;
   --h-fs: 12px;
   --h-lh: 1.6;
 }
 
-/* Single radius scale — no user-facing toggle */
+/* Square geometry aliases — every radius resolves to zero. */
 :root {
   --h-r-sm: var(--h-radius-sm);
   --h-r-md: var(--h-radius-md);
@@ -26,7 +26,9 @@
 /* App-shell layout sizing — aligned with prototypes' --topbar-h / --sidebar-w / --statusbar-h. */
 :root {
   --h-topbar-h: 48px;
-  --h-statusbar-h: 26px;
+  --h-statusbar-h: 28px;
   --h-sidebar-w: 248px;
   --h-tab-h: 36px;
+  --h-page-content-max-width: 1120px;
+  --h-page-content-gutter-x: 24px;
 }

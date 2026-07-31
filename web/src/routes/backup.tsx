@@ -136,17 +136,15 @@ export function BackupRoute() {
       />
 
       <Alert tone="warning" size="sm">
-        <AlertTriangle size={14} /> 备份文件可能包含 <code>.env</code>、OAuth 令牌、API Key 和聊天历史。请只保存在可信位置，不要直接发给他人。
+        <AlertTriangle size={16} /> 备份文件可能包含 <code>.env</code>、OAuth 令牌、API Key 和聊天历史。请只保存在可信位置，不要直接发给他人。
       </Alert>
 
       <div className={s.actions}>
-        <Button type="button" variant="solid" tone="accent" onClick={exportBackup} disabled={busy}>
-          <Download size={13} />
-          {exporting ? "导出中…" : "导出当前档案备份"}
+        <Button type="button" variant="solid" tone="accent" onClick={exportBackup} loading={exporting} disabled={importing} leadingIcon={<Download size={12} />}>
+          导出当前档案备份
         </Button>
-        <Button type="button" variant="outline" onClick={importBackup} disabled={busy}>
-          <Upload size={13} />
-          {importing ? "导入中…" : "导入备份压缩包"}
+        <Button type="button" variant="outline" onClick={importBackup} loading={importing} disabled={exporting} leadingIcon={<Upload size={12} />}>
+          导入备份压缩包
         </Button>
       </div>
 
@@ -155,7 +153,7 @@ export function BackupRoute() {
 
       <section className={s.previewPanel}>
         <h3 className={s.previewTitle}>
-          <Archive size={15} /> 备份策略
+          <Archive size={16} /> 备份策略
         </h3>
         <div className={s.entryList}>
           <div className={s.entryItem}>
@@ -176,7 +174,7 @@ export function BackupRoute() {
       {lastExport?.ok && (
         <section className={s.previewPanel}>
           <h3 className={s.previewTitle}>
-            <CheckCircle2 size={15} /> 导出结果
+            <CheckCircle2 size={16} /> 导出结果
           </h3>
           <div className={s.entryList}>
             <div className={s.entryItem}>
@@ -204,7 +202,7 @@ export function BackupRoute() {
               onClick={() => void openBackupDirectory(lastExport.backupPath)}
               disabled={!lastExport.backupPath || !window.hermesDesktop?.openWorkspacePath}
             >
-              <FolderOpen size={13} />
+              <FolderOpen size={12} />
               打开所在文件夹
             </Button>
           </div>
@@ -214,7 +212,7 @@ export function BackupRoute() {
       {lastImport?.ok && (
         <section className={s.previewPanel}>
           <h3 className={s.previewTitle}>
-            <CheckCircle2 size={15} /> 导入结果
+            <CheckCircle2 size={16} /> 导入结果
           </h3>
           <div className={s.entryList}>
             <div className={s.entryItem}>

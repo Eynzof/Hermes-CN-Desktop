@@ -30,7 +30,7 @@
   width: 100%;
   max-width: var(--conversation-max-width, 780px);
   margin: 0 auto;
-  padding: 10px 28px 18px;
+  padding: 12px 28px 0;
 }
 
 /* Live subagent count badge on the top-bar toggle chip. */
@@ -38,10 +38,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 15px;
-  height: 15px;
+  min-width: 16px;
+  height: 16px;
   padding: 0 4px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text-2);
   font-size: 9.5px;
@@ -55,10 +55,7 @@
   color: var(--h-accent-contrast);
 }
 
-/* Soft fade between the scrolling timeline and the composer, mirroring
-   Claude Desktop. The gradient sits just above the composer container
-   and bleeds into the page background, so trailing message content
-   does not collide with the composer's hard top edge. */
+/* Flat separator between the scrolling timeline and the composer. */
 .composerArea::before {
   content: "";
   position: absolute;
@@ -67,21 +64,17 @@
   right: 0;
   height: 20px;
   pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--h-bg-pane) 0%, transparent),
-    var(--h-bg-pane)
-  );
+  background: var(--h-bg-pane);
   z-index: 1;
 }
 
 .approvalCard {
-  margin: 14px 0 0;
+  margin: 16px 0 0;
   border: 1px solid var(--h-warn);
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--h-bg-input);
-  box-shadow: var(--h-shadow);
-  padding: 14px;
+  box-shadow: none;
+  padding: 16px;
 }
 
 .approvalHeader {
@@ -94,13 +87,13 @@
 .approvalCommand {
   margin-bottom: 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--h-bg-code);
   color: var(--h-text);
   font-family: var(--h-font-mono);
   font-size: 12px;
   line-height: 1.6;
-  padding: 9px 10px;
+  padding: 8px 12px;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -114,7 +107,7 @@
 
 .approvalError {
   margin-bottom: 12px;
-  color: var(--h-err, #c44);
+  color: var(--h-color-danger-fg);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -128,11 +121,11 @@
 .approvalApprove,
 .approvalDeny,
 .approvalSettings {
-  border-radius: 8px;
+  border-radius: 0;
   cursor: pointer;
   font-family: var(--h-font-cn);
   font-size: 12px;
-  padding: 6px 14px;
+  padding: 8px 16px;
 }
 
 .approvalApprove:disabled,
@@ -167,6 +160,6 @@
 
 @media (max-width: 720px) {
   .composerArea {
-    padding: 8px 16px 14px;
+    padding: 8px 16px 0;
   }
 }

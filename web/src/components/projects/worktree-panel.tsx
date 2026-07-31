@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import type { GitBranch, Worktree } from "@/lib/runtime";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { useWorktrees } from "@/hooks/use-worktrees";
 import { shortenPath } from "@/lib/paths";
 import s from "./worktree-panel.module.css";
@@ -61,7 +62,7 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
     <section className={s.panel}>
       <div className={s.head}>
         <h2 className={s.title}>
-          <GitBranchIcon size={15} aria-hidden /> Git 工作树
+          <GitBranchIcon size={16} aria-hidden /> Git 工作树
         </h2>
         {wt.status?.branch ? (
           <span className={s.branchChip} title="当前分支">
@@ -80,7 +81,7 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
           title="刷新"
           aria-label="刷新工作树"
         >
-          <RefreshCw size={13} aria-hidden className={wt.loading ? s.spin : undefined} />
+          {wt.loading ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} aria-hidden />}
         </button>
       </div>
 
@@ -109,7 +110,7 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
                   {tree.isMain ? <span className={s.badge}>主</span> : null}
                   {tree.locked ? (
                     <span className={s.badge} data-tone="muted" title="已锁定">
-                      <Lock size={10} aria-hidden />
+                      <Lock size={12} aria-hidden />
                     </span>
                   ) : null}
                 </span>
@@ -125,7 +126,7 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
                   title="在文件管理器打开"
                   aria-label="在文件管理器打开"
                 >
-                  <ExternalLink size={13} aria-hidden />
+                  <ExternalLink size={12} aria-hidden />
                 </button>
                 <button
                   type="button"
@@ -136,7 +137,7 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
                   aria-label="删除工作树"
                   data-tone="danger"
                 >
-                  <Trash2 size={13} aria-hidden />
+                  <Trash2 size={12} aria-hidden />
                 </button>
               </span>
             </li>
@@ -164,7 +165,7 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
           onClick={submitCreate}
           disabled={!newName.trim() || wt.busy}
         >
-          <Plus size={13} aria-hidden /> 新建
+          <Plus size={12} aria-hidden /> 新建
         </button>
       </div>
 

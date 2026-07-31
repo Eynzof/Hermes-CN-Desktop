@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { CircleOff, Compass, ExternalLink, Globe2, HardDrive, Palette } from "lucide-react";
 import { Button } from "@hermes/shared-ui";
+import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { openExternalUrl } from "@/lib/external-links";
 import { ThemeSection } from "./settings";
 import { ConnectionSection } from "./settings-connection-section";
@@ -23,7 +24,7 @@ function OfflineHome() {
         <CircleOff size={32} />
         <h2>工作台暂时离线</h2>
         <p>会话、模型、Skills、MCP 等页面需要后端。连接成功后重新加载即可恢复。</p>
-        <div><Button variant="solid" tone="accent" onClick={() => { window.location.hash = "#/guide"; }}><Compass size={13} />继续使用引导</Button></div>
+        <div><Button variant="solid" tone="accent" onClick={() => { window.location.hash = "#/guide"; }}><Compass size={12} />继续使用引导</Button></div>
       </div>
     </OfflinePage>
   );
@@ -33,7 +34,7 @@ function OfflineAbout() {
   return (
     <OfflinePage title="关于与帮助" sub="离线时也可以访问社区和使用文档。">
       <div className={s.cards}>
-        <article><Globe2 size={20} /><h2>中文社区官网</h2><p>查看最新文档、安装说明和社区联系方式。</p><Button variant="outline" onClick={() => void openExternalUrl("https://hermesagent.org.cn")}><ExternalLink size={13} />打开官网</Button></article>
+        <article><Globe2 size={20} /><h2>中文社区官网</h2><p>查看最新文档、安装说明和社区联系方式。</p><Button variant="outline" onClick={() => void openExternalUrl("https://hermesagent.org.cn")}><ExternalLink size={12} />打开官网</Button></article>
         <article><Compass size={20} /><h2>重新选择开始方式</h2><p>选择开箱即用，或连接你已经部署好的 Hermes。</p><Button variant="outline" onClick={() => { window.location.hash = "#/guide"; }}>打开引导</Button></article>
       </div>
     </OfflinePage>
@@ -45,13 +46,13 @@ export function OfflineShell() {
   return (
     <div className={s.shell}>
       <aside>
-        <div className={s.brand}><span>H</span><div><strong>Hermes Agent</strong><small>离线控制台</small></div></div>
+        <div className={s.brand}><HermesLogoMark className={s.brandMark} size={32} /><div><strong>Hermes Agent</strong><small>离线控制台</small></div></div>
         <nav>
-          <Link data-active={pathname === "/" ? "true" : undefined} to="/"><CircleOff size={15} />离线状态</Link>
-          <Link data-active={pathname === "/connection" ? "true" : undefined} to="/connection"><Globe2 size={15} />连接</Link>
-          <Link data-active={pathname === "/kernel" ? "true" : undefined} to="/kernel"><HardDrive size={15} />内核</Link>
-          <Link data-active={pathname === "/theme" ? "true" : undefined} to="/theme"><Palette size={15} />主题</Link>
-          <Link data-active={pathname === "/about" ? "true" : undefined} to="/about"><Compass size={15} />关于</Link>
+          <Link data-active={pathname === "/" ? "true" : undefined} to="/"><CircleOff size={16} />离线状态</Link>
+          <Link data-active={pathname === "/connection" ? "true" : undefined} to="/connection"><Globe2 size={16} />连接</Link>
+          <Link data-active={pathname === "/kernel" ? "true" : undefined} to="/kernel"><HardDrive size={16} />内核</Link>
+          <Link data-active={pathname === "/theme" ? "true" : undefined} to="/theme"><Palette size={16} />主题</Link>
+          <Link data-active={pathname === "/about" ? "true" : undefined} to="/about"><Compass size={16} />关于</Link>
         </nav>
       </aside>
       <main>

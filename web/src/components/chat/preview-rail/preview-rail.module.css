@@ -17,14 +17,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
 .tabs {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -32,10 +32,10 @@
 .tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 1px solid transparent;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   font-family: var(--h-font-cn);
@@ -67,7 +67,7 @@
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -93,8 +93,8 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -102,9 +102,9 @@
   flex: 1;
   min-width: 0;
   height: 28px;
-  padding: 0 9px;
+  padding: 0 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-mono);
@@ -115,11 +115,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   height: 28px;
-  padding: 0 9px;
+  padding: 0 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-bg-chip);
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
@@ -144,7 +144,7 @@
   place-content: center;
   justify-items: center;
   gap: 8px;
-  padding: 28px 22px;
+  padding: 28px 24px;
   text-align: center;
   color: var(--h-text-3);
   font-size: 12.5px;
@@ -152,10 +152,10 @@
 }
 
 .notice {
-  margin: 10px;
-  padding: 10px 12px;
+  margin: 12px;
+  padding: 12px 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-2);
   font-size: 12px;
@@ -194,7 +194,7 @@
 /* Drag handle between the directory browser and the content. */
 .splitter {
   flex: 0 0 auto;
-  height: 7px;
+  height: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -209,8 +209,8 @@
 
 .splitterGrip {
   width: 28px;
-  height: 3px;
-  border-radius: 999px;
+  height: 4px;
+  border-radius: 0;
   background: var(--h-line);
 }
 
@@ -231,7 +231,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px;
+  padding: 4px 8px;
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 11px;
@@ -243,8 +243,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1px;
-  padding: 4px 6px;
+  gap: 4px;
+  padding: 4px 8px;
   font-family: var(--h-font-mono);
   font-size: 11px;
   line-height: 1.5;
@@ -252,11 +252,11 @@
 
 .crumbItem {
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   font: inherit;
-  padding: 1px 3px;
+  padding: 4px 4px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -268,7 +268,7 @@
 
 .crumbCurrent {
   color: var(--h-text);
-  padding: 1px 3px;
+  padding: 4px 4px;
   white-space: nowrap;
 }
 
@@ -280,11 +280,11 @@
 .fileEntry {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
-  padding: 5px 7px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
@@ -313,7 +313,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--h-line-soft);
   color: var(--h-text-3);
   font-size: 11px;
@@ -333,7 +333,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 10px 12px;
+  padding: 12px 12px;
   cursor: text;
 }
 
@@ -384,8 +384,8 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
+  gap: 4px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -395,17 +395,7 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--h-text-2);
-  padding-left: 2px;
-}
-
-.spin {
-  animation: reviewSpin 1s linear infinite;
-}
-
-@keyframes reviewSpin {
-  to {
-    transform: rotate(360deg);
-  }
+  padding-left: 4px;
 }
 
 .reviewError {
@@ -413,7 +403,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--h-line-soft);
   background: var(--h-warn-soft);
   color: var(--h-text);
@@ -455,12 +445,12 @@
 .reviewRow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
   height: 24px;
-  padding-right: 6px;
+  padding-right: 8px;
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-family: var(--h-font-cn);
@@ -500,7 +490,7 @@
 /* Single-letter status badge, tinted by the file's git status. */
 .reviewStatus {
   flex: 0 0 auto;
-  width: 13px;
+  width: 12px;
   text-align: center;
   font-family: var(--h-font-mono);
   font-size: 11px;
@@ -530,7 +520,7 @@
   flex: 0 0 auto;
   display: none;
   align-items: center;
-  gap: 1px;
+  gap: 4px;
   margin-left: auto;
 }
 
@@ -542,10 +532,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: var(--h-button-height-xs);
+  height: var(--h-button-height-xs);
   border: 0;
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   cursor: pointer;
@@ -566,8 +556,8 @@
 
 .reviewStagedDot {
   flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--h-ok);
 }
@@ -576,7 +566,7 @@
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-family: var(--h-font-mono);
   font-size: 10.5px;
 }
@@ -602,8 +592,8 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
+  gap: 8px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--h-line-soft);
 }
 
@@ -635,7 +625,7 @@
 
 .diffLine {
   display: block;
-  padding: 0 10px;
+  padding: 0 12px;
   white-space: pre;
   color: var(--h-text);
 }
@@ -663,19 +653,19 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   padding: 8px;
   border-top: 1px solid var(--h-line-soft);
 }
 
 .reviewCommitInput {
   width: 100%;
-  min-height: 30px;
+  min-height: 32px;
   max-height: 140px;
   resize: vertical;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
-  padding: 6px 8px;
+  border-radius: 0;
+  padding: 8px 8px;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-cn);
@@ -691,15 +681,15 @@
 .reviewShipActions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .reviewCommitBtn {
   flex: 1;
   min-width: 0;
-  padding: 5px 10px;
+  padding: 4px 12px;
   border: 1px solid var(--h-accent-border);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-accent);
   color: var(--h-accent-contrast);
   font-size: 12px;
@@ -719,7 +709,7 @@
 .reviewCommitMode {
   flex: 0 0 auto;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text-2);
   font-size: 11px;
@@ -744,10 +734,10 @@
   width: 100%;
   max-width: 320px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-pane);
-  box-shadow: var(--h-shadow-lg);
-  padding: 14px;
+  box-shadow: none;
+  padding: 16px;
 }
 
 .reviewModalTitle {
@@ -757,7 +747,7 @@
 }
 
 .reviewModalBody {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--h-text-2);
@@ -776,13 +766,13 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .reviewModalBtn {
-  padding: 5px 12px;
+  padding: 4px 12px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 12px;
@@ -810,13 +800,13 @@
 
 .segmented {
   display: inline-flex;
-  gap: 2px;
+  gap: 4px;
 }
 
 .segmentButton {
   padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-3);
   font-family: var(--h-font-cn);
@@ -833,7 +823,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 8px 10px;
+  padding: 8px 12px;
   font-family: var(--h-font-mono);
   font-size: 11.5px;
   line-height: 1.55;
@@ -855,16 +845,16 @@
 }
 
 .logLine[data-tone="error"] .lineText {
-  color: var(--h-err, #d76f54);
+  color: var(--h-color-danger-fg);
 }
 
 .logLine[data-tone="warning"] .lineText {
-  color: var(--h-warn);
+  color: var(--h-color-warning-fg);
 }
 
 .lineNumber {
   flex: 0 0 auto;
-  width: 34px;
+  width: 36px;
   text-align: right;
   color: var(--h-text-4);
   /* Keep line numbers out of copied selections. */
@@ -889,8 +879,8 @@
 
 /* "modified" dot on the 文件 tab while the editor has unsaved changes. */
 .tabDirtyDot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--h-accent);
   flex: 0 0 auto;
@@ -907,9 +897,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px;
+  padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 11px;
@@ -925,13 +915,13 @@
 .editControls {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .editAction {
-  padding: 2px 9px;
+  padding: 4px 8px;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--h-text-2);
   font-size: 11px;
@@ -963,7 +953,7 @@
 /* Stale-on-disk conflict banner. */
 .conflictBanner {
   flex: 0 0 auto;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--h-line-soft);
   background: var(--h-warn-soft);
   color: var(--h-text);
@@ -975,7 +965,7 @@
 }
 
 .conflictBody {
-  margin-top: 2px;
+  margin-top: 4px;
   color: var(--h-text-2);
   line-height: 1.5;
 }
@@ -983,7 +973,7 @@
 .conflictActions {
   display: flex;
   gap: 12px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .conflictAction {
@@ -1004,7 +994,7 @@
 
 .saveError {
   flex: 0 0 auto;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--h-line-soft);
   color: var(--h-danger);
   font-size: 11px;
@@ -1023,7 +1013,7 @@
   resize: none;
   border: 0;
   outline: none;
-  padding: 10px 12px;
+  padding: 12px 12px;
   background: transparent;
   color: var(--h-text);
   font-family: var(--h-font-mono);

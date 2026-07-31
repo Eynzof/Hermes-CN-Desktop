@@ -1,12 +1,22 @@
 import { atom } from "jotai";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
-import { readUiValue, removeUiValue, writeUiValue } from "@/lib/ui-store";
+import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 import hermesDefaultAvatar from "@/assets/hermes-default-avatar.png";
+
+function persistedUiBaseAtom<T>(read: () => T) {
+  const baseAtom = atom<T>(read());
+  baseAtom.onMount = (setValue) => {
+    const syncFromUiStore = () => setValue(read());
+    syncFromUiStore();
+    return subscribeUiStore(syncFromUiStore);
+  };
+  return baseAtom;
+}
 
 const ACTIVE_SESSION_ID_KEY = "hermes.active-session-id";
 
-const activeSessionIdBaseAtom = atom<string | null>(
-  readUiValue<string | null>(ACTIVE_SESSION_ID_KEY, null),
+const activeSessionIdBaseAtom = persistedUiBaseAtom<string | null>(
+  () => readUiValue<string | null>(ACTIVE_SESSION_ID_KEY, null),
 );
 
 /**
@@ -75,12 +85,25 @@ export const sidebarSearchAtom = atom(
 );
 export const commandPaletteOpenAtom = atom(false);
 
+const APP_SIDEBAR_VISIBLE_KEY = "hermes.app-sidebar-visible";
+const appSidebarVisibleBaseAtom = persistedUiBaseAtom<boolean>(
+  () => readUiValue<unknown>(APP_SIDEBAR_VISIBLE_KEY, true) !== false,
+);
+export const appSidebarVisibleAtom = atom(
+  (get) => get(appSidebarVisibleBaseAtom),
+  (_get, set, next: boolean) => {
+    const visible = next === true;
+    set(appSidebarVisibleBaseAtom, visible);
+    writeUiValue(APP_SIDEBAR_VISIBLE_KEY, visible);
+  },
+);
+
 export const CONVERSATION_WIDTH_OPTIONS = [
   // 档位整体上调一档（用户反馈原「小/中」过窄）：大 = 960 + 头像列
   // 46px（36px 头像 + 10px gap），正文有效宽度与原「大」一致。
   { value: "small", label: "小", title: "小宽度", maxWidth: "780px" },
   { value: "medium", label: "中", title: "中等宽度", maxWidth: "960px" },
-  { value: "large", label: "大", title: "大宽度", maxWidth: "1006px" },
+  { value: "large", label: "大", title: "大宽度", maxWidth: "1008px" },
   { value: "full", label: "满", title: "铺满宽度", maxWidth: "100%" },
 ] as const;
 
@@ -140,8 +163,8 @@ export function normalizeAssistantAvatarDataUrl(value: unknown): string {
   return /^data:image\/(?:png|jpe?g|gif|webp|svg\+xml);base64,/i.test(text) ? text : "";
 }
 
-const conversationWidthModeBaseAtom = atom<ConversationWidthMode>(
-  normalizeConversationWidthMode(readUiValue(CONVERSATION_WIDTH_KEY, DEFAULT_CONVERSATION_WIDTH_MODE)),
+const conversationWidthModeBaseAtom = persistedUiBaseAtom<ConversationWidthMode>(
+  () => normalizeConversationWidthMode(readUiValue(CONVERSATION_WIDTH_KEY, DEFAULT_CONVERSATION_WIDTH_MODE)),
 );
 export const conversationWidthModeAtom = atom(
   (get) => get(conversationWidthModeBaseAtom),
@@ -152,8 +175,8 @@ export const conversationWidthModeAtom = atom(
   },
 );
 
-const conversationFontSizeBaseAtom = atom<ConversationFontSizeMode>(
-  normalizeConversationFontSizeMode(readUiValue(CONVERSATION_FONT_SIZE_KEY, DEFAULT_CONVERSATION_FONT_SIZE_MODE)),
+const conversationFontSizeBaseAtom = persistedUiBaseAtom<ConversationFontSizeMode>(
+  () => normalizeConversationFontSizeMode(readUiValue(CONVERSATION_FONT_SIZE_KEY, DEFAULT_CONVERSATION_FONT_SIZE_MODE)),
 );
 export const conversationFontSizeAtom = atom(
   (get) => get(conversationFontSizeBaseAtom),
@@ -174,7 +197,9 @@ export const conversationFontSizeAtom = atom(
 // Desktop 模式 (Electron) 下主进程 own dashboard 子进程，切换走 IPC →
 // stop + spawn，真正即时生效（direction B）。X-Hermes-Profile header 是给
 // 未来 fork 改造支持 per-request 路由用的占位（direction C）。
-const activeProfileBaseAtom = atom<string>(readUiValue("hermes.active-profile", "default"));
+const activeProfileBaseAtom = persistedUiBaseAtom<string>(
+  () => readUiValue("hermes.active-profile", "default"),
+);
 export const activeProfileAtom = atom(
   (get) => get(activeProfileBaseAtom),
   (_get, set, next: string) => {
@@ -189,8 +214,8 @@ export const activeProfileAtom = atom(
 // 切换活跃档案时清空。对齐官方 dashboard 的 management-profile scope。
 export const managementProfileAtom = atom<string | null>(null);
 
-const assistantDisplayNameBaseAtom = atom<string>(
-  normalizeAssistantDisplayName(readUiValue(ASSISTANT_DISPLAY_NAME_KEY, DEFAULT_ASSISTANT_DISPLAY_NAME)),
+const assistantDisplayNameBaseAtom = persistedUiBaseAtom<string>(
+  () => normalizeAssistantDisplayName(readUiValue(ASSISTANT_DISPLAY_NAME_KEY, DEFAULT_ASSISTANT_DISPLAY_NAME)),
 );
 export const assistantDisplayNameAtom = atom(
   (get) => get(assistantDisplayNameBaseAtom),
@@ -205,8 +230,8 @@ export const assistantDisplayNameAtom = atom(
   },
 );
 
-const assistantAvatarDataUrlBaseAtom = atom<string>(
-  normalizeAssistantAvatarDataUrl(readUiValue(ASSISTANT_AVATAR_KEY, "")),
+const assistantAvatarDataUrlBaseAtom = persistedUiBaseAtom<string>(
+  () => normalizeAssistantAvatarDataUrl(readUiValue(ASSISTANT_AVATAR_KEY, "")),
 );
 export const assistantAvatarDataUrlAtom = atom(
   (get) => get(assistantAvatarDataUrlBaseAtom),
@@ -223,7 +248,9 @@ export const assistantAvatarEffectiveAtom = atom(
   (get) => get(assistantAvatarDataUrlBaseAtom) || hermesDefaultAvatar,
 );
 
-const showReasoningBaseAtom = atom<boolean>(readUiValue("hermes.show-reasoning", false));
+const showReasoningBaseAtom = persistedUiBaseAtom<boolean>(
+  () => readUiValue("hermes.show-reasoning", false),
+);
 export const showReasoningAtom = atom(
   (get) => get(showReasoningBaseAtom),
   (_get, set, next: boolean) => {
@@ -235,7 +262,9 @@ export const showReasoningAtom = atom(
 // 匿名使用统计开关（默认开启）。发送端在 lib/telemetry.ts 直接读 ui-store，
 // 这个 atom 只服务设置页 UI。key 与 lib/telemetry.ts 的 TELEMETRY_ENABLED_KEY 一致。
 const TELEMETRY_ENABLED_UI_KEY = "hermes.telemetry-enabled";
-const telemetryEnabledBaseAtom = atom<boolean>(readUiValue<unknown>(TELEMETRY_ENABLED_UI_KEY, true) !== false);
+const telemetryEnabledBaseAtom = persistedUiBaseAtom<boolean>(
+  () => readUiValue<unknown>(TELEMETRY_ENABLED_UI_KEY, true) !== false,
+);
 export const telemetryEnabledAtom = atom(
   (get) => get(telemetryEnabledBaseAtom),
   (_get, set, next: boolean) => {
@@ -248,7 +277,9 @@ export const telemetryEnabledAtom = atom(
 // so the user's last choice survives reload; ⌘B toggles it. The active tab
 // lives in the `?panel=` query, not here (see lib/preview-rail.ts).
 const RIGHT_RAIL_VISIBLE_KEY = "hermes.right-rail-visible";
-const rightRailVisibleBaseAtom = atom<boolean>(readUiValue<unknown>(RIGHT_RAIL_VISIBLE_KEY, false) === true);
+const rightRailVisibleBaseAtom = persistedUiBaseAtom<boolean>(
+  () => readUiValue<unknown>(RIGHT_RAIL_VISIBLE_KEY, false) === true,
+);
 export const rightRailVisibleAtom = atom(
   (get) => get(rightRailVisibleBaseAtom),
   (_get, set, next: boolean) => {
@@ -263,8 +294,8 @@ function normalizeComposerSubmitShortcut(value: unknown): ComposerSubmitShortcut
   return value === "ctrl-enter" ? "ctrl-enter" : "enter";
 }
 
-const composerSubmitShortcutBaseAtom = atom<ComposerSubmitShortcut>(
-  normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "enter")),
+const composerSubmitShortcutBaseAtom = persistedUiBaseAtom<ComposerSubmitShortcut>(
+  () => normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "enter")),
 );
 export const composerSubmitShortcutAtom = atom(
   (get) => get(composerSubmitShortcutBaseAtom),
@@ -289,7 +320,7 @@ function readNotifyFlag(key: string): boolean {
 }
 
 function makeNotifyFlagAtom(key: string) {
-  const baseAtom = atom<boolean>(readNotifyFlag(key));
+  const baseAtom = persistedUiBaseAtom<boolean>(() => readNotifyFlag(key));
   return atom(
     (get) => get(baseAtom),
     (_get, set, next: boolean) => {

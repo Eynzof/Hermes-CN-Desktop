@@ -18,7 +18,7 @@ export interface ProfileScopeBannerProps {
 export function ProfileScopeBanner({ scope, profileNames, onSelect }: ProfileScopeBannerProps) {
   return (
     <div className={s.scopeBanner} role="status">
-      <Users size={14} className={s.scopeIcon} />
+      <Users size={16} className={s.scopeIcon} />
       <span className={s.scopeText}>
         正在管理档案 <strong>{scope}</strong> —— 技能的查看与启停作用于该档案，不影响运行中的 dashboard。
       </span>
@@ -37,7 +37,7 @@ export function ProfileScopeBanner({ scope, profileNames, onSelect }: ProfileSco
         ))}
       </Select>
       <button type="button" className={s.scopeExit} onClick={() => onSelect(null)}>
-        <X size={13} /> 退出范围
+        <X size={12} /> 退出范围
       </button>
     </div>
   );

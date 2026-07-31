@@ -34,6 +34,11 @@ async function fetchDevToken() {
 }
 
 async function bootstrap() {
+  if (!window.__TAURI_INTERNALS__ && !window.__HERMES_RUNTIME__) {
+    const { installBrowserCompanionRuntime } = await import("./lib/browser-companion");
+    await installBrowserCompanionRuntime();
+  }
+
   if (window.__TAURI_INTERNALS__ && !window.__HERMES_RUNTIME__) {
     const { installTauriBridge } = await import("./lib/tauri-bridge");
     await installTauriBridge();

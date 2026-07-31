@@ -5,11 +5,14 @@
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  background: var(--h-bg-app);
+  background-color: var(--h-color-bg-page-canvas);
+  background-image: var(--h-texture-pinhole-grid);
+  background-repeat: repeat;
+  background-position: 0 0;
 }
 
 .pageContent {
-  max-width: 1100px;
+  max-width: var(--h-page-content-max-width);
   margin: 0 auto;
   padding: 32px 40px 96px;
   -webkit-user-select: none;
@@ -32,7 +35,7 @@
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--h-text-3);
-  padding-top: 9px;
+  padding-top: 8px;
 }
 
 .sectionBody {
@@ -43,14 +46,14 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   gap: 12px;
 }
 
 .sectionLh {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
 }
 
 .sectionTag {
@@ -91,7 +94,7 @@
 .taskGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 16px;
 }
 
 @media (max-width: 900px) {

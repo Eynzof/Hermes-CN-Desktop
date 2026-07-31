@@ -6,7 +6,7 @@
   top: 0;
   bottom: 0;
   left: 0;
-  width: 7px;
+  width: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -18,9 +18,9 @@
 }
 
 .grip {
-  width: 3px;
+  width: 4px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--h-line);
 }
 

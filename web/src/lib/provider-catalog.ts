@@ -8,8 +8,13 @@ export interface ProviderCatalogModel {
   label?: string;
   contextWindow?: number;
   supportsVision?: boolean;
+  supportsPdf?: boolean;
+  supportsAudio?: boolean;
+  supportsVideo?: boolean;
   supportsTools?: boolean;
   supportsReasoning?: boolean;
+  supportsReasoningControl?: boolean;
+  openWeights?: boolean;
 }
 
 /**

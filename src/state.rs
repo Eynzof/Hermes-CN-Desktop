@@ -29,6 +29,14 @@ pub struct GatewayWsHandle {
     pub notify: Arc<Notify>,
 }
 
+/// Process-lifetime browser companion endpoint. The bearer token is distinct
+/// from the dashboard credential and is accepted only by the loopback server.
+#[derive(Clone)]
+pub struct BrowserCompanionHandle {
+    pub port: u16,
+    pub token: String,
+}
+
 /// Windows Job Object handle used to bind the dashboard process tree to the
 /// desktop lifecycle. On non-Windows this is a zero-sized placeholder so the
 /// DashboardHandle shape stays uniform across platforms.
@@ -206,6 +214,8 @@ pub struct AppStateInner {
     /// on the relay socket path. `None` on webview-direct WS or before the
     /// first relay connect.
     pub gateway_ws: Option<GatewayWsHandle>,
+    /// Lazily started when the user chooses “在浏览器中打开社区桌面版”.
+    pub browser_companion: Option<BrowserCompanionHandle>,
     /// Set while a managed-dashboard restart is in progress (profile switch or
     /// YOLO toggle). Guards against two restarts racing on `dashboard_handle`.
     pub dashboard_restart_in_flight: bool,
@@ -268,6 +278,7 @@ impl AppState {
                 current_profile: "default".to_string(),
                 dashboard_handle: None,
                 gateway_ws: None,
+                browser_companion: None,
                 dashboard_restart_in_flight: false,
                 last_runtime_error: None,
                 yolo_mode: false,

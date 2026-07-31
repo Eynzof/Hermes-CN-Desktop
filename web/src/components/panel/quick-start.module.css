@@ -1,7 +1,7 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .card {
@@ -10,8 +10,8 @@
   text-align: left;
   background: var(--h-bg-pane);
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md, 8px);
-  padding: 12px 14px;
+  border-radius: 0;
+  padding: 12px 16px;
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s;
   font: inherit;
@@ -28,7 +28,7 @@
   font-size: 10px;
   color: var(--h-accent);
   letter-spacing: 0.06em;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .title {

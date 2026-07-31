@@ -123,7 +123,7 @@ export function PersonaMarketPanel({
 
       <div className={s.filters}>
         <label className={s.searchBox}>
-          <Search size={15} aria-hidden="true" />
+          <Search size={16} aria-hidden="true" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -132,7 +132,7 @@ export function PersonaMarketPanel({
           />
           {query && (
             <button type="button" onClick={() => setQuery("")} aria-label="清空搜索">
-              <X size={14} />
+              <X size={16} />
             </button>
           )}
         </label>
@@ -171,7 +171,7 @@ export function PersonaMarketPanel({
                 <strong>{persona.name}</strong>
                 <span className={s.description}>{persona.description}</span>
               </span>
-              <span className={s.cardArrow} aria-hidden="true"><ChevronRight size={15} /></span>
+              <span className={s.cardArrow} aria-hidden="true"><ChevronRight size={16} /></span>
             </button>
           ))}
         </div>
@@ -221,12 +221,12 @@ export function PersonaMarketPanel({
                     </Dialog.Description>
                   </div>
                   <Dialog.Close asChild>
-                    <button type="button" className={s.closeButton} aria-label="关闭人格详情"><X size={17} /></button>
+                    <button type="button" className={s.closeButton} aria-label="关闭人格详情"><X size={16} /></button>
                   </Dialog.Close>
                 </header>
 
                 <div className={s.promptMeta}>
-                  <span><Sparkles size={13} /> 完整中文提示词</span>
+                  <span><Sparkles size={12} /> 完整中文提示词</span>
                   <span>{selected.characterCount.toLocaleString()} 字符</span>
                 </div>
                 <div className={s.promptPreview}>
@@ -241,7 +241,7 @@ export function PersonaMarketPanel({
 
                 {dialogError && <div className={s.dialogError}>{dialogError}</div>}
                 {appliedId === selected.id && (
-                  <div className={s.applied}><Check size={14} /> 已应用到档案 {profile}</div>
+                  <div className={s.applied}><Check size={16} /> 已应用到档案 {profile}</div>
                 )}
 
                 <footer className={s.dialogFooter}>
@@ -254,7 +254,7 @@ export function PersonaMarketPanel({
                     disabled={!prompt || loadingPrompt || applying}
                     onClick={handleApply}
                   >
-                    <Sparkles size={14} />
+                    <Sparkles size={16} />
                     {applying ? "应用中…" : appliedId === selected.id ? "再次应用" : "立即应用"}
                   </Button>
                 </footer>
@@ -272,7 +272,7 @@ export function PersonaMarketPanel({
             aria-describedby="persona-overwrite-description"
             data-testid="persona-overwrite-dialog"
           >
-            <div className={s.confirmIcon}><TriangleAlert size={22} /></div>
+            <div className={s.confirmIcon}><TriangleAlert size={24} /></div>
             <Dialog.Title>{PERSONA_OVERWRITE_DIALOG_TITLE}</Dialog.Title>
             <Dialog.Description id="persona-overwrite-description">
               {PERSONA_OVERWRITE_DIALOG_DESCRIPTION}

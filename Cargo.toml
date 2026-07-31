@@ -46,6 +46,11 @@ open = "5"
 # debounces before re-reading.
 notify = "6"
 futures-util = "0.3"
+# Loopback-only HTTP/WebSocket server used by the browser companion mode.
+bytes = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 # WebSocket relay to the runtime's native /api/ws (commands/ws_proxy.rs).
 # The relay also carries remote-mode connections (src/connection.rs), which
 # may be wss://, so a rustls backend is required.

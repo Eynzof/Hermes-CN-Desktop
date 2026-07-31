@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Cable, Check, ChevronsUpDown, Globe2, X } from "lucide-react";
-import { Popover } from "@hermes/shared-ui";
+import { LoadingState, Popover } from "@hermes/shared-ui";
 import {
   useActiveProfileName,
   useProfiles,
@@ -67,7 +67,7 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
         title={`已连接${isRemote ? "远程 Hermes Agent" : "本地 Hermes Agent CLI"}；当前连接模式下不支持由桌面端切换档案（设置 → 连接 可切回本机内核）`}
       >
         <span className={s.triggerLabel}>
-          <Icon size={11} aria-hidden="true" /> {isRemote ? "远程" : "本地"}
+          <Icon size={12} aria-hidden="true" /> {isRemote ? "远程" : "本地"}
         </span>
         <span className={s.triggerName}>Hermes Agent</span>
       </button>
@@ -95,7 +95,7 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
             <span className={s.triggerName}>
               {isError ? "未接入" : active}
             </span>
-            <ChevronsUpDown size={13} className={s.triggerChevron} />
+            <ChevronsUpDown size={12} className={s.triggerChevron} />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -107,7 +107,7 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
           >
             <div className={s.menuTitle}>切换档案</div>
             {isLoading ? (
-              <div className={s.menuEmpty}>加载中…</div>
+              <LoadingState variant="inline" label="正在加载档案…" />
             ) : profiles.length === 0 ? (
               <div className={s.menuEmpty}>没有可用的档案</div>
             ) : (
@@ -126,7 +126,7 @@ export function ProfileSelector({ variant = "sidebar" }: ProfileSelectorProps) {
                     {p.is_default && (
                       <span className={s.menuItemBadge}>default</span>
                     )}
-                    {isActive && <Check size={13} className={s.menuCheck} />}
+                    {isActive && <Check size={12} className={s.menuCheck} />}
                   </button>
                 );
               })

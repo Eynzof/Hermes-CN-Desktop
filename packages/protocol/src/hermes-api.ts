@@ -163,6 +163,10 @@ export type MessagingPlatformTestResponse = z.infer<typeof MessagingPlatformTest
 
 export const SessionSummary = z.object({
   id: z.string(),
+  // Core uses this lineage link for official desktop session branching. Keep
+  // it in the parsed summary so branch drafts and persisted children retain
+  // their relationship to the source conversation.
+  parent_session_id: z.string().nullable().optional(),
   source: z.string().optional(),
   user_id: z.string().nullable().optional(),
   model: NullableStringAsEmpty,
@@ -1282,6 +1286,8 @@ export type ProfileSetupCommandResponse = z.infer<typeof ProfileSetupCommandResp
 
 export const SessionCreateResult = z.object({
   session_id: z.string(),
+  stored_session_id: z.string().nullable().optional(),
+  message_count: z.number().optional(),
 }).passthrough();
 export type SessionCreateResult = z.infer<typeof SessionCreateResult>;
 
@@ -1372,6 +1378,23 @@ export const SessionCompressResult = z.object({
 }).passthrough();
 export type SessionCompressResult = z.infer<typeof SessionCompressResult>;
 
+export const GatewayModelCapabilities = z.object({
+  fast: z.boolean().optional(),
+  reasoning: z.boolean().optional(),
+  supports_tools: z.boolean().optional(),
+  supports_vision: z.boolean().optional(),
+  supports_pdf: z.boolean().optional(),
+  supports_audio: z.boolean().optional(),
+  supports_video: z.boolean().optional(),
+  supports_reasoning: z.boolean().optional(),
+  supports_reasoning_control: z.boolean().optional(),
+  open_weights: z.boolean().optional(),
+  context_window: z.number().int().nonnegative().optional(),
+  max_output_tokens: z.number().int().nonnegative().optional(),
+  model_family: z.string().optional(),
+}).passthrough();
+export type GatewayModelCapabilities = z.infer<typeof GatewayModelCapabilities>;
+
 export const GatewayModelProvider = z.object({
   slug: z.string(),
   name: z.string().optional(),
@@ -1381,6 +1404,7 @@ export const GatewayModelProvider = z.object({
   is_user_defined: z.boolean().optional(),
   source: z.string().optional(),
   warning: z.string().optional(),
+  capabilities: z.record(z.string(), GatewayModelCapabilities).optional(),
 }).passthrough();
 export type GatewayModelProvider = z.infer<typeof GatewayModelProvider>;
 

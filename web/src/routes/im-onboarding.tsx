@@ -145,7 +145,7 @@ function QrPanel({ data, url, status, message, onStart, startLabel, startBusy }:
     if (!data) return;
     QRCode.toDataURL(data, {
       width: 232,
-      margin: 1,
+      margin: 4,
       errorCorrectionLevel: "M",
     }).then((next) => {
       if (!cancelled) setSrc(next);
@@ -169,7 +169,7 @@ function QrPanel({ data, url, status, message, onStart, startLabel, startBusy }:
             <span>QR</span>
             {onStart ? (
               <button className={`${s.btn} ${s.primary} ${s.qrStartBtn}`} type="button" onClick={onStart} disabled={startBusy}>
-                <ScanLine size={14} />{startBusy ? "生成中…" : startLabel ?? "开始扫码"}
+                <ScanLine size={16} />{startBusy ? "生成中…" : startLabel ?? "开始扫码"}
               </button>
             ) : null}
           </div>
@@ -182,8 +182,8 @@ function QrPanel({ data, url, status, message, onStart, startLabel, startBusy }:
         <div className={s.traceRow}><span>状态</span><b>{statusText(status)}</b><em>{data ? "二维码只在本页临时使用" : "还没有生成二维码"}</em></div>
         {url && <code className={s.urlPreview}>{url}</code>}
         <div className={s.buttonRow}>
-          <button className={s.btn} type="button" onClick={copy} disabled={!data}><ClipboardList size={14} />复制二维码内容</button>
-          {url && <button className={s.btn} type="button" onClick={() => openExternal(url)}><ExternalLink size={14} />打开备用链接</button>}
+          <button className={s.btn} type="button" onClick={copy} disabled={!data}><ClipboardList size={16} />复制二维码内容</button>
+          {url && <button className={s.btn} type="button" onClick={() => openExternal(url)}><ExternalLink size={16} />打开备用链接</button>}
         </div>
       </div>
     </section>
@@ -200,7 +200,7 @@ function Hero({ platform, stateSub, onPrimary, primaryBusy }: {
   return (
     <div className={s.headBand}>
       <div className={s.heroCopy}>
-        <div className={s.heroKicker}><span>{isFeishu ? "№ 031A" : "№ 031B"}</span><span>IM ONBOARDING</span><em>消息接入 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
+        <div className={s.heroKicker}><span>IM ONBOARDING</span><em>消息接入 / 消息平台接入 / {isFeishu ? "飞书 · Lark" : "微信 · Weixin"}</em></div>
         <h1>将<em>{isFeishu ? "飞书消息平台" : "微信消息平台"}</em>接入<br />中文社区桌面版</h1>
         <p className={s.sub}>{isFeishu
           ? "跟着向导扫码，保存后再按提示到飞书后台勾选权限并发布即可。"
@@ -209,7 +209,7 @@ function Hero({ platform, stateSub, onPrimary, primaryBusy }: {
       <div className={s.heroActions}>
         <span className={s.heroState}>{stateSub}</span>
         <button className={`${s.btn} ${s.primary}`} type="button" onClick={onPrimary} disabled={primaryBusy}>
-          {isFeishu ? <ScanLine size={14} /> : <MessageSquareText size={14} />}
+          {isFeishu ? <ScanLine size={16} /> : <MessageSquareText size={16} />}
           {primaryBusy ? "处理中…" : "开始扫码"}
         </button>
       </div>
@@ -353,7 +353,7 @@ function FeishuBackendChecklist({ groupEnabled }: { groupEnabled: boolean }) {
             : "扫码只是把应用信息带回来。还要在飞书后台打开机器人、订阅消息事件、开启发送权限，最后发布一次版本，私聊才能用。"}</p>
         </div>
         <button className={`${s.btn} ${s.externalBtn}`} type="button" onClick={() => openExternal(FEISHU_DEVELOPER_URL)}>
-          <ExternalLink size={14} />打开飞书开发者后台
+          <ExternalLink size={16} />打开飞书开发者后台
         </button>
       </div>
 
@@ -432,13 +432,13 @@ function DiagnosticAssistant({
         </div>
         <div className={s.diagnosticActions}>
           <CopyButton className={s.btn} text={() => JSON.stringify(bundle, null, 2)}>
-            <ClipboardList size={14} />复制诊断包
+            <ClipboardList size={16} />复制诊断包
           </CopyButton>
           <CopyButton className={s.btn} text={() => buildImDiagnosticPrompt(bundle)}>
-            <ClipboardList size={14} />复制排查提示
+            <ClipboardList size={16} />复制排查提示
           </CopyButton>
           <button className={`${s.btn} ${s.primary}`} type="button" onClick={onAskHermes} disabled={asking}>
-            <MessageSquareText size={14} />{asking ? "正在打开…" : "让 Hermes 排查"}
+            <MessageSquareText size={16} />{asking ? "正在打开…" : "让 Hermes 排查"}
           </button>
         </div>
       </div>
@@ -451,7 +451,7 @@ function DiagnosticAssistant({
           </div>
         ))}
       </div>
-      {askError ? <div className={s.inlineError}><XCircle size={14} />{askError}</div> : null}
+      {askError ? <div className={s.inlineError}><XCircle size={16} />{askError}</div> : null}
     </div>
   );
 }
@@ -500,8 +500,8 @@ function MessagingTestGuide({
 
       <div className={s.testPanel}>
         <div className={s.testCards}>
-          <div><MessageSquareText size={15} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到回复或配对提示。</span></div>
-          <div><Stethoscope size={15} /><b>官方检测</b><span>{platformLoading
+          <div><MessageSquareText size={16} /><b>私聊测试</b><span>给机器人发送 <code>hi</code>，应收到回复或配对提示。</span></div>
+          <div><Stethoscope size={16} /><b>官方检测</b><span>{platformLoading
             ? "正在读取官方消息平台状态。"
             : officialAvailable
               ? `当前状态：${platformStateText(platform?.state)}${platform?.error_message ? `，${platform.error_message}` : ""}`
@@ -516,7 +516,7 @@ function MessagingTestGuide({
 
         <div className={s.testActions}>
           <button className={s.btn} type="button" onClick={onTest} disabled={platformLoading || testPending}>
-            <RotateCw size={14} />{testPending ? "检测中…" : `检测${platformLabel}连接`}
+            <RotateCw size={16} />{testPending ? "检测中…" : `检测${platformLabel}连接`}
           </button>
         </div>
       </div>
@@ -679,7 +679,7 @@ function Rail({ platform }: { platform: ImPlatform }) {
               aria-controls={`${platform}-${panel.id}-panel`}
               onClick={() => setActive(isActive ? null : panel.id)}
             >
-              <Icon size={17} aria-hidden="true" />
+              <Icon size={16} aria-hidden="true" />
               <span className={s.railLabel}>{panel.label}</span>
               <span className={s.railDot} aria-hidden="true" />
             </button>
@@ -690,7 +690,7 @@ function Rail({ platform }: { platform: ImPlatform }) {
       {activePanel ? (
         <div className={s.contextPopover} role="dialog" aria-label={activePanel.title}>
           <button className={s.railClose} type="button" onClick={() => setActive(null)}>
-            <X size={14} aria-hidden="true" />
+            <X size={16} aria-hidden="true" />
             收起
           </button>
           <section id={`${platform}-${activePanel.id}-panel`} className={s.railPanel}>
@@ -939,7 +939,7 @@ function FeishuRoute() {
               startBusy={begin.isPending}
             />
           </div>
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RefreshCw size={14} />立即检查</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={16} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RefreshCw size={16} />立即检查</button></div>
 
           <SectionTitle num="[ STEP 02 ]" title="保存设置并启动网关" meta="只会更新当前配置档案；飞书后台还需要继续按提示确认" />
           <section className={s.section}>
@@ -991,7 +991,7 @@ function FeishuRoute() {
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="密钥会自动隐藏；保存后继续去飞书后台确认" />
           {credential && <div className={s.summaryLine}>扫码结果：应用 ID {last(credential.appId)} · 应用密钥 {last(credential.appSecret)} · 扫码用户 open_id {last(credential.openId)} · 机器人 {credential.botName ?? "未探测"}</div>}
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !canApplyQr || !allowPolicyReady}><Save size={14} />保存并启动网关</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !canApplyQr || !allowPolicyReady}><Save size={16} />保存并启动网关</button></div>
           <ApplyResult result={result} />
           <SectionTitle num="[ STEP 03 ]" title="打开飞书后台完成权限" meta="按清单勾选权限、订阅消息并发布版本" />
           <FeishuBackendChecklist groupEnabled={groupEnabled} />
@@ -1213,7 +1213,7 @@ function WeixinRoute() {
               startBusy={begin.isPending}
             />
           </div>
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={14} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RotateCw size={14} />立即检查</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={start} disabled={busy}><ScanLine size={16} />生成二维码</button><button className={s.btn} onClick={pollOnce} disabled={!flow || busy}><RotateCw size={16} />立即检查</button></div>
           <SectionTitle num="[ STEP 03 ]" title="确认扫码结果" meta="无需手填账号、口令或接口地址" />
           <section className={s.section}>
             {credential ? (
@@ -1267,7 +1267,7 @@ function WeixinRoute() {
           </section>
           <SectionTitle num="[ REVIEW ]" title="保存前看一眼" meta="口令会自动隐藏" />
           <ReviewTable rows={rows} />
-          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual || canApplySaved) || !allowPolicyReady}><Save size={14} />{canApplyQr || canApplyManual ? "保存并启动网关" : "重新启动网关"}</button></div>
+          <div className={s.sectionActions}><button className={`${s.btn} ${s.primary}`} onClick={save} disabled={busy || !(canApplyQr || canApplyManual || canApplySaved) || !allowPolicyReady}><Save size={16} />{canApplyQr || canApplyManual ? "保存并启动网关" : "重新启动网关"}</button></div>
           <ApplyResult result={result} />
           <SectionTitle num="[ STEP 05 ]" title="发一条消息试试" meta="私聊微信机器人，确认真的能回复" />
           <MessagingTestGuide

@@ -1,3 +1,4 @@
 .externalMemoryPage {
-  max-width: 1120px;
+  width: 100%;
+  min-width: 0;
 }

@@ -11,10 +11,10 @@
   width: min(680px, calc(100vw - 36px));
   max-width: min(680px, calc(100vw - 36px));
   max-height: min(620px, calc(100vh - 120px));
-  border-radius: var(--h-r-lg);
+  border-radius: 0;
   z-index: 91;
   background: color-mix(in srgb, var(--h-bg-pane) 96%, transparent);
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28), var(--h-shadow-l);
+  box-shadow: none;
   animation: commandPaletteContentIn 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
   transform-origin: center;
   will-change: transform, opacity;
@@ -56,13 +56,13 @@
 }
 
 .searchRow {
-  height: 50px;
+  height: 52px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  gap: 12px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--h-line);
-  background: linear-gradient(180deg, var(--h-bg-pane), var(--h-bg-soft));
+  background: var(--h-bg-soft);
   color: var(--h-text-3);
 }
 
@@ -84,8 +84,8 @@
 .kbd {
   flex-shrink: 0;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-sm);
-  padding: 2px 5px;
+  border-radius: 0;
+  padding: 4px 4px;
   background: var(--h-bg-pane);
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
@@ -106,7 +106,7 @@
 }
 
 .group :global([cmdk-group-heading]) {
-  padding: 6px 8px 5px;
+  padding: 8px 8px 4px;
   color: var(--h-text-3);
   font-family: var(--h-font-mono);
   font-size: 10px;
@@ -118,9 +118,9 @@
   min-height: 44px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 9px;
-  border-radius: var(--h-r-md);
+  gap: 12px;
+  padding: 8px 8px;
+  border-radius: 0;
   color: var(--h-text-2);
   cursor: pointer;
   user-select: none;
@@ -140,7 +140,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--h-r-md);
+  border-radius: 0;
   background: var(--h-bg-soft);
   color: var(--h-text-3);
   border: 1px solid var(--h-line-soft);
@@ -169,7 +169,7 @@
   min-width: 0;
   flex: 1;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .itemLabel {

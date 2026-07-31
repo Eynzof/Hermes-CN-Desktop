@@ -23,7 +23,7 @@ export function SkillInvocationMessage({ text }: { text: string }) {
         aria-expanded={expanded}
         onClick={() => setExpanded((current) => !current)}
       >
-        {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+        {expanded ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
         {expanded ? "收起 Skill 内容" : "展开 Skill 内容"}
       </button>
     </div>

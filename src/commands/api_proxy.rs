@@ -595,13 +595,13 @@ async fn api_request_impl_inner(
     })
 }
 
-/// The main API proxy command. Handles local route intercepts and proxies
-/// to the dashboard for everything else.
-#[tauri::command]
-pub async fn api_request(
-    app: tauri::AppHandle,
+/// Shared desktop proxy path used by both Tauri IPC and the loopback browser
+/// companion. Keeping it here preserves local archive/session-log intercepts,
+/// OAuth cookies and token-refresh behavior for both renderers.
+pub async fn api_request_from_state(
+    app: &tauri::AppHandle,
     input: ApiRequestInput,
-    state: State<'_, AppState>,
+    state: &AppState,
 ) -> Result<ApiRequestResult, AppError> {
     let (api_base_url, auth, hermes_home, hermes_home_base, mode) = {
         let inner = state.inner.lock()?;
@@ -646,7 +646,7 @@ pub async fn api_request(
             crate::oauth_session::persist_if_dirty(&api_base_url, session);
         }
         if result.status == 401 && is_auth_expired_body(&result.body) {
-            emit_auth_expired(&app, &state, &api_base_url, &result.body);
+            emit_auth_expired(app, state, &api_base_url, &result.body);
         }
         return Ok(result);
     }
@@ -703,6 +703,17 @@ pub async fn api_request(
     .await
 }
 
+/// The main API proxy command. Handles local route intercepts and proxies
+/// to the dashboard for everything else.
+#[tauri::command]
+pub async fn api_request(
+    app: tauri::AppHandle,
+    input: ApiRequestInput,
+    state: State<'_, AppState>,
+) -> Result<ApiRequestResult, AppError> {
+    api_request_from_state(&app, input, &state).await
+}
+
 /// True when a 401 body carries the gated-auth envelope signalling the remote
 /// session is dead (needs re-login), vs a generic loopback `{detail:...}` 401.
 fn is_auth_expired_body(body: &str) -> bool {
@@ -718,12 +729,7 @@ fn is_auth_expired_body(body: &str) -> bool {
 
 /// Emit `connection-auth-expired` to the frontend so it can surface the
 /// re-login banner. Debounced to 5s (a burst of 401s must not storm the UI).
-fn emit_auth_expired(
-    app: &tauri::AppHandle,
-    state: &State<'_, AppState>,
-    base_url: &str,
-    body: &str,
-) {
+fn emit_auth_expired(app: &tauri::AppHandle, state: &AppState, base_url: &str, body: &str) {
     use tauri::Emitter;
     {
         let mut inner = match state.inner.lock() {

@@ -6,9 +6,9 @@ import {
   AlertTriangle,
   Cable,
   CheckCircle2,
+  ExternalLink,
   Globe2,
   HardDrive,
-  Loader2,
   XCircle,
 } from "lucide-react";
 import type {
@@ -18,7 +18,7 @@ import type {
   ConnectionMode,
   TestConnectionResult,
 } from "@hermes/protocol";
-import { Alert, Button, Input } from "@hermes/shared-ui";
+import { Alert, Button, Input, LoadingIndicator } from "@hermes/shared-ui";
 import { notifyConnectionAuthRestored } from "@/lib/connection-auth-events";
 import { SettingsHero } from "./settings-hero";
 import { ManagedRuntimePanel } from "./managed-runtime-panel";
@@ -72,10 +72,10 @@ function ModeCard({
       onClick={onSelect}
     >
       <span className={s.approvalModeOptionTitle}>
-        <Icon size={14} aria-hidden="true" />
+        <Icon size={16} aria-hidden="true" />
         {title}
         {current && <span className={s.approvalModeBadge}>当前目标</span>}
-        {active && <CheckCircle2 size={14} style={{ marginLeft: "auto" }} aria-hidden="true" />}
+        {active && <CheckCircle2 size={16} style={{ marginLeft: "auto" }} aria-hidden="true" />}
       </span>
       <span className={s.approvalModeOptionDesc}>{description}</span>
     </button>
@@ -107,6 +107,7 @@ export function ConnectionSection({
 }: SettingsSectionProps) {
   const desktop = typeof window !== "undefined" ? window.hermesDesktop : undefined;
   const supported = Boolean(desktop?.getConnectionConfig);
+  const browserCompanion = Boolean(window.__HERMES_RUNTIME__?.browserCompanion);
 
   const [config, setConfig] = useState<ConnectionConfigView | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -127,6 +128,8 @@ export function ConnectionSection({
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [openingBrowser, setOpeningBrowser] = useState(false);
+  const [browserMessage, setBrowserMessage] = useState<ConnectionMessage | null>(null);
   const [message, setMessage] = useState<ConnectionMessage | null>(null);
 
   useEffect(() => {
@@ -333,7 +336,39 @@ export function ConnectionSection({
     }
   };
 
+  const handleOpenBrowser = async () => {
+    if (!desktop?.openBrowserCompanion) return;
+    setOpeningBrowser(true);
+    setBrowserMessage(null);
+    try {
+      await desktop.openBrowserCompanion();
+      setBrowserMessage({ tone: "ok", text: "已在系统浏览器中打开社区桌面版" });
+    } catch (error) {
+      setBrowserMessage({
+        tone: "error",
+        text: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setOpeningBrowser(false);
+    }
+  };
+
   if (!supported) {
+    if (browserCompanion) {
+      return (
+        <div>
+          {showHeading && <h2 className={s.heading}>连接</h2>}
+          <SettingsHero
+            ok
+            icon={<Globe2 size={24} />}
+            eyebrow="浏览器伴生模式"
+            title="已通过社区桌面版连接"
+            description="当前浏览器的 REST 与实时网关通信均由桌面端安全转发；连接目标由桌面端统一管理。需要切换内核时，请回到桌面端的连接页面操作。"
+            badge={<span className={s.statusBadge} data-on="true">已连接</span>}
+          />
+        </div>
+      );
+    }
     return (
       <div>
         {showHeading && <h2 className={s.heading}>连接</h2>}
@@ -375,11 +410,37 @@ export function ConnectionSection({
         />
       )}
 
+      {!externalOnly && desktop?.openBrowserCompanion && (
+        <div className={s.connBrowserCompanion}>
+          <div className={s.connBrowserCompanionCopy}>
+            <div className={s.connBrowserCompanionTitle}>在浏览器中使用社区桌面版</div>
+            <div className={s.rowSub}>
+              由当前桌面端安全转发内核连接，无需在浏览器里复制会话令牌。
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleOpenBrowser()}
+            loading={openingBrowser}
+            leadingIcon={<ExternalLink size={12} />}
+          >
+            在浏览器中打开社区桌面版
+          </Button>
+        </div>
+      )}
+
+      {browserMessage && (
+        <Alert className={s.connResult} tone={browserMessage.tone} size="sm">
+          {browserMessage.text}
+        </Alert>
+      )}
+
       {loadError && <div className={s.connResult} data-tone="error">{loadError}</div>}
 
       {envOverride && (
         <div className={s.connEnvWarn}>
-          <AlertTriangle size={15} aria-hidden="true" />
+          <AlertTriangle size={16} aria-hidden="true" />
           <div>
             <div style={{ fontWeight: 600 }}>当前会话由环境变量强制为远程模式（{config?.remoteUrl}）。</div>
             <div style={{ marginTop: 4 }}>
@@ -414,7 +475,7 @@ export function ConnectionSection({
       )}
 
       {mode !== "managed" && (
-        <div className={s.connModeGrid} role="radiogroup" aria-label="外部 Hermes 位置" style={{ marginTop: 10 }}>
+        <div className={s.connModeGrid} role="radiogroup" aria-label="外部 Hermes 位置" style={{ marginTop: 12 }}>
           <ModeCard
             active={mode === "local"}
             current={effectiveMode === "local"}
@@ -475,7 +536,7 @@ export function ConnectionSection({
                   data-tone={probeStatus === "reachable" ? "ok" : probeStatus === "probing" ? undefined : "error"}
                   aria-live="polite"
                 >
-                  {probeStatus === "probing" && <Loader2 size={12} className={s.connSpin} />}
+                  {probeStatus === "probing" && <LoadingIndicator size="xs" />}
                   {probeStatus === "reachable" && <CheckCircle2 size={12} />}
                   {(probeStatus === "unreachable" || probeStatus === "authRequired") && <XCircle size={12} />}
                   {probeStatus === "probing" && "正在检测连接方式…"}
@@ -547,17 +608,16 @@ export function ConnectionSection({
                           variant="solid"
                           tone="accent"
                           onClick={() => void handleOauthLogin()}
-                          disabled={disabled || loggingIn}
-                          aria-busy={loggingIn}
+                          disabled={disabled}
+                          loading={loggingIn}
                         >
-                          {loggingIn && <Loader2 size={13} className={s.connSpin} />}
                           使用 {p.displayName} 登录
                         </Button>
                       ))}
                     {authProviders
                       .filter((p) => p.supportsPassword)
                       .map((p) => (
-                        <div key={p.name} style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 280 }}>
+                        <div key={p.name} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 280 }}>
                           <Input
                             style={{ minWidth: 280 }}
                             value={pwUser}
@@ -582,10 +642,9 @@ export function ConnectionSection({
                             variant="solid"
                             tone="accent"
                             onClick={() => void handlePasswordLogin(p.name)}
-                            disabled={disabled || loggingIn || !pwUser || !pwPass}
-                            aria-busy={loggingIn}
+                            disabled={disabled || !pwUser || !pwPass}
+                            loading={loggingIn}
                           >
-                            {loggingIn && <Loader2 size={13} className={s.connSpin} />}
                             登录
                           </Button>
                         </div>
@@ -608,10 +667,10 @@ export function ConnectionSection({
             className={s.connFooterSpacer}
             variant="outline"
             onClick={() => void handleTest()}
-            disabled={disabled || testing || (mode === "local" ? !trimmedLocalUrl : !trimmedRemoteUrl)}
-            aria-busy={testing}
+            disabled={disabled || (mode === "local" ? !trimmedLocalUrl : !trimmedRemoteUrl)}
+            loading={testing}
+            leadingIcon={<Cable size={12} />}
           >
-            {testing ? <Loader2 size={13} className={s.connSpin} /> : <Cable size={13} />}
             测试连接
           </Button>
         )}
@@ -642,9 +701,8 @@ export function ConnectionSection({
           tone="accent"
           onClick={() => void submit(true)}
           disabled={disabled || !canSubmit}
-          aria-busy={applying}
+          loading={applying}
         >
-          {applying && <Loader2 size={13} className={s.connSpin} />}
           {externalOnly
             ? "连接并进入桌面端"
             : mode === "remote"

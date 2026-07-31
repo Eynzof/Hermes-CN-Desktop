@@ -22,10 +22,6 @@ vi.mock("@/hooks/use-profiles", () => ({
   useSetManagementProfile: () => vi.fn(),
 }));
 
-vi.mock("@/components/top-bar/top-bar", () => ({
-  TopBarActions: () => null,
-}));
-
 import { SkillsRoute } from "./skills";
 
 describe("SkillsRoute tabs", () => {
@@ -40,5 +36,8 @@ describe("SkillsRoute tabs", () => {
     expect(market).toBeGreaterThan(-1);
     expect(stats).toBeGreaterThan(market);
     expect(mine).toBeGreaterThan(stats);
+    expect(html).toContain('role="tablist" aria-label="技能页面"');
+    expect(html.match(/role="tab"/g)).toHaveLength(4);
+    expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
   });
 });

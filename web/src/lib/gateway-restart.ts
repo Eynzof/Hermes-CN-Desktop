@@ -53,10 +53,10 @@ export function isGatewayRestartLocked(phase: GatewayRestartPhase): boolean {
 }
 
 export function gatewayRestartButtonLabel(phase: GatewayRestartPhase): string {
-  if (phase === "starting" || phase === "running") return "重启中…";
-  if (phase === "success") return "已完成";
-  if (phase === "error") return "重试";
-  return "重启";
+  if (phase === "starting" || phase === "running") return "网关重启中…";
+  if (phase === "success") return "网关已重启";
+  if (phase === "error") return "重试网关";
+  return "重启网关";
 }
 
 export function gatewayRestartTitle(

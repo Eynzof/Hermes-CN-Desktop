@@ -39,6 +39,27 @@ describe("sidebarSearchAtom", () => {
   });
 });
 
+describe("appSidebarVisibleAtom (persisted)", () => {
+  it("defaults to visible and restores a hidden sidebar", async () => {
+    const visibleUi = await loadUi();
+    expect(createStore().get(visibleUi.appSidebarVisibleAtom)).toBe(true);
+
+    const hiddenUi = await loadUi({ "hermes.app-sidebar-visible": false });
+    expect(createStore().get(hiddenUi.appSidebarVisibleAtom)).toBe(false);
+  });
+
+  it("persists visibility changes", async () => {
+    const { appSidebarVisibleAtom, uiStore } = await loadUi();
+    const store = createStore();
+    store.set(appSidebarVisibleAtom, false);
+    expect(store.get(appSidebarVisibleAtom)).toBe(false);
+    expect(uiStore.readUiValue("hermes.app-sidebar-visible", true)).toBe(false);
+
+    store.set(appSidebarVisibleAtom, true);
+    expect(uiStore.readUiValue("hermes.app-sidebar-visible", false)).toBe(true);
+  });
+});
+
 describe("activeProfileAtom (persisted)", () => {
   it("defaults to 'default' when nothing is stored", async () => {
     const { activeProfileAtom } = await loadUi();
@@ -132,7 +153,7 @@ describe("conversationWidthModeAtom (persisted)", () => {
     const { conversationWidthMaxWidth } = await loadUi();
     expect(conversationWidthMaxWidth("small")).toBe("780px");
     expect(conversationWidthMaxWidth("medium")).toBe("960px");
-    expect(conversationWidthMaxWidth("large")).toBe("1006px");
+    expect(conversationWidthMaxWidth("large")).toBe("1008px");
     expect(conversationWidthMaxWidth("full")).toBe("100%");
   });
 });
@@ -311,5 +332,61 @@ describe("assistant display profile atoms (persisted)", () => {
     store.set(assistantAvatarDataUrlAtom, "https://example.test/avatar.png");
     expect(store.get(assistantAvatarDataUrlAtom)).toBe("");
     expect(uiStore.readUiValue("hermes.assistant-avatar-data-url", "fallback")).toBe("");
+  });
+});
+
+describe("persisted atoms follow late ui-store hydration (#480)", () => {
+  it("restores common settings when the snapshot arrives after module evaluation", async () => {
+    const {
+      assistantAvatarDataUrlAtom,
+      assistantDisplayNameAtom,
+      composerSubmitShortcutAtom,
+      showReasoningAtom,
+      uiStore,
+    } = await loadUi();
+    const store = createStore();
+    const atoms = [
+      showReasoningAtom,
+      composerSubmitShortcutAtom,
+      assistantDisplayNameAtom,
+      assistantAvatarDataUrlAtom,
+    ] as const;
+    const unsubscribes = atoms.map((targetAtom) => store.sub(targetAtom, () => {}));
+
+    expect(store.get(showReasoningAtom)).toBe(false);
+    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe("");
+
+    const avatar = "data:image/png;base64,AAAA";
+    uiStore.__resetUiStoreForTests({
+      "hermes.show-reasoning": true,
+      "hermes.composer-submit-shortcut": "ctrl-enter",
+      "hermes.assistant-display-name": "Claudia",
+      "hermes.assistant-avatar-data-url": avatar,
+    });
+
+    expect(store.get(showReasoningAtom)).toBe(true);
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
+    expect(store.get(assistantDisplayNameAtom)).toBe("Claudia");
+    expect(store.get(assistantAvatarDataUrlAtom)).toBe(avatar);
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
+  });
+
+  it("reads hydrated values on first mount without another notification", async () => {
+    const { composerSubmitShortcutAtom, showReasoningAtom, uiStore } = await loadUi();
+    uiStore.__resetUiStoreForTests({
+      "hermes.show-reasoning": true,
+      "hermes.composer-submit-shortcut": "ctrl-enter",
+    });
+
+    const store = createStore();
+    const unsubscribes = [
+      store.sub(showReasoningAtom, () => {}),
+      store.sub(composerSubmitShortcutAtom, () => {}),
+    ];
+    expect(store.get(showReasoningAtom)).toBe(true);
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
+    unsubscribes.forEach((unsubscribe) => unsubscribe());
   });
 });

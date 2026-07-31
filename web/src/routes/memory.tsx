@@ -7,7 +7,7 @@ import {
   useSaveUserProfile,
   useUpdateMemoryEntry,
 } from "@/hooks/use-memory";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import { MemoryLimitControl } from "@/components/memory/memory-limit-control";
 import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
@@ -104,9 +104,14 @@ export function MemoryRoute() {
   };
 
   const right = (
-    <Button type="button" variant="outline" onClick={() => void memoryQuery.refetch()} disabled={memoryQuery.isFetching}>
-      <RefreshCw size={14} />
-      {memoryQuery.isFetching ? "刷新中" : "刷新"}
+    <Button
+      type="button"
+      variant="outline"
+      loading={memoryQuery.isFetching}
+      leadingIcon={<RefreshCw size={16} />}
+      onClick={() => void memoryQuery.refetch()}
+    >
+      刷新
     </Button>
   );
 
@@ -130,7 +135,7 @@ export function MemoryRoute() {
           <Button type="button" variant="outline" onClick={() => void memoryQuery.refetch()}>重试</Button>
         </div>
       ) : isLoading || !data ? (
-        <div className={s.emptyState}>加载记忆中…</div>
+        <LoadingState variant="page" label="正在加载记忆…" />
       ) : (
         <div className={s.memoryPage}>
           <div className={s.statsGrid}>
@@ -166,7 +171,7 @@ export function MemoryRoute() {
                   <span>写入当前档案的 memories/MEMORY.md</span>
                 </div>
                 <Button type="button" variant="solid" tone="accent" size="sm" onClick={() => setShowAdd((v) => !v)}>
-                  <Plus size={14} /> 添加记忆
+                  <Plus size={16} /> 添加记忆
                 </Button>
               </div>
 
@@ -184,14 +189,14 @@ export function MemoryRoute() {
                   <div className={s.formActions}>
                     <span>{newEntry.length} 字符</span>
                     <Button type="button" variant="outline" size="sm" onClick={() => { setShowAdd(false); setNewEntry(""); }}>取消</Button>
-                    <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleAdd} disabled={!newEntry.trim() || addEntry.isPending}>保存</Button>
+                    <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleAdd} loading={addEntry.isPending} disabled={!newEntry.trim()}>保存</Button>
                   </div>
                 </div>
               )}
 
               {data.memory.entries.length === 0 ? (
                 <div className={s.emptyState}>
-                  <Brain size={18} />
+                  <Brain size={20} />
                   暂无记忆。Hermes 会在聊天时自动沉淀重要事实，你也可以手动添加。
                 </div>
               ) : (
@@ -204,22 +209,22 @@ export function MemoryRoute() {
                           <div className={s.formActions}>
                             <span>{editContent.length} 字符</span>
                             <Button type="button" variant="outline" size="sm" onClick={() => setEditingIndex(null)}>取消</Button>
-                            <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveEdit} disabled={updateEntry.isPending}>保存</Button>
+                            <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveEdit} loading={updateEntry.isPending}>保存</Button>
                           </div>
                         </div>
                       ) : (
                         <>
                           <p>{entry.content}</p>
                           <div className={s.entryActions}>
-                            <Button type="button" variant="plain" size="inherit" onClick={() => { setEditingIndex(entry.index); setEditContent(entry.content); }}>编辑</Button>
+                            <Button type="button" variant="plain" size="xs" onClick={() => { setEditingIndex(entry.index); setEditContent(entry.content); }}>编辑</Button>
                             {confirmDelete === entry.index ? (
                               <span className={s.confirmDelete}>
                                 确认删除？
-                                <Button type="button" variant="plain" size="inherit" onClick={() => removeEntry.mutate(entry.index, { onSuccess: () => setConfirmDelete(null) })}>是</Button>
-                                <Button type="button" variant="plain" size="inherit" onClick={() => setConfirmDelete(null)}>否</Button>
+                                <Button type="button" variant="plain" size="xs" onClick={() => removeEntry.mutate(entry.index, { onSuccess: () => setConfirmDelete(null) })}>是</Button>
+                                <Button type="button" variant="plain" size="xs" onClick={() => setConfirmDelete(null)}>否</Button>
                               </span>
                             ) : (
-                              <Button type="button" variant="plain" size="inherit" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={13} /></Button>
+                              <Button type="button" variant="plain" size="xs" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={12} /></Button>
                             )}
                           </div>
                         </>
@@ -250,7 +255,7 @@ export function MemoryRoute() {
                 />
                 <div className={`${s.formActions} ${s.profileFooter}`}>
                   <span>{userContent.length} / {data.user.charLimit} 字符</span>
-                  <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveUser} disabled={!userDirty || saveUser.isPending}>保存画像</Button>
+                  <Button type="button" variant="solid" tone="accent" size="sm" onClick={handleSaveUser} loading={saveUser.isPending} disabled={!userDirty}>保存画像</Button>
                 </div>
               </div>
             </section>

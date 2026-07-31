@@ -18,7 +18,9 @@ import {
   XCircle,
 } from "lucide-react";
 import type { CodingAgentStatus, SkillInfo } from "@hermes/protocol";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import { CopyButton } from "@/components/ui/copy-button";
+import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import { useCodingAgentsCheck } from "@/hooks/use-coding-agents";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
 import s from "./settings.module.css";
@@ -56,10 +58,10 @@ function agentStatusLine(agent: CodingAgentStatus): string {
 }
 
 function StatusIcon({ status }: { status: CardStatus }) {
-  if (status === "ok") return <CheckCircle2 size={13} />;
-  if (status === "error") return <XCircle size={13} />;
-  if (status === "warning") return <AlertTriangle size={13} />;
-  return <CircleHelp size={13} />;
+  if (status === "ok") return <CheckCircle2 size={12} />;
+  if (status === "error") return <XCircle size={12} />;
+  if (status === "warning") return <AlertTriangle size={12} />;
+  return <CircleHelp size={12} />;
 }
 
 function RuntimeField({ label, value, mono, wide }: {
@@ -91,7 +93,7 @@ export function DelegationSkillControl({ agent, skill, onToggle, pending }: {
         role="status"
       >
         <span className={s.delegationSkillIcon} aria-hidden>
-          <AlertTriangle size={15} />
+          <AlertTriangle size={16} />
         </span>
         <div className={s.delegationSkillBody}>
           <div className={s.delegationSkillMeta}>
@@ -117,7 +119,7 @@ export function DelegationSkillControl({ agent, skill, onToggle, pending }: {
       aria-label={`${agent.label} 委派技能`}
     >
       <span className={s.delegationSkillIcon} aria-hidden>
-        <Bot size={15} />
+        <Bot size={16} />
       </span>
       <div className={s.delegationSkillBody}>
         <div className={s.delegationSkillMeta}>
@@ -151,31 +153,26 @@ export function CodingAgentToolbar({ isFetching, hasBridge, onRefresh, diagnosti
   onRefresh: () => void;
   diagnostics: () => string;
 }) {
-  const actionClassName = [s.btn, s.codingAgentToolbarButton].join(" ");
   return (
     <div className={s.codingAgentToolbar} role="toolbar" aria-label="编程Agent 操作">
-      <button
-        className={actionClassName}
+      <Button
+        className={s.codingAgentToolbarButton}
+        variant="outline"
+        size="md"
         type="button"
         data-coding-agent-action="true"
         onClick={onRefresh}
-        disabled={isFetching || !hasBridge}
+        disabled={!hasBridge}
+        loading={isFetching}
+        leadingIcon={<RefreshCw size={12} />}
       >
-        <RefreshCw
-          className={s.codingAgentRefreshIcon}
-          data-spinning={isFetching ? "true" : undefined}
-          size={13}
-        />
-        {isFetching ? "检测中" : "刷新检测"}
-      </button>
-      <CopyButton
-        className={actionClassName}
+        刷新检测
+      </Button>
+      <DiagnosticCopyButton
+        className={s.codingAgentToolbarButton}
         data-coding-agent-action="true"
         text={diagnostics}
-      >
-        <Copy size={13} />
-        复制诊断 JSON
-      </CopyButton>
+      />
     </div>
   );
 }
@@ -193,7 +190,7 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
       <header className={s.codingAgentCardHeader}>
         <div className={s.codingAgentIdentity}>
           <div className={s.debugCardIcon}>
-            <SquareTerminal size={15} />
+            <SquareTerminal size={16} />
           </div>
           <div className={s.codingAgentIdentityText}>
             <h3>{agent.label}</h3>
@@ -207,7 +204,7 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
           </span>
           {agent.installed ? (
             <span className={s.envStatusTag} data-status={agent.loginState === "logged_in" ? "ok" : status}>
-              <KeyRound size={11} aria-hidden />
+              <KeyRound size={12} aria-hidden />
               {LOGIN_LABELS[agent.loginState]}
             </span>
           ) : null}
@@ -247,7 +244,7 @@ function AgentCard({ agent, skill, onToggle, togglePending, onOpenPath }: {
             type="button"
             onClick={() => void onOpenPath(agent.path)}
           >
-            <FolderOpen size={13} />
+            <FolderOpen size={12} />
             打开路径
           </button>
         ) : null}
@@ -356,7 +353,7 @@ export function CodingAgentsSection({ showHeading = true }: { showHeading?: bool
         </div>
       )}
 
-      {!data && query.isLoading && <p className={s.desc}>正在检测本机编程Agent…</p>}
+      {!data && query.isLoading && <LoadingState variant="block" label="正在检测本机编程 Agent…" />}
     </div>
   );
 }

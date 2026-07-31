@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleHelp,
-  Copy,
   FolderOpen,
   MonitorCog,
   RefreshCw,
@@ -13,7 +12,8 @@ import {
   XCircle,
 } from "lucide-react";
 import type { EnvironmentCheckCategory, EnvironmentCheckItem, EnvironmentCheckResult, EnvironmentCheckStatus } from "@hermes/protocol";
-import { CopyButton } from "@/components/ui/copy-button";
+import { Button, LoadingState } from "@hermes/shared-ui";
+import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import { useEnvironmentCheck } from "@/hooks/use-environment-check";
 import s from "./settings.module.css";
 
@@ -99,22 +99,38 @@ export function EnvironmentSection({ showHeading = true }: { showHeading?: boole
       </div>
 
       <div className={s.debugActionBar}>
-        <button className={s.btn} type="button" onClick={() => void query.refetch()} disabled={query.isFetching || !hasBridge}>
-          <RefreshCw size={13} />
-          {query.isFetching ? "刷新中" : "刷新检查"}
-        </button>
-        <CopyButton className={s.btn} text={() => diagnosticsPayload(data)}>
-          <Copy size={13} />
-          复制诊断 JSON
-        </CopyButton>
-        <button className={s.btn} type="button" onClick={() => void openPath(data?.runtimeRoot)} disabled={!data?.runtimeRoot || !window.hermesDesktop?.openWorkspacePath}>
-          <FolderOpen size={13} />
+        <Button
+          variant="outline"
+          size="md"
+          type="button"
+          onClick={() => void query.refetch()}
+          disabled={!hasBridge}
+          loading={query.isFetching}
+          leadingIcon={<RefreshCw size={12} />}
+        >
+          刷新检查
+        </Button>
+        <DiagnosticCopyButton text={() => diagnosticsPayload(data)} />
+        <Button
+          variant="outline"
+          size="md"
+          type="button"
+          onClick={() => void openPath(data?.runtimeRoot)}
+          disabled={!data?.runtimeRoot || !window.hermesDesktop?.openWorkspacePath}
+          leadingIcon={<FolderOpen size={12} />}
+        >
           打开内核目录
-        </button>
-        <button className={s.btn} type="button" onClick={() => void openPath(data?.hermesHome)} disabled={!data?.hermesHome || !window.hermesDesktop?.openWorkspacePath}>
-          <FolderOpen size={13} />
+        </Button>
+        <Button
+          variant="outline"
+          size="md"
+          type="button"
+          onClick={() => void openPath(data?.hermesHome)}
+          disabled={!data?.hermesHome || !window.hermesDesktop?.openWorkspacePath}
+          leadingIcon={<FolderOpen size={12} />}
+        >
           打开 HERMES_HOME
-        </button>
+        </Button>
       </div>
 
       {!hasBridge && <div className={s.runtimeMessage} data-tone="error">当前环境不支持环境检查。</div>}
@@ -122,7 +138,7 @@ export function EnvironmentSection({ showHeading = true }: { showHeading?: boole
 
       {data && (
         <div className={s.aboutDebugGrid}>
-          <DebugCard icon={<MonitorCog size={15} />} title="环境摘要" sub="核心错误会影响启动；可选 warning 只影响对应能力" wide>
+          <DebugCard icon={<MonitorCog size={16} />} title="环境摘要" sub="核心错误会影响启动；可选 warning 只影响对应能力" wide>
             <div className={s.runtimeGrid}>
               <RuntimeField label="平台" value={`${data.platform}-${data.arch}`} />
               <RuntimeField label="档案" value={data.currentProfile} />
@@ -147,7 +163,7 @@ export function EnvironmentSection({ showHeading = true }: { showHeading?: boole
         </div>
       )}
 
-      {!data && query.isLoading && <p className={s.desc}>正在检查本机环境…</p>}
+      {!data && query.isLoading && <LoadingState variant="block" label="正在检查本机环境…" />}
     </div>
   );
 }
@@ -176,7 +192,7 @@ function EnvironmentItemRow({ item, onOpenPath }: { item: EnvironmentCheckItem; 
       )}
       {item.path && window.hermesDesktop?.openWorkspacePath && (
         <button className={[s.btn, s.envOpenPathButton].join(" ")} type="button" onClick={() => void onOpenPath(item.path)}>
-          <FolderOpen size={13} />
+          <FolderOpen size={12} />
           打开路径
         </button>
       )}
@@ -185,17 +201,17 @@ function EnvironmentItemRow({ item, onOpenPath }: { item: EnvironmentCheckItem; 
 }
 
 function StatusIcon({ status }: { status: EnvironmentCheckStatus }) {
-  if (status === "ok") return <CheckCircle2 size={13} />;
-  if (status === "error") return <XCircle size={13} />;
-  if (status === "warning") return <AlertTriangle size={13} />;
-  return <CircleHelp size={13} />;
+  if (status === "ok") return <CheckCircle2 size={12} />;
+  if (status === "error") return <XCircle size={12} />;
+  if (status === "warning") return <AlertTriangle size={12} />;
+  return <CircleHelp size={12} />;
 }
 
 function categoryIcon(category: EnvironmentCheckCategory): ReactNode {
-  if (category === "core" || category === "runtime") return <ShieldCheck size={15} />;
-  if (category === "tools") return <Terminal size={15} />;
-  if (category === "browser") return <Wrench size={15} />;
-  return <MonitorCog size={15} />;
+  if (category === "core" || category === "runtime") return <ShieldCheck size={16} />;
+  if (category === "tools") return <Terminal size={16} />;
+  if (category === "browser") return <Wrench size={16} />;
+  return <MonitorCog size={16} />;
 }
 
 function DebugCard({ icon, title, sub, children, wide }: {

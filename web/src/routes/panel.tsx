@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { useNavigate } from "react-router-dom";
+import { LoadingState } from "@hermes/shared-ui";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { useSessions } from "@/hooks/use-sessions";
@@ -103,7 +104,7 @@ export function PanelRoute() {
   };
 
   return (
-    <div className={s.pageWrap}>
+    <div className={s.pageWrap} data-page-texture="pinhole">
       <div className={s.pageContent}>
         <PanelHero
           activeCount={active.length}
@@ -124,7 +125,7 @@ export function PanelRoute() {
           <HealthGrid />
         </Section>
 
-        {isLoading && <div className={s.loading}>加载中…</div>}
+        {isLoading && <LoadingState variant="block" label="正在加载会话…" />}
 
         {active.length > 0 && (
           <Section

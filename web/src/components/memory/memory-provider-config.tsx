@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Save } from "lucide-react";
-import { Button } from "@hermes/shared-ui";
+import { Button, LoadingState } from "@hermes/shared-ui";
 import type { MemoryProviderConfigResponse } from "@hermes/protocol";
 import type { VisibleMemoryProvider } from "@/hooks/use-memory";
 import { openExternalUrl } from "@/lib/external-links";
@@ -110,7 +110,7 @@ export function MemoryProviderConfig({
           {field.description}
           {field.url && (
             <button type="button" onClick={() => void openExternalUrl(field.url)}>
-              获取凭据 <ExternalLink size={11} />
+              获取凭据 <ExternalLink size={12} />
             </button>
           )}
         </small>
@@ -118,7 +118,7 @@ export function MemoryProviderConfig({
     );
   };
 
-  if (loading) return <div className={s.loadingBlock}>读取配置中…</div>;
+  if (loading) return <LoadingState variant="block" label="正在读取配置…" />;
   if (!config) return <div className={s.inlineError}>无法读取配置。</div>;
 
   return (
@@ -129,8 +129,8 @@ export function MemoryProviderConfig({
           <span>保存只更新当前档案，不会自动切换当前记忆后端。</span>
         </div>
         {!dependenciesInstalled && (
-          <Button type="button" variant="outline" size="sm" disabled={setupPending} onClick={() => void onSetup()}>
-            {setupPending ? "安装中…" : "安装依赖"}
+          <Button type="button" variant="outline" size="sm" loading={setupPending} onClick={() => void onSetup()}>
+            安装依赖
           </Button>
         )}
       </div>
@@ -153,14 +153,15 @@ export function MemoryProviderConfig({
           variant="solid"
           tone="accent"
           size="sm"
-          disabled={saving || !dependenciesInstalled}
+          loading={saving}
+          disabled={!dependenciesInstalled}
+          leadingIcon={<Save size={12} />}
           onClick={() => {
             setSaved(false);
             void onSave(values).then(() => setSaved(true)).catch(() => setSaved(false));
           }}
         >
-          <Save size={13} />
-          {saving ? "检测中…" : "保存并检测"}
+          保存并检测
         </Button>
       </div>
     </section>

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { SessionSummary } from "@hermes/protocol";
+import { exportSessionJson } from "@/lib/session-export";
 import { renameSession, type RenameDeps } from "@/lib/session-rename";
 import { togglePinnedSession, unpinSessions } from "@/lib/session-ui-state";
 
@@ -13,6 +14,7 @@ export interface UseSessionRowActionsOptions {
   resumeSession: RenameDeps["resumeSession"];
   /** Archive a single session, typically `useArchiveSession().mutate`. */
   archive: (id: string) => void;
+  profile?: string | null;
   /** Side effect after a successful delete (e.g. clear active session / route). */
   onDeleted?: (succeededIds: string[]) => void;
 }
@@ -36,6 +38,9 @@ export interface UseSessionRowActions {
   submitRename: () => Promise<void>;
   // archive
   handleArchive: (session: SessionSummary) => void;
+  exportError: string;
+  clearExportError: () => void;
+  handleExport: (session: SessionSummary) => Promise<void>;
   // delete (array form works for single or many)
   deleteTargets: SessionSummary[] | null;
   openDeleteDialog: (targets: SessionSummary[]) => void;
@@ -44,8 +49,8 @@ export interface UseSessionRowActions {
 }
 
 /**
- * State machine for a single session's row actions (pin / rename / archive /
- * delete) backing the shared `SessionRowMenu` + rename/delete modals.
+ * State machine for a single session's row actions (pin / rename / export /
+ * archive / delete) backing the shared `SessionRowMenu` + action modals.
  *
  * Deliberately excludes bulk-delete selection mode — that stays in the history
  * page. Pin state is not owned here: callers already track pinned ids via
@@ -58,6 +63,7 @@ export function useSessionRowActions({
   setSessionTitle,
   resumeSession,
   archive,
+  profile,
   onDeleted,
 }: UseSessionRowActionsOptions): UseSessionRowActions {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -66,6 +72,7 @@ export function useSessionRowActions({
   const [renameError, setRenameError] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
   const [deleteTargets, setDeleteTargets] = useState<SessionSummary[] | null>(null);
+  const [exportError, setExportError] = useState("");
 
   const togglePin = useCallback((sessionId: string) => {
     togglePinnedSession(sessionId);
@@ -120,6 +127,21 @@ export function useSessionRowActions({
     [archive],
   );
 
+  const clearExportError = useCallback(() => setExportError(""), []);
+
+  const handleExport = useCallback(
+    async (session: SessionSummary) => {
+      setOpenMenuId(null);
+      setExportError("");
+      try {
+        await exportSessionJson(session.id, profile);
+      } catch (error) {
+        setExportError(error instanceof Error ? error.message : "导出会话失败");
+      }
+    },
+    [profile],
+  );
+
   const openDeleteDialog = useCallback((targets: SessionSummary[]) => {
     const uniqueTargets = Array.from(
       new Map(targets.map((session) => [session.id, session])).values(),
@@ -161,6 +183,9 @@ export function useSessionRowActions({
     setRenameValue,
     submitRename,
     handleArchive,
+    exportError,
+    clearExportError,
+    handleExport,
     deleteTargets,
     openDeleteDialog,
     closeDeleteDialog,

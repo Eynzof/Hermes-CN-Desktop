@@ -19,7 +19,6 @@ import {
   Globe,
   Folder,
   ImagePlus,
-  Loader2,
   MessageSquare,
   Mic,
   Plus,
@@ -27,6 +26,7 @@ import {
   Square,
   X,
 } from "lucide-react";
+import { LoadingIndicator, LoadingState } from "@hermes/shared-ui";
 import type { ModelOptionsResult } from "@hermes/protocol";
 import { fileNameFromPath } from "@/lib/composer-prompt";
 import {
@@ -137,6 +137,8 @@ interface GooseComposerProps {
   loading?: boolean;
   showMeta?: boolean;
   compact?: boolean;
+  /** Remove the lower corner radius when the composer sits flush with a page edge. */
+  flushBottom?: boolean;
   /** "big" makes the composer the page hero: shows a header bar (label + char count
    * + context ring) and a row of empty-state hints; textarea is taller. */
   variant?: "default" | "big";
@@ -217,6 +219,7 @@ export function GooseComposer({
   loading = false,
   showMeta = true,
   compact = false,
+  flushBottom = false,
   variant = "default",
   headerLabel = "新任务",
   loadingPlaceholder,
@@ -591,9 +594,9 @@ export function GooseComposer({
     return () => clearTimeout(timer);
   }, [mentionTokenKey]);
 
-  // Picker now groups candidates internally (recent / configured /
-  // recommended / more) from the catalog + usage log. Composer just hands it
-  // the raw model.options payload and stays out of the way.
+  // Picker now groups candidates internally (configured / recent / MoA)
+  // from the catalog + usage log. Composer just hands it the raw
+  // model.options payload and stays out of the way.
 
   const appendAttachmentDrafts = useCallback((drafts: ComposerAttachment[]) => {
     if (!drafts.length) return;
@@ -885,6 +888,7 @@ export function GooseComposer({
       attachments,
       workspacePath: workspacePath.trim() || undefined,
       modelSelection: selectedModelRef.current ?? undefined,
+      reasoningEffort: reasoningPicker?.value ?? undefined,
       skillCommandNames: skillPicker?.skills.map((skill) => skill.name),
     };
 
@@ -1195,6 +1199,7 @@ export function GooseComposer({
         className={s.box}
         data-disabled={disabled}
         data-drag-active={dragActive}
+        data-flush-bottom={flushBottom}
         data-variant={variant}
         onDrop={handleDrop}
         onDragEnter={handleDragEnter}
@@ -1264,7 +1269,7 @@ export function GooseComposer({
               {voiceStatus === "recording" ? (
                 <Mic aria-hidden="true" />
               ) : (
-                <Loader2 aria-hidden="true" />
+                <LoadingIndicator size="xs" />
               )}
             </span>
             <span className={s.voiceActivityText}>
@@ -1347,7 +1352,7 @@ export function GooseComposer({
               </div>
             ) : null}
             {skillToken && skillPicker?.loading && totalCandidates === 0 ? (
-              <div className={s.skillPanelState}>正在读取已启用 Skill…</div>
+              <LoadingState className={s.skillPanelState} variant="inline" label="正在读取已启用 Skill…" />
             ) : skillToken && skillPicker?.error && totalCandidates === 0 ? (
               <div className={s.skillPanelState} data-tone="error">
                 {skillPicker.error}
@@ -1396,7 +1401,7 @@ export function GooseComposer({
               <small>Enter / Tab 选择，Esc 关闭</small>
             </div>
             {mentionLoading && mentionCandidates.length === 0 ? (
-              <div className={s.skillPanelState}>正在检索…</div>
+              <LoadingState className={s.skillPanelState} variant="inline" label="正在检索…" />
             ) : mentionCandidates.length === 0 ? (
               <div className={s.skillPanelState}>没有匹配的引用</div>
             ) : (
@@ -1490,7 +1495,7 @@ export function GooseComposer({
               {voiceStatus === "recording" ? (
                 <Square className={s.toolIcon} aria-hidden="true" />
               ) : voiceStatus === "transcribing" ? (
-                <Loader2 className={s.toolIcon} aria-hidden="true" />
+                <LoadingIndicator className={s.toolIcon} size="sm" />
               ) : (
                 <Mic className={s.toolIcon} aria-hidden="true" />
               )}

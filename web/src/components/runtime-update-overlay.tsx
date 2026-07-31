@@ -1,4 +1,5 @@
 import { useAtomValue } from "jotai";
+import { LoadingIndicator } from "@hermes/shared-ui";
 import { runtimeUpdatingAtom } from "@/stores/ui";
 import s from "./profile-switch-overlay.module.css";
 
@@ -15,7 +16,7 @@ export function RuntimeUpdateOverlay() {
     <div className={s.backdrop} role="alert" aria-live="assertive">
       <div className={s.card}>
         <div className={s.title}>
-          <span className={s.spinner} aria-hidden="true" />
+          <LoadingIndicator size="sm" />
           {isRollback ? "正在恢复到上一版本…" : "正在更新 Hermes…"}
         </div>
         <div className={s.body}>

@@ -71,10 +71,10 @@ export function RecentTable({ sessions, onOpen }: RecentTableProps) {
             <tr>
               <th style={{ width: 80 }}>ID</th>
               <th>标题</th>
-              <th style={{ width: 130 }}>模型</th>
-              <th style={{ width: 90 }}>来源</th>
-              <th style={{ width: 110 }}>完成</th>
-              <th style={{ width: 90 }} className={s.numeric}>Tokens</th>
+              <th style={{ width: 132 }}>模型</th>
+              <th style={{ width: 92 }}>来源</th>
+              <th style={{ width: 112 }}>完成</th>
+              <th style={{ width: 92 }} className={s.numeric}>Tokens</th>
             </tr>
           </thead>
           <tbody>

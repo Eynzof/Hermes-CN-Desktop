@@ -30,6 +30,7 @@ export function useCreateAndSendSession() {
     sendPrompt,
     setSessionTitle,
     setSessionModel,
+    setSessionReasoningEffort,
     dispatchCommand,
     attachImage,
     attachImageBytes,
@@ -84,6 +85,9 @@ export function useCreateAndSendSession() {
             payload.modelSelection.model,
             payload.modelSelection.provider,
           );
+        }
+        if (payload.reasoningEffort) {
+          await setSessionReasoningEffort(sessionId, payload.reasoningEffort);
         }
         let transportText: string | undefined;
         const skillCommand = resolveComposerSkillCommand(
@@ -146,6 +150,7 @@ export function useCreateAndSendSession() {
     sendPrompt,
     setActiveSessionId,
     setSessionModel,
+    setSessionReasoningEffort,
     setSessionTitle,
   ]);
 }

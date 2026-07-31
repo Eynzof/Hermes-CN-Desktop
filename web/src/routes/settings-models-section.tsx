@@ -64,7 +64,7 @@ import {
 } from "@/lib/local-provider-context";
 import type { EnvVarInfo } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
-import { Alert, Button, Field, Input, Select, Textarea } from "@hermes/shared-ui";
+import { Alert, Button, Field, Input, LoadingState, Select, Textarea } from "@hermes/shared-ui";
 import { OAuthProvidersSection } from "./settings-oauth-section";
 import { MoaPanel } from "./settings-moa-panel";
 import { useMoaConfig } from "@/hooks/use-moa-config";
@@ -879,9 +879,7 @@ export function ModelsSection() {
     return Array.from(set);
   }, [customModelsQuery.data?.models, customForm.model]);
 
-  const refreshLabel = modelsQuery.isFetching
-    ? "刷新中…"
-    : modelsQuery.isError
+  const refreshLabel = modelsQuery.isError
       ? "刷新失败 重试"
       : modelsQuery.data
         ? `已加载 ${modelsQuery.data.models.length} 个`
@@ -892,9 +890,7 @@ export function ModelsSection() {
     return providerModelsErrorText(modelsQuery.error);
   }, [supportsModelListing, modelsQuery.isError, modelsQuery.error]);
 
-  const customRefreshLabel = customModelsQuery.isFetching
-    ? "刷新中…"
-    : customModelsQuery.isError
+  const customRefreshLabel = customModelsQuery.isError
       ? "刷新失败 重试"
       : customModelsQuery.data
         ? `已加载 ${customModelsQuery.data.models.length} 个`
@@ -1446,7 +1442,7 @@ export function ModelsSection() {
     onDelete: () => deleteEnv.mutate(key),
   });
 
-  if (configLoading || (envLoading && !envVars)) return <div className={s.desc}>加载中…</div>;
+  if (configLoading || (envLoading && !envVars)) return <LoadingState variant="block" label="正在加载模型配置…" />;
   if (configIsError || !config) {
     const message = configError instanceof Error ? configError.message : "配置加载失败";
     return (
@@ -1697,7 +1693,8 @@ export function ModelsSection() {
                             type="button"
                             variant="outline"
                             tone="danger"
-                            disabled={providerDeletePending || providerSavePending || providerSetCurrentPending}
+                            loading={providerDeletePending}
+                            disabled={providerSavePending || providerSetCurrentPending}
                             onClick={() => void handleDeleteSelectedProvider()}
                             title={
                               currentProviderId === selectedProvider.id
@@ -1705,7 +1702,7 @@ export function ModelsSection() {
                                 : "删除此自定义服务商"
                             }
                           >
-                            {providerDeletePending ? "删除中…" : "删除服务商"}
+                            删除服务商
                           </Button>
                         )}
                       </div>
@@ -1751,7 +1748,7 @@ export function ModelsSection() {
                             <Button
                               type="button"
                               variant="outline"
-                              disabled={modelsQuery.isFetching}
+                              loading={modelsQuery.isFetching}
                               onClick={() => modelsQuery.refetch()}
                               title={`从 ${providerForm.baseUrl}/models 拉取`}
                             >
@@ -1830,7 +1827,7 @@ export function ModelsSection() {
                         }
                         onClick={() => void handleProviderSave()}
                       >
-                        {providerSavePending ? "保存中…" : showSavedFlash ? "✓ 已保存" : "保存配置"}
+                        {showSavedFlash ? "✓ 已保存" : "保存配置"}
                       </Button>
                       <Button
                         variant={isFormDirty || selectedProviderIsCurrent ? "outline" : "solid"}
@@ -1853,12 +1850,12 @@ export function ModelsSection() {
                               : "请先保存 API Key / provider 配置"
                         }
                       >
-                        {providerSetCurrentPending ? "切换中…" : selectedProviderIsCurrent ? "已是当前模型" : "设为当前模型"}
+                        {selectedProviderIsCurrent ? "已是当前模型" : "设为当前模型"}
                       </Button>
                       <Button
                         variant="outline"
+                        loading={probeForSelected?.status === "pending"}
                         disabled={
-                          probeForSelected?.status === "pending" ||
                           providerDeletePending ||
                           (!selectedHasCredentials && !providerForm.apiKey.trim() && !selectedProviderCanOmitApiKey)
                         }
@@ -1871,7 +1868,7 @@ export function ModelsSection() {
                               : "向 /models 端点发一次 GET，验证 API Key + 网络通"
                         }
                       >
-                        {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
+                        测试连接
                       </Button>
                     </div>
                     {probeForSelected && probeForSelected.status !== "pending" && (
@@ -2098,7 +2095,8 @@ export function ModelsSection() {
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={customModelsQuery.isFetching || !customBaseUrl || !customBaseUrlValid}
+                    loading={customModelsQuery.isFetching}
+                    disabled={!customBaseUrl || !customBaseUrlValid}
                     onClick={() => void customModelsQuery.refetch()}
                     title="从服务商读取模型列表"
                   >
@@ -2140,8 +2138,8 @@ export function ModelsSection() {
                 type="button"
                 variant="solid"
                 tone="accent"
+                loading={saveConfig.isPending}
                 disabled={
-                  saveConfig.isPending ||
                   !customForm.name.trim() ||
                   !customForm.baseUrl.trim() ||
                   !customBaseUrlValid ||
@@ -2149,7 +2147,7 @@ export function ModelsSection() {
                 }
                 onClick={handleAddCustom}
               >
-                {saveConfig.isPending ? "保存中…" : "添加并选中"}
+                添加并选中
               </Button>
             </div>
           </div>
@@ -2361,10 +2359,10 @@ function AuxiliaryModelsPanel({
         <Button
           type="button"
           variant="outline"
-          disabled={savingTask === "__all__"}
+          loading={savingTask === "__all__"}
           onClick={onResetAll}
         >
-          {savingTask === "__all__" ? "恢复中…" : "全部恢复为自动"}
+          全部恢复为自动
         </Button>
       </div>
 
@@ -2511,10 +2509,10 @@ function AuxiliaryModelsPanel({
               type="button"
               variant="solid"
               tone="accent"
-              disabled={isSavingCurrent}
+              loading={isSavingCurrent}
               onClick={onSaveTask}
             >
-              {isSavingCurrent ? "保存中…" : "保存此辅助任务"}
+              保存此辅助任务
             </Button>
             <Button
               type="button"
@@ -2600,7 +2598,7 @@ function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEdi
           {info.tools.length > 0 && ` · 用于: ${info.tools.join(", ")}`}
         </div>
       </div>
-      <div className={s.rowRight} style={{ gap: 6, flexWrap: "wrap", minWidth: 200 }}>
+      <div className={s.rowRight} style={{ gap: 8, flexWrap: "wrap", minWidth: 200 }}>
         {isEditing ? (
           <>
             <Input mono type={info.is_password ? "password" : "text"} value={editVal} onChange={(e) => onEditChange(e.target.value)} placeholder="输入值…" style={{ width: 180 }} fullWidth={false} autoFocus />
@@ -2626,21 +2624,7 @@ function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEdi
 
 function ProviderPanelLoading({ providerName }: { providerName: string }) {
   return (
-    <div className={s.providerPanelLoading} role="status" aria-live="polite">
-      <div className={s.providerPanelLoadingHeader}>
-        <span className={s.providerPanelSpinner} aria-hidden="true" />
-        <div>
-          <div className={s.providerPanelLoadingTitle}>正在加载 {providerName}</div>
-          <div className={s.providerPanelLoadingDesc}>正在同步配置、密钥状态和模型预设…</div>
-        </div>
-      </div>
-      <div className={s.providerPanelSkeleton} aria-hidden="true">
-        <span className={s.providerPanelSkeletonLine} data-width="long" />
-        <span className={s.providerPanelSkeletonLine} data-width="full" />
-        <span className={s.providerPanelSkeletonLine} data-width="full" />
-        <span className={s.providerPanelSkeletonLine} data-width="medium" />
-      </div>
-    </div>
+    <LoadingState variant="block" label={`正在加载 ${providerName}…`} />
   );
 }
 
@@ -2669,7 +2653,7 @@ function ProbeResultRow({ probe }: { probe: { status: "ok" | "error" | "pending"
   };
   const kind = result?.error_kind ? kindLabel[result.error_kind] ?? result.error_kind : "请求失败";
   return (
-    <div className={s.desc} style={{ marginTop: 8, color: "var(--h-danger, #c44)" }}>
+    <div className={s.desc} style={{ marginTop: 8, color: "var(--h-color-danger-fg)" }}>
       ✗ {kind} · {errorText}
     </div>
   );

@@ -42,7 +42,7 @@ export function WebPreviewTab({ url, onUrlChange }: WebPreviewTabProps) {
           spellCheck={false}
         />
         <button type="button" className={s.iconBtn} onClick={load} disabled={!valid}>
-          <Globe size={13} aria-hidden />
+          <Globe size={12} aria-hidden />
           打开
         </button>
         <button
@@ -53,7 +53,7 @@ export function WebPreviewTab({ url, onUrlChange }: WebPreviewTabProps) {
           title="刷新"
           aria-label="刷新预览"
         >
-          <RotateCw size={13} aria-hidden />
+          <RotateCw size={12} aria-hidden />
         </button>
       </div>
       {url ? (

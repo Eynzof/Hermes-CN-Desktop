@@ -2,7 +2,7 @@
   min-height: calc(100vh - 120px);
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(420px, 1fr) minmax(320px, 380px);
-  gap: 14px;
+  gap: 16px;
 }
 
 .headerActions {
@@ -18,13 +18,14 @@
 .dangerButton {
   appearance: none;
   border: 1px solid var(--h-line);
-  border-radius: var(--h-r-md);
-  min-height: 30px;
+  border-radius: 0;
+  height: var(--h-button-height-md);
+  min-height: var(--h-button-height-md);
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   font-family: var(--h-font-cn);
   font-size: 12px;
   color: var(--h-text-2);
@@ -40,7 +41,7 @@
 
 .headerPrimary,
 .primaryButton {
-  color: #ffffff;
+  color: var(--h-accent-contrast);
   border-color: var(--h-accent);
   background: var(--h-accent);
   font-weight: 700;
@@ -71,7 +72,7 @@
 .listPane,
 .historyPane {
   border: 1px solid var(--h-line);
-  border-radius: 16px;
+  border-radius: 0;
   background: var(--h-bg-app);
   overflow: hidden;
 }
@@ -83,12 +84,12 @@
 .searchBox {
   height: 36px;
   margin: 12px;
-  padding: 0 10px;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   gap: 8px;
   border: 1px solid var(--h-line);
-  border-radius: 10px;
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text-3);
 }
@@ -122,7 +123,7 @@
   width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--h-line);
-  border-radius: 9px;
+  border-radius: 0;
   background: var(--h-bg-input);
   color: var(--h-text);
   font-family: var(--h-font-cn);
@@ -134,23 +135,23 @@
 .field select,
 .field input {
   height: 32px;
-  padding: 0 10px;
+  padding: 0 12px;
 }
 
 .jobList {
-  max-height: calc(100vh - 210px);
+  max-height: calc(100vh - 212px);
   overflow-y: auto;
-  padding: 0 8px 10px;
+  padding: 0 8px 12px;
 }
 
 .jobRow {
   width: 100%;
   border: 0;
-  border-radius: 12px;
-  padding: 10px;
+  border-radius: 0;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   color: var(--h-text-2);
   background: transparent;
   cursor: pointer;
@@ -165,7 +166,7 @@
 .jobRow[data-selected="true"] {
   color: var(--h-text);
   background: var(--h-bg-chip);
-  box-shadow: inset 0 0 0 1px var(--h-line);
+  box-shadow: none;
 }
 
 .jobRowTop {
@@ -202,45 +203,11 @@
   color: var(--h-text-3);
 }
 
-.dot,
-.runDot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--h-r-pill);
-  flex: 0 0 auto;
-  background: var(--h-text-4);
-}
-
-.dot {
-  margin-top: 4px;
-}
-
-.dot[data-tone="ok"],
-.runDot[data-tone="ok"] {
-  background: var(--h-ok);
-}
-
-.dot[data-tone="live"],
-.runDot[data-tone="live"] {
-  background: var(--h-accent);
-  box-shadow: 0 0 0 3px var(--h-accent-soft);
-}
-
-.dot[data-tone="warn"],
-.runDot[data-tone="warn"] {
-  background: var(--h-warn);
-}
-
-.dot[data-tone="err"],
-.runDot[data-tone="err"] {
-  background: var(--h-err);
-}
-
 .feedback {
   margin-bottom: 12px;
-  padding: 10px 12px;
+  padding: 12px 12px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 0;
   font-size: 12px;
   line-height: 1.55;
   color: var(--h-text-2);
@@ -267,17 +234,17 @@
 
 .card {
   border: 1px solid var(--h-line);
-  border-radius: 18px;
-  padding: 22px;
+  border-radius: 0;
+  padding: 24px;
   background: var(--h-bg-pane);
-  box-shadow: var(--h-shadow);
+  box-shadow: none;
 }
 
 .cardHeader {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .cardHeaderTop {
@@ -285,7 +252,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 20px;
 }
 
 .titleBlock {
@@ -336,11 +303,11 @@
 }
 
 .statusBadge {
-  min-height: 30px;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   padding: 0 12px;
-  border-radius: var(--h-r-pill);
+  border-radius: 0;
   font-size: 12px;
   font-weight: 700;
   background: var(--h-bg-chip);
@@ -370,18 +337,18 @@
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .infoTile {
   min-width: 0;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
   padding: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 14px;
+  border-radius: 0;
   background: var(--h-bg-app);
 }
 
@@ -390,7 +357,7 @@
 }
 
 .infoIcon {
-  margin-top: 2px;
+  margin-top: 4px;
   color: var(--h-text-3);
 }
 
@@ -398,7 +365,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .infoText span,
@@ -422,8 +389,8 @@
 .detailGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .detailItem {
@@ -437,8 +404,8 @@
 .truncated,
 .errorState {
   border: 1px solid color-mix(in srgb, var(--h-err) 30%, var(--h-line));
-  border-radius: 12px;
-  padding: 10px 12px;
+  border-radius: 0;
+  padding: 12px 12px;
   color: var(--h-err);
   background: color-mix(in srgb, var(--h-err) 8%, var(--h-bg-app));
   font-size: 12px;
@@ -446,16 +413,16 @@
 }
 
 .promptCard {
-  margin-top: 18px;
+  margin-top: 20px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 14px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--h-bg-app);
 }
 
 .promptHeader,
 .runDetailHeader {
-  min-height: 34px;
+  min-height: 36px;
   padding: 0 12px;
   display: flex;
   align-items: center;
@@ -470,7 +437,7 @@
 .promptCard pre,
 .outputPre {
   margin: 0;
-  padding: 14px;
+  padding: 16px;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--h-text-2);
@@ -489,7 +456,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .fieldFull {
@@ -497,8 +464,8 @@
 }
 
 .field textarea {
-  min-height: 150px;
-  padding: 10px;
+  min-height: 152px;
+  padding: 12px;
   resize: vertical;
   line-height: 1.65;
 }
@@ -523,9 +490,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   border: 1px dashed var(--h-line);
-  border-radius: 18px;
+  border-radius: 0;
   background: var(--h-bg-app);
   text-align: center;
 }
@@ -546,8 +513,8 @@
 }
 
 .panelHeader {
-  min-height: 58px;
-  padding: 12px 14px;
+  min-height: 60px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -563,7 +530,7 @@
 }
 
 .panelSub {
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 11px;
   color: var(--h-text-3);
 }
@@ -577,12 +544,12 @@
 .runRow {
   width: 100%;
   border: 0;
-  border-radius: 12px;
-  padding: 9px 8px;
+  border-radius: 0;
+  padding: 8px 8px;
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   color: var(--h-text-2);
   background: transparent;
   cursor: pointer;
@@ -603,7 +570,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .runTitle {
@@ -624,7 +591,7 @@
 .runDetailBox {
   margin: 8px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 14px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--h-bg-pane);
 }
@@ -632,11 +599,11 @@
 .runDetailHeader span {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .truncated {
-  margin: 10px;
+  margin: 12px;
   color: var(--h-warn);
   border-color: color-mix(in srgb, var(--h-warn) 34%, var(--h-line));
   background: var(--h-warn-soft);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { LoadingState, Popover, StatusDot } from "@hermes/shared-ui";
 import {
   Archive,
   ArchiveRestore,
@@ -25,6 +25,7 @@ import {
   useUnarchiveSession,
 } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
+import { useSessionBranch } from "@/hooks/use-session-branch";
 import { isSessionRunning } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import {
@@ -55,8 +56,11 @@ import {
   togglePinnedSource,
 } from "@/lib/source-pin";
 import { renameSession } from "@/lib/session-rename";
+import { exportSessionJson } from "@/lib/session-export";
 import {
   SessionDeleteModal,
+  SessionBranchErrorModal,
+  SessionExportErrorModal,
   SessionRenameModal,
   SessionRowMenu,
 } from "@/components/session-actions";
@@ -152,7 +156,7 @@ function SourcePopover({
         aria-label="来源筛选"
       >
         <div className={s.popHead}>
-          <Search size={13} />
+          <Search size={12} />
           <input
             className={s.popSearch}
             placeholder="搜索来源…"
@@ -197,7 +201,7 @@ function SourcePopover({
                         aria-label={pinnedHere ? "取消置顶" : "置顶"}
                         title={pinnedHere ? "取消置顶" : "置顶"}
                       >
-                        {pinnedHere ? <Pin size={11} /> : <PinOff size={11} />}
+                        {pinnedHere ? <Pin size={12} /> : <PinOff size={12} />}
                       </button>
                       <span className={s.popCount}>{counts.get(item.key) ?? 0}</span>
                     </div>
@@ -239,6 +243,7 @@ export function HistoryRoute() {
   const unarchiveSession = useUnarchiveSession();
   const deleteSessions = useDeleteSessions();
   const { setSessionTitle, resumeSession } = useGateway();
+  const sessionBranch = useSessionBranch();
 
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -254,6 +259,7 @@ export function HistoryRoute() {
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(() => new Set());
   const [deleteTargets, setDeleteTargets] = useState<SessionSummary[] | null>(null);
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
+  const [exportError, setExportError] = useState("");
 
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [workspaceMap, setWorkspaceMap] = useState(readSessionWorkspaceMap);
@@ -512,6 +518,19 @@ export function HistoryRoute() {
     [archiveSession],
   );
 
+  const handleExport = useCallback(
+    async (session: SessionSummary) => {
+      setOpenMenuId(null);
+      setExportError("");
+      try {
+        await exportSessionJson(session.id, activeProfile);
+      } catch (error) {
+        setExportError(error instanceof Error ? error.message : "导出会话失败");
+      }
+    },
+    [activeProfile],
+  );
+
   const handleUnarchive = useCallback(
     (session: SessionSummary) => {
       setOpenMenuId(null);
@@ -591,7 +610,7 @@ export function HistoryRoute() {
               onClick={startBulkDeleteMode}
               disabled={bulkDeleteMode || deleteSessions.isPending || filtered.length === 0}
             >
-              <Trash2 size={13} />
+              <Trash2 size={12} />
               批量删除
             </TopBarActionButton>
           </>
@@ -674,7 +693,7 @@ export function HistoryRoute() {
         </div>
 
         <div className={s.searchBox}>
-          <Search size={13} />
+          <Search size={12} />
           <input
             type="search"
             placeholder="搜索标题与会话 ID…"
@@ -733,7 +752,7 @@ export function HistoryRoute() {
             onClick={() => openDeleteDialog(selectedSessions)}
             disabled={selectedSessions.length === 0 || deleteSessions.isPending}
           >
-            <Trash2 size={13} />
+            <Trash2 size={12} />
             删除所选
           </button>
           <button type="button" onClick={stopBulkDeleteMode} disabled={deleteSessions.isPending}>
@@ -746,7 +765,7 @@ export function HistoryRoute() {
         {isError ? (
           <div className={s.errorState}>无法加载会话列表，请检查 Dashboard 服务。</div>
         ) : isLoading ? (
-          <div className={s.emptyState}>加载会话中…</div>
+          <LoadingState variant="page" label="正在加载会话…" />
         ) : dayGroups.length === 0 ? (
           <div className={s.emptyState}>
             {scopedSessions.length === 0
@@ -828,9 +847,9 @@ export function HistoryRoute() {
                       <span className={s.cellId}>{shortId(session.id)}</span>
                       <span className={s.cellTitle}>
                         {status.kind === "running" ? (
-                          <span className={s.dotLive} aria-hidden />
+                          <StatusDot tone="success" aria-hidden />
                         ) : status.kind === "failed" ? (
-                          <span className={s.dotFail} aria-hidden />
+                          <StatusDot tone="danger" aria-hidden />
                         ) : null}
                         {pinned ? <Pin size={12} className={s.titlePin} aria-hidden /> : null}
                         <span className={s.titleText}>{sessionDisplayTitle(session)}</span>
@@ -856,15 +875,17 @@ export function HistoryRoute() {
                             disabled={menuDisabled}
                             onClick={(event) => event.stopPropagation()}
                           >
-                            <MoreHorizontal size={14} />
+                            <MoreHorizontal size={16} />
                           </button>
                         </Popover.Trigger>
                         <SessionRowMenu
                           pinned={pinned}
-                          disabled={menuDisabled}
+                          disabled={menuDisabled || sessionBranch.branchingSessionId === session.id}
                           archived={archiveScope === "archived"}
                           onTogglePin={() => onTogglePinSession(session.id)}
                           onRename={() => startRename(session)}
+                          onBranch={() => void sessionBranch.branchSession(session)}
+                          onExport={() => void handleExport(session)}
                           onArchive={() => handleArchive(session)}
                           onUnarchive={() => handleUnarchive(session)}
                           onDelete={() => openDeleteDialog([session])}
@@ -908,6 +929,17 @@ export function HistoryRoute() {
           deleting={deleteSessions.isPending}
           onClose={closeDeleteDialog}
           onConfirm={confirmDelete}
+        />
+      ) : null}
+
+      {exportError ? (
+        <SessionExportErrorModal error={exportError} onClose={() => setExportError("")} />
+      ) : null}
+
+      {sessionBranch.error ? (
+        <SessionBranchErrorModal
+          error={sessionBranch.error}
+          onClose={sessionBranch.clearError}
         />
       ) : null}
     </main>

@@ -99,7 +99,7 @@ export function MemoryBackendsPanel({ view }: MemoryBackendsPanelProps) {
     return (
       <section className={s.backendPanel}>
         <header className={s.backendSummary}>
-          <div className={s.summaryIcon}><Database size={18} /></div>
+          <div className={s.summaryIcon}><Database size={20} /></div>
           <div>
             <small>当前启用后端</small>
             <strong>{activeMeta?.label ?? "未启用外置后端"}</strong>
@@ -119,7 +119,7 @@ export function MemoryBackendsPanel({ view }: MemoryBackendsPanelProps) {
             disabled={openVikingStatus.isFetching || hindsightStatus.isFetching}
             onClick={refreshAll}
           >
-            <RefreshCw size={13} /> 刷新全部
+            <RefreshCw size={12} /> 刷新全部
           </Button>
         </header>
 
@@ -148,7 +148,7 @@ export function MemoryBackendsPanel({ view }: MemoryBackendsPanelProps) {
                 <span>{meta.description}</span>
                 <small>
                   {status?.version ? `v${status.version}` : statusQueries[provider].isFetching ? "检测中…" : "尚未返回版本"}
-                  {status?.active && <b><Check size={11} /> 当前</b>}
+                  {status?.active && <b><Check size={12} /> 当前</b>}
                 </small>
               </Link>
             );
@@ -175,7 +175,7 @@ export function MemoryBackendsPanel({ view }: MemoryBackendsPanelProps) {
             disabled={Boolean(selectedStatus?.active) || !selectedStatus?.healthy || setProvider.isPending}
             onClick={() => void handleActivate()}
           >
-            {selectedStatus?.active ? <><Check size={13} /> 当前启用</> : "设为当前"}
+            {selectedStatus?.active ? <><Check size={12} /> 当前启用</> : "设为当前"}
           </Button>
         </div>
 

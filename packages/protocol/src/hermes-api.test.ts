@@ -10,6 +10,7 @@ import {
   CronRunsResponse,
   ElevenLabsVoicesResponse,
   FsListResponse,
+  GatewayModelProvider,
   MemoryProviderConfigResponse,
   MemoryProviderRuntimeStatusResponse,
   MoaConfigResponse,
@@ -22,9 +23,49 @@ import {
   SkillsResponse,
   SkillsHubSearchResponse,
   SessionCompressResult,
+  SessionCreateResult,
   SessionSummary,
   StatusResponse,
 } from "./hermes-api";
+
+
+describe("Gateway model provider schemas", () => {
+  it("parses models.dev capability metadata returned by Core", () => {
+    const parsed = GatewayModelProvider.parse({
+      slug: "deepseek",
+      models: ["deepseek-reasoner"],
+      capabilities: {
+        "deepseek-reasoner": {
+          fast: false,
+          reasoning: true,
+          supports_tools: true,
+          supports_vision: false,
+          supports_pdf: true,
+          supports_audio: true,
+          supports_video: true,
+          supports_reasoning: true,
+          supports_reasoning_control: true,
+          open_weights: true,
+          context_window: 131_072,
+          max_output_tokens: 65_536,
+          model_family: "deepseek",
+        },
+      },
+    });
+
+    expect(parsed.capabilities?.["deepseek-reasoner"]).toMatchObject({
+      supports_tools: true,
+      supports_vision: false,
+      supports_pdf: true,
+      supports_audio: true,
+      supports_video: true,
+      supports_reasoning: true,
+      supports_reasoning_control: true,
+      open_weights: true,
+      context_window: 131_072,
+    });
+  });
+});
 
 
 describe("Memory provider schemas", () => {
@@ -563,6 +604,43 @@ describe("SessionSummary cwd (#216)", () => {
       offset: 0,
     });
     expect(parsed.sessions[0]?.cwd).toBe("/Users/claw/project-b");
+  });
+});
+
+describe("session branch contract", () => {
+  const baseSession = {
+    id: "branch-child",
+    model: "deepseek-v4-pro",
+    title: "分叉会话",
+    started_at: 1,
+    ended_at: null,
+    message_count: 2,
+    input_tokens: 0,
+    output_tokens: 0,
+    estimated_cost_usd: null,
+  };
+
+  it("preserves the Core parent session lineage", () => {
+    const parsed = SessionSummary.parse({
+      ...baseSession,
+      parent_session_id: "branch-parent",
+    });
+
+    expect(parsed.parent_session_id).toBe("branch-parent");
+  });
+
+  it("accepts the runtime and stored ids returned by session.create", () => {
+    const parsed = SessionCreateResult.parse({
+      session_id: "runtime-child",
+      stored_session_id: "branch-child",
+      message_count: 2,
+    });
+
+    expect(parsed).toMatchObject({
+      session_id: "runtime-child",
+      stored_session_id: "branch-child",
+      message_count: 2,
+    });
   });
 });
 

@@ -1,5 +1,6 @@
 pub mod api_proxy;
 pub mod backup;
+pub mod browser_companion;
 pub mod coding_agents;
 pub mod config_migration;
 pub mod connection;
@@ -19,6 +20,7 @@ pub mod preview;
 pub mod profiles;
 pub mod restart;
 pub mod runtime_manager;
+pub mod session_export;
 pub mod terminal;
 pub mod ui_store;
 pub mod ws_proxy;

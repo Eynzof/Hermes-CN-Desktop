@@ -273,7 +273,7 @@ export function CommandPalette() {
                           onSelect={() => void runItem(item)}
                         >
                           <span className={s.iconBox} data-kind={item.group}>
-                            <Icon size={15} />
+                            <Icon size={16} />
                           </span>
                           <span className={s.itemMain}>
                             <span className={s.itemLabel}>{item.label}</span>

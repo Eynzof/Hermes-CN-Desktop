@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { Popover } from "@hermes/shared-ui";
 import {
   AlignLeft,
-  Check,
   Cpu,
   MoreVertical,
   Package,
@@ -17,7 +16,6 @@ import s from "./profiles.module.css";
 export interface ProfileActionsMenuProps {
   profile: ProfileSummary;
   isActive: boolean;
-  onSetActive: () => void;
   onEditModel: () => void;
   onEditDescription: () => void;
   onEditSoul: () => void;
@@ -30,13 +28,12 @@ export interface ProfileActionsMenuProps {
 
 /**
  * 单个档案的 ⋯ 动作菜单（自带 Popover 触发器）。对齐官方桌面端 ProfileActionsMenu：
- * 设为默认 / 改模型 / 改描述 / 编辑 SOUL / 复制 CLI 命令 / 重命名 / 删除。
- * default 档案不可重命名/删除；当前档案不可「设为默认」、且要切走后才能删。
+ * 改模型 / 改描述 / 编辑 SOUL / 管理技能 / 复制 CLI 命令 / 重命名 / 删除。
+ * 高频切换动作由卡片一级按钮承载；default 档案不可重命名/删除，当前档案要切走后才能删。
  */
 export function ProfileActionsMenu({
   profile,
   isActive,
-  onSetActive,
   onEditModel,
   onEditDescription,
   onEditSoul,
@@ -72,7 +69,7 @@ export function ProfileActionsMenu({
           className={s.menuTrigger}
           aria-label={`${profile.name} 的操作`}
         >
-          <MoreVertical size={15} />
+          <MoreVertical size={16} />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -84,36 +81,23 @@ export function ProfileActionsMenu({
           role="menu"
         >
           <Popover.Close asChild>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={onSetActive}
-              disabled={isActive}
-            >
-              <Check size={13} /> 设为默认
-            </button>
-          </Popover.Close>
-
-          <div className={s.menuSep} />
-
-          <Popover.Close asChild>
             <button type="button" role="menuitem" onClick={onEditModel}>
-              <Cpu size={13} /> 改模型
+              <Cpu size={12} /> 改模型
             </button>
           </Popover.Close>
           <Popover.Close asChild>
             <button type="button" role="menuitem" onClick={onEditDescription}>
-              <AlignLeft size={13} /> 改描述
+              <AlignLeft size={12} /> 改描述
             </button>
           </Popover.Close>
           <Popover.Close asChild>
             <button type="button" role="menuitem" onClick={onEditSoul}>
-              <ScrollText size={13} /> 编辑 SOUL.md
+              <ScrollText size={12} /> 编辑 SOUL.md
             </button>
           </Popover.Close>
           <Popover.Close asChild>
             <button type="button" role="menuitem" onClick={onManageSkills}>
-              <Package size={13} /> 管理技能
+              <Package size={12} /> 管理技能
             </button>
           </Popover.Close>
           {/* 不包 Popover.Close：保持菜单打开以便就地显示「已复制」反馈。 */}
@@ -123,7 +107,7 @@ export function ProfileActionsMenu({
             onClick={handleCopyCommand}
             className={copyState === "copied" ? s.menuItemCopied : undefined}
           >
-            <Terminal size={13} />
+            <Terminal size={12} />
             {copyState === "copied"
               ? "已复制"
               : copyState === "error"
@@ -136,7 +120,7 @@ export function ProfileActionsMenu({
               <div className={s.menuSep} />
               <Popover.Close asChild>
                 <button type="button" role="menuitem" onClick={onRename}>
-                  <Pencil size={13} /> 重命名
+                  <Pencil size={12} /> 重命名
                 </button>
               </Popover.Close>
               <Popover.Close asChild>
@@ -148,7 +132,7 @@ export function ProfileActionsMenu({
                   disabled={isActive}
                   title={isActive ? "切到别的档案后才能删" : undefined}
                 >
-                  <Trash2 size={13} /> 删除
+                  <Trash2 size={12} /> 删除
                 </button>
               </Popover.Close>
             </>

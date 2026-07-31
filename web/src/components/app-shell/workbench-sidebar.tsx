@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Popover } from "@hermes/shared-ui";
+import { Popover, StatusDot, type StatusDotTone } from "@hermes/shared-ui";
 import { Folder, MessageSquare, MoreHorizontal, Plus } from "lucide-react";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { activeSessionIdAtom } from "@/stores/ui";
@@ -14,6 +14,7 @@ import {
   useSessions,
 } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
+import { useSessionBranch } from "@/hooks/use-session-branch";
 import {
   isSessionRunning,
   mergeLiveRuntimeSessions,
@@ -29,6 +30,8 @@ import {
 import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
 import {
   SessionDeleteModal,
+  SessionBranchErrorModal,
+  SessionExportErrorModal,
   SessionRenameModal,
   SessionRowMenu,
   useSessionRowActions,
@@ -77,11 +80,11 @@ function sectionLabel(index: number, label: string): string {
 function KanbanQuickIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2.2" y="2.4" width="11.6" height="11.2" rx="1.8" stroke="currentColor" strokeWidth="1.3" />
+      <rect x="2.2" y="2.4" width="11.6" height="11.2" rx="0" stroke="currentColor" strokeWidth="1.3" />
       <path d="M6 4.8v6.4M10 4.8v6.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-      <rect x="3.8" y="4.5" width="2.2" height="3" rx="0.6" fill="currentColor" opacity="0.8" />
-      <rect x="6.9" y="4.5" width="2.2" height="4.8" rx="0.6" fill="currentColor" opacity="0.58" />
-      <rect x="10" y="4.5" width="2.2" height="2.6" rx="0.6" fill="currentColor" opacity="0.72" />
+      <rect x="3.8" y="4.5" width="2.2" height="3" rx="0" fill="currentColor" opacity="0.8" />
+      <rect x="6.9" y="4.5" width="2.2" height="4.8" rx="0" fill="currentColor" opacity="0.58" />
+      <rect x="10" y="4.5" width="2.2" height="2.6" rx="0" fill="currentColor" opacity="0.72" />
     </svg>
   );
 }
@@ -97,6 +100,8 @@ interface SessionRowProps {
   actions: UseSessionRowActions;
   onClick: () => void;
   onHover?: () => void;
+  onBranch: () => void;
+  branching?: boolean;
 }
 
 function SessionRow({
@@ -110,10 +115,19 @@ function SessionRow({
   actions,
   onClick,
   onHover,
+  onBranch,
+  branching = false,
 }: SessionRowProps) {
   const title = sessionDisplayTitle(session);
   const dotState = state === "idle" ? undefined : state;
-  const actionMenuDisabled = menuDisabled || actions.isDeleting;
+  const dotTone: StatusDotTone | null = dotState === "live"
+    ? "success"
+    : dotState === "ok"
+      ? "warning"
+      : dotState === "err"
+        ? "danger"
+        : null;
+  const actionMenuDisabled = menuDisabled || actions.isDeleting || branching;
   return (
     // role=button (not a real <button>) so the "⋯" trigger can nest inside it.
     <div
@@ -134,7 +148,7 @@ function SessionRow({
     >
       <div className={s.rowMain}>
         <div className={s.ttl}>
-          <span className={s.dot} data-state={dotState} />
+          {dotTone ? <StatusDot tone={dotTone} size="xs" /> : <span className={s.dotPlaceholder} />}
           <span className={s.ttlText}>{title}</span>
         </div>
         <div className={s.meta}>
@@ -162,7 +176,7 @@ function SessionRow({
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
-            <MoreHorizontal size={14} />
+            <MoreHorizontal size={16} />
           </button>
         </Popover.Trigger>
         <SessionRowMenu
@@ -170,6 +184,8 @@ function SessionRow({
           disabled={actionMenuDisabled}
           onTogglePin={() => actions.togglePin(session.id)}
           onRename={() => actions.startRename(session)}
+          onBranch={onBranch}
+          onExport={() => void actions.handleExport(session)}
           onArchive={() => actions.handleArchive(session)}
           onDelete={() => actions.openDeleteDialog([session])}
         />
@@ -189,6 +205,7 @@ export function WorkbenchSidebar() {
   const archiveSession = useArchiveSession();
   const deleteSessions = useDeleteSessions();
   const { setSessionTitle, resumeSession } = useGateway();
+  const sessionBranch = useSessionBranch();
   const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
   const [pinnedSessionIds, setPinnedSessionIds] = useState(readPinnedSessionIds);
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
@@ -302,6 +319,7 @@ export function WorkbenchSidebar() {
     setSessionTitle,
     resumeSession,
     archive: archiveSession.mutate,
+    profile,
     onDeleted: onSessionsDeleted,
   });
 
@@ -385,6 +403,8 @@ export function WorkbenchSidebar() {
                 actions={rowActions}
                 onClick={() => goSession(sess)}
                 onHover={() => hoverSession(sess)}
+                onBranch={() => void sessionBranch.branchSession(sess)}
+                branching={sessionBranch.branchingSessionId === sess.id}
               />
             ))
           )}
@@ -418,6 +438,8 @@ export function WorkbenchSidebar() {
                   actions={rowActions}
                   onClick={() => goSession(sess)}
                   onHover={() => hoverSession(sess)}
+                  onBranch={() => void sessionBranch.branchSession(sess)}
+                  branching={sessionBranch.branchingSessionId === sess.id}
                 />
               );
             })}
@@ -436,7 +458,7 @@ export function WorkbenchSidebar() {
               onClick={() => navigate("/projects")}
             >
               <span className={s.sideItemIcon}>
-                <Folder size={14} />
+                <Folder size={16} />
               </span>
               <span className={s.sideItemLabel}>暂无置顶项目</span>
             </button>
@@ -453,7 +475,7 @@ export function WorkbenchSidebar() {
                   title={proj.path}
                 >
                   <span className={s.sideItemIcon}>
-                    <Folder size={14} />
+                    <Folder size={16} />
                   </span>
                   <span className={s.sideItemLabel}>{proj.name}</span>
                 </button>
@@ -486,6 +508,8 @@ export function WorkbenchSidebar() {
                   actions={rowActions}
                   onClick={() => goSession(sess)}
                   onHover={() => hoverSession(sess)}
+                  onBranch={() => void sessionBranch.branchSession(sess)}
+                  branching={sessionBranch.branchingSessionId === sess.id}
                 />
               );
             })
@@ -510,6 +534,20 @@ export function WorkbenchSidebar() {
           deleting={rowActions.isDeleting}
           onClose={rowActions.closeDeleteDialog}
           onConfirm={rowActions.confirmDelete}
+        />
+      ) : null}
+
+      {rowActions.exportError ? (
+        <SessionExportErrorModal
+          error={rowActions.exportError}
+          onClose={rowActions.clearExportError}
+        />
+      ) : null}
+
+      {sessionBranch.error ? (
+        <SessionBranchErrorModal
+          error={sessionBranch.error}
+          onClose={sessionBranch.clearError}
         />
       ) : null}
     </aside>

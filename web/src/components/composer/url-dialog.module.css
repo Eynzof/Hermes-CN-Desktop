@@ -14,11 +14,9 @@
   flex-direction: column;
   width: min(460px, calc(100vw - 32px));
   border: 1px solid var(--h-line);
-  border-radius: 18px;
+  border-radius: 0;
   background: var(--h-bg-input);
-  box-shadow:
-    0 24px 72px rgba(31, 30, 27, 0.18),
-    0 8px 24px rgba(31, 30, 27, 0.08);
+  box-shadow: none;
   color: var(--h-text);
   overflow: hidden;
 }
@@ -29,7 +27,7 @@
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--h-line-soft);
-  padding: 16px 18px 14px;
+  padding: 16px 20px 16px;
 }
 
 .titleBar h2 {
@@ -44,15 +42,15 @@
 }
 
 .titleBar h2 svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   stroke-width: 2;
 }
 
 .close {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: var(--h-button-height-sm);
+  height: var(--h-button-height-sm);
+  border-radius: 0;
   color: var(--h-text-2);
   padding: 0;
   background: transparent;
@@ -77,8 +75,8 @@
 .body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px;
+  gap: 12px;
+  padding: 16px 20px;
 }
 
 .urlText {
@@ -88,17 +86,17 @@
   word-break: break-all;
   background: var(--h-bg-soft);
   border: 1px solid var(--h-line-soft);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: 0;
+  padding: 8px 12px;
 }
 
 .previewCard {
   display: flex;
   gap: 12px;
   border: 1px solid var(--h-line-soft);
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--h-bg-soft);
-  padding: 10px;
+  padding: 12px;
   min-width: 0;
 }
 
@@ -107,7 +105,7 @@
   flex: 0 0 auto;
   width: 72px;
   height: 72px;
-  border-radius: 10px;
+  border-radius: 0;
   overflow: hidden;
   background: var(--h-bg);
   border: 1px solid var(--h-line-soft);
@@ -129,8 +127,8 @@
 }
 
 .previewIcon svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 
 .previewMeta {
@@ -178,7 +176,7 @@
 }
 
 .errorText {
-  color: var(--h-danger, #dc2626);
+  color: var(--h-color-danger-fg);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -193,26 +191,26 @@
 .hint code {
   font-family: var(--h-font-mono, ui-monospace, monospace);
   background: var(--h-bg-soft);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 0 4px;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
   border-top: 1px solid var(--h-line-soft);
-  padding: 14px 18px;
+  padding: 16px 20px;
 }
 
 .secondary,
 .primary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 9px;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -235,8 +233,8 @@
 }
 
 .secondary svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
 }
 
@@ -247,8 +245,8 @@
 }
 
 .primary svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   stroke-width: 2;
 }
 

@@ -1,7 +1,7 @@
 .field {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   color: var(--h-color-fg-default);
 }
 
@@ -14,7 +14,7 @@
 .labelGroup {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 4px;
 }
 
 .label {
@@ -26,7 +26,7 @@
 
 .required {
   color: var(--h-color-danger-fg);
-  margin-left: 3px;
+  margin-left: 4px;
 }
 
 .hint {
@@ -38,7 +38,7 @@
 .control {
   min-width: 0;
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .error {

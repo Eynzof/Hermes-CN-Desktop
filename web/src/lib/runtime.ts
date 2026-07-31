@@ -14,6 +14,8 @@ import type {
   EnvironmentCheckResult,
   ExportLogSnapshotInput,
   ExportLogSnapshotResult,
+  ExportSessionJsonInput,
+  ExportSessionJsonResult,
   FileUploadInput,
   HermesMessageMetadata,
   ImOnboardingApplyInput,
@@ -436,6 +438,8 @@ declare global {
       managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
       /** Running as the portable (unzip-and-run) desktop distribution. */
       portable?: boolean;
+      /** UI is running in a system browser through the desktop loopback relay. */
+      browserCompanion?: boolean;
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
@@ -449,7 +453,9 @@ declare global {
       createWorkspaceProject?(): Promise<ElectronFilePickerResult>;
       openWorkspacePath?(input: { path: string }): Promise<ElectronApiRequestResult>;
       openExternalUrl?(input: { url: string }): Promise<ElectronSimpleResult>;
+      openBrowserCompanion?(): Promise<{ ok: boolean; url: string; port: number }>;
       exportLogSnapshot?(input: ExportLogSnapshotInput): Promise<ExportLogSnapshotResult>;
+      exportSessionJson?(input: ExportSessionJsonInput): Promise<ExportSessionJsonResult>;
       exportDebugBundle?(input?: ExportDebugBundleInput): Promise<ExportDebugBundleResult>;
       environmentCheck?(): Promise<EnvironmentCheckResult>;
       codingAgentsCheck?(): Promise<CodingAgentsCheckResult>;

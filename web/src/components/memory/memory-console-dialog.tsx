@@ -86,7 +86,7 @@ export function MemoryConsoleDialog({ provider, consoleUrl }: Props) {
               <Button type="button" variant="outline">取消</Button>
             </Dialog.Close>
             <Button type="button" variant="solid" tone="accent" onClick={handleSubmit}>
-              打开控制台 <ExternalLink size={13} />
+              打开控制台 <ExternalLink size={12} />
             </Button>
           </div>
         </Dialog.Content>

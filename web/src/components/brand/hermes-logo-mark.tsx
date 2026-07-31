@@ -4,11 +4,11 @@ interface HermesLogoMarkProps {
   size?: number;
   className?: string;
   title?: string;
-  /** 保留旧「H」立体 SVG 标的接口签名；位图 logo 不再区分明暗色调。 */
+  /** 黑白灰位图在所有主题下保持一致，保留 tone 仅兼容既有调用。 */
   tone?: "light" | "dark";
 }
 
-/** 品牌标：与 Hermes 默认头像同源的位图（原为「H」立体 SVG 标）。 */
+/** Hermes 中文社区桌面版统一使用的黑白灰品牌标。 */
 export function HermesLogoMark({ size = 22, className, title }: HermesLogoMarkProps) {
   return (
     <img
@@ -19,7 +19,8 @@ export function HermesLogoMark({ size = 22, className, title }: HermesLogoMarkPr
       alt={title ?? ""}
       aria-hidden={title ? undefined : true}
       style={{
-        borderRadius: Math.max(4, Math.round(size * 0.22)),
+        borderRadius: 0,
+        background: "var(--h-color-bg-avatar)",
         objectFit: "cover",
         display: "block",
       }}

@@ -37,8 +37,4 @@
   --h-font-cn: var(--h-font-ui);
   --h-font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
     Consolas, monospace;
-  --h-font-display-cn: "Noto Serif SC", "Source Han Serif SC", "Songti SC",
-    STSongti-SC, "SimSun", serif;
-  --h-font-brand: Fraunces, Georgia, Cambria, "Times New Roman", serif;
-  --h-font-serif: var(--h-font-display-cn);
 }

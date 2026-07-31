@@ -1,5 +1,5 @@
 import { Popover } from "@hermes/shared-ui";
-import { Archive, ArchiveRestore, Edit3, Pin, PinOff, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Download, Edit3, GitFork, Pin, PinOff, Trash2 } from "lucide-react";
 import s from "./session-actions.module.css";
 
 export interface SessionRowMenuProps {
@@ -9,6 +9,8 @@ export interface SessionRowMenuProps {
   archived?: boolean;
   onTogglePin: () => void;
   onRename: () => void;
+  onBranch: () => void;
+  onExport: () => void;
   onArchive: () => void;
   /** Restore an archived session. Required when `archived` is true. */
   onUnarchive?: () => void;
@@ -16,8 +18,8 @@ export interface SessionRowMenuProps {
 }
 
 /**
- * Dropdown body for a single session's actions (pin / rename / archive /
- * delete). Render it inside a `Popover.Root` whose `Popover.Trigger` is the
+ * Dropdown body for a single session's actions (pin / rename / branch / export /
+ * archive / delete). Render it inside a `Popover.Root` whose `Popover.Trigger` is the
  * "⋯" button — shared by the history list and the workbench sidebar. In the
  * history page's archived scope the archive item flips to "取消归档".
  */
@@ -27,6 +29,8 @@ export function SessionRowMenu({
   archived,
   onTogglePin,
   onRename,
+  onBranch,
+  onExport,
   onArchive,
   onUnarchive,
   onDelete,
@@ -43,23 +47,33 @@ export function SessionRowMenu({
       >
         <Popover.Close asChild>
           <button type="button" onClick={onTogglePin} role="menuitem" disabled={disabled}>
-            {pinned ? <PinOff size={13} /> : <Pin size={13} />}
+            {pinned ? <PinOff size={12} /> : <Pin size={12} />}
             {pinned ? "取消置顶" : "置顶"}
           </button>
         </Popover.Close>
         <Popover.Close asChild>
           <button type="button" onClick={onRename} role="menuitem" disabled={disabled}>
-            <Edit3 size={13} /> 重命名
+            <Edit3 size={12} /> 重命名
+          </button>
+        </Popover.Close>
+        <Popover.Close asChild>
+          <button type="button" onClick={onBranch} role="menuitem" disabled={disabled}>
+            <GitFork size={12} /> 分叉
+          </button>
+        </Popover.Close>
+        <Popover.Close asChild>
+          <button type="button" onClick={onExport} role="menuitem" disabled={disabled}>
+            <Download size={12} /> 导出 JSON
           </button>
         </Popover.Close>
         <Popover.Close asChild>
           {archived ? (
             <button type="button" onClick={onUnarchive} role="menuitem" disabled={disabled}>
-              <ArchiveRestore size={13} /> 取消归档
+              <ArchiveRestore size={12} /> 取消归档
             </button>
           ) : (
             <button type="button" onClick={onArchive} role="menuitem" disabled={disabled}>
-              <Archive size={13} /> 归档
+              <Archive size={12} /> 归档
             </button>
           )}
         </Popover.Close>
@@ -71,7 +85,7 @@ export function SessionRowMenu({
             data-tone="danger"
             disabled={disabled}
           >
-            <Trash2 size={13} /> 删除
+            <Trash2 size={12} /> 删除
           </button>
         </Popover.Close>
       </Popover.Content>
