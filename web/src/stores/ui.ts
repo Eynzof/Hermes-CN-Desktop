@@ -442,7 +442,7 @@ export function hydratePersistedUiAtoms(store: ReturnType<typeof import("jotai/v
   }
 
   // 10. Active session ID — use exported atom (write handler handles set/null)
-  const activeSessionId = readUiValue<string | null>(ACTIVE_SESSION_ID_KEY, undefined);
+  const activeSessionId = readUiValue<string | null | undefined>(ACTIVE_SESSION_ID_KEY, undefined);
   // We read the store's current value from the exported atom's getter, not
   // the private base atom, because the exported atom layers on top of the base.
   // For null comparison we check if the stored value is explicitly null vs absent.
