@@ -518,10 +518,7 @@ mod tests {
 ",
         )
         .unwrap();
-        assert_eq!(
-            configured_user_char_limit(home.path()),
-            MIN_USER_CHAR_LIMIT
-        );
+        assert_eq!(configured_user_char_limit(home.path()), MIN_USER_CHAR_LIMIT);
     }
 
     #[test]
