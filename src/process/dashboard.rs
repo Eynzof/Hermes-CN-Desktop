@@ -971,10 +971,79 @@ fn resolve_hermes_command(allow_external_agent: bool) -> Result<(String, Vec<Str
 }
 
 /// Spawn the hermes dashboard subprocess.
+const MANAGED_TAVILY_BASE_URL: &str = "https://tavily.fengchiyun.com";
+// This is an intentionally extractable desktop credential. The proxy only
+// authorizes it for POST /search and POST /extract.
+const MANAGED_TAVILY_ACCESS_KEY: &str = "3JElum7mkWtDU8IzA8rZERBekzzcYyNkW-v0iAhArkI";
+
+fn configure_managed_web_provider(cmd: &mut Command) {
+    // Keep the Core provider and user-facing name as "Tavily", but route it
+    // through the operator-owned Tavily-compatible proxy.
+    cmd.env("TAVILY_BASE_URL", MANAGED_TAVILY_BASE_URL)
+        .env("TAVILY_API_KEY", MANAGED_TAVILY_ACCESS_KEY);
+}
+
+fn enforce_managed_web_provider_config(hermes_home: &str) -> Result<(), AppError> {
+    let home = Path::new(hermes_home);
+    fs::create_dir_all(home).map_err(|error| {
+        AppError::FileError(format!(
+            "create managed Hermes home {}: {error}",
+            home.display()
+        ))
+    })?;
+    let config_path = home.join("config.yaml");
+    let mut config: serde_yaml::Value = if config_path.exists() {
+        serde_yaml::from_slice(&fs::read(&config_path).map_err(|error| {
+            AppError::FileError(format!("read {}: {error}", config_path.display()))
+        })?)
+        .map_err(|error| AppError::FileError(format!("parse {}: {error}", config_path.display())))?
+    } else {
+        serde_yaml::Value::Mapping(Default::default())
+    };
+
+    let root = config.as_mapping_mut().ok_or_else(|| {
+        AppError::FileError(format!(
+            "{} root must be a YAML mapping",
+            config_path.display()
+        ))
+    })?;
+    let web = root
+        .entry(serde_yaml::Value::String("web".into()))
+        .or_insert_with(|| serde_yaml::Value::Mapping(Default::default()));
+    let web = web.as_mapping_mut().ok_or_else(|| {
+        AppError::FileError(format!(
+            "{}.web must be a YAML mapping",
+            config_path.display()
+        ))
+    })?;
+    for key in ["search_backend", "extract_backend"] {
+        web.insert(
+            serde_yaml::Value::String(key.into()),
+            serde_yaml::Value::String("tavily".into()),
+        );
+    }
+
+    let output = serde_yaml::to_string(&config)
+        .map_err(|error| AppError::FileError(format!("serialize config.yaml: {error}")))?;
+    if fs::read_to_string(&config_path).ok().as_deref() == Some(output.as_str()) {
+        return Ok(());
+    }
+
+    let mut temp = tempfile::NamedTempFile::new_in(home)
+        .map_err(|error| AppError::FileError(format!("create temporary config.yaml: {error}")))?;
+    temp.write_all(output.as_bytes())
+        .and_then(|_| temp.flush())
+        .map_err(|error| AppError::FileError(format!("write config.yaml: {error}")))?;
+    temp.persist(&config_path)
+        .map_err(|error| AppError::FileError(format!("replace config.yaml: {}", error.error)))?;
+    Ok(())
+}
+
 fn spawn_dashboard(
     options: &EnsureDashboardOptions,
     claimed_ports: Vec<u16>,
 ) -> Result<SpawnedDashboard, AppError> {
+    enforce_managed_web_provider_config(&options.hermes_home)?;
     let (program, mut prefix_args) = resolve_hermes_command(options.allow_external_agent)?;
 
     let api_args = vec![
@@ -1034,6 +1103,7 @@ fn spawn_dashboard(
             "HERMES_DASHBOARD_PREWARM_AGENT",
             std::env::var("HERMES_DASHBOARD_PREWARM_AGENT").unwrap_or_else(|_| "0".to_string()),
         );
+    configure_managed_web_provider(&mut cmd);
     if let Some(token) = session_token.as_deref() {
         cmd.env("HERMES_DASHBOARD_SESSION_TOKEN", token);
     }
@@ -1707,6 +1777,45 @@ mod tests {
 
         std::env::remove_var("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT");
         std::env::remove_var("HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD");
+    }
+
+    #[test]
+    fn managed_web_provider_uses_operator_tavily_proxy() {
+        let mut cmd = Command::new("hermes");
+        configure_managed_web_provider(&mut cmd);
+        let envs: std::collections::HashMap<_, _> = cmd
+            .get_envs()
+            .filter_map(|(key, value)| value.map(|value| (key.to_owned(), value.to_owned())))
+            .collect();
+
+        assert_eq!(
+            envs.get(std::ffi::OsStr::new("TAVILY_BASE_URL")),
+            Some(&std::ffi::OsString::from(MANAGED_TAVILY_BASE_URL))
+        );
+        assert_eq!(
+            envs.get(std::ffi::OsStr::new("TAVILY_API_KEY")),
+            Some(&std::ffi::OsString::from(MANAGED_TAVILY_ACCESS_KEY))
+        );
+    }
+
+    #[test]
+    fn managed_web_provider_config_preserves_other_values_and_forces_tavily() {
+        let home = tempfile::tempdir().expect("tempdir");
+        fs::write(
+            home.path().join("config.yaml"),
+            "model: test-model\nweb:\n  backend: exa\n  search_backend: parallel\n",
+        )
+        .expect("seed config");
+
+        enforce_managed_web_provider_config(home.path().to_str().expect("utf-8 path"))
+            .expect("enforce provider config");
+
+        let config: serde_yaml::Value =
+            serde_yaml::from_slice(&fs::read(home.path().join("config.yaml")).unwrap()).unwrap();
+        assert_eq!(config["model"].as_str(), Some("test-model"));
+        assert_eq!(config["web"]["backend"].as_str(), Some("exa"));
+        assert_eq!(config["web"]["search_backend"].as_str(), Some("tavily"));
+        assert_eq!(config["web"]["extract_backend"].as_str(), Some("tavily"));
     }
 
     #[test]
