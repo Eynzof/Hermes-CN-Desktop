@@ -59,7 +59,7 @@ const channel = argValue("--channel", process.env.HERMES_RUNTIME_CHANNEL ?? "sta
 const feedBaseUrl = argValue(
   "--feed-base-url",
   process.env.HERMES_RUNTIME_FEED_BASE_URL
-    ?? "https://huangxingpackage.tos-cn-hongkong.volces.com/package/Hermes-CN-Core/runtime",
+    ?? "https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime",
 ).replace(/\/+$/u, "");
 const platform = argValue("--platform", process.env.HERMES_RUNTIME_PLATFORM ?? "win32");
 const arch = argValue("--arch", process.env.HERMES_RUNTIME_ARCH ?? "x64");

@@ -83,4 +83,4 @@ done
 "semver": "0.6.8"
 ```
 
-再使用老版本客户端检查更新，确认它显示 `0.6.8`，并从 `huanxing.tos-cn-beijing.volces.com` 下载对应品牌安装包。
+再使用老版本客户端检查更新，确认它显示 `0.6.8`，并从 `huanxing.tos-accelerate.volces.com` 下载对应品牌安装包。

@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.9-rc.4`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.9-rc.5`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.9-rc.4)"
+        description: "Tag name to associate the build with (e.g. v0.6.9-rc.5)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -223,7 +223,7 @@ jobs:
           (async () => {
             const repo = process.env.BUNDLED_RUNTIME_REPO || "Eynzof/Hermes-CN-Core";
             const tag = process.env.BUNDLED_RUNTIME_TAG || "latest";
-            const feedBaseUrl = "https://huangxingpackage.tos-cn-hongkong.volces.com/package/Hermes-CN-Core/runtime";
+            const feedBaseUrl = "https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime";
             const runtimeVersion = tag === "latest" ? null : tag.replace(/^runtime-v/u, "");
             const baseUrl = runtimeVersion
               ? `${feedBaseUrl}/releases/${encodeURIComponent(runtimeVersion)}`
@@ -509,9 +509,9 @@ jobs:
   #
   # The upload is idempotent and can be re-run from the Actions UI.
   #
-  # Publish immutable version objects to Hong Kong first, then mirror the same
-  # version to Beijing. Only after both regions are complete do we publish the
-  # mutable Beijing latest.json/canary.json consumed by desktop clients.
+  # Publish immutable Beijing version objects through the TOS acceleration
+  # endpoint first. Only after they are complete do we publish the mutable
+  # latest.json/canary.json consumed by desktop clients.
   mirror-sync:
     needs: build
     runs-on: ubuntu-latest
@@ -567,20 +567,11 @@ jobs:
           sha256sum * | sort -k2 > checksums.txt
           gh release upload "$RELEASE_TAG" checksums.txt -R "$GITHUB_REPOSITORY" --clobber
 
-      - name: Upload versioned assets to Hong Kong TOS
-        env:
-          DESKTOP_ASSET_DIR: assets
-          DESKTOP_VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          DESKTOP_TOS_BASE_URL: https://huangxingpackage.tos-cn-hongkong.volces.com/package/hermesagent
-          DESKTOP_UPLOAD_VERSIONED: "1"
-          DESKTOP_PUBLISH_CHANNEL_MANIFEST: "0"
-        run: node scripts/upload-desktop-tos.mjs
-
       - name: Upload versioned assets to Beijing TOS
         env:
           DESKTOP_ASSET_DIR: assets
           DESKTOP_VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          DESKTOP_TOS_BASE_URL: https://huanxing.tos-cn-beijing.volces.com/package/hermesagent
+          DESKTOP_TOS_BASE_URL: https://huanxing.tos-accelerate.volces.com/package/hermesagent
           DESKTOP_UPLOAD_VERSIONED: "1"
           DESKTOP_PUBLISH_CHANNEL_MANIFEST: "0"
         run: node scripts/upload-desktop-tos.mjs
@@ -589,7 +580,7 @@ jobs:
         env:
           DESKTOP_ASSET_DIR: assets
           DESKTOP_VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          DESKTOP_TOS_BASE_URL: https://huanxing.tos-cn-beijing.volces.com/package/hermesagent
+          DESKTOP_TOS_BASE_URL: https://huanxing.tos-accelerate.volces.com/package/hermesagent
           DESKTOP_UPLOAD_VERSIONED: "0"
           DESKTOP_PUBLISH_CHANNEL_MANIFEST: "1"
         run: node scripts/upload-desktop-tos.mjs

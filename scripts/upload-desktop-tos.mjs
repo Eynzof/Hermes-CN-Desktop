@@ -23,7 +23,7 @@ const RELEASE_CHANNEL = (process.env.DESKTOP_RELEASE_CHANNEL || "stable").trim()
 const UPLOAD_VERSIONED = envFlag("DESKTOP_UPLOAD_VERSIONED", true);
 const PUBLISH_CHANNEL_MANIFEST = envFlag("DESKTOP_PUBLISH_CHANNEL_MANIFEST", true);
 const TOS_BASE_URL = requiredHttpsUrl(
-    process.env.DESKTOP_TOS_BASE_URL || "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent",
+    process.env.DESKTOP_TOS_BASE_URL || "https://huanxing.tos-accelerate.volces.com/package/hermesagent",
 );
 const UPLOAD_OPTIONS = tosUploadOptionsFromEnv();
 

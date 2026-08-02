@@ -13,7 +13,7 @@ const SOURCE_ROOT = resolve(process.env.RUNTIME_SYNC_DIR || "runtime-sync");
 const CHANNEL = (process.env.CHANNEL || "stable").trim() || "stable";
 const FEED_BASE_URL = requiredUrl(
   process.env.RUNTIME_FEED_BASE_URL ||
-    "https://huangxingpackage.tos-cn-hongkong.volces.com/package/Hermes-CN-Core/runtime",
+    "https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime",
 );
 const UPLOAD_OPTIONS = tosUploadOptionsFromEnv();
 
