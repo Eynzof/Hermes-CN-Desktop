@@ -9,23 +9,30 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  containsPluginManifest,
+  isDirectory,
+  validateBundledPluginTree,
+} from "./bundled-plugin-tree.mjs";
 
 function usage() {
   console.log(`Usage: node scripts/stage-bundled-runtime-resources.mjs [options]
 
-Extracts the Dashboard web_dist and bundled plugins from an already staged,
-prebuilt Hermes-CN-Core runtime zip. This never builds Hermes-CN-Core.
+Extracts Dashboard web_dist from an already staged, prebuilt Hermes-CN-Core
+runtime zip and stages a validated bundled plugins tree. This never builds
+Hermes-CN-Core.
 
 Options:
   --runtime-dir <dir>    Staged runtime directory (default: static/bundled-runtime)
   --dashboard-out <dir> Dashboard output (default: static/dashboard/web_dist)
   --plugins-out <dir>   Plugins output (default: static/bundled-plugins)
+  --plugins-source <dir> Complete Core plugins tree. Defaults to
+                         HERMES_BUNDLED_PLUGINS_SOURCE, then ../Hermes-CN-Core/plugins
 `);
 }
 
@@ -54,14 +61,16 @@ const pluginsOut = resolve(
   repoRoot,
   argValue("--plugins-out", "static/bundled-plugins"),
 );
-
-function isDirectory(path) {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
-}
+const siblingPlugins = resolve(repoRoot, "../Hermes-CN-Core/plugins");
+const configuredPluginsSource = argValue(
+  "--plugins-source",
+  process.env.HERMES_BUNDLED_PLUGINS_SOURCE ?? null,
+);
+const pluginsSource = configuredPluginsSource
+  ? resolve(repoRoot, configuredPluginsSource)
+  : isDirectory(siblingPlugins)
+    ? siblingPlugins
+    : null;
 
 function findDirectory(root, predicate) {
   const entries = readdirSync(root, { withFileTypes: true });
@@ -73,14 +82,6 @@ function findDirectory(root, predicate) {
     if (nested) return nested;
   }
   return null;
-}
-
-function containsPluginManifest(root) {
-  return Boolean(findDirectory(root, (path) =>
-    readdirSync(path, { withFileTypes: true }).some((entry) =>
-      entry.isFile() && /^plugin\.ya?ml$/iu.test(entry.name),
-    ),
-  ));
 }
 
 function copyClean(source, destination) {
@@ -130,12 +131,14 @@ try {
     throw new Error("prebuilt runtime does not contain hermes_cli/web_dist");
   }
 
-  const plugins = findDirectory(extractRoot, (path) =>
+  const runtimePlugins = findDirectory(extractRoot, (path) =>
     basename(path) === "plugins" && containsPluginManifest(path),
   );
+  const plugins = pluginsSource ?? runtimePlugins;
   if (!plugins) {
     throw new Error("prebuilt runtime does not contain bundled plugins");
   }
+  validateBundledPluginTree(plugins);
 
   copyClean(webDist, dashboardOut);
   copyClean(plugins, pluginsOut);
@@ -148,6 +151,7 @@ try {
     `sourceCommit=${manifest.sourceCommit ?? ""}`,
     `runtimeSha256=${manifest.sha256 ?? ""}`,
     "source=prebuilt-runtime-zip",
+    `pluginsSource=${pluginsSource ? "core-source-tree" : "prebuilt-runtime-zip"}`,
     "",
   ].join("\n");
   writeFileSync(join(dirname(dashboardOut), "README.generated.txt"), provenance);

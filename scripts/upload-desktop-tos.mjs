@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { request as httpsRequest } from "node:https";
 import { extname, join, relative, resolve, sep } from "node:path";
+import {
+  mapLimit,
+  sha256File,
+  tosUploadOptionsFromEnv,
+  uploadFileToTos,
+} from "./tos-upload.mjs";
+import { desktopArtifactObjectPaths } from "./tos-object-layout.mjs";
 import { brandedWindowsArtifactBrand } from "./windows-artifact-names.mjs";
 
 const SOURCE_DIR = resolve(process.env.DESKTOP_ASSET_DIR || "assets");
@@ -17,6 +21,7 @@ const TOS_BASE_URL = requiredHttpsUrl(
     process.env.DESKTOP_TOS_BASE_URL || "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent",
 );
 const REPOSITORY = process.env.GITHUB_REPOSITORY || "Eynzof/Hermes-CN-Desktop";
+const UPLOAD_OPTIONS = tosUploadOptionsFromEnv();
 
 if (!VERSION_TAG) throw new Error("DESKTOP_VERSION_TAG is required (for example v0.6.3)");
 if (!new Set(["stable", "canary"]).has(RELEASE_CHANNEL)) {
@@ -85,73 +90,23 @@ function matchesBrandAsset(fileName, brand, version) {
 }
 
 async function upload(filePath, objectPath) {
-  const { size } = await stat(filePath);
   const url = publicUrl(objectPath);
-  let lastError;
-  for (let attempt = 1; attempt <= 6; attempt += 1) {
-    try {
-      await uploadFile(filePath, url, objectPath, size);
-      console.log(`Uploaded ${relative(process.cwd(), filePath)} -> ${url}`);
-      return url.toString();
-    } catch (error) {
-      lastError = error;
-      if (attempt < 6) {
-        const delay = Math.min(15 * 2 ** (attempt - 1), 120) * 1000;
-        console.warn(`Upload failed for ${objectPath} (attempt ${attempt}/6): ${error?.message || error}`);
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
-      }
-    }
-  }
-  throw new Error(`Upload failed for ${objectPath} after 6 attempts: ${lastError?.message || lastError}`);
-}
-
-function uploadFile(filePath, url, objectPath, contentLength) {
-  return new Promise((resolveUpload, rejectUpload) => {
-    let responseBody = "";
-    let settled = false;
-
-    const finish = (error) => {
-      if (settled) return;
-      settled = true;
-      if (error) rejectUpload(error);
-      else resolveUpload();
-    };
-
-    const request = httpsRequest(url, {
-      method: "PUT",
-      headers: {
-        "cache-control": objectPath.includes("/latest/")
-          || objectPath.endsWith("latest.json")
-          || objectPath.endsWith("canary.json")
-          ? "no-cache, no-store, must-revalidate"
-          : "public, max-age=31536000, immutable",
-        "content-length": String(contentLength),
-        "content-type": contentTypeFor(filePath),
-      },
-    }, (response) => {
-      response.setEncoding("utf8");
-      response.on("data", (chunk) => {
-        if (responseBody.length < 64 * 1024) responseBody += chunk;
-      });
-      response.on("aborted", () => finish(new Error(`TOS response aborted for ${url}`)));
-      response.on("error", (error) => finish(error));
-      response.on("end", () => {
-        const statusCode = response.statusCode || 0;
-        if (statusCode < 200 || statusCode >= 300) {
-          const detail = responseBody.trim();
-          finish(new Error(`HTTP ${statusCode}${detail ? `: ${detail}` : ""}`));
-          return;
-        }
-        finish();
-      });
-    });
-
-    request.on("error", (error) => finish(error));
-
-    const source = createReadStream(filePath);
-    source.on("error", (error) => request.destroy(error));
-    source.pipe(request);
+  const result = await uploadFileToTos({
+    cacheControl: objectPath.endsWith("latest.json") || objectPath.endsWith("canary.json")
+      ? "no-cache, no-store, must-revalidate"
+      : "public, max-age=31536000, immutable",
+    contentType: contentTypeFor(filePath),
+    filePath,
+    objectPath,
+    url,
+  }, {
+    ...UPLOAD_OPTIONS,
+    log: (message) => console.warn(message),
   });
+  console.log(
+    `Uploaded ${relative(process.cwd(), filePath)} -> ${url} (${result.mode}, ${result.parts} part${result.parts === 1 ? "" : "s"})`,
+  );
+  return url.toString();
 }
 
 async function readBrands() {
@@ -192,29 +147,38 @@ async function main() {
     }
 
     const assets = {};
-    for (const fileName of brandFiles) {
-      const filePath = join(SOURCE_DIR, fileName);
-      const latestPath = `${channelRoot}/latest/${fileName}`;
-      const versionedPath = `${channelRoot}/releases/v${version}/${fileName}`;
-      await upload(filePath, latestPath);
-      await upload(filePath, versionedPath);
-      uploaded.add(fileName);
+    const assetEntries = await mapLimit(
+      brandFiles,
+      UPLOAD_OPTIONS.fileConcurrency,
+      async (fileName) => {
+        const filePath = join(SOURCE_DIR, fileName);
+        const [versionedPath] = desktopArtifactObjectPaths({ channelRoot, fileName, version });
+        const [{ size }, sha256] = await Promise.all([
+          stat(filePath),
+          sha256File(filePath),
+          upload(filePath, versionedPath),
+        ]);
+        uploaded.add(fileName);
 
-      const platform = platformFor(fileName);
-      if (!platform) continue;
-      const body = await readFile(filePath);
-      assets[platform] = {
-        label: labelFor(platform),
-        platform,
-        fileName,
-        size: body.byteLength,
-        sha256: createHash("sha256").update(body).digest("hex"),
-        url: publicUrl(`${channelRoot}/latest/${fileName}`).toString(),
-        versionedUrl: publicUrl(`${channelRoot}/releases/v${version}/${fileName}`).toString(),
-        ...(!OMIT_SOURCE_URL ? {
-          sourceUrl: `https://github.com/${REPOSITORY}/releases/download/${encodeURIComponent(VERSION_TAG)}/${encodedFileName(fileName)}`,
-        } : {}),
-      };
+        const platform = platformFor(fileName);
+        if (!platform) return null;
+        const versionedUrl = publicUrl(versionedPath).toString();
+        return [platform, {
+          label: labelFor(platform),
+          platform,
+          fileName,
+          size,
+          sha256,
+          url: versionedUrl,
+          versionedUrl,
+          ...(!OMIT_SOURCE_URL ? {
+            sourceUrl: `https://github.com/${REPOSITORY}/releases/download/${encodeURIComponent(VERSION_TAG)}/${encodedFileName(fileName)}`,
+          } : {}),
+        }];
+      },
+    );
+    for (const entry of assetEntries.filter(Boolean)) {
+      assets[entry[0]] = entry[1];
     }
 
     const manifest = {
@@ -237,14 +201,18 @@ async function main() {
     const latestManifestPath = RELEASE_CHANNEL === "stable"
       ? `${brand.id}/latest.json`
       : `${brand.id}/canary.json`;
-    await upload(manifestPath, latestManifestPath);
-    await upload(manifestPath, `${channelRoot}/releases/v${version}/latest.json`);
+    await Promise.all([
+      upload(manifestPath, latestManifestPath),
+      upload(manifestPath, `${channelRoot}/releases/v${version}/latest.json`),
+    ]);
   }
 
   if (files.includes("checksums.txt")) {
     const checksumPath = join(SOURCE_DIR, "checksums.txt");
-    await upload(checksumPath, `checksums/latest/checksums.txt`);
-    await upload(checksumPath, `checksums/v${version}/checksums.txt`);
+    await Promise.all([
+      upload(checksumPath, "checksums/latest/checksums.txt"),
+      upload(checksumPath, `checksums/v${version}/checksums.txt`),
+    ]);
   }
 
   const unmatched = files.filter((fileName) => !uploaded.has(fileName) && fileName !== "checksums.txt");

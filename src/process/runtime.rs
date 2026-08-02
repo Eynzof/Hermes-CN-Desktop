@@ -1159,20 +1159,6 @@ fn sync_bundled_plugins_from_resource(
     Ok(Some(target))
 }
 
-fn sync_runtime_resources_from_resource(
-    resource_dir: Option<&Path>,
-    runtime_dir: &Path,
-) -> Result<(), String> {
-    sync_dashboard_web_dist_from_resource(resource_dir, runtime_dir)?;
-    sync_bundled_skills_from_resource(resource_dir, runtime_dir)?;
-    if let Some(source) = bundled_plugins_dir(resource_dir) {
-        if contains_plugin_manifest(&source) {
-            sync_bundled_plugins_from_resource(resource_dir, runtime_dir)?;
-        }
-    }
-    Ok(())
-}
-
 fn sync_available_runtime_resources_from_resource(
     resource_dir: Option<&Path>,
     runtime_dir: &Path,
@@ -2130,22 +2116,15 @@ pub async fn install_bundled_runtime_if_needed(
         };
     }
 
-    let mut result = if has_expanded_runtime {
+    // Resource overlays are synchronized by the bootstrap caller after the
+    // install record is committed. Keeping installation and overlay sync
+    // separate prevents an optional plugin packaging error from turning a
+    // usable runtime into a fatal first-launch bootstrap failure.
+    if has_expanded_runtime {
         install_runtime_tree(manifest, &expanded_runtime_dir, "bundled").await
     } else {
         install_runtime_zip(manifest, &artifact_path, "bundled").await
-    };
-    if result.ok {
-        if let Some(installed) = &result.installed {
-            if let Err(e) =
-                sync_runtime_resources_from_resource(resource_dir, Path::new(&installed.path))
-            {
-                result.ok = false;
-                result.error = Some(format!("Bundled runtime resource sync failed: {}", e));
-            }
-        }
     }
-    result
 }
 
 /// Download, verify, and install a runtime update.
@@ -4101,12 +4080,9 @@ mod tests {
         std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
 
         let result = install_bundled_runtime_if_needed(Some(&resource)).await;
-
-        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
-        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
-
         assert!(result.ok, "unexpected install error: {:?}", result.error);
         let installed = result.installed.expect("runtime should be installed");
+        let installed_path = Path::new(&installed.path);
         assert_eq!(installed.runtime_version, "9.9.9-cn.1");
         assert_eq!(installed.source, "bundled");
         assert_eq!(
@@ -4114,19 +4090,37 @@ mod tests {
             Some(manifest.sha256.as_str())
         );
         assert!(Path::new(&installed.executable_path).is_file());
-        assert!(Path::new(&installed.path)
+        assert!(!installed_path
             .join("_internal")
             .join("hermes_cli")
             .join(DASHBOARD_WEB_DIST_DIR)
             .join("index.html")
             .is_file());
-        assert!(Path::new(&installed.path)
+        assert!(!installed_path
             .join("_internal")
             .join(BUNDLED_SKILLS_DIR)
             .join("creative")
             .join("demo")
             .join("SKILL.md")
             .is_file());
+
+        sync_runtime_resources_if_available(Some(&resource)).unwrap();
+        assert!(installed_path
+            .join("_internal")
+            .join("hermes_cli")
+            .join(DASHBOARD_WEB_DIST_DIR)
+            .join("index.html")
+            .is_file());
+        assert!(installed_path
+            .join("_internal")
+            .join(BUNDLED_SKILLS_DIR)
+            .join("creative")
+            .join("demo")
+            .join("SKILL.md")
+            .is_file());
+
+        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 
     #[tokio::test]

@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.8`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.9-rc.1`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.8)"
+        description: "Tag name to associate the build with (e.g. v0.6.9-rc.1)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -252,7 +252,7 @@ jobs:
           });
           NODE
 
-      - name: Checkout runtime source for bundled skills only
+      - name: Checkout runtime source for bundled skills and plugins
         uses: actions/checkout@v4
         with:
           repository: ${{ steps.runtime_manifest.outputs.source_repo }}
@@ -271,8 +271,8 @@ jobs:
           )
           node "${args[@]}"
 
-      - name: Stage Dashboard and plugins from prebuilt runtime
-        run: node scripts/stage-bundled-runtime-resources.mjs
+      - name: Stage Dashboard and complete plugins
+        run: node scripts/stage-bundled-runtime-resources.mjs --plugins-source hermes-agent-cn-source/plugins
 
       - name: Stage bundled skills
         run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
@@ -509,15 +509,21 @@ jobs:
   #
   # The upload is idempotent and can be re-run from the Actions UI.
   #
-  # TOS upload uses the public HTTPS PUT endpoint, matching Tapdance.
-  # TOS receives both an immutable tag directory and a latest directory.
+  # TOS upload uses the public HTTPS endpoint, matching Tapdance. Large assets
+  # are multipart-uploaded once under the immutable version directory; the
+  # small latest.json manifest points clients at those versioned objects.
   mirror-sync:
     needs: build
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      DESKTOP_RELEASE_CHANNEL: ${{ (contains(github.event.inputs.tag || github.ref_name, '-alpha') || contains(github.event.inputs.tag || github.ref_name, '-beta') || contains(github.event.inputs.tag || github.ref_name, '-rc')) && 'canary' || 'stable' }}
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       DESKTOP_TOS_BASE_URL: https://huanxing.tos-cn-beijing.volces.com/package/hermesagent
+      TOS_FILE_CONCURRENCY: "3"
+      TOS_MULTIPART_THRESHOLD_MB: "32"
+      TOS_PART_CONCURRENCY: "4"
+      TOS_PART_SIZE_MB: "16"
     steps:
       - uses: actions/checkout@v4
 

@@ -3,15 +3,13 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
-  readFileSync,
-  readdirSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { isDirectory, validateBundledPluginTree } from "./bundled-plugin-tree.mjs";
 
 function usage() {
   console.log(`Usage: node scripts/stage-bundled-plugins.mjs [options]
@@ -75,65 +73,7 @@ function capture(command, args, options = {}) {
   return result.stdout.trim();
 }
 
-function isDirectory(path) {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-function walk(dir, visit) {
-  if (!isDirectory(dir)) return;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walk(full, visit);
-    } else {
-      visit(full, entry.name);
-    }
-  }
-}
-
-function hasPluginManifest(path) {
-  let found = false;
-  walk(path, (_full, name) => {
-    if (name.toLowerCase() === "plugin.yaml" || name.toLowerCase() === "plugin.yml") {
-      found = true;
-    }
-  });
-  return found;
-}
-
-function validatePluginTree(path) {
-  if (!isDirectory(path)) {
-    throw new Error(`bundled plugins source is missing: ${path}`);
-  }
-  if (!hasPluginManifest(path)) {
-    throw new Error(`bundled plugins source is missing plugin.yaml files: ${path}`);
-  }
-
-  const missingApis = [];
-  walk(path, (full, name) => {
-    const lower = name.toLowerCase();
-    if (lower !== "manifest.json" || dirname(full).split(/[\\/]/).pop() !== "dashboard") {
-      return;
-    }
-    const manifest = JSON.parse(readFileSync(full, "utf8"));
-    const api = typeof manifest.api === "string" ? manifest.api.trim() : "";
-    if (api && !existsSync(join(dirname(full), api))) {
-      missingApis.push(join(dirname(full), api));
-    }
-  });
-
-  if (missingApis.length > 0) {
-    throw new Error(
-      `bundled dashboard plugins declare missing api files: ${missingApis.slice(0, 5).join(", ")}`,
-    );
-  }
-}
-
-validatePluginTree(sourcePlugins);
+validateBundledPluginTree(sourcePlugins);
 if (resolve(sourcePlugins) === resolve(outDir)) {
   throw new Error("source plugins and output directory are the same path");
 }

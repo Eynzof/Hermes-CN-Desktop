@@ -41,6 +41,10 @@ env:
   # Public TOS object prefix. The bucket is configured for the same HTTPS
   # PUT flow used by the Tapdance packaging pipeline.
   RUNTIME_FEED_BASE_URL: https://huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime
+  TOS_FILE_CONCURRENCY: "3"
+  TOS_MULTIPART_THRESHOLD_MB: "32"
+  TOS_PART_CONCURRENCY: "4"
+  TOS_PART_SIZE_MB: "16"
 
 jobs:
   sync:

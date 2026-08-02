@@ -2,6 +2,12 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
+import {
+  mapLimit,
+  tosUploadOptionsFromEnv,
+  uploadFileToTos,
+} from "./tos-upload.mjs";
+import { signedManifestRequiresObject } from "./tos-object-layout.mjs";
 
 const SOURCE_ROOT = resolve(process.env.RUNTIME_SYNC_DIR || "runtime-sync");
 const CHANNEL = (process.env.CHANNEL || "stable").trim() || "stable";
@@ -9,6 +15,7 @@ const FEED_BASE_URL = requiredUrl(
   process.env.RUNTIME_FEED_BASE_URL ||
     "https://huanxing.tos-cn-beijing.volces.com/package/Hermes-CN-Core/runtime",
 );
+const UPLOAD_OPTIONS = tosUploadOptionsFromEnv();
 
 function requiredUrl(value) {
   const parsed = new URL(value.trim());
@@ -52,38 +59,22 @@ async function filesUnder(directory) {
 }
 
 async function upload(filePath, objectPath) {
-  const body = await readFile(filePath);
   const url = publicUrl(objectPath);
-  let lastError;
-  for (let attempt = 1; attempt <= 6; attempt += 1) {
-    try {
-      const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          "cache-control": objectPath.startsWith(`${CHANNEL}/`)
-            ? "no-cache, no-store, must-revalidate"
-            : "public, max-age=31536000, immutable",
-          "content-length": String(body.byteLength),
-          "content-type": contentTypeFor(filePath),
-        },
-        body,
-      });
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
-      }
-      console.log(`Uploaded ${relative(process.cwd(), filePath)} -> ${url}`);
-      return;
-    } catch (error) {
-      lastError = error;
-      if (attempt < 6) {
-        const delay = Math.min(15 * 2 ** (attempt - 1), 120) * 1000;
-        console.warn(`Upload failed for ${objectPath} (attempt ${attempt}/6): ${error?.message || error}`);
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
-      }
-    }
-  }
-  throw new Error(`Upload failed for ${objectPath} after 6 attempts: ${lastError?.message || lastError}`);
+  const result = await uploadFileToTos({
+    cacheControl: objectPath.startsWith(`${CHANNEL}/`)
+      ? "no-cache, no-store, must-revalidate"
+      : "public, max-age=31536000, immutable",
+    contentType: contentTypeFor(filePath),
+    filePath,
+    objectPath,
+    url,
+  }, {
+    ...UPLOAD_OPTIONS,
+    log: (message) => console.warn(message),
+  });
+  console.log(
+    `Uploaded ${relative(process.cwd(), filePath)} -> ${url} (${result.mode}, ${result.parts} part${result.parts === 1 ? "" : "s"})`,
+  );
 }
 
 async function main() {
@@ -95,17 +86,42 @@ async function main() {
     throw new Error(`No runtime feed files found under ${channelRoot}`);
   }
 
-  // Keep immutable release objects first, then stable zips, and manifests last.
-  // This prevents clients from observing a new manifest before its zip exists.
-  for (const filePath of await filesUnder(releasesRoot)) {
-    await upload(filePath, relative(SOURCE_ROOT, filePath));
+  // Upload immutable release zips before any manifest can make them visible.
+  // Parallelism is bounded so a runner cannot open an unbounded number of
+  // multipart connections when all platform artifacts are present.
+  const releaseFiles = await filesUnder(releasesRoot);
+  const releaseZips = releaseFiles.filter((file) => file.endsWith(".zip"));
+  const releaseMetadata = releaseFiles.filter((file) => !file.endsWith(".zip"));
+  await mapLimit(releaseZips, UPLOAD_OPTIONS.fileConcurrency, (filePath) =>
+    upload(filePath, relative(SOURCE_ROOT, filePath)));
+  await mapLimit(releaseMetadata, UPLOAD_OPTIONS.fileConcurrency, (filePath) =>
+    upload(filePath, relative(SOURCE_ROOT, filePath)));
+
+  // A channel zip is only required when a signed manifest explicitly points
+  // at that mutable object. Current manifests point at releases/<version>/,
+  // so uploading the same large zip under stable/ or canary/ is normally waste.
+  const channelManifests = channelFiles.filter((file) => file.endsWith(".json"));
+  const signedArtifactUrls = new Set();
+  for (const manifestPath of channelManifests) {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (manifest.artifactUrl) {
+      signedArtifactUrls.add(new URL(String(manifest.artifactUrl)).toString());
+    }
   }
-  for (const filePath of channelFiles.filter((file) => file.endsWith(".zip"))) {
-    await upload(filePath, relative(SOURCE_ROOT, filePath));
-  }
-  for (const filePath of channelFiles.filter((file) => file.endsWith(".json"))) {
-    await upload(filePath, relative(SOURCE_ROOT, filePath));
-  }
+  const requiredChannelZips = channelFiles.filter((file) => {
+    if (!file.endsWith(".zip")) return false;
+    const objectPath = relative(SOURCE_ROOT, file);
+    const required = signedManifestRequiresObject(
+      signedArtifactUrls,
+      publicUrl(objectPath).toString(),
+    );
+    if (!required) console.log(`Skipped duplicate channel zip: ${objectPath}`);
+    return required;
+  });
+  await mapLimit(requiredChannelZips, UPLOAD_OPTIONS.fileConcurrency, (filePath) =>
+    upload(filePath, relative(SOURCE_ROOT, filePath)));
+  await mapLimit(channelManifests, UPLOAD_OPTIONS.fileConcurrency, (filePath) =>
+    upload(filePath, relative(SOURCE_ROOT, filePath)));
   await upload(join(SOURCE_ROOT, "summary.json"), "sync-summary.json");
 }
 
