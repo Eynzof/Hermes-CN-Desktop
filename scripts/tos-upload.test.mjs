@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   desktopArtifactObjectPaths,
+  desktopManifestObjectPaths,
   desktopUpdateManifest,
   signedManifestRequiresObject,
 } from "./tos-object-layout.mjs";
@@ -90,6 +91,24 @@ test("desktop manifests omit repository and source URLs", () => {
   ]);
   assert.equal(JSON.stringify(manifest).includes("repository"), false);
   assert.equal(JSON.stringify(manifest).includes("sourceUrl"), false);
+});
+
+test("desktop publication separates versioned objects from the channel manifest", () => {
+  const common = {
+    channelManifestPath: "fengchihermes/canary.json",
+    channelRoot: "fengchihermes/canary",
+    version: "0.6.9-rc.4",
+  };
+  assert.deepEqual(desktopManifestObjectPaths({
+    ...common,
+    publishChannelManifest: false,
+    uploadVersioned: true,
+  }), ["fengchihermes/canary/releases/v0.6.9-rc.4/latest.json"]);
+  assert.deepEqual(desktopManifestObjectPaths({
+    ...common,
+    publishChannelManifest: true,
+    uploadVersioned: false,
+  }), ["fengchihermes/canary.json"]);
 });
 
 test("channel runtime zips are retained only when a signed manifest needs them", () => {

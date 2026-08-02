@@ -10,6 +10,7 @@ import {
 } from "./tos-upload.mjs";
 import {
   desktopArtifactObjectPaths,
+  desktopManifestObjectPaths,
   desktopUpdateManifest,
 } from "./tos-object-layout.mjs";
 import { brandedWindowsArtifactBrand } from "./windows-artifact-names.mjs";
@@ -19,14 +20,27 @@ const BRANDS_DIR = resolve(process.env.DESKTOP_BRANDS_DIR || "brands");
 const VERSION_TAG = (process.env.DESKTOP_VERSION_TAG || "").trim();
 const SELECTED_BRAND = (process.env.DESKTOP_BRAND || "").trim();
 const RELEASE_CHANNEL = (process.env.DESKTOP_RELEASE_CHANNEL || "stable").trim().toLowerCase();
+const UPLOAD_VERSIONED = envFlag("DESKTOP_UPLOAD_VERSIONED", true);
+const PUBLISH_CHANNEL_MANIFEST = envFlag("DESKTOP_PUBLISH_CHANNEL_MANIFEST", true);
 const TOS_BASE_URL = requiredHttpsUrl(
-    process.env.DESKTOP_TOS_BASE_URL || "https://huangxingpackage.tos-cn-hongkong.volces.com/package/hermesagent",
+    process.env.DESKTOP_TOS_BASE_URL || "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent",
 );
 const UPLOAD_OPTIONS = tosUploadOptionsFromEnv();
 
 if (!VERSION_TAG) throw new Error("DESKTOP_VERSION_TAG is required (for example v0.6.3)");
 if (!new Set(["stable", "canary"]).has(RELEASE_CHANNEL)) {
   throw new Error(`DESKTOP_RELEASE_CHANNEL must be stable or canary, got ${RELEASE_CHANNEL}`);
+}
+if (!UPLOAD_VERSIONED && !PUBLISH_CHANNEL_MANIFEST) {
+  throw new Error("At least one desktop upload phase must be enabled");
+}
+
+function envFlag(name, fallback) {
+  const value = process.env[name];
+  if (value === undefined || value === "") return fallback;
+  if (value === "1") return true;
+  if (value === "0") return false;
+  throw new Error(`${name} must be 0 or 1, got ${value}`);
 }
 
 function requiredHttpsUrl(value) {
@@ -153,7 +167,7 @@ async function main() {
         const [{ size }, sha256] = await Promise.all([
           stat(filePath),
           sha256File(filePath),
-          upload(filePath, versionedPath),
+          UPLOAD_VERSIONED ? upload(filePath, versionedPath) : Promise.resolve(),
         ]);
         uploaded.add(fileName);
 
@@ -190,18 +204,23 @@ async function main() {
     const latestManifestPath = RELEASE_CHANNEL === "stable"
       ? `${brand.id}/latest.json`
       : `${brand.id}/canary.json`;
-    await Promise.all([
-      upload(manifestPath, latestManifestPath),
-      upload(manifestPath, `${channelRoot}/releases/v${version}/latest.json`),
-    ]);
+    const manifestObjectPaths = desktopManifestObjectPaths({
+      channelManifestPath: latestManifestPath,
+      channelRoot,
+      publishChannelManifest: PUBLISH_CHANNEL_MANIFEST,
+      uploadVersioned: UPLOAD_VERSIONED,
+      version,
+    });
+    await Promise.all(manifestObjectPaths.map((objectPath) => upload(manifestPath, objectPath)));
   }
 
   if (files.includes("checksums.txt")) {
     const checksumPath = join(SOURCE_DIR, "checksums.txt");
-    await Promise.all([
-      upload(checksumPath, "checksums/latest/checksums.txt"),
-      upload(checksumPath, `checksums/v${version}/checksums.txt`),
-    ]);
+    const checksumObjectPaths = [
+      ...(UPLOAD_VERSIONED ? [`checksums/v${version}/checksums.txt`] : []),
+      ...(PUBLISH_CHANNEL_MANIFEST ? ["checksums/latest/checksums.txt"] : []),
+    ];
+    await Promise.all(checksumObjectPaths.map((objectPath) => upload(checksumPath, objectPath)));
   }
 
   const unmatched = files.filter((fileName) => !uploaded.has(fileName) && fileName !== "checksums.txt");
