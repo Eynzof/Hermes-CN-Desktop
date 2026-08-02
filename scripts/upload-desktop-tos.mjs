@@ -18,7 +18,7 @@ const SELECTED_BRAND = (process.env.DESKTOP_BRAND || "").trim();
 const RELEASE_CHANNEL = (process.env.DESKTOP_RELEASE_CHANNEL || "stable").trim().toLowerCase();
 const OMIT_SOURCE_URL = process.env.DESKTOP_OMIT_SOURCE_URL === "1";
 const TOS_BASE_URL = requiredHttpsUrl(
-    process.env.DESKTOP_TOS_BASE_URL || "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent",
+    process.env.DESKTOP_TOS_BASE_URL || "https://huangxingpackage.tos-cn-hongkong.volces.com/package/hermesagent",
 );
 const REPOSITORY = process.env.GITHUB_REPOSITORY || "Eynzof/Hermes-CN-Desktop";
 const UPLOAD_OPTIONS = tosUploadOptionsFromEnv();

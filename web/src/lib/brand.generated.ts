@@ -47,7 +47,7 @@ export const BRAND: BrandConfig = {
   "longDescription": "Desktop app for HuanxingHermes AI Assistant.",
   "tagline": "AI Assistant",
   "edition": "桌面版",
-  "updateManifestUrl": "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent/huanxingcomhermes/latest.json",
+  "updateManifestUrl": "https://huangxingpackage.tos-cn-hongkong.volces.com/package/hermesagent/huanxingcomhermes/latest.json",
   "updateDownloadUrl": "https://huanxingapi.com/hermes-client",
   "accountDefaultModels": [
     "deepseek-v4-flash",
