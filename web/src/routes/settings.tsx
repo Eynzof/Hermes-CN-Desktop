@@ -9,15 +9,12 @@ import {
   Cable,
   CheckCircle2,
   Copy,
-  ExternalLink as ExternalLinkIcon,
   FolderOpen,
   GitCommit,
-  GitFork,
   Globe2,
   Heart,
   Image as ImageIcon,
   Info,
-  MessageCircle,
   RefreshCw,
   Download,
   RotateCcw,
@@ -61,7 +58,6 @@ import {
   type ConversationFontSizeMode,
 } from "@/stores/ui";
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
-import { openExternalUrl } from "@/lib/external-links";
 import { detectHostOS } from "@/lib/runtime";
 import { checkDesktopUpdate } from "@/lib/desktop-update";
 import { BRAND } from "@/lib/brand.generated";
@@ -79,9 +75,6 @@ import { gatewayRestartButtonLabel, gatewayRestartTitle } from "@/lib/gateway-re
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import type { ConfigSchemaField, CronJob, DesktopUpdateCheckResult, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import { CopyButton } from "@/components/ui/copy-button";
-import wechatCommunityQr from "@/assets/wechat-community-qr.png";
-import feishuCommunityQr from "@/assets/feishu-community-qr.png";
-import { WandermindsMark } from "@/components/brand/wanderminds-mark";
 import { SettingsHero } from "./settings-hero";
 import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
@@ -1577,11 +1570,16 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
         return;
       }
       const fileName = result.asset?.fileName ?? result.filePath?.split(/[\\/]/).pop();
+      const restartingForInstall = detectHostOS() === "windows";
       setDesktopInstallState({
         phase: "ready",
-        message: fileName
-          ? `安装包已下载并打开：${fileName}。请按系统提示完成覆盖安装。`
-          : "安装包已下载并打开。请按系统提示完成覆盖安装。",
+        message: restartingForInstall
+          ? fileName
+            ? `安装程序已启动：${fileName}。应用将自动退出并继续覆盖安装。`
+            : "安装程序已启动。应用将自动退出并继续覆盖安装。"
+          : fileName
+            ? `安装包已下载并打开：${fileName}。请按系统提示完成覆盖安装。`
+            : "安装包已下载并打开。请按系统提示完成覆盖安装。",
       });
     } catch (error) {
       setDesktopInstallState({
@@ -1591,10 +1589,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     }
   };
 
-  // Developer mode ships enabled; the shortcut to open devtools follows the
-  // platform's browser convention (registered in web/src/lib/tauri-bridge.ts).
-  const devtoolsShortcut =
-    detectHostOS() === "macos" ? "F12 或 ⌘ + ⌥ + I" : "F12 或 Ctrl + Shift + I";
+  const restartingForInstall = detectHostOS() === "windows";
   const canInstallDesktopUpdate = Boolean(
     desktopUpdateResult?.ok &&
       desktopUpdateResult.updateAvailable &&
@@ -1607,8 +1602,9 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
       {showHeading && <h2 className={s.heading}>关于</h2>}
       <SettingsHero
         icon={<Heart size={24} />}
-        eyebrow="Hermes Agent 中文社区桌面版"
-        title="联系与致谢"
+        eyebrow={`${BRAND.appName} ${BRAND.edition}`}
+        title="桌面端信息"
+        description="查看当前桌面端版本和更新状态。"
       />
 
       <div className={s.aboutDebugGrid}>
@@ -1654,7 +1650,11 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               disabled={!canInstallDesktopUpdate}
             >
               <Download size={13} />
-              {desktopInstallState.phase === "downloading" ? "下载中…" : "下载安装"}
+              {desktopInstallState.phase === "downloading"
+                ? "下载中…"
+                : restartingForInstall
+                  ? "下载并重启安装"
+                  : "下载安装"}
             </Button>
           </div>
           {desktopInstallState.phase !== "idle" && (
@@ -1666,112 +1666,12 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             </div>
           )}
           <p className={s.desc}>
-            这里提醒的是桌面壳版本。点击“下载安装”会下载当前系统的安装包、校验完整性并自动打开安装器；请按系统提示完成覆盖安装。
+            {restartingForInstall
+              ? "下载完成并校验通过后，将自动启动安装程序并退出当前应用，以继续覆盖安装。"
+              : "下载完成并校验通过后，将自动打开当前系统的安装包；请按系统提示完成覆盖安装。"}
           </p>
-        </DebugCard>
-
-        <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools">
-          <div className={s.runtimeGrid}>
-            <RuntimeField label="开发者模式" value="已默认开启" />
-            <RuntimeField label="打开快捷键" value={devtoolsShortcut} mono />
-          </div>
-          <p className={s.desc}>
-            本桌面端默认开启开发者模式，按上述快捷键即可打开 / 关闭浏览器开发者工具（DevTools），
-            用于查看控制台日志、网络请求等，方便排查问题或向社区反馈。再次按下快捷键可以关闭。
-          </p>
-        </DebugCard>
-
-        <DebugCard icon={<Heart size={15} />} title="致谢与许可" sub="贡献者、支持方与字体署名">
-          <div className={s.thanksText}>
-            <p>
-              感谢 Hermes Agent 官方
-              <ExternalTextLink href="https://nousresearch.com/">Nous Research</ExternalTextLink>
-              的支持，以及参与测试、反馈、共建的中文社区朋友。
-            </p>
-            <p>
-              感谢
-              <ExternalTextLink href="https://github.com/MaxwellGengYF">MaxwellGeng</ExternalTextLink>
-              的代码贡献，及
-              <ExternalTextLink href="https://www.compshare.cn/">优云智算</ExternalTextLink>
-              的支持。
-            </p>
-            <p>
-              界面内置并使用华为 HarmonyOS Sans（SC，© 2021 Huawei Device Co., Ltd.），依据
-              <ExternalTextLink href="https://github.com/ajacocks/harmonyos-sans-font/blob/main/LICENSE">
-                《HarmonyOS Sans Fonts License Agreement》
-              </ExternalTextLink>
-              免费用于商业用途，以未修改的原始文件随应用分发。
-            </p>
-          </div>
-        </DebugCard>
-
-        <DebugCard icon={<MessageCircle size={15} />} title="联系方式" sub="社区入口和反馈渠道" wide>
-          <div className={s.contactLayout}>
-            <div className={s.runtimeGrid}>
-              <ExternalLinkField label="官网" href="https://hermesagent.org.cn" text="hermesagent.org.cn" />
-              <ContactField label="反馈">
-                <ExternalTextLink href="https://github.com/Eynzof/hermes-agent-cn-desktop/issues">
-                  到桌面端仓库 UI 层提交 issue 或建议
-                </ExternalTextLink>
-                <ExternalTextLink href="https://github.com/Eynzof/hermes-agent-cn/issues">
-                  到桌面端内核仓库提交 issue 或建议
-                </ExternalTextLink>
-              </ContactField>
-              <ContactField label="商务合作、企业定制化开发等" className={s.businessContactField}>
-                <div className={s.businessContactLines}>
-                  <ContactCopyLine label="电子邮箱" value="eynzof@gmail.com" />
-                  <ContactCopyLine label="微信号" value="Eynzof" />
-                </div>
-              </ContactField>
-            </div>
-            <div className={s.contactQrGroup}>
-              <div className={s.wechatQrPanel}>
-                <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
-                <p>微信扫码即可加入 Hermes Agent 中文社区微信群</p>
-              </div>
-              <div className={s.wechatQrPanel}>
-                <img src={feishuCommunityQr} alt="Hermes Agent 中文社区飞书群二维码" />
-                <p>飞书扫码即可加入 Hermes Agent 中文社区飞书群</p>
-              </div>
-            </div>
-          </div>
-        </DebugCard>
-
-        <DebugCard icon={<GitFork size={15} />} title="项目链接" sub="桌面端与内核仓库" wide>
-          <div className={s.runtimeGrid}>
-            <ExternalLinkField
-              label="桌面端"
-              href="https://github.com/Eynzof/hermes-agent-cn-desktop"
-              text="github.com/Eynzof/hermes-agent-cn-desktop"
-              wide
-            />
-            <ExternalLinkField
-              label="内核"
-              href="https://github.com/Eynzof/hermes-agent-cn"
-              text="github.com/Eynzof/hermes-agent-cn"
-              wide
-            />
-          </div>
         </DebugCard>
       </div>
-
-      <footer className={s.wandermindsFooter}>
-        <a
-          className={s.wandermindsCredit}
-          href="https://wanderminds.ai"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(event) => {
-            event.preventDefault();
-            void openExternalUrl("https://wanderminds.ai");
-          }}
-          title="Wanderminds · wanderminds.ai"
-        >
-          <span className={s.wandermindsCreditLabel}>Designed by</span>
-          <WandermindsMark className={s.wandermindsCreditLogo} />
-        </a>
-        <p className={s.wandermindsCopyright}>© 2026 Wanderminds · All rights reserved</p>
-      </footer>
     </div>
   );
 }
@@ -1812,66 +1712,6 @@ function RuntimeField({ label, value, mono, wide, title }: {
     </div>
   );
 }
-
-function ExternalLinkField({ label, href, text, wide }: {
-  label: string;
-  href: string;
-  text: string;
-  wide?: boolean;
-}) {
-  return (
-    <div className={s.runtimeField} data-wide={wide ? "true" : undefined}>
-      <span>{label}</span>
-      <b data-mono="true">
-        <ExternalTextLink href={href}>{text}</ExternalTextLink>
-      </b>
-    </div>
-  );
-}
-
-function ContactField({ label, children, className }: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`${s.runtimeField} ${className ?? ""}`} data-wide="true">
-      <span>{label}</span>
-      <div className={s.contactLines}>{children}</div>
-    </div>
-  );
-}
-
-function ContactCopyLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className={s.contactCopyLine}>
-      <span className={s.contactCopyLabel}>{label}：</span>
-      <b className={s.contactCopyValue}>{value}</b>
-      <CopyButton className={s.contactCopyButton} text={value} showStatusIcon={false}>
-        复制
-      </CopyButton>
-    </div>
-  );
-}
-
-function ExternalTextLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      className={`${s.link} ${s.externalLink}`}
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={(event) => {
-        event.preventDefault();
-        void openExternalUrl(href);
-      }}
-    >
-      {children}
-      <ExternalLinkIcon size={11} aria-hidden="true" />
-    </a>
-  );
-}
-
 
 function formatDesktopUpdateCheckedAt(value: number | undefined): string {
   if (!value) return "—";

@@ -393,7 +393,13 @@ async fn install_desktop_update_from(
         downloaded.bytes_downloaded,
         downloaded.bytes_total,
         progress_file_name.clone(),
-        Some("正在打开安装包"),
+        Some(
+            if should_exit_after_installer_launch(std::env::consts::OS) {
+                "正在启动安装程序并重启应用"
+            } else {
+                "正在打开安装包"
+            },
+        ),
     );
     if let Err(err) = open::that(&file_path) {
         return install_error(
@@ -412,8 +418,16 @@ async fn install_desktop_update_from(
         downloaded.bytes_downloaded,
         downloaded.bytes_total,
         progress_file_name,
-        Some("安装包已打开"),
+        Some(
+            if should_exit_after_installer_launch(std::env::consts::OS) {
+                "安装程序已启动，应用即将退出"
+            } else {
+                "安装包已打开"
+            },
+        ),
     );
+
+    schedule_exit_after_installer_launch(app);
 
     DesktopInstallUpdateResult {
         ok: true,
@@ -425,6 +439,26 @@ async fn install_desktop_update_from(
         launched: true,
         error: None,
     }
+}
+
+fn should_exit_after_installer_launch(platform: &str) -> bool {
+    platform == "windows"
+}
+
+fn schedule_exit_after_installer_launch(app: Option<&AppHandle>) {
+    if !should_exit_after_installer_launch(std::env::consts::OS) {
+        return;
+    }
+    let Some(app) = app.cloned() else {
+        return;
+    };
+
+    tauri::async_runtime::spawn(async move {
+        // Give the final progress event and IPC response time to reach the
+        // renderer, then release the running executable for the NSIS installer.
+        tokio::time::sleep(Duration::from_millis(350)).await;
+        app.exit(0);
+    });
 }
 
 fn install_error(
@@ -968,5 +1002,12 @@ mod tests {
             assert_eq!(platform_asset_score("windows-portable", &archive), 0);
             assert!(platform_asset_score("windows", &installer) > 0);
         }
+    }
+
+    #[test]
+    fn only_windows_installer_launches_require_app_exit() {
+        assert!(should_exit_after_installer_launch("windows"));
+        assert!(!should_exit_after_installer_launch("macos"));
+        assert!(!should_exit_after_installer_launch("linux"));
     }
 }

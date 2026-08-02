@@ -13,7 +13,7 @@ import {
   shouldRunAutoDesktopUpdateCheck,
   shouldShowDesktopUpdateNotice,
 } from "@/lib/desktop-update";
-import { runtime } from "@/lib/runtime";
+import { detectHostOS, runtime } from "@/lib/runtime";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
 import { versionLabel } from "@/lib/build-info";
 import { BRAND } from "@/lib/brand.generated";
@@ -47,7 +47,10 @@ function formatBytes(value: number | undefined): string {
   return `${Math.round(value)} B`;
 }
 
-function progressStageLabel(progress: DesktopInstallUpdateProgress): string {
+function progressStageLabel(
+  progress: DesktopInstallUpdateProgress,
+  restartingForInstall: boolean,
+): string {
   switch (progress.stage) {
     case "starting":
       return "正在检查更新清单";
@@ -56,9 +59,9 @@ function progressStageLabel(progress: DesktopInstallUpdateProgress): string {
     case "verifying":
       return "正在校验安装包";
     case "launching":
-      return "正在打开安装包";
+      return restartingForInstall ? "正在启动安装程序并重启应用" : "正在打开安装包";
     case "complete":
-      return "安装包已打开";
+      return restartingForInstall ? "安装程序已启动" : "安装包已打开";
     case "error":
       return "更新安装失败";
     default:
@@ -82,6 +85,7 @@ export function DesktopUpdateNotifier() {
   const [installError, setInstallError] = useState<string | null>(null);
   const [installProgress, setInstallProgress] =
     useState<DesktopInstallUpdateProgress | null>(null);
+  const restartingForInstall = detectHostOS() === "windows";
 
   useEffect(() => {
     if (runtime.platform === "web" || !window.hermesDesktop?.checkDesktopUpdate) return;
@@ -170,9 +174,13 @@ export function DesktopUpdateNotifier() {
         fileName,
       });
       setInstallMessage(
-        fileName
-          ? `安装包已下载并打开：${fileName}。请按系统提示完成覆盖安装。`
-          : "安装包已下载并打开。请按系统提示完成覆盖安装。",
+        restartingForInstall
+          ? fileName
+            ? `安装程序已启动：${fileName}。应用将自动退出并继续覆盖安装。`
+            : "安装程序已启动。应用将自动退出并继续覆盖安装。"
+          : fileName
+            ? `安装包已下载并打开：${fileName}。请按系统提示完成覆盖安装。`
+            : "安装包已下载并打开。请按系统提示完成覆盖安装。",
       );
     } catch (error) {
       setInstallError(error instanceof Error ? error.message : String(error || "桌面端更新安装失败"));
@@ -200,7 +208,9 @@ export function DesktopUpdateNotifier() {
             发现 {BRAND.appName} 新版本
           </Dialog.Title>
           <Dialog.Description id="desktop-update-desc" className={s.body}>
-            已发布 {versionLabel(result?.latestVersion)}。点击“下载安装”会下载当前系统的安装包并自动打开，请按系统提示完成覆盖安装。
+            {restartingForInstall
+              ? `已发布 ${versionLabel(result?.latestVersion)}。下载并校验完成后，将自动启动安装程序并退出当前应用。`
+              : `已发布 ${versionLabel(result?.latestVersion)}。下载安装包后会自动打开，请按系统提示完成覆盖安装。`}
           </Dialog.Description>
           <div className={s.versionPanel} aria-label="桌面端版本信息">
             <div>
@@ -220,7 +230,11 @@ export function DesktopUpdateNotifier() {
           {showProgress && (
             <div className={s.progressPanel}>
               <div className={s.progressMeta}>
-                <span>{installProgress ? progressStageLabel(installProgress) : "正在下载安装包"}</span>
+                <span>
+                  {installProgress
+                    ? progressStageLabel(installProgress, restartingForInstall)
+                    : "正在下载安装包"}
+                </span>
                 {progressPercent !== undefined && <b>{progressPercent}%</b>}
               </div>
               <div
@@ -245,7 +259,8 @@ export function DesktopUpdateNotifier() {
               onClick={() => void install()}
               disabled={installing || !window.hermesDesktop?.installDesktopUpdate}
             >
-              <Download size={13} /> {installing ? "下载中…" : "下载安装"}
+              <Download size={13} />
+              {installing ? "下载中…" : restartingForInstall ? "下载并重启安装" : "下载安装"}
             </button>
           </div>
         </Dialog.Content>
