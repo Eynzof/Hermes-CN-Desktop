@@ -90,9 +90,23 @@ interface NavItem {
   matches: (path: string) => boolean;
 }
 
+export const ASSISTANT_ROUTE = "/assistant";
+
+export function matchesAssistantRoute(pathname: string): boolean {
+  return pathname === ASSISTANT_ROUTE
+    || pathname.startsWith(`${ASSISTANT_ROUTE}/`)
+    || pathname === "/im"
+    || pathname.startsWith("/im/");
+}
+
 const NAV_ITEMS: readonly NavItem[] = [
   { label: "新建任务", href: "/", icon: Plus, matches: (p) => p === "/" || p.startsWith("/new") },
-  { label: "助理", href: "/im/feishu", icon: Bot, matches: (p) => p.startsWith("/im") },
+  {
+    label: "助理",
+    href: ASSISTANT_ROUTE,
+    icon: Bot,
+    matches: matchesAssistantRoute,
+  },
   { label: "项目", href: "/projects", icon: Folder, matches: (p) => p.startsWith("/projects") },
   { label: "技能", href: "/skills", icon: Puzzle, matches: (p) => p.startsWith("/skills") },
   { label: "连接器", href: "/mcp", icon: Plug, matches: (p) => p.startsWith("/mcp") },

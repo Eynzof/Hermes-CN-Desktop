@@ -45,7 +45,7 @@ import { LogsRoute } from "@/routes/logs";
 import { DebugRoute } from "@/routes/debug";
 import { ConsoleRoute } from "@/routes/console";
 import { ProfilesRoute } from "@/routes/profiles";
-import { DingtalkRoute, FeishuRoute, WeixinRoute } from "@/routes/im-onboarding";
+import { FeishuRoute, WeixinRoute } from "@/routes/im-onboarding";
 import { HealthGrid } from "@/components/panel/health-grid";
 import s from "./settings-dialog.module.css";
 
@@ -178,7 +178,6 @@ function EmbeddedPane({ pane }: { pane: SettingsPane }) {
           tabs={[
             { key: "feishu", label: "飞书", kind: "route", node: <FeishuRoute /> },
             { key: "weixin", label: "微信", kind: "route", node: <WeixinRoute /> },
-            { key: "dingtalk", label: "钉钉", kind: "route", node: <DingtalkRoute /> },
           ]}
         />
       );
