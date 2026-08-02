@@ -11,6 +11,7 @@ import {
 import type { GitBranch, Worktree } from "@/lib/runtime";
 import { LoadingIndicator } from "@hermes/shared-ui";
 import { useWorktrees } from "@/hooks/use-worktrees";
+import { useConfirm } from "@/lib/use-confirm";
 import { shortenPath } from "@/lib/paths";
 import s from "./worktree-panel.module.css";
 
@@ -33,6 +34,7 @@ function openInFinder(path: string): void {
 export function WorktreePanel({ repoPath }: WorktreePanelProps) {
   const wt = useWorktrees(repoPath);
   const [newName, setNewName] = useState("");
+  const { confirm } = useConfirm();
 
   // The git bridge only exists in the desktop shell; hide the panel in the browser.
   if (typeof window === "undefined" || !window.hermesDesktop?.git) {
@@ -47,11 +49,14 @@ export function WorktreePanel({ repoPath }: WorktreePanelProps) {
     });
   };
 
-  const onRemove = (tree: Worktree) => {
+  const onRemove = async (tree: Worktree) => {
     if (tree.isMain) return;
-    const confirmed = window.confirm(
-      `确认删除工作树「${basename(tree.path)}」？这会移除该 worktree 目录，但不删除其分支。`,
-    );
+    const confirmed = await confirm({
+      title: "删除工作树",
+      body: `确认删除工作树「${basename(tree.path)}」？这会移除该 worktree 目录，但不删除其分支。`,
+      confirmLabel: "删除",
+      danger: true,
+    });
     if (confirmed) void wt.removeWorktree(tree.path);
   };
 

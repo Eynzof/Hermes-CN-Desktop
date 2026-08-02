@@ -1451,7 +1451,7 @@ export function hydratePersistedChatAtoms(
   store: ReturnType<typeof import("jotai/vanilla")["createStore"]>,
 ): void {
   // Gateway session ID
-  const gwId = readUiValue<string | null>(GW_SESSION_ID_KEY, undefined);
+  const gwId = readUiValue<string | null | undefined>(GW_SESSION_ID_KEY, undefined);
   if (gwId !== undefined) {
     const current = store.get(gwSessionIdAtom);
     if (current !== gwId) {
