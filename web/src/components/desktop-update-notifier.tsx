@@ -5,16 +5,8 @@ import type {
   DesktopInstallUpdateProgress,
   DesktopUpdateCheckResult,
 } from "@hermes/protocol";
-import {
-  checkDesktopUpdate,
-  DESKTOP_UPDATE_AUTO_CHECK_DATE_KEY,
-  DESKTOP_UPDATE_DISMISSED_VERSION_KEY,
-  desktopUpdateDateKey,
-  shouldRunAutoDesktopUpdateCheck,
-  shouldShowDesktopUpdateNotice,
-} from "@/lib/desktop-update";
+import { checkDesktopUpdate, shouldShowDesktopUpdateNotice } from "@/lib/desktop-update";
 import { detectHostOS, runtime } from "@/lib/runtime";
-import { readUiValue, writeUiValue } from "@/lib/ui-store";
 import { versionLabel } from "@/lib/build-info";
 import { BRAND } from "@/lib/brand.generated";
 import s from "./desktop-update-notifier.module.css";
@@ -23,19 +15,9 @@ const UPDATE_PROGRESS_EVENT = "desktop-update-progress";
 
 let autoCheckPromise: Promise<DesktopUpdateCheckResult> | null = null;
 
-function rememberDismissedVersion(result: DesktopUpdateCheckResult | null): void {
-  if (result?.latestVersion) {
-    writeUiValue(DESKTOP_UPDATE_DISMISSED_VERSION_KEY, result.latestVersion);
-  }
-}
-
-function startAutoCheckIfNeeded(): Promise<DesktopUpdateCheckResult> | null {
+function startAutoCheckIfNeeded(): Promise<DesktopUpdateCheckResult> {
   if (autoCheckPromise) return autoCheckPromise;
 
-  const lastAutoCheckDate = readUiValue<string | null>(DESKTOP_UPDATE_AUTO_CHECK_DATE_KEY, null);
-  if (!shouldRunAutoDesktopUpdateCheck(lastAutoCheckDate)) return null;
-
-  writeUiValue(DESKTOP_UPDATE_AUTO_CHECK_DATE_KEY, desktopUpdateDateKey());
   autoCheckPromise = checkDesktopUpdate();
   return autoCheckPromise;
 }
@@ -92,12 +74,10 @@ export function DesktopUpdateNotifier() {
 
     let cancelled = false;
     const promise = startAutoCheckIfNeeded();
-    if (!promise) return;
 
     promise.then((next) => {
       if (cancelled) return;
-      const dismissedVersion = readUiValue<string | null>(DESKTOP_UPDATE_DISMISSED_VERSION_KEY, null);
-      if (shouldShowDesktopUpdateNotice(next, dismissedVersion)) {
+      if (shouldShowDesktopUpdateNotice(next)) {
         setResult(next);
         setOpen(true);
       }
@@ -138,7 +118,6 @@ export function DesktopUpdateNotifier() {
 
   const close = () => {
     if (installing) return;
-    rememberDismissedVersion(result);
     setOpen(false);
     setInstallProgress(null);
   };
@@ -252,7 +231,7 @@ export function DesktopUpdateNotifier() {
             </div>
           )}
           <div className={s.actions}>
-            <button className={s.btn} type="button" onClick={close} disabled={installing}>本版本不再提醒</button>
+            <button className={s.btn} type="button" onClick={close} disabled={installing}>稍后提醒</button>
             <button
               className={s.btnPrimary}
               type="button"

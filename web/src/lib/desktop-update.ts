@@ -7,8 +7,6 @@ import { DESKTOP_VERSION } from "./build-info";
 import { BRAND } from "./brand.generated";
 
 export const DESKTOP_UPDATE_DOWNLOAD_URL = BRAND.updateDownloadUrl;
-export const DESKTOP_UPDATE_AUTO_CHECK_DATE_KEY = "desktop.update.lastAutoCheckDate";
-export const DESKTOP_UPDATE_DISMISSED_VERSION_KEY = "desktop.update.dismissedVersion";
 
 interface ParsedSemver {
   major: number;
@@ -97,22 +95,10 @@ function unknownErrorMessage(error: unknown): string {
   return String(error || "未知错误");
 }
 
-export function desktopUpdateDateKey(date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-export function shouldRunAutoDesktopUpdateCheck(lastAutoCheckDate: string | null | undefined, now = new Date()): boolean {
-  return lastAutoCheckDate !== desktopUpdateDateKey(now);
-}
-
 export function shouldShowDesktopUpdateNotice(
   result: Pick<DesktopUpdateCheckResult, "ok" | "updateAvailable" | "latestVersion">,
-  dismissedVersion: string | null | undefined,
 ): boolean {
-  return Boolean(result.ok && result.updateAvailable && result.latestVersion && result.latestVersion !== dismissedVersion);
+  return Boolean(result.ok && result.updateAvailable && result.latestVersion);
 }
 
 export function buildDesktopUpdateCheckResult(
