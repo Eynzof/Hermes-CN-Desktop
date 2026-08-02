@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   desktopArtifactObjectPaths,
+  desktopUpdateManifest,
   signedManifestRequiresObject,
 } from "./tos-object-layout.mjs";
 import { mapLimit, sha256File, uploadFileToTos } from "./tos-upload.mjs";
@@ -62,6 +63,33 @@ test("desktop assets have one immutable object and no latest binary copy", () =>
     fileName: "Hermes-Fengchi-0.6.9_x64-setup.exe",
     version: "0.6.9",
   }), ["fengchihermes/releases/v0.6.9/Hermes-Fengchi-0.6.9_x64-setup.exe"]);
+});
+
+test("desktop manifests omit repository and source URLs", () => {
+  const manifest = desktopUpdateManifest({
+    assets: {
+      windows: {
+        fileName: "Hermes-Fengchi-0.6.9-rc.3_x64-setup.exe",
+        url: "https://bucket.example/releases/v0.6.9-rc.3/setup.exe",
+        versionedUrl: "https://bucket.example/releases/v0.6.9-rc.3/setup.exe",
+      },
+    },
+    channel: "canary",
+    publishedAt: "2026-08-02T00:00:00.000Z",
+    semver: "0.6.9-rc.3",
+    version: "v0.6.9-rc.3",
+  });
+
+  assert.deepEqual(Object.keys(manifest), [
+    "version",
+    "semver",
+    "publishedAt",
+    "channel",
+    "updatedAt",
+    "assets",
+  ]);
+  assert.equal(JSON.stringify(manifest).includes("repository"), false);
+  assert.equal(JSON.stringify(manifest).includes("sourceUrl"), false);
 });
 
 test("channel runtime zips are retained only when a signed manifest needs them", () => {

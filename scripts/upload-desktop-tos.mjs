@@ -8,7 +8,10 @@ import {
   tosUploadOptionsFromEnv,
   uploadFileToTos,
 } from "./tos-upload.mjs";
-import { desktopArtifactObjectPaths } from "./tos-object-layout.mjs";
+import {
+  desktopArtifactObjectPaths,
+  desktopUpdateManifest,
+} from "./tos-object-layout.mjs";
 import { brandedWindowsArtifactBrand } from "./windows-artifact-names.mjs";
 
 const SOURCE_DIR = resolve(process.env.DESKTOP_ASSET_DIR || "assets");
@@ -16,11 +19,9 @@ const BRANDS_DIR = resolve(process.env.DESKTOP_BRANDS_DIR || "brands");
 const VERSION_TAG = (process.env.DESKTOP_VERSION_TAG || "").trim();
 const SELECTED_BRAND = (process.env.DESKTOP_BRAND || "").trim();
 const RELEASE_CHANNEL = (process.env.DESKTOP_RELEASE_CHANNEL || "stable").trim().toLowerCase();
-const OMIT_SOURCE_URL = process.env.DESKTOP_OMIT_SOURCE_URL === "1";
 const TOS_BASE_URL = requiredHttpsUrl(
     process.env.DESKTOP_TOS_BASE_URL || "https://huangxingpackage.tos-cn-hongkong.volces.com/package/hermesagent",
 );
-const REPOSITORY = process.env.GITHUB_REPOSITORY || "Eynzof/Hermes-CN-Desktop";
 const UPLOAD_OPTIONS = tosUploadOptionsFromEnv();
 
 if (!VERSION_TAG) throw new Error("DESKTOP_VERSION_TAG is required (for example v0.6.3)");
@@ -55,10 +56,6 @@ function publicUrl(objectPath) {
 
 function normalized(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/gu, "");
-}
-
-function encodedFileName(fileName) {
-  return encodeURIComponent(fileName).replace(/%2F/gu, "/");
 }
 
 function platformFor(fileName) {
@@ -171,9 +168,6 @@ async function main() {
           sha256,
           url: versionedUrl,
           versionedUrl,
-          ...(!OMIT_SOURCE_URL ? {
-            sourceUrl: `https://github.com/${REPOSITORY}/releases/download/${encodeURIComponent(VERSION_TAG)}/${encodedFileName(fileName)}`,
-          } : {}),
         }];
       },
     );
@@ -181,18 +175,13 @@ async function main() {
       assets[entry[0]] = entry[1];
     }
 
-    const manifest = {
-      repository: REPOSITORY,
-      version: VERSION_TAG,
-      semver: version,
-      publishedAt: now,
-      channel: RELEASE_CHANNEL,
-      ...(!OMIT_SOURCE_URL ? {
-        sourceUrl: `https://github.com/${REPOSITORY}/releases/tag/${encodeURIComponent(VERSION_TAG)}`,
-      } : {}),
-      updatedAt: now,
+    const manifest = desktopUpdateManifest({
       assets,
-    };
+      channel: RELEASE_CHANNEL,
+      publishedAt: now,
+      semver: version,
+      version: VERSION_TAG,
+    });
     const manifestFileName = RELEASE_CHANNEL === "stable"
       ? `${brand.id}-latest.json`
       : `${brand.id}-canary.json`;

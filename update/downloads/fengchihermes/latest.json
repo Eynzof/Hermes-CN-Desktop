@@ -1,10 +1,8 @@
 {
-  "repository": "nevermorewish/HuanXing-Hermes",
   "version": "v0.6.8",
   "semver": "0.6.8",
   "publishedAt": "2026-08-01T15:07:13.126Z",
   "channel": "stable",
-  "sourceUrl": "https://github.com/nevermorewish/HuanXing-Hermes/releases/tag/v0.6.8",
   "updatedAt": "2026-08-01T15:07:13.126Z",
   "assets": {
     "windows": {
@@ -14,8 +12,7 @@
       "size": 157860394,
       "sha256": "14aac6af45957a2f3be0c583d0b7d92448c555110007f75e2356d651a1ed9e0d",
       "url": "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent/fengchihermes/latest/Hermes-Fengchi-0.6.8_x64-setup.exe",
-      "versionedUrl": "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent/fengchihermes/releases/v0.6.8/Hermes-Fengchi-0.6.8_x64-setup.exe",
-      "sourceUrl": "https://github.com/nevermorewish/HuanXing-Hermes/releases/download/v0.6.8/Hermes-Fengchi-0.6.8_x64-setup.exe"
+      "versionedUrl": "https://huanxing.tos-cn-beijing.volces.com/package/hermesagent/fengchihermes/releases/v0.6.8/Hermes-Fengchi-0.6.8_x64-setup.exe"
     }
   }
 }
