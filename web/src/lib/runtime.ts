@@ -9,6 +9,7 @@ import type {
   ConnectionConfigInput,
   ConnectionConfigView,
   ConnectionMode,
+  DesktopInstallUpdateResult,
   DesktopUpdateManifestFetchResult,
   CodingAgentsCheckResult,
   EnvironmentCheckResult,
@@ -455,6 +456,7 @@ declare global {
       environmentCheck?(): Promise<EnvironmentCheckResult>;
       codingAgentsCheck?(): Promise<CodingAgentsCheckResult>;
       checkDesktopUpdate?(): Promise<DesktopUpdateManifestFetchResult>;
+      installDesktopUpdate?(): Promise<DesktopInstallUpdateResult>;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
       refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;
       getRuntimeInfo?(): Promise<RuntimeInfo>;

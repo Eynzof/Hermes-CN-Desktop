@@ -249,6 +249,34 @@ export interface DesktopUpdateCheckResult extends DesktopUpdateManifestFetchResu
   sourceUrl?: string;
 }
 
+export interface DesktopInstallUpdateResult {
+  ok: boolean;
+  manifestUrl: string;
+  asset?: DesktopUpdateAsset;
+  filePath?: string;
+  bytesDownloaded: number;
+  bytesTotal?: number;
+  launched: boolean;
+  error?: string;
+}
+
+export type DesktopInstallUpdateProgressStage =
+  | "starting"
+  | "downloading"
+  | "verifying"
+  | "launching"
+  | "complete"
+  | "error";
+
+export interface DesktopInstallUpdateProgress {
+  stage: DesktopInstallUpdateProgressStage;
+  bytesDownloaded: number;
+  bytesTotal?: number;
+  percent?: number;
+  fileName?: string;
+  message?: string;
+}
+
 export interface RuntimeUpdateManifest {
   schemaVersion: number;
   channel: string;

@@ -87,3 +87,84 @@
   background: var(--h-accent);
   color: var(--h-accent-contrast);
 }
+
+.btn:disabled,
+.btnPrimary:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.installMessage {
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.installMessage[data-tone="error"] {
+  color: var(--h-err);
+}
+
+.progressPanel {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: var(--h-bg-app);
+  padding: 10px 11px;
+}
+
+.progressMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--h-text);
+  font-size: 12px;
+}
+
+.progressMeta b {
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.progressTrack {
+  position: relative;
+  overflow: hidden;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--h-line-soft);
+}
+
+.progressFill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--h-accent);
+  transition: width 160ms ease;
+}
+
+.progressTrack[data-indeterminate="true"] .progressFill {
+  position: absolute;
+  left: -40%;
+  width: 40%;
+  animation: update-progress-indeterminate 1.1s ease-in-out infinite;
+}
+
+.progressBytes {
+  min-height: 15px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+@keyframes update-progress-indeterminate {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(350%);
+  }
+}

@@ -150,6 +150,14 @@ describe("isTauriDevMode", () => {
     expect(mockInvoke).toHaveBeenCalledWith("desktop_check_update", undefined);
   });
 
+  it("exposes desktop update install through Tauri IPC", async () => {
+    await installTauriBridge();
+
+    await window.hermesDesktop?.installDesktopUpdate?.();
+
+    expect(mockInvoke).toHaveBeenCalledWith("desktop_install_update", undefined);
+  });
+
   it("exposes external terminal opening through Tauri IPC", async () => {
     await installTauriBridge();
 

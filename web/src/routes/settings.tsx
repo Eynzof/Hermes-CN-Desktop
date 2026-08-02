@@ -62,8 +62,9 @@ import {
 } from "@/stores/ui";
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
 import { openExternalUrl } from "@/lib/external-links";
-import { detectHostOS, runtime } from "@/lib/runtime";
-import { checkDesktopUpdate, DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
+import { detectHostOS } from "@/lib/runtime";
+import { checkDesktopUpdate } from "@/lib/desktop-update";
+import { BRAND } from "@/lib/brand.generated";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import {
   approvalModeConfigValue,
@@ -1543,10 +1544,16 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
 export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   const [desktopUpdateResult, setDesktopUpdateResult] = useState<DesktopUpdateCheckResult | null>(null);
   const [desktopUpdateChecking, setDesktopUpdateChecking] = useState(false);
+  const [desktopInstallState, setDesktopInstallState] = useState<{
+    phase: "idle" | "downloading" | "ready" | "error";
+    message?: string;
+  }>({ phase: "idle" });
   const hasDesktopUpdateBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.checkDesktopUpdate);
+  const hasDesktopInstallBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.installDesktopUpdate);
 
   const handleCheckDesktopUpdate = async () => {
     setDesktopUpdateChecking(true);
+    setDesktopInstallState({ phase: "idle" });
     try {
       setDesktopUpdateResult(await checkDesktopUpdate());
     } finally {
@@ -1554,14 +1561,46 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     }
   };
 
-  const handleOpenDesktopDownload = () => {
-    void openExternalUrl(desktopUpdateResult?.downloadUrl ?? DESKTOP_UPDATE_DOWNLOAD_URL);
+  const handleInstallDesktopUpdate = async () => {
+    if (!window.hermesDesktop?.installDesktopUpdate) {
+      setDesktopInstallState({ phase: "error", message: "当前环境没有自动下载安装能力" });
+      return;
+    }
+    setDesktopInstallState({ phase: "downloading", message: "正在下载安装包…" });
+    try {
+      const result = await window.hermesDesktop.installDesktopUpdate();
+      if (!result.ok) {
+        setDesktopInstallState({
+          phase: "error",
+          message: result.error ?? "桌面端更新安装失败",
+        });
+        return;
+      }
+      const fileName = result.asset?.fileName ?? result.filePath?.split(/[\\/]/).pop();
+      setDesktopInstallState({
+        phase: "ready",
+        message: fileName
+          ? `安装包已下载并打开：${fileName}。请按系统提示完成覆盖安装。`
+          : "安装包已下载并打开。请按系统提示完成覆盖安装。",
+      });
+    } catch (error) {
+      setDesktopInstallState({
+        phase: "error",
+        message: error instanceof Error ? error.message : String(error || "桌面端更新安装失败"),
+      });
+    }
   };
 
   // Developer mode ships enabled; the shortcut to open devtools follows the
   // platform's browser convention (registered in web/src/lib/tauri-bridge.ts).
   const devtoolsShortcut =
     detectHostOS() === "macos" ? "F12 或 ⌘ + ⌥ + I" : "F12 或 Ctrl + Shift + I";
+  const canInstallDesktopUpdate = Boolean(
+    desktopUpdateResult?.ok &&
+      desktopUpdateResult.updateAvailable &&
+      hasDesktopInstallBridge &&
+      desktopInstallState.phase !== "downloading",
+  );
 
   return (
     <div>
@@ -1573,7 +1612,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
       />
 
       <div className={s.aboutDebugGrid}>
-        <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
+        <DebugCard icon={<Download size={15} />} title="桌面端更新" sub="检查新版本并下载覆盖安装" wide>
           <div className={s.runtimeGrid}>
             <RuntimeField label="当前版本" value={versionLabel(DESKTOP_VERSION)} />
             <RuntimeField
@@ -1586,7 +1625,7 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
             />
             <RuntimeField
               label="清单地址"
-              value={desktopUpdateResult?.manifestUrl ?? "https://desktop.hermesagent.org.cn/latest.json"}
+              value={desktopUpdateResult?.manifestUrl ?? BRAND.updateManifestUrl}
               mono
               wide
             />
@@ -1607,11 +1646,28 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
               <RefreshCw size={13} />
               {desktopUpdateChecking ? "检查中" : "检查更新"}
             </Button>
-            <Button variant="solid" tone="accent" type="button" onClick={handleOpenDesktopDownload}>
-              <ExternalLinkIcon size={13} />
-              去官网下载
+            <Button
+              variant="solid"
+              tone="accent"
+              type="button"
+              onClick={() => void handleInstallDesktopUpdate()}
+              disabled={!canInstallDesktopUpdate}
+            >
+              <Download size={13} />
+              {desktopInstallState.phase === "downloading" ? "下载中…" : "下载安装"}
             </Button>
           </div>
+          {desktopInstallState.phase !== "idle" && (
+            <div
+              className={s.runtimeMessage}
+              data-tone={desktopInstallState.phase === "error" ? "error" : "normal"}
+            >
+              {desktopInstallState.message}
+            </div>
+          )}
+          <p className={s.desc}>
+            这里提醒的是桌面壳版本。点击“下载安装”会下载当前系统的安装包、校验完整性并自动打开安装器；请按系统提示完成覆盖安装。
+          </p>
         </DebugCard>
 
         <DebugCard icon={<Bug size={15} />} title="开发者工具" sub="默认开启开发者模式，可用快捷键打开 DevTools">
@@ -1834,9 +1890,7 @@ function formatDesktopUpdateMessage(
   if (!result) return "点击“检查更新”可手动读取官网最新版本。";
   if (!result.ok) return result.error ?? "桌面端更新检查失败。";
   if (result.updateAvailable) {
-    return runtime.isPortable()
-      ? `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载免安装版压缩包，退出应用后覆盖解压（data 目录会保留）。`
-      : `发现新版本 ${versionLabel(result.latestVersion)}，可前往官网下载新版安装包覆盖安装。`;
+    return `发现新版本 ${versionLabel(result.latestVersion)}，可下载安装包并自动打开安装器。`;
   }
   return `当前已是最新版本 ${versionLabel(result.currentVersion)}。`;
 }
