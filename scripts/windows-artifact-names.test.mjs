@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   brandedWindowsArtifactBrand,
+  macosArchLabel,
+  macosDmgName,
+  macosPortableName,
   tauriDefaultWindowsInstallerName,
   windowsArchLabel,
   windowsInstallerName,
@@ -26,6 +29,17 @@ test("creates unique branded Windows portable names", () => {
   );
 });
 
+test("creates unique branded macOS artifact names", () => {
+  assert.equal(
+    macosDmgName({ artifactBrandName: "HuanxingAI", version: "0.6.9-rc.6", arch: "aarch64" }),
+    "Hermes-HuanxingAI-0.6.9-rc.6_aarch64.dmg",
+  );
+  assert.equal(
+    macosPortableName({ artifactBrandName: "Huanxing", version: "0.6.9-rc.6", arch: "x64" }),
+    "Hermes-Huanxing-0.6.9-rc.6_x64-macos-portable.zip",
+  );
+});
+
 test("extracts exact brands from new Windows artifact names", () => {
   assert.equal(
     brandedWindowsArtifactBrand("Hermes-Huanxing-0.6.5_x64-setup.exe", "0.6.5"),
@@ -39,11 +53,20 @@ test("extracts exact brands from new Windows artifact names", () => {
     brandedWindowsArtifactBrand("HuanxingHermes.Desktop_0.6.5_x64-windows-portable.zip", "0.6.5"),
     null,
   );
+  assert.equal(
+    brandedWindowsArtifactBrand("Hermes-HuanxingAI-0.6.5_aarch64.dmg", "0.6.5"),
+    "HuanxingAI",
+  );
 });
 
 test("maps Rust Windows targets to artifact architecture labels", () => {
   assert.equal(windowsArchLabel("x86_64-pc-windows-msvc"), "x64");
   assert.equal(windowsArchLabel("aarch64-pc-windows-msvc"), "arm64");
+});
+
+test("maps Rust macOS targets to artifact architecture labels", () => {
+  assert.equal(macosArchLabel("aarch64-apple-darwin"), "aarch64");
+  assert.equal(macosArchLabel("x86_64-apple-darwin"), "x64");
 });
 
 test("preserves the Tauri default name for locating the original installer", () => {

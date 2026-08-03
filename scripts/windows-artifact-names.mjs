@@ -31,6 +31,29 @@ export function windowsPortableName({ artifactBrandName, version, arch = "x64" }
   return `Hermes-${brand}-${releaseVersion}_${architecture}-windows-portable.zip`;
 }
 
+export function macosArchLabel(target = "aarch64-apple-darwin") {
+  const normalized = String(target ?? "").trim().toLowerCase();
+  if (normalized === "x64" || normalized.startsWith("x86_64")) return "x64";
+  if (normalized === "aarch64" || normalized === "arm64" || normalized.startsWith("aarch64")) {
+    return "aarch64";
+  }
+  throw new Error(`Unsupported macOS target: ${JSON.stringify(target)}`);
+}
+
+export function macosDmgName({ artifactBrandName, version, arch = "aarch64" }) {
+  const brand = requireMatch(artifactBrandName, SAFE_BRAND_NAME, "artifact brand name");
+  const releaseVersion = requireMatch(version, SEMVER, "desktop version");
+  const architecture = requireMatch(arch, /^(?:x64|aarch64)$/u, "macOS architecture");
+  return `Hermes-${brand}-${releaseVersion}_${architecture}.dmg`;
+}
+
+export function macosPortableName({ artifactBrandName, version, arch = "aarch64" }) {
+  const brand = requireMatch(artifactBrandName, SAFE_BRAND_NAME, "artifact brand name");
+  const releaseVersion = requireMatch(version, SEMVER, "desktop version");
+  const architecture = requireMatch(arch, /^(?:x64|aarch64)$/u, "macOS architecture");
+  return `Hermes-${brand}-${releaseVersion}_${architecture}-macos-portable.zip`;
+}
+
 export function brandedWindowsArtifactBrand(fileName, version) {
   const releaseVersion = requireMatch(version, SEMVER, "desktop version");
   const name = String(fileName ?? "");

@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.9-rc.5`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.9-rc.6`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.9-rc.5)"
+        description: "Tag name to associate the build with (e.g. v0.6.9-rc.6)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -89,12 +89,9 @@ jobs:
             },
           ];
 
-          // This fork publishes the Windows desktop consumed by the Huanxing
-          // Team site. It has no Apple notarization secrets; limiting tag
-          // builds here also ensures mirror-sync is not blocked by macOS jobs.
-          const platforms = process.env.GITHUB_REPOSITORY === "nevermorewish/HuanXing-Hermes"
-            ? allPlatforms.filter((platform) => platform.runtime_platform === "win32")
-            : allPlatforms;
+          // Linux packaging remains opt-in. Release tags build Windows plus
+          // both signed and notarized macOS architectures.
+          const platforms = allPlatforms.filter((platform) => platform.runtime_platform !== "linux");
 
           const brandsDir = path.join(process.cwd(), "brands");
           const brands = fs.readdirSync(brandsDir)
@@ -278,24 +275,72 @@ jobs:
         run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
 
       - name: Prepare macOS signing credentials
+        id: macos_signing
         if: matrix.runtime_platform == 'darwin'
         shell: bash
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE || secrets.MAC_CSC_LINK || secrets.CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD || secrets.CSC_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || secrets.MAC_CSC_NAME || secrets.CSC_NAME }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY || secrets.APPLE_API_KEY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          test -n "$APPLE_CERTIFICATE"
-          test -n "$APPLE_CERTIFICATE_PASSWORD"
-          test -n "$APPLE_SIGNING_IDENTITY"
-          test -n "$APPLE_API_KEY"
-          test -n "$APPLE_API_PRIVATE_KEY"
+          set -euo pipefail
+          umask 077
 
-          mkdir -p "$RUNNER_TEMP/appstoreconnect/private_keys"
-          printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8"
-          chmod 600 "$RUNNER_TEMP/appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8"
+          normalize_secret_line() {
+            printf '%s' "${1:-}" | tr -d '\r\n' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g'
+          }
+
+          APPLE_CERTIFICATE="$(printf '%s' "$APPLE_CERTIFICATE" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+          APPLE_CERTIFICATE_PASSWORD="$(normalize_secret_line "$APPLE_CERTIFICATE_PASSWORD")"
+          APPLE_SIGNING_IDENTITY="$(normalize_secret_line "$APPLE_SIGNING_IDENTITY")"
+          APPLE_API_KEY_ID="$(normalize_secret_line "$APPLE_API_KEY_ID")"
+          APPLE_API_ISSUER="$(normalize_secret_line "$APPLE_API_ISSUER")"
+          APPLE_ID="$(normalize_secret_line "$APPLE_ID")"
+          APPLE_APP_SPECIFIC_PASSWORD="$(normalize_secret_line "$APPLE_APP_SPECIFIC_PASSWORD")"
+          APPLE_TEAM_ID="$(normalize_secret_line "$APPLE_TEAM_ID")"
+
+          signing_missing=()
+          for name in \
+            APPLE_CERTIFICATE \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_IDENTITY
+          do
+            if [ -z "${!name}" ]; then
+              signing_missing+=("$name")
+            fi
+          done
+
+          if [ ${#signing_missing[@]} -gt 0 ]; then
+            echo "::error::Missing macOS signing secrets: ${signing_missing[*]}"
+            exit 1
+          fi
+
+          notarization_method=""
+          if [ -n "$APPLE_API_KEY_ID" ] && [ -n "$APPLE_API_ISSUER" ] && [ -n "$APPLE_API_PRIVATE_KEY" ]; then
+            notarization_method="api-key"
+          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            notarization_method="apple-id"
+          else
+            echo "::error::Missing macOS notarization secrets. Configure either APPLE_API_KEY_ID/APPLE_API_ISSUER/APPLE_API_PRIVATE_KEY or APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID."
+            exit 1
+          fi
+
+          if [[ "$notarization_method" == "api-key" ]]; then
+            mkdir -p "$RUNNER_TEMP/appstoreconnect/private_keys"
+            api_key_path="$RUNNER_TEMP/appstoreconnect/private_keys/AuthKey.p8"
+            if [[ "$APPLE_API_PRIVATE_KEY" == *"\\n"* ]]; then
+              printf '%b\n' "$APPLE_API_PRIVATE_KEY" > "$api_key_path"
+            else
+              printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$api_key_path"
+            fi
+            echo "api_key_path=$api_key_path" >> "$GITHUB_OUTPUT"
+          fi
 
           signing_keychain_password="$(uuidgen)"
           signing_keychain="$RUNNER_TEMP/hermes-signing.keychain-db"
@@ -305,20 +350,87 @@ jobs:
           security set-keychain-settings -lut 21600 "$signing_keychain"
           security unlock-keychain -p "$signing_keychain_password" "$signing_keychain"
 
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
-          security import "$certificate_path" \
+          if [[ "$APPLE_CERTIFICATE" == file://* ]]; then
+            certificate_file="${APPLE_CERTIFICATE#file://}"
+            if [[ ! -f "$certificate_file" ]]; then
+              echo "::error::APPLE_CERTIFICATE/CSC_LINK file:// target is not a certificate file."
+              exit 1
+            fi
+            cp "$certificate_file" "$certificate_path"
+          elif [[ "$APPLE_CERTIFICATE" == http://* || "$APPLE_CERTIFICATE" == https://* ]]; then
+            curl --fail --show-error --location "$APPLE_CERTIFICATE" --output "$certificate_path"
+          elif [[ -f "$APPLE_CERTIFICATE" ]]; then
+            cp "$APPLE_CERTIFICATE" "$certificate_path"
+          else
+            certificate_payload="$APPLE_CERTIFICATE"
+            if [[ "$certificate_payload" == data:*base64,* ]]; then
+              certificate_payload="${certificate_payload#*,}"
+            fi
+            CERTIFICATE_PAYLOAD="$certificate_payload" python3 - "$certificate_path" <<'PY'
+          import base64
+          import os
+          import re
+          import sys
+
+          payload = re.sub(r"\s+", "", os.environ["CERTIFICATE_PAYLOAD"])
+          try:
+              decoded = base64.b64decode(payload, validate=True)
+          except Exception as exc:
+              print(f"APPLE_CERTIFICATE/CSC_LINK is not a valid base64 certificate payload: {exc}", file=sys.stderr)
+              sys.exit(1)
+
+          if not decoded:
+              print("APPLE_CERTIFICATE/CSC_LINK decoded to an empty certificate payload.", file=sys.stderr)
+              sys.exit(1)
+
+          with open(sys.argv[1], "wb") as fh:
+              fh.write(decoded)
+          PY
+          fi
+
+          if [[ ! -s "$certificate_path" ]]; then
+            echo "::error::macOS signing certificate payload is empty."
+            exit 1
+          fi
+
+          if ! security import "$certificate_path" \
             -P "$APPLE_CERTIFICATE_PASSWORD" \
             -A \
             -t cert \
             -f pkcs12 \
-            -k "$signing_keychain"
+            -k "$signing_keychain"; then
+            echo "::error::Failed to import macOS signing certificate. Check the certificate payload and password."
+            exit 1
+          fi
           security set-key-partition-list \
             -S apple-tool:,apple: \
             -s \
             -k "$signing_keychain_password" \
             "$signing_keychain"
           security list-keychains -d user -s "$signing_keychain" $(security list-keychains -d user | tr -d '"')
-          security find-identity -v -p codesigning "$signing_keychain"
+          identities="$(security find-identity -v -p codesigning "$signing_keychain")"
+          printf '%s\n' "$identities"
+
+          signing_identity_match="$(printf '%s' "$APPLE_SIGNING_IDENTITY" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+          if [[ "$signing_identity_match" == Developer\ ID\ Application:* ]]; then
+            signing_identity_match="${signing_identity_match#Developer ID Application:}"
+            signing_identity_match="$(printf '%s' "$signing_identity_match" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+          fi
+
+          identity_line="$(grep -F "$signing_identity_match" <<< "$identities" | head -n 1 || true)"
+          if [[ -z "$identity_line" ]]; then
+            echo "::error::APPLE_SIGNING_IDENTITY/CSC_NAME was not found in the imported certificate identities."
+            exit 1
+          fi
+
+          selected_identity="$(sed -E 's/^[^\"]*\"([^\"]+)\".*$/\1/' <<< "$identity_line")"
+          if [[ -z "$selected_identity" || "$selected_identity" == "$identity_line" ]]; then
+            selected_identity="$signing_identity_match"
+          fi
+
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "identity=$selected_identity" >> "$GITHUB_OUTPUT"
+          echo "notarization=$notarization_method" >> "$GITHUB_OUTPUT"
 
       - name: Verify bundled macOS runtime payload signatures
         if: matrix.runtime_platform == 'darwin'
@@ -326,12 +438,11 @@ jobs:
         run: scripts/verify-macos-runtime-payload.sh "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"
 
       - name: Build + upload installers
+        if: matrix.runtime_platform != 'darwin' || steps.macos_signing.outputs.enabled == 'true'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_SIGNING_IDENTITY: ${{ steps.macos_signing.outputs.identity }}
         with:
           # tauri-action looks up the tag from this input. On a push:tags
           # trigger it falls back to GITHUB_REF, but we pass it explicitly
@@ -347,10 +458,8 @@ jobs:
             安装包已内置来自 ${{ steps.runtime_manifest.outputs.source_repo }}
             ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端、内置技能和内置插件。
 
-            Windows、macOS 和 Linux 安装包同时内置 Hermes-CN-Core runtime
+            Windows 和 macOS 安装包同时内置 Hermes-CN-Core runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。
-
-            Linux x64 版本提供 Debian 安装包（.deb）和免安装 AppImage。
 
             Windows 和 macOS 另附免安装（portable）压缩包：解压即用，全部数据保存在
             解压目录的 data 文件夹内，详见压缩包内 README-portable.txt。
@@ -404,17 +513,38 @@ jobs:
           gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
       - name: Notarize, staple, verify, and reupload macOS DMG
-        if: matrix.runtime_platform == 'darwin'
+        if: matrix.runtime_platform == 'darwin' && steps.macos_signing.outputs.enabled == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          NOTARIZATION_METHOD: ${{ steps.macos_signing.outputs.notarization }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
+          APPLE_API_KEY_PATH: ${{ steps.macos_signing.outputs.api_key_path }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           shopt -s nullglob
+
+          if [[ "$NOTARIZATION_METHOD" == "api-key" ]]; then
+            notary_args=(
+              --key "$APPLE_API_KEY_PATH"
+              --key-id "$APPLE_API_KEY_ID"
+              --issuer "$APPLE_API_ISSUER"
+            )
+          elif [[ "$NOTARIZATION_METHOD" == "apple-id" ]]; then
+            notary_args=(
+              --apple-id "$APPLE_ID"
+              --password "$APPLE_APP_SPECIFIC_PASSWORD"
+              --team-id "$APPLE_TEAM_ID"
+            )
+          else
+            echo "Unsupported notarization method: $NOTARIZATION_METHOD" >&2
+            exit 1
+          fi
 
           dmgs=(target/${{ matrix.target }}/release/bundle/dmg/*.dmg)
           if [ ${#dmgs[@]} -eq 0 ]; then
@@ -426,9 +556,7 @@ jobs:
             echo "Notarizing final DMG: $dmg"
             submit_json="$RUNNER_TEMP/notary-submit-$(basename "$dmg").json"
             xcrun notarytool submit "$dmg" \
-              --key "$APPLE_API_KEY_PATH" \
-              --key-id "$APPLE_API_KEY" \
-              --issuer "$APPLE_API_ISSUER" \
+              "${notary_args[@]}" \
               --wait \
               --output-format json | tee "$submit_json"
 
@@ -449,9 +577,7 @@ jobs:
               echo "Notarization failed with status: $submission_status" >&2
               if [ -n "$submission_id" ]; then
                 xcrun notarytool log "$submission_id" \
-                  --key "$APPLE_API_KEY_PATH" \
-                  --key-id "$APPLE_API_KEY" \
-                  --issuer "$APPLE_API_ISSUER" \
+                  "${notary_args[@]}" \
                   --output-format json | tee "$RUNNER_TEMP/notary-log-$submission_id.json" || true
               fi
               exit 1
@@ -460,16 +586,38 @@ jobs:
             xcrun stapler staple "$dmg"
             xcrun stapler validate "$dmg"
             spctl -a -vvv -t open --context context:primary-signature "$dmg"
-
-            # tauri-action already uploaded the first DMG. Replace it with the
-            # final notarized + stapled DMG so the release asset is the one users download.
-            gh release upload "$RELEASE_TAG" "$dmg" --clobber
           done
 
-      - name: Package + upload macOS portable zip
-        if: matrix.runtime_platform == 'darwin'
+      - name: Rename branded macOS DMG
+        id: macos_dmg
+        if: matrix.runtime_platform == 'darwin' && steps.macos_signing.outputs.enabled == 'true'
         shell: bash
         env:
+          BRAND: ${{ matrix.brand }}
+        run: |
+          set -euo pipefail
+          node scripts/rename-macos-artifacts.mjs \
+            --target "${{ matrix.target }}" \
+            --brand "$BRAND"
+
+      - name: Upload branded macOS DMG
+        if: matrix.runtime_platform == 'darwin' && steps.macos_signing.outputs.enabled == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release upload \
+            "$RELEASE_TAG" \
+            "${{ steps.macos_dmg.outputs.dmg_path }}" \
+            --clobber
+
+      - name: Package + upload macOS portable zip
+        if: matrix.runtime_platform == 'darwin' && steps.macos_signing.outputs.enabled == 'true'
+        shell: bash
+        env:
+          BRAND: ${{ matrix.brand }}
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
           RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
@@ -500,7 +648,9 @@ jobs:
           xcrun stapler validate "$app"
           spctl -a -vvv --type exec "$app"
 
-          node scripts/package-portable-macos.mjs --target ${{ matrix.target }}
+          node scripts/package-portable-macos.mjs \
+            --target "${{ matrix.target }}" \
+            --brand "$BRAND"
           gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
   # Mirror final release assets to Volcengine TOS after every build leg
@@ -537,12 +687,21 @@ jobs:
           const fs = require("node:fs");
           const path = require("node:path");
           const version = process.env.RELEASE_TAG.replace(/^v/u, "");
-          const names = new Set(
-            fs.readdirSync("brands")
-              .filter((name) => name.endsWith(".json"))
-              .map((name) => JSON.parse(fs.readFileSync(path.join("brands", name), "utf8")))
-              .map((brand) => `${brand.productName}_${version}_x64-setup.exe`),
-          );
+          const names = new Set();
+          const brands = fs.readdirSync("brands")
+            .filter((name) => name.endsWith(".json"))
+            .map((name) => JSON.parse(fs.readFileSync(path.join("brands", name), "utf8")));
+          for (const brand of brands) {
+            const productNames = new Set([
+              brand.productName,
+              brand.productName.replaceAll(" ", "."),
+            ]);
+            names.add(`${brand.productName}_${version}_x64-setup.exe`);
+            for (const productName of productNames) {
+              names.add(`${productName}_${version}_aarch64.dmg`);
+              names.add(`${productName}_${version}_x64.dmg`);
+            }
+          }
           console.log([...names].sort().join("\n"));
           NODE
 
