@@ -445,13 +445,13 @@ mod tests {
 
     #[test]
     fn honors_user_configured_memory_limit_above_previous_max() {
-        /// Regression test: the Desktop used to clamp memory_char_limit at
-        /// MAX_MEMORY_CHAR_LIMIT (8000), but the Python backend (hermes-agent-cn
-        /// runtime) has no such cap. A user who sets memory_char_limit: 20000 in
-        /// config.yaml would see the MEMORY header rendered by the backend with
-        /// 20000 but the Desktop's own read_memory command would return 8000.
-        /// After fixing the clamping, configured values up to at least 20000
-        /// must pass through unchanged.
+        // Regression test: the Desktop used to clamp memory_char_limit at
+        // MAX_MEMORY_CHAR_LIMIT (8000), but the Python backend (hermes-agent-cn
+        // runtime) has no such cap. A user who sets memory_char_limit: 20000 in
+        // config.yaml would see the MEMORY header rendered by the backend with
+        // 20000 but the Desktop's own read_memory command would return 8000.
+        // After fixing the clamping, configured values up to at least 20000
+        // must pass through unchanged.
         let home = tempfile::tempdir().unwrap();
         fs::write(
             home.path().join("config.yaml"),
@@ -495,11 +495,11 @@ mod tests {
 
     #[test]
     fn honors_user_configured_user_limit_above_previous_default() {
-        /// Regression test: the Desktop used to hardcode USER_CHAR_LIMIT at 1375
-        /// regardless of what the user set in config.yaml. The Python backend
-        /// (MemoryStore in tools/memory_tool.py) reads user_char_limit from config
-        /// directly via agent_init.py. After fixing, the Desktop must also read
-        /// the configured value and pass it through unchanged.
+        // Regression test: the Desktop used to hardcode USER_CHAR_LIMIT at 1375
+        // regardless of what the user set in config.yaml. The Python backend
+        // (MemoryStore in tools/memory_tool.py) reads user_char_limit from config
+        // directly via agent_init.py. After fixing, the Desktop must also read
+        // the configured value and pass it through unchanged.
         let home = tempfile::tempdir().unwrap();
         fs::write(
             home.path().join("config.yaml"),
@@ -518,16 +518,13 @@ mod tests {
 ",
         )
         .unwrap();
-        assert_eq!(
-            configured_user_char_limit(home.path()),
-            MIN_USER_CHAR_LIMIT
-        );
+        assert_eq!(configured_user_char_limit(home.path()), MIN_USER_CHAR_LIMIT);
     }
 
     #[test]
     fn honors_both_limits_from_same_config() {
-        /// Integration-style test: config with both memory_char_limit and
-        /// user_char_limit must produce correct values from both readers.
+        // Integration-style test: config with both memory_char_limit and
+        // user_char_limit must produce correct values from both readers.
         let home = tempfile::tempdir().unwrap();
         fs::write(
             home.path().join("config.yaml"),
@@ -543,11 +540,11 @@ mod tests {
 
     #[test]
     fn read_memory_returns_configured_limits() {
-        /// End-to-end regression test: read_memory_from_home() must return
-        /// char_limit values matching the configured limits, not hardcoded
-        /// defaults (8000 for memory, 1375 for user). This was the bug:
-        /// the Desktop used to clamp memory_char_limit at 8000 and hardcode
-        /// user_char_limit at 1375 instead of reading from config.yaml.
+        // End-to-end regression test: read_memory_from_home() must return
+        // char_limit values matching the configured limits, not hardcoded
+        // defaults (8000 for memory, 1375 for user). This was the bug:
+        // the Desktop used to clamp memory_char_limit at 8000 and hardcode
+        // user_char_limit at 1375 instead of reading from config.yaml.
         let home = tempfile::tempdir().unwrap();
 
         // Create config with non-default limits

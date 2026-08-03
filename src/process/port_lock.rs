@@ -241,7 +241,7 @@ fn get_process_start_time(pid: u32) -> Option<u64> {
         }
         // FILETIME is 100-ns intervals since 1601-01-01.
         // 11644473600 = seconds from 1601-01-01 to 1970-01-01.
-        let epoch_ms = (creation / 10_000).saturating_sub(11644473600_000);
+        let epoch_ms = (creation / 10_000).saturating_sub(11_644_473_600_000);
         Some(epoch_ms)
     }
 }
