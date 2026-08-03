@@ -1,6 +1,6 @@
 {
   "name": "@hermes/shared-ui",
-  "version": "0.6.9-rc.6",
+  "version": "0.6.9-rc.7",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",

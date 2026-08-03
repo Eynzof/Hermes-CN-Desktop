@@ -9,6 +9,7 @@ import {
   uploadFileToTos,
 } from "./tos-upload.mjs";
 import {
+  assignDesktopAsset,
   desktopArtifactObjectPaths,
   desktopManifestObjectPaths,
   desktopUpdateManifest,
@@ -186,7 +187,7 @@ async function main() {
       },
     );
     for (const entry of assetEntries.filter(Boolean)) {
-      assets[entry[0]] = entry[1];
+      assignDesktopAsset(assets, entry, brand.id);
     }
 
     const manifest = desktopUpdateManifest({

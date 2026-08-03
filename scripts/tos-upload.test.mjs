@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  assignDesktopAsset,
   desktopArtifactObjectPaths,
   desktopManifestObjectPaths,
   desktopUpdateManifest,
@@ -91,6 +92,19 @@ test("desktop manifests omit repository and source URLs", () => {
   ]);
   assert.equal(JSON.stringify(manifest).includes("repository"), false);
   assert.equal(JSON.stringify(manifest).includes("sourceUrl"), false);
+});
+
+test("desktop manifests reject duplicate installers for one platform", () => {
+  const assets = {};
+  assignDesktopAsset(assets, ["windows", { fileName: "Hermes-Huanxing-0.6.9_x64-setup.exe" }], "huanxingcomhermes");
+  assert.throws(
+    () => assignDesktopAsset(
+      assets,
+      ["windows", { fileName: "HuanxingHermes.Desktop_0.6.9_x64-setup.exe" }],
+      "huanxingcomhermes",
+    ),
+    /Multiple windows installers matched brand huanxingcomhermes/u,
+  );
 });
 
 test("desktop publication separates versioned objects from the channel manifest", () => {

@@ -13,6 +13,15 @@ export function desktopUpdateManifest({ assets, channel, publishedAt, semver, ve
   };
 }
 
+export function assignDesktopAsset(assets, [platform, asset], brandId) {
+  if (assets[platform]) {
+    throw new Error(
+      `Multiple ${platform} installers matched brand ${brandId}: ${assets[platform].fileName}, ${asset.fileName}`,
+    );
+  }
+  assets[platform] = asset;
+}
+
 export function desktopManifestObjectPaths({
   channelManifestPath,
   channelRoot,
