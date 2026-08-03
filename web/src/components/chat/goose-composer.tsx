@@ -105,6 +105,7 @@ import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
 import { imageFileFromClipboardData, readClipboardImageAsFile } from "@/lib/clipboard-image";
 import { downloadExternalImageFile } from "@/lib/transport";
 import { runtime } from "@/lib/runtime";
+import { enterpriseProviderIdsFromConfig } from "@/lib/model-provider-visibility";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
 import s from "./goose-composer.module.css";
 
@@ -281,6 +282,10 @@ export function GooseComposer({
   const hasProcessingAttachment = attachments.some(isAttachmentBusy);
   const sttEnabled = sttEnabledFromConfig(voiceConfig);
   const maxRecordingSeconds = voiceMaxRecordingSecondsFromConfig(voiceConfig);
+  const enterpriseProviderIds = useMemo(
+    () => enterpriseProviderIdsFromConfig(voiceConfig ?? undefined),
+    [voiceConfig],
+  );
   const contextRisk = contextUsageRisk(contextUsage);
   const contextWarning = contextRiskText(contextRisk, loading);
   const controlsDisabled = disabled || loading;
@@ -1180,7 +1185,7 @@ export function GooseComposer({
     }
   }, [modelPicker?.initialOptions, modelOptions]);
 
-  const modelText = modelButtonText(modelPicker, modelOptions);
+  const modelText = modelButtonText(modelPicker, modelOptions, { enterpriseProviderIds });
   const voiceButtonTitle = !sttEnabled
     ? "语音识别（STT）已关闭"
     : voiceStatus === "recording"

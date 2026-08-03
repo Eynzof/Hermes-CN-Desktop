@@ -57,8 +57,22 @@ export function modelMatches(model: string, query: string): boolean {
 export function modelButtonText(
   picker: ComposerModelPickerProps | undefined,
   options: ModelOptionsResult | null,
+  groupingOptions: ModelGroupingOptions = {},
 ): string {
-  return picker?.selected?.model || options?.model || picker?.label || "切换模型";
+  const model = picker?.selected?.model || options?.model;
+  if (!model) return picker?.label || "切换模型";
+
+  const providerId = (picker?.selected?.provider || options?.provider || "").toLowerCase();
+  const provider = options?.providers.find(
+    (candidate) => candidate.slug.toLowerCase() === providerId,
+  );
+  const enterprise = providerId.startsWith(ENTERPRISE_PROVIDER_PREFIX)
+    || groupingOptions.enterpriseProviderIds?.has(providerId)
+    || isTeamServiceProviderUrl(provider?.api_url);
+  if (!enterprise) return model;
+
+  const friendlyName = provider?.name || picker?.selected?.providerName || "";
+  return friendlyName.replace(/^team-/i, "").trim() || model;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

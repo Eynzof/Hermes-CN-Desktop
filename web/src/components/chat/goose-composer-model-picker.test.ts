@@ -5,7 +5,48 @@ import {
   buildCandidates,
   groupCandidates,
   isTeamServiceProviderUrl,
+  modelButtonText,
 } from "./goose-composer-model-picker";
+
+describe("modelButtonText", () => {
+  it("shows the friendly Team model name instead of its opaque model id", () => {
+    const options = {
+      provider: "custom:gpt软件研发",
+      model: "mdl_rVPYUJij75Ht-cvb",
+      providers: [{
+        slug: "custom:gpt软件研发",
+        name: "gpt软件研发",
+        models: ["mdl_rVPYUJij75Ht-cvb"],
+        authenticated: true,
+        api_url: `${BRAND.teamServiceUrl}/api/workbuddy/proxy/v1`,
+      }],
+    } as ModelOptionsResult;
+
+    expect(modelButtonText(undefined, options)).toBe("gpt软件研发");
+  });
+
+  it("keeps regular model ids visible", () => {
+    const options = {
+      provider: "deepseek",
+      model: "deepseek-chat",
+      providers: [{ slug: "deepseek", name: "DeepSeek", models: ["deepseek-chat"] }],
+    } as ModelOptionsResult;
+
+    expect(modelButtonText(undefined, options)).toBe("deepseek-chat");
+  });
+
+  it("uses config classification when a Team model has a custom proxy URL", () => {
+    const options = {
+      provider: "custom:研发模型",
+      model: "mdl_opaque_id",
+      providers: [{ slug: "custom:研发模型", name: "研发模型", models: ["mdl_opaque_id"] }],
+    } as ModelOptionsResult;
+
+    expect(modelButtonText(undefined, options, {
+      enterpriseProviderIds: new Set(["custom:研发模型"]),
+    })).toBe("研发模型");
+  });
+});
 
 describe("buildCandidates", () => {
   it("augments a stale MiniMax gateway model list with MiniMax-M3 from the desktop catalog", () => {

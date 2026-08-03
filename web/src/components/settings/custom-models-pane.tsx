@@ -290,6 +290,10 @@ function EnterpriseSection() {
       ),
     [config],
   );
+  const defaultEnterpriseName = meta?.defaultModel
+    ? enterprisePresets.find((preset) => preset.defaultModel === meta.defaultModel)?.name
+      || meta.defaultModel
+    : "";
 
   const handleSync = async () => {
     // Settings can be opened immediately after the managed runtime becomes
@@ -431,7 +435,7 @@ function EnterpriseSection() {
           {meta
             ? meta.cleanupOnly
               ? "设备已被企业停用，本地托管模型已清理。"
-              : `上次同步 ${new Date(meta.lastSyncAt).toLocaleString()} · ${meta.modelCount} 个模型${meta.defaultModel ? ` · 默认 ${meta.defaultModel}` : ""}`
+              : `上次同步 ${new Date(meta.lastSyncAt).toLocaleString()} · ${meta.modelCount} 个模型${defaultEnterpriseName ? ` · 默认 ${defaultEnterpriseName}` : ""}`
             : binding
               ? "已绑定，尚未同步。"
               : "未绑定设备。设备令牌由企业管理员在后台注册设备时发放。"}
