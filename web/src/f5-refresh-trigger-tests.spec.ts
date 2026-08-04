@@ -134,7 +134,7 @@ describe("Bug #1: UI Store initialization race", () => {
     expect(store.get(uiMod.assistantDisplayNameAtom)).toBe("Hermes");
     // BUG: should be "Claudia" (the persisted value)
     
-    expect(store.get(uiMod.composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(uiMod.composerSubmitShortcutAtom)).toBe("ctrl-enter");
     // BUG: should be "ctrl-enter" (the persisted value)
   });
 
