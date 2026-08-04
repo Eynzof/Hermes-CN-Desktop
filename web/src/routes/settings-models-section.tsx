@@ -355,11 +355,10 @@ const AUXILIARY_PROVIDER_PRESETS: { id: string; name: string; hint: string; mode
   },
 ];
 
+// Vision capability is decided per model by the catalog `supportsVision` flag,
+// so provider ids must not blanket-block models that accept image input.
 const TEXT_ONLY_VISION_PROVIDERS = new Set([
   "deepseek",
-  "minimax",
-  "minimax-cn",
-  "minimax-oauth",
   "kimi-for-coding",
   "kimi-coding",
   "kimi-coding-cn",
