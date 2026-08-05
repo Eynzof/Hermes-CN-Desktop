@@ -708,7 +708,7 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
 // Forks rebuilding the desktop should set the compile-time env override
 // to point at their own release pipeline + key (or edit the constants
 // below).
-// The production fallback below is the Volcengine TOS mirror.
+// The production fallback below is the managed Linux download server.
 const BAKED_MANIFEST_BASE_URL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
 const BAKED_MANIFEST_CHANNEL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
 const BAKED_ARTIFACT_MIRROR_BASE_URL: Option<&str> =
@@ -717,9 +717,9 @@ const BAKED_PUBLIC_KEY_PEM: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
 
 const FALLBACK_MANIFEST_BASE_URL: &str =
-    "https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime/stable";
+    "https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime/stable";
 const FALLBACK_ARTIFACT_MIRROR_BASE_URL: &str =
-    "https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime/stable";
+    "https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime/stable";
 // The upstream signed manifest is mirrored byte-for-byte; its artifactUrl is
 // not rewritten here because it is covered by the Ed25519 signature.
 const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
@@ -2176,7 +2176,7 @@ pub async fn install_runtime_update(
     };
 
     // Verify the signed artifact URL first, then optionally use the byte-for-byte
-    // TOS mirror as the transport source. The signed manifest is never mutated;
+    // configured mirror as the transport source. The signed manifest is never mutated;
     // install_runtime_zip still enforces its signed SHA-256 before extraction.
     let download_url = match artifact_download_url(
         &resolved,
@@ -4496,15 +4496,15 @@ mod tests {
     fn manifest_url_falls_back_when_env_unset() {
         clear_runtime_env();
         // No env, no compile-time bake (BAKED_* are option_env! and unset in
-        // dev/test builds), so we get the TOS fallback + default channel.
+        // dev/test builds), so we get the production fallback + default channel.
         let url = configured_manifest_url().unwrap();
         assert!(url
-            .contains("huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime/stable"));
+            .contains("ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime/stable"));
         assert!(url.contains("stable-"));
     }
 
     #[test]
-    fn artifact_download_uses_tos_mirror_without_mutating_signed_url() {
+    fn artifact_download_uses_configured_mirror_without_mutating_signed_url() {
         let manifest = fixture_manifest();
         let signed_url = manifest.artifact_url.clone();
         let download_url =

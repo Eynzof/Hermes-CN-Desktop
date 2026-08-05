@@ -14,5 +14,5 @@ pub const BRAND_DATA_DIR_NAME: &str = ".frogclawhermes";
 pub const BRAND_WINDOW_TITLE: &str = "HermesAgent 桌面版";
 pub const BRAND_HOMEPAGE: &str = "https://frogclaw.com";
 pub const BRAND_UPDATE_MANIFEST_URL: &str =
-    "https://huanxing.tos-accelerate.volces.com/package/hermesagent/frogclawhermes/latest.json";
+    "https://ai.fengchiyun.com/downloads/frogclawhermes/latest.json";
 pub const BRAND_UPDATE_DOWNLOAD_URL: &str = "https://frogclaw.com/hermes-client";

@@ -1,5 +1,5 @@
 # Mirror official Hermes-CN-Core runtime release assets to the production
-# Volcengine TOS runtime feed. The signed manifest JSON is uploaded as-is; do not
+# runtime feed server. The signed manifest JSON is uploaded as-is; do not
 # rewrite artifactUrl here because it is part of the runtime signature payload.
 
 name: sync-core-runtime
@@ -18,6 +18,10 @@ on:
       platforms:
         description: "Comma-separated platform-arch list"
         default: "win32-x64,darwin-arm64,darwin-x64,linux-x64"
+        required: false
+      remote_path:
+        description: "Linux server web root, downloads root, or runtime root. Empty uses LINUX_DEPLOY_PATH."
+        default: ""
         required: false
       verify_public_urls:
         description: "Verify public manifest URLs after upload"
@@ -38,13 +42,7 @@ concurrency:
 
 env:
   CORE_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-  # Public TOS object prefix. The bucket is configured for the same HTTPS
-  # PUT flow used by the Tapdance packaging pipeline.
-  RUNTIME_FEED_BASE_URL: https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime
-  TOS_FILE_CONCURRENCY: "3"
-  TOS_MULTIPART_THRESHOLD_MB: "32"
-  TOS_PART_CONCURRENCY: "4"
-  TOS_PART_SIZE_MB: "16"
+  RUNTIME_FEED_BASE_URL: https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime
 
 jobs:
   sync:
@@ -52,8 +50,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -262,10 +258,174 @@ jobs:
           name: runtime-sync-${{ steps.runtime.outputs.release_tag }}
           path: runtime-sync/
 
-      - name: Upload runtime assets to Volcengine TOS
+      - name: Configure SSH for Linux upload
+        env:
+          SECRET_LINUX_DEPLOY_HOST: ${{ secrets.LINUX_DEPLOY_HOST }}
+          SECRET_LINUX_DEPLOY_PORT: ${{ secrets.LINUX_DEPLOY_PORT }}
+          SECRET_LINUX_DEPLOY_USER: ${{ secrets.LINUX_DEPLOY_USER }}
+          VAR_LINUX_DEPLOY_HOST: ${{ vars.LINUX_DEPLOY_HOST }}
+          VAR_LINUX_DEPLOY_PORT: ${{ vars.LINUX_DEPLOY_PORT }}
+          VAR_LINUX_DEPLOY_USER: ${{ vars.LINUX_DEPLOY_USER }}
+          LINUX_DEPLOY_KEY: ${{ secrets.LINUX_DEPLOY_KEY }}
+          LINUX_DEPLOY_KNOWN_HOSTS: ${{ secrets.LINUX_DEPLOY_KNOWN_HOSTS }}
+          SECRET_LINUX_DEPLOY_PATH: ${{ secrets.LINUX_DEPLOY_PATH }}
+          VAR_LINUX_DEPLOY_PATH: ${{ vars.LINUX_DEPLOY_PATH }}
+          INPUT_REMOTE_PATH: ${{ github.event.inputs.remote_path || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          deploy_host="${SECRET_LINUX_DEPLOY_HOST:-${VAR_LINUX_DEPLOY_HOST:-}}"
+          deploy_port="${SECRET_LINUX_DEPLOY_PORT:-${VAR_LINUX_DEPLOY_PORT:-}}"
+          deploy_user="${SECRET_LINUX_DEPLOY_USER:-${VAR_LINUX_DEPLOY_USER:-}}"
+          configured_remote_path="${SECRET_LINUX_DEPLOY_PATH:-${VAR_LINUX_DEPLOY_PATH:-}}"
+
+          if [[ -z "$deploy_host" ]]; then deploy_host="43.224.248.112"; fi
+          if [[ -z "$deploy_user" ]]; then deploy_user="root"; fi
+          if [[ -z "$deploy_port" ]]; then deploy_port="22"; fi
+
+          missing=()
+          if [[ -z "${LINUX_DEPLOY_KEY:-}" ]]; then missing+=("secrets.LINUX_DEPLOY_KEY"); fi
+          if [[ -z "${INPUT_REMOTE_PATH:-}" && -z "$configured_remote_path" ]]; then
+            missing+=("workflow input remote_path, secrets.LINUX_DEPLOY_PATH, or vars.LINUX_DEPLOY_PATH")
+          fi
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing Linux upload configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+          remote_path="${INPUT_REMOTE_PATH:-$configured_remote_path}"
+          remote_path="${remote_path%/}"
+
+          mkdir -p "$HOME/.ssh"
+          key_path="$HOME/.ssh/linux_deploy_key"
+          key_material="$LINUX_DEPLOY_KEY"
+          if [[ "$key_material" == *'\n'* ]]; then
+            key_material="${key_material//\\n/$'\n'}"
+          fi
+          printf '%s\n' "$key_material" | tr -d '\r' > "$key_path"
+          case "$(head -n 1 "$key_path")" in
+            "-----BEGIN "*"PRIVATE KEY-----") ;;
+            *)
+              echo "::error::LINUX_DEPLOY_KEY is not an OpenSSH/PEM private key. Store the full private key content, not a path or public key."
+              exit 1
+              ;;
+          esac
+
+          known_hosts_path="$HOME/.ssh/known_hosts"
+          if [[ -z "${LINUX_DEPLOY_KNOWN_HOSTS:-}" ]]; then
+            : > "$known_hosts_path"
+            strict_host_key_checking="accept-new"
+          else
+            printf '%s' "$LINUX_DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$known_hosts_path"
+            strict_host_key_checking="yes"
+          fi
+
+          {
+            echo "SSH_KEY_PATH=$key_path"
+            echo "SSH_KNOWN_HOSTS_PATH=$known_hosts_path"
+            echo "SSH_STRICT_HOST_KEY_CHECKING=$strict_host_key_checking"
+            echo "LINUX_DEPLOY_HOST=$deploy_host"
+            echo "LINUX_DEPLOY_PORT=$deploy_port"
+            echo "LINUX_DEPLOY_USER=$deploy_user"
+            echo "LINUX_DEPLOY_REMOTE_PATH=$remote_path"
+          } >> "$GITHUB_ENV"
+
+      - name: Upload runtime assets to Linux server
         env:
           CHANNEL: ${{ steps.runtime.outputs.channel }}
-        run: node scripts/upload-tos.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ssh_common_options=(
+            -i "$SSH_KEY_PATH"
+            -o "UserKnownHostsFile=$SSH_KNOWN_HOSTS_PATH"
+            -o "StrictHostKeyChecking=$SSH_STRICT_HOST_KEY_CHECKING"
+            -o "BatchMode=yes"
+            -o "ConnectTimeout=60"
+            -o "ConnectionAttempts=3"
+            -o "ServerAliveInterval=15"
+            -o "ServerAliveCountMax=20"
+            -o "TCPKeepAlive=yes"
+            -o "IPQoS=throughput"
+          )
+          remote="$LINUX_DEPLOY_USER@$LINUX_DEPLOY_HOST"
+
+          remote_quote() {
+            python3 -c 'import shlex, sys; print(shlex.quote(sys.argv[1]))' "$1"
+          }
+
+          retry() {
+            local label="$1"
+            shift
+            local attempt=1
+            local max_attempts=6
+            local delay
+            until "$@"; do
+              if [[ "$attempt" -ge "$max_attempts" ]]; then
+                echo "$label failed after $max_attempts attempts" >&2
+                return 1
+              fi
+              delay=$((15 * (2 ** (attempt - 1))))
+              if [[ "$delay" -gt 120 ]]; then delay=120; fi
+              echo "$label failed; retrying in ${delay}s."
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
+
+          target_path="$(node --input-type=commonjs - <<'NODE'
+          const baseUrl = new URL(process.env.RUNTIME_FEED_BASE_URL);
+          const publicParts = baseUrl.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+          let remotePath = (process.env.LINUX_DEPLOY_REMOTE_PATH || "").replace(/[\\/]+$/g, "");
+          const remoteParts = remotePath.split(/[\\/]+/).filter(Boolean);
+          const last = remoteParts[remoteParts.length - 1] || "";
+          if (last === "runtime") {
+            console.log(remotePath);
+          } else if (last === "Hermes-CN-Core") {
+            console.log(`${remotePath}/runtime`);
+          } else if (last === "downloads") {
+            console.log(`${remotePath}/${publicParts.slice(1).join("/")}`);
+          } else {
+            console.log(`${remotePath}/${publicParts.join("/")}`);
+          }
+          NODE
+          )"
+
+          echo "Uploading runtime feed to $target_path"
+          retry "create remote runtime directories" \
+            ssh "${ssh_common_options[@]}" -p "$LINUX_DEPLOY_PORT" "$remote" \
+            "mkdir -p $(remote_quote "$target_path/$CHANNEL") $(remote_quote "$target_path/releases")"
+
+          # Upload immutable release-versioned files first. Channel zips are
+          # copied before manifests so clients never see a manifest before its
+          # fallback zip exists.
+          find runtime-sync/releases -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' version_dir; do
+            version="$(basename "$version_dir")"
+            retry "create remote release directory $version" \
+              ssh "${ssh_common_options[@]}" -p "$LINUX_DEPLOY_PORT" "$remote" \
+              "mkdir -p $(remote_quote "$target_path/releases/$version")"
+
+            while IFS= read -r -d '' file; do
+              retry "upload release file $(basename "$file")" \
+                scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" "$file" "$remote:$target_path/releases/$version/"
+            done < <(find "$version_dir" -maxdepth 1 -type f -print0)
+          done
+
+          while IFS= read -r -d '' zip_file; do
+            retry "upload channel zip $(basename "$zip_file")" \
+              scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" "$zip_file" "$remote:$target_path/$CHANNEL/"
+          done < <(find "runtime-sync/$CHANNEL" -maxdepth 1 -type f -name '*.zip' -print0)
+
+          while IFS= read -r -d '' manifest; do
+            retry "upload channel manifest $(basename "$manifest")" \
+              scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" "$manifest" "$remote:$target_path/$CHANNEL/"
+          done < <(find "runtime-sync/$CHANNEL" -maxdepth 1 -type f -name '*.json' -print0)
+
+          retry "upload sync summary" \
+            scp "${ssh_common_options[@]}" -P "$LINUX_DEPLOY_PORT" runtime-sync/summary.json "$remote:$target_path/sync-summary.json"
 
       - name: Verify public runtime manifests
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.verify_public_urls != 'false' }}

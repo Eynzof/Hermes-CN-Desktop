@@ -47,7 +47,7 @@ export const BRAND: BrandConfig = {
   "longDescription": "Desktop app for FrogClaw AI Assistant.",
   "tagline": "AI Assistant",
   "edition": "桌面版",
-  "updateManifestUrl": "https://huanxing.tos-accelerate.volces.com/package/hermesagent/frogclawhermes/latest.json",
+  "updateManifestUrl": "https://ai.fengchiyun.com/downloads/frogclawhermes/latest.json",
   "updateDownloadUrl": "https://frogclaw.com/hermes-client",
   "accountDefaultModels": [
     "deepseek-v4-flash",

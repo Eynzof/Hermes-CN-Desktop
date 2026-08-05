@@ -23,7 +23,7 @@ it under static/bundled-runtime/ so Tauri bundles it into the installer.
 Options:
   --repo <owner/repo>      Runtime release repo (default: Eynzof/Hermes-CN-Core)
   --tag <tag|latest>      Runtime release tag, or latest (default: latest)
-  --feed-base-url <url>   Prebuilt runtime feed root (default: Volcengine TOS)
+  --feed-base-url <url>   Prebuilt runtime feed root (default: production Linux server)
   --channel <name>        Manifest channel name (default: stable)
   --platform <name>       Runtime platform (default: win32)
   --arch <name>           Runtime arch (default: x64)
@@ -59,7 +59,7 @@ const channel = argValue("--channel", process.env.HERMES_RUNTIME_CHANNEL ?? "sta
 const feedBaseUrl = argValue(
   "--feed-base-url",
   process.env.HERMES_RUNTIME_FEED_BASE_URL
-    ?? "https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime",
+    ?? "https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime",
 ).replace(/\/+$/u, "");
 const platform = argValue("--platform", process.env.HERMES_RUNTIME_PLATFORM ?? "win32");
 const arch = argValue("--arch", process.env.HERMES_RUNTIME_ARCH ?? "x64");

@@ -37,9 +37,17 @@ on:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
         default: "runtime-v0.19.0-cn.7"
         required: false
+      remote_path:
+        description: "Linux server download root. Use /www/wwwroot/downloads, or leave empty to use LINUX_DEPLOY_PATH."
+        required: false
+        default: ""
 
 permissions:
   contents: write
+
+env:
+  UPDATE_FEED_BASE_URL: https://ai.fengchiyun.com/downloads
+  RUNTIME_UPDATE_FEED_BASE_URL: https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime
 
 jobs:
   resolve-brands:
@@ -220,7 +228,7 @@ jobs:
           (async () => {
             const repo = process.env.BUNDLED_RUNTIME_REPO || "Eynzof/Hermes-CN-Core";
             const tag = process.env.BUNDLED_RUNTIME_TAG || "latest";
-            const feedBaseUrl = "https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime";
+            const feedBaseUrl = process.env.RUNTIME_UPDATE_FEED_BASE_URL;
             const runtimeVersion = tag === "latest" ? null : tag.replace(/^runtime-v/u, "");
             const baseUrl = runtimeVersion
               ? `${feedBaseUrl}/releases/${encodeURIComponent(runtimeVersion)}`
@@ -653,15 +661,14 @@ jobs:
             --brand "$BRAND"
           gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
-  # Mirror final release assets to Volcengine TOS after every build leg
-  # finishes, i.e. after notarized DMGs and portable zips are final. GitHub
-  # Releases remains the source and fallback for users.
+  # Publish final release assets to the production Linux download server after
+  # every build leg finishes, i.e. after notarized DMGs and portable zips are
+  # final. GitHub Releases remains the source and fallback for users.
   #
   # The upload is idempotent and can be re-run from the Actions UI.
   #
-  # Publish immutable Beijing version objects through the TOS acceleration
-  # endpoint first. Only after they are complete do we publish the mutable
-  # latest.json/canary.json consumed by desktop clients.
+  # Publish immutable version objects first. Only after they are complete do
+  # we publish the mutable latest.json/canary.json consumed by desktop clients.
   mirror-sync:
     needs: build
     runs-on: ubuntu-latest
@@ -669,10 +676,6 @@ jobs:
       RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
       DESKTOP_RELEASE_CHANNEL: ${{ (contains(github.event.inputs.tag || github.ref_name, '-alpha') || contains(github.event.inputs.tag || github.ref_name, '-beta') || contains(github.event.inputs.tag || github.ref_name, '-rc')) && 'canary' || 'stable' }}
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-      TOS_FILE_CONCURRENCY: "3"
-      TOS_MULTIPART_THRESHOLD_MB: "32"
-      TOS_PART_CONCURRENCY: "4"
-      TOS_PART_SIZE_MB: "16"
     steps:
       - uses: actions/checkout@v4
 
@@ -726,20 +729,152 @@ jobs:
           sha256sum * | sort -k2 > checksums.txt
           gh release upload "$RELEASE_TAG" checksums.txt -R "$GITHUB_REPOSITORY" --clobber
 
-      - name: Upload versioned assets to Beijing TOS
+      - name: Prepare Linux server upload tree
         env:
           DESKTOP_ASSET_DIR: assets
           DESKTOP_VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          DESKTOP_TOS_BASE_URL: https://huanxing.tos-accelerate.volces.com/package/hermesagent
-          DESKTOP_UPLOAD_VERSIONED: "1"
-          DESKTOP_PUBLISH_CHANNEL_MANIFEST: "0"
-        run: node scripts/upload-desktop-tos.mjs
+          DESKTOP_FEED_BASE_URL: ${{ env.UPDATE_FEED_BASE_URL }}
+        run: node scripts/prepare-desktop-server-upload.mjs
 
-      - name: Publish Beijing desktop channel manifest
+      - name: Configure SSH for Linux upload
         env:
-          DESKTOP_ASSET_DIR: assets
-          DESKTOP_VERSION_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          DESKTOP_TOS_BASE_URL: https://huanxing.tos-accelerate.volces.com/package/hermesagent
-          DESKTOP_UPLOAD_VERSIONED: "0"
-          DESKTOP_PUBLISH_CHANNEL_MANIFEST: "1"
-        run: node scripts/upload-desktop-tos.mjs
+          SECRET_LINUX_DEPLOY_HOST: ${{ secrets.LINUX_DEPLOY_HOST }}
+          SECRET_LINUX_DEPLOY_PORT: ${{ secrets.LINUX_DEPLOY_PORT }}
+          SECRET_LINUX_DEPLOY_USER: ${{ secrets.LINUX_DEPLOY_USER }}
+          VAR_LINUX_DEPLOY_HOST: ${{ vars.LINUX_DEPLOY_HOST }}
+          VAR_LINUX_DEPLOY_PORT: ${{ vars.LINUX_DEPLOY_PORT }}
+          VAR_LINUX_DEPLOY_USER: ${{ vars.LINUX_DEPLOY_USER }}
+          LINUX_DEPLOY_KEY: ${{ secrets.LINUX_DEPLOY_KEY }}
+          LINUX_DEPLOY_KNOWN_HOSTS: ${{ secrets.LINUX_DEPLOY_KNOWN_HOSTS }}
+          SECRET_LINUX_DEPLOY_PATH: ${{ secrets.LINUX_DEPLOY_PATH }}
+          VAR_LINUX_DEPLOY_PATH: ${{ vars.LINUX_DEPLOY_PATH }}
+          INPUT_REMOTE_PATH: ${{ github.event.inputs.remote_path || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+
+          deploy_host="${SECRET_LINUX_DEPLOY_HOST:-${VAR_LINUX_DEPLOY_HOST:-}}"
+          deploy_port="${SECRET_LINUX_DEPLOY_PORT:-${VAR_LINUX_DEPLOY_PORT:-}}"
+          deploy_user="${SECRET_LINUX_DEPLOY_USER:-${VAR_LINUX_DEPLOY_USER:-}}"
+          configured_remote_path="${SECRET_LINUX_DEPLOY_PATH:-${VAR_LINUX_DEPLOY_PATH:-}}"
+
+          if [[ -z "$deploy_host" ]]; then deploy_host="43.224.248.112"; fi
+          if [[ -z "$deploy_user" ]]; then deploy_user="root"; fi
+          if [[ -z "$deploy_port" ]]; then deploy_port="22"; fi
+
+          missing=()
+          if [[ -z "${LINUX_DEPLOY_KEY:-}" ]]; then missing+=("secrets.LINUX_DEPLOY_KEY"); fi
+          if [[ -z "${INPUT_REMOTE_PATH:-}" && -z "$configured_remote_path" ]]; then
+            missing+=("workflow input remote_path, secrets.LINUX_DEPLOY_PATH, or vars.LINUX_DEPLOY_PATH")
+          fi
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing Linux upload configuration: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+          remote_path="${INPUT_REMOTE_PATH:-$configured_remote_path}"
+          remote_path="${remote_path%/}"
+
+          mkdir -p "$HOME/.ssh"
+          key_path="$HOME/.ssh/linux_deploy_key"
+          key_material="$LINUX_DEPLOY_KEY"
+          if [[ "$key_material" == *'\n'* ]]; then
+            key_material="${key_material//\\n/$'\n'}"
+          fi
+          printf '%s\n' "$key_material" | tr -d '\r' > "$key_path"
+          case "$(head -n 1 "$key_path")" in
+            "-----BEGIN "*"PRIVATE KEY-----") ;;
+            *)
+              echo "::error::LINUX_DEPLOY_KEY is not an OpenSSH/PEM private key. Store the full private key content, not a path or public key."
+              exit 1
+              ;;
+          esac
+
+          known_hosts_path="$HOME/.ssh/known_hosts"
+          if [[ -z "${LINUX_DEPLOY_KNOWN_HOSTS:-}" ]]; then
+            : > "$known_hosts_path"
+            strict_host_key_checking="accept-new"
+          else
+            printf '%s' "$LINUX_DEPLOY_KNOWN_HOSTS" | tr -d '\r' > "$known_hosts_path"
+            strict_host_key_checking="yes"
+          fi
+
+          {
+            echo "SSH_KEY_PATH=$key_path"
+            echo "SSH_KNOWN_HOSTS_PATH=$known_hosts_path"
+            echo "SSH_STRICT_HOST_KEY_CHECKING=$strict_host_key_checking"
+            echo "LINUX_DEPLOY_HOST=$deploy_host"
+            echo "LINUX_DEPLOY_PORT=$deploy_port"
+            echo "LINUX_DEPLOY_USER=$deploy_user"
+            echo "LINUX_DEPLOY_REMOTE_PATH=$remote_path"
+          } >> "$GITHUB_ENV"
+
+      - name: Upload desktop assets to Linux server
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ssh_common_options=(
+            -i "$SSH_KEY_PATH"
+            -o "UserKnownHostsFile=$SSH_KNOWN_HOSTS_PATH"
+            -o "StrictHostKeyChecking=$SSH_STRICT_HOST_KEY_CHECKING"
+            -o "BatchMode=yes"
+            -o "ConnectTimeout=60"
+            -o "ConnectionAttempts=3"
+            -o "ServerAliveInterval=15"
+            -o "ServerAliveCountMax=20"
+            -o "TCPKeepAlive=yes"
+            -o "IPQoS=throughput"
+          )
+          remote="$LINUX_DEPLOY_USER@$LINUX_DEPLOY_HOST"
+
+          remote_quote() {
+            python3 -c 'import shlex, sys; print(shlex.quote(sys.argv[1]))' "$1"
+          }
+
+          retry() {
+            local label="$1"
+            shift
+            local attempt=1
+            local max_attempts=6
+            local delay
+            until "$@"; do
+              if [[ "$attempt" -ge "$max_attempts" ]]; then
+                echo "$label failed after $max_attempts attempts" >&2
+                return 1
+              fi
+              delay=$((15 * (2 ** (attempt - 1))))
+              if [[ "$delay" -gt 120 ]]; then delay=120; fi
+              echo "$label failed; retrying in ${delay}s."
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
+
+          target_path="$(node --input-type=commonjs - <<'NODE'
+          const baseUrl = new URL(process.env.UPDATE_FEED_BASE_URL);
+          const publicParts = baseUrl.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+          let remotePath = (process.env.LINUX_DEPLOY_REMOTE_PATH || "").replace(/[\\/]+$/g, "");
+          const remoteParts = remotePath.split(/[\\/]+/).filter(Boolean);
+          const publicLeaf = publicParts[publicParts.length - 1] || "";
+          const remoteLeaf = remoteParts[remoteParts.length - 1] || "";
+          console.log(remoteLeaf === publicLeaf ? remotePath : `${remotePath}/${publicLeaf}`);
+          NODE
+          )"
+          quoted_target="$(remote_quote "$target_path")"
+
+          upload_tree() {
+            local phase="$1"
+            tar -C "desktop-server-upload/$phase" -cf - . | \
+              ssh "${ssh_common_options[@]}" -p "$LINUX_DEPLOY_PORT" "$remote" \
+                "tar -xf - -C $quoted_target"
+          }
+
+          retry "create remote desktop directory" \
+            ssh "${ssh_common_options[@]}" -p "$LINUX_DEPLOY_PORT" "$remote" \
+              "mkdir -p $quoted_target"
+          retry "upload immutable desktop assets" upload_tree immutable
+          retry "publish desktop channel manifests" upload_tree mutable
+
+          echo "Uploaded desktop release to $UPDATE_FEED_BASE_URL"
