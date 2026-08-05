@@ -16,13 +16,28 @@ import {
   extractImagePartsFromUnknown,
   imagePartFromSource,
 } from "@/lib/message-images";
+import {
+  dedupeVideoParts,
+  expandMediaDirectives,
+  extractVideoPartsFromUnknown,
+  splitMediaDirectives,
+  videoPartFromPossibleVideo,
+  videoPartFromSource,
+} from "@/lib/message-media";
 import { stableTextHash, type UiTurnStats } from "@/lib/ui-store";
 import { isSkillInvocationText } from "@/lib/skill-invocation";
 import type { AssistantTurnBlock } from "@/stores/chat";
-import type { AssistantMessageStats, ChatImageItem, ChatMessage, ChatToolItem } from "./chat-types";
+import type {
+  AssistantMessageStats,
+  ChatImageItem,
+  ChatMessage,
+  ChatToolItem,
+  ChatVideoItem,
+} from "./chat-types";
 
 type HermesToolPart = Extract<HermesMessagePart, { type: "tool" }>;
 type HermesImagePart = Extract<HermesMessagePart, { type: "image" }>;
+type HermesVideoPart = Extract<HermesMessagePart, { type: "video" }>;
 
 export interface HermesUIMessageUpdate {
   sessionId: string;
@@ -84,6 +99,10 @@ function imagePartToEntry(part: HermesImagePart): ChatImageItem {
     (typeof record.image_url === "string" ? record.image_url : undefined) ||
     (record.image_url && typeof record.image_url === "object"
       ? (record.image_url as Record<string, unknown>).url
+      : undefined) ||
+    (typeof record.imageUrl === "string" ? record.imageUrl : undefined) ||
+    (record.imageUrl && typeof record.imageUrl === "object"
+      ? (record.imageUrl as Record<string, unknown>).url
       : undefined);
   const name = part.name || part.filename || part.file_name || (typeof url === "string" && !url.startsWith("data:")
     ? url.replace(/\\/g, "/").split("/").pop()
@@ -99,10 +118,46 @@ function imagePartToEntry(part: HermesImagePart): ChatImageItem {
   };
 }
 
+function videoPartToEntry(part: HermesVideoPart): ChatVideoItem {
+  const record = part as Record<string, unknown>;
+  const url =
+    part.url ||
+    part.src ||
+    part.path ||
+    part.data ||
+    (typeof record.video_url === "string" ? record.video_url : undefined) ||
+    (record.video_url && typeof record.video_url === "object"
+      ? (record.video_url as Record<string, unknown>).url
+      : undefined) ||
+    (typeof record.videoUrl === "string" ? record.videoUrl : undefined) ||
+    (record.videoUrl && typeof record.videoUrl === "object"
+      ? (record.videoUrl as Record<string, unknown>).url
+      : undefined);
+  const name = part.name || part.filename || part.file_name || (typeof url === "string" && !url.startsWith("data:")
+    ? url.replace(/\\/g, "/").split("/").pop()
+    : undefined);
+  return {
+    ...(typeof url === "string" && url ? { url } : {}),
+    ...(part.title || name ? { title: part.title || name } : {}),
+    ...(name ? { name } : {}),
+    ...(part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type
+      ? { mimeType: part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type }
+      : {}),
+  };
+}
+
 function imagePartsFromMessageImages(images: SessionMessage["images"]): HermesImagePart[] {
   if (!images?.length) return [];
   return dedupeImageParts(images.flatMap((image, index) => {
     const part = imagePartFromSource(image, `image-${index + 1}`);
+    return part ? [part] : [];
+  }));
+}
+
+function videoPartsFromMessageVideos(videos: SessionMessage["videos"]): HermesVideoPart[] {
+  if (!videos?.length) return [];
+  return dedupeVideoParts(videos.flatMap((video, index) => {
+    const part = videoPartFromSource(video, `video-${index + 1}`);
     return part ? [part] : [];
   }));
 }
@@ -136,23 +191,30 @@ function imagePartsFromTransportText(text: string | null | undefined): HermesIma
   return dedupeImageParts(parts);
 }
 
-function textAndImagesFromStructuredContent(content: string | null | undefined): {
+function textAndMediaFromStructuredContent(content: string | null | undefined): {
   text?: string;
+  parts?: HermesMessagePart[];
   images: HermesImagePart[];
+  videos: HermesVideoPart[];
 } {
   const parsed = parseJsonContent(content);
   if (parsed === undefined) {
     return {
       text: content ?? undefined,
       images: imagePartsFromTransportText(content),
+      videos: [],
     };
   }
 
   const textParts: string[] = [];
-  const imageParts: HermesImagePart[] = [];
+  const orderedParts: HermesMessagePart[] = [];
+  const pushText = (text: string) => {
+    textParts.push(text);
+    orderedParts.push({ type: "text", text });
+  };
   const visit = (value: unknown) => {
     if (typeof value === "string") {
-      textParts.push(value);
+      pushText(value);
       return;
     }
     if (Array.isArray(value)) {
@@ -161,8 +223,6 @@ function textAndImagesFromStructuredContent(content: string | null | undefined):
     }
     if (!value || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
-    if (typeof record.text === "string") textParts.push(record.text);
-    if (typeof record.content === "string" && record.type === "text") textParts.push(record.content);
     const direct = imagePartFromSource(record);
     if (direct && (
       record.type === "image" ||
@@ -171,22 +231,102 @@ function textAndImagesFromStructuredContent(content: string | null | undefined):
       record.type === "output_image" ||
       record.is_image === true
     )) {
-      imageParts.push(direct);
-    } else {
-      imageParts.push(...extractImagePartsFromUnknown(record));
+      orderedParts.push(direct);
+      return;
     }
+    const directVideo = videoPartFromPossibleVideo(record);
+    if (directVideo && (
+      record.type === "video" ||
+      record.type === "video_url" ||
+      record.type === "input_video" ||
+      record.type === "output_video" ||
+      record.is_video === true
+    )) {
+      orderedParts.push(directVideo);
+      return;
+    }
+
+    if (typeof record.text === "string") pushText(record.text);
+    if (typeof record.content === "string" && record.type === "text") {
+      pushText(record.content);
+    }
+    if (record.type === "text") return;
+
+    // Some providers wrap the canonical ordered array in `content` or `parts`.
+    // Visit those containers in place instead of flattening media by type.
+    let visitedContainer = false;
+    for (const key of ["content", "parts", "items"] as const) {
+      const nested = record[key];
+      if (nested && typeof nested === "object") {
+        visitedContainer = true;
+        visit(nested);
+      }
+    }
+    if (visitedContainer) return;
+
+    orderedParts.push(...extractImagePartsFromUnknown(record));
+    orderedParts.push(...extractVideoPartsFromUnknown(record));
+  };
+
+  const mediaKey = (part: HermesMessagePart): string | undefined => {
+    if (part.type === "image") {
+      const key = part.url || part.path || part.name || part.alt;
+      return key ? `image:${key}` : undefined;
+    }
+    if (part.type === "video") {
+      const key = part.url || part.path || part.name || part.title;
+      return key ? `video:${key}` : undefined;
+    }
+    return undefined;
   };
 
   visit(parsed);
-  const images = dedupeImageParts([
-    ...imageParts,
-    ...imagePartsFromTransportText(content),
-  ]);
-  if (!textParts.length && !images.length) return { text: content ?? undefined, images: [] };
+  const seenMedia = new Set<string>();
+  const parts = orderedParts.filter((part) => {
+    const key = mediaKey(part);
+    if (!key) return part.type !== "image" && part.type !== "video";
+    if (seenMedia.has(key)) return false;
+    seenMedia.add(key);
+    return true;
+  });
+  const images = imagePartsFromTransportText(content);
+  if (!textParts.length && !parts.some((part) => part.type !== "text") && !images.length) {
+    return { text: content ?? undefined, images: [], videos: [] };
+  }
   return {
     text: textParts.join("\n").trim() || undefined,
+    parts,
     images,
+    videos: [],
   };
+}
+
+function appendMissingMessageMedia(
+  parts: HermesMessagePart[],
+  images: HermesImagePart[],
+  videos: HermesVideoPart[],
+): HermesMessagePart[] {
+  const seen = new Set<string>();
+  const result: HermesMessagePart[] = [];
+  const append = (part: HermesMessagePart) => {
+    let key: string | undefined;
+    if (part.type === "image") {
+      const value = part.url || part.path || part.name || part.alt;
+      key = value ? `image:${value}` : undefined;
+    } else if (part.type === "video") {
+      const value = part.url || part.path || part.name || part.title;
+      key = value ? `video:${value}` : undefined;
+    }
+    if ((part.type === "image" || part.type === "video") && !key) return;
+    if (key && seen.has(key)) return;
+    if (key) seen.add(key);
+    result.push(part);
+  };
+
+  parts.forEach(append);
+  dedupeImageParts(images).forEach(append);
+  dedupeVideoParts(videos).forEach(append);
+  return result;
 }
 
 function normalizeAssistantBlocks(
@@ -348,7 +488,7 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
     };
   }
 
-  const content = textAndImagesFromStructuredContent(msg.content);
+  const content = textAndMediaFromStructuredContent(msg.content);
   const text = normalizeContent(content.text);
   const processNotificationText = msg.role === "user"
     ? normalizeProcessNotificationText(text ?? "")
@@ -357,12 +497,22 @@ export function legacySessionMessageToHermesUIMessage(msg: SessionMessage): Herm
     normalizeReasoningText(msg.reasoning_content ?? msg.reasoning ?? undefined),
   );
   const tools = parseToolCalls(msg.tool_calls, createdAt);
-  const parts: HermesMessagePart[] = [];
-  if (text) parts.push({ type: "text", text });
-  parts.push(...dedupeImageParts([
+  const orderedContentParts = content.parts
+    ? content.parts.flatMap((part) => {
+      if (part.type !== "text") return [part];
+      const normalized = normalizeContent(part.text);
+      return normalized ? splitMediaDirectives(normalized) : [];
+    })
+    : text
+      ? splitMediaDirectives(text)
+      : [];
+  const parts = appendMissingMessageMedia(orderedContentParts, [
     ...content.images,
     ...imagePartsFromMessageImages(msg.images),
-  ]));
+  ], [
+    ...content.videos,
+    ...videoPartsFromMessageVideos(msg.videos),
+  ]);
   if (reasoning) parts.push({ type: "reasoning", text: reasoning });
   tools.forEach((tool) => parts.push(tool));
 
@@ -476,7 +626,16 @@ export function legacySessionMessagesToHermesUIMessages(messages: SessionMessage
 
 export function messagesResponseToHermesUIMessages(response: MessagesResponse | undefined): HermesUIMessage[] {
   if (!response) return [];
-  if (response.ui_messages) return response.ui_messages;
+  if (response.ui_messages) {
+    return response.ui_messages.map((message) => ({
+      ...message,
+      parts: appendMissingMessageMedia(
+        expandMediaDirectives(message.parts),
+        [],
+        [],
+      ),
+    }));
+  }
   return legacySessionMessagesToHermesUIMessages(response.messages);
 }
 
@@ -520,6 +679,10 @@ function partsToBlocks(
     }
     if (part.type === "image") {
       blocks.push({ type: "image", image: imagePartToEntry(part) });
+      continue;
+    }
+    if (part.type === "video") {
+      blocks.push({ type: "video", video: videoPartToEntry(part) });
       continue;
     }
     if (part.type === "moa_reference") {
@@ -574,6 +737,13 @@ function imagesFromParts(parts: HermesMessagePart[]): ChatImageItem[] | undefine
   return images.length ? images : undefined;
 }
 
+function videosFromParts(parts: HermesMessagePart[]): ChatVideoItem[] | undefined {
+  const videos = parts
+    .filter((part): part is HermesVideoPart => part.type === "video")
+    .map(videoPartToEntry);
+  return videos.length ? videos : undefined;
+}
+
 function messageHasErrorNotice(message: HermesUIMessage): boolean {
   return message.parts.some((part) => part.type === "notice" && part.level === "error");
 }
@@ -588,6 +758,9 @@ function statsHashFromMessage(message: HermesUIMessage): string | undefined {
     reasoningFromParts(message.parts),
     imagesFromParts(message.parts)
       ?.map((image) => [image.url, image.name, image.alt].filter(Boolean).join(" "))
+      .join("\n"),
+    videosFromParts(message.parts)
+      ?.map((video) => [video.url, video.name, video.title].filter(Boolean).join(" "))
       .join("\n"),
     toolText,
   ].filter(Boolean).join("\n"));
@@ -807,6 +980,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     : msg.role;
   const reasoning = reasoningFromParts(msg.parts);
   const images = imagesFromParts(msg.parts);
+  const videos = videosFromParts(msg.parts);
   const blocks = msg.role === "assistant"
     ? partsToBlocks(msg, { includeProgress })
     : undefined;
@@ -814,7 +988,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     ?.filter((block): block is Extract<AssistantTurnBlock, { type: "tool" }> => block.type === "tool")
     .map((block) => block.tool);
 
-  if (!text && !reasoning && !images?.length && !tools?.length && !blocks?.length) return null;
+  if (!text && !reasoning && !images?.length && !videos?.length && !tools?.length && !blocks?.length) return null;
 
   return {
     id: msg.id,
@@ -823,6 +997,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     text,
     reasoning,
     images,
+    videos,
     tools: tools?.length ? tools : undefined,
     blocks,
     status: msg.status,
@@ -868,9 +1043,12 @@ function canonicalReasoning(message: HermesUIMessage): string {
 
 function canonicalImages(message: HermesUIMessage): string {
   return comparableText(
-    imagesFromParts(message.parts)
-      ?.map((image) => [image.url, image.name, image.alt].filter(Boolean).join(" "))
-      .join("\n"),
+    [
+      ...(imagesFromParts(message.parts) ?? [])
+        .map((image) => [image.url, image.name, image.alt].filter(Boolean).join(" ")),
+      ...(videosFromParts(message.parts) ?? [])
+        .map((video) => [video.url, video.name, video.title].filter(Boolean).join(" ")),
+    ].join("\n"),
   );
 }
 

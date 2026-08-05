@@ -5,6 +5,7 @@ import {
   fetchExternalJSON,
   fetchJSON,
   fetchMediaDataUrl,
+  mediaStreamUrl,
   uploadAttachmentFile,
 } from "./transport";
 
@@ -102,6 +103,42 @@ describe("transport · debug-bus integration", () => {
     stubFetch(() => makeResponse(200, '{"data_url":"https://example.com/not-inline.png"}'));
 
     await expect(fetchMediaDataUrl("/tmp/a.png")).rejects.toThrow(/image data URL/);
+  });
+
+  it("fetchMediaDataUrl accepts an encoded gateway video", async () => {
+    stubFetch(() => makeResponse(200, '{"data_url":"data:video/mp4;base64,QUJD"}'));
+
+    await expect(fetchMediaDataUrl("C:\\Users\\TU\\Desktop\\demo.mp4"))
+      .resolves.toBe("data:video/mp4;base64,QUJD");
+  });
+
+  it("builds an authenticated loopback streaming URL for local Tauri video", () => {
+    window.__HERMES_RUNTIME__ = {
+      platform: "tauri",
+      connectionMode: "managed",
+      dashboardApiBaseUrl: "http://127.0.0.1:9120",
+      sessionToken: "secret token",
+    };
+
+    const value = mediaStreamUrl("C:\\Users\\TU\\Desktop\\demo clip.mp4");
+    const url = new URL(value!);
+    expect(url.origin).toBe("http://127.0.0.1:9120");
+    expect(url.pathname).toBe("/api/media/file");
+    expect(url.searchParams.get("path")).toBe("C:\\Users\\TU\\Desktop\\demo clip.mp4");
+    expect(url.searchParams.get("token")).toBe("secret token");
+  });
+
+  it("does not expose a direct media URL for remote or non-loopback backends", () => {
+    window.__HERMES_RUNTIME__ = {
+      platform: "tauri",
+      connectionMode: "remote",
+      apiBaseUrl: "https://remote.example.test",
+      sessionToken: "secret",
+    };
+    expect(mediaStreamUrl("/tmp/demo.mp4")).toBeUndefined();
+
+    window.__HERMES_RUNTIME__.connectionMode = "local";
+    expect(mediaStreamUrl("/tmp/demo.mp4")).toBeUndefined();
   });
 
   it("fetchExternalJSON pushes a REST entry on non-ok response", async () => {

@@ -9,6 +9,7 @@ import { AssistantProfileCard } from "./assistant-profile-card";
 import { CliDelegationCard, entryFromChatTool } from "./cli-delegation-card";
 import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
+import { MessageVideo } from "./message-video";
 import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
 import { SkillInvocationMessage } from "./skill-invocation-message";
@@ -556,6 +557,15 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
       return;
     }
 
+    if (block.type === "video") {
+      items.push(
+        <div key={`video-${index}`} className={s.videoBlock}>
+          <MessageVideo video={block.video} />
+        </div>,
+      );
+      return;
+    }
+
     if (block.type === "moa_reference") {
       // MoA 参考模型输出块——不受 showReasoning 门控：它是委员会成员的
       // 实际回答（MoA 的核心卖点），不是模型的内心独白；默认折叠不扰。
@@ -910,6 +920,16 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
                   ))}
                 </div>
               ) : null}
+              {message.videos?.length ? (
+                <div className={s.messageVideos}>
+                  {message.videos.map((video, index) => (
+                    <MessageVideo
+                      key={`${video.url ?? video.name ?? video.title ?? "video"}-${index}`}
+                      video={video}
+                    />
+                  ))}
+                </div>
+              ) : null}
               {showReasoning && message.reasoning ? (
                 <ReasoningBlock text={message.reasoning} streaming={streaming && !message.text} />
               ) : null}
@@ -1005,6 +1025,7 @@ export function MessageTimeline({
           message.text ||
           message.reasoning ||
           message.images?.length ||
+          message.videos?.length ||
           message.tools?.length ||
           message.blocks?.length,
       ),

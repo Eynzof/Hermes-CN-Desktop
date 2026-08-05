@@ -12,6 +12,7 @@ import {
   reduceGatewayEvent,
   resetStreamStateAtom,
   startPromptAtom,
+  textForStatsHash,
   terminateAllStreamsAtom,
 } from "./chat";
 
@@ -47,6 +48,17 @@ function runtimeMessage(overrides: Partial<HermesUIMessage>): HermesUIMessage {
 }
 
 describe("chat runtime reducer", () => {
+  it("includes video sources in the live stats content hash input", () => {
+    expect(textForStatsHash(runtimeMessage({
+      parts: [{
+        type: "video",
+        path: "C:\\media\\clip.mp4",
+        name: "clip.mp4",
+        title: "Demo",
+      }],
+    }))).toBe("C:\\media\\clip.mp4\nclip.mp4\nDemo");
+  });
+
   it("uses message.complete payload even when no deltas were received", () => {
     const next = reduceGatewayEvent(
       createEmptyChatRuntime(1),
@@ -68,6 +80,132 @@ describe("chat runtime reducer", () => {
       ],
     });
     expect(next.streamStatus).toBe("complete");
+  });
+
+  it("converts final MEDIA directives into image and video parts", () => {
+    const next = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "message.complete",
+        session_id: "s1",
+        payload: {
+          text: [
+            "已完成。",
+            "MEDIA:C:\\Users\\TU\\Desktop\\result.png",
+            "MEDIA:C:\\Users\\TU\\Desktop\\result.mp4",
+          ].join("\n"),
+          status: "complete",
+        },
+      },
+      10,
+    );
+
+    expect(assistantMessage(next).parts).toEqual([
+      { type: "text", text: "已完成。" },
+      expect.objectContaining({
+        type: "image",
+        url: "C:\\Users\\TU\\Desktop\\result.png",
+      }),
+      expect.objectContaining({
+        type: "video",
+        url: "C:\\Users\\TU\\Desktop\\result.mp4",
+      }),
+    ]);
+  });
+
+  it("accepts camelCase imageUrl and videoUrl in gateway payloads", () => {
+    const next = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "message.complete",
+        session_id: "s1",
+        payload: {
+          text: "done",
+          imageUrl: { url: "C:\\Users\\TU\\Desktop\\camel-case.png" },
+          videoUrl: { url: "C:\\Users\\TU\\Desktop\\camel-case.mp4" },
+          status: "complete",
+        },
+      },
+      10,
+    );
+
+    expect(assistantMessage(next).parts).toEqual([
+      { type: "text", text: "done" },
+      expect.objectContaining({
+        type: "image",
+        url: "C:\\Users\\TU\\Desktop\\camel-case.png",
+      }),
+      expect.objectContaining({
+        type: "video",
+        url: "C:\\Users\\TU\\Desktop\\camel-case.mp4",
+      }),
+    ]);
+  });
+
+  it("keeps media at its first delta position while deduplicating repeated payloads", () => {
+    let runtime = createEmptyChatRuntime(1);
+    const apply = (payload: Record<string, unknown>, now: number) => {
+      runtime = reduceGatewayEvent(runtime, {
+        type: "message.delta",
+        session_id: "s1",
+        payload,
+      }, now);
+    };
+
+    apply({ text: "before" }, 10);
+    apply({ image: { url: "C:\\media\\first.png" } }, 11);
+    apply({ video: { url: "C:\\media\\first.mp4" } }, 12);
+    apply({ text: "after" }, 13);
+    apply({
+      images: [
+        { url: "C:\\media\\first.png" },
+        { url: "C:\\media\\second.png" },
+      ],
+      videos: [
+        { url: "C:\\media\\first.mp4" },
+        { url: "C:\\media\\second.mp4" },
+      ],
+    }, 14);
+
+    expect(assistantMessage(runtime).parts).toEqual([
+      { type: "text", text: "before" },
+      expect.objectContaining({ type: "image", url: "C:\\media\\first.png" }),
+      expect.objectContaining({ type: "video", url: "C:\\media\\first.mp4" }),
+      { type: "text", text: "after" },
+      expect.objectContaining({ type: "image", url: "C:\\media\\second.png" }),
+      expect.objectContaining({ type: "video", url: "C:\\media\\second.mp4" }),
+    ]);
+  });
+
+  it("does not move MEDIA parts when completion repeats them in structured fields", () => {
+    const runtime = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "message.complete",
+        session_id: "s1",
+        payload: {
+          text: [
+            "before",
+            "MEDIA:C:\\media\\first.png",
+            "middle",
+            "MEDIA:C:\\media\\first.mp4",
+            "after",
+          ].join("\n"),
+          images: [{ url: "C:\\media\\first.png" }],
+          videos: [{ url: "C:\\media\\first.mp4" }],
+          status: "complete",
+        },
+      },
+      10,
+    );
+
+    expect(assistantMessage(runtime).parts).toEqual([
+      { type: "text", text: "before" },
+      expect.objectContaining({ type: "image", url: "C:\\media\\first.png" }),
+      { type: "text", text: "middle" },
+      expect.objectContaining({ type: "video", url: "C:\\media\\first.mp4" }),
+      { type: "text", text: "after" },
+    ]);
   });
 
   it("replaces a corrupt streamed prefix with the authoritative completion text", () => {

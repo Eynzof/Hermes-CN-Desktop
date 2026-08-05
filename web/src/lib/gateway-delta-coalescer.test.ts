@@ -79,6 +79,30 @@ describe("createDeltaCoalescer", () => {
     ]);
   });
 
+  it.each(["video", "videos", "video_url", "videoUrl"])(
+    "does not merge a delta carrying %s",
+    (field) => {
+      const { applied, coalescer } = setup();
+      const source = { url: "C:\\Users\\TU\\Desktop\\demo.mp4" };
+
+      coalescer.dispatch(delta("s1", "before "));
+      coalescer.dispatch({
+        type: "message.delta",
+        session_id: "s1",
+        payload: {
+          text: "video",
+          [field]: field === "videos" ? [source] : source,
+        },
+      } as GatewayEvent);
+
+      expect(applied).toHaveLength(2);
+      expect((applied[0].payload as Record<string, unknown>).text).toBe("before ");
+      expect((applied[1].payload as Record<string, unknown>)[field]).toEqual(
+        field === "videos" ? [source] : source,
+      );
+    },
+  );
+
   it("flush() applies pending deltas immediately and cancels the frame", () => {
     const { applied, frame, coalescer } = setup();
 

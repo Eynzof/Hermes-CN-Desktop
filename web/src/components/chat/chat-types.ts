@@ -1,4 +1,4 @@
-import type { AssistantTurnBlock, ImageEntry, ToolEntry } from "@/stores/chat";
+import type { AssistantTurnBlock, ImageEntry, ToolEntry, VideoEntry } from "@/stores/chat";
 
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
@@ -8,6 +8,7 @@ export interface ChatToolItem extends ToolEntry {
 }
 
 export type ChatImageItem = ImageEntry;
+export type ChatVideoItem = VideoEntry;
 
 export interface AssistantMessageStats {
   ttftMs?: number;
@@ -32,6 +33,7 @@ export interface ChatMessage {
   text?: string;
   reasoning?: string;
   images?: ChatImageItem[];
+  videos?: ChatVideoItem[];
   tools?: ChatToolItem[];
   blocks?: AssistantTurnBlock[];
   status?: "streaming" | "complete" | "error";
