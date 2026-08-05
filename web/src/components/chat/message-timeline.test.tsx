@@ -262,6 +262,78 @@ describe("MessageTimeline", () => {
     expect(html).toContain("/Users/enzo/Downloads/chart.png");
   });
 
+  it("uses an in-app enlargement trigger for a resolved image", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-inline-image",
+        role: "assistant",
+        createdAt: 1,
+        images: [{ url: "data:image/png;base64,AAAA", alt: "测试图片" }],
+      },
+    ];
+
+    const html = renderTimeline(<MessageTimeline messages={messages} />);
+
+    expect(html).toContain("<button");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).toContain("放大查看图片：测试图片");
+    expect(html).not.toContain('target="_blank"><img');
+  });
+
+  it("requires consent before rendering a network-backed video", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-video",
+        role: "assistant",
+        createdAt: 1,
+        blocks: [{
+          type: "video",
+          video: { url: "https://example.test/demo.mp4", title: "演示视频" },
+        }],
+      },
+    ];
+
+    const html = renderTimeline(<MessageTimeline messages={messages} />);
+
+    expect(html).not.toContain("<video");
+    expect(html).toContain("外部视频已阻止自动加载");
+    expect(html).toContain("加载并播放");
+    expect(html).toContain("https://example.test/demo.mp4");
+  });
+
+  it("renders an inline video payload with native controls", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-inline-video",
+        role: "assistant",
+        createdAt: 1,
+        videos: [{ url: "data:video/mp4;base64,AAAA", title: "内联视频" }],
+      },
+    ];
+
+    const html = renderTimeline(<MessageTimeline messages={messages} />);
+
+    expect(html).toContain("<video");
+    expect(html).toContain("controls");
+    expect(html).toContain('aria-label="内联视频"');
+  });
+
+  it("shows loading state while a local video path is being resolved", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-local-video",
+        role: "assistant",
+        createdAt: 1,
+        videos: [{ url: "C:\\Users\\TU\\Desktop\\demo.mp4", name: "demo.mp4" }],
+      },
+    ];
+
+    const html = renderTimeline(<MessageTimeline messages={messages} />);
+
+    expect(html).toContain("视频加载中");
+    expect(html).toContain("demo.mp4");
+  });
+
   it("shows turn navigation for multi-turn conversations", () => {
     const messages: ChatMessage[] = [
       { id: "user-1", role: "user", createdAt: 1, text: "第一轮问题" },

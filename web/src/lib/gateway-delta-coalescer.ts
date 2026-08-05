@@ -12,7 +12,7 @@ import type { GatewayEvent } from "@hermes/protocol";
  * frame down to one, with no change to the reducer.
  *
  * Ordering guarantees:
- *  - Only plain-text deltas (a string `payload.text`, no image fields) are
+ *  - Only plain-text deltas (a string `payload.text`, no media fields) are
  *    buffered. Any other event — including a delta that also carries images —
  *    first flushes the buffered text, then applies as-is, so nothing is
  *    reordered or dropped.
@@ -42,7 +42,16 @@ function isCoalescablePureTextDelta(event: GatewayEvent): boolean {
   if (!payload || typeof payload.text !== "string") return false;
   // A delta that also carries an image must keep its exact position relative to
   // surrounding text — never merge those.
-  if ("images" in payload || "image" in payload || "image_url" in payload) {
+  if (
+    "images" in payload ||
+    "image" in payload ||
+    "image_url" in payload ||
+    "imageUrl" in payload ||
+    "videos" in payload ||
+    "video" in payload ||
+    "video_url" in payload ||
+    "videoUrl" in payload
+  ) {
     return false;
   }
   return true;

@@ -156,7 +156,7 @@ export async function fetchJSON<T>(
 }
 
 /**
- * Resolve an image path on the gateway into a browser-safe data URL.
+ * Resolve an image or video path on the gateway into a browser-safe data URL.
  *
  * Chat history stores the path returned by `image.attach(_bytes)`. A webview
  * cannot load that absolute path directly (and must not be given broad
@@ -167,10 +167,37 @@ export async function fetchMediaDataUrl(path: string): Promise<string> {
   const result = await fetchJSON<{ data_url?: unknown }>(
     `/api/media?path=${encodeURIComponent(path)}`,
   );
-  if (typeof result.data_url !== "string" || !result.data_url.startsWith("data:image/")) {
-    throw new Error("Media response did not contain an image data URL");
+  if (typeof result.data_url !== "string" || !/^data:(?:image|video)\//i.test(result.data_url)) {
+    throw new Error("Media response did not contain an image data URL or video data URL");
   }
   return result.data_url;
+}
+
+/**
+ * Build a direct, authenticated loopback URL for native video streaming.
+ * This bypasses the Tauri string IPC proxy so the browser can issue Range
+ * requests instead of buffering a whole video as base64 JSON.
+ */
+export function mediaStreamUrl(path: string): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  if (runtime.platform !== "tauri" || runtime.isRemote()) return undefined;
+  const baseUrl = window.__HERMES_RUNTIME__?.dashboardApiBaseUrl
+    ?? window.__HERMES_RUNTIME__?.apiBaseUrl;
+  const token = runtime.getSessionToken();
+  if (!baseUrl || !token) return undefined;
+
+  try {
+    const url = new URL("/api/media/file", baseUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1" && url.hostname !== "[::1]") {
+      return undefined;
+    }
+    url.searchParams.set("path", path);
+    url.searchParams.set("token", token);
+    return url.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 const EXTERNAL_FETCH_TIMEOUT_MS = 15_000;

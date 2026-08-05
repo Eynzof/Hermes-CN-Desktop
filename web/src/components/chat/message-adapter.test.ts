@@ -61,12 +61,13 @@ function uiMessage(overrides: Partial<HermesUIMessage> = {}): HermesUIMessage {
 }
 
 describe("protocol schemas", () => {
-  it("validates canonical Hermes UI messages with text, reasoning, tool, notice, and metadata", () => {
+  it("validates canonical Hermes UI messages with media, tool, notice, and metadata", () => {
     const parsed = HermesUIMessageSchema.parse(uiMessage({
       parts: [
         { type: "reasoning", text: "plan" },
         { type: "tool", toolCallId: "call-1", name: "read_file", state: "done", output: "ok" },
         { type: "image", url: "https://example.test/chart.png", alt: "chart" },
+        { type: "video", url: "https://example.test/demo.mp4", title: "demo" },
         { type: "text", text: "done" },
         { type: "notice", level: "warning", text: "quota low" },
       ],
@@ -85,6 +86,7 @@ describe("protocol schemas", () => {
       "reasoning",
       "tool",
       "image",
+      "video",
       "text",
       "notice",
     ]);
@@ -158,6 +160,126 @@ describe("message adapter", () => {
       id: "ui-1",
       parts: [{ type: "text", text: "canonical" }],
     });
+  });
+
+  it("expands MEDIA directives in canonical history messages", () => {
+    const [message] = messagesResponseToHermesUIMessages({
+      session_id: "s1",
+      messages: [],
+      ui_messages: [uiMessage({
+        id: "ui-media",
+        parts: [{
+          type: "text",
+          text: "已生成\nMEDIA:C:\\Users\\TU\\Desktop\\demo.mp4",
+        }],
+      })],
+    });
+
+    expect(message?.parts).toEqual([
+      { type: "text", text: "已生成" },
+      expect.objectContaining({
+        type: "video",
+        url: "C:\\Users\\TU\\Desktop\\demo.mp4",
+      }),
+    ]);
+  });
+
+  it("deduplicates canonical MEDIA directives and structured media parts", () => {
+    const path = "C:\\media\\clip.mp4";
+    const [message] = messagesResponseToHermesUIMessages({
+      session_id: "s1",
+      messages: [],
+      ui_messages: [uiMessage({
+        id: "ui-deduped-media",
+        parts: [
+          { type: "text", text: `before\nMEDIA:${path}` },
+          { type: "video", url: path, title: "clip" },
+        ],
+      })],
+    });
+
+    expect(message?.parts.filter((part) => part.type === "video")).toHaveLength(1);
+  });
+
+  it("renders stored MEDIA image and video tags without leaking path directives into text", () => {
+    const [message] = storedMessagesToChatMessages([
+      sessionMessage({
+        content: [
+          "文件已经生成。",
+          "MEDIA:C:\\Users\\TU\\Desktop\\result.png",
+          "MEDIA:C:\\Users\\TU\\Desktop\\result.mp4",
+        ].join("\n"),
+      }),
+    ]);
+
+    expect(message?.text).toBe("文件已经生成。");
+    expect(message?.blocks?.map((block) => block.type)).toEqual(["text", "image", "video"]);
+    expect(message?.images?.[0]?.url).toBe("C:\\Users\\TU\\Desktop\\result.png");
+    expect(message?.videos?.[0]?.url).toBe("C:\\Users\\TU\\Desktop\\result.mp4");
+  });
+
+  it("preserves text, image, video, text order from structured history", () => {
+    const [message] = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({
+        content: JSON.stringify([
+          { type: "text", text: "before" },
+          { type: "image", url: "C:\\media\\first.png", alt: "first" },
+          { type: "video", url: "C:\\media\\clip.mp4", title: "clip" },
+          { type: "text", text: "after" },
+        ]),
+      }),
+    ]);
+
+    expect(message?.parts).toEqual([
+      { type: "text", text: "before" },
+      expect.objectContaining({ type: "image", url: "C:\\media\\first.png" }),
+      expect.objectContaining({ type: "video", url: "C:\\media\\clip.mp4" }),
+      { type: "text", text: "after" },
+    ]);
+  });
+
+  it("maps canonical camelCase imageUrl and videoUrl parts into chat media", () => {
+    const message = hermesUIMessageToChatMessage(uiMessage({
+      parts: [
+        {
+          type: "image",
+          imageUrl: { url: "https://example.test/camel-case.png" },
+          title: "Camel case image",
+        },
+        {
+          type: "video",
+          videoUrl: { url: "https://example.test/camel-case.mp4" },
+          title: "Camel case video",
+        },
+      ],
+    }));
+
+    expect(message?.images).toEqual([
+      expect.objectContaining({
+        url: "https://example.test/camel-case.png",
+        title: "Camel case image",
+      }),
+    ]);
+    expect(message?.videos).toEqual([
+      expect.objectContaining({
+        url: "https://example.test/camel-case.mp4",
+        title: "Camel case video",
+      }),
+    ]);
+    expect(message?.blocks).toEqual([
+      expect.objectContaining({
+        type: "image",
+        image: expect.objectContaining({
+          url: "https://example.test/camel-case.png",
+        }),
+      }),
+      expect.objectContaining({
+        type: "video",
+        video: expect.objectContaining({
+          url: "https://example.test/camel-case.mp4",
+        }),
+      }),
+    ]);
   });
 
   it("hides image transport context when rendering stored user prompts", () => {

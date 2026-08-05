@@ -15,6 +15,11 @@ import {
   dedupeImageParts,
   imagePartFromSource,
 } from "@/lib/message-images";
+import {
+  dedupeVideoParts,
+  expandMediaDirectives,
+  videoPartFromSource,
+} from "@/lib/message-media";
 import { notifyFromGatewayEvent } from "@/lib/notifications";
 import { resolvePersistentSessionId } from "@/lib/session-map";
 import { recordUiTurnStats, stableTextHash } from "@/lib/ui-store";
@@ -41,11 +46,19 @@ export interface ImageEntry {
   mimeType?: string;
 }
 
+export interface VideoEntry {
+  url?: string;
+  title?: string;
+  name?: string;
+  mimeType?: string;
+}
+
 export type AssistantTurnBlock =
   | { type: "text"; text: string }
   | { type: "reasoning"; text: string }
   | { type: "progress"; text: string }
   | { type: "image"; image: ImageEntry }
+  | { type: "video"; video: VideoEntry }
   | { type: "tool"; tool: ToolEntry }
   | { type: "moa_reference"; label: string; text: string; index?: number; count?: number };
 
@@ -204,7 +217,9 @@ function imagePartsFromPayload(payload: Record<string, any>): HermesMessagePart[
       ? [payload.image]
       : payload.image_url !== undefined
         ? [payload.image_url]
-        : [];
+        : payload.imageUrl !== undefined
+          ? [payload.imageUrl]
+          : [];
 
   return dedupeImageParts(
     sources.flatMap((source: unknown, index: number) => {
@@ -214,33 +229,77 @@ function imagePartsFromPayload(payload: Record<string, any>): HermesMessagePart[
   );
 }
 
+function videoPartsFromPayload(payload: Record<string, any>): HermesMessagePart[] {
+  const sources = Array.isArray(payload.videos)
+    ? payload.videos
+    : payload.video !== undefined
+      ? [payload.video]
+      : payload.video_url !== undefined
+        ? [payload.video_url]
+        : payload.videoUrl !== undefined
+          ? [payload.videoUrl]
+          : [];
+
+  return dedupeVideoParts(
+    sources.flatMap((source: unknown, index: number) => {
+      const part = videoPartFromSource(source, `video-${index + 1}`);
+      return part ? [part] : [];
+    }),
+  );
+}
+
 function appendImageParts(parts: HermesMessagePart[], images: HermesMessagePart[]): HermesMessagePart[] {
   if (!images.length) return parts;
-  const progressIndex = parts.findIndex((part) => part.type === "progress");
-  const base = progressIndex === -1
-    ? parts
-    : [...parts.slice(0, progressIndex), ...parts.slice(progressIndex + 1)];
-  const currentImages = base.filter((part): part is Extract<HermesMessagePart, { type: "image" }> =>
+  const currentImages = parts.filter((part): part is Extract<HermesMessagePart, { type: "image" }> =>
     part.type === "image"
   );
   const nextImages = dedupeImageParts([
     ...currentImages,
     ...images.filter((part): part is Extract<HermesMessagePart, { type: "image" }> => part.type === "image"),
   ]);
-  const imageKeys = new Set(nextImages.map((part) => part.url || part.path || part.name || part.alt).filter(Boolean));
-  const withoutDuplicateImages = base.filter((part) => {
-    if (part.type !== "image") return true;
+  const existingKeys = new Set(
+    currentImages.map((part) => part.url || part.path || part.name || part.alt).filter(Boolean),
+  );
+  const additions = nextImages.filter((part) => {
     const key = part.url || part.path || part.name || part.alt;
-    return !key || !imageKeys.has(key);
+    return Boolean(key && !existingKeys.has(key));
   });
-  const merged = [...withoutDuplicateImages, ...nextImages];
-  return progressIndex === -1
-    ? merged
-    : [
-      ...merged.slice(0, progressIndex),
-      parts[progressIndex]!,
-      ...merged.slice(progressIndex),
-    ];
+  return insertBeforeProgress(parts, additions);
+}
+
+function appendVideoParts(parts: HermesMessagePart[], videos: HermesMessagePart[]): HermesMessagePart[] {
+  if (!videos.length) return parts;
+  const current = parts.filter(
+    (part): part is Extract<HermesMessagePart, { type: "video" }> => part.type === "video",
+  );
+  const next = dedupeVideoParts([
+    ...current,
+    ...videos.filter(
+      (part): part is Extract<HermesMessagePart, { type: "video" }> => part.type === "video",
+    ),
+  ]);
+  const existingKeys = new Set(
+    current.map((part) => part.url || part.path || part.name || part.title).filter(Boolean),
+  );
+  const additions = next.filter((part) => {
+    const key = part.url || part.path || part.name || part.title;
+    return Boolean(key && !existingKeys.has(key));
+  });
+  return insertBeforeProgress(parts, additions);
+}
+
+function insertBeforeProgress(
+  parts: HermesMessagePart[],
+  additions: HermesMessagePart[],
+): HermesMessagePart[] {
+  if (!additions.length) return parts;
+  const progressIndex = parts.findIndex((part) => part.type === "progress");
+  if (progressIndex === -1) return [...parts, ...additions];
+  return [
+    ...parts.slice(0, progressIndex),
+    ...additions,
+    ...parts.slice(progressIndex),
+  ];
 }
 
 function terminateRunningTools(parts: HermesMessagePart[]): HermesMessagePart[] {
@@ -549,7 +608,9 @@ function finalizeAssistantParts(
   if (finalReasoning) {
     parts = upsertReasoningPart(parts, finalReasoning);
   }
+  parts = expandMediaDirectives(parts);
   parts = appendImageParts(parts, imagePartsFromPayload(payload));
+  parts = appendVideoParts(parts, videoPartsFromPayload(payload));
 
   return parts;
 }
@@ -614,10 +675,11 @@ function reduceGatewayEventInner(
     case "message.delta": {
       const text = typeof payload.text === "string" ? payload.text : "";
       const images = imagePartsFromPayload(payload);
+      const videos = videoPartsFromPayload(payload);
       // Empty delta must not create an assistant message block — it's a
       // no-op that prevents "重复发送3条空消息".  The backend may
       // emit empty-string deltas during reasoning↔content transitions.
-      if (!text && images.length === 0) return runtime;
+      if (!text && images.length === 0 && videos.length === 0) return runtime;
       const id = activeAssistantId(runtime, now);
       const next = updateActiveAssistant(
         clearProviderStatus({
@@ -633,7 +695,10 @@ function reduceGatewayEventInner(
         (message) => ({
           ...message,
           status: "streaming",
-          parts: appendImageParts(appendTextPart(message.parts, text), images),
+          parts: appendVideoParts(
+            appendImageParts(appendTextPart(message.parts, text), images),
+            videos,
+          ),
         }),
       );
       return next;
@@ -1168,11 +1233,12 @@ export const appendNoticeAtom = atom(
   },
 );
 
-function textForStatsHash(message: HermesUIMessage): string {
+export function textForStatsHash(message: HermesUIMessage): string {
   return message.parts
     .flatMap((part) => {
       if (part.type === "text" || part.type === "reasoning") return [part.text];
       if (part.type === "image") return [part.url, part.path, part.name, part.alt].filter(Boolean) as string[];
+      if (part.type === "video") return [part.url, part.path, part.name, part.title].filter(Boolean) as string[];
       if (part.type === "tool") {
         let output = "";
         if (typeof part.output === "string") {

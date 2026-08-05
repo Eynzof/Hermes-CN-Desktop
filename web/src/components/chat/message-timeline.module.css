@@ -429,7 +429,9 @@
 }
 
 .imageBlock,
+.videoBlock,
 .messageImages,
+.messageVideos,
 .toolImages {
   display: flex;
   flex-wrap: wrap;
@@ -437,7 +439,8 @@
   margin: 8px 0;
 }
 
-.messageImages {
+.messageImages,
+.messageVideos {
   margin-top: 12px;
 }
 
@@ -448,14 +451,32 @@
   overflow: hidden;
   border: 1px solid var(--h-line-soft);
   border-radius: 0;
+  padding: 0;
   background: var(--h-bg-pane);
   color: inherit;
+  cursor: zoom-in;
+  font: inherit;
   text-decoration: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
 }
 
 .imageFrame:hover {
   border-color: color-mix(in srgb, var(--h-accent) 40%, var(--h-line-soft));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--h-color-ink-000) 14%, transparent);
+  transform: translateY(-4px);
   text-decoration: none;
+}
+
+.imageFrame:active {
+  transform: scale(0.985);
+}
+
+.imageFrame:focus-visible {
+  outline: 2px solid var(--h-accent);
+  outline-offset: 2px;
 }
 
 .imageFrame img {
@@ -463,9 +484,167 @@
   max-width: 100%;
   max-height: 360px;
   object-fit: contain;
+  transition: transform 180ms ease;
 }
 
-.imageFallback {
+.imageFrame:hover img {
+  transform: scale(1.015);
+}
+
+.imageLightboxOverlay {
+  background: color-mix(in srgb, var(--h-color-ink-000) 76%, transparent);
+  backdrop-filter: blur(8px) saturate(0.8);
+}
+
+.imageLightbox.imageLightbox {
+  width: fit-content;
+  max-width: 94vw;
+  height: auto;
+  max-height: 92vh;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.imageLightboxTitle,
+.imageLightboxDescription {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.imageLightboxClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 0;
+  background: rgb(20 22 25 / 62%);
+  color: rgb(255 255 255 / 88%);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 22%);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.imageLightboxClose:hover {
+  border-color: rgb(255 255 255 / 28%);
+  background: rgb(20 22 25 / 82%);
+  color: white;
+  transform: scale(1.06);
+}
+
+.imageLightboxClose:active {
+  transform: scale(0.94);
+}
+
+.imageLightboxCanvas {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0;
+  background: rgb(12 14 17 / 72%);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 38%);
+}
+
+.imageLightboxCanvas img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 94vw;
+  max-height: 92vh;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.imageLightboxFooter {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  max-width: calc(100% - 32px);
+  align-items: center;
+  gap: 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 0;
+  padding: 8px 8px 8px 12px;
+  background: rgb(20 22 25 / 68%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 24%);
+  color: rgb(255 255 255 / 88%);
+  backdrop-filter: blur(14px);
+  font-size: 12px;
+}
+
+.imageLightboxFooter span {
+  min-width: 0;
+  max-width: min(48vw, 520px);
+  overflow: hidden;
+  color: rgb(255 255 255 / 72%);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imageLightboxFooter button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 12px;
+  background: rgb(255 255 255 / 13%);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.imageLightboxFooter button:hover {
+  background: rgb(255 255 255 / 22%);
+  transform: translateY(-4px);
+}
+
+.imageLightboxFooter button:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.videoFrame {
+  display: flex;
+  width: min(100%, 640px);
+  max-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 0;
+  background: var(--h-bg-code);
+}
+
+.videoFrame video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+
+.imageFallback,
+.videoFallback {
   display: inline-grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
@@ -479,30 +658,58 @@
   line-height: 1.45;
 }
 
-.imageFallback svg {
+.imageFallback svg,
+.videoFallback svg {
   margin-top: 4px;
   color: var(--h-text-3);
 }
 
-.imageFallbackBody {
+.imageFallbackBody,
+.videoFallbackBody {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.imageFallbackTitle {
+.imageFallbackTitle,
+.videoFallbackTitle {
   color: var(--h-text);
   font-size: 13px;
   font-weight: 600;
 }
 
-.imageFallbackMeta {
+.imageFallbackMeta,
+.videoFallbackMeta {
   color: var(--h-text-2);
   font-size: 12px;
 }
 
-.imageFallback code {
+.videoFallbackActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.videoFallbackActions button {
+  appearance: none;
+  border: 1px solid var(--h-line);
+  border-radius: 0;
+  padding: 4px 8px;
+  background: var(--h-bg-pane);
+  color: var(--h-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.videoFallbackActions button:hover {
+  border-color: var(--h-accent);
+  color: var(--h-accent);
+}
+
+.imageFallback code,
+.videoFallback code {
   align-self: flex-start;
   max-width: 100%;
   overflow: hidden;
@@ -538,15 +745,23 @@
 .turnText + .progressBlock,
 .turnText + .toolChain,
 .turnText + .imageBlock,
+.turnText + .videoBlock,
 .imageBlock + .turnText,
+.videoBlock + .turnText,
 .imageBlock + .toolChain,
+.videoBlock + .toolChain,
 .imageBlock + .progressBlock,
+.videoBlock + .progressBlock,
 .imageBlock + .reasoning,
+.videoBlock + .reasoning,
 .reasoning + .toolChain,
 .reasoning + .turnText,
 .toolChain + .progressBlock,
 .toolChain + .turnText,
-.toolChain + .imageBlock {
+.toolChain + .imageBlock,
+.toolChain + .videoBlock,
+.imageBlock + .videoBlock,
+.videoBlock + .imageBlock {
   margin-top: 12px;
 }
 

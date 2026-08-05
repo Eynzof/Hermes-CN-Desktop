@@ -222,6 +222,31 @@ export const HermesImageSource = z.union([
 ]);
 export type HermesImageSource = z.infer<typeof HermesImageSource>;
 
+export const HermesVideoSource = z.union([
+  z.string(),
+  z
+    .object({
+      url: z.string().optional(),
+      src: z.string().optional(),
+      path: z.string().optional(),
+      data: z.string().optional(),
+      video_url: z.unknown().optional(),
+      videoUrl: z.unknown().optional(),
+      title: z.string().optional(),
+      name: z.string().optional(),
+      filename: z.string().optional(),
+      file_name: z.string().optional(),
+      mimeType: z.string().optional(),
+      mime_type: z.string().optional(),
+      mediaType: z.string().optional(),
+      contentType: z.string().optional(),
+      content_type: z.string().optional(),
+      is_video: z.boolean().optional(),
+    })
+    .passthrough(),
+]);
+export type HermesVideoSource = z.infer<typeof HermesVideoSource>;
+
 const MessageContent = z.unknown().transform(stringifyMessageContent);
 
 export const SessionDetail = SessionSummary.extend({
@@ -252,6 +277,7 @@ export const SessionMessage = z.object({
   role: z.string(),
   content: MessageContent,
   images: z.array(HermesImageSource).optional(),
+  videos: z.array(HermesVideoSource).optional(),
   // The nullable metadata columns below mirror the backend's `SELECT *` off
   // the messages table. They are also `.optional()` on purpose: upstream adds
   // and (rarely) drops columns across releases, and a "required but nullable"
@@ -349,6 +375,28 @@ const HermesImageMessagePart = z
   })
   .passthrough();
 
+const HermesVideoMessagePart = z
+  .object({
+    type: z.literal("video"),
+    url: z.string().optional(),
+    src: z.string().optional(),
+    path: z.string().optional(),
+    data: z.string().optional(),
+    video_url: z.unknown().optional(),
+    videoUrl: z.unknown().optional(),
+    title: z.string().optional(),
+    name: z.string().optional(),
+    filename: z.string().optional(),
+    file_name: z.string().optional(),
+    mimeType: z.string().optional(),
+    mime_type: z.string().optional(),
+    mediaType: z.string().optional(),
+    contentType: z.string().optional(),
+    content_type: z.string().optional(),
+    is_video: z.boolean().optional(),
+  })
+  .passthrough();
+
 const HermesToolMessagePart = z
   .object({
     type: z.literal("tool"),
@@ -386,6 +434,7 @@ export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesReasoningMessagePart,
   HermesProgressMessagePart,
   HermesImageMessagePart,
+  HermesVideoMessagePart,
   HermesToolMessagePart,
   HermesNoticeMessagePart,
   HermesMoaReferenceMessagePart,

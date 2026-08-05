@@ -51,5 +51,10 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "dompurify": "3.4.13"
+    }
   }
 }
