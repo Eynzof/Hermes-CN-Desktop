@@ -84,7 +84,19 @@ export function writeEnterpriseSyncMeta(meta: EnterpriseSyncMeta | null): void {
 }
 
 export function enterpriseProviderId(workbuddyId: string): string {
-  return `${ENTERPRISE_PROVIDER_PREFIX}${workbuddyId}`;
+  let slug = "";
+  let pendingDash = false;
+  for (const ch of workbuddyId.trim()) {
+    const allowed = /[a-z0-9_]/i.test(ch) ? ch.toLowerCase() : "";
+    if (allowed) {
+      if (pendingDash && slug) slug += "-";
+      pendingDash = false;
+      slug += allowed;
+    } else {
+      pendingDash = true;
+    }
+  }
+  return `${ENTERPRISE_PROVIDER_PREFIX}${slug || "unnamed"}`;
 }
 
 function usesAnthropicMessages(model: EnterpriseModel): boolean {
@@ -140,6 +152,10 @@ function asRecord(value: unknown): Record<string, any> {
 }
 
 /**
+ * @deprecated Kept as a pure compatibility helper for older callers/tests.
+ * Desktop production writes go through Rust `set_team_device_token`, which
+ * owns the manifest fetch and model_registry update.
+ *
  * 把下发清单应用到 Core config（纯函数，可单测）：
  * - cleanupOnly → 删除全部 custom:team-* providers；
  * - 否则 upsert 清单内模型、删除已不在清单里的 team providers；

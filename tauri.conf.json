@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
-  "productName": "FrogClawHermes Desktop",
+  "productName": "FengchiHermes Desktop",
   "mainBinaryName": "hermesagent",
   "version": "0.6.9-rc.7",
   "identifier": "cn.org.hermesagent.desktop",
@@ -41,12 +41,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "FrogClawHermes",
-    "homepage": "https://frogclaw.com",
-    "copyright": "Copyright © 2026 FrogClawHermes",
+    "publisher": "FengchiHermes",
+    "homepage": "https://ai.fengchiyun.com",
+    "copyright": "Copyright © 2026 FengchiHermes",
     "category": "DeveloperTool",
-    "shortDescription": "FrogClawHermes AI Assistant Desktop",
-    "longDescription": "Desktop app for FrogClaw AI Assistant.",
+    "shortDescription": "FengchiHermes AI Assistant Desktop",
+    "longDescription": "Desktop app for FengchiHermes AI Assistant.",
     "licenseFile": "legal/EULA.zh-CN.rtf",
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",

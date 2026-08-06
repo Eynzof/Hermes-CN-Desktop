@@ -231,6 +231,14 @@ fn main() {
 
             let boot_home_str = boot_home.to_string_lossy().to_string();
 
+            if let Err(error) = hermes_agent_cn::model_registry::migrate_profile_home(
+                &boot_home,
+                hermes_agent_cn::brand_generated::BRAND_PROVIDER_KEY,
+                hermes_agent_cn::brand_generated::BRAND_ACCOUNT_DEFAULT_MODELS,
+            ) {
+                log::warn!("model provider migration failed: {error}");
+            }
+
             // 3. Resolve host/port
             let host = std::env::var("HERMES_DESKTOP_API_HOST")
                 .unwrap_or_else(|_| "127.0.0.1".to_string());
@@ -531,6 +539,8 @@ fn main() {
             commands::account::account_save_credentials,
             commands::account::account_has_saved_credentials,
             commands::account::account_clear_credentials,
+            hermes_agent_cn::model_registry::save_user_provider,
+            hermes_agent_cn::model_registry::delete_user_provider,
             commands::backup::backup_export_profile,
             commands::backup::backup_import_profile,
             commands::config_migration::config_migration_scan,

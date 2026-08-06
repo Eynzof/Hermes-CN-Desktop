@@ -1,5 +1,5 @@
-import { BRAND } from "./brand.generated";
 import { ENTERPRISE_PROVIDER_PREFIX } from "./enterprise-sync";
+import { BRAND } from "./brand.generated";
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -20,10 +20,23 @@ function gatewayProviderIdFromDisplayName(value: unknown): string {
   return name ? `custom:${name.replaceAll(" ", "-")}` : "";
 }
 
-const CURRENT_ACCOUNT_PROVIDER_IDS = new Set([
-  `custom:${BRAND.providerKey}`.toLowerCase(),
-  `custom:${BRAND.providerKey}-messages`.toLowerCase(),
-]);
+const MANAGED_PROVIDER_PREFIXES = [
+  "custom:acct-",
+  ENTERPRISE_PROVIDER_PREFIX,
+  "custom:user-",
+] as const;
+
+const LEGACY_BRAND_PROVIDER_IDS = new Set(
+  BRAND.knownBrandProviderKeys.flatMap((providerKey) => [
+    `custom:${providerKey}`,
+    `custom:${providerKey}-messages`,
+  ]),
+);
+
+/** Legacy account providers created by any packaged desktop brand. */
+export function isLegacyBrandModelProvider(providerId: string): boolean {
+  return LEGACY_BRAND_PROVIDER_IDS.has(normalizedProviderId(providerId));
+}
 
 /** Providers written by account/device provisioning are not user custom models. */
 export function isManagedModelProvider(
@@ -32,11 +45,11 @@ export function isManagedModelProvider(
 ): boolean {
   const id = normalizedProviderId(providerId);
   const entry = asRecord(rawEntry);
-  return id.startsWith(ENTERPRISE_PROVIDER_PREFIX)
-    || CURRENT_ACCOUNT_PROVIDER_IDS.has(id)
-    || entry.team_managed === true
-    || typeof entry.token_id === "number"
-    || typeof entry.tokenId === "number";
+  return MANAGED_PROVIDER_PREFIXES.some((prefix) => id.startsWith(prefix))
+    || isLegacyBrandModelProvider(id)
+    // Keep recognizing old team entries long enough for the startup migration
+    // to hide them from the picker while config.yaml is being repaired.
+    || entry.team_managed === true;
 }
 
 /**
@@ -50,7 +63,14 @@ export function savedCustomProviderIdsFromConfig(
 
   for (const [providerId, rawEntry] of Object.entries(asRecord(config?.providers))) {
     const id = normalizedProviderId(providerId);
-    if (!id || isManagedModelProvider(id, rawEntry)) continue;
+    if (!id) continue;
+    // custom:user-* is registry-managed for persistence, but it is still a
+    // user-visible custom model and must remain in the picker.
+    if (id.startsWith("custom:user-")) {
+      ids.add(id);
+      continue;
+    }
+    if (isManagedModelProvider(id, rawEntry)) continue;
     ids.add(id);
   }
 
@@ -58,7 +78,12 @@ export function savedCustomProviderIdsFromConfig(
   for (const rawEntry of legacy) {
     const entry = asRecord(rawEntry);
     const id = normalizedProviderId(entry.provider_key ?? entry.name);
-    if (!id || isManagedModelProvider(id, entry)) continue;
+    if (!id) continue;
+    if (id.startsWith("custom:user-")) {
+      ids.add(id);
+      continue;
+    }
+    if (isManagedModelProvider(id, entry)) continue;
     ids.add(id);
   }
 
@@ -68,10 +93,8 @@ export function savedCustomProviderIdsFromConfig(
 /**
  * Gateway provider IDs that belong to Team-managed configuration.
  *
- * Rust persists stable provider_key values such as `team-mdl_*`, while Core's
- * model.options response derives the visible slug from the friendly `name`
- * (for example `custom:rightcodegpt`). Keep both identities so the composer
- * can classify the row as enterprise without changing its selectable slug.
+ * Managed provider ids are canonical and are returned by Core unchanged.
+ * Legacy team entries are still recognized during the one-time migration.
  */
 export function enterpriseProviderIdsFromConfig(
   config: Record<string, unknown> | undefined,
@@ -85,7 +108,7 @@ export function enterpriseProviderIdsFromConfig(
     if (id.startsWith(ENTERPRISE_PROVIDER_PREFIX) || entry.team_managed === true) {
       ids.add(id);
       const gatewayId = gatewayProviderIdFromDisplayName(entry.name);
-      if (gatewayId) ids.add(gatewayId);
+      if (gatewayId && entry.team_managed === true) ids.add(gatewayId);
     }
   };
 

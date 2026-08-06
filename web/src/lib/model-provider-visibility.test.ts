@@ -7,10 +7,16 @@ import {
 
 describe("savedCustomProviderIdsFromConfig", () => {
   it("keeps user entries and excludes account and Team-managed providers", () => {
+    const siblingBrandProviderKey = BRAND.knownBrandProviderKeys.find(
+      (providerKey) => providerKey !== BRAND.providerKey,
+    );
+    expect(siblingBrandProviderKey).toBeDefined();
+
     const ids = savedCustomProviderIdsFromConfig({
       providers: {
         "custom:my-endpoint": { base_url: "http://localhost:3000/v1" },
         [`custom:${BRAND.providerKey}`]: { base_url: "https://account.example/v1" },
+        [`custom:${siblingBrandProviderKey}`]: { base_url: "https://sibling.example/v1" },
         "custom:old-brand": { base_url: "https://old.example/v1", token_id: 7 },
       },
       custom_providers: [
@@ -28,6 +34,7 @@ describe("savedCustomProviderIdsFromConfig", () => {
 
     expect(Array.from(ids)).toEqual([
       "custom:my-endpoint",
+      "custom:old-brand",
       "custom:legacy-user",
     ]);
   });

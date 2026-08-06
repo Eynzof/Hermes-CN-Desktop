@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useActiveProfileName, useProfiles, useSetActiveProfile } from "@/hooks/use-profiles";
 import { useStatus } from "@/hooks/use-status";
+import { useAccountLogout, useAccountStatus } from "@/hooks/use-account";
 import { useModelInfo } from "@/hooks/use-config";
 import { useCommandPalette } from "@/components/command-palette";
 import { openSettingsDialogAtom } from "@/stores/settings-dialog";
@@ -59,6 +60,8 @@ export function AccountPopup() {
   const huanxingAccount = useAtomValue(huanxingAuthAtom);
   const gatewayConnection = useAtomValue(gwConnectionAtom);
   const setHuanxingAccount = useSetAtom(huanxingAuthAtom);
+  const accountLogout = useAccountLogout();
+  const { data: accountStatus } = useAccountStatus();
   const openAuthDialog = useSetAtom(authDialogOpenAtom);
   const openDeviceTokenDialog = useSetAtom(deviceTokenDialogOpenAtom);
 
@@ -66,6 +69,17 @@ export function AccountPopup() {
     if (!open) return;
     void getTeamDeviceTokenStatus().then(setTeamDevice).catch(() => setTeamDevice(null));
   }, [open]);
+
+  useEffect(() => {
+    const user = accountStatus?.user;
+    if (!user || huanxingAccount) return;
+    setHuanxingAccount({
+      serverUrl: accountStatus.serverUrl ?? "",
+      userId: user.id,
+      username: user.username,
+      displayName: user.displayName,
+    });
+  }, [accountStatus, huanxingAccount, setHuanxingAccount]);
 
   const dashboardUrl = dashboardUrlFromInputs({
     healthUrl: status?.gateway_health_url,
@@ -152,7 +166,11 @@ export function AccountPopup() {
                   type="button"
                   className={s.enterpriseLogout}
                   title="退出企业账号"
-                  onClick={() => setHuanxingAccount(null)}
+                  onClick={() => {
+                    void accountLogout.mutateAsync().catch(() => undefined).finally(() => {
+                      setHuanxingAccount(null);
+                    });
+                  }}
                 >
                   <LogOut size={13} />
                   退出登录

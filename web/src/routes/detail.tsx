@@ -600,7 +600,7 @@ export function DetailRoute() {
     if (!model) return null;
     return {
       model,
-      provider: modelInfo?.provider,
+      provider: modelInfo?.provider ?? "",
     };
   }, [model, modelInfo?.provider, selectedModel]);
   const selectedContextMax = useMemo(

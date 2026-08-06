@@ -66,6 +66,16 @@ import type {
   UiEventInput,
   UiStoreSnapshot,
   UiTurnStats,
+  AccountLoginInput,
+  AccountUser,
+  AccountStatusResult,
+  AccountSavedCredentialsInfo,
+  AccountSetupResult,
+  AccountTokenInfo,
+  AccountBalanceInfo,
+  AccountSaveModelsInput,
+  AccountTestModelResult,
+  UserProviderInput,
   WatchPreviewFileResult,
   WriteWorkspaceFileInput,
   WriteWorkspaceFileResult,
@@ -276,6 +286,49 @@ const tauriBridge = {
 
   async externalRequest(input: ApiRequestInput): Promise<ApiRequestResult> {
     return invokeCommand("external_request", { input });
+  },
+
+  async accountLogin(input: AccountLoginInput): Promise<AccountUser> {
+    return invokeCommand("account_login", { input });
+  },
+  async accountStatus(): Promise<AccountStatusResult> {
+    return invokeCommand("account_status");
+  },
+  async accountFetchSetup(): Promise<AccountSetupResult> {
+    return invokeCommand("account_fetch_setup");
+  },
+  async accountListTokens(): Promise<AccountTokenInfo[]> {
+    return invokeCommand("account_list_tokens");
+  },
+  async accountBalance(): Promise<AccountBalanceInfo> {
+    return invokeCommand("account_balance");
+  },
+  async accountSaveModels(input: AccountSaveModelsInput): Promise<AccountStatusResult> {
+    return invokeCommand("account_save_models", { input });
+  },
+  async accountTestModel(modelId: string): Promise<AccountTestModelResult> {
+    return invokeCommand("account_test_model", { modelId });
+  },
+  async accountLogout(): Promise<AccountStatusResult> {
+    return invokeCommand("account_logout");
+  },
+  async accountSaveCredentials(input: AccountLoginInput): Promise<void> {
+    return invokeCommand("account_save_credentials", { input });
+  },
+  async accountHasSavedCredentials(): Promise<AccountSavedCredentialsInfo> {
+    return invokeCommand("account_has_saved_credentials");
+  },
+  async accountLoginSaved(): Promise<AccountUser> {
+    return invokeCommand("account_login_saved");
+  },
+  async accountClearCredentials(): Promise<void> {
+    return invokeCommand("account_clear_credentials");
+  },
+  async saveUserProvider(input: UserProviderInput): Promise<string> {
+    return invokeCommand("save_user_provider", { input });
+  },
+  async deleteUserProvider(providerId: string): Promise<void> {
+    return invokeCommand("delete_user_provider", { providerId });
   },
 
   async uploadFile(input: FileUploadInput): Promise<ApiRequestResult> {

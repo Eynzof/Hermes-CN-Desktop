@@ -24,6 +24,8 @@
 //!    provider id。写成标量会让 Core 的 `_get_model_config()` 退化成
 //!    `{"default": <str>}` 并丢掉 provider/base_url/api_key。
 
+use std::collections::HashSet;
+
 use serde_yaml::{Mapping, Value};
 
 /// 受管命名空间。每类模型独占一个前缀，分类因此是纯前缀判断。
@@ -326,27 +328,45 @@ pub fn migrate_legacy_config(config: &mut Value, brand_provider_key: &str) -> bo
     };
     let mut changed = false;
 
-    // 1. 摘掉旧 team_managed 列表条目。新写入方会用 providers: map 重建它们，
-    //    所以这里只删不转——保留会变成重复 provider。
-    if let Some(seq) = root
-        .get_mut("custom_providers")
-        .and_then(Value::as_sequence_mut)
-    {
-        let before = seq.len();
-        seq.retain(|entry| {
-            let team_managed = entry.get("team_managed").and_then(Value::as_bool) == Some(true);
-            let legacy_key = entry
+    // 1. Move old team_managed list entries into the canonical providers map.
+    // The old list used a display-name slug and could not round-trip. Preserve
+    // the useful credentials/model fields while assigning a stable team id.
+    if let Some(Value::Sequence(entries)) = root.remove("custom_providers") {
+        let mut keep = Vec::new();
+        let mut providers = match root.remove("providers") {
+            Some(Value::Mapping(map)) => map,
+            _ => Mapping::new(),
+        };
+        for entry in entries {
+            let Some(mut map) = entry.as_mapping().cloned() else {
+                keep.push(entry);
+                continue;
+            };
+            let legacy_key = map
                 .get("provider_key")
                 .and_then(Value::as_str)
-                .is_some_and(|key| key.starts_with("team-"));
-            !(team_managed || legacy_key)
-        });
-        if seq.len() != before {
+                .unwrap_or("");
+            let managed = map.get("team_managed").and_then(Value::as_bool) == Some(true)
+                || legacy_key.to_ascii_lowercase().starts_with("team-");
+            if !managed {
+                keep.push(Value::Mapping(map));
+                continue;
+            }
+            let raw_model = map
+                .get("model")
+                .and_then(Value::as_str)
+                .or_else(|| map.get("name").and_then(Value::as_str))
+                .unwrap_or(legacy_key);
+            let id = managed_provider_id(ManagedNamespace::Team, raw_model);
+            map.insert("provider_key".into(), id.clone().into());
+            map.insert("team_managed".into(), true.into());
+            providers.insert(id.into(), Value::Mapping(map));
             changed = true;
         }
-        if seq.is_empty() {
-            root.remove("custom_providers");
+        if !keep.is_empty() {
+            root.insert("custom_providers".into(), Value::Sequence(keep));
         }
+        root.insert("providers".into(), Value::Mapping(providers));
     }
 
     // 2. 删掉旧账号 provider。它们的 api_key 归属上一个登录用户，且本分支上
@@ -370,14 +390,367 @@ pub fn migrate_legacy_config(config: &mut Value, brand_provider_key: &str) -> bo
         }
     }
 
-    // 3. 标量 model: 一律丢弃。值通常是个 provider id，Core 会把它当模型名，
-    //    于是每个回落到全局默认的会话都进猜测链路。
-    if matches!(root.get("model"), Some(Value::String(_))) {
+    // 3. Scalar model values lose provider/base_url/api_key in Core. Convert
+    // them to the mapping form. When the scalar is a legacy provider id, use
+    // that provider's declared model; otherwise retain it as a plain default
+    // so a user-selected built-in model is not silently discarded.
+    let scalar_model = root.get("model").cloned();
+    if let Some(Value::String(raw)) = scalar_model {
         root.remove("model");
+        let mut model_cfg = Mapping::new();
+        let mut provider_match: Option<(String, String)> = None;
+        if let Some(providers) = root.get("providers").and_then(Value::as_mapping) {
+            for (key, value) in providers {
+                let Some(key_str) = key.as_str() else {
+                    continue;
+                };
+                let matches_id = key_str.eq_ignore_ascii_case(&raw)
+                    || key_str.eq_ignore_ascii_case(raw.strip_prefix("custom:").unwrap_or(""));
+                let declared = value.get("model").and_then(Value::as_str).unwrap_or("");
+                if matches_id {
+                    provider_match = Some((key_str.to_string(), declared.to_string()));
+                    break;
+                }
+            }
+        }
+        if let Some((provider, declared)) = provider_match {
+            model_cfg.insert("provider".into(), provider.into());
+            model_cfg.insert(
+                "default".into(),
+                if declared.is_empty() {
+                    raw.clone()
+                } else {
+                    declared
+                }
+                .into(),
+            );
+        } else {
+            model_cfg.insert("default".into(), raw.into());
+        }
+        root.insert("model".into(), Value::Mapping(model_cfg));
         changed = true;
     }
 
     changed
+}
+
+/// Converge the active brand's account providers to its JSON model allowlist.
+/// Other managed namespaces and user-written providers are left untouched.
+pub fn retain_brand_account_models(
+    config: &mut Value,
+    brand_provider_key: &str,
+    allowed_models: &[&str],
+) -> bool {
+    let account_ids = [
+        managed_provider_id(ManagedNamespace::Account, brand_provider_key),
+        managed_provider_id(
+            ManagedNamespace::Account,
+            &format!("{brand_provider_key}-messages"),
+        ),
+    ];
+    let allowed: HashSet<&str> = allowed_models.iter().copied().collect();
+    let Some(root) = config.as_mapping_mut() else {
+        return false;
+    };
+    let Some(providers) = root.get_mut("providers").and_then(Value::as_mapping_mut) else {
+        return false;
+    };
+
+    let mut changed = false;
+    let mut remove = Vec::new();
+    let mut retained_by_provider: Vec<(String, Vec<String>, Value)> = Vec::new();
+
+    for provider_id in &account_ids {
+        let key = Value::from(provider_id.as_str());
+        let Some(entry) = providers.get_mut(&key) else {
+            continue;
+        };
+        let Some(entry_map) = entry.as_mapping_mut() else {
+            continue;
+        };
+
+        let mut retained = Vec::new();
+        if let Some(models) = entry_map.get_mut("models").and_then(Value::as_mapping_mut) {
+            let stale: Vec<Value> = models
+                .keys()
+                .filter(|model| model.as_str().is_none_or(|model| !allowed.contains(model)))
+                .cloned()
+                .collect();
+            for model in stale {
+                models.remove(&model);
+                changed = true;
+            }
+            retained.extend(
+                allowed_models
+                    .iter()
+                    .filter(|allowed_model| models.contains_key(Value::from(**allowed_model)))
+                    .map(|allowed_model| (*allowed_model).to_string()),
+            );
+        } else if let Some(model) = entry_map.get("model").and_then(Value::as_str) {
+            if allowed.contains(model) {
+                retained.push(model.to_string());
+            }
+        }
+
+        if retained.is_empty() {
+            remove.push(key);
+            changed = true;
+            continue;
+        }
+
+        let current = entry_map.get("model").and_then(Value::as_str);
+        if current.is_none_or(|model| !retained.iter().any(|allowed| allowed == model)) {
+            entry_map.insert("model".into(), retained[0].clone().into());
+            changed = true;
+        }
+        retained_by_provider.push((provider_id.clone(), retained, entry.clone()));
+    }
+
+    for key in remove {
+        providers.remove(&key);
+    }
+
+    let current_account_default = root
+        .get("model")
+        .and_then(Value::as_mapping)
+        .and_then(|model| {
+            Some((
+                model.get("provider")?.as_str()?.to_string(),
+                model.get("default")?.as_str()?.to_string(),
+            ))
+        })
+        .filter(|(provider, _)| account_ids.contains(provider));
+
+    if let Some((current_provider, current_model)) = current_account_default {
+        let valid = retained_by_provider.iter().any(|(provider, models, _)| {
+            provider == &current_provider && models.contains(&current_model)
+        });
+        if !valid {
+            let replacement = allowed_models.iter().find_map(|allowed_model| {
+                retained_by_provider
+                    .iter()
+                    .find_map(|(provider, models, entry)| {
+                        models.iter().any(|model| model == allowed_model).then(|| {
+                            (
+                                provider.clone(),
+                                (*allowed_model).to_string(),
+                                entry.clone(),
+                            )
+                        })
+                    })
+            });
+            if let Some((provider, model, entry)) = replacement {
+                let model_config = root
+                    .get_mut("model")
+                    .and_then(Value::as_mapping_mut)
+                    .expect("account default was read from a mapping");
+                model_config.insert("provider".into(), provider.into());
+                model_config.insert("default".into(), model.into());
+                model_config.remove("model");
+                for field in ["base_url", "api_mode", "api_key"] {
+                    if let Some(value) = entry.get(field).cloned() {
+                        model_config.insert(field.into(), value);
+                    }
+                }
+            } else {
+                root.remove("model");
+            }
+            changed = true;
+        }
+    }
+
+    changed
+}
+
+/// Upsert a single managed provider without clearing the rest of its
+/// namespace. This is used by the user-custom-model command; sync sources use
+/// `apply_managed_providers` because their manifest is authoritative.
+pub fn upsert_managed_provider(
+    config: &mut Value,
+    provider: &ManagedProvider,
+) -> Result<(), String> {
+    let root =
+        as_mapping_mut(config).ok_or_else(|| "config.yaml root must be an object".to_string())?;
+    let mut providers = root
+        .remove("providers")
+        .unwrap_or_else(|| Value::Mapping(Mapping::new()));
+    let map = providers
+        .as_mapping_mut()
+        .ok_or_else(|| "providers must be a mapping".to_string())?;
+    map.insert(provider.id.clone().into(), provider_entry(provider));
+    root.insert("providers".into(), providers);
+    Ok(())
+}
+
+pub fn delete_managed_provider(
+    config: &mut Value,
+    provider_id: &str,
+    namespace: ManagedNamespace,
+) -> Result<(), String> {
+    let root =
+        as_mapping_mut(config).ok_or_else(|| "config.yaml root must be an object".to_string())?;
+    let Some(providers) = root.get_mut("providers").and_then(Value::as_mapping_mut) else {
+        return Ok(());
+    };
+    if ManagedNamespace::classify(provider_id) != Some(namespace) {
+        return Err("provider is outside the requested managed namespace".into());
+    }
+    providers.remove(provider_id);
+    clear_default_model_if_managed(config, &[namespace]);
+    Ok(())
+}
+
+/// Run the migration once for a profile before the dashboard starts. The
+/// marker is deliberately scoped to the profile home so switching profiles
+/// cannot skip migration for a different config tree.
+pub fn migrate_profile_home(
+    home: &std::path::Path,
+    brand_provider_key: &str,
+    allowed_account_models: &[&str],
+) -> Result<bool, String> {
+    use std::fs;
+    let marker = home.join(".model-registry-v2");
+    if marker.is_file() {
+        return Ok(false);
+    }
+    let path = home.join("config.yaml");
+    if !path.is_file() {
+        fs::create_dir_all(home).map_err(|e| e.to_string())?;
+        fs::write(&marker, b"1\n").map_err(|e| e.to_string())?;
+        return Ok(false);
+    }
+    let mut config: Value = serde_yaml::from_slice(&fs::read(&path).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("parse config.yaml: {e}"))?;
+    let mut changed = migrate_legacy_config(&mut config, brand_provider_key);
+    changed |= retain_brand_account_models(&mut config, brand_provider_key, allowed_account_models);
+    if changed {
+        let output = serde_yaml::to_string(&config).map_err(|e| e.to_string())?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| "invalid config path".to_string())?;
+        let tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+        use std::io::Write;
+        tmp.as_file()
+            .write_all(output.as_bytes())
+            .map_err(|e| e.to_string())?;
+        tmp.persist(&path).map_err(|e| e.error.to_string())?;
+    }
+    fs::write(&marker, b"1\n").map_err(|e| e.to_string())?;
+    Ok(changed)
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProviderInput {
+    #[serde(default)]
+    pub previous_id: Option<String>,
+    pub name: String,
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    pub model: String,
+    #[serde(default)]
+    pub anthropic_messages: bool,
+    #[serde(default)]
+    pub context_length: Option<u64>,
+    #[serde(default)]
+    pub supports_tools: Option<bool>,
+    #[serde(default)]
+    pub supports_vision: Option<bool>,
+    #[serde(default)]
+    pub supports_reasoning: Option<bool>,
+}
+
+fn read_profile_config(home: &std::path::Path) -> Result<Value, String> {
+    let path = home.join("config.yaml");
+    if !path.is_file() {
+        return Ok(Value::Mapping(Mapping::new()));
+    }
+    serde_yaml::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("parse config.yaml: {e}"))
+}
+
+fn write_profile_config(home: &std::path::Path, config: &Value) -> Result<(), String> {
+    use std::io::Write;
+    std::fs::create_dir_all(home).map_err(|e| e.to_string())?;
+    let path = home.join("config.yaml");
+    let output = serde_yaml::to_string(config).map_err(|e| e.to_string())?;
+    let tmp = tempfile::NamedTempFile::new_in(home).map_err(|e| e.to_string())?;
+    tmp.as_file()
+        .write_all(output.as_bytes())
+        .map_err(|e| e.to_string())?;
+    tmp.as_file().sync_all().ok();
+    tmp.persist(path).map_err(|e| e.error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_user_provider(
+    input: UserProviderInput,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<String, crate::error::AppError> {
+    let name = input.name.trim();
+    let model = input.model.trim();
+    let base_url = input.base_url.trim();
+    if name.is_empty() || model.is_empty() || base_url.is_empty() {
+        return Err(crate::error::AppError::InvalidRequest(
+            "name, model and base URL are required".into(),
+        ));
+    }
+    let home = { state.inner.lock()?.hermes_home.clone() };
+    let home = std::path::Path::new(&home);
+    let mut config = read_profile_config(home).map_err(crate::error::AppError::FileError)?;
+    let id = managed_provider_id(ManagedNamespace::User, name);
+    if let Some(previous) = input.previous_id.as_deref().filter(|value| *value != id) {
+        if ManagedNamespace::classify(previous) == Some(ManagedNamespace::User) {
+            delete_managed_provider(&mut config, previous, ManagedNamespace::User)
+                .map_err(crate::error::AppError::FileError)?;
+        }
+    }
+    let provider = ManagedProvider {
+        id: id.clone(),
+        namespace: ManagedNamespace::User,
+        name: name.to_string(),
+        base_url: base_url.to_string(),
+        api_key: input.api_key.trim().to_string(),
+        api_mode: if input.anthropic_messages {
+            ApiMode::AnthropicMessages
+        } else {
+            ApiMode::ChatCompletions
+        },
+        model: model.to_string(),
+        models: vec![ManagedModel {
+            id: model.to_string(),
+            context_length: input.context_length,
+            supports_tools: input.supports_tools,
+            supports_vision: input.supports_vision,
+            supports_reasoning: input.supports_reasoning,
+        }],
+        extra: Vec::new(),
+    };
+    upsert_managed_provider(&mut config, &provider).map_err(crate::error::AppError::FileError)?;
+    write_profile_config(home, &config).map_err(crate::error::AppError::FileError)?;
+    if let Err(error) = crate::commands::runtime_manager::restart_dashboard(&state).await {
+        log::warn!("user provider saved but dashboard restart failed: {error}");
+    }
+    Ok(id)
+}
+
+#[tauri::command]
+pub async fn delete_user_provider(
+    provider_id: String,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<(), crate::error::AppError> {
+    let home = { state.inner.lock()?.hermes_home.clone() };
+    let home = std::path::Path::new(&home);
+    let mut config = read_profile_config(home).map_err(crate::error::AppError::FileError)?;
+    delete_managed_provider(&mut config, &provider_id, ManagedNamespace::User)
+        .map_err(crate::error::AppError::InvalidRequest)?;
+    write_profile_config(home, &config).map_err(crate::error::AppError::FileError)?;
+    if let Err(error) = crate::commands::runtime_manager::restart_dashboard(&state).await {
+        log::warn!("user provider deleted but dashboard restart failed: {error}");
+    }
+    Ok(())
 }
 
 /// 在 JSON 形态的 config 上执行受管 provider 同步。
@@ -401,6 +774,16 @@ pub fn set_default_model_json(
     model: &str,
 ) -> Result<(), String> {
     with_json_as_yaml(config, |yaml| set_default_model(yaml, provider, model))
+}
+
+pub fn clear_default_model_if_managed_json(
+    config: &mut serde_json::Value,
+    scope: &[ManagedNamespace],
+) -> Result<(), String> {
+    with_json_as_yaml(config, |yaml| {
+        clear_default_model_if_managed(yaml, scope);
+        Ok(())
+    })
 }
 
 /// JSON 形态的 [`migrate_legacy_config`]。
@@ -643,7 +1026,7 @@ providers:
     }
 
     #[test]
-    fn migrate_drops_legacy_team_managed_list_entries() {
+    fn migrate_moves_legacy_team_managed_list_entries() {
         let mut config: Value = serde_yaml::from_str(
             r#"
 custom_providers:
@@ -662,6 +1045,7 @@ custom_providers:
         let seq = config["custom_providers"].as_sequence().unwrap();
         assert_eq!(seq.len(), 1);
         assert_eq!(seq[0]["provider_key"].as_str(), Some("my-own"));
+        assert!(config["providers"]["custom:team-old-team"].is_mapping());
     }
 
     #[test]
@@ -691,10 +1075,14 @@ providers:
     }
 
     #[test]
-    fn migrate_drops_scalar_model_config() {
+    fn migrate_converts_scalar_model_config_to_mapping() {
         let mut config: Value = serde_yaml::from_str("model: custom:team-glm-5-2\n").unwrap();
         assert!(migrate_legacy_config(&mut config, "fengchihermes"));
-        assert!(config.as_mapping().unwrap().get("model").is_none());
+        assert_eq!(
+            config["model"]["default"].as_str(),
+            Some("custom:team-glm-5-2")
+        );
+        assert!(config["model"].is_mapping());
     }
 
     #[test]
@@ -766,5 +1154,82 @@ model:
         let snapshot = config.clone();
         assert!(!migrate_legacy_config(&mut config, "fengchihermes"));
         assert_eq!(snapshot, config);
+    }
+
+    #[test]
+    fn brand_account_allowlist_prunes_relay_catalog_without_touching_other_sources() {
+        let mut config: Value = serde_yaml::from_str(
+            r#"
+providers:
+  custom:acct-brand:
+    base_url: https://account.example/v1
+    api_mode: chat_completions
+    api_key: sk-account
+    model: server-only
+    models:
+      allowed-chat: {}
+      server-only: {}
+  custom:acct-brand-messages:
+    model: allowed-messages
+    models:
+      allowed-messages: {}
+      server-only-claude: {}
+  custom:acct-other-brand:
+    model: other-brand-model
+    models:
+      other-brand-model: {}
+  custom:user-local:
+    model: local-model
+    models:
+      local-model: {}
+model:
+  provider: custom:acct-brand
+  default: server-only
+  base_url: https://account.example/v1
+  api_mode: chat_completions
+  api_key: sk-account
+"#,
+        )
+        .unwrap();
+
+        assert!(retain_brand_account_models(
+            &mut config,
+            "brand",
+            &["allowed-chat", "allowed-messages"],
+        ));
+
+        let providers = config["providers"].as_mapping().unwrap();
+        assert!(providers["custom:acct-brand"]["models"]["allowed-chat"].is_mapping());
+        assert!(providers["custom:acct-brand"]["models"]
+            .get("server-only")
+            .is_none());
+        assert!(providers["custom:acct-brand-messages"]["models"]
+            .get("server-only-claude")
+            .is_none());
+        assert!(providers["custom:acct-other-brand"]["models"]["other-brand-model"].is_mapping());
+        assert!(providers["custom:user-local"]["models"]["local-model"].is_mapping());
+        assert_eq!(config["model"]["provider"], "custom:acct-brand");
+        assert_eq!(config["model"]["default"], "allowed-chat");
+    }
+
+    #[test]
+    fn v2_profile_migration_runs_for_profiles_that_already_completed_v1() {
+        let temp = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp.path().join(".model-registry-v1"), b"1\n").unwrap();
+        std::fs::write(
+            temp.path().join("config.yaml"),
+            b"providers:\n  custom:acct-brand:\n    model: server-only\n    models:\n      allowed: {}\n      server-only: {}\n",
+        )
+        .unwrap();
+
+        assert!(migrate_profile_home(temp.path(), "brand", &["allowed"]).unwrap());
+        assert!(temp.path().join(".model-registry-v2").is_file());
+        let config: Value =
+            serde_yaml::from_slice(&std::fs::read(temp.path().join("config.yaml")).unwrap())
+                .unwrap();
+        assert!(config["providers"]["custom:acct-brand"]["models"]
+            .get("server-only")
+            .is_none());
+        assert!(!migrate_profile_home(temp.path(), "brand", &["allowed"]).unwrap());
     }
 }

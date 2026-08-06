@@ -26,11 +26,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::State;
 
-use crate::brand_generated::{BRAND_APP_NAME, BRAND_PROVIDER_KEY};
+use crate::brand_generated::{BRAND_ACCOUNT_DEFAULT_MODELS, BRAND_APP_NAME, BRAND_PROVIDER_KEY};
 use crate::error::AppError;
 use crate::model_registry::{
-    apply_managed_providers_json, managed_provider_id, migrate_legacy_config_json,
-    set_default_model_json, ApiMode, ManagedModel, ManagedNamespace, ManagedProvider,
+    apply_managed_providers_json, clear_default_model_if_managed_json, managed_provider_id,
+    migrate_legacy_config_json, set_default_model_json, ApiMode, ManagedModel, ManagedNamespace,
+    ManagedProvider,
 };
 use crate::state::AppState;
 
@@ -384,6 +385,37 @@ fn endpoint_types_for_model(endpoint_types: &ModelEndpointTypes, model: &str) ->
             (name.trim().to_ascii_lowercase() == target).then(|| types.clone())
         })
         .unwrap_or_default()
+}
+
+fn is_brand_account_model(model: &str) -> bool {
+    let model = model.trim();
+    BRAND_ACCOUNT_DEFAULT_MODELS.contains(&model)
+}
+
+/// The brand JSON is authoritative. The account service may advertise many
+/// more relay models, but those must never become this desktop brand's built-in
+/// catalog.
+fn select_brand_account_models(models: &[String]) -> Vec<String> {
+    let available: HashSet<&str> = models.iter().map(|model| model.trim()).collect();
+    BRAND_ACCOUNT_DEFAULT_MODELS
+        .iter()
+        .filter(|model| available.contains(**model))
+        .map(|model| (*model).to_string())
+        .collect()
+}
+
+fn select_brand_account_catalog(catalog: AccountModelCatalog) -> AccountModelCatalog {
+    let models = select_brand_account_models(&catalog.models);
+    let selected: HashSet<&str> = models.iter().map(String::as_str).collect();
+    let endpoint_types = catalog
+        .endpoint_types
+        .into_iter()
+        .filter(|(model, _)| selected.contains(model.as_str()))
+        .collect();
+    AccountModelCatalog {
+        models,
+        endpoint_types,
+    }
 }
 
 fn split_models_by_endpoint(
@@ -1476,7 +1508,9 @@ fn account_providers(config: &Value, input: &AccountProvision<'_>) -> Vec<Manage
 
     let chat_provider_id = account_provider_id();
     let messages_provider_id = account_messages_provider_id();
-    let (chat_models, messages_models) = split_models_by_endpoint(models, model_endpoint_types);
+    let selected_models = select_brand_account_models(models);
+    let (chat_models, messages_models) =
+        split_models_by_endpoint(&selected_models, model_endpoint_types);
     // 只换令牌、不改模型选择时，保留已有 provider 的模型集合。
     let token_only_update = models.is_empty();
 
@@ -1490,7 +1524,7 @@ fn account_providers(config: &Value, input: &AccountProvision<'_>) -> Vec<Manage
                  api_mode: ApiMode,
                  model_ids: &[String]|
      -> Option<ManagedProvider> {
-        let existing_models = existing_provider_models(config, &id);
+        let existing_models = select_brand_account_models(&existing_provider_models(config, &id));
         let effective: Vec<String> = if model_ids.is_empty() && token_only_update {
             existing_models
         } else {
@@ -1631,7 +1665,10 @@ pub async fn account_login(
     let session = require_session()?;
     // 换了账号（或换了服务地址）就丢掉上一个用户的 key，别让它被复用。
     match discard_key_from_another_owner(&session) {
-        Ok(true) => log::info!("account login: discarded an API key owned by a different account"),
+        Ok(true) => {
+            log::info!("account login: discarded an API key owned by a different account");
+            clear_account_providers(&state).await?;
+        }
         Ok(false) => {}
         Err(error) => log::warn!("account login: could not clear the previous key: {error}"),
     }
@@ -1673,7 +1710,7 @@ pub async fn account_status() -> Result<StatusResult, AppError> {
 #[tauri::command]
 pub async fn account_fetch_setup() -> Result<SetupResult, AppError> {
     let session = require_session()?;
-    let catalog = fetch_models(&session).await?;
+    let catalog = select_brand_account_catalog(fetch_models(&session).await?);
     let key = stored_key()?;
     Ok(SetupResult {
         user: session.user.clone(),
@@ -1765,6 +1802,16 @@ pub async fn account_save_models(
     if input.models.is_empty() && input.token_id.is_none() {
         return Err(AppError::InvalidRequest("未选择任何模型或令牌".to_string()));
     }
+    let selected_models = select_brand_account_models(&input.models);
+    if !input.models.is_empty() && selected_models.is_empty() {
+        return Err(AppError::InvalidRequest(
+            "No model from the active brand allowlist was selected".to_string(),
+        ));
+    }
+    let primary_model_id = input
+        .primary_model_id
+        .as_deref()
+        .filter(|model| selected_models.iter().any(|selected| selected == model));
     let session = require_session()?;
     let api_base = account_api_base(&session.base_url);
     let messages_base = account_messages_base(&session.base_url);
@@ -1787,9 +1834,9 @@ pub async fn account_save_models(
         &AccountProvision {
             chat_api_base: &api_base,
             messages_api_base: &messages_base,
-            models: &input.models,
+            models: &selected_models,
             model_endpoint_types: &input.model_endpoint_types,
-            primary_model_id: input.primary_model_id.as_deref(),
+            primary_model_id,
             api_key: &key,
             token_id: input.token_id,
         },
@@ -1801,6 +1848,11 @@ pub async fn account_save_models(
 
 #[tauri::command]
 pub async fn account_test_model(model_id: String) -> Result<TestModelResult, AppError> {
+    if !is_brand_account_model(&model_id) {
+        return Err(AppError::InvalidRequest(
+            "Model is outside the active brand allowlist".to_string(),
+        ));
+    }
     let session = require_session()?;
     let api_base = account_api_base(&session.base_url);
     let key = match stored_key()? {
@@ -1925,13 +1977,24 @@ pub async fn account_clear_credentials() -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn account_logout() -> Result<StatusResult, AppError> {
+pub async fn account_logout(state: State<'_, AppState>) -> Result<StatusResult, AppError> {
     *SESSION.lock()? = None;
     secret_store::delete(&session_account())?;
     // key 与它的归属记录必须一起清，否则残留的归属会让下一个登录用户被误判为
     // 「同一个人」而复用一把已经不存在的 key。
     clear_stored_key()?;
+    clear_account_providers(&state).await?;
     account_status().await
+}
+
+async fn clear_account_providers(state: &State<'_, AppState>) -> Result<(), AppError> {
+    let (dash_base, token) = dashboard_state(state)?;
+    let mut config = read_config(&dash_base, token.as_deref()).await?;
+    apply_managed_providers_json(&mut config, &[ManagedNamespace::Account], &[])
+        .map_err(AppError::ProxyError)?;
+    clear_default_model_if_managed_json(&mut config, &[ManagedNamespace::Account])
+        .map_err(AppError::ProxyError)?;
+    write_config(&dash_base, token.as_deref(), &config).await
 }
 
 #[cfg(test)]
@@ -2352,18 +2415,20 @@ mod tests {
 
     #[test]
     fn merge_account_provider_writes_custom_entry() {
+        let chat_model = BRAND_ACCOUNT_DEFAULT_MODELS[0];
+        let messages_model = BRAND_ACCOUNT_DEFAULT_MODELS[BRAND_ACCOUNT_DEFAULT_MODELS.len() - 1];
         let config = json!({ "providers": {} });
         let merged = merge_account_provider(
             config,
             &AccountProvision {
                 chat_api_base: "https://api.huanxing.ai/v1",
                 messages_api_base: "https://api.huanxing.ai",
-                models: &["gpt-x".to_string(), "claude-y".to_string()],
+                models: &[chat_model.to_string(), messages_model.to_string()],
                 model_endpoint_types: &ModelEndpointTypes::from([
-                    ("gpt-x".to_string(), vec!["openai".to_string()]),
-                    ("claude-y".to_string(), vec!["anthropic".to_string()]),
+                    (chat_model.to_string(), vec!["openai".to_string()]),
+                    (messages_model.to_string(), vec!["anthropic".to_string()]),
                 ]),
-                primary_model_id: Some("gpt-x"),
+                primary_model_id: Some(chat_model),
                 api_key: "sk-secret",
                 token_id: Some(42),
             },
@@ -2374,23 +2439,23 @@ mod tests {
         assert_eq!(entry["api_mode"], "chat_completions");
         assert_eq!(entry["transport"], "openai_chat");
         assert_eq!(entry["discover_models"], false);
-        assert_eq!(entry["model"], "gpt-x");
+        assert_eq!(entry["model"], chat_model);
         assert_eq!(entry["api_key"], "sk-secret");
         assert_eq!(entry["token_id"], 42);
-        assert!(entry["models"]["gpt-x"].is_object());
-        assert!(entry["models"].get("claude-y").is_none());
+        assert!(entry["models"][chat_model].is_object());
+        assert!(entry["models"].get(messages_model).is_none());
         let messages_id = account_messages_provider_id();
         let messages_entry = &merged["providers"][&messages_id];
         assert_eq!(messages_entry["base_url"], "https://api.huanxing.ai");
         assert_eq!(messages_entry["api_mode"], "anthropic_messages");
         assert_eq!(messages_entry["transport"], "anthropic_messages");
-        assert_eq!(messages_entry["model"], "claude-y");
+        assert_eq!(messages_entry["model"], messages_model);
         assert_eq!(messages_entry["api_key"], "sk-secret");
         assert_eq!(messages_entry["token_id"], 42);
-        assert!(messages_entry["models"]["claude-y"].is_object());
+        assert!(messages_entry["models"][messages_model].is_object());
         // primary model also written to config.model
         assert_eq!(merged["model"]["provider"], id);
-        assert_eq!(merged["model"]["default"], "gpt-x");
+        assert_eq!(merged["model"]["default"], chat_model);
         // `model.model` 只是 Core 在缺 `default` 时的兜底别名。既然恒写
         // `default`，就不要再写第二份可能与之漂移的副本。
         assert!(merged["model"].get("model").is_none());
@@ -2402,17 +2467,18 @@ mod tests {
 
     #[test]
     fn merge_account_provider_sets_messages_primary_provider() {
+        let messages_model = BRAND_ACCOUNT_DEFAULT_MODELS[BRAND_ACCOUNT_DEFAULT_MODELS.len() - 1];
         let merged = merge_account_provider(
             json!({ "providers": {} }),
             &AccountProvision {
                 chat_api_base: "https://api.huanxing.ai/v1",
                 messages_api_base: "https://api.huanxing.ai",
-                models: &["claude-y".to_string()],
+                models: &[messages_model.to_string()],
                 model_endpoint_types: &ModelEndpointTypes::from([(
-                    "claude-y".to_string(),
+                    messages_model.to_string(),
                     vec!["anthropic".to_string()],
                 )]),
-                primary_model_id: Some("claude-y"),
+                primary_model_id: Some(messages_model),
                 api_key: "sk-secret",
                 token_id: None,
             },
@@ -2420,18 +2486,20 @@ mod tests {
         let chat_id = account_provider_id();
         let messages_id = account_messages_provider_id();
         assert!(merged["providers"].get(&chat_id).is_none());
-        assert!(merged["providers"][&messages_id]["models"]["claude-y"].is_object());
+        assert!(merged["providers"][&messages_id]["models"][messages_model].is_object());
         assert_eq!(merged["model"]["provider"], messages_id);
     }
 
     #[test]
     fn merge_account_provider_defaults_primary_to_first_model() {
+        let first = BRAND_ACCOUNT_DEFAULT_MODELS[0];
+        let second = BRAND_ACCOUNT_DEFAULT_MODELS[1];
         let merged = merge_account_provider(
             json!({}),
             &AccountProvision {
                 chat_api_base: "https://x/v1",
                 messages_api_base: "https://x",
-                models: &["a".to_string(), "b".to_string()],
+                models: &[first.to_string(), second.to_string()],
                 model_endpoint_types: &ModelEndpointTypes::new(),
                 primary_model_id: None,
                 api_key: "sk-k",
@@ -2439,7 +2507,7 @@ mod tests {
             },
         );
         let id = account_provider_id();
-        assert_eq!(merged["providers"][&id]["model"], "a");
+        assert_eq!(merged["providers"][&id]["model"], first);
         // no primary_model_id → config.model is not overwritten
         assert!(merged.get("model").is_none());
     }
@@ -2448,19 +2516,23 @@ mod tests {
     fn merge_account_provider_token_only_preserves_models() {
         let id = account_provider_id();
         let messages_id = account_messages_provider_id();
+        let chat_model = BRAND_ACCOUNT_DEFAULT_MODELS[0];
+        let messages_model = BRAND_ACCOUNT_DEFAULT_MODELS[BRAND_ACCOUNT_DEFAULT_MODELS.len() - 1];
         let merged = merge_account_provider(
             json!({
                 "providers": {
                     id.clone(): {
-                        "model": "existing-model",
+                        "model": chat_model,
                         "models": {
-                            "existing-model": {}
+                            chat_model: {},
+                            "server-only-model": {}
                         }
                     },
                     messages_id.clone(): {
-                        "model": "existing-claude",
+                        "model": messages_model,
                         "models": {
-                            "existing-claude": {}
+                            messages_model: {},
+                            "server-only-claude": {}
                         }
                     }
                 }
@@ -2476,13 +2548,15 @@ mod tests {
             },
         );
         let entry = &merged["providers"][&id];
-        assert_eq!(entry["model"], "existing-model");
-        assert!(entry["models"]["existing-model"].is_object());
+        assert_eq!(entry["model"], chat_model);
+        assert!(entry["models"][chat_model].is_object());
+        assert!(entry["models"].get("server-only-model").is_none());
         assert_eq!(entry["api_key"], "sk-new");
         assert_eq!(entry["token_id"], 7);
         let messages_entry = &merged["providers"][&messages_id];
-        assert_eq!(messages_entry["model"], "existing-claude");
-        assert!(messages_entry["models"]["existing-claude"].is_object());
+        assert_eq!(messages_entry["model"], messages_model);
+        assert!(messages_entry["models"][messages_model].is_object());
+        assert!(messages_entry["models"].get("server-only-claude").is_none());
         assert_eq!(messages_entry["api_key"], "sk-new");
         assert_eq!(messages_entry["token_id"], 7);
     }
@@ -2491,13 +2565,14 @@ mod tests {
     fn merge_account_provider_token_only_does_not_create_missing_messages_provider() {
         let id = account_provider_id();
         let messages_id = account_messages_provider_id();
+        let chat_model = BRAND_ACCOUNT_DEFAULT_MODELS[0];
         let merged = merge_account_provider(
             json!({
                 "providers": {
                     id.clone(): {
-                        "model": "existing-model",
+                        "model": chat_model,
                         "models": {
-                            "existing-model": {}
+                            chat_model: {}
                         }
                     }
                 }
@@ -2513,8 +2588,8 @@ mod tests {
             },
         );
         let entry = &merged["providers"][&id];
-        assert_eq!(entry["model"], "existing-model");
-        assert!(entry["models"]["existing-model"].is_object());
+        assert_eq!(entry["model"], chat_model);
+        assert!(entry["models"][chat_model].is_object());
         assert_eq!(entry["api_key"], "sk-new");
         assert_eq!(entry["token_id"], 7);
         assert!(merged["providers"].get(&messages_id).is_none());

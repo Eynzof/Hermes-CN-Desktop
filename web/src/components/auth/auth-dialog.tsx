@@ -5,9 +5,13 @@ import { Eye, EyeOff, X } from "lucide-react";
 import { authDialogOpenAtom, huanxingAuthAtom } from "@/stores/auth";
 import {
   DEFAULT_HUANXING_SERVER_URL,
-  loginHuanxingAccount,
   registerHuanxingAccount,
 } from "@/lib/huanxing-auth";
+import { useAccountFetchSetup, useAccountLogin, useAccountSaveModels } from "@/hooks/use-account";
+import {
+  selectBrandAccountEndpointTypes,
+  selectBrandAccountModels,
+} from "@/lib/brand-account-models";
 import s from "./auth-dialog.module.css";
 
 type AuthTab = "login" | "register";
@@ -25,6 +29,9 @@ export function AuthDialog() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const accountLogin = useAccountLogin();
+  const accountFetchSetup = useAccountFetchSetup();
+  const accountSaveModels = useAccountSaveModels();
 
   const resetFeedback = () => {
     setError("");
@@ -44,8 +51,32 @@ export function AuthDialog() {
     setBusy(true);
     resetFeedback();
     try {
-      const account = await loginHuanxingAccount(serverUrl, username, password);
-      setAccount(account);
+      const user = await accountLogin.mutateAsync({
+        baseUrl: serverUrl,
+        username,
+        password,
+      });
+      // Login only authenticates the account. Provision the server-selected
+      // model catalog immediately so a new user cannot retain an old user's
+      // provider/key or fall back to Core's provider guessing path.
+      const setup = await accountFetchSetup.mutateAsync();
+      const brandModels = selectBrandAccountModels(setup.models);
+      if (brandModels.length > 0) {
+        await accountSaveModels.mutateAsync({
+          models: brandModels,
+          modelEndpointTypes: selectBrandAccountEndpointTypes(
+            setup.modelEndpointTypes,
+            brandModels,
+          ),
+          primaryModelId: brandModels[0],
+        });
+      }
+      setAccount({
+        serverUrl: setup.baseUrl,
+        userId: user.id,
+        username: user.username,
+        displayName: user.displayName,
+      });
       setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败，请稍后重试。");

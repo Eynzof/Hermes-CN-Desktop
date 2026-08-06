@@ -159,7 +159,7 @@ describe("buildCandidates", () => {
 describe("groupCandidates", () => {
   it("groups brand defaults as built-in and Team models as enterprise", () => {
     const [firstBrandModel, secondBrandModel] = BRAND.accountDefaultModels;
-    const brandProvider = `custom:${BRAND.providerKey}`;
+    const brandProvider = `custom:acct-${BRAND.providerKey}`;
     const options = {
       providers: [
         {
@@ -201,13 +201,13 @@ describe("groupCandidates", () => {
       "custom:my-endpoint:local-model",
     ]);
     expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
-      ...BRAND.accountDefaultModels.map((model) => `${brandProvider}:${model}`),
-      "official-provider:official-only",
+      `${brandProvider}:${firstBrandModel}`,
+      `${brandProvider}:${secondBrandModel}`,
     ]);
   });
 
   it("fills the complete built-in brand catalog when Core advertises only two models", () => {
-    const brandProvider = `custom:${BRAND.providerKey}`;
+    const brandProvider = `custom:acct-${BRAND.providerKey}`;
     const options = {
       providers: [{
         slug: brandProvider,
@@ -220,13 +220,13 @@ describe("groupCandidates", () => {
     const groups = groupCandidates(options);
 
     expect(groups.builtin.map((candidate) => candidate.model)).toEqual(
-      [...BRAND.accountDefaultModels],
+      BRAND.accountDefaultModels.slice(0, 2).sort(),
     );
   });
 
   it("keeps brand defaults but hides Team models while logged out", () => {
     const brandModel = BRAND.accountDefaultModels[0];
-    const messagesProvider = `custom:${BRAND.providerKey}-messages`;
+    const messagesProvider = `custom:acct-${BRAND.providerKey}-messages`;
     const options = {
       providers: [
         {
@@ -252,17 +252,17 @@ describe("groupCandidates", () => {
 
     const groups = groupCandidates(options, { showEnterprise: false });
 
-    expect(groups.builtin.map((candidate) => candidate.key)).toEqual(
-      BRAND.accountDefaultModels.map((model) => `${messagesProvider}:${model}`),
-    );
+    expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
+      `${messagesProvider}:${brandModel}`,
+    ]);
     expect(groups.enterprise).toEqual([]);
     expect(groups.custom).toEqual([]);
   });
 
   it("shows one row per branded model when chat and Messages providers overlap", () => {
     const [flash, pro, sol, kimi, glm, claude] = BRAND.accountDefaultModels;
-    const regularProvider = `custom:${BRAND.providerKey}`;
-    const messagesProvider = `custom:${BRAND.providerKey}-messages`;
+    const regularProvider = `custom:acct-${BRAND.providerKey}`;
+    const messagesProvider = `custom:acct-${BRAND.providerKey}-messages`;
     const options = {
       providers: [
         {
@@ -274,7 +274,7 @@ describe("groupCandidates", () => {
         {
           slug: messagesProvider,
           name: `${BRAND.appName} Messages`,
-          models: [flash, pro, sol, kimi, glm, claude],
+          models: [kimi, glm, claude],
           authenticated: true,
         },
       ],
@@ -317,6 +317,49 @@ describe("groupCandidates", () => {
     expect(groups.custom.map((candidate) => candidate.key)).toEqual([
       "custom:my-endpoint:my-model",
     ]);
+  });
+
+  it("hides account providers belonging to other packaged brands", () => {
+    const siblingBrandProviderKey = BRAND.knownBrandProviderKeys.find(
+      (providerKey) => providerKey !== BRAND.providerKey,
+    );
+    expect(siblingBrandProviderKey).toBeDefined();
+
+    const currentProvider = `custom:acct-${BRAND.providerKey}`;
+    const siblingProvider = `custom:acct-${siblingBrandProviderKey}`;
+    const legacySiblingProvider = `custom:${siblingBrandProviderKey}`;
+    const model = BRAND.accountDefaultModels[0];
+    const options = {
+      providers: [
+        {
+          slug: currentProvider,
+          name: BRAND.appName,
+          models: [model],
+          authenticated: true,
+        },
+        {
+          slug: siblingProvider,
+          name: "Sibling brand",
+          models: [model],
+          authenticated: true,
+        },
+        {
+          slug: legacySiblingProvider,
+          name: "Legacy sibling brand",
+          models: [model],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options, {
+      savedCustomProviderIds: new Set([legacySiblingProvider]),
+    });
+
+    expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
+      `${currentProvider}:${model}`,
+    ]);
+    expect(groups.custom).toEqual([]);
   });
 
   it("groups a Team-managed friendly-name gateway slug as enterprise", () => {

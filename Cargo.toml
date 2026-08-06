@@ -2,7 +2,7 @@
 name = "hermes-agent-cn-desktop"
 version = "0.6.9-rc.7"
 edition = "2021"
-description = "FrogClawHermes AI Assistant Desktop"
+description = "FengchiHermes AI Assistant Desktop"
 authors = ["Hermes Agent CN Contributors"]
 homepage = "https://hermesagent.org.cn"
 

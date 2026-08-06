@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog } from "@hermes/shared-ui";
 import {
   Eye,
@@ -10,7 +11,6 @@ import {
   X,
 } from "lucide-react";
 import { useConfig, useSaveConfig } from "@/hooks/use-config";
-import { useGateway } from "@/hooks/use-gateway";
 import {
   buildCustomProviderDeleteUpdate,
   buildProviderSettingsUpdate,
@@ -18,20 +18,17 @@ import {
   type ProviderPreset,
 } from "@/lib/provider-catalog";
 import {
-  applyEnterpriseSync,
   DEFAULT_TEAM_SERVER_URL,
   ENTERPRISE_PROVIDER_PREFIX,
-  enterpriseProviderId,
   readEnterpriseBinding,
   readEnterpriseSyncMeta,
-  syncEnterpriseModels,
   writeEnterpriseBinding,
   writeEnterpriseSyncMeta,
   type EnterpriseBinding,
   type EnterpriseSyncMeta,
 } from "@/lib/enterprise-sync";
 import { savedCustomProviderIdsFromConfig } from "@/lib/model-provider-visibility";
-import { clearTeamDeviceToken } from "@/lib/tauri-bridge";
+import { clearTeamDeviceToken, setTeamDeviceToken } from "@/lib/tauri-bridge";
 import { dismissTeamDeviceTokenOnboarding } from "@/stores/auth";
 import s from "./custom-models-pane.module.css";
 
@@ -49,7 +46,7 @@ function slugifyProviderId(modelName: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `custom:${slug || "model"}`;
+  return `custom:user-${slug || "model"}`;
 }
 
 const INPUT_WINDOW_OPTIONS = [
@@ -271,10 +268,7 @@ function CustomModelEditDialog({ title, initial, saving, error, onClose, onSave 
 /* ── 企业模型下发 ─────────────────────────────────────────────── */
 
 function EnterpriseSection() {
-  const configQuery = useConfig();
-  const { data: config } = configQuery;
-  const saveConfig = useSaveConfig();
-  const { setRuntimeModel } = useGateway();
+  const { data: config } = useConfig();
   const [binding, setBinding] = useState<EnterpriseBinding | null>(readEnterpriseBinding);
   const [meta, setMeta] = useState<EnterpriseSyncMeta | null>(readEnterpriseSyncMeta);
   const [serverUrl, setServerUrl] = useState(binding?.serverUrl ?? DEFAULT_TEAM_SERVER_URL);
@@ -296,19 +290,6 @@ function EnterpriseSection() {
     : "";
 
   const handleSync = async () => {
-    // Settings can be opened immediately after the managed runtime becomes
-    // ready, before the shared config query has completed. Refetch here so a
-    // valid device token is not rejected just because the panel raced startup.
-    let currentConfig = config;
-    if (!currentConfig) {
-      setError("正在加载配置…");
-      const result = await configQuery.refetch();
-      currentConfig = result.data;
-      if (!currentConfig) {
-        setError("配置加载失败，请确认工作台已连接后重试。");
-        return;
-      }
-    }
     const nextBinding: EnterpriseBinding = {
       serverUrl: serverUrl.trim().replace(/\/+$/, ""),
       deviceToken: deviceToken.trim(),
@@ -320,23 +301,14 @@ function EnterpriseSection() {
     setBusy(true);
     setError("");
     try {
-      const data = await syncEnterpriseModels(nextBinding);
-      const next = applyEnterpriseSync(currentConfig, nextBinding, data);
-      await saveConfig.mutateAsync(next);
-      if (!data.cleanupOnly && data.defaultModel) {
-        try {
-          await setRuntimeModel(data.defaultModel, enterpriseProviderId(data.defaultModel));
-        } catch {
-          // 热切换失败不阻塞：下轮新会话也会读到落盘的默认模型
-        }
-      }
+      // Rust owns Team config writes. It stores the token privately, fetches
+      // the manifest, and applies providers through model_registry atomically.
+      const status = await setTeamDeviceToken(nextBinding.deviceToken);
       setBinding(nextBinding);
       writeEnterpriseBinding(nextBinding);
       const nextMeta: EnterpriseSyncMeta = {
         lastSyncAt: Date.now(),
-        modelCount: data.cleanupOnly ? 0 : (data.models ?? []).length,
-        defaultModel: data.defaultModel,
-        cleanupOnly: data.cleanupOnly === true,
+        modelCount: status.syncedModels,
       };
       setMeta(nextMeta);
       writeEnterpriseSyncMeta(nextMeta);
@@ -351,15 +323,6 @@ function EnterpriseSection() {
     setBusy(true);
     setError("");
     try {
-      if (binding) {
-        const currentConfig = config ?? (await configQuery.refetch()).data;
-        if (!currentConfig) {
-          setError("配置加载失败，请确认工作台已连接后重试。");
-          return;
-        }
-        const next = applyEnterpriseSync(currentConfig, binding, { cleanupOnly: true });
-        await saveConfig.mutateAsync(next);
-      }
       if (window.__TAURI_INTERNALS__ != null) {
         await clearTeamDeviceToken();
       }
@@ -467,6 +430,7 @@ function EnterpriseSection() {
 export function CustomModelsPane() {
   const { data: config } = useConfig();
   const saveConfig = useSaveConfig();
+  const queryClient = useQueryClient();
   const [editor, setEditor] = useState<
     | { mode: "add" }
     | { mode: "edit"; providerId: string }
@@ -534,7 +498,28 @@ export function CustomModelsPane() {
         providers[key] = entry;
         next = { ...next, providers };
       }
-      await saveConfig.mutateAsync(next);
+      const desktop = typeof window !== "undefined" ? window.hermesDesktop : undefined;
+      if (desktop?.saveUserProvider) {
+        await desktop.saveUserProvider({
+          previousId: editor?.mode === "edit" ? editor.providerId : undefined,
+          name: modelName,
+          baseUrl: draft.baseUrl,
+          apiKey: draft.apiKey,
+          model: modelName,
+          anthropicMessages: false,
+          contextLength: draft.inputWindow || undefined,
+          supportsTools: draft.supportsTools,
+          supportsVision: draft.supportsImages,
+          supportsReasoning: draft.supportsReasoning,
+        });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["config"] }),
+          queryClient.invalidateQueries({ queryKey: ["model-info"] }),
+          queryClient.invalidateQueries({ queryKey: ["model-options"] }),
+        ]);
+      } else {
+        await saveConfig.mutateAsync(next);
+      }
       setEditor(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败，请稍后重试。");
@@ -548,7 +533,16 @@ export function CustomModelsPane() {
     if (!window.confirm("确定删除这个自定义模型吗？")) return;
     setError("");
     try {
-      await saveConfig.mutateAsync(buildCustomProviderDeleteUpdate(config, providerId));
+      if (window.hermesDesktop?.deleteUserProvider) {
+        await window.hermesDesktop.deleteUserProvider(providerId);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["config"] }),
+          queryClient.invalidateQueries({ queryKey: ["model-info"] }),
+          queryClient.invalidateQueries({ queryKey: ["model-options"] }),
+        ]);
+      } else {
+        await saveConfig.mutateAsync(buildCustomProviderDeleteUpdate(config, providerId));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除失败。");
     }

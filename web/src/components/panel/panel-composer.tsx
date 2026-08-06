@@ -119,7 +119,7 @@ export function PanelComposer() {
     if (!model) return null;
     return {
       model,
-      provider: selectedModel?.provider ?? modelInfo?.provider,
+      provider: selectedModel?.provider ?? modelInfo?.provider ?? "",
       providerName: selectedModel?.providerName,
       contextWindow: selectedModel?.contextWindow,
     };

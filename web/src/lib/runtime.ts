@@ -417,6 +417,28 @@ export interface HermesGitBridge {
   repoStatus(input: { repoPath: string }): Promise<RepoStatus | null>;
 }
 
+export interface AccountLoginInput { baseUrl: string; username: string; password: string; }
+export interface AccountUser { id: number; username: string; displayName: string; role: number; status: number; group: string; }
+export interface AccountStatusResult { loggedIn: boolean; user?: AccountUser; serverUrl?: string; hasKey: boolean; maskedKey?: string; }
+export interface AccountSavedCredentialsInfo { hasSaved: boolean; username?: string; baseUrl?: string; }
+export interface AccountSetupResult { user: AccountUser; baseUrl: string; models: string[]; modelEndpointTypes?: Record<string, string[]>; hasKey: boolean; maskedKey?: string; }
+export interface AccountTokenInfo { id: number; name: string; group: string; status: number; }
+export interface AccountBalanceInfo { quota: number; usedQuota: number; quotaPerUnit: number; displayInCurrency: boolean; topUpUrl: string; }
+export interface AccountSaveModelsInput { models: string[]; modelEndpointTypes?: Record<string, string[]>; primaryModelId?: string; tokenId?: number; }
+export interface AccountTestModelResult { ok: boolean; latencyMs?: number; reply?: string; error?: string; }
+export interface UserProviderInput {
+  previousId?: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  anthropicMessages?: boolean;
+  contextLength?: number;
+  supportsTools?: boolean;
+  supportsVision?: boolean;
+  supportsReasoning?: boolean;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -443,6 +465,20 @@ declare global {
       quitApp?(): Promise<void>;
       request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
+      accountLogin?(input: AccountLoginInput): Promise<AccountUser>;
+      accountStatus?(): Promise<AccountStatusResult>;
+      accountFetchSetup?(): Promise<AccountSetupResult>;
+      accountListTokens?(): Promise<AccountTokenInfo[]>;
+      accountBalance?(): Promise<AccountBalanceInfo>;
+      accountSaveModels?(input: AccountSaveModelsInput): Promise<AccountStatusResult>;
+      accountTestModel?(modelId: string): Promise<AccountTestModelResult>;
+      accountLogout?(): Promise<AccountStatusResult>;
+      accountSaveCredentials?(input: AccountLoginInput): Promise<void>;
+      accountHasSavedCredentials?(): Promise<AccountSavedCredentialsInfo>;
+      accountLoginSaved?(): Promise<AccountUser>;
+      accountClearCredentials?(): Promise<void>;
+      saveUserProvider?(input: UserProviderInput): Promise<string>;
+      deleteUserProvider?(providerId: string): Promise<void>;
       uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
       downloadExternalImage?(input: DownloadExternalImageInput): Promise<DownloadedImageResult>;
       pickFiles?(): Promise<ElectronFilePickerResult>;

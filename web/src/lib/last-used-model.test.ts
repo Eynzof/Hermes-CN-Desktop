@@ -72,12 +72,12 @@ describe("last-used-model", () => {
   });
 
   it("ignores selections without a model", () => {
-    rememberLastUsedModel({ model: "" });
+    rememberLastUsedModel({ model: "", provider: "deepseek" });
     expect(readLastUsedModel()).toBeNull();
   });
 
   it("expires entries older than 30 days", () => {
-    rememberLastUsedModel({ model: "claude-sonnet-4-6" });
+    rememberLastUsedModel({ model: "claude-sonnet-4-6", provider: "anthropic" });
     const raw = readUiValue<{ selection: { model: string }; ts: number }>(
       scopedKey(),
       { selection: { model: "" }, ts: 0 },
@@ -97,7 +97,7 @@ describe("last-used-model", () => {
   });
 
   it("forgets on demand", () => {
-    rememberLastUsedModel({ model: "claude-opus-4-7" });
+    rememberLastUsedModel({ model: "claude-opus-4-7", provider: "anthropic" });
     forgetLastUsedModel();
     expect(readLastUsedModel()).toBeNull();
   });

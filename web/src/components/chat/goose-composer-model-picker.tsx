@@ -20,9 +20,14 @@ import {
   type ModelUsageEntry,
 } from "@/lib/model-usage-log";
 import { BRAND } from "@/lib/brand.generated";
+import {
+  isBrandAccountModel,
+  isCurrentBrandAccountProvider,
+} from "@/lib/brand-account-models";
 import { ENTERPRISE_PROVIDER_PREFIX } from "@/lib/enterprise-sync";
 import {
   enterpriseProviderIdsFromConfig,
+  isLegacyBrandModelProvider,
   savedCustomProviderIdsFromConfig,
 } from "@/lib/model-provider-visibility";
 import { getProviderIconUrl } from "@/lib/provider-icons";
@@ -239,27 +244,6 @@ export function buildCandidates(
     }
   }
 
-  // Brand account providers are the built-in model catalog for this desktop
-  // brand. Older Core configs may advertise only the two models that happened
-  // to be provisioned at the time, so fill the rest from brands/*.json instead
-  // of making the picker appear to have an incomplete built-in catalog.
-  const brandProvider = all.find((candidate) =>
-    isBrandProvider(candidate.providerSlug.toLowerCase()),
-  );
-  if (brandProvider) {
-    for (const modelId of BRAND.accountDefaultModels) {
-      const key = `${brandProvider.providerSlug}:${modelId}`;
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
-      all.push({
-        ...brandProvider,
-        key,
-        model: modelId,
-        caps: null,
-      });
-    }
-  }
-
   // 2. From catalog Top 5: ensure they have catalog candidates even if the
   // gateway never returned them. This guarantees the 推荐预设 group is
   // populated for users with zero configured providers, while non-default
@@ -348,22 +332,10 @@ interface ModelMenuProps {
 }
 
 const CUSTOM_PROVIDER_PREFIX = "custom:";
-const BRAND_PROVIDER_SLUGS = new Set([
-  `${CUSTOM_PROVIDER_PREFIX}${BRAND.providerKey}`.toLowerCase(),
-  `${CUSTOM_PROVIDER_PREFIX}${BRAND.providerKey}-messages`.toLowerCase(),
-]);
-const BRAND_MODEL_ORDER = new Map(
-  BRAND.accountDefaultModels.map((model, index) => [model.toLowerCase(), index]),
-);
-
 export interface ModelGroups {
   enterprise: Candidate[];
   custom: Candidate[];
   builtin: Candidate[];
-}
-
-function isBrandProvider(providerSlug: string): boolean {
-  return BRAND_PROVIDER_SLUGS.has(providerSlug.toLowerCase());
 }
 
 function modelNameOrder(a: Candidate, b: Candidate): number {
@@ -391,8 +363,8 @@ export function groupCandidates(
 ): ModelGroups {
   const groups: ModelGroups = { enterprise: [], custom: [], builtin: [] };
   const { all } = buildCandidates(modelOptions, []);
-  const brandCandidates: Candidate[] = [];
   const otherBuiltinCandidates: Candidate[] = [];
+  const seenBuiltinModels = new Set<string>();
   const showEnterprise = options.showEnterprise ?? true;
 
   for (const candidate of all) {
@@ -410,68 +382,34 @@ export function groupCandidates(
           subtitle: "由企业管理员下发",
         });
       }
-    } else if (isBrandProvider(providerSlug)) {
-      if (BRAND_MODEL_ORDER.has(candidate.model.toLowerCase())) {
-        brandCandidates.push(candidate);
+    } else if (providerSlug.startsWith("custom:acct-")) {
+      // Account-backed models are provisioned managed providers, but they are
+      // normal built-in choices only when they belong to the active brand.
+      if (
+        isCurrentBrandAccountProvider(providerSlug)
+        && isBrandAccountModel(candidate.model)
+        && !seenBuiltinModels.has(candidate.model)
+      ) {
+        seenBuiltinModels.add(candidate.model);
+        otherBuiltinCandidates.push(candidate);
       }
+    } else if (isLegacyBrandModelProvider(providerSlug)) {
+      // Old desktop releases used custom:<brand> ids. Never surface account
+      // providers from the current or another brand as user custom models.
+      continue;
     } else if (providerSlug.startsWith(CUSTOM_PROVIDER_PREFIX)) {
       if (options.savedCustomProviderIds?.has(providerSlug) ?? true) {
         groups.custom.push(candidate);
       }
-    } else {
-      otherBuiltinCandidates.push(candidate);
     }
   }
-
-  // A branded account can expose the same model through both its regular
-  // chat-completions provider and the `-messages` provider.  The gateway
-  // keeps those providers separate because they use different transports,
-  // but the picker should present one row per model.  Prefer a provider that
-  // explicitly advertised the model over a catalog fallback, then prefer the
-  // regular transport when both providers advertise it.  Models available
-  // only through Messages (for example Claude aliases) still retain that
-  // provider so selecting them uses the correct API mode.
-  const advertisedBrandModels = new Map<string, Set<string>>();
-  for (const provider of modelOptions?.providers ?? []) {
-    const providerSlug = provider.slug.toLowerCase();
-    if (!isBrandProvider(providerSlug)) continue;
-    advertisedBrandModels.set(
-      providerSlug,
-      new Set((provider.models ?? []).map((model) => model.toLowerCase())),
-    );
-  }
-  const brandCandidateScore = (candidate: Candidate): number => {
-    const providerSlug = candidate.providerSlug.toLowerCase();
-    const advertised = advertisedBrandModels.get(providerSlug)?.has(candidate.model.toLowerCase())
-      ? 0
-      : 2;
-    const messages = providerSlug.endsWith("-messages") ? 1 : 0;
-    return advertised + messages;
-  };
-  const uniqueBrandCandidates = new Map<string, Candidate>();
-  for (const candidate of brandCandidates) {
-    const modelKey = candidate.model.toLowerCase();
-    const previous = uniqueBrandCandidates.get(modelKey);
-    if (!previous || brandCandidateScore(candidate) < brandCandidateScore(previous)) {
-      uniqueBrandCandidates.set(modelKey, candidate);
-    }
-  }
-  brandCandidates.length = 0;
-  brandCandidates.push(...uniqueBrandCandidates.values());
-
-  brandCandidates.sort((a, b) =>
-    (BRAND_MODEL_ORDER.get(a.model.toLowerCase()) ?? Number.MAX_SAFE_INTEGER)
-    - (BRAND_MODEL_ORDER.get(b.model.toLowerCase()) ?? Number.MAX_SAFE_INTEGER));
-  const brandModelIds = new Set(brandCandidates.map((candidate) => candidate.model.toLowerCase()));
 
   groups.enterprise.sort(modelNameOrder);
   groups.custom.sort(modelNameOrder);
-  groups.builtin = [
-    ...brandCandidates,
-    ...otherBuiltinCandidates
-      .filter((candidate) => !brandModelIds.has(candidate.model.toLowerCase()))
-      .sort(modelNameOrder),
-  ];
+  const brandOrder = new Map(BRAND.accountDefaultModels.map((model, index) => [model, index]));
+  groups.builtin = otherBuiltinCandidates.sort((a, b) =>
+    (brandOrder.get(a.model) ?? Number.MAX_SAFE_INTEGER)
+      - (brandOrder.get(b.model) ?? Number.MAX_SAFE_INTEGER));
   return groups;
 }
 
