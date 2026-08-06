@@ -12,6 +12,7 @@ use std::process::Stdio;
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::process::Command;
@@ -2006,7 +2007,14 @@ pub async fn install_bundled_runtime_if_needed(
         };
     }
 
-    if let Some(current) = read_current_record() {
+    let current = read_current_record();
+    let should_install_bundled = should_install_bundled_runtime(
+        current
+            .as_ref()
+            .map(|record| record.runtime_version.as_str()),
+        &manifest.runtime_version,
+    );
+    if let Some(current) = current {
         // Dev/debug builds keep `local-source` runtimes (see dev-runtime tree).
         // Release builds archive the stale pointer and fall through to bundled
         // install so packaged launches never stick on an old dev-local kernel.
@@ -2057,6 +2065,18 @@ pub async fn install_bundled_runtime_if_needed(
                 previous: Some(current),
                 error: None,
             };
+        } else if !should_install_bundled {
+            log::info!(
+                "Keeping current managed runtime {} over bundled {}",
+                current.runtime_version,
+                manifest.runtime_version
+            );
+            return RuntimeInstallUpdateResult {
+                ok: true,
+                installed: None,
+                previous: Some(current),
+                error: None,
+            };
         }
     }
 
@@ -2085,6 +2105,20 @@ pub async fn install_bundled_runtime_if_needed(
         }
     }
     result
+}
+
+fn should_install_bundled_runtime(current_version: Option<&str>, bundled_version: &str) -> bool {
+    let Some(current_version) = current_version else {
+        return true;
+    };
+
+    match (
+        Version::parse(current_version),
+        Version::parse(bundled_version),
+    ) {
+        (Ok(current), Ok(bundled)) => current.cmp_precedence(&bundled).is_lt(),
+        _ => current_version != bundled_version,
+    }
 }
 
 /// Download, verify, and install a runtime update.
@@ -3059,6 +3093,35 @@ mod tests {
                 "must reject invalid runtimeVersion {version:?}"
             );
         }
+    }
+
+    #[test]
+    fn bundled_runtime_installs_when_current_version_is_missing() {
+        assert!(should_install_bundled_runtime(None, "0.19.0-cn.6"));
+    }
+
+    #[test]
+    fn bundled_runtime_installs_over_older_current_version() {
+        assert!(should_install_bundled_runtime(
+            Some("0.19.0-cn.5"),
+            "0.19.0-cn.6"
+        ));
+    }
+
+    #[test]
+    fn bundled_runtime_skips_matching_current_version() {
+        assert!(!should_install_bundled_runtime(
+            Some("0.19.0-cn.6"),
+            "0.19.0-cn.6"
+        ));
+    }
+
+    #[test]
+    fn bundled_runtime_does_not_downgrade_newer_current_version() {
+        assert!(!should_install_bundled_runtime(
+            Some("0.19.0-cn.7"),
+            "0.19.0-cn.6"
+        ));
     }
 
     #[test]
