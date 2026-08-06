@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.9-rc.8`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.10`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.9-rc.8)"
+        description: "Tag name to associate the build with (e.g. v0.6.10)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -147,6 +147,12 @@ jobs:
           Windows installer name, install directory, and uninstall registry
           entries use the English name Hermes Agent CN Desktop to avoid
           compatibility issues caused by non-ASCII install paths.
+
+          Before installing, fully quit any running Hermes Agent CN Desktop app.
+
+          Windows installers are not currently Authenticode-signed. If Windows
+          SmartScreen appears, verify the file against checksums.txt, then use
+          More info > Run anyway to continue.
           EOF
 
           prerelease_args=()
