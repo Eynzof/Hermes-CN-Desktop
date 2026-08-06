@@ -4,13 +4,14 @@
 //   GET {serverUrl}/api/workbuddy/sync
 //   Authorization: Bearer <deviceToken>
 // 响应 data：{ cleanupOnly?, models: [...], defaultModel?, skills? }。
-// 每个模型是 OpenAI 兼容配置：url 指向 Team proxy（{serverUrl}/api/workbuddy/proxy/v1），
-// apiKey 即 deviceToken 本身，真实上游 key 永不下发。
+// 每个模型的 url 指向 Team proxy（{serverUrl}/api/workbuddy/proxy/v1），
+// OpenAI 模型走 Chat Completions，Anthropic 模型走 Messages；apiKey 即
+// deviceToken 本身，真实上游 key 永不下发。
 // 设备被停用时返回 cleanupOnly:true + 空清单，客户端据此清理本地托管模型。
 //
 // 应用策略：下发的模型写成 Core config.yaml 里的自定义 provider
 //（id 前缀 custom:team-），这样它们自动出现在 Composer 的模型选择器里，
-// 并通过 Core 的 OpenAI 兼容通道真实可用。
+// 并通过 Core 对应的 OpenAI / Anthropic 兼容通道真实可用。
 
 import { readUiValue, removeUiValue, writeUiValue } from "./ui-store";
 import { BRAND } from "./brand.generated";
@@ -86,6 +87,18 @@ export function enterpriseProviderId(workbuddyId: string): string {
   return `${ENTERPRISE_PROVIDER_PREFIX}${workbuddyId}`;
 }
 
+function usesAnthropicMessages(model: EnterpriseModel): boolean {
+  if (model.useCustomProtocol === true) return true;
+  const id = model.id.trim().toLowerCase();
+  // Older Team manifests did not include useCustomProtocol. Keep the
+  // account-era routing for the two branded aliases that are Messages-only.
+  return id === "claude-opus-4-8" || id === "kimi-k3";
+}
+
+function anthropicBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, "").replace(/\/v1$/i, "");
+}
+
 interface SyncEnvelope {
   success: boolean;
   message?: string;
@@ -148,11 +161,19 @@ export function applyEnterpriseSync(
   for (const model of models) {
     if (!model?.id) continue;
     const providerId = enterpriseProviderId(model.id);
+    const anthropic = usesAnthropicMessages(model);
+    const baseUrl = model.url || `${base}/api/workbuddy/proxy/v1`;
     providers[providerId] = {
       name: model.name || model.id,
-      base_url: model.url || `${base}/api/workbuddy/proxy/v1`,
-      api_mode: "chat_completions",
-      transport: "openai_chat",
+      // Anthropic's SDK appends /v1/messages itself. The Team proxy URL is
+      // advertised with a /v1 suffix for OpenAI clients, so strip it here to
+      // avoid producing /v1/v1/messages.
+      base_url: anthropic ? anthropicBaseUrl(baseUrl) : baseUrl,
+      api_mode: anthropic ? "anthropic_messages" : "chat_completions",
+      transport: anthropic ? "anthropic_messages" : "openai_chat",
+      // The manifest is authoritative. Do not probe /models and replace the
+      // explicitly synchronized model with an unrelated relay catalog.
+      discover_models: false,
       api_key: binding.deviceToken.trim(),
       model: model.id,
       models: {
@@ -176,7 +197,7 @@ export function applyEnterpriseSync(
       provider: providerId,
       default: defaultModel,
       base_url: provider.base_url,
-      api_mode: "chat_completions",
+      api_mode: provider.api_mode,
       api_key: binding.deviceToken.trim(),
     };
   }

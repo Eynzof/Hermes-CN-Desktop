@@ -78,6 +78,39 @@ describe("applyEnterpriseSync", () => {
     expect(model.api_key).toBe("wbd_test_token");
   });
 
+  it.each(["claude-opus-4-8", "kimi-k3"])(
+    "routes %s through Anthropic Messages and pins the synchronized model",
+    (id) => {
+      const next = applyEnterpriseSync(baseConfig(), BINDING, {
+        models: [{ id, url: "http://localhost:3100/api/workbuddy/proxy/v1" }],
+        defaultModel: id,
+      });
+      const provider = (next.providers as Record<string, any>)[enterpriseProviderId(id)];
+      expect(provider).toMatchObject({
+        base_url: "http://localhost:3100/api/workbuddy/proxy",
+        api_mode: "anthropic_messages",
+        transport: "anthropic_messages",
+        discover_models: false,
+        model: id,
+      });
+      expect(next.model).toMatchObject({
+        provider: enterpriseProviderId(id),
+        default: id,
+        base_url: "http://localhost:3100/api/workbuddy/proxy",
+        api_mode: "anthropic_messages",
+      });
+    },
+  );
+
+  it("honors the Team manifest protocol flag for non-branded model ids", () => {
+    const next = applyEnterpriseSync(baseConfig(), BINDING, {
+      models: [{ id: "provider-specific-alias", useCustomProtocol: true }],
+    });
+    const provider = (next.providers as Record<string, any>)[enterpriseProviderId("provider-specific-alias")];
+    expect(provider.api_mode).toBe("anthropic_messages");
+    expect(provider.base_url).toBe("http://localhost:3100/api/workbuddy/proxy");
+  });
+
   it("ignores defaultModel that is not in the manifest", () => {
     const next = applyEnterpriseSync(baseConfig(), BINDING, {
       models: [{ id: "kimi-k3" }],

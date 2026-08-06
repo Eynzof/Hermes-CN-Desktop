@@ -1,3 +1,4 @@
+pub mod account;
 pub mod api_proxy;
 pub mod backup;
 pub mod coding_agents;

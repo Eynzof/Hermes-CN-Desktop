@@ -4498,8 +4498,7 @@ mod tests {
         // No env, no compile-time bake (BAKED_* are option_env! and unset in
         // dev/test builds), so we get the production fallback + default channel.
         let url = configured_manifest_url().unwrap();
-        assert!(url
-            .contains("ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime/stable"));
+        assert!(url.contains("ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime/stable"));
         assert!(url.contains("stable-"));
     }
 

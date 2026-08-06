@@ -70,10 +70,16 @@ windows-sys = { version = "0.61", features = [
 ] }
 # Read-only registry access for live PATH/PATHEXT resolution (path_resolver.rs).
 winreg = "0.55"
+# Native credential store for the account sk- key (commands/account.rs).
+# Windows + macOS only: the ubuntu CI runner has no Secret Service / D-Bus
+# session, so on Linux/CI the key falls back to an in-memory store
+# (see account::secret_store). keyring is never compiled there.
+keyring = { version = "3", features = ["windows-native"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSProcessInfo", "NSString"] }
+keyring = { version = "3", features = ["apple-native"] }
 
 [dev-dependencies]
 pretty_assertions = "1"
