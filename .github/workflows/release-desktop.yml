@@ -48,6 +48,10 @@ permissions:
 env:
   UPDATE_FEED_BASE_URL: https://ai.fengchiyun.com/downloads
   RUNTIME_UPDATE_FEED_BASE_URL: https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime
+  # Build-time source for immutable, signed runtime release artifacts. Keep
+  # this separate from the client update endpoint so a frontend/feed outage
+  # cannot block every platform in the release matrix.
+  BUNDLED_RUNTIME_FEED_BASE_URL: https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime
 
 jobs:
   resolve-brands:
@@ -228,7 +232,8 @@ jobs:
           (async () => {
             const repo = process.env.BUNDLED_RUNTIME_REPO || "Eynzof/Hermes-CN-Core";
             const tag = process.env.BUNDLED_RUNTIME_TAG || "latest";
-            const feedBaseUrl = process.env.RUNTIME_UPDATE_FEED_BASE_URL;
+            const feedBaseUrl = process.env.BUNDLED_RUNTIME_FEED_BASE_URL
+              || process.env.RUNTIME_UPDATE_FEED_BASE_URL;
             const runtimeVersion = tag === "latest" ? null : tag.replace(/^runtime-v/u, "");
             const baseUrl = runtimeVersion
               ? `${feedBaseUrl}/releases/${encodeURIComponent(runtimeVersion)}`
@@ -271,6 +276,7 @@ jobs:
             scripts/stage-bundled-runtime.mjs
             --repo "Eynzof/Hermes-CN-Core"
             --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.19.0-cn.7' }}"
+            --feed-base-url "${{ env.BUNDLED_RUNTIME_FEED_BASE_URL }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
