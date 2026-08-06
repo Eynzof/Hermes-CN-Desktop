@@ -634,6 +634,8 @@ def main() -> None:
             [
                 str(VENV_HERMES),
                 "dashboard",
+                "--skip-build",     # Serve existing web_dist; skip npm install + Vite build
+                                    # (the Desktop Vite dev server at 9545 is the real frontend)
                 "--no-open",        # Don't open browser
                 "--port", str(backend_port),
                 "--host", "127.0.0.1",
