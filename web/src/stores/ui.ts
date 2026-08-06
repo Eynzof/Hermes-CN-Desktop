@@ -295,7 +295,7 @@ function normalizeComposerSubmitShortcut(value: unknown): ComposerSubmitShortcut
 }
 
 const composerSubmitShortcutBaseAtom = persistedUiBaseAtom<ComposerSubmitShortcut>(
-  () => normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "enter")),
+  () => normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "ctrl-enter")),
 );
 export const composerSubmitShortcutAtom = atom(
   (get) => get(composerSubmitShortcutBaseAtom),
