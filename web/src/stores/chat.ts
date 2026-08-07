@@ -77,6 +77,18 @@ export interface ChatSessionRuntime {
   turnStartedAt?: number;
   turnFirstTokenAt?: number;
   activeAssistantId?: string;
+  /**
+   * Core's stable id for the turn that {@link activeAssistantId} belongs to
+   * (stamped on every gateway event of that turn). When present it is the
+   * authoritative answer to "same turn or new turn?", replacing the
+   * stream-status heuristic: a duplicated `message.start` carries the same
+   * turn_id and is therefore idempotent, while a genuinely new turn carries a
+   * different one.
+   *
+   * Absent on older runtimes that don't send `turn_id` — the reducer then falls
+   * back to the pre-existing heuristic. Never treat "absent" as "same turn".
+   */
+  activeTurnId?: string;
   interrupted?: boolean;
 }
 
@@ -168,6 +180,7 @@ function resetStream(runtime: ChatSessionRuntime, now: number): ChatSessionRunti
     statusKind: undefined,
     statusUpdatedAt: undefined,
     activeAssistantId: undefined,
+    activeTurnId: undefined,
     turnStartedAt: undefined,
     turnFirstTokenAt: undefined,
     updatedAt: now,
@@ -194,6 +207,30 @@ function sessionIdFor(runtime: ChatSessionRuntime, event: GatewayEvent): string 
 
 function isStreamingStatus(status: StreamStatus): boolean {
   return status === "streaming" || status === "connecting";
+}
+
+/** Core's stable per-turn id, when the runtime is new enough to send one. */
+function turnIdOf(event: GatewayEvent): string | undefined {
+  const raw = (event as { turn_id?: unknown }).turn_id;
+  return typeof raw === "string" && raw ? raw : undefined;
+}
+
+/**
+ * Decide whether an incoming `message.start` continues the live bubble or opens
+ * a new one.
+ *
+ * With a turn id this is exact: same id ⇒ same turn (so the duplicate
+ * `message.start` that several Core dispatch paths emit is idempotent),
+ * different id ⇒ genuinely a new turn. Without one (older Core) fall back to
+ * the original heuristic — mid-stream status implies the same turn.
+ */
+function shouldContinueActiveTurn(
+  runtime: ChatSessionRuntime,
+  turnId: string | undefined,
+): boolean {
+  if (!runtime.activeAssistantId) return false;
+  if (turnId && runtime.activeTurnId) return runtime.activeTurnId === turnId;
+  return isStreamingStatus(runtime.streamStatus);
 }
 
 function textFromParts(parts: HermesMessagePart[]): string {
@@ -614,10 +651,9 @@ function reduceGatewayEventInner(
 
   switch (event.type) {
     case "message.start": {
-      const id =
-        isStreamingStatus(runtime.streamStatus) && runtime.activeAssistantId
-          ? runtime.activeAssistantId
-          : assistantClientId(now);
+      const turnId = turnIdOf(event);
+      const continuing = shouldContinueActiveTurn(runtime, turnId);
+      const id = continuing ? runtime.activeAssistantId! : assistantClientId(now);
       return ensureAssistantMessage(
         {
           ...runtime,
@@ -626,7 +662,11 @@ function reduceGatewayEventInner(
           statusKind: undefined,
           statusUpdatedAt: undefined,
           activeAssistantId: id,
-          turnStartedAt: runtime.turnStartedAt ?? now,
+          activeTurnId: turnId ?? runtime.activeTurnId,
+          // A continued turn keeps its original start time; a new turn restarts
+          // the clock (the old code reused turnStartedAt unconditionally, which
+          // backdated every follow-up turn to the first one).
+          turnStartedAt: continuing ? runtime.turnStartedAt ?? now : now,
           turnFirstTokenAt: undefined,
           updatedAt: now,
         },
@@ -840,6 +880,7 @@ function reduceGatewayEventInner(
         turnStartedAt: undefined,
         turnFirstTokenAt: undefined,
         activeAssistantId: undefined,
+        activeTurnId: undefined,
         interrupted: undefined,
         updatedAt: now,
       };
@@ -960,6 +1001,7 @@ function reduceGatewayEventInner(
         statusKind: "error",
         statusUpdatedAt: now,
         activeAssistantId: undefined,
+        activeTurnId: undefined,
         interrupted: undefined,
         updatedAt: now,
       };
@@ -982,6 +1024,7 @@ function reduceGatewayEventInner(
         statusKind: "error",
         statusUpdatedAt: now,
         activeAssistantId: undefined,
+        activeTurnId: undefined,
         updatedAt: now,
       };
     }
@@ -1165,6 +1208,12 @@ export const startPromptAtom = atom(
         turnStartedAt: now,
         turnFirstTokenAt: undefined,
         activeAssistantId: assistantId,
+        // The optimistic bubble predates the backend's turn, so no id is known
+        // yet. Clearing it (rather than inheriting the previous turn's) is what
+        // lets the first real `message.start` adopt this bubble: with no
+        // activeTurnId to compare against, shouldContinueActiveTurn falls back
+        // to the streaming check and reuses it instead of opening a second one.
+        activeTurnId: undefined,
       })),
     );
   },
@@ -1312,6 +1361,7 @@ export const setSessionErrorAtom = atom(
           statusKind: "error",
           statusUpdatedAt: now,
           activeAssistantId: undefined,
+          activeTurnId: undefined,
           turnStartedAt: undefined,
           turnFirstTokenAt: undefined,
           updatedAt: now,
@@ -1374,6 +1424,7 @@ export const terminateAllStreamsAtom = atom(null, (_get, set) => {
           statusKind: "error",
           statusUpdatedAt: now,
           activeAssistantId: undefined,
+          activeTurnId: undefined,
           updatedAt: now,
         };
       } else {
