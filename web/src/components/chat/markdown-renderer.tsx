@@ -16,6 +16,7 @@ import { harden } from "rehype-harden";
 import { Streamdown } from "streamdown";
 import "katex/dist/katex.min.css";
 import { MessageImage } from "./message-image";
+import { isImageReference } from "@/lib/message-images";
 import s from "./markdown-renderer.module.css";
 
 interface MarkdownTextProps {
@@ -58,6 +59,8 @@ const streamdownControls: ComponentProps<typeof Streamdown>["controls"] = {
 const streamdownTranslations: ComponentProps<typeof Streamdown>["translations"] = {
   copyCode: "复制代码",
 };
+
+const MARKDOWN_IMAGE_DEST_RE = /!\[([^\]\n]*)\]\(\s*([^<\n)]*?\.(?:apng|avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)(?:[?#][^\n)]*)?)\s*\)/gi;
 
 const markdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
@@ -193,6 +196,14 @@ function normalizeTexMathDelimiters(text: string): string {
   }
 
   return result;
+}
+
+function normalizeMarkdownImageDestinations(text: string): string {
+  return text.replace(MARKDOWN_IMAGE_DEST_RE, (match, alt: string, rawUrl: string) => {
+    const url = rawUrl.trim();
+    if (!/\s/.test(url) || !isImageReference(url)) return match;
+    return `![${alt}](<${url}>)`;
+  });
 }
 
 function safeHref(value: unknown): string | undefined {
@@ -561,7 +572,10 @@ export const MarkdownText = memo(function MarkdownText({
   text,
   streaming = false,
 }: MarkdownTextProps) {
-  const normalizedText = useMemo(() => normalizeTexMathDelimiters(text), [text]);
+  const normalizedText = useMemo(
+    () => normalizeTexMathDelimiters(normalizeMarkdownImageDestinations(text)),
+    [text],
+  );
 
   return (
     <Streamdown

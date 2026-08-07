@@ -4,6 +4,7 @@ import { getDefaultStore, useAtomValue, useSetAtom } from "jotai";
 import {
   ConfigSetResult,
   CommandDispatchResult,
+  FileAttachResult,
   ImageAttachResult,
   InputDetectDropResult,
   ModelOptionsResult,
@@ -745,6 +746,28 @@ export function useGateway() {
     [ensureSubscribed],
   );
 
+  const attachFile = useCallback(
+    async (
+      sessionId: string,
+      path?: string,
+      dataUrl?: string,
+      name?: string,
+    ): Promise<FileAttachResult> => {
+      ensureSubscribed();
+      return parseGatewayResult(
+        FileAttachResult,
+        await getGatewayClient().request("file.attach", {
+          session_id: sessionId,
+          ...(path ? { path } : {}),
+          ...(dataUrl ? { data_url: dataUrl } : {}),
+          ...(name ? { name } : {}),
+        }),
+        "file.attach",
+      );
+    },
+    [ensureSubscribed],
+  );
+
   const detectDroppedPath = useCallback(
     async (sessionId: string, path: string): Promise<InputDetectDropResult> => {
       ensureSubscribed();
@@ -839,6 +862,7 @@ export function useGateway() {
     setSessionReasoningEffort,
     attachImage,
     attachImageBytes,
+    attachFile,
     detectDroppedPath,
     interruptSession,
     setSessionTitle,

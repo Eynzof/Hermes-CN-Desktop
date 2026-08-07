@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  filesFromClipboardData,
   imageFileFromClipboardData,
   readClipboardImageAsFile,
   type NativeClipboardImage,
@@ -37,6 +38,11 @@ describe("clipboard image helpers", () => {
   it("ignores non-image paste files", () => {
     const file = new File(["txt"], "note.txt", { type: "text/plain" });
     expect(imageFileFromClipboardData(clipboardDataWithFile(file))).toBeNull();
+  });
+
+  it("preserves non-image paste files for the composer attachment path", () => {
+    const file = new File(["%PDF-"], "report.pdf", { type: "application/pdf" });
+    expect(filesFromClipboardData(clipboardDataWithFile(file))).toEqual([file]);
   });
 
   it("falls back to native clipboard image when paste data has no image", async () => {
