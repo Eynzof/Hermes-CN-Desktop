@@ -164,6 +164,18 @@ export async function fetchJSON<T>(
  * confined `/api/media` endpoint.
  */
 export async function fetchMediaDataUrl(path: string): Promise<string> {
+  const readFileDataUrl = window.hermesDesktop?.readFileDataUrl;
+  if (readFileDataUrl) {
+    try {
+      const dataUrl = await readFileDataUrl(path);
+      if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) {
+        return dataUrl;
+      }
+    } catch {
+      // Fall back to Core's media endpoint when the path is not on this machine.
+    }
+  }
+
   const result = await fetchJSON<{ data_url?: unknown }>(
     `/api/media?path=${encodeURIComponent(path)}`,
   );
@@ -171,6 +183,17 @@ export async function fetchMediaDataUrl(path: string): Promise<string> {
     throw new Error("Media response did not contain an image data URL");
   }
   return result.data_url;
+}
+
+export async function readFileDataUrl(path: string): Promise<string | null> {
+  const reader = window.hermesDesktop?.readFileDataUrl;
+  if (!reader) return null;
+  try {
+    const dataUrl = await reader(path);
+    return dataUrl || null;
+  } catch {
+    return null;
+  }
 }
 
 const EXTERNAL_FETCH_TIMEOUT_MS = 15_000;
@@ -398,6 +421,15 @@ function attachmentFileName(path: string): string {
 export async function readImageBytesFromPath(
   path: string,
 ): Promise<{ contentBase64: string; filename: string } | null> {
+  const dataUrl = await readFileDataUrl(path);
+  if (dataUrl?.startsWith("data:image/")) {
+    const comma = dataUrl.indexOf(",");
+    const contentBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    return contentBase64
+      ? { contentBase64, filename: attachmentFileName(path) }
+      : null;
+  }
+
   const read = window.hermesDesktop?.readWorkspaceFile;
   if (!read) return null;
   try {

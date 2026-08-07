@@ -26,18 +26,36 @@ function isImageFile(file: File): boolean {
   return file.type.startsWith("image/") || isLikelyImageUrl(file.name);
 }
 
-export function imageFileFromClipboardData(clipboardData?: DataTransfer | null): File | null {
-  if (!clipboardData) return null;
+export function filesFromClipboardData(clipboardData?: DataTransfer | null): File[] {
+  if (!clipboardData) return [];
+
+  const files: File[] = [];
+  const seen = new Set<string>();
+  const add = (file: File | null) => {
+    if (!file) return;
+    const key = `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    files.push(file);
+  };
 
   for (const file of Array.from(clipboardData.files ?? [])) {
-    if (isImageFile(file)) return file;
+    add(file);
   }
 
   for (const item of Array.from(clipboardData.items ?? [])) {
     if (item.kind !== "file") continue;
-    if (item.type && !item.type.startsWith("image/")) continue;
-    const file = item.getAsFile();
-    if (file && isImageFile(file)) return file;
+    add(item.getAsFile());
+  }
+
+  return files;
+}
+
+export function imageFileFromClipboardData(clipboardData?: DataTransfer | null): File | null {
+  if (!clipboardData) return null;
+
+  for (const file of filesFromClipboardData(clipboardData)) {
+    if (isImageFile(file)) return file;
   }
 
   return null;

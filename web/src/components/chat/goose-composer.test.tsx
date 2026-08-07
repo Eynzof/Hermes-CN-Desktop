@@ -83,6 +83,12 @@ describe("GooseComposer slash hints", () => {
 });
 
 describe("GooseComposer workspace picker", () => {
+  it("renders initial draft text in the textarea", () => {
+    const html = renderComposer(<GooseComposer initial="恢复的草稿" />);
+
+    expect(html).toContain("恢复的草稿");
+  });
+
   it("renders a clear workspace action when a workspace is selected", () => {
     const html = renderComposer(
       <GooseComposer initialWorkspacePath="/Users/enzo/Project" />,

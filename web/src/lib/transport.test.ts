@@ -98,6 +98,22 @@ describe("transport · debug-bus integration", () => {
     );
   });
 
+  it("fetchMediaDataUrl prefers the desktop file bridge for local images", async () => {
+    const readFileDataUrl = vi.fn(async () => "data:image/png;base64,REVT");
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request: vi.fn(),
+      readFileDataUrl,
+    };
+    stubFetch(() => makeResponse(500, "should not fetch"));
+
+    await expect(fetchMediaDataUrl("/Users/me/Library/Application Support/Hermes/out.png"))
+      .resolves.toBe("data:image/png;base64,REVT");
+
+    expect(readFileDataUrl).toHaveBeenCalledWith("/Users/me/Library/Application Support/Hermes/out.png");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("fetchMediaDataUrl rejects a malformed media response", async () => {
     stubFetch(() => makeResponse(200, '{"data_url":"https://example.com/not-inline.png"}'));
 
