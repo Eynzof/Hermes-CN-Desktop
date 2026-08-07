@@ -1013,6 +1013,30 @@ fn spawn_dashboard(
     let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
     let _ = std::fs::create_dir_all(&gateway_lock_dir);
     let _ = std::fs::create_dir_all(&gateway_runtime_dir);
+    if let Some(record) = crate::process::runtime::read_current_record() {
+        match crate::process::gateway::preflight_managed_gateway_restart(
+            &record,
+            &options.hermes_home,
+            &gateway_runtime_dir,
+            &gateway_lock_dir,
+        ) {
+            Ok(report) => {
+                if report.stop_attempted
+                    || report.stale_files_removed > 0
+                    || !report.remaining_pids.is_empty()
+                    || report.lock_active
+                {
+                    log::info!(
+                        "Gateway preflight before dashboard spawn: {}",
+                        report.summary()
+                    );
+                }
+            }
+            Err(err) => {
+                log::warn!("Gateway preflight before dashboard spawn failed: {}", err);
+            }
+        }
+    }
     cmd.args(&prefix_args)
         .env("HERMES_HOME", &options.hermes_home)
         .env(
