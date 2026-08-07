@@ -1,0 +1,194 @@
+/* WanderMemory api-docs route — Hermes tokens only, no hard-coded colors. */
+
+.page {
+  width: 100%;
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1080px;
+}
+
+.pageHead {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pageTitle {
+  margin: 0;
+  color: var(--h-text);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.pageSub {
+  margin: 4px 0 0;
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--h-line);
+}
+
+.tab {
+  padding: 8px 16px;
+  color: var(--h-text-3);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: 0;
+  font-family: var(--h-font-mono);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color var(--h-duration-fast) var(--h-ease-standard);
+}
+
+.tab:hover {
+  color: var(--h-text);
+}
+
+.tab[data-active="true"] {
+  color: var(--h-accent);
+  border-bottom-color: var(--h-accent);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.th {
+  padding: 8px 12px;
+  color: var(--h-text-4);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  border-bottom: 1px solid var(--h-line);
+  white-space: nowrap;
+}
+
+.td {
+  padding: 8px 12px;
+  color: var(--h-text-2);
+  border-bottom: 1px solid var(--h-line-soft);
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+.tr:last-child .td {
+  border-bottom: 0;
+}
+
+.monoCell {
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.opCell {
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.errorCell {
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.llmChip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 4px 8px;
+  color: var(--h-warn);
+  border: 1px solid var(--h-warn-border);
+  background: var(--h-warn-soft);
+  font-size: 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.codeBlock {
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-pane);
+  overflow: hidden;
+}
+
+.codeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.codeTitle {
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.codeText {
+  margin: 0;
+  padding: 16px;
+  color: var(--h-text-2);
+  background: var(--h-bg-code);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: 12px 0 0;
+  color: var(--h-text-3);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--h-text-2);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.inlineCode {
+  padding: 4px 8px;
+  color: var(--h-text);
+  background: var(--h-bg-code);
+  border: 1px solid var(--h-line-soft);
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+}

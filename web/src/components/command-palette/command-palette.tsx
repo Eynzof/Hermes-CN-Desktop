@@ -12,6 +12,7 @@ import {
   Bug,
   Clock,
   Cpu,
+  Database,
   FileText,
   Folder,
   HeartPulse,
@@ -70,6 +71,7 @@ const ICONS: Record<CommandPaletteIconKey, LucideIcon> = {
   settings: Settings,
   skill: Sparkles,
   soul: Sparkles,
+  wanderMemory: Database,
 };
 
 function sortProjectsForFileSearch(projects: readonly WorkspaceProject[]): WorkspaceProject[] {

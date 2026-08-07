@@ -3,8 +3,15 @@ import { resolveSkillOrigin } from "@/lib/skill-origin";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { translateCategory, translateSkill } from "@/lib/skill-translations";
 import type { WorkspaceProject } from "@/lib/workspaces";
+import { WANDER_MEMORY_PATHS } from "@/lib/wander-memory/paths";
 
-export type CommandPaletteGroupId = "commands" | "sessions" | "projects" | "skills" | "files";
+export type CommandPaletteGroupId =
+  | "commands"
+  | "wanderMemory"
+  | "sessions"
+  | "projects"
+  | "skills"
+  | "files";
 
 export type CommandPaletteIconKey =
   | "analytics"
@@ -25,7 +32,8 @@ export type CommandPaletteIconKey =
   | "project"
   | "settings"
   | "skill"
-  | "soul";
+  | "soul"
+  | "wanderMemory";
 
 export type CommandPaletteAction =
   | { type: "navigate"; to: string }
@@ -68,10 +76,11 @@ interface FilterOptions {
   maxPerGroup?: number;
 }
 
-const GROUP_ORDER: CommandPaletteGroupId[] = ["commands", "sessions", "projects", "skills", "files"];
+const GROUP_ORDER: CommandPaletteGroupId[] = ["commands", "wanderMemory", "sessions", "projects", "skills", "files"];
 
 export const COMMAND_PALETTE_GROUP_LABELS: Record<CommandPaletteGroupId, string> = {
   commands: "命令",
+  wanderMemory: "Wander 记忆",
   sessions: "会话",
   projects: "项目",
   skills: "Skills",
@@ -278,6 +287,83 @@ export const COMMAND_PALETTE_COMMANDS: readonly CommandPaletteItem[] = [
     icon: "console",
     action: { type: "navigate", to: "/console" },
     priority: 18,
+  },
+  {
+    id: "command-wander-memory-memories",
+    group: "wanderMemory",
+    label: "浏览记忆",
+    subtitle: "/wander-memory/memories · 搜索、添加与删除 MemOS 记忆",
+    keywords: ["wander", "memOS", "memory", "memories", "记忆", "浏览"],
+    icon: "wanderMemory",
+    action: { type: "navigate", to: WANDER_MEMORY_PATHS.memories },
+    defaultVisible: true,
+    priority: 0,
+  },
+  {
+    id: "command-wander-memory-files",
+    group: "wanderMemory",
+    label: "文件导入",
+    subtitle: "/wander-memory/files · 从本地目录导入记忆",
+    keywords: ["wander", "memOS", "memory", "files", "import", "文件", "导入"],
+    icon: "wanderMemory",
+    action: { type: "navigate", to: WANDER_MEMORY_PATHS.files },
+    defaultVisible: true,
+    priority: 1,
+  },
+  {
+    id: "command-wander-memory-dialogue",
+    group: "wanderMemory",
+    label: "对话导入",
+    subtitle: "/wander-memory/dialogue · 导入历史对话作为记忆",
+    keywords: ["wander", "memOS", "memory", "dialogue", "transcript", "import", "对话", "导入"],
+    icon: "wanderMemory",
+    action: { type: "navigate", to: WANDER_MEMORY_PATHS.dialogue },
+    defaultVisible: true,
+    priority: 2,
+  },
+  {
+    id: "command-wander-memory-chat",
+    group: "wanderMemory",
+    label: "记忆聊天",
+    subtitle: "/wander-memory/chat · 基于记忆的 MemOS 聊天",
+    keywords: ["wander", "memOS", "memory", "chat", "conversation", "记忆", "聊天"],
+    icon: "wanderMemory",
+    action: { type: "navigate", to: WANDER_MEMORY_PATHS.chat },
+    defaultVisible: true,
+    priority: 3,
+  },
+  {
+    id: "command-wander-memory-context",
+    group: "wanderMemory",
+    label: "上下文预览",
+    subtitle: "/wander-memory/context · 预览当前上下文构建",
+    keywords: ["wander", "memOS", "memory", "context", "prompt", "preview", "上下文", "预览"],
+    icon: "wanderMemory",
+    action: { type: "navigate", to: WANDER_MEMORY_PATHS.context },
+    defaultVisible: true,
+    priority: 4,
+  },
+  {
+    id: "command-wander-memory-status",
+    group: "wanderMemory",
+    label: "状态",
+    subtitle: "/wander-memory/status · 服务健康、端点与维护",
+    keywords: ["wander", "memOS", "memory", "status", "health", "endpoint", "状态"],
+    icon: "wanderMemory",
+    action: { type: "navigate", to: WANDER_MEMORY_PATHS.status },
+    defaultVisible: true,
+    priority: 5,
+  },
+  {
+    id: "command-wander-memory-api",
+    group: "wanderMemory",
+    label: "API 文档",
+    subtitle: "/wander-memory/api · MemOS REST / WS 接口参考",
+    keywords: ["wander", "memOS", "memory", "api", "docs", "documentation", "接口", "文档"],
+    icon: "wanderMemory",
+    action: { type: "navigate", to: WANDER_MEMORY_PATHS.api },
+    defaultVisible: true,
+    priority: 6,
   },
 ];
 

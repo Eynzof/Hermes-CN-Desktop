@@ -28,6 +28,13 @@ import { ProfilesRoute } from "@/routes/profiles";
 import { ProfileBuilderRoute } from "@/routes/profile-builder";
 import { MemoryRoute } from "@/routes/memory";
 import { ExternalMemoryRoute } from "@/routes/external-memory";
+import { WanderMemoryMemoriesRoute } from "@/routes/wander-memory/memories";
+import { WanderMemoryFilesRoute } from "@/routes/wander-memory/files";
+import { WanderMemoryDialogueRoute } from "@/routes/wander-memory/dialogue";
+import { WanderMemoryChatRoute } from "@/routes/wander-memory/chat";
+import { WanderMemoryContextRoute } from "@/routes/wander-memory/context";
+import { WanderMemoryStatusRoute } from "@/routes/wander-memory/status";
+import { WanderMemoryApiDocsRoute } from "@/routes/wander-memory/api-docs";
 import { SoulRoute } from "@/routes/soul";
 import { CronRoute } from "@/routes/cron";
 import { ConsoleRoute } from "@/routes/console";
@@ -80,6 +87,15 @@ function BackendApp() {
           <Route path="/memconfig" element={withBoundary(<ExternalMemoryRoute page="config" />)} />
           <Route path="/openviking" element={withBoundary(<ExternalMemoryRoute page="openviking" />)} />
           <Route path="/hindsight" element={withBoundary(<ExternalMemoryRoute page="hindsight" />)} />
+          <Route path="/wander-memory" element={<Navigate to="/wander-memory/memories" replace />} />
+          <Route path="/wander-memory/memories" element={withBoundary(<WanderMemoryMemoriesRoute />)} />
+          <Route path="/wander-memory/files" element={withBoundary(<WanderMemoryFilesRoute />)} />
+          <Route path="/wander-memory/dialogue" element={withBoundary(<WanderMemoryDialogueRoute />)} />
+          <Route path="/wander-memory/chat" element={withBoundary(<WanderMemoryChatRoute />)} />
+          <Route path="/wander-memory/context" element={withBoundary(<WanderMemoryContextRoute />)} />
+          <Route path="/wander-memory/status" element={withBoundary(<WanderMemoryStatusRoute />)} />
+          <Route path="/wander-memory/api" element={withBoundary(<WanderMemoryApiDocsRoute />)} />
+          <Route path="/wander-memory/*" element={<Navigate to="/wander-memory/memories" replace />} />
           <Route path="/soul" element={withBoundary(<SoulRoute />)} />
           <Route path="/cron" element={withBoundary(<CronRoute />)} />
           <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />
