@@ -86,9 +86,12 @@ Hermes CN 的需求与 bug 修复通常**同时横跨 Desktop 与 Core 两个仓
 `.codex/skills/desktop-dual-repo-test/SKILL.md`。
 
 发版、版本号更新、安装包发布或 GitHub Release 相关任务必须按顺序使用仓库内技能：**先过** `.codex/skills/desktop-release-preflight/SKILL.md`（发版前安全闸门：防内核静默降级 / 防 schema 重置 / identifier 不变 / 公证签名 / 国内镜像先有 artifactUrl 再发清单 / 先发 canary），**再做** `.codex/skills/desktop-release-sync-landing/SKILL.md`（版本同步与官网清单）。
-只要桌面端公开版本发生变化，就必须同步处理 `Eynzof/hermes-agent-cn-desktop-landing`，
+只要桌面端 **stable/正式公开版本** 发生变化，就必须同步处理 `Eynzof/hermes-agent-cn-desktop-landing`，
 更新官网版本与 `https://desktop.hermesagent.org.cn/latest.json` 清单；如果 release 资产尚未生成，
-需要明确说明 Landing 同步被阻塞，不能把桌面端发版任务当作已经完整结束。
+需要明确说明 Landing 同步被阻塞，不能把正式发版任务当作已经完整结束。
+**RC / beta / alpha / canary 等预发布或内测版本禁止修改 Landing 仓库，禁止更新官网版本，
+禁止让 `https://desktop.hermesagent.org.cn/latest.json` 指向预发布版本。** 预发布版本只能通过
+GitHub Release、手工分发或明确的内测渠道验证，不能暴露给全量用户的官网入口和自动更新清单。
 
 ### 启动顺序
 

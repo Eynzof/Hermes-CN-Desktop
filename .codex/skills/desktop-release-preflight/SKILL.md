@@ -1,13 +1,13 @@
 ---
 name: desktop-release-preflight
-description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop release (new installer, version bump, GitHub Release, or pushing a new build to users). This is the release safety gate that prevents in-place overwrite-upgrade regressions for existing users (live users are mainly on v0.3.2 and upgrade by downloading the new installer over the old one). Covers the managed-runtime reconcile traps (silent kernel downgrade via bundled_runtime_tag, schemaVersion re-bootstrap, the load-bearing stable bundle identifier), the China-mirror "artifactUrl-before-signing" rule, the cnb.cool vs GitHub Actions build-location decision, signing / notarization / Authenticode gates, and shipping to a canary channel first. Complements desktop-release-sync-landing (which handles version sync + the landing latest.json) — run this one FIRST.
+description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop release (new installer, version bump, GitHub Release, or pushing a new build to users). This is the release safety gate that prevents in-place overwrite-upgrade regressions for existing users (live users are mainly on v0.3.2 and upgrade by downloading the new installer over the old one). Covers the managed-runtime reconcile traps (silent kernel downgrade via bundled_runtime_tag, schemaVersion re-bootstrap, the load-bearing stable bundle identifier), the China-mirror "artifactUrl-before-signing" rule, the cnb.cool vs GitHub Actions build-location decision, signing / notarization / Authenticode gates, and shipping to a canary channel first. Complements desktop-release-sync-landing for stable/public releases only (which handles version sync + the landing latest.json) — run this one FIRST.
 ---
 
 # Desktop Release Preflight（发版前预检）
 
 ## Overview
 
-线上用户主力是 **v0.3.2**，外壳尚无自更新（热更新轨道 C 未建），所以用户升级 = **下载新安装包直接覆盖装**。这套机制**默认是安全的**——用户的内核 runtime 树和所有设置都在 app-data、不在安装目录，覆盖装不动它们；启动时 `install_bundled_runtime_if_needed` 自动 reconcile。**但有两个坑会在不经意间伤到老用户，必须每次发版主动防。** 本技能就是发版前的安全闸门，先于 `desktop-release-sync-landing` 执行。
+线上用户主力是 **v0.3.2**，外壳尚无自更新（热更新轨道 C 未建），所以用户升级 = **下载新安装包直接覆盖装**。这套机制**默认是安全的**——用户的内核 runtime 树和所有设置都在 app-data、不在安装目录，覆盖装不动它们；启动时 `install_bundled_runtime_if_needed` 自动 reconcile。**但有两个坑会在不经意间伤到老用户，必须每次发版主动防。** 本技能就是发版前的安全闸门；只有 stable/正式公开版本才在本技能之后执行 `desktop-release-sync-landing`。
 
 完整设计见 `docs/hot-update-impl-plan.md`（§12 覆盖升级安全性、§2.5 构建/分发后端、§11 灰度通道）。
 
@@ -37,7 +37,7 @@ description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop rele
 6. ☑️ **版本号同步**：改根 `package.json` "version" 后 `pnpm run version:sync`，`pnpm version:check` 通过（这步与 `desktop-release-sync-landing` 重叠，以那篇为准）。
 7. ☑️ **发版说明提示"安装前先退出正在运行的桌面端"**（外壳 .exe/.app 文件锁；dashboard 子进程在 app-data 不被锁）。
 8. ☑️ **先发 canary 给开发团队覆盖装验证**（见下"灰度优先"），确认 reconcile 行为符合预期，再放 stable。
-9. ☑️ 发完后转 `desktop-release-sync-landing`：同步 landing 官网版本 + `https://desktop.hermesagent.org.cn/latest.json`。
+9. ☑️ stable/正式公开版本发完后转 `desktop-release-sync-landing`：同步 landing 官网版本 + `https://desktop.hermesagent.org.cn/latest.json`。RC / beta / alpha / canary 等预发布或内测版本禁止同步 Landing，禁止让官网或 public `latest.json` 指向预发布版本。
 
 ## 两个必须主动防的坑（深入）
 
@@ -81,6 +81,6 @@ Ed25519 私钥放执行签名的那个平台 secret，**永不上分发服务器
 
 ## 相关技能 / 文档
 
-- 版本同步 + landing `latest.json`：`.codex/skills/desktop-release-sync-landing/SKILL.md`（本技能之后执行）。
+- stable/正式公开版本同步 landing `latest.json`：`.codex/skills/desktop-release-sync-landing/SKILL.md`（本技能之后执行）。RC / beta / alpha / canary 等预发布或内测版本不要执行该同步。
 - 双仓库启动/打包态补验：`.codex/skills/desktop-dual-repo-test/SKILL.md`。
 - 完整热更新方案：`docs/hot-update-impl-plan.md`（§2.5 / §11 / §12）。
