@@ -1,10 +1,10 @@
 /**
  * F5 Refresh Bug Trigger Tests
- * 
+ *
  * This file contains trigger tests for potential bugs caused by page refresh (F5).
  * Each test simulates a page refresh by resetting modules (vi.resetModules())
  * and verifying that state is correctly preserved or — in bug cases — lost.
- * 
+ *
  * Run with: npx vitest run reports/f5-refresh-trigger-tests.spec.ts
  */
 
@@ -63,7 +63,7 @@ function installSessionStorage() {
 
 async function loadModules() {
   vi.resetModules();
-  
+
   // We need to set up window.__HERMES_RUNTIME__ before importing runtime
   if (typeof window !== "undefined" && !window.__HERMES_RUNTIME__) {
     (window as any).__HERMES_RUNTIME__ = {
@@ -76,12 +76,12 @@ async function loadModules() {
       backendReady: true,
     };
   }
-  
+
   const uiStoreMod = await import("@/lib/ui-store");
   const uiMod = await import("@/stores/ui");
   const chatMod = await import("@/stores/chat");
   const panelMod = await import("@/stores/panel");
-  
+
   return { uiStoreMod, uiMod, chatMod, panelMod };
 }
 
@@ -99,7 +99,7 @@ describe("Bug #1: UI Store initialization race", () => {
     // Simulate: user previously set conversation width to "small"
     // This value is in localStorage (web mode fallback)
     const BACKUP_KEY = "hermes_ui_backup";
-    
+
     // Pre-seed localStorage with persisted user preferences
     localStorage.setItem(BACKUP_KEY, JSON.stringify({
       "hermes.conversation-width": "small",
@@ -111,10 +111,10 @@ describe("Bug #1: UI Store initialization race", () => {
 
     // Import ui-store module fresh
     const uiStoreMod = await import("@/lib/ui-store");
-    
+
     // IMPORTANT: We do NOT call initUiStore() yet — this simulates the race
     // where atoms are imported before initUiStore completes
-    
+
     // Now import stores/ui (which reads atoms at module import time)
     const uiMod = await import("@/stores/ui");
     const store = createStore();
@@ -124,23 +124,23 @@ describe("Bug #1: UI Store initialization race", () => {
     // This DEMONSTRATES the race condition bug
     expect(store.get(uiMod.conversationWidthModeAtom)).toBe("large");
     // BUG: should be "small" (the persisted value)
-    
+
     expect(store.get(uiMod.conversationFontSizeAtom)).toBe("standard");
     // BUG: should be "large" (the persisted value)
-    
+
     expect(store.get(uiMod.showReasoningAtom)).toBe(false);
     // BUG: should be true (the persisted value)
-    
+
     expect(store.get(uiMod.assistantDisplayNameAtom)).toBe("Hermes");
     // BUG: should be "Claudia" (the persisted value)
-    
+
     expect(store.get(uiMod.composerSubmitShortcutAtom)).toBe("ctrl-enter");
     // BUG: should be "ctrl-enter" (the persisted value)
   });
 
   it("verifies fix: hydratePersistedUiAtoms re-reads persisted values after initUiStore", async () => {
     const BACKUP_KEY = "hermes_ui_backup";
-    
+
     // Pre-seed localStorage with persisted user preferences
     localStorage.setItem(BACKUP_KEY, JSON.stringify({
       "hermes.conversation-width": "small",
@@ -175,7 +175,7 @@ describe("Bug #1: UI Store initialization race", () => {
 
   it("verifies fix: hydratePersistedUiAtoms is idempotent — already-correct values unchanged", async () => {
     const BACKUP_KEY = "hermes_ui_backup";
-    
+
     // Pre-seed with values that match defaults
     localStorage.setItem(BACKUP_KEY, JSON.stringify({
       "hermes.conversation-width": "large",  // same as default
@@ -665,16 +665,16 @@ describe("Bug #5: Composer queue attachment loss", () => {
     // The module installs a beforeunload listener on import that warns
     // when there are queued entries with non-serializable attachments.
     // This test verifies the listener is installed and wired correctly.
-    
+
     vi.resetModules();
-    
+
     if (typeof window === "undefined") {
       // Node.js test environment — skip spy check, verify via hasNonSerializableAttachments
       const mod = await import("@/stores/composer-queue");
       expect(typeof mod.hasNonSerializableAttachments).toBe("function");
       return;
     }
-    
+
     const addEventListenerSpy = vi.spyOn(window, "addEventListener");
     await import("@/stores/composer-queue");
 
@@ -700,35 +700,35 @@ describe("Bug #6: Gateway bridge singleton state reset", () => {
     // On F5, the module reloads and the singleton resets to null.
     // This is expected behavior but means subscriber lists, reconnect flags,
     // and delta coalescer buffer are all lost.
-    
+
     // We can't directly access the private gatewayBridge variable, but we
     // can verify that the ensureGatewayBridge function creates a fresh bridge
     // by testing the delta coalescer separately.
-    
+
     const { createDeltaCoalescer } = await import("@/lib/gateway-delta-coalescer");
-    
+
     // Create a coalescer and buffer some deltas
     const applied: any[] = [];
     const coalescer = createDeltaCoalescer((event) => {
       applied.push(event);
     });
-    
+
     // Dispatch a delta (uses requestAnimationFrame, won't apply immediately in test)
     coalescer.dispatch({
       type: "message.delta",
       session_id: "gws-1",
       payload: { text: "Hello" },
     });
-    
+
     // Flush should apply the buffered delta
     coalescer.flush();
     expect(applied).toHaveLength(1);
-    
+
     // Now simulate F5: create a NEW coalescer
     const freshCoalescer = createDeltaCoalescer((event) => {
       applied.push(event);
     });
-    
+
     // The new coalescer has no buffer — the old deltas are gone
     freshCoalescer.flush();
     // applied still has 1 (from the old coalescer), not 2
@@ -748,17 +748,17 @@ describe("Bug #6: Gateway bridge singleton state reset", () => {
     // with `if (reattachInFlight) return; reattachInFlight = true;`, so
     // concurrent calls within the same page load are still serialized.
     // The guard reset on F5 is acceptable because the old page's state is gone.
-    
+
     // This test documents the behavior for awareness.
     const { getDefaultStore } = await import("jotai/vanilla");
     const { gwSessionIdAtom } = await import("@/stores/chat");
-    
+
     // Simulate F5
     vi.resetModules();
-    
+
     const freshGwIdAtom = (await import("@/stores/chat")).gwSessionIdAtom;
     const store = getDefaultStore();
-    
+
     // After refresh, gwSessionIdAtom is null (no persistence data in this test)
     expect(store.get(freshGwIdAtom)).toBeNull();
   });
@@ -767,24 +767,24 @@ describe("Bug #6: Gateway bridge singleton state reset", () => {
     // The fix ensures that on first WebSocket connect after page load,
     // the handler checks both gwSessionIdAtom AND activeSessionIdAtom
     // (via resolveGatewaySessionId) for session recovery.
-    
+
     // Load modules with persistence data
     const uiStoreMod = await import("@/lib/ui-store");
     const chatMod = await import("@/stores/chat");
     const uiMod = await import("@/stores/ui");
     const store = createStore();
-    
+
     // Simulate: user had an active session (persisted via Bug #2 fix)
     // but no gateway session ID persisted (edge case)
     const { resolveGatewaySessionId } = await import("@/lib/session-map");
-    
+
     // Set activeSessionIdAtom (as if persisted and restored)
     store.set(uiMod.activeSessionIdAtom, "my-persistent-session-123");
     expect(store.get(uiMod.activeSessionIdAtom)).toBe("my-persistent-session-123");
-    
+
     // gwSessionIdAtom is null (not persisted in this scenario)
     expect(store.get(chatMod.gwSessionIdAtom)).toBeNull();
-    
+
     // The first-connect handler should fall back to activeSessionIdAtom
     // via resolveGatewaySessionId to find a recoverable gateway session.
     // This test verifies the lookup works.
@@ -798,24 +798,24 @@ describe("Bug #6: Gateway bridge singleton state reset", () => {
     // The delta coalescer's flush() is called on gateway.disconnected
     // before the module state is lost. This ensures any buffered deltas
     // are applied before the bridge is torn down.
-    
+
     const { createDeltaCoalescer } = await import("@/lib/gateway-delta-coalescer");
-    
+
     const applied: any[] = [];
     const coalescer = createDeltaCoalescer((event) => {
       applied.push(event);
     });
-    
+
     // Buffer some deltas (simulating in-flight streaming)
     coalescer.dispatch({
       type: "message.delta",
       session_id: "gws-1",
       payload: { text: "World" },
     });
-    
+
     // Before F5, flush() is called (by gateway.disconnected handler)
     coalescer.flush();
-    
+
     // Deltas are applied before the page unloads
     expect(applied).toHaveLength(1);
     expect((applied[0] as any).payload.text).toBe("World");
@@ -823,12 +823,12 @@ describe("Bug #6: Gateway bridge singleton state reset", () => {
 
   it("verifies fix: delta coalescer handles empty flush gracefully", async () => {
     const { createDeltaCoalescer } = await import("@/lib/gateway-delta-coalescer");
-    
+
     const applied: any[] = [];
     const coalescer = createDeltaCoalescer((event) => {
       applied.push(event);
     });
-    
+
     // Flush with no buffered deltas should not throw
     expect(() => coalescer.flush()).not.toThrow();
     expect(applied).toHaveLength(0);
@@ -1020,7 +1020,7 @@ describe("Bug #9: Workspace mapping inconsistency on refresh", () => {
     // mirrorSessionWorkspaceMapping. Compare with the manual session resume
     // flow which DOES call it. This means after F5, the new gateway session
     // ID has no workspace mapping.
-    
+
     const { rememberSessionMapping } = await import("@/lib/session-map");
     const {
       rememberSessionWorkspace,
@@ -1053,7 +1053,7 @@ describe("Bug #9: Workspace mapping inconsistency on refresh", () => {
     // The session map has gws-new-1 -> persist-123.
     // So withSessionIdAliases should add gws-new-1 to the expanded map.
     // Let's verify this behavior.
-    
+
     // Actually the current code already handles this via withSessionIdAliases!
     // So this test may not show a real bug at the raw data level.
     // But the bug IS that the reattach onResumed doesn't call
@@ -1136,7 +1136,7 @@ describe("Bug #9: Workspace mapping inconsistency on refresh", () => {
     // Even without mirror, withSessionIdAliases expands the raw map
     // using the session map, so gws-2 can find the workspace via persist-1
     expect(resolveSessionWorkspace(undefined, ["gws-2"])).toBe("/workspace/path");
-    
+
     // The persistent ID always resolves (stable across refreshes)
     expect(resolveSessionWorkspace(undefined, ["persist-1"])).toBe("/workspace/path");
   });
