@@ -54,6 +54,7 @@ import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
+import { useConfirm } from "@/lib/use-confirm";
 import { reportPromoClick } from "@/lib/telemetry";
 import { openExternalUrl } from "@/lib/external-links";
 import {
@@ -613,6 +614,7 @@ export function ModelsSection() {
   const { data: moaConfig } = useMoaConfig();
   const moaPresetCount = Object.keys(moaConfig?.presets ?? {}).length;
   const saveConfig = useSaveConfig();
+  const { confirm } = useConfirm();
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const revealEnv = useRevealEnv();
@@ -1352,7 +1354,13 @@ export function ModelsSection() {
     const confirmMessage = referencedTasks.length > 0
       ? `确定删除「${selectedProvider.name}」吗？引用它的辅助模型（${referencedTasks.join("、")}）会自动恢复为 Auto。`
       : `确定删除「${selectedProvider.name}」吗？此操作会移除该自定义服务商的 Base URL、模型和密钥配置。`;
-    if (!window.confirm(confirmMessage)) return;
+    const confirmed = await confirm({
+      title: "删除服务商",
+      body: confirmMessage,
+      confirmLabel: "删除",
+      danger: true,
+    });
+    if (!confirmed) return;
 
     const nextSelectedProviderId = orderedProviders.find((provider) => provider.id !== providerId)?.id ?? "";
     setProviderDeletePending(true);
@@ -1708,6 +1716,12 @@ export function ModelsSection() {
                       </div>
                     </div>
 
+                    {providerSaveError && (
+                      <div className={s.modelPickerError} style={{ marginTop: 8 }}>
+                        操作失败：{providerSaveError}
+                      </div>
+                    )}
+
                     <div className={s.providerFormGrid}>
                       <Field label={selectedProvider.apiKeyLabel} className={s.fieldRow}>
                         <Input
@@ -1873,11 +1887,6 @@ export function ModelsSection() {
                     </div>
                     {probeForSelected && probeForSelected.status !== "pending" && (
                       <ProbeResultRow probe={probeForSelected} />
-                    )}
-                    {providerSaveError && (
-                      <div className={s.modelPickerError} style={{ marginTop: 8 }}>
-                        操作失败：{providerSaveError}
-                      </div>
                     )}
                   </>
                 )}

@@ -42,12 +42,33 @@ const BUNDLED_PLUGINS_DIR: &str = "plugins";
 const RUNTIME_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const RUNTIME_MANIFEST_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNTIME_ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
-// The release runtime is a PyInstaller-style onefile binary. On a cold macOS
-// launch it has to unpack its embedded Python payload before argparse can even
-// print `dashboard --help`; current arm64 artifacts routinely take ~18s on the
-// first run. Keep the smoke check long enough for the cold path and let normal
-// launches stay fast via the runtime's own cache.
-const SMOKE_TIMEOUT: Duration = Duration::from_secs(60);
+// The release runtime is a PyInstaller-built frozen binary. On a cold launch
+// (first exec after extraction) it has to boot the frozen interpreter and load
+// the whole bundled payload before argparse can even print `dashboard --help`;
+// the smaller macOS arm64 artifacts already routinely took ~18s on the first
+// run, and the runtime payload has since grown much heavier (Python 3.14 since
+// runtime-v0.19.0-cn.*, plus bundled Node 22 / TUI / more SDKs — a ~130MB zip
+// / ~57MB exe). On slower machines with real-time antivirus scanning the
+// freshly-extracted tree, the first `dashboard --help` can take well over 60s.
+// Keep the smoke check long enough for that cold path (install/update runs in
+// the background, so the longer cap only delays the error, not the user) and
+// let normal launches stay fast via the runtime's own cache. The cap can be
+// tuned per environment with HERMES_RUNTIME_SMOKE_TIMEOUT_SECS.
+const SMOKE_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Effective smoke-check timeout: `HERMES_RUNTIME_SMOKE_TIMEOUT_SECS` env
+/// override when set to a sane value (>= 10s, clamped at 10min), otherwise
+/// [`SMOKE_TIMEOUT`]. Env override lets slow/AV-scanned first-run machines opt
+/// out of the default budget without a rebuild.
+fn smoke_timeout() -> Duration {
+    if let Ok(raw) = std::env::var("HERMES_RUNTIME_SMOKE_TIMEOUT_SECS") {
+        if let Ok(secs) = raw.trim().parse::<u64>() {
+            let clamped = secs.clamp(10, 10 * 60);
+            return Duration::from_secs(clamped);
+        }
+    }
+    SMOKE_TIMEOUT
+}
 // Spawning a just-written/just-extracted executable can transiently fail with
 // ETXTBSY ("Text file busy"): a concurrent fork in another thread may have
 // inherited a write fd to the file, so exec sees it as still open for writing.
@@ -1602,7 +1623,7 @@ async fn smoke_check_runtime(executable_path: &Path) -> Result<(), String> {
         }
     };
 
-    wait_for_smoke_child(child, SMOKE_TIMEOUT).await
+    wait_for_smoke_child(child, smoke_timeout()).await
 }
 
 /// True when the spawn error is ETXTBSY ("Text file busy"), which can briefly
@@ -3340,6 +3361,34 @@ mod tests {
             .await
             .expect_err("hung smoke child should time out");
         assert!(err.contains("timed out"), "unexpected error: {err}");
+    }
+
+    #[test]
+    #[serial]
+    fn smoke_timeout_defaults_to_180s_and_honors_env_override() {
+        std::env::remove_var("HERMES_RUNTIME_SMOKE_TIMEOUT_SECS");
+        assert_eq!(smoke_timeout(), Duration::from_secs(180));
+
+        std::env::set_var("HERMES_RUNTIME_SMOKE_TIMEOUT_SECS", "300");
+        assert_eq!(smoke_timeout(), Duration::from_secs(300));
+
+        // Garbage and out-of-range values fall back to sane bounds.
+        std::env::set_var("HERMES_RUNTIME_SMOKE_TIMEOUT_SECS", "not-a-number");
+        assert_eq!(smoke_timeout(), Duration::from_secs(180));
+        std::env::set_var("HERMES_RUNTIME_SMOKE_TIMEOUT_SECS", "5");
+        assert_eq!(
+            smoke_timeout(),
+            Duration::from_secs(10),
+            "clamped to minimum"
+        );
+        std::env::set_var("HERMES_RUNTIME_SMOKE_TIMEOUT_SECS", "99999");
+        assert_eq!(
+            smoke_timeout(),
+            Duration::from_secs(10 * 60),
+            "clamped to maximum"
+        );
+
+        std::env::remove_var("HERMES_RUNTIME_SMOKE_TIMEOUT_SECS");
     }
 
     #[cfg(unix)]

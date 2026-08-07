@@ -1,8 +1,8 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.7.0`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.8.0-rc1`).
 #
 # Desktop release build runs in parallel for Windows, macOS, and Linux. Each job:
-#   1. Installs Node + pnpm + Rust toolchain
+#   1. Installs Node 22 + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
 #   4. Stages the bundled dashboard frontend, bundled skills, bundled plugins,
@@ -30,11 +30,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.7.0)"
+        description: "Tag name to associate the build with (e.g. v0.8.0-rc1)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.19.0-cn.7"
+        default: "runtime-v0.20.0-cn.3"
         required: false
 
 permissions:
@@ -74,7 +74,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.22.0"
 
       - uses: pnpm/action-setup@v3
         with:
@@ -115,7 +115,7 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.19.0-cn.7' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.3' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -173,7 +173,7 @@ jobs:
           args=(
             scripts/stage-bundled-runtime.mjs
             --repo "Eynzof/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.19.0-cn.7' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.3' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
@@ -264,7 +264,7 @@ jobs:
 
             已知限制：本版本保持 runtime manifest schema 2，不包含 schema 2/3 双读能力。
             后续发布 schema 3 runtime manifest 前，必须先发布支持双读的桌面端，或将
-            minAppVersion 提升到对应的桌面端版本，避免 0.7.0 用户停留在旧内核。
+            minAppVersion 提升到对应的桌面端版本，避免旧桌面端用户停留在旧内核。
 
             如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
           releaseDraft: false

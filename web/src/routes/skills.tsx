@@ -105,7 +105,7 @@ function markdownWithoutFrontmatter(content: string): string {
 }
 
 export function SkillsRoute() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   // 管理范围：/skills?profile=X 深链或档案页「管理技能」会设它。scope ≠ 活跃档案时，
   // 技能列表/启停就地作用于该档案（不切换 dashboard），并显示提示横幅。
   const active = useActiveProfileName();
@@ -118,6 +118,24 @@ export function SkillsRoute() {
   useEffect(() => {
     if (urlProfile) setMgmt(urlProfile);
   }, [urlProfile, setMgmt]);
+
+  // Sync management scope TO the URL whenever it changes, so the scope
+  // survives page refresh (Bug #4 fix — URL-Driven Scope).
+  // Handles both onSelect changes and external clearing (active-profile switch).
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const current = mgmt && mgmt !== active ? mgmt : null;
+      const inUrl = prev.get("profile");
+      if (current && current !== inUrl) {
+        prev.set("profile", current);
+      } else if (!current && inUrl) {
+        prev.delete("profile");
+      } else {
+        return prev; // already in sync — skip update
+      }
+      return prev;
+    }, { replace: true });
+  }, [mgmt, active, setSearchParams]);
 
   const { data: skills, isLoading, isFetching, isError, error, refetch } = useSkills(scope);
   const toggleSkill = useToggleSkill(scope);

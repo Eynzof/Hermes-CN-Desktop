@@ -181,6 +181,30 @@ describe("message adapter", () => {
     expect(message?.text).toBe("阅读这张图片的内容\n\n附件：ga.png");
   });
 
+  it("extracts stored image attached-at paths without rendering the transport line", () => {
+    const path = "/Users/enzo/Library/Application Support/cn.org.hermesagent.desktop/runtime/hermes-home/images/upload.png";
+    const message = storedMessageToChatMessage(sessionMessage({
+      id: 10,
+      session_id: "s1",
+      role: "user",
+      content: [
+        "[Hermes UI Image]",
+        "name=upload.png",
+        "description:",
+        "[User attached image: upload.png]",
+        "[/Hermes UI Image]",
+        "",
+        "图里是什么？",
+        "",
+        `[Image attached at: ${path}]`,
+        "[screenshot]",
+      ].join("\n"),
+    }));
+
+    expect(message?.text).toBe("图里是什么？\n\n附件：upload.png");
+    expect(message?.images?.[0]?.url).toBe(path);
+  });
+
   it("normalizes injected Skill instructions from user to system messages", () => {
     const message = hermesUIMessageToChatMessage(uiMessage({
       id: "skill-invocation",

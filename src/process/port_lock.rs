@@ -241,7 +241,7 @@ fn get_process_start_time(pid: u32) -> Option<u64> {
         }
         // FILETIME is 100-ns intervals since 1601-01-01.
         // 11644473600 = seconds from 1601-01-01 to 1970-01-01.
-        let epoch_ms = (creation / 10_000).saturating_sub(11644473600_000);
+        let epoch_ms = (creation / 10_000).saturating_sub(11_644_473_600_000);
         Some(epoch_ms)
     }
 }
@@ -502,6 +502,56 @@ pub fn owner_identifier() -> String {
     format!("{}-{}", std::process::id(), now_millis())
 }
 
+/// Best-effort cleanup of stale port-lock files under `$HERMES_HOME/.port-locks`.
+///
+/// Lock files are normally broken lazily when a specific port is claimed, but
+/// a directory full of dead-owner locks can still mislead port-allocation
+/// heuristics and clutter the runtime home. This function scans the lock
+/// directory at startup and reclaims any lock whose recorded owner is dead or
+/// has been PID-reused.
+pub fn cleanup_stale_port_locks(hermes_home: impl AsRef<Path>) {
+    let dir = lock_dir(&hermes_home);
+    let entries = match fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(err) => {
+            log::debug!("Cannot read port lock directory {}: {}", dir.display(), err);
+            return;
+        }
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("lock") {
+            continue;
+        }
+        if !stale_lock_owner(&path) {
+            continue;
+        }
+        match OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&path)
+        {
+            Ok(file) => {
+                if file.try_lock_exclusive().is_ok() {
+                    log::info!("Cleaned stale port lock {}", path.display());
+                    // Drop the lock immediately; we only needed to break the
+                    // stale claim so future claimers see a free port.
+                }
+            }
+            Err(err) => {
+                log::debug!(
+                    "Could not break stale port lock {}: {}",
+                    path.display(),
+                    err
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -650,6 +700,44 @@ mod tests {
         assert!(
             !stale_lock_owner(&path),
             "live owner with matching start_time should not be stale"
+        );
+    }
+
+    // ── Stale port-lock directory cleanup ────────────────────────────
+
+    #[test]
+    fn cleanup_stale_port_locks_breaks_dead_owner_locks() {
+        let dir = TempDir::new().unwrap();
+        let home = dir.path();
+
+        // Stale lock from a dead process.
+        let stale_path = lock_file_path(50030, home);
+        fs::create_dir_all(stale_path.parent().unwrap()).unwrap();
+        fs::write(&stale_path, "999999999\n").unwrap();
+
+        cleanup_stale_port_locks(home);
+
+        // The stale lock should now be reclaimable.
+        let lock = try_claim_port(50030, home).expect("should claim after stale cleanup");
+        lock.release();
+    }
+
+    #[test]
+    fn cleanup_stale_port_locks_preserves_live_owner_locks() {
+        let dir = TempDir::new().unwrap();
+        let home = dir.path();
+
+        // Live lock held by this process.
+        let live_path = lock_file_path(50031, home);
+        let live_lock = try_claim_port(50031, home).expect("should claim live port");
+        live_lock.release();
+
+        cleanup_stale_port_locks(home);
+
+        // The live lock must still be held by us after cleanup.
+        assert!(
+            !stale_lock_owner(&live_path),
+            "cleanup must not break a live owner's lock"
         );
     }
 

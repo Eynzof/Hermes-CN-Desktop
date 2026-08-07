@@ -26,6 +26,7 @@ import {
   useCronRuns,
   useDeleteCronJob,
 } from "@/hooks/use-cron";
+import { useConfirm } from "@/lib/use-confirm";
 import { SectionShell } from "./section-shell";
 import s from "./cron.module.css";
 
@@ -202,6 +203,7 @@ export function CronRoute() {
   const deleteJob = useDeleteCronJob();
   const cronAction = useCronAction();
   const queryClient = useQueryClient();
+  const { confirm } = useConfirm();
 
   const [query, setQuery] = useState("");
   const [profileFilter, setProfileFilter] = useState("all");
@@ -359,8 +361,14 @@ export function CronRoute() {
     );
   };
 
-  const handleDelete = (job: CronJob) => {
-    if (!window.confirm(`删除定时任务「${titleOf(job)}」？此操作无法撤销。`)) return;
+  const handleDelete = async (job: CronJob) => {
+    const confirmed = await confirm({
+      title: "删除定时任务",
+      body: `删除定时任务「${titleOf(job)}」？此操作无法撤销。`,
+      confirmLabel: "删除",
+      danger: true,
+    });
+    if (!confirmed) return;
     deleteJob.mutate(
       { id: job.id, profile: cronJobProfile(job) },
       {

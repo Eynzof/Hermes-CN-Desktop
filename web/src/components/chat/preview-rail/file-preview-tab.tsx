@@ -26,6 +26,7 @@ import {
   UNSAVED_DISCARD_CONFIRM,
   type EolStyle,
 } from "@/lib/preview-rail";
+import { useConfirm } from "@/lib/use-confirm";
 import { MarkdownText } from "@/components/chat/markdown-renderer";
 import { previewEditorDirtyAtom } from "@/stores/preview-rail";
 import s from "./preview-rail.module.css";
@@ -55,6 +56,17 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
   // Switching to another file resets the editor and would silently drop an
   // unsaved draft — confirm first (the atom is written by the editor below).
   const editorDirty = useAtomValue(previewEditorDirtyAtom);
+  const { confirm } = useConfirm();
+
+  // 统一替代 window.confirm 的草稿丢弃确认（Tauri webview 下原生脚本对话框不可靠）。
+  const confirmDiscardDraft = useCallback(async () => {
+    return confirm({
+      title: "放弃未保存的修改",
+      body: UNSAVED_DISCARD_CONFIRM,
+      confirmLabel: "放弃修改",
+      danger: true,
+    });
+  }, [confirm]);
 
   // Reset the browser to the workspace root whenever the session's workspace changes.
   useEffect(() => {
@@ -231,7 +243,12 @@ export function FilePreviewTab({ workspaceRoot, filePath, onSelectFile }: FilePr
                 return;
               }
               if (entry.path === filePath) return;
-              if (editorDirty && !window.confirm(UNSAVED_DISCARD_CONFIRM)) return;
+              if (editorDirty) {
+                void (async () => {
+                  if (await confirmDiscardDraft()) onSelectFile(entry.path);
+                })();
+                return;
+              }
               onSelectFile(entry.path);
             }}
             title={entry.path}
@@ -353,6 +370,17 @@ function FileViewer({
   onReload: () => void;
 }) {
   const setEditorDirty = useSetAtom(previewEditorDirtyAtom);
+  const { confirm } = useConfirm();
+
+  // 统一替代 window.confirm 的草稿丢弃确认（Tauri webview 下原生脚本对话框不可靠）。
+  const confirmDiscardDraft = useCallback(async () => {
+    return confirm({
+      title: "放弃未保存的修改",
+      body: UNSAVED_DISCARD_CONFIRM,
+      confirmLabel: "放弃修改",
+      danger: true,
+    });
+  }, [confirm]);
 
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -440,12 +468,12 @@ function FileViewer({
   }, [canEdit, editing]);
 
   // Leaving edit mode (Escape / 取消) drops the draft — confirm when dirty.
-  const cancelEdit = useCallback(() => {
-    if (dirty && !window.confirm(UNSAVED_DISCARD_CONFIRM)) return;
+  const cancelEdit = useCallback(async () => {
+    if (dirty && !(await confirmDiscardDraft())) return;
     setEditing(false);
     setSaveError(null);
     setConflict(false);
-  }, [dirty]);
+  }, [confirmDiscardDraft, dirty]);
 
   const discardAndReload = useCallback(() => {
     setEditing(false);
@@ -528,7 +556,7 @@ function FileViewer({
             <button
               type="button"
               className={s.editAction}
-              onClick={cancelEdit}
+              onClick={() => void cancelEdit()}
               disabled={saving}
             >
               取消
@@ -581,7 +609,7 @@ function FileViewer({
                 void saveEdit();
               } else if (event.key === "Escape") {
                 event.preventDefault();
-                cancelEdit();
+                void cancelEdit();
               }
             }}
           />

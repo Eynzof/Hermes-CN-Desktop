@@ -1,0 +1,77 @@
+/* ── 应用内确认弹窗（替代 window.confirm / window.prompt）── */
+.dialog {
+  width: 440px;
+  max-width: calc(100vw - 32px);
+}
+
+.dialogHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--h-text);
+}
+
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.dialogMessage {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--h-text-2);
+  word-break: break-word;
+}
+
+.dialogMessage code {
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  background: var(--h-bg-soft);
+  border: 1px solid var(--h-line-soft);
+  padding: 0 4px;
+}
+
+.inputField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inputLabel {
+  font-size: 12px;
+  color: var(--h-text-3);
+}
+
+.input {
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1px solid var(--h-line);
+  border-radius: 0;
+  background: var(--h-bg-pane);
+  color: var(--h-text);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--h-accent);
+}
+
+.dialogFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--h-line-soft);
+}
