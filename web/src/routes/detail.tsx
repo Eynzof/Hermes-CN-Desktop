@@ -30,6 +30,11 @@ import { useSessionResolution } from "@/hooks/use-session-resolution";
 import { useSessionUsagePolling } from "@/hooks/use-session-usage-polling";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import { readSessionModelOverride } from "@/lib/session-model-override";
+import {
+  composerDraftStorageKey,
+  readComposerDraftByKey,
+  writeComposerDraftByKey,
+} from "@/lib/composer-drafts";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { parseBuiltinComposerCommand } from "@/lib/builtin-commands";
 import { resolveComposerSkillCommand } from "@/lib/composer-skills";
@@ -48,7 +53,7 @@ import {
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
-import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
+import { isRemoteConnection, readFileDataUrl, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
 import { voiceAutoTtsFromConfig } from "@/lib/voice";
 import {
   rememberSessionWorkspace,
@@ -86,6 +91,12 @@ import {
 } from "@/components/chat/message-adapter";
 import s from "./detail.module.css";
 
+interface ComposerPrefillState {
+  text: string;
+  nonce: number;
+  sessionId?: string;
+}
+
 export function DetailRoute() {
   // URL drives the *initial* selection (deep links, browser back/forward),
   // but `activeSessionIdAtom` is the runtime source of truth. This lets
@@ -116,6 +127,7 @@ export function DetailRoute() {
     completePath,
     attachImage,
     attachImageBytes,
+    attachFile,
     detectDroppedPath,
   } = useGateway();
   const { data: config } = useConfig();
@@ -204,6 +216,21 @@ export function DetailRoute() {
     () => resolveSessionWorkspace(sessionData?.cwd ?? sessionSummary?.cwd, [restSessionId, taskId]),
     [sessionData?.cwd, sessionSummary?.cwd, restSessionId, taskId],
   );
+  const composerDraftKey = useMemo(
+    () => composerDraftStorageKey({
+      kind: "session",
+      sessionId: restSessionId ?? taskId,
+      profile: activeProfile,
+    }),
+    [activeProfile, restSessionId, taskId],
+  );
+  const storedComposerDraft = useMemo(
+    () => readComposerDraftByKey(composerDraftKey),
+    [composerDraftKey],
+  );
+  const onComposerDraftChange = useCallback((text: string) => {
+    writeComposerDraftByKey(composerDraftKey, text);
+  }, [composerDraftKey]);
 
   // Sync URL → atom on mount and whenever URL changes (browser back/forward
   // or a deep-link entry). Sidebar / history clicks already update the atom
@@ -414,8 +441,10 @@ export function DetailRoute() {
     const prepared = await prepareComposerPrompt(gatewaySessionId, payload, {
       attachImage,
       attachImageBytes,
+      attachFile,
       remote: isRemoteConnection(),
       readImageBytes: readImageBytesFromPath,
+      readFileDataUrl,
       detectDroppedPath,
       uploadFile: uploadAttachmentFile,
       onAttachmentUpdate: updateAttachment,
@@ -424,7 +453,7 @@ export function DetailRoute() {
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
-  }, [attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
+  }, [attachFile, attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
@@ -448,7 +477,7 @@ export function DetailRoute() {
 
   // ---- Send queue (drain on settle, send-now / edit / delete) --------------
   const queuedPrompts = useQueuedPrompts(taskId);
-  const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
+  const [composerPrefill, setComposerPrefill] = useState<ComposerPrefillState>({ text: "", nonce: 0 });
   const drainingRef = useRef(false);
   const previousBusyRef = useRef(runtimeIsBusy);
   const userInterruptedRef = useRef(false);
@@ -499,7 +528,7 @@ export function DetailRoute() {
   }, [drainEntry, queuedPrompts]);
 
   const onQueueEdit = useCallback((entry: QueuedPromptEntry) => {
-    setComposerPrefill((prefill) => ({ text: entry.text, nonce: prefill.nonce + 1 }));
+    setComposerPrefill((prefill) => ({ text: entry.text, nonce: prefill.nonce + 1, sessionId: taskId }));
     removeQueuedPrompt(taskId, entry.id);
   }, [taskId]);
 
@@ -624,6 +653,9 @@ export function DetailRoute() {
     estimatedUsed: estimatedContextUsed,
   });
   const autoTts = voiceAutoTtsFromConfig(config);
+  const hasActiveComposerPrefill = composerPrefill.sessionId === taskId && composerPrefill.nonce > 0;
+  const composerInitial = hasActiveComposerPrefill ? composerPrefill.text : storedComposerDraft;
+  const composerInitialNonce = hasActiveComposerPrefill ? composerPrefill.nonce : 0;
   const pageStyle = useMemo(
     () => {
       const font = conversationFontSizeVars(conversationFontSizeMode);
@@ -732,11 +764,12 @@ export function DetailRoute() {
               onDelete={onQueueDelete}
             />
             <GooseComposer
-              key={taskId}
+              key={`${taskId}:${composerDraftKey ?? "draft"}`}
               flushBottom
               initialWorkspacePath={sessionWorkspace}
-              initial={composerPrefill.text}
-              initialNonce={composerPrefill.nonce}
+              initial={composerInitial}
+              initialNonce={composerInitialNonce}
+              onDraftChange={onComposerDraftChange}
               onSend={onSend}
               loadingPlaceholder={composerLoadingPlaceholder}
               showMeta={false}
