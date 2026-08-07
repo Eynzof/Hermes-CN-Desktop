@@ -12,6 +12,7 @@ import {
 } from "@hermes/protocol";
 
 export const DELETE_SESSION_CONCURRENCY = 3;
+export const SESSIONS_API_PAGE_LIMIT = 100;
 
 export interface DeleteSessionsFailure {
   id: string;
@@ -76,17 +77,77 @@ export interface UseSessionsOptions {
   includeArchived?: boolean;
 }
 
+interface FetchSessionsOptions extends UseSessionsOptions {
+  signal?: AbortSignal;
+}
+
+function sessionsPath(limit: number, offset: number, includeArchived: boolean): string {
+  return `/api/sessions?limit=${limit}&offset=${offset}${includeArchived ? "&include_archived=true" : ""}`;
+}
+
+function normalizePageNumber(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.floor(value));
+}
+
+export async function fetchSessionsList(
+  limit = 50,
+  offset = 0,
+  opts: FetchSessionsOptions = {},
+): Promise<SessionsResponse> {
+  const requestedLimit = normalizePageNumber(limit, 50);
+  const requestedOffset = normalizePageNumber(offset, 0);
+  const includeArchived = opts.includeArchived ?? false;
+
+  const firstLimit = Math.min(requestedLimit, SESSIONS_API_PAGE_LIMIT);
+  const first = await fetchJSON(
+    sessionsPath(firstLimit, requestedOffset, includeArchived),
+    { signal: opts.signal },
+    SessionsResponse,
+  );
+
+  if (requestedLimit <= SESSIONS_API_PAGE_LIMIT) return first;
+
+  const sessions = [...first.sessions];
+  let total = first.total;
+  let nextOffset = requestedOffset + sessions.length;
+  let remaining = Math.min(
+    requestedLimit - sessions.length,
+    Math.max(0, total - nextOffset),
+  );
+
+  while (remaining > 0) {
+    const pageLimit = Math.min(remaining, SESSIONS_API_PAGE_LIMIT);
+    const page = await fetchJSON(
+      sessionsPath(pageLimit, nextOffset, includeArchived),
+      { signal: opts.signal },
+      SessionsResponse,
+    );
+    total = page.total;
+    if (page.sessions.length === 0) break;
+    sessions.push(...page.sessions);
+    nextOffset += page.sessions.length;
+    remaining = Math.min(
+      requestedLimit - sessions.length,
+      Math.max(0, total - nextOffset),
+    );
+  }
+
+  return {
+    ...first,
+    sessions,
+    total,
+    limit: requestedLimit,
+    offset: requestedOffset,
+  };
+}
+
 export function useSessions(limit = 50, offset = 0, opts: UseSessionsOptions = {}) {
   const profile = useActiveProfileName();
   const includeArchived = opts.includeArchived ?? false;
   return useQuery<SessionsResponse>({
     queryKey: ["sessions", profile, limit, offset, includeArchived ? "all" : "active"],
-    queryFn: ({ signal }) =>
-      fetchJSON(
-        `/api/sessions?limit=${limit}&offset=${offset}${includeArchived ? "&include_archived=true" : ""}`,
-        { signal },
-        SessionsResponse,
-      ),
+    queryFn: ({ signal }) => fetchSessionsList(limit, offset, { includeArchived, signal }),
   });
 }
 
