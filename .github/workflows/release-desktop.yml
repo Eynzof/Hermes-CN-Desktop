@@ -2,7 +2,7 @@
 # Release. Triggers on tags matching `v*` (e.g. `v0.8.0-rc1`).
 #
 # Desktop release build runs in parallel for Windows, macOS, and Linux. Each job:
-#   1. Installs Node + pnpm + Rust toolchain
+#   1. Installs Node 22 + pnpm + Rust toolchain
 #   2. Caches cargo registry and target dir
 #   3. `pnpm install`
 #   4. Stages the bundled dashboard frontend, bundled skills, bundled plugins,
@@ -74,7 +74,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.22.0"
 
       - uses: pnpm/action-setup@v3
         with:
