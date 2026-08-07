@@ -42,6 +42,8 @@ const PREVIEW_FILE_CHANGED: &str = "preview-file-changed";
 const TEXT_PREVIEW_MAX_BYTES: u64 = 512 * 1024;
 /// Cap inline image data URLs so a giant asset can't balloon the IPC payload.
 const IMAGE_PREVIEW_MAX_BYTES: u64 = 8 * 1024 * 1024;
+/// Match the upstream desktop bridge cap for arbitrary file data URLs.
+const FILE_DATA_URL_MAX_BYTES: u64 = 16 * 1024 * 1024;
 /// Bytes sampled from the head of a file to decide text vs binary.
 const BINARY_SNIFF_BYTES: usize = 4096;
 /// Match the upstream `hermes:fs:writeText` cap (1 MB). The spot editor's save
@@ -56,6 +58,13 @@ pub struct ReadWorkspaceFileInput {
     pub path: String,
     /// Session workspace root. Reads are confined to this directory.
     pub root: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadFileDataUrlInput {
+    /// Absolute local file path, or a `file://` URL.
+    pub path: String,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -230,6 +239,69 @@ fn image_mime(ext: &str) -> Option<&'static str> {
     }
 }
 
+fn data_url_mime(ext: &str) -> &'static str {
+    match ext {
+        "apng" => "image/apng",
+        "avif" => "image/avif",
+        "bmp" => "image/bmp",
+        "gif" => "image/gif",
+        "heic" => "image/heic",
+        "heif" => "image/heif",
+        "ico" => "image/x-icon",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "svg" => "image/svg+xml",
+        "tif" | "tiff" => "image/tiff",
+        "webp" => "image/webp",
+        "pdf" => "application/pdf",
+        "csv" => "text/csv",
+        "htm" | "html" => "text/html",
+        "json" => "application/json",
+        "md" | "markdown" => "text/markdown",
+        "txt" => "text/plain",
+        "xml" => "application/xml",
+        "zip" => "application/zip",
+        _ => "application/octet-stream",
+    }
+}
+
+fn decode_file_url_path(raw: &str) -> AppResult<PathBuf> {
+    if !raw.starts_with("file://") {
+        return Ok(PathBuf::from(raw));
+    }
+    let parsed = url::Url::parse(raw)?;
+    parsed
+        .to_file_path()
+        .map_err(|_| AppError::InvalidRequest("Invalid file URL".to_string()))
+}
+
+fn read_file_data_url_impl(path: &str) -> AppResult<String> {
+    let raw = path.trim();
+    if raw.is_empty() {
+        return Err(AppError::InvalidRequest("Path is required".to_string()));
+    }
+    let resolved = decode_file_url_path(raw)?.canonicalize()?;
+    let meta = fs::metadata(&resolved)?;
+    if !meta.is_file() {
+        return Err(AppError::FileError("Not a regular file".to_string()));
+    }
+    if meta.len() > FILE_DATA_URL_MAX_BYTES {
+        return Err(AppError::InvalidRequest(format!(
+            "file is too large ({} bytes; limit {} bytes)",
+            meta.len(),
+            FILE_DATA_URL_MAX_BYTES
+        )));
+    }
+    let ext = resolved
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    let bytes = fs::read(&resolved)?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:{};base64,{}", data_url_mime(&ext), b64))
+}
+
 /// Heuristic binary sniff over a head sample: any NUL byte, or a high ratio of
 /// non-text control characters, marks the content binary.
 fn looks_binary(sample: &[u8]) -> bool {
@@ -319,6 +391,15 @@ pub fn read_workspace_file(
 ) -> AppResult<FilePreview> {
     require_local_preview(&state)?;
     read_file_preview(&input.root, &input.path)
+}
+
+#[tauri::command]
+pub fn read_file_data_url(
+    input: ReadFileDataUrlInput,
+    state: State<'_, AppState>,
+) -> AppResult<String> {
+    require_local_preview(&state)?;
+    read_file_data_url_impl(&input.path)
 }
 
 /// Core, AppHandle-free write logic so it can be unit-tested directly. Mirrors

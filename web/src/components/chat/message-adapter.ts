@@ -63,6 +63,7 @@ function displayUnknown(value: unknown): string | undefined {
 
 const HERMES_UI_IMAGE_BLOCK_RE = /\[Hermes UI Image\]\nname=([^\n]*)\ndescription:\n([\s\S]*?)\n\[\/Hermes UI Image\]/g;
 const IMAGE_FALLBACK_RE = /\[You can examine it with vision_analyze using image_url: ([^\]\n]+)\]/g;
+const IMAGE_ATTACHED_AT_RE = /\[Image attached at:\s*([^\]\n]+)\]/g;
 
 function parseJsonContent(value: string | null | undefined): unknown | undefined {
   const text = value?.trim();
@@ -118,6 +119,13 @@ function imagePartsFromTransportText(text: string | null | undefined): HermesIma
     if (part) parts.push(part);
   }
 
+  for (const match of text.matchAll(IMAGE_ATTACHED_AT_RE)) {
+    const path = match[1]?.trim();
+    if (!path) continue;
+    const part = imagePartFromSource(path);
+    if (part) parts.push(part);
+  }
+
   for (const match of text.matchAll(HERMES_UI_IMAGE_BLOCK_RE)) {
     const name = match[1]?.trim();
     const description = match[2]?.trim();
@@ -129,8 +137,6 @@ function imagePartsFromTransportText(text: string | null | undefined): HermesIma
       })));
       continue;
     }
-    const part = imagePartFromSource({ name, alt: name || "图片附件" });
-    if (part) parts.push(part);
   }
 
   return dedupeImageParts(parts);

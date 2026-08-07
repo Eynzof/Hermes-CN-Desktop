@@ -1466,6 +1466,16 @@ export const AttachmentUploadResult = z.object({
 }).passthrough();
 export type AttachmentUploadResult = z.infer<typeof AttachmentUploadResult>;
 
+export const FileAttachResult = z.object({
+  attached: z.boolean().optional(),
+  name: z.string().optional(),
+  path: z.string().optional(),
+  ref_path: z.string().optional(),
+  ref_text: z.string().optional(),
+  uploaded: z.boolean().optional(),
+}).passthrough();
+export type FileAttachResult = z.infer<typeof FileAttachResult>;
+
 // `/api/fs/list` entry. Upstream's handler returns `isDirectory`; the fork's
 // original P-004 handler returned `is_dir`. Accept either off the wire and
 // normalize to a single canonical `is_dir` so every consumer (and the inferred
