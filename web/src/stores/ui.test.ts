@@ -93,10 +93,10 @@ describe("showReasoningAtom (persisted)", () => {
 });
 
 describe("composerSubmitShortcutAtom (persisted)", () => {
-  it("defaults to Enter submit when nothing is stored", async () => {
+  it("defaults to Ctrl+Enter submit when nothing is stored", async () => {
     const { composerSubmitShortcutAtom } = await loadUi();
     const store = createStore();
-    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
   });
 
   it("restores Ctrl+Enter submit from the UI store", async () => {
@@ -354,7 +354,7 @@ describe("persisted atoms follow late ui-store hydration (#480)", () => {
     const unsubscribes = atoms.map((targetAtom) => store.sub(targetAtom, () => {}));
 
     expect(store.get(showReasoningAtom)).toBe(false);
-    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
     expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
     expect(store.get(assistantAvatarDataUrlAtom)).toBe("");
 

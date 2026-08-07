@@ -1,6 +1,6 @@
 import { atom } from "jotai";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
-import { readUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
+import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 import hermesDefaultAvatar from "@/assets/hermes-default-avatar.png";
 
 function persistedUiBaseAtom<T>(read: () => T) {
@@ -13,7 +13,36 @@ function persistedUiBaseAtom<T>(read: () => T) {
   return baseAtom;
 }
 
-export const activeSessionIdAtom = atom<string | null>(null);
+const ACTIVE_SESSION_ID_KEY = "hermes.active-session-id";
+
+const activeSessionIdBaseAtom = persistedUiBaseAtom<string | null>(
+  () => readUiValue<string | null>(ACTIVE_SESSION_ID_KEY, null),
+);
+
+/**
+ * Tracks the currently-active session ID across the UI (sidebar highlight,
+ * detail route target, gateway resume). Persisted to the UI store so it
+ * survives page refresh (F5) on non-detail routes (e.g., the Panel page).
+ *
+ * On detail routes the URL (`/tasks/:taskId`) provides recovery, but the
+ * atom is the single source of truth at runtime — sidebar/history/panel
+ * clicks update it synchronously before navigating (see issue #53).
+ *
+ * Setting to `null` short-circuits the persisted key (via removeUiValue)
+ * so a stale session ID doesn't linger after the user has explicitly
+ * cleared their active context.
+ */
+export const activeSessionIdAtom = atom(
+  (get) => get(activeSessionIdBaseAtom),
+  (_get, set, next: string | null) => {
+    set(activeSessionIdBaseAtom, next);
+    if (next) {
+      writeUiValue(ACTIVE_SESSION_ID_KEY, next);
+    } else {
+      removeUiValue(ACTIVE_SESSION_ID_KEY);
+    }
+  },
+);
 
 // Maps a pre-compression persistent session id to the live continuation "tip"
 // that the backend redirected a `session.resume` to. The detail route watches
@@ -23,7 +52,37 @@ export const activeSessionIdAtom = atom<string | null>(null);
 // resumeSession via recordTipRedirect; consumed by the detail route effect.
 export const sessionTipRedirectAtom = atom<Record<string, string>>({});
 
-export const sidebarSearchAtom = atom("");
+const SIDEBAR_SEARCH_KEY = "hermes.sidebar-search";
+
+function readSidebarSearch(): string {
+  if (typeof sessionStorage === "undefined") return "";
+  try {
+    return sessionStorage.getItem(SIDEBAR_SEARCH_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeSidebarSearch(value: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    if (value) {
+      sessionStorage.setItem(SIDEBAR_SEARCH_KEY, value);
+    } else {
+      sessionStorage.removeItem(SIDEBAR_SEARCH_KEY);
+    }
+  } catch {}
+}
+
+const sidebarSearchBaseAtom = atom<string>(readSidebarSearch());
+
+export const sidebarSearchAtom = atom(
+  (get) => get(sidebarSearchBaseAtom),
+  (_get, set, next: string) => {
+    set(sidebarSearchBaseAtom, next);
+    writeSidebarSearch(next);
+  },
+);
 export const commandPaletteOpenAtom = atom(false);
 
 const APP_SIDEBAR_VISIBLE_KEY = "hermes.app-sidebar-visible";
@@ -236,7 +295,7 @@ function normalizeComposerSubmitShortcut(value: unknown): ComposerSubmitShortcut
 }
 
 const composerSubmitShortcutBaseAtom = persistedUiBaseAtom<ComposerSubmitShortcut>(
-  () => normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "enter")),
+  () => normalizeComposerSubmitShortcut(readUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, "ctrl-enter")),
 );
 export const composerSubmitShortcutAtom = atom(
   (get) => get(composerSubmitShortcutBaseAtom),
@@ -283,6 +342,134 @@ export interface NotificationSettings {
   onComplete: boolean;
   onApproval: boolean;
   onlyBackground: boolean;
+}
+
+/**
+ * Re-read all persisted atoms from the UI store's current kvCache.
+ *
+ * Call this AFTER `initUiStore()` completes to ensure atoms reflect
+ * persisted values even if they were created at module-import time
+ * before the UI store was initialized (the F5 refresh race).
+ *
+ * For writable atoms created via `makeNotifyFlagAtom` (whose private
+ * base atoms are not accessible), we call `store.set()` on the exported
+ * atom — the write handler is idempotent for values already in kvCache.
+ *
+ * This function is safe to call multiple times; it only updates atoms
+ * whose current value differs from the persisted value.
+ */
+export function hydratePersistedUiAtoms(store: ReturnType<typeof import("jotai/vanilla")["createStore"]>): void {
+  type JotaiStore = typeof store;
+
+  // 1. Conversation width
+  const width = readUiValue(CONVERSATION_WIDTH_KEY, undefined);
+  if (width !== undefined) {
+    const normalized = normalizeConversationWidthMode(width);
+    if (store.get(conversationWidthModeBaseAtom) !== normalized) {
+      store.set(conversationWidthModeBaseAtom as any, normalized);
+    }
+  }
+
+  // 2. Conversation font size
+  const fontSize = readUiValue(CONVERSATION_FONT_SIZE_KEY, undefined);
+  if (fontSize !== undefined) {
+    const normalized = normalizeConversationFontSizeMode(fontSize);
+    if (store.get(conversationFontSizeBaseAtom) !== normalized) {
+      store.set(conversationFontSizeBaseAtom as any, normalized);
+    }
+  }
+
+  // 3. Active profile
+  const profile = readUiValue<string | undefined>("hermes.active-profile", undefined);
+  if (profile !== undefined && typeof profile === "string") {
+    if (store.get(activeProfileBaseAtom) !== profile) {
+      store.set(activeProfileBaseAtom as any, profile);
+    }
+  }
+
+  // 4. Assistant display name
+  const displayName = readUiValue<string | undefined>(ASSISTANT_DISPLAY_NAME_KEY, undefined);
+  if (displayName !== undefined) {
+    const normalized = normalizeAssistantDisplayName(displayName);
+    if (store.get(assistantDisplayNameBaseAtom) !== normalized) {
+      store.set(assistantDisplayNameBaseAtom as any, normalized);
+    }
+  }
+
+  // 5. Assistant avatar
+  const avatar = readUiValue<string | undefined>(ASSISTANT_AVATAR_KEY, undefined);
+  if (avatar !== undefined) {
+    const normalized = normalizeAssistantAvatarDataUrl(avatar);
+    if (store.get(assistantAvatarDataUrlBaseAtom) !== normalized) {
+      store.set(assistantAvatarDataUrlBaseAtom as any, normalized);
+    }
+  }
+
+  // 6. Show reasoning
+  const showReasoning = readUiValue<unknown>("hermes.show-reasoning", undefined);
+  if (showReasoning !== undefined) {
+    const enabled = showReasoning === true;
+    if (store.get(showReasoningBaseAtom) !== enabled) {
+      store.set(showReasoningBaseAtom as any, enabled);
+    }
+  }
+
+  // 7. Telemetry enabled
+  const telemetry = readUiValue<unknown>(TELEMETRY_ENABLED_UI_KEY, undefined);
+  if (telemetry !== undefined) {
+    const enabled = telemetry !== false;
+    if (store.get(telemetryEnabledBaseAtom) !== enabled) {
+      store.set(telemetryEnabledBaseAtom as any, enabled);
+    }
+  }
+
+  // 8. Right rail visible
+  const rightRail = readUiValue<unknown>(RIGHT_RAIL_VISIBLE_KEY, undefined);
+  if (rightRail !== undefined) {
+    const visible = rightRail === true;
+    if (store.get(rightRailVisibleBaseAtom) !== visible) {
+      store.set(rightRailVisibleBaseAtom as any, visible);
+    }
+  }
+
+  // 9. Composer submit shortcut
+  const shortcut = readUiValue<unknown>(COMPOSER_SUBMIT_SHORTCUT_KEY, undefined);
+  if (shortcut !== undefined) {
+    const normalized = normalizeComposerSubmitShortcut(shortcut);
+    if (store.get(composerSubmitShortcutBaseAtom) !== normalized) {
+      store.set(composerSubmitShortcutBaseAtom as any, normalized);
+    }
+  }
+
+  // 10. Active session ID — use exported atom (write handler handles set/null)
+  const activeSessionId = readUiValue<string | null | undefined>(ACTIVE_SESSION_ID_KEY, undefined);
+  // We read the store's current value from the exported atom's getter, not
+  // the private base atom, because the exported atom layers on top of the base.
+  // For null comparison we check if the stored value is explicitly null vs absent.
+  if (activeSessionId !== undefined) {
+    const current = store.get(activeSessionIdAtom);
+    if (current !== activeSessionId) {
+      store.set(activeSessionIdAtom, activeSessionId);
+    }
+  }
+
+  // 11-15. Notification flags — use exported atoms (write handler is idempotent)
+  const notifyKeys: Array<{ atom: any; key: string }> = [
+    { atom: notifySystemAtom, key: NOTIFY_SYSTEM_KEY },
+    { atom: notifySoundAtom, key: NOTIFY_SOUND_KEY },
+    { atom: notifyOnCompleteAtom, key: NOTIFY_ON_COMPLETE_KEY },
+    { atom: notifyOnApprovalAtom, key: NOTIFY_ON_APPROVAL_KEY },
+    { atom: notifyOnlyBackgroundAtom, key: NOTIFY_ONLY_BACKGROUND_KEY },
+  ];
+  for (const { atom: notifAtom, key } of notifyKeys) {
+    const stored = readUiValue<unknown>(key, undefined);
+    if (stored !== undefined) {
+      const enabled = stored !== false;
+      if (store.get(notifAtom) !== enabled) {
+        store.set(notifAtom, enabled);
+      }
+    }
+  }
 }
 
 export function readNotificationSettings(): NotificationSettings {

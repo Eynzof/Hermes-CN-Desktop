@@ -10,7 +10,7 @@ export interface ComposerKeyState {
 
 export function shouldSubmitComposerKey(
   keyState: ComposerKeyState,
-  shortcut: ComposerSubmitShortcut = "enter",
+  shortcut: ComposerSubmitShortcut = "ctrl-enter",
 ): boolean {
   if (keyState.isComposing || keyState.altKey || keyState.key !== "Enter") return false;
 
@@ -21,7 +21,7 @@ export function shouldSubmitComposerKey(
   return !keyState.shiftKey && !keyState.ctrlKey;
 }
 
-export function composerSubmitShortcutHint(shortcut: ComposerSubmitShortcut = "enter"): string {
+export function composerSubmitShortcutHint(shortcut: ComposerSubmitShortcut = "ctrl-enter"): string {
   return shortcut === "ctrl-enter"
     ? "Ctrl+Enter 发送；Enter 换行"
     : "Enter 发送；Shift+Enter 换行";

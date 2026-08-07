@@ -3,6 +3,7 @@ import { Download, PackageX, Play, RefreshCw, RotateCcw, Square, Trash2 } from "
 import type { RuntimeControlResult } from "@hermes/protocol";
 import { Alert, Button, LoadingIndicator } from "@hermes/shared-ui";
 import { resolveManagedRuntimePresentation } from "@/lib/managed-runtime-presentation";
+import { useConfirm } from "@/lib/use-confirm";
 import { runtime } from "@/lib/runtime";
 import s from "./managed-runtime-panel.module.css";
 
@@ -20,6 +21,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
   const [control, setControl] = useState<RuntimeControlResult | null>(null);
   const [busy, setBusy] = useState<RuntimeAction | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const { confirm } = useConfirm();
   const attached = runtime.isAttached();
 
   const adopt = useCallback((result: RuntimeControlResult) => {
@@ -196,8 +198,16 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             variant="outline"
             tone="danger"
             onClick={() => {
-              if (!window.confirm("确定卸载内置内核吗？模型配置、会话、档案和外部连接设置都会保留。")) return;
-              void run("uninstall", desktop?.uninstallManagedRuntime?.bind(desktop), "内置内核已卸载，用户数据已保留。");
+              void (async () => {
+                const ok = await confirm({
+                  title: "卸载内置内核",
+                  body: "确定卸载内置内核吗？模型配置、会话、档案和外部连接设置都会保留。",
+                  confirmLabel: "卸载",
+                  danger: true,
+                });
+                if (!ok) return;
+                void run("uninstall", desktop?.uninstallManagedRuntime?.bind(desktop), "内置内核已卸载，用户数据已保留。");
+              })();
             }}
             disabled={anyBusy}
           >

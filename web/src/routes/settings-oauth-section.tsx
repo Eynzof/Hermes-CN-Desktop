@@ -9,6 +9,7 @@ import {
   usePollOAuthSession,
   useCancelOAuthSession,
 } from "@/hooks/use-oauth-providers";
+import { useConfirm } from "@/lib/use-confirm";
 import { CopyButton } from "@/components/ui/copy-button";
 import { openExternalUrl } from "@/lib/external-links";
 import { Badge, Button, Input, LoadingState } from "@hermes/shared-ui";
@@ -77,6 +78,7 @@ export function OAuthProvidersSection() {
   const { data: providers, isLoading, isError, error, refetch } = useOAuthProviders();
   const disconnect = useDisconnectOAuth();
   const [loginProvider, setLoginProvider] = useState<OAuthProvider | null>(null);
+  const { confirm } = useConfirm();
 
   const connectedCount = useMemo(
     () => providers?.filter((p) => p.status.logged_in).length ?? 0,
@@ -84,12 +86,17 @@ export function OAuthProvidersSection() {
   );
 
   const handleDisconnect = useCallback(
-    (provider: OAuthProvider) => {
-      const confirmed = window.confirm(`确定要断开 ${provider.name} 的 OAuth 登录吗？`);
+    async (provider: OAuthProvider) => {
+      const confirmed = await confirm({
+        title: "断开 OAuth 登录",
+        body: `确定要断开 ${provider.name} 的 OAuth 登录吗？`,
+        confirmLabel: "断开",
+        danger: true,
+      });
       if (!confirmed) return;
       disconnect.mutate(provider.id);
     },
-    [disconnect],
+    [confirm, disconnect],
   );
 
   if (isLoading) return <LoadingState variant="block" label="正在加载 OAuth 状态…" />;
