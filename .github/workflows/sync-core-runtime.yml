@@ -42,7 +42,7 @@ concurrency:
 
 env:
   CORE_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-  RUNTIME_FEED_BASE_URL: https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime
+  RUNTIME_FEED_BASE_URL: https://huanxing.ai/downloads/Hermes-CN-Core/runtime
 
 jobs:
   sync:

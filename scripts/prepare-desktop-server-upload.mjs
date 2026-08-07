@@ -20,7 +20,7 @@ const OUTPUT_DIR = resolve(process.env.DESKTOP_SERVER_UPLOAD_DIR || "desktop-ser
 const VERSION_TAG = (process.env.DESKTOP_VERSION_TAG || "").trim();
 const RELEASE_CHANNEL = (process.env.DESKTOP_RELEASE_CHANNEL || "stable").trim().toLowerCase();
 const FEED_BASE_URL = requiredHttpsUrl(
-  process.env.DESKTOP_FEED_BASE_URL || "https://ai.fengchiyun.com/downloads",
+  process.env.DESKTOP_FEED_BASE_URL || "https://huanxing.ai/downloads",
 );
 
 if (!VERSION_TAG) throw new Error("DESKTOP_VERSION_TAG is required (for example v0.6.9)");

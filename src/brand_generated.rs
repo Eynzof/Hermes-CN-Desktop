@@ -15,7 +15,7 @@ pub const BRAND_DATA_DIR_NAME: &str = ".fengchihermes";
 pub const BRAND_WINDOW_TITLE: &str = "HermesAgent 桌面版";
 pub const BRAND_HOMEPAGE: &str = "https://ai.fengchiyun.com";
 pub const BRAND_UPDATE_MANIFEST_URL: &str =
-    "https://ai.fengchiyun.com/downloads/fengchihermes/latest.json";
+    "https://huanxing.ai/downloads/fengchihermes/latest.json";
 pub const BRAND_UPDATE_DOWNLOAD_URL: &str = "https://ai.fengchiyun.com/hermes-client";
 pub const BRAND_ACCOUNT_DEFAULT_MODELS: &[&str] = &[
     "deepseek-v4-flash",

@@ -46,8 +46,8 @@ permissions:
   contents: write
 
 env:
-  UPDATE_FEED_BASE_URL: https://ai.fengchiyun.com/downloads
-  RUNTIME_UPDATE_FEED_BASE_URL: https://ai.fengchiyun.com/downloads/Hermes-CN-Core/runtime
+  UPDATE_FEED_BASE_URL: https://huanxing.ai/downloads
+  RUNTIME_UPDATE_FEED_BASE_URL: https://huanxing.ai/downloads/Hermes-CN-Core/runtime
   # Build-time source for immutable, signed runtime release artifacts. Keep
   # this separate from the client update endpoint so a frontend/feed outage
   # cannot block every platform in the release matrix.

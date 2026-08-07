@@ -39,7 +39,7 @@ test("prepares immutable assets before mutable Linux server manifests", async ()
         DESKTOP_SERVER_UPLOAD_DIR: output,
         DESKTOP_VERSION_TAG: "v0.6.9",
         DESKTOP_RELEASE_CHANNEL: "stable",
-        DESKTOP_FEED_BASE_URL: "https://ai.fengchiyun.com/downloads",
+        DESKTOP_FEED_BASE_URL: "https://huanxing.ai/downloads",
       },
     });
     assert.equal(result.status, 0, result.stderr);
@@ -57,7 +57,7 @@ test("prepares immutable assets before mutable Linux server manifests", async ()
     assert.equal(immutableManifest.channel, "stable");
     assert.equal(
       immutableManifest.assets.windows.url,
-      "https://ai.fengchiyun.com/downloads/fengchihermes/releases/v0.6.9/Hermes-Fengchi-0.6.9_x64-setup.exe",
+      "https://huanxing.ai/downloads/fengchihermes/releases/v0.6.9/Hermes-Fengchi-0.6.9_x64-setup.exe",
     );
     assert.equal(
       await readFile(join(output, "immutable", "checksums", "v0.6.9", "checksums.txt"), "utf8"),

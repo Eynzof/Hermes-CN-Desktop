@@ -18,7 +18,7 @@
   "longDescription": "Desktop app for FengchiHermes AI Assistant.",
   "tagline": "AI Assistant",
   "edition": "桌面版",
-  "updateManifestUrl": "https://ai.fengchiyun.com/downloads/fengchihermes/latest.json",
+  "updateManifestUrl": "https://huanxing.ai/downloads/fengchihermes/latest.json",
   "updateDownloadUrl": "https://ai.fengchiyun.com/hermes-client",
   "accountDefaultModels": [
     "deepseek-v4-flash",

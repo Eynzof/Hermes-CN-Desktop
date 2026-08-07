@@ -72,7 +72,7 @@ sudo install -m 0644 /tmp/hermes-update/downloads/huanxingcomhermes/latest.json 
 
 ```bash
 for brand in fengchihermes frogclawhermes huanxinghermes huanxingcomhermes; do
-  curl -fsSL "https://ai.fengchiyun.com/downloads/$brand/latest.json"
+  curl -fsSL "https://huanxing.ai/downloads/$brand/latest.json"
 done
 ```
 
