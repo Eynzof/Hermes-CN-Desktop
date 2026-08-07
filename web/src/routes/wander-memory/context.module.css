@@ -1,0 +1,57 @@
+/* WanderMemory context route — Hermes tokens only, no hard-coded colors. */
+
+.buildRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 720px;
+}
+
+.queryInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.topK {
+  width: 96px;
+  flex: none;
+}
+
+.output {
+  margin-top: 16px;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextBlock {
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-pane);
+}
+
+.contextHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--h-line-soft);
+}
+
+.contextLabel {
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.contextText {
+  margin: 0;
+  padding: 16px;
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

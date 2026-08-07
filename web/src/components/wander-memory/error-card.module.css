@@ -1,0 +1,15 @@
+/* ErrorCard — Hermes tokens only, no hard-coded colors. */
+
+.errorCard {
+  margin: 0;
+}
+
+.text {
+  color: var(--h-color-danger-fg);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

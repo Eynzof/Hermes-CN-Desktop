@@ -15,6 +15,11 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    env:
+      # The Playwright webServer inherits this env: harness/start-memos.mjs
+      # spawns the REAL MemOS backend (`python -m src.memory --remote …`)
+      # from the sibling Wander-Memory checkout (the port-shift/CORS branch).
+      WANDER_MEMORY_DIR: ../Wander-Memory
     defaults:
       run:
         working-directory: Hermes-CN-Desktop
@@ -32,6 +37,17 @@ jobs:
           repository: Eynzof/Hermes-CN-Core
           ref: main
           path: Hermes-CN-Core
+
+      # The MemOS backend behind the /wander-memory surface. Sibling checkout
+      # so the default WANDER_MEMORY_DIR (../Wander-Memory) resolves. ref =
+      # feat/hermes-port-shift carries the port auto-shift trio + the
+      # --cors-origins flag the E2E harness passes; flips to main once merged.
+      - name: Checkout Wander-Memory backend
+        uses: actions/checkout@v4
+        with:
+          repository: Eynzof/Wander-Memory
+          ref: feat/hermes-port-shift
+          path: Wander-Memory
 
       - uses: pnpm/action-setup@v4
         with:
@@ -57,6 +73,17 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -U pip
           .venv/bin/pip install -e ".[all]"
+
+      - name: Install Wander-Memory (Python) into .venv
+        working-directory: Wander-Memory
+        # wandermemory (hatchling). The backend runs `python -m src.memory`,
+        # which needs the package deps (orjson/websockets/numpy/msgspec/apsw/…).
+        # MemoryOS resolves from PyPI under plain pip — the `tool.uv.sources`
+        # path override in pyproject.toml is a uv dev-time shortcut only.
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e .
 
       - name: Install desktop deps
         run: pnpm install --frozen-lockfile
