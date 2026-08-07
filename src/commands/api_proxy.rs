@@ -496,20 +496,7 @@ async fn api_request_impl_inner(
         return Ok(json_result(status, status_text, body));
     }
 
-    // 4. Runtime update intercept
-    if url_p == "/api/hermes/update" && method.to_uppercase() == "POST" {
-        let result = crate::process::runtime::install_runtime_update(None).await;
-        let status = if result.ok { 200 } else { 503 };
-        let status_text = if result.ok {
-            "OK"
-        } else {
-            "Runtime Update Failed"
-        };
-        let body = serde_json::to_value(&result).unwrap_or_default();
-        return Ok(json_result(status, status_text, body));
-    }
-
-    // 5. Proxy to dashboard
+    // 4. Proxy to dashboard
     let full_url = if path.starts_with("http://") || path.starts_with("https://") {
         // Validate same origin
         let base = url::Url::parse(api_base_url)?;
@@ -583,7 +570,7 @@ async fn api_request_impl_inner(
         .collect();
     let raw_body = res.text().await.unwrap_or_default();
 
-    // 6. Post-process: filter archived sessions
+    // 5. Post-process: filter archived sessions
     let body = session_archive::filter_archived_from_response(path, method, hermes_home, &raw_body);
 
     Ok(ApiRequestResult {
@@ -627,6 +614,25 @@ pub async fn api_request_from_state(
                 "ok": false,
                 "error": "当前连接的不是本机内核，无法更新桌面端 managed runtime"
             }),
+        ));
+    }
+
+    if mode == crate::connection::ConnectionMode::Managed
+        && url_path(&input.path) == "/api/hermes/update"
+        && input.method.as_deref().unwrap_or("GET").to_uppercase() == "POST"
+    {
+        let result =
+            crate::commands::runtime_manager::install_runtime_update_managed(state).await?;
+        let status = if result.ok { 200 } else { 503 };
+        let status_text = if result.ok {
+            "OK"
+        } else {
+            "Runtime Update Failed"
+        };
+        return Ok(json_result(
+            status,
+            status_text,
+            serde_json::to_value(&result).unwrap_or_default(),
         ));
     }
 

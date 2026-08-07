@@ -72,7 +72,7 @@ pub async fn supervise_managed_dashboard(app: tauri::AppHandle) {
             if inner.dashboard_restart_in_flight {
                 continue;
             }
-            let exited = match inner.dashboard_handle.as_mut() {
+            let exited_or_missing = match inner.dashboard_handle.as_mut() {
                 Some(handle) if handle.owns_process => match handle.child.as_mut() {
                     // `Ok(Some(_))` means the process has already exited. A live
                     // (or still-booting) child returns `Ok(None)`, so this never
@@ -80,9 +80,10 @@ pub async fn supervise_managed_dashboard(app: tauri::AppHandle) {
                     Some(child) => matches!(child.try_wait(), Ok(Some(_))),
                     None => false,
                 },
+                None => true,
                 _ => false,
             };
-            if !exited {
+            if !exited_or_missing {
                 // Healthy. The crash-loop counter is reset by the HEALTHY_WINDOW
                 // check below whenever the next real restart is far enough out.
                 continue;

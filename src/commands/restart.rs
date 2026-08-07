@@ -11,8 +11,6 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tauri::State;
-
 use crate::error::AppError;
 use crate::process::dashboard;
 use crate::state::AppState;
@@ -32,7 +30,7 @@ pub fn host_and_port() -> (String, u16) {
 /// now owns the restart and must call [`end_restart`] when done; `false` if a
 /// restart is already in flight. The check-and-set happens under a single lock,
 /// so two concurrent callers cannot both win.
-pub fn try_begin_restart(state: &State<'_, AppState>) -> Result<bool, AppError> {
+pub fn try_begin_restart(state: &AppState) -> Result<bool, AppError> {
     let mut inner = state.inner.lock()?;
     if inner.dashboard_restart_in_flight {
         return Ok(false);
@@ -42,10 +40,24 @@ pub fn try_begin_restart(state: &State<'_, AppState>) -> Result<bool, AppError> 
 }
 
 /// Release the dashboard-restart guard claimed by [`try_begin_restart`].
-pub fn end_restart(state: &State<'_, AppState>) {
+pub fn end_restart(state: &AppState) {
     if let Ok(mut inner) = state.inner.lock() {
         inner.dashboard_restart_in_flight = false;
     }
+}
+
+pub struct RestartGuard<'a> {
+    state: &'a AppState,
+}
+
+impl Drop for RestartGuard<'_> {
+    fn drop(&mut self) {
+        end_restart(self.state);
+    }
+}
+
+pub fn try_begin_restart_guard(state: &AppState) -> Result<Option<RestartGuard<'_>>, AppError> {
+    Ok(try_begin_restart(state)?.then_some(RestartGuard { state }))
 }
 
 /// What a respawn ended up doing.
@@ -81,7 +93,7 @@ pub struct RespawnResult {
 /// command-specific state (`current_profile`, `yolo_mode`, sticky file) and
 /// must hold the [`try_begin_restart`] guard for the duration.
 pub async fn respawn_managed_dashboard(
-    state: &State<'_, AppState>,
+    state: &AppState,
     host: &str,
     port: u16,
     target_home: &str,
@@ -152,7 +164,7 @@ pub async fn respawn_managed_dashboard(
 /// the resulting connection into AppState. Returns the connection tuple on
 /// success. The session token is process-local and rotates on every restart.
 async fn spawn_and_adopt(
-    state: &State<'_, AppState>,
+    state: &AppState,
     host: &str,
     port: u16,
     hermes_home: &str,

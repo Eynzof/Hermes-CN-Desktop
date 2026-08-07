@@ -15,7 +15,7 @@ use crate::process::dashboard;
 use crate::process::runtime;
 use crate::state::AppState;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task;
 
@@ -177,19 +177,55 @@ pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult,
 pub async fn runtime_install_update(
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
+    install_runtime_update_managed(&state).await
+}
+
+pub(crate) async fn install_runtime_update_managed(
+    state: &AppState,
+) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 更新")?;
     }
-    let result = runtime::install_runtime_update(None).await;
+    let Some(_restart_guard) = restart::try_begin_restart_guard(state)? else {
+        return Ok(runtime::RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: runtime::read_current_record(),
+            error: Some("内核操作正在进行中，请稍后重试".to_string()),
+        });
+    };
+
+    let backend_stopped = AtomicBool::new(false);
+    let mut result = runtime::install_runtime_update_with_pre_replace(None, || {
+        stop_managed_backend(state).map_err(|error| error.to_string())?;
+        backend_stopped.store(true, Ordering::Relaxed);
+        Ok(())
+    })
+    .await;
+    let restart_result = if result.ok || backend_stopped.load(Ordering::Relaxed) {
+        Some(restart_dashboard(state).await)
+    } else {
+        None
+    };
+
     if !result.ok {
+        if let Some(Err(error)) = restart_result {
+            let install_error = result
+                .error
+                .take()
+                .unwrap_or_else(|| "Runtime update failed".to_string());
+            result.error = Some(format!(
+                "{}; previous Runtime restart also failed: {}",
+                install_error, error
+            ));
+        }
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = result.error.clone();
         return Ok(result);
     }
 
-    // Restart dashboard after successful install
-    if let Err(e) = restart_dashboard(&state).await {
+    if let Some(Err(e)) = restart_result {
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = Some(e.to_string());
         return Ok(runtime::RuntimeInstallUpdateResult {
@@ -323,7 +359,7 @@ fn uninstall_runtime_payload_with(
     })
 }
 
-fn stop_managed_backend(state: &State<'_, AppState>) -> Result<(), AppError> {
+fn stop_managed_backend(state: &AppState) -> Result<(), AppError> {
     let mut inner = state.inner.lock()?;
     if inner.connection_mode != ConnectionMode::Managed {
         return Ok(());
@@ -382,14 +418,13 @@ pub async fn managed_runtime_install(
         desktop_control::set_managed_runtime_desired_state(ManagedRuntimeDesiredState::Stopped)?;
         return runtime_control_snapshot(&state, None);
     }
-    if !restart::try_begin_restart(&state)? {
+    let Some(_restart_guard) = restart::try_begin_restart_guard(&state)? else {
         return runtime_control_snapshot(
             &state,
             Some("内核操作正在进行中，请稍后重试".to_string()),
         );
-    }
+    };
     let install = install_runtime_payload(&app).await;
-    restart::end_restart(&state);
     if !install.ok || runtime::read_current_record().is_none() {
         let error = install
             .error
@@ -404,21 +439,18 @@ pub async fn managed_runtime_install(
 pub async fn managed_runtime_stop(
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
-    if !restart::try_begin_restart(&state)? {
+    let Some(_restart_guard) = restart::try_begin_restart_guard(&state)? else {
         return runtime_control_snapshot(
             &state,
             Some("内核操作正在进行中，请稍后重试".to_string()),
         );
-    }
+    };
     let result = stop_managed_backend(&state);
-    restart::end_restart(&state);
+    if result.is_ok() {
+        desktop_control::set_managed_runtime_desired_state(ManagedRuntimeDesiredState::Stopped)?;
+    }
     match result {
-        Ok(()) => {
-            desktop_control::set_managed_runtime_desired_state(
-                ManagedRuntimeDesiredState::Stopped,
-            )?;
-            runtime_control_snapshot(&state, None)
-        }
+        Ok(()) => runtime_control_snapshot(&state, None),
         Err(error) => runtime_control_snapshot(&state, Some(error.to_string())),
     }
 }
@@ -438,36 +470,28 @@ pub async fn managed_runtime_start(
             Some("当前正在使用外部 Hermes，请使用“启动并切换到内置内核”".to_string()),
         );
     }
-    if !restart::try_begin_restart(&state)? {
+    let Some(_restart_guard) = restart::try_begin_restart_guard(&state)? else {
         return runtime_control_snapshot(
             &state,
             Some("内核操作正在进行中，请稍后重试".to_string()),
         );
-    }
+    };
     desktop_control::set_managed_runtime_desired_state(ManagedRuntimeDesiredState::Running)?;
     let result = super::connection::apply_managed(&app, &state).await;
-    restart::end_restart(&state);
+    if !matches!(&result, Ok(applied) if applied.ok) {
+        desktop_control::set_managed_runtime_desired_state(ManagedRuntimeDesiredState::Stopped)?;
+    }
     match result {
         Ok(applied) if applied.ok => runtime_control_snapshot(&state, None),
-        Ok(applied) => {
-            desktop_control::set_managed_runtime_desired_state(
-                ManagedRuntimeDesiredState::Stopped,
-            )?;
-            runtime_control_snapshot(
-                &state,
-                Some(
-                    applied
-                        .error
-                        .unwrap_or_else(|| "内置内核启动失败".to_string()),
-                ),
-            )
-        }
-        Err(error) => {
-            desktop_control::set_managed_runtime_desired_state(
-                ManagedRuntimeDesiredState::Stopped,
-            )?;
-            runtime_control_snapshot(&state, Some(error.to_string()))
-        }
+        Ok(applied) => runtime_control_snapshot(
+            &state,
+            Some(
+                applied
+                    .error
+                    .unwrap_or_else(|| "内置内核启动失败".to_string()),
+            ),
+        ),
+        Err(error) => runtime_control_snapshot(&state, Some(error.to_string())),
     }
 }
 
@@ -475,31 +499,24 @@ pub async fn managed_runtime_start(
 pub async fn managed_runtime_uninstall(
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
-    if !restart::try_begin_restart(&state)? {
+    let Some(_restart_guard) = restart::try_begin_restart_guard(&state)? else {
         return runtime_control_snapshot(
             &state,
             Some("内核操作正在进行中，请稍后重试".to_string()),
         );
-    }
+    };
     if let Err(error) = stop_managed_backend(&state) {
-        restart::end_restart(&state);
         return runtime_control_snapshot(&state, Some(error.to_string()));
     }
     let outcome = uninstall_runtime_payload(&runtime::runtime_root());
-    restart::end_restart(&state);
+    desktop_control::set_managed_runtime_desired_state(if outcome.is_ok() {
+        ManagedRuntimeDesiredState::Uninstalled
+    } else {
+        ManagedRuntimeDesiredState::Stopped
+    })?;
     match outcome {
-        Ok(outcome) => {
-            desktop_control::set_managed_runtime_desired_state(
-                ManagedRuntimeDesiredState::Uninstalled,
-            )?;
-            runtime_control_snapshot(&state, outcome.cleanup_error)
-        }
-        Err(error) => {
-            desktop_control::set_managed_runtime_desired_state(
-                ManagedRuntimeDesiredState::Stopped,
-            )?;
-            runtime_control_snapshot(&state, Some(error.to_string()))
-        }
+        Ok(outcome) => runtime_control_snapshot(&state, outcome.cleanup_error),
+        Err(error) => runtime_control_snapshot(&state, Some(error.to_string())),
     }
 }
 
@@ -508,28 +525,25 @@ pub async fn managed_runtime_reinstall(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<RuntimeControlResult, AppError> {
-    if !restart::try_begin_restart(&state)? {
+    let Some(_restart_guard) = restart::try_begin_restart_guard(&state)? else {
         return runtime_control_snapshot(
             &state,
             Some("内核操作正在进行中，请稍后重试".to_string()),
         );
-    }
+    };
     let was_managed = {
         let inner = state.inner.lock()?;
         inner.connection_mode == ConnectionMode::Managed
     };
     if let Err(error) = stop_managed_backend(&state) {
-        restart::end_restart(&state);
         return runtime_control_snapshot(&state, Some(error.to_string()));
     }
     if let Err(error) = uninstall_runtime_payload(&runtime::runtime_root()) {
-        restart::end_restart(&state);
         desktop_control::set_managed_runtime_desired_state(ManagedRuntimeDesiredState::Stopped)?;
         return runtime_control_snapshot(&state, Some(error.to_string()));
     }
     let install = install_runtime_payload(&app).await;
     if !install.ok || runtime::read_current_record().is_none() {
-        restart::end_restart(&state);
         desktop_control::set_managed_runtime_desired_state(
             ManagedRuntimeDesiredState::Uninstalled,
         )?;
@@ -552,7 +566,6 @@ pub async fn managed_runtime_reinstall(
     } else {
         None
     };
-    restart::end_restart(&state);
     match start_result {
         Some(Ok(applied)) if !applied.ok => runtime_control_snapshot(
             &state,
@@ -834,7 +847,7 @@ pub async fn runtime_rollback(
 }
 
 /// Stop the current dashboard and spawn a new one.
-pub(crate) async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> {
+pub(crate) async fn restart_dashboard(state: &AppState) -> Result<(), AppError> {
     let (host, port, hermes_home) = {
         let mut inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "内核重启")?;
