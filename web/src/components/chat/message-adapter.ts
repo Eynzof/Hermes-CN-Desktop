@@ -1006,6 +1006,48 @@ function isSupersededByStoredTurn(
   return true;
 }
 
+// 回合**进行中**的「消息裂开」：上面一条在实时更新进度，下面一条是死的。
+//
+// Core 在回合进行中就把每个 tool_calls 步骤各写成一行 assistant（见
+// ~/.hermes/state.db 行序：assistant(tool_calls) / tool / assistant(tool_calls)…）。
+// 只要此刻 session-messages 被重新拉取（全局 refetchOnWindowFocus，或上一回合
+// message.complete 后 500ms 的 invalidate 落进了新回合），stored 就拿到「半个
+// 回合」——而 live 那条整合的 streaming 消息已经跑得更远。
+//
+// 这种方向上现有守卫都不命中：isReplayDuplicateLiveMessage 要求 live 是 stored
+// 的前缀（这里相反，live 是超集），isSupersededByStoredTurn 要求 live 已
+// complete（这里仍在流式），isSameCanonicalMessage 又被工具身份守卫否决（工具
+// 集不同）。于是 stored 半行原样保留 + live 整条追加 = 两条并存；再按 createdAt
+// 排序（live 用 turnStartedAt，早于 stored 半行的中途 timestamp），就成了
+// 「live 在上、死行在下」。
+//
+// 反过来判定：stored 这半行的工具身份（toolCallId 后端唯一）若是某条仍在流式的
+// live 消息工具身份的**连续子串**，且文本也被其包含，那它就是同一回合已被 live
+// 覆盖的中间态——丢掉 stored，让那条还在更新的 live 独占这一回合。
+// 只在 live 仍 streaming 时生效；回合收尾后仍由 isSupersededByStoredTurn 等
+// 让 canonical stored 行取胜，不影响历史渲染。
+function isStoredRowAbsorbedByStreamingLive(
+  stored: HermesUIMessage,
+  liveMessages: HermesUIMessage[],
+): boolean {
+  if (stored.role !== "assistant") return false;
+  // 工具身份是唯一可靠的「同一回合」判据；纯文本行交给文本匹配路径。
+  const storedTools = canonicalToolIdentityComparable(stored);
+  if (!storedTools) return false;
+
+  const storedText = looseComparableText(canonicalText(stored));
+
+  return liveMessages.some((live) => {
+    if (live.role !== "assistant" || live.status !== "streaming") return false;
+    const liveTools = canonicalToolIdentityComparable(live);
+    if (!liveTools) return false;
+    // stored 的工具序列必须原样出现在 live 里（连续、同序）。
+    if (!liveTools.includes(storedTools)) return false;
+    if (!storedText) return true;
+    return looseComparableText(canonicalText(live)).includes(storedText);
+  });
+}
+
 function isInterruptedLiveSuperset(
   stored: HermesUIMessage,
   live: HermesUIMessage,
@@ -1174,6 +1216,9 @@ export function mergeHermesUIMessages(
     );
 
     if (liveIndex === -1) {
+      // 回合进行中落库的中间态 assistant 行：已被仍在流式的 live 整条覆盖，
+      // 保留它就会在实时更新的那条下面多出一条永不更新的「死消息」。
+      if (isStoredRowAbsorbedByStreamingLive(storedMessage, consolidatedLive)) continue;
       merged.push(storedMessage);
       continue;
     }
