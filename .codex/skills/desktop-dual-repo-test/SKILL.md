@@ -167,4 +167,5 @@ Wait for kernel ready (dashboard **9120** returns 200), then:
 
 - **PR merged, considering tag** → 路线 A on both repos' latest `main` (or integration branch).
 - **Tag pushed, GHA green** → 路线 B on release asset; 路线 A results do not replace B for runtime badge or macOS relay.
-- **Formal public release** → also run `.codex/skills/desktop-release-sync-landing/SKILL.md` for landing / `latest.json`.
+- **Stable/formal public release** → also run `.codex/skills/desktop-release-sync-landing/SKILL.md` for landing / `latest.json`.
+- **RC / beta / alpha / canary prerelease** → do not modify the landing repository and do not point public `latest.json` at the prerelease; distribute and validate through GitHub Release or a dedicated internal channel.
