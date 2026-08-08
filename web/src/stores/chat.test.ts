@@ -1,5 +1,5 @@
 import { createStore } from "jotai/vanilla";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { HermesMessagePart, HermesUIMessage } from "@hermes/protocol";
 import {
   applyGatewayEventAtom,
@@ -45,6 +45,28 @@ function runtimeMessage(overrides: Partial<HermesUIMessage>): HermesUIMessage {
     ...overrides,
   };
 }
+
+describe("gwSessionIdAtom (persisted)", () => {
+  it("persists writes to the UI store and removes the key when cleared", async () => {
+    vi.resetModules();
+    const uiStore = await import("@/lib/ui-store");
+    uiStore.__resetUiStoreForTests();
+    const chat = await import("./chat");
+    const store = createStore();
+    store.set(chat.gwSessionIdAtom, "gws-live-789");
+    expect(uiStore.readUiValue("hermes.gateway-session-id", null)).toBe("gws-live-789");
+    store.set(chat.gwSessionIdAtom, null);
+    expect(uiStore.readUiValue("hermes.gateway-session-id", "fallback")).toBe("fallback");
+  });
+
+  it("restores a persisted gateway session id after a reload (F5)", async () => {
+    vi.resetModules();
+    const uiStore = await import("@/lib/ui-store");
+    uiStore.__resetUiStoreForTests({ "hermes.gateway-session-id": "gws-persisted-456" });
+    const chat = await import("./chat");
+    expect(createStore().get(chat.gwSessionIdAtom)).toBe("gws-persisted-456");
+  });
+});
 
 describe("chat runtime reducer", () => {
   it("uses message.complete payload even when no deltas were received", () => {
@@ -632,11 +654,6 @@ describe("chat runtime reducer", () => {
     expect(rt.statusKind).toBeUndefined();
     expect(rt.statusUpdatedAt).toBeUndefined();
     expect(assistantMessage(rt).parts).toEqual([{ type: "text", text: "hello" }]);
-  });
-
-  it("exports action atoms used for per-session updates", () => {
-    expect(startPromptAtom).toBeDefined();
-    expect(chatRuntimeBySessionAtom).toBeDefined();
   });
 });
 
