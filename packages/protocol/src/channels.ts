@@ -295,6 +295,57 @@ export interface RuntimeInstallUpdateResult {
   error?: string;
 }
 
+// --- Track B: UI layer hot update (custom `hermesui:` scheme) -------------
+// Mirror of src/process/ui_update.rs. The Ed25519 payload joins exactly these
+// ten fields with `\n` (schemaVersion, channel, uiVersion, appVersionFloor,
+// platform, arch, artifactUrl, sha256, sourceRepo, sourceCommit).
+
+export interface UiUpdateManifest {
+  schemaVersion: number;
+  channel: string;
+  uiVersion: string;
+  /** Minimum desktop shell version this UI package requires (signed gate). */
+  appVersionFloor: string;
+  platform: string;
+  arch: string;
+  artifactUrl: string;
+  sha256: string;
+  signature: string;
+  sourceRepo: string;
+  sourceCommit: string;
+}
+
+export interface UiInstallRecord {
+  schemaVersion: number;
+  uiVersion: string;
+  appVersionFloor: string;
+  channel: string;
+  path: string;
+  sha256: string;
+  source: string;
+  installedAt: string;
+  previousUiVersion?: string;
+}
+
+export interface UiUpdateCheckResult {
+  ok: boolean;
+  updateAvailable: boolean;
+  currentUiVersion?: string;
+  manifest?: UiUpdateManifest;
+  error?: string;
+}
+
+export interface UiInstallUpdateResult {
+  ok: boolean;
+  installed?: UiInstallRecord;
+  previous?: UiInstallRecord;
+  error?: string;
+}
+
+export interface UiUpdateReadyPayload {
+  uiVersion: string;
+}
+
 export type GuideState = "pending" | "deferred" | "completed";
 export type ManagedRuntimeDesiredState = "running" | "stopped" | "uninstalled";
 export type ManagedRuntimeLifecycleState =
@@ -316,6 +367,119 @@ export interface RuntimeControlResult {
   running: boolean;
   backendReady: boolean;
   error?: string;
+}
+
+// --- Unified self-update (configurable source + one version for both
+// --- frontend and backend). Mirror of src/update_config.rs / src/unified_manifest.rs.
+
+export interface UpdateMirror {
+  label: string;
+  releaseManifestUrl: string;
+  runtimeBaseUrl: string;
+}
+
+export interface UpdateConfig {
+  schemaVersion: number;
+  channel: string;
+  releaseManifestUrl: string;
+  runtimeBaseUrl: string;
+  runtimeManifestUrl: string;
+  runtimePublicKeyPem: string;
+  timeoutSeconds: number;
+  verifySha256: boolean;
+  verifySignature: boolean;
+  mirrors: UpdateMirror[];
+}
+
+export interface UpdateConfigSnapshot {
+  ok: boolean;
+  config: UpdateConfig;
+  path: string;
+  configError?: string;
+  effectiveReleaseManifestUrl: string;
+  effectiveRuntimeManifestUrl?: string;
+  effectiveRuntimePublicKeyPem?: string;
+}
+
+export interface UnifiedDesktopAsset {
+  kind: string;
+  fileName: string;
+  url: string;
+  sha256: string;
+  size?: number;
+}
+
+export interface UnifiedRuntimeAsset {
+  kind: string;
+  fileName: string;
+  url: string;
+  sha256: string;
+  size?: number;
+  kernelVersion: string;
+  /** Already-signed track-A runtime manifest (authoritative). */
+  manifest: RuntimeUpdateManifest;
+}
+
+export interface UnifiedPlatformAssets {
+  desktop?: UnifiedDesktopAsset;
+  runtime?: UnifiedRuntimeAsset;
+}
+
+export interface UnifiedReleaseManifest {
+  schemaVersion: number;
+  version: string;
+  publishedAt?: string;
+  notes?: string;
+  minAppVersion?: string;
+  assets: Record<string, UnifiedPlatformAssets>;
+  repository?: string;
+  semver?: string;
+  sourceUrl?: string;
+}
+
+export interface AppUpdateProgressPayload {
+  phase: string;
+  percent: number;
+  message: string;
+}
+
+export interface AppUpdateCheckResult {
+  ok: boolean;
+  currentVersion?: string;
+  latestVersion?: string;
+  updateAvailable: boolean;
+  sameVersion: boolean;
+  manifest?: UnifiedReleaseManifest;
+  error?: string;
+}
+
+export interface AppUpdateInstallResult {
+  ok: boolean;
+  backendInstalled: boolean;
+  frontendStaged: boolean;
+  backendVerified: boolean;
+  frontendInstalled: boolean;
+  restarted: boolean;
+  error?: string;
+}
+
+// --- Dev-source backend hot update (local-source dev runtime only) ---
+
+export interface HotUpdateBackendInput {
+  sourceRoot?: string;
+  skipGit?: boolean;
+}
+
+export interface HotUpdateBackendResult {
+  ok: boolean;
+  sourceRoot: string;
+  commit?: string;
+  error?: string;
+}
+
+export interface HotUpdateProgressPayload {
+  phase: string;
+  message: string;
 }
 
 export interface SwitchProfileInput {

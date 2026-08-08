@@ -17,5 +17,7 @@ pub mod state;
 pub mod supervisor;
 pub mod tray;
 pub mod ui_store;
+pub mod unified_manifest;
+pub mod update_config;
 pub mod update_stage;
 pub mod util;

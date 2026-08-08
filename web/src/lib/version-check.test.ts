@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertCompatible,
+  expectedBackendVersion,
   getVersionCheckState,
+  recordRuntimeKernelVersion,
   resetVersionCheck,
   verifyBackendVersion,
 } from "./version-check";
@@ -127,6 +129,30 @@ describe("version-check", () => {
       resetVersionCheck();
 
       expect(getVersionCheckState()).toEqual({ kind: "unchecked" });
+    });
+
+    it("prefers the recorded runtime kernel version over the baked constant", async () => {
+      // Unified self-update: after a backend update the kernel version equals
+      // the manifest version (0.8.0), which may differ from the baked constant.
+      recordRuntimeKernelVersion("0.8.0");
+      expect(expectedBackendVersion()).toBe("0.8.0");
+      stubFetch({ version: "0.8.0", name: "hermes-agent" });
+
+      const state = await verifyBackendVersion();
+
+      expect(state.kind).toBe("ok");
+      expect(state).toMatchObject({ backendVersion: "0.8.0" });
+    });
+
+    it("falls back to the baked constant when no kernel version is recorded", () => {
+      resetVersionCheck();
+      expect(expectedBackendVersion()).toBe(EXPECTED_BACKEND_VERSION);
+    });
+
+    it("resetVersionCheck clears the recorded kernel version", () => {
+      recordRuntimeKernelVersion("0.8.0");
+      resetVersionCheck();
+      expect(expectedBackendVersion()).toBe(EXPECTED_BACKEND_VERSION);
     });
   });
 });

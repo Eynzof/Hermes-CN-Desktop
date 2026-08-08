@@ -94,7 +94,11 @@ python run.py --skip-prereqs
 1. 先尝试杀掉占用该端口的进程（平台相关：Windows 用 `netstat` + `taskkill`，macOS 用 `lsof` + `kill`，Linux 用 `ss` + `kill`）
 2. 杀不掉则回退到 OS 分配的随机空闲端口
 
-前端端口（9545）同样会尝试杀掉占用进程。
+**前端端口（默认 9545）在运行时重新校验**，而非硬编码：
+- 先尝试绑定 9545（同时检查 IPv4 `127.0.0.1` 与 IPv6 `::1`）
+- 若被占用 → 杀掉占用进程
+- 若被操作系统屏蔽（见下方“EACCES / Windows 排除端口范围”FAQ）→ 自动回退到空闲端口，并通过 `E2E_VITE_PORT` 传给 Vite
+- 最终端口会显示在启动日志里（`Frontend: http://localhost:<port>`）
 
 ### 4. 启动后端
 
@@ -135,16 +139,17 @@ hermes dashboard --no-open --port <port> --host 127.0.0.1
 ### 6. 启动前端
 
 ```bash
-pnpm web:dev    # Vite dev server，默认 9545 端口
+pnpm web:dev    # Vite dev server，默认 9545 端口；被系统屏蔽时自动回退
 ```
 
 环境变量注入：
 - `PYTHONIOENCODING=utf-8`
 - `HERMES_DASHBOARD_ORIGIN=<dashboard_origin>`（Vite proxy 用这个 URL 转发 API 请求到后端）
+- `E2E_VITE_PORT=<frontend_port>`（Vite 实际监听端口，`web/vite.config.ts` 读取；直接 `pnpm web:dev` 时 vite 也会自行探测）
 
 ### 7. 打开浏览器
 
-除非指定了 `--no-browser`，否则自动打开 `http://localhost:9545`。
+除非指定了 `--no-browser`，否则自动打开 `http://localhost:<frontend_port>`（默认 9545，被系统屏蔽时自动回退到空闲端口）。
 
 ### 8. 退出清理
 
@@ -177,7 +182,7 @@ pnpm tauri:run
 | 后端 | 本地 hermes CLI dashboard | managed runtime（从 Core 源码安装） |
 | 原生能力 | 无（浏览器） | 全部（系统托盘、文件对话框等） |
 | 适用 | 纯前端调试 | 完整桌面端开发 |
-| 端口 | 9120（后端）+ 9545（前端） | 9120（后端 managed runtime） |
+| 端口 | 9120（后端）+ 9545（前端，被系统屏蔽时自动回退） | 9120（后端 managed runtime） |
 
 ## 常见问题
 
@@ -209,6 +214,18 @@ corepack enable && corepack prepare pnpm@latest --activate
 ### 端口被占用
 
 脚本会自动尝试杀掉占用端口的进程。如果杀不掉，会回退到空闲端口。也可以手动释放端口后重试。
+
+### 前端启动报 EACCES（`listen EACCES: permission denied ::1:9545`）
+
+端口没被占用、但 Vite 绑定失败并报 `EACCES`，通常是 **Windows 排除端口范围（excluded port range）** 导致的：Hyper-V / WSL2 / WinNAT 等会动态预留一段 TCP 端口，落在范围内的端口（即使空闲）绑定也会报 `EACCES`。检查：
+
+```bash
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+如果 9545 落在某个范围里（如 `9511–9610`），就是它了。注意这些范围**重启后会变化**，所以无法靠改死一个端口解决——脚本与 `web/vite.config.ts` 都会在启动时探测 9545 是否可用，不可用则自动回退到空闲端口。
+
+想手动回收被预留的端口：重启电脑，或重启 Hyper-V/WSL 相关服务（如管理员 `net stop winnat && net start winnat`，或关闭再打开 WSL）。
 
 ### 后端启动超时
 

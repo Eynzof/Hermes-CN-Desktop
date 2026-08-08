@@ -306,7 +306,7 @@ Shared UI primitives:
 | `desktop-prd/` | Product Requirements Document (6 docs: feature inventory, PRD, IA, specs, backend contract, parity gap) |
 | `gateway-connection-overhaul.md` | Gateway connection architecture |
 | `managed-runtime.md` | Managed runtime design |
-| `hot-update-plan.md` / `hot-update-impl-plan.md` | Hot update design |
+| `hot-update.md` | Hot update design（统一自更新 + UI 热更 + 开发热更 + 使用/验证） |
 | `macos-signing-and-notarization.md` | macOS code signing |
 | `portable-mode.md` | Portable mode |
 | `yolo-mode.md` | YOLO mode |

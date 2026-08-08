@@ -38,6 +38,9 @@ import type {
   SwitchProfileInput,
   SwitchProfileResult,
   TestConnectionResult,
+  UiInstallUpdateResult,
+  UiUpdateCheckResult,
+  UiUpdateReadyPayload,
   YoloModeStatus,
 } from "@hermes/protocol";
 
@@ -463,6 +466,20 @@ declare global {
       environmentCheck?(): Promise<EnvironmentCheckResult>;
       codingAgentsCheck?(): Promise<CodingAgentsCheckResult>;
       checkDesktopUpdate?(): Promise<DesktopUpdateManifestFetchResult>;
+      getUpdateConfig?(): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
+      setUpdateConfig?(config: import("@hermes/protocol").UpdateConfig): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
+      appUpdateCheck?(): Promise<import("@hermes/protocol").AppUpdateCheckResult>;
+      appUpdateInstall?(): Promise<import("@hermes/protocol").AppUpdateInstallResult>;
+      onAppUpdateProgress?(handler: (payload: import("@hermes/protocol").AppUpdateProgressPayload) => void): () => void;
+      /** Track B UI hot update: signed web-dist zip swap without restarting the
+       *  kernel. The Rust side reloads the window after a successful install;
+       *  the `ui-update-ready` listener is the renderer-side fallback. */
+      uiCheckUpdate?(): Promise<UiUpdateCheckResult>;
+      uiInstallUpdate?(): Promise<UiInstallUpdateResult>;
+      uiRollback?(): Promise<UiInstallUpdateResult>;
+      onUiUpdateReady?(handler: (payload: UiUpdateReadyPayload) => void): () => void;
+      hotUpdateBackend?(input: { sourceRoot?: string; skipGit?: boolean }): Promise<import("@hermes/protocol").HotUpdateBackendResult>;
+      onHotUpdateProgress?(handler: (payload: import("@hermes/protocol").HotUpdateProgressPayload) => void): () => void;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
       refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;
       getRuntimeInfo?(): Promise<RuntimeInfo>;

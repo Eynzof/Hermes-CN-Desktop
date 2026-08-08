@@ -14,12 +14,31 @@ export type VersionCheckState =
 
 let state: VersionCheckState = { kind: "unchecked" };
 
+/**
+ * Kernel version recorded from the managed runtime install record (set by the
+ * runtime/app-update hooks). When present it is the preferred expected version
+ * for the unified self-update flow — after a backend update the kernel is
+ * verified against the manifest version, and the baked constant is only the
+ * build-time fallback.
+ */
+let runtimeKernelVersion: string | null = null;
+
+export function recordRuntimeKernelVersion(version: string | null | undefined): void {
+  runtimeKernelVersion = version?.trim() || null;
+}
+
+/** The backend version the frontend currently expects to connect to. */
+export function expectedBackendVersion(): string {
+  return runtimeKernelVersion ?? EXPECTED_BACKEND_VERSION;
+}
+
 export function getVersionCheckState(): VersionCheckState {
   return state;
 }
 
 export function resetVersionCheck(): void {
   state = { kind: "unchecked" };
+  runtimeKernelVersion = null;
 }
 
 function isDevBypassEnabled(): boolean {
@@ -50,7 +69,10 @@ async function fetchBackendVersion(apiBaseUrl?: string): Promise<BackendVersionI
   return data as BackendVersionInfo;
 }
 
-export async function verifyBackendVersion(apiBaseUrl?: string): Promise<VersionCheckState> {
+export async function verifyBackendVersion(
+  apiBaseUrl?: string,
+  expected = expectedBackendVersion(),
+): Promise<VersionCheckState> {
   if (runtime.platform === "web") {
     // Web/browser-companion mode: no managed runtime; skip the gate.
     state = { kind: "ok", backendVersion: "web" };
@@ -58,17 +80,17 @@ export async function verifyBackendVersion(apiBaseUrl?: string): Promise<Version
   }
 
   if (isDevBypassEnabled()) {
-    state = { kind: "ok", backendVersion: EXPECTED_BACKEND_VERSION };
+    state = { kind: "ok", backendVersion: expected };
     return state;
   }
 
   try {
     const info = await fetchBackendVersion(apiBaseUrl);
-    if (info.version !== EXPECTED_BACKEND_VERSION) {
+    if (info.version !== expected) {
       state = {
         kind: "mismatch",
         backendVersion: info.version,
-        expectedVersion: EXPECTED_BACKEND_VERSION,
+        expectedVersion: expected,
       };
       return state;
     }

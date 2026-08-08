@@ -498,12 +498,24 @@ export const profileSwitchingAtom = atom<{
   active: false,
 });
 
-// Set to true while the desktop main process is installing a runtime update or
-// rolling back. Like a profile switch, this stops + respawns the dashboard
-// subprocess, during which every REST/WS call would otherwise hit a stale
-// session token and surface a 401. The window-level RuntimeUpdateOverlay reads
-// this and blocks UI interaction (and the polling queries behind it) until the
-// new dashboard is ready and the token has been refreshed.
-export const runtimeUpdatingAtom = atom<{ active: boolean; mode?: "install" | "rollback" }>({
+// Set to true while the desktop main process is installing a runtime update,
+// rolling back, hot-updating the dev-source backend, or running the unified
+// app update (frontend + backend at one version). Like a profile switch, these
+// stop + respawn the dashboard subprocess, during which every REST/WS call
+// would otherwise hit a stale session token and surface a 401. The window-level
+// RuntimeUpdateOverlay reads this and blocks UI interaction (and the polling
+// queries behind it) until the new dashboard is ready and the token has been
+// refreshed.
+export type RuntimeUpdatingMode = "install" | "rollback" | "hot-update" | "app-update" | "ui-update";
+
+export interface RuntimeUpdatingState {
+  active: boolean;
+  mode?: RuntimeUpdatingMode;
+  /** Progress lines streamed by `app-update-progress` / `hot-update-progress`
+   * events. `percent` is present for app-update (0-100), absent for hot-update. */
+  progress?: Array<{ phase: string; percent?: number; message: string }>;
+}
+
+export const runtimeUpdatingAtom = atom<RuntimeUpdatingState>({
   active: false,
 });

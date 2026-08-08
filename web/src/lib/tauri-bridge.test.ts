@@ -305,7 +305,7 @@ describe("isTauriDevMode", () => {
   it("verifies backend version before mounting the runtime in Tauri mode", async () => {
     (globalThis as any).window.__TAURI_INTERNALS__ = {};
     const fetchSpy = vi.fn(async () =>
-      new Response(JSON.stringify({ version: "0.19.0", name: "hermes-agent" }), {
+      new Response(JSON.stringify({ version: "0.7.0", name: "hermes-agent" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),

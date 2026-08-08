@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, Sparkles } from "lucide-react";
+import { Download, Sparkles, RefreshCw } from "lucide-react";
 import { Dialog } from "@hermes/shared-ui";
 import type { DesktopUpdateCheckResult } from "@hermes/protocol";
 import {
@@ -10,6 +10,7 @@ import {
   shouldRunAutoDesktopUpdateCheck,
   shouldShowDesktopUpdateNotice,
 } from "@/lib/desktop-update";
+import { hasAppUpdateBridge, installAppUpdate } from "@/lib/app-update";
 import { openExternalUrl } from "@/lib/external-links";
 import { runtime } from "@/lib/runtime";
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
@@ -65,6 +66,21 @@ export function DesktopUpdateNotifier() {
     setOpen(false);
   };
 
+  const canAutoInstall = hasAppUpdateBridge();
+
+  const updateNow = async () => {
+    rememberDismissedVersion(result);
+    setOpen(false);
+    try {
+      // Unified flow: installs the backend, verifies, stages the new shell,
+      // then exits + relaunches via the detached updater.
+      await installAppUpdate();
+    } catch (error) {
+      console.error("App update install failed", error);
+      await openExternalUrl(result?.downloadUrl);
+    }
+  };
+
   const download = async () => {
     rememberDismissedVersion(result);
     setOpen(false);
@@ -97,9 +113,15 @@ export function DesktopUpdateNotifier() {
           </div>
           <div className={s.actions}>
             <button className={s.btn} type="button" onClick={close}>本版本不再提醒</button>
-            <button className={s.btnPrimary} type="button" onClick={() => void download()}>
-              <Download size={12} /> 去官网下载
-            </button>
+            {canAutoInstall ? (
+              <button className={s.btnPrimary} type="button" onClick={() => void updateNow()}>
+                <RefreshCw size={12} /> 立即更新
+              </button>
+            ) : (
+              <button className={s.btnPrimary} type="button" onClick={() => void download()}>
+                <Download size={12} /> 去官网下载
+              </button>
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
