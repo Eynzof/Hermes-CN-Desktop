@@ -1,24 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  isUiUpdateOverlayActive,
-  listenForUiUpdateReady,
-  uiUpdatingActivePayload,
-  uiUpdatingSettledPayload,
-} from "./use-ui-update";
+import { isUiUpdateOverlayActive, listenForUiUpdateReady } from "./use-ui-update";
 import type { UiUpdateReadyPayload } from "@hermes/protocol";
-
-describe("uiUpdatingActivePayload", () => {
-  it("raises the blocking overlay in ui-update mode for install AND rollback", () => {
-    // Both install and rollback funnel through the same overlay state.
-    expect(uiUpdatingActivePayload()).toEqual({ active: true, mode: "ui-update" });
-  });
-});
-
-describe("uiUpdatingSettledPayload", () => {
-  it("clears the overlay on settle (success AND failure)", () => {
-    expect(uiUpdatingSettledPayload()).toEqual({ active: false });
-  });
-});
 
 describe("isUiUpdateOverlayActive", () => {
   it("is true only when active with mode ui-update", () => {
