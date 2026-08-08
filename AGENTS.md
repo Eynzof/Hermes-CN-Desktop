@@ -180,7 +180,7 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 ## 端口
 
 - **9120**：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）
-- **9545**：Vite dev server（`web/vite.config.ts` 写死，strictPort）
+- **9545**：Vite dev server（`web/vite.config.ts` 默认值，strictPort；Windows 可能因 Hyper-V/WSL2 的“排除端口范围”屏蔽 9545 —— `run.py` 与 vite config 都会在启动时探测并自动回退到空闲端口，见 `docs/run-py-usage.md` 的 EACCES FAQ）
 
 ## Rust 测试约定
 

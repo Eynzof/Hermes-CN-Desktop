@@ -46,6 +46,16 @@ import type {
   SwitchProfileInput,
   SwitchProfileResult,
   TestConnectionResult,
+  UpdateConfig,
+  UpdateConfigSnapshot,
+  AppUpdateCheckResult,
+  AppUpdateInstallResult,
+  AppUpdateProgressPayload,
+  HotUpdateBackendResult,
+  HotUpdateProgressPayload,
+  UiInstallUpdateResult,
+  UiUpdateCheckResult,
+  UiUpdateReadyPayload,
   YoloModeStatus,
 } from "@hermes/protocol";
 import type {
@@ -340,6 +350,101 @@ const tauriBridge = {
 
   async checkDesktopUpdate(): Promise<DesktopUpdateManifestFetchResult> {
     return invokeCommand("desktop_check_update");
+  },
+
+  async getUpdateConfig(): Promise<UpdateConfigSnapshot> {
+    return invokeCommand("get_update_config");
+  },
+
+  async setUpdateConfig(config: UpdateConfig): Promise<UpdateConfigSnapshot> {
+    return invokeCommand("set_update_config", { input: { config } });
+  },
+
+  async appUpdateCheck(): Promise<AppUpdateCheckResult> {
+    return invokeCommand("app_update_check");
+  },
+
+  async appUpdateInstall(): Promise<AppUpdateInstallResult> {
+    return invokeCommand("app_update_install");
+  },
+
+  async hotUpdateBackend(input: {
+    sourceRoot?: string;
+    skipGit?: boolean;
+  }): Promise<HotUpdateBackendResult> {
+    return invokeCommand("hot_update_backend", { input });
+  },
+
+  // Track B UI hot update (custom `hermesui:` scheme). The kernel is never
+  // restarted — after a successful install/rollback the Rust side emits
+  // `ui-update-ready` and reloads the main window itself.
+  async uiCheckUpdate(): Promise<UiUpdateCheckResult> {
+    return invokeCommand("ui_check_update");
+  },
+
+  async uiInstallUpdate(): Promise<UiInstallUpdateResult> {
+    return invokeCommand("ui_install_update");
+  },
+
+  async uiRollback(): Promise<UiInstallUpdateResult> {
+    return invokeCommand("ui_rollback");
+  },
+
+  onUiUpdateReady(handler: (payload: UiUpdateReadyPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<UiUpdateReadyPayload>("ui-update-ready", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
+  },
+
+  onHotUpdateProgress(handler: (payload: HotUpdateProgressPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<HotUpdateProgressPayload>("hot-update-progress", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
+  },
+
+  onAppUpdateProgress(handler: (payload: AppUpdateProgressPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<AppUpdateProgressPayload>("app-update-progress", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
   },
 
   getRuntimeConfig() {
