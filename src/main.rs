@@ -500,6 +500,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::gateway::get_runtime_config,
             commands::gateway::refresh_gateway_url,
+            commands::fatal_error::fatal_error_and_exit,
             commands::connection::get_connection_config,
             commands::connection::save_connection_config,
             commands::connection::probe_connection_config,

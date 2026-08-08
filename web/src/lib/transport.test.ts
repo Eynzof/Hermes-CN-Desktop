@@ -7,6 +7,8 @@ import {
   fetchMediaDataUrl,
   uploadAttachmentFile,
 } from "./transport";
+import { resetVersionCheck } from "./version-check";
+import { EXPECTED_BACKEND_VERSION } from "./build-info";
 
 type PushArg = Parameters<typeof debugBus.push>[0];
 
@@ -61,6 +63,25 @@ describe("transport · debug-bus integration", () => {
       headers: { "Content-Type": "text/plain" },
     });
   }
+
+  it("fetchJSON invokes the version guard in Tauri mode", async () => {
+    resetVersionCheck();
+    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.__TAURI_INTERNALS__ = {};
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    ) as unknown as typeof globalThis.fetch;
+
+    await expect(fetchJSON("/api/x")).rejects.toThrow(/backend version check has not completed/);
+
+    // The version probe was issued, but the actual /api/x request was not.
+    const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as [string][];
+    expect(calls.some(([url]) => url.includes("/api/x"))).toBe(false);
+    expect(calls.some(([url]) => url.includes("/api/version"))).toBe(true);
+  });
 
   it("fetchJSON pushes a REST entry on non-ok response", async () => {
     stubFetch(() => makeResponse(401, "unauthorized"));

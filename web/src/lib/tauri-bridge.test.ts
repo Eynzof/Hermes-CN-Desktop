@@ -301,4 +301,26 @@ describe("isTauriDevMode", () => {
     expect(mockInvoke).toHaveBeenCalledWith("managed_runtime_uninstall", undefined);
     expect(mockInvoke).toHaveBeenCalledWith("managed_runtime_reinstall", undefined);
   });
+
+  it("verifies backend version before mounting the runtime in Tauri mode", async () => {
+    (globalThis as any).window.__TAURI_INTERNALS__ = {};
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify({ version: "0.19.0", name: "hermes-agent" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    (globalThis as any).fetch = fetchSpy;
+
+    await installTauriBridge();
+
+    expect(fetchSpy).toHaveBeenCalledWith("http://127.0.0.1:9120/api/version");
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      platform: "tauri",
+      // In dev mode with managed connection the runtime hides apiBaseUrl so
+      // requests flow through the Vite proxy, but the real dashboard origin is
+      // preserved on dashboardApiBaseUrl.
+      dashboardApiBaseUrl: "http://127.0.0.1:9120",
+    });
+  });
 });
