@@ -9,6 +9,7 @@ pub mod debug_bundle;
 pub mod desktop_update;
 pub mod devtools;
 pub mod environment;
+pub mod fatal_error;
 pub mod file_dialogs;
 pub mod gateway;
 pub mod git;

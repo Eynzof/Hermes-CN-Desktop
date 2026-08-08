@@ -73,6 +73,7 @@ import type {
   HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
+import { assertCompatible, resetVersionCheck, verifyBackendVersion } from "./version-check";
 import hermesLogo from "@/assets/hermes-default-avatar.png";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
@@ -233,6 +234,10 @@ function normalizeFileDropPayload(payload: TauriFileDropEventPayload): DesktopFi
 
 const tauriBridge = {
   windowType: "tauri" as const,
+
+  async fatalErrorAndExit(input: { title: string; message: string }): Promise<never> {
+    return invokeCommand("fatal_error_and_exit", { input });
+  },
 
   async request(input: ApiRequestInput): Promise<ApiRequestResult> {
     return invokeCommand("api_request", { input });
@@ -1042,6 +1047,23 @@ export async function installTauriBridge(): Promise<void> {
     config = await invokeCommand("get_runtime_config");
   }
 
+  // Mount the bridge before the version gate so that a mismatch can use the
+  // native fatal-error dialog via hermesDesktop.fatalErrorAndExit. The bridge
+  // is fully functional through Tauri invoke; window.__HERMES_RUNTIME__ is set
+  // after the version check so the platform guard still sees the Tauri context.
+  (window as any).hermesDesktop = tauriBridge;
+
+  // Reset any stale version check state, then verify before we let the React
+  // app run against this backend. A mismatch or unreachable /api/version
+  // triggers a fatal dialog and force-quits. We pass the config's apiBaseUrl
+  // explicitly because window.__HERMES_RUNTIME__ is not populated yet.
+  resetVersionCheck();
+  const versionState = await verifyBackendVersion(config.apiBaseUrl);
+  if (versionState.kind !== "ok") {
+    assertCompatible();
+    throw new Error("version check failed during bridge installation");
+  }
+
   // Attached local/remote mode must keep the real URLs even in Vite dev: the
   // Vite proxy targets the managed dashboard port (9120), so relative URLs
   // would route traffic to the wrong backend. Managed dev still hides URLs and
@@ -1063,8 +1085,6 @@ export async function installTauriBridge(): Promise<void> {
     managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
     managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",
   };
-
-  (window as any).hermesDesktop = tauriBridge;
 
   registerDevtoolsShortcut();
 }

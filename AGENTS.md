@@ -61,6 +61,10 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 - Gateway 事件：`tui_gateway/server.py`
 - 上游 Web 实现：`web/src/lib/api.ts`、`gatewayClient.ts`
 
+### 后端版本同步
+
+桌面端在启动时会通过 `GET /api/version` 校验所连后端的版本，期望值写死在 `web/src/lib/build-info.ts` 的 `EXPECTED_BACKEND_VERSION`。 bumps Core `pyproject.toml` 版本时，**必须在同一个 release PR 里同步更新 `EXPECTED_BACKEND_VERSION`**，否则新版桌面端启动时会直接弹出版本不匹配对话框并强制退出。
+
 ## 开发流程
 
 ### 开发前预检（双仓同步 + Worktree 隔离）
