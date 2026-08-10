@@ -365,6 +365,29 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // Split heavy third-party libraries into their own chunks so the app
+    // shell + route chunks stay small and, critically, Rollup never merges a
+    // big vendor (e.g. the 3.3 MB mermaid bundle) into the startup chunk.
+    // Without manualChunks the app bundle used to merge into the mermaid
+    // chunk, forcing ~3.8 MB of JS to download+parse before first paint.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("xterm")) return "vendor-terminal";
+          if (id.includes("recharts")) return "vendor-charts";
+          if (id.includes("mermaid") || id.includes("cytoscape") || id.includes("dagre") || id.includes("elkjs") || id.includes("khroma")) return "vendor-mermaid";
+          if (id.includes("cmdk") || id.includes("@radix-ui") || id.includes("@floating-ui")) return "vendor-ui";
+          if (id.includes("qrcode")) return "vendor-qrcode";
+          if (id.includes("@dnd-kit")) return "vendor-dnd";
+          if (id.includes("lucide-react")) return "vendor-icons";
+          if (id.includes("katex") || id.includes("streamdown") || id.includes("rehype") || id.includes("remark") || id.includes("unified")) return "vendor-markdown";
+          return undefined;
+        },
+      },
+    },
+  },
   css: {
     modules: {
       localsConvention: "camelCase",
