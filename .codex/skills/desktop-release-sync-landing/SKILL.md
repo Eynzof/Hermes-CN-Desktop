@@ -11,7 +11,7 @@ Use this skill only when a **stable/public** desktop release is prepared, publis
 
 ## Prerelease Rule
 
-**RC / beta / alpha / canary and any other prerelease or internal-test version must not touch the landing repository.** Do not create a landing worktree, do not update website copy, and do not point `https://desktop.hermesagent.org.cn/latest.json` at a prerelease. Prerelease builds are distributed through GitHub Release, manual download, or a dedicated internal channel only; the public website and update manifest must continue to represent the latest stable release.
+**RC / beta / alpha / canary and any other prerelease or internal-test version must not touch the landing repository.** Do not open a landing branch, do not update website copy, and do not point `https://desktop.hermesagent.org.cn/latest.json` at a prerelease. Prerelease builds are distributed through GitHub Release, manual download, or a dedicated internal channel only; the public website and update manifest must continue to represent the latest stable release.
 
 ## Release workflow
 
@@ -25,7 +25,7 @@ Use this skill only when a **stable/public** desktop release is prepared, publis
 
    Do not invent `size`, `sha256`, `publishedAt`, or installer URLs. If the release job has not produced assets yet, stop and state that the landing sync is blocked on release assets.
    If `$VERSION` contains a prerelease suffix such as `-rc`, `-beta`, `-alpha`, or `-canary`, stop here and report that landing sync is intentionally forbidden for prereleases.
-4. Open or create a separate worktree/branch for `Eynzof/hermes-agent-cn-desktop-landing`. Prefer a `codex/` branch, for example `codex/update-desktop-latest-json`.
+4. The **human** opens a separate branch for `Eynzof/hermes-agent-cn-desktop-landing`, for example `codex/update-desktop-latest-json`. The coding agent only prepares the landing file edits below and never runs git operations — branch / commit / push / PR are executed by the human (see `docs/agents/git-workflow.md` §5).
 5. In the landing repo, update the public release state for the same desktop version:
 
    - `src/site.config.ts`: set `VERSION` to the bare semver, for example `0.3.0`.
@@ -41,9 +41,11 @@ Use this skill only when a **stable/public** desktop release is prepared, publis
    ```
 
    Confirm the response contains the same `version`, `semver`, asset names, sizes, hashes, and release URLs as the GitHub Release.
-7. Commit and open PRs for both repositories when both changed. Mention the landing PR from the desktop release PR, or clearly state when landing did not need changes.
+7. The **human** commits and opens PRs for both repositories when both changed (the coding agent must not do this). Mention the landing PR from the desktop release PR, or clearly state when landing did not need changes.
 
 ## Guardrails
+
+- Coding agents never run git operations (commit / push / pull / checkout / branch / worktree / PR). Landing repo changes are prepared by the agent and committed, pushed, and PRed by the human; see `docs/agents/git-workflow.md`.
 
 Do not close a stable/public release task by only updating this desktop repository when the public version changed. Either update landing in the same work session or explicitly report that landing sync is pending and why.
 
