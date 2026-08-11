@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendAppUpdateProgress } from "./use-app-update";
+import { appendAppUpdateProgress, type AppUpdateProgressLine } from "./use-app-update";
 import type { AppUpdateProgressPayload } from "@hermes/protocol";
 
 function line(percent: number, phase = "download-runtime"): AppUpdateProgressPayload {
@@ -14,7 +14,7 @@ describe("appendAppUpdateProgress", () => {
   });
 
   it("appends in order, keeping the log capped at 200 lines", () => {
-    let state = { active: true, mode: "app-update" as const, progress: [] as AppUpdateProgressPayload[] };
+    let state = { active: true, mode: "app-update" as const, progress: [] as AppUpdateProgressLine[] };
     for (let i = 0; i < 250; i += 1) {
       state = { ...state, progress: appendAppUpdateProgress(state, line(i)) };
     }

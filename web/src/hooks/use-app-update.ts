@@ -14,12 +14,23 @@ import { runtimeUpdatingAtom } from "@/stores/ui";
 const RUNTIME_INFO_KEY = ["desktop-runtime-info"] as const;
 const MAX_PROGRESS_LINES = 200;
 
-/** Pure helper: append one progress event to the overlay state, capping the
- * log at MAX_PROGRESS_LINES. Exported for unit tests. */
+/**
+ * Pure helper: append one progress event to the overlay state, capping the
+ * log at MAX_PROGRESS_LINES. Exported for unit tests.
+ *
+ * Accepts the atom's loose progress shape ({ percent?: number }) because
+ * hot-update progress lines omit `percent`; app-update lines always carry it.
+ */
+export type AppUpdateProgressLine = {
+  phase: string;
+  percent?: number;
+  message: string;
+};
+
 export function appendAppUpdateProgress(
-  state: { active: boolean; mode?: string; progress?: AppUpdateProgressPayload[] },
+  state: { active: boolean; mode?: string; progress?: AppUpdateProgressLine[] },
   payload: AppUpdateProgressPayload,
-): AppUpdateProgressPayload[] {
+): AppUpdateProgressLine[] {
   return [...(state.progress ?? []), payload].slice(-MAX_PROGRESS_LINES);
 }
 
@@ -41,8 +52,16 @@ async function refreshDesktopGateway(): Promise<void> {
 /** One-shot "检查更新" mutation (also used by the notifier CTA). */
 export function useAppUpdateCheck() {
   return useMutation<AppUpdateCheckResult>({
-    mutationFn: () => window.hermesDesktop!.appUpdateCheck!(),
-    enabled: hasAppUpdateBridge(),
+    // TanStack Query v5 removed `enabled` from mutation options; guard inside
+    // the fn instead so a missing bridge fails the call rather than silently
+    // no-oping (the managed-runtime panel hides the CTA when the bridge is
+    // absent, so this only fires on a stale/half-updated webview).
+    mutationFn: () => {
+      if (!hasAppUpdateBridge()) {
+        throw new Error("更新桥接不可用");
+      }
+      return window.hermesDesktop!.appUpdateCheck!();
+    },
   });
 }
 
@@ -82,9 +101,9 @@ export function useAppUpdateInstall() {
       // restarted the dashboard, so always resync the rotated session token.
       await refreshDesktopGateway();
       await qc.invalidateQueries({ queryKey: RUNTIME_INFO_KEY });
-      const fresh = qc.getQueryData<{ current?: { kernelVersion?: string } }>({
-        queryKey: RUNTIME_INFO_KEY,
-      });
+      const fresh = qc.getQueryData<{ current?: { kernelVersion?: string } }>(
+        RUNTIME_INFO_KEY,
+      );
       recordRuntimeKernelVersion(fresh?.current?.kernelVersion);
       setUpdating({ active: false });
     },
