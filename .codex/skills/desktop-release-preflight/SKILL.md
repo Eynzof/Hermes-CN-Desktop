@@ -1,6 +1,6 @@
 ---
 name: desktop-release-preflight
-description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop release (new installer, version bump, GitHub Release, or pushing a new build to users). This is the release safety gate that prevents in-place overwrite-upgrade regressions for existing users (live users are mainly on v0.3.2 and upgrade by downloading the new installer over the old one). Covers the managed-runtime reconcile traps (silent kernel downgrade via bundled_runtime_tag, schemaVersion re-bootstrap, the load-bearing stable bundle identifier), the China-mirror "artifactUrl-before-signing" rule, the cnb.cool vs GitHub Actions build-location decision, signing / notarization / Authenticode gates, and shipping to a canary channel first. Complements desktop-release-sync-landing for stable/public releases only (which handles version sync + the landing latest.json) — run this one FIRST.
+description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop release (new installer, version bump, GitHub Release, or publishing a new build to users). This is the release safety gate that prevents in-place overwrite-upgrade regressions for existing users (live users are mainly on v0.3.2 and upgrade by downloading the new installer over the old one). Covers the managed-runtime reconcile traps (silent kernel downgrade via bundled_runtime_tag, schemaVersion re-bootstrap, the load-bearing stable bundle identifier), the China-mirror "artifactUrl-before-signing" rule, the cnb.cool vs GitHub Actions build-location decision, signing / notarization / Authenticode gates, and shipping to a canary channel first. Complements desktop-release-sync-landing for stable/public releases only (which handles version sync + the landing latest.json) — run this one FIRST.
 ---
 
 # Desktop Release Preflight（发版前预检）
@@ -26,6 +26,8 @@ description: Use BEFORE preparing or publishing any Hermes Agent CN Desktop rele
 ## 发版前必过 checklist（按顺序逐条勾）
 
 > 任何一条不满足，**停下来**，不要发 stable。
+>
+> **角色边界**：编码代理负责准备 / 核对发版输入与验证产物（版本号、`bundled_runtime_tag`、manifest、签名、canary 结果），但**不执行**任何 git 写操作 —— 打 tag / push / 开 PR / 发 Release / 同步 landing 全部由**人**（或 CI/CD 流水线）执行，见 `docs/agents/git-workflow.md`。
 
 1. ☑️ **identifier 没改**：`grep identifier tauri.conf.json` 仍是 `cn.org.hermesagent.desktop`。永不更改。
 2. ☑️ **`bundled_runtime_tag` 锁到 ≥ 线上 stable 最高 runtime，且是明确版本（不是 `latest`）**。这是**防内核静默降级**的关键（见下"坑 1"）。
