@@ -1511,6 +1511,25 @@ export function buildCurrentModelConfigUpdate(
   };
 }
 
+/**
+ * 「保存配置」是否应顺带把该服务商提升为默认主模型。
+ *
+ * 首次运行时配置页还没有任何可用模型（/api/model/info 返回空 provider /
+ * model），用户点「保存配置」的直觉就是"让工作台用上这个模型"。此时把顶层
+ * model.* 一起落盘，工作台/新会话才会用新模型，而不是继续显示旧的（甚至已
+ * 失效的）默认模型。已有默认模型时保持原语义：保存配置只写 providers.<id>，
+ * 不切换主模型。
+ *
+ * modelInfo 未加载（undefined/null）时保守返回 false，避免在信息未就绪时
+ * 误把正在编辑的服务商提升为默认。
+ */
+export function shouldPromoteProviderOnSave(
+  modelInfo: { model?: string | null; provider?: string | null } | null | undefined,
+): boolean {
+  if (!modelInfo) return false;
+  return !modelInfo.model?.trim() || !modelInfo.provider?.trim();
+}
+
 export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCatalog): ProviderCatalog {
   const byId = new Map(base.providers.map((provider) => [provider.id, provider]));
   for (const provider of remote.providers) {

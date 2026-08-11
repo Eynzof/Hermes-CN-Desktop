@@ -39,6 +39,7 @@ import {
   providerApiKeyLabels,
   providerHasSavedCredentials,
   resolveSelectedProvider,
+  shouldPromoteProviderOnSave,
   sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
@@ -1201,6 +1202,12 @@ export function ModelsSection() {
     const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
+    const providerName = selectedProvider.name;
+    // 首次运行（还没有默认模型）时，「保存配置」顺带把该服务商提升为默认主
+    // 模型，让工作台 / 新会话直接用上新模型——否则工作台会继续显示旧的（甚
+    // 至已失效的）默认模型。已有默认模型时保持原语义：保存配置只写
+    // providers.<id>，不切换主模型。
+    const promoteToDefault = shouldPromoteProviderOnSave(modelInfo);
     setProviderSavePending(true);
     setProviderSaveError("");
     try {
@@ -1217,8 +1224,28 @@ export function ModelsSection() {
           ...settingsUpdate,
           model_context_length: parseContextWindowInput(providerForm.contextWindow),
         };
+      } else if (promoteToDefault) {
+        // 还没有默认模型：一并写入 model.*（provider + default + base_url +
+        // 上下文覆盖），使工作台的模型设置就是新模型。
+        settingsUpdate = buildProviderConfigUpdate(config, selectedProvider, providerForm);
       }
       await saveConfig.mutateAsync(settingsUpdate);
+      if (promoteToDefault) {
+        // 工作台 composer 从 UI store 读默认模型；配置已落盘就立刻播种，
+        // 让「切换模型」/ 新任务的模型设置显示新模型。
+        rememberLastUsedModel({
+          model: savedModel,
+          provider: providerId,
+          providerName,
+        });
+        // Live hot-switch 是尽力而为（全局 config.set，不碰运行中的会话）：
+        // config.yaml 已持久化，失败也不影响下一次会话用新模型。
+        try {
+          await setRuntimeModel(savedModel, providerId);
+        } catch (error) {
+          console.warn("首次保存后热切换运行模型失败（默认配置已保存）", error);
+        }
+      }
       setProviderForm((prev) => ({ ...prev, apiKey: "" }));
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
@@ -1257,9 +1284,6 @@ export function ModelsSection() {
       await saveConfig.mutateAsync(
         buildProviderConfigUpdate(config, selectedProvider, providerForm),
       );
-      // Same hot-switch path as the composer model picker: update the live
-      // gateway runtime explicitly after disk config is already usable.
-      await setRuntimeModel(savedModel, providerId);
       setProviderForm((prev) => ({ ...prev, apiKey: "" }));
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
@@ -1271,12 +1295,25 @@ export function ModelsSection() {
       // PanelComposer seeds its model picker from the UI store.
       // This mirrors picking a model from the workbench composer, so the next
       // new session carries this explicit choice even before /api/model/info
-      // finishes refetching.
+      // finishes refetching. Seed it right after the config lands on disk so a
+      // failed live-switch below can never leave the workbench showing a stale
+      // last-used model while config.model already points at the new one.
       rememberLastUsedModel({
         model: savedModel,
         provider: providerId,
         providerName,
       });
+      // Same hot-switch path as the composer model picker: update the live
+      // gateway runtime explicitly after disk config is already usable.
+      // Best-effort: config.yaml is already persisted, so a refusal (e.g. the
+      // backend rejecting an unresolvable provider, or a busy session) must
+      // not fail the whole action — the default model is already updated and
+      // the workbench will pick it up.
+      try {
+        await setRuntimeModel(savedModel, providerId);
+      } catch (error) {
+        console.warn("设为当前模型后热切换运行模型失败（默认配置已保存）", error);
+      }
     } catch (error) {
       setProviderSaveError(error instanceof Error ? error.message : String(error || "设置失败"));
     } finally {
