@@ -122,7 +122,6 @@ function syncReadme(text, currentVersionLabelPattern) {
 }
 
 updateText("README.md", (text) => syncReadme(text, /(当前版本是 `)v[^`]+(`)/));
-updateText("README.en-US.md", (text) => syncReadme(text, /(Current release: `)v[^`]+(`)/));
 
 updateText("docs/macos-signing-and-notarization.md", (text) => text.replace(
   /(Hermes Agent CN Desktop_)[^_]+(_aarch64\.dmg)/g,

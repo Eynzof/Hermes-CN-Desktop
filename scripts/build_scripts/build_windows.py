@@ -69,7 +69,6 @@ LF_REQUIRED_FILES = [
     "packages/shared-ui/package.json",
     "legal/EULA.zh-CN.rtf",
     "README.md",
-    "README.en-US.md",
 ]
 
 
