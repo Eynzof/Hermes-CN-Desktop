@@ -3,6 +3,7 @@ import type { MessagesResponse, SearchResult, SessionsResponse, SessionSummary }
 import { fetchJSON } from "@/lib/transport";
 import {
   deleteSessionsInBatches,
+  fetchSessionsList,
   fetchSessionMessages,
   withoutSearchResults,
   withoutSessions,
@@ -36,6 +37,15 @@ function sessionsResponse(ids: string[]): SessionsResponse {
     total: ids.length,
     limit: 50,
     offset: 0,
+  };
+}
+
+function sessionsPage(ids: string[], total: number, limit: number, offset: number): SessionsResponse {
+  return {
+    sessions: ids.map(session),
+    total,
+    limit,
+    offset,
   };
 }
 
@@ -89,6 +99,69 @@ describe("deleteSessionsInBatches", () => {
     expect(result.failed).toEqual([{ id: "s2", error: "boom" }]);
     expect(result.successCount).toBe(2);
     expect(result.failureCount).toBe(1);
+  });
+});
+
+describe("fetchSessionsList", () => {
+  beforeEach(() => {
+    mockFetchJSON.mockReset();
+  });
+
+  it("keeps requests within the Core page-size cap", async () => {
+    mockFetchJSON.mockImplementation(async (path: string) => {
+      if (path === "/api/sessions?limit=100&offset=0&include_archived=true") {
+        return sessionsPage(Array.from({ length: 100 }, (_, i) => `s${i}`), 150, 100, 0);
+      }
+      if (path === "/api/sessions?limit=50&offset=100&include_archived=true") {
+        return sessionsPage(Array.from({ length: 50 }, (_, i) => `s${i + 100}`), 150, 50, 100);
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+
+    const result = await fetchSessionsList(200, 0, { includeArchived: true });
+
+    expect(result.sessions).toHaveLength(150);
+    expect(result.sessions[0]?.id).toBe("s0");
+    expect(result.sessions[149]?.id).toBe("s149");
+    expect(result.total).toBe(150);
+    expect(result.limit).toBe(200);
+    expect(result.offset).toBe(0);
+    expect(mockFetchJSON.mock.calls.map((call) => call[0])).toEqual([
+      "/api/sessions?limit=100&offset=0&include_archived=true",
+      "/api/sessions?limit=50&offset=100&include_archived=true",
+    ]);
+  });
+
+  it("preserves requested offset when aggregating multiple pages", async () => {
+    mockFetchJSON.mockImplementation(async (path: string) => {
+      if (path === "/api/sessions?limit=100&offset=20") {
+        return sessionsPage(Array.from({ length: 100 }, (_, i) => `s${i + 20}`), 300, 100, 20);
+      }
+      if (path === "/api/sessions?limit=50&offset=120") {
+        return sessionsPage(Array.from({ length: 50 }, (_, i) => `s${i + 120}`), 300, 50, 120);
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+
+    const result = await fetchSessionsList(150, 20);
+
+    expect(result.sessions).toHaveLength(150);
+    expect(result.sessions[0]?.id).toBe("s20");
+    expect(result.sessions[149]?.id).toBe("s169");
+    expect(result.total).toBe(300);
+    expect(result.limit).toBe(150);
+    expect(result.offset).toBe(20);
+  });
+
+  it("uses a single request when the requested limit fits the backend cap", async () => {
+    mockFetchJSON.mockResolvedValue(sessionsPage(["s1", "s2"], 2, 50, 0));
+
+    const result = await fetchSessionsList(50, 0);
+
+    expect(result.sessions.map((item) => item.id)).toEqual(["s1", "s2"]);
+    expect(mockFetchJSON.mock.calls.map((call) => call[0])).toEqual([
+      "/api/sessions?limit=50&offset=0",
+    ]);
   });
 });
 

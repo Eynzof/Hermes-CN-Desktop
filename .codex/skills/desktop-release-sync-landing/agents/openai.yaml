@@ -1,4 +1,4 @@
 interface:
   display_name: "桌面端发版同步 Landing"
-  short_description: "桌面端发版时同步 landing 官网版本和 latest.json 清单。"
-  default_prompt: "协助完成 Hermes Agent CN 桌面端发版，并同步更新 landing 仓库的官网版本与 latest.json 清单。"
+  short_description: "stable 正式发版时同步 landing 官网版本和 latest.json 清单；预发布禁止同步。"
+  default_prompt: "协助完成 Hermes Agent CN 桌面端 stable 正式发版，并同步更新 landing 仓库的官网版本与 latest.json 清单。RC、beta、alpha、canary 等预发布或内测版本禁止修改 landing 仓库，禁止更新 public latest.json。"

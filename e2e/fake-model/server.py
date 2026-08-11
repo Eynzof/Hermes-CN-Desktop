@@ -136,6 +136,9 @@ def _reply_for(messages: list[dict[str, Any]]) -> str:
     text = _text_of(last_user.get("content")).strip()
     if STREAM_ORDER_MARKER in text:
         return STREAM_ORDER_REPLY
+    if text.startswith("return-image-e2e:"):
+        path = text.split(":", 1)[1].strip()
+        return f"模型生成图片：![生成图]({path})"
     if text == "scroll-follow-e2e":
         return " ".join(f"scroll-follow-token-{index}" for index in range(300))
     # Echo a stable marker plus the prompt so specs can assert on either.

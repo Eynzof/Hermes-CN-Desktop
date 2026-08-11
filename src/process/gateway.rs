@@ -63,6 +63,24 @@ fn gateway_lock_path(runtime_dir: &Path) -> PathBuf {
     runtime_dir.join(GATEWAY_LOCK_FILE)
 }
 
+fn normalize_path_text(path: &Path) -> String {
+    fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_lowercase()
+}
+
+fn text_contains_path(text: &str, path: &Path) -> bool {
+    let normalized_text = text.replace('\\', "/").to_lowercase();
+    let raw = path.to_string_lossy().replace('\\', "/").to_lowercase();
+    if !raw.is_empty() && normalized_text.contains(&raw) {
+        return true;
+    }
+    let canonical = normalize_path_text(path);
+    !canonical.is_empty() && normalized_text.contains(&canonical)
+}
+
 fn parse_pid_value(value: &Value) -> Option<u32> {
     match value {
         Value::Number(number) => number.as_u64().and_then(|pid| u32::try_from(pid).ok()),
@@ -247,6 +265,93 @@ fn gateway_pid_candidates(runtime_dir: &Path) -> Vec<u32> {
     pids.into_iter().collect()
 }
 
+fn token_lock_paths(gateway_lock_dir: &Path) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let Ok(entries) = fs::read_dir(gateway_lock_dir) else {
+        return paths;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "lock") {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    paths
+}
+
+fn token_lock_record_matches_managed_runtime(
+    record: &GatewayRuntimeRecord,
+    pid: u32,
+    runtime_root: &Path,
+) -> bool {
+    if !record_looks_like_gateway(record) {
+        return false;
+    }
+    if !record.argv.is_empty() && text_contains_path(&record.argv.join(" "), runtime_root) {
+        return true;
+    }
+    process_command_line(pid)
+        .as_deref()
+        .is_some_and(|command_line| {
+            command_line_looks_like_gateway(command_line)
+                && text_contains_path(command_line, runtime_root)
+        })
+}
+
+fn gateway_token_lock_pid_candidates(gateway_lock_dir: &Path, runtime_root: &Path) -> Vec<u32> {
+    let mut pids = BTreeSet::new();
+    for path in token_lock_paths(gateway_lock_dir) {
+        let Some(record) = read_gateway_runtime_record(&path) else {
+            continue;
+        };
+        let Some(pid) = record.pid else {
+            continue;
+        };
+        if pid_is_running(pid)
+            && token_lock_record_matches_managed_runtime(&record, pid, runtime_root)
+        {
+            pids.insert(pid);
+        }
+    }
+    pids.into_iter().collect()
+}
+
+fn managed_gateway_pid_candidates(
+    runtime_dir: &Path,
+    gateway_lock_dir: &Path,
+    runtime_root: &Path,
+) -> Vec<u32> {
+    let mut pids = BTreeSet::new();
+    pids.extend(gateway_pid_candidates(runtime_dir));
+    pids.extend(gateway_token_lock_pid_candidates(
+        gateway_lock_dir,
+        runtime_root,
+    ));
+    pids.into_iter().collect()
+}
+
+fn cleanup_stale_gateway_token_lock_files(gateway_lock_dir: &Path, _runtime_root: &Path) -> usize {
+    let mut removed = 0;
+    for path in token_lock_paths(gateway_lock_dir) {
+        let remove = match read_gateway_runtime_record(&path) {
+            Some(record) => match record.pid {
+                Some(pid) if pid_is_running(pid) => !record_looks_like_gateway(&record),
+                _ => true,
+            },
+            None => true,
+        };
+        if remove {
+            match fs::remove_file(&path) {
+                Ok(()) => removed += 1,
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => {}
+            }
+        }
+    }
+    removed
+}
+
 fn gateway_runtime_lock_active(runtime_dir: &Path) -> bool {
     let lock_path = gateway_lock_path(runtime_dir);
     if !lock_path.exists() {
@@ -300,11 +405,17 @@ fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> Option<Option<i3
     None
 }
 
-fn wait_for_gateway_runtime_to_settle(runtime_dir: &Path, timeout: Duration) -> bool {
+fn wait_for_gateway_runtime_to_settle(
+    runtime_dir: &Path,
+    gateway_lock_dir: &Path,
+    runtime_root: &Path,
+    timeout: Duration,
+) -> bool {
     let start = Instant::now();
     while start.elapsed() < timeout {
         let _ = cleanup_stale_gateway_runtime_files(runtime_dir);
-        if gateway_pid_candidates(runtime_dir).is_empty()
+        let _ = cleanup_stale_gateway_token_lock_files(gateway_lock_dir, runtime_root);
+        if managed_gateway_pid_candidates(runtime_dir, gateway_lock_dir, runtime_root).is_empty()
             && !gateway_runtime_lock_active(runtime_dir)
         {
             return true;
@@ -409,11 +520,15 @@ pub fn preflight_managed_gateway_restart(
         .map_err(|err| format!("无法创建 Gateway lock 目录：{err}"))?;
 
     let mut report = ManagedGatewayPreflightReport::default();
+    let runtime_root = crate::process::runtime::runtime_root();
+    report.stale_files_removed +=
+        cleanup_stale_gateway_token_lock_files(gateway_lock_dir, &runtime_root);
     let runtime_files_exist = gateway_pid_path(gateway_runtime_dir).exists()
         || gateway_lock_path(gateway_runtime_dir).exists();
 
     if runtime_files_exist
-        || !gateway_pid_candidates(gateway_runtime_dir).is_empty()
+        || !managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root)
+            .is_empty()
         || gateway_runtime_lock_active(gateway_runtime_dir)
     {
         report.stop_attempted = true;
@@ -431,31 +546,52 @@ pub fn preflight_managed_gateway_restart(
                 log::warn!("{}", err);
             }
         }
-        let _ = wait_for_gateway_runtime_to_settle(gateway_runtime_dir, GATEWAY_SETTLE_TIMEOUT);
+        let _ = wait_for_gateway_runtime_to_settle(
+            gateway_runtime_dir,
+            gateway_lock_dir,
+            &runtime_root,
+            GATEWAY_SETTLE_TIMEOUT,
+        );
     }
 
     report.stale_files_removed += cleanup_stale_gateway_runtime_files(gateway_runtime_dir);
+    report.stale_files_removed +=
+        cleanup_stale_gateway_token_lock_files(gateway_lock_dir, &runtime_root);
 
-    let remaining = gateway_pid_candidates(gateway_runtime_dir);
+    let remaining =
+        managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root);
     if !remaining.is_empty() {
         for pid in &remaining {
             terminate_pid(*pid, false);
         }
-        if !wait_for_gateway_runtime_to_settle(gateway_runtime_dir, GATEWAY_FORCE_SETTLE_TIMEOUT) {
-            for pid in gateway_pid_candidates(gateway_runtime_dir) {
+        if !wait_for_gateway_runtime_to_settle(
+            gateway_runtime_dir,
+            gateway_lock_dir,
+            &runtime_root,
+            GATEWAY_FORCE_SETTLE_TIMEOUT,
+        ) {
+            for pid in
+                managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root)
+            {
                 terminate_pid(pid, true);
                 report.force_killed_pids.push(pid);
             }
             let _ = wait_for_gateway_runtime_to_settle(
                 gateway_runtime_dir,
+                gateway_lock_dir,
+                &runtime_root,
                 GATEWAY_FORCE_SETTLE_TIMEOUT,
             );
         }
     }
 
     report.stale_files_removed += cleanup_stale_gateway_runtime_files(gateway_runtime_dir);
-    report.remaining_pids = gateway_pid_candidates(gateway_runtime_dir);
-    report.lock_active = gateway_runtime_lock_active(gateway_runtime_dir);
+    report.stale_files_removed +=
+        cleanup_stale_gateway_token_lock_files(gateway_lock_dir, &runtime_root);
+    report.remaining_pids =
+        managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root);
+    report.lock_active = gateway_runtime_lock_active(gateway_runtime_dir)
+        || !gateway_token_lock_pid_candidates(gateway_lock_dir, &runtime_root).is_empty();
     Ok(report)
 }
 
@@ -528,5 +664,74 @@ mod tests {
         assert_eq!(removed, 0);
         assert!(lock_path.exists());
         file.unlock().expect("unlock");
+    }
+
+    #[test]
+    fn cleanup_stale_gateway_token_lock_files_removes_dead_pid() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let runtime_root = temp.path().join("runtime");
+        fs::create_dir_all(&runtime_root).expect("runtime");
+        let lock_dir = temp.path().join("token-locks");
+        fs::create_dir_all(&lock_dir).expect("locks");
+        let lock_path = lock_dir.join("weixin.lock");
+        fs::write(
+            &lock_path,
+            format!(
+                r#"{{"pid":0,"kind":"hermes-gateway","argv":["{}/versions/old/hermes","gateway","run"]}}"#,
+                runtime_root.display()
+            ),
+        )
+        .expect("lock");
+
+        let removed = cleanup_stale_gateway_token_lock_files(&lock_dir, &runtime_root);
+
+        assert_eq!(removed, 1);
+        assert!(!lock_path.exists());
+    }
+
+    #[test]
+    fn gateway_token_lock_pid_candidates_accepts_managed_runtime_path() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let runtime_root = temp.path().join("runtime");
+        fs::create_dir_all(&runtime_root).expect("runtime");
+        let lock_dir = temp.path().join("token-locks");
+        fs::create_dir_all(&lock_dir).expect("locks");
+        let pid = std::process::id();
+        fs::write(
+            lock_dir.join("weixin.lock"),
+            format!(
+                r#"{{"pid":{},"kind":"hermes-gateway","argv":["{}/versions/old/hermes","gateway","run","--replace"]}}"#,
+                pid,
+                runtime_root.display()
+            ),
+        )
+        .expect("lock");
+
+        assert_eq!(
+            gateway_token_lock_pid_candidates(&lock_dir, &runtime_root),
+            vec![pid]
+        );
+    }
+
+    #[test]
+    fn gateway_token_lock_pid_candidates_rejects_unrelated_runtime_path() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let runtime_root = temp.path().join("runtime");
+        let other_root = temp.path().join("other-runtime");
+        fs::create_dir_all(&runtime_root).expect("runtime");
+        fs::create_dir_all(&other_root).expect("other");
+        let lock_dir = temp.path().join("token-locks");
+        fs::create_dir_all(&lock_dir).expect("locks");
+        fs::write(
+            lock_dir.join("weixin.lock"),
+            format!(
+                r#"{{"pid":{},"kind":"hermes-gateway","argv":["{}/versions/old/hermes","gateway","run","--replace"]}}"#,
+                std::process::id(),
+                other_root.display()
+            ),
+        )
+        .expect("lock");
+
+        assert!(gateway_token_lock_pid_candidates(&lock_dir, &runtime_root).is_empty());
     }
 }

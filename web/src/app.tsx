@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
 import { readUiValue } from "@/lib/ui-store";
-import { sendTelemetryPingIfDue } from "@/lib/telemetry";
+import { sendTelemetryPingIfDue, sendTokenUsageTelemetryIfDue } from "@/lib/telemetry";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
@@ -149,6 +149,7 @@ export function App() {
   }, [hydrateTheme]);
   useEffect(() => {
     void sendTelemetryPingIfDue();
+    if (runtime.isBackendReady()) void sendTokenUsageTelemetryIfDue();
   }, []);
 
   const isGuide = location.pathname === "/guide";

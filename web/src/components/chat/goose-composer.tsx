@@ -102,7 +102,7 @@ import {
 import { WorkspacePickerModal } from "@/components/composer/workspace-picker";
 import { UrlDialog } from "@/components/composer/url-dialog";
 import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
-import { imageFileFromClipboardData, readClipboardImageAsFile } from "@/lib/clipboard-image";
+import { filesFromClipboardData, imageFileFromClipboardData, readClipboardImageAsFile } from "@/lib/clipboard-image";
 import { downloadExternalImageFile } from "@/lib/transport";
 import { runtime } from "@/lib/runtime";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
@@ -154,6 +154,7 @@ interface GooseComposerProps {
   skillPicker?: ComposerSkillPickerProps;
   mentionPicker?: ComposerMentionPickerProps;
   contextUsage?: ComposerContextUsage | null;
+  onDraftChange?: (text: string) => void;
   /** Hide `/compress` affordances when the composer is not bound to an existing session. */
   showCompressCommand?: boolean;
   initialWorkspacePath?: string;
@@ -230,6 +231,7 @@ export function GooseComposer({
   skillPicker,
   mentionPicker,
   contextUsage,
+  onDraftChange,
   showCompressCommand = true,
   initialWorkspacePath = "",
   voiceConfig = null,
@@ -518,11 +520,12 @@ export function GooseComposer({
 
   useEffect(() => {
     valueRef.current = value;
+    onDraftChange?.(value);
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 196)}px`;
-  }, [value]);
+  }, [onDraftChange, value]);
 
   useEffect(() => {
     voiceStatusRef.current = voiceStatus;
@@ -896,6 +899,7 @@ export function GooseComposer({
     markAttachmentsProcessing();
     try {
       await onSend?.(payload, { updateAttachment });
+      onDraftChange?.("");
       setValue("");
       setSelectedSkill(null);
       setSelectionStart(0);
@@ -1007,6 +1011,12 @@ export function GooseComposer({
     if (controlsDisabled) return;
     const clipboardData = event.clipboardData;
     const text = clipboardData.getData("text/plain");
+    const pastedFiles = filesFromClipboardData(clipboardData);
+    if (pastedFiles.length) {
+      event.preventDefault();
+      addBrowserFiles(pastedFiles);
+      return;
+    }
     const pastedImage = imageFileFromClipboardData(clipboardData);
     if (pastedImage) {
       event.preventDefault();

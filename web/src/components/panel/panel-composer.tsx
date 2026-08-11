@@ -12,6 +12,12 @@ import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import {
+  composerDraftStorageKey,
+  forgetComposerDraftByKey,
+  readComposerDraftByKey,
+  writeComposerDraftByKey,
+} from "@/lib/composer-drafts";
+import {
   reasoningEffortFromConfig,
   type ReasoningEffort,
 } from "@/lib/reasoning-effort";
@@ -66,6 +72,15 @@ export function PanelComposer() {
   const draftRef = useRef<{ id: string; cwd: string } | null>(null);
   const initialWorkspacePath = normalizeWorkspacePath(searchParams.get("workspace"));
   const submitShortcutHint = composerSubmitShortcutHint(composerSubmitShortcut);
+  const newTaskDraftKey = useMemo(
+    () => composerDraftStorageKey({ kind: "new", profile: activeProfile }),
+    [activeProfile],
+  );
+  const storedDraft = useMemo(
+    () => readComposerDraftByKey(newTaskDraftKey),
+    [newTaskDraftKey],
+  );
+  const composerInitial = prefilledDraft.nonce > 0 ? prefilledDraft.text : storedDraft;
   const enabledSkills = useMemo(
     () => (skillsQuery.data ?? []).filter((skill) => skill.enabled),
     [skillsQuery.data],
@@ -203,6 +218,7 @@ export function PanelComposer() {
         void closeSession(draft.id).catch(() => {});
       }
       await createAndSendSession(payload, controls, options);
+      forgetComposerDraftByKey(newTaskDraftKey);
     } catch (err) {
       console.error("Failed to create session:", err);
       throw err;
@@ -214,16 +230,22 @@ export function PanelComposer() {
     createAndSendSession,
     adoptCreatedSession,
     closeSession,
+    newTaskDraftKey,
   ]);
+
+  const onDraftChange = useCallback((text: string) => {
+    writeComposerDraftByKey(newTaskDraftKey, text);
+  }, [newTaskDraftKey]);
 
   return (
     <div ref={wrapperRef}>
       <GooseComposer
-        key={initialWorkspacePath || "default-workspace"}
+        key={`${initialWorkspacePath || "default-workspace"}:${newTaskDraftKey ?? "draft"}`}
         onSend={onSend}
-        initial={prefilledDraft.text}
+        initial={composerInitial}
         initialNonce={prefilledDraft.nonce}
         initialWorkspacePath={initialWorkspacePath}
+        onDraftChange={onDraftChange}
         placeholder={`描述你想完成的任务，${submitShortcutHint}…`}
         variant="big"
         headerLabel="新任务"
