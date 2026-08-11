@@ -5,6 +5,7 @@ import { __resetUiStoreForTests } from "@/lib/ui-store";
 import { rememberSessionMapping } from "@/lib/session-map";
 import {
   STALL_WATCHDOG_THRESHOLD_MS,
+  hasRunningTool,
   isRuntimeRunning,
   isSessionRunning,
   mergeLiveRuntimeSessions,
@@ -214,6 +215,80 @@ describe("streamSilenceMs (stall watchdog input)", () => {
   it("never reports negative silence for clock skew", () => {
     const runtime = runningRuntime({ lastActivityAt: 10_000 });
     expect(streamSilenceMs(runtime, 1_000)).toBe(0);
+  });
+
+  it("pauses while a tool is still running (long terminal task is not a stall)", () => {
+    const runtime = runningRuntime({
+      lastActivityAt: 1_000,
+      messages: [
+        {
+          id: "a1",
+          sessionId: "s1",
+          role: "assistant" as const,
+          createdAt: 0,
+          status: "streaming" as const,
+          parts: [
+            {
+              type: "tool" as const,
+              toolCallId: "tool-1",
+              name: "terminal",
+              state: "running" as const,
+            },
+          ],
+        },
+      ],
+    });
+    // Even far past the stall threshold the clock stays paused: the tool is
+    // legitimately doing work while the backend is silent.
+    expect(hasRunningTool(runtime)).toBe(true);
+    expect(streamSilenceMs(runtime, 999_000)).toBeNull();
+  });
+
+  it("resumes measuring silence once the running tool completes", () => {
+    const runtime = runningRuntime({
+      lastActivityAt: 1_000,
+      messages: [
+        {
+          id: "a1",
+          sessionId: "s1",
+          role: "assistant" as const,
+          createdAt: 0,
+          status: "streaming" as const,
+          parts: [
+            {
+              type: "tool" as const,
+              toolCallId: "tool-1",
+              name: "terminal",
+              state: "done" as const,
+              completedAt: 1_000,
+            },
+          ],
+        },
+      ],
+    });
+    expect(hasRunningTool(runtime)).toBe(false);
+    expect(streamSilenceMs(runtime, 4_000)).toBe(3_000);
+  });
+
+  it("hasRunningTool ignores finished and non-tool parts", () => {
+    const runtime = runningRuntime({
+      messages: [
+        {
+          id: "a1",
+          sessionId: "s1",
+          role: "assistant" as const,
+          createdAt: 0,
+          status: "streaming" as const,
+          parts: [
+            { type: "text" as const, text: "done" },
+            { type: "tool" as const, toolCallId: "t1", name: "read_file", state: "done" as const },
+            { type: "tool" as const, toolCallId: "t2", name: "write_file", state: "error" as const },
+          ],
+        },
+      ],
+    });
+    expect(hasRunningTool(runtime)).toBe(false);
+    expect(streamSilenceMs(runtime, 5_000)).toBe(5_000);
   });
 
   it("exposes a generous default threshold", () => {
