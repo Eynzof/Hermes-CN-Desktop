@@ -39,7 +39,7 @@ import {
   providerApiKeyLabels,
   providerHasSavedCredentials,
   resolveSelectedProvider,
-  shouldPromoteProviderOnSave,
+  shouldUpdateDefaultModelOnSave,
   sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
@@ -1203,34 +1203,34 @@ export function ModelsSection() {
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
     const providerName = selectedProvider.name;
-    // 首次运行（还没有默认模型）时，「保存配置」顺带把该服务商提升为默认主
-    // 模型，让工作台 / 新会话直接用上新模型——否则工作台会继续显示旧的（甚
-    // 至已失效的）默认模型。已有默认模型时保持原语义：保存配置只写
-    // providers.<id>，不切换主模型。
-    const promoteToDefault = shouldPromoteProviderOnSave(modelInfo);
+    // 「保存配置」需要一并更新顶层默认主模型（model.*）的两种情况：
+    // 1. 选中的服务商就是当前默认主模型（provider id 相同，无论是否改了模
+    //    型 / Base URL）：编辑当前默认服务商后保存，默认主模型必须跟着更新，
+    //    否则 config.model 与 providers.<id> 脱节——UI 上「已是当前模型」会
+    //    翻回「设为当前模型」，工作台默认模型仍是旧的（甚至已失效的）。
+    // 2. 首次运行还没有默认模型：保存即把该服务商提升为默认主模型。
+    // 其余情况保持原语义：保存配置只写 providers.<id>，不切换主模型。
+    const shouldUpdateDefaultModel = shouldUpdateDefaultModelOnSave({
+      currentProviderId,
+      selectedProviderId: selectedProvider.id,
+      modelInfo,
+    });
     setProviderSavePending(true);
     setProviderSaveError("");
     try {
       await syncProviderApiKeyToCanonicalEnv(selectedProvider, newApiKey);
-      // "保存配置" only touches providers.<id> — it does not switch the active
-      // model. The context-window override is a single field tied to the current
-      // model, so persist it here only when this provider's model is already the
-      // active one (editing the live model's window without re-switching).
-      // Writing it for a non-current provider would stomp the real current
-      // model's override.
-      let settingsUpdate = buildProviderSettingsUpdate(config, selectedProvider, providerForm);
-      if (selectedProviderIsCurrent) {
-        settingsUpdate = {
-          ...settingsUpdate,
-          model_context_length: parseContextWindowInput(providerForm.contextWindow),
-        };
-      } else if (promoteToDefault) {
-        // 还没有默认模型：一并写入 model.*（provider + default + base_url +
-        // 上下文覆盖），使工作台的模型设置就是新模型。
+      let settingsUpdate;
+      if (shouldUpdateDefaultModel) {
+        // buildProviderConfigUpdate = providers.<id> + model.*（provider +
+        // default + base_url + api_key + 上下文覆盖）。
         settingsUpdate = buildProviderConfigUpdate(config, selectedProvider, providerForm);
+      } else {
+        // 只写 providers.<id>。上下文窗口覆盖是绑定「当前模型」的单槽字段，
+        // 非默认服务商在此保存时不得写入，避免踩掉真正当前模型的覆盖值。
+        settingsUpdate = buildProviderSettingsUpdate(config, selectedProvider, providerForm);
       }
       await saveConfig.mutateAsync(settingsUpdate);
-      if (promoteToDefault) {
+      if (shouldUpdateDefaultModel) {
         // 工作台 composer 从 UI store 读默认模型；配置已落盘就立刻播种，
         // 让「切换模型」/ 新任务的模型设置显示新模型。
         rememberLastUsedModel({
@@ -1243,7 +1243,7 @@ export function ModelsSection() {
         try {
           await setRuntimeModel(savedModel, providerId);
         } catch (error) {
-          console.warn("首次保存后热切换运行模型失败（默认配置已保存）", error);
+          console.warn("保存默认主模型后热切换运行模型失败（默认配置已保存）", error);
         }
       }
       setProviderForm((prev) => ({ ...prev, apiKey: "" }));
