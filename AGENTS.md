@@ -29,7 +29,7 @@ Hermes-CN-Desktop/
 │   └── process/
 │       ├── dashboard.rs         dashboard 子进程管理（probe/spawn/port fallback）
 │       ├── gateway.rs           gateway 子进程 / 冲突检测
-│       └── runtime.rs           managed runtime 安装/签名验证
+│       └── runtime.rs           managed runtime 安装/SHA-256 校验
 ├── web/                    React 前端（Vite + TanStack Query + Jotai）
 │   ├── src/
 │   │   ├── lib/tauri-bridge.ts    Tauri invoke 包装 + hermesDesktop shim
@@ -153,5 +153,5 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - **文件系统测试**：用 `tempfile::TempDir`，禁止写 `/tmp`、cwd 或固定路径
 - **HTTP 测试**：用 `wiremock::MockServer`，禁止打真实网络
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
-- **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `Eynzof/Hermes-CN-Core` 真实后端 + fake model）、`release-desktop.yml`（发布构建）
+- **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `nevermorewish/Hermes-CN-Core` 真实后端 + fake model）、`release-desktop.yml`（发布构建）
 - **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock

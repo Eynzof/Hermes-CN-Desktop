@@ -33,9 +33,6 @@ pub enum AppError {
     #[error("Runtime download failed: {0}")]
     RuntimeDownloadFailed(String),
 
-    #[error("Runtime signature verification failed: {0}")]
-    RuntimeSignatureInvalid(String),
-
     #[error("Runtime SHA-256 mismatch: expected {expected}, got {actual}")]
     RuntimeChecksumMismatch { expected: String, actual: String },
 
@@ -126,7 +123,6 @@ impl AppError {
             AppError::RuntimeManifestNotConfigured => "runtime_manifest_not_configured",
             AppError::RuntimeCheckFailed(_) => "runtime_check_failed",
             AppError::RuntimeDownloadFailed(_) => "runtime_download_failed",
-            AppError::RuntimeSignatureInvalid(_) => "runtime_signature_invalid",
             AppError::RuntimeChecksumMismatch { .. } => "runtime_checksum_mismatch",
             AppError::RuntimeExtractFailed(_) => "runtime_extract_failed",
             AppError::RuntimeSmokeFailed(_) => "runtime_smoke_failed",
@@ -159,7 +155,6 @@ impl AppError {
             AppError::RuntimeManifestNotConfigured
             | AppError::RuntimeCheckFailed(_)
             | AppError::RuntimeDownloadFailed(_)
-            | AppError::RuntimeSignatureInvalid(_)
             | AppError::RuntimeChecksumMismatch { .. }
             | AppError::RuntimeExtractFailed(_)
             | AppError::RuntimeSmokeFailed(_)

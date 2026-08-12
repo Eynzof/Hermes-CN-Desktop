@@ -2,6 +2,8 @@
 
 > 面向自建国内分发服务器的权威实施方案。所有结论均以当前代码为准，关键处给出 `文件:行号`。
 > 涉及两个仓库：`Hermes-CN-Desktop`（桌面外壳 + UI）与 `Hermes-CN-Core`（Python 内核 + 发布签名流水线）。
+>
+> **历史文档说明（2026-08-12）**：本文保留早期实施设计供追溯，不再是当前 Core runtime 的权威说明。现行桌面端已移除 Core Ed25519 manifest 验签，更新 manifest 和 ZIP 只走 `https://huanxing.ai/downloads/Hermes-CN-Core/runtime`，继续执行 HTTPS、平台/架构、路径安全与 ZIP SHA-256 校验。当前行为见 `managed-runtime.md` 与代码。
 
 ---
 

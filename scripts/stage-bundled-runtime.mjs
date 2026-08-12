@@ -17,11 +17,11 @@ import { fileURLToPath } from "node:url";
 function usage() {
   console.log(`Usage: node scripts/stage-bundled-runtime.mjs [options]
 
-Downloads a released Hermes-CN-Core runtime zip + signed manifest and stages
+Downloads a released Hermes-CN-Core runtime zip + manifest and stages
 it under static/bundled-runtime/ so Tauri bundles it into the installer.
 
 Options:
-  --repo <owner/repo>      Runtime release repo (default: Eynzof/Hermes-CN-Core)
+  --repo <owner/repo>      Runtime release repo (default: nevermorewish/Hermes-CN-Core)
   --tag <tag|latest>      Runtime release tag, or latest (default: latest)
   --feed-base-url <url>   Prebuilt runtime feed root (default: production Linux server)
   --channel <name>        Manifest channel name (default: stable)
@@ -53,7 +53,7 @@ if (hasFlag("--help") || hasFlag("-h")) {
 }
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const repo = argValue("--repo", process.env.HERMES_RUNTIME_REPO ?? "Eynzof/Hermes-CN-Core");
+const repo = argValue("--repo", process.env.HERMES_RUNTIME_REPO ?? "nevermorewish/Hermes-CN-Core");
 const tag = argValue("--tag", process.env.HERMES_RUNTIME_TAG ?? "latest");
 const channel = argValue("--channel", process.env.HERMES_RUNTIME_CHANNEL ?? "stable");
 const feedBaseUrl = argValue(

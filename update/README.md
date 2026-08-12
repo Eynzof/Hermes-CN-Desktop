@@ -1,6 +1,6 @@
 # 老服务器桌面更新清单
 
-此目录用于让仍然读取旧服务器地址的桌面客户端发现火山 TOS 上的新版。
+此目录用于让仍然读取旧服务器地址的桌面客户端发现 Linux 下载服务器上的新版。
 
 ## 需要上传的文件
 
@@ -21,7 +21,7 @@
 
 `huanxingcomhermes` 在老服务器上当前不存在，需要同时创建目录。
 
-这些 JSON 已指向火山 TOS 的安装包，不需要把 EXE 再上传到老服务器。
+这些 JSON 与安装包都发布在 Linux 下载服务器，不再依赖旧对象存储。
 
 ## 当前发布内容
 
@@ -32,7 +32,7 @@
 | `huanxinghermes` | `0.6.8` | `HuanxingHermes.Desktop_0.6.8_x64-setup.exe` | `1d2a04f290a64f3b4508482bbdf18a98d847995b51902db234e3d7241e917955` |
 | `huanxingcomhermes` | `0.6.8` | `HuanxingHermes.Desktop_0.6.8_x64-setup.exe` | `1d2a04f290a64f3b4508482bbdf18a98d847995b51902db234e3d7241e917955` |
 
-当前 TOS stable 清单只发布了 Windows 资产，因此这些兼容清单也只包含 Windows。不要在没有对应 DMG 和 SHA-256 的情况下手工添加 macOS 条目。
+当前兼容清单只发布 Windows 资产。不要在没有对应 DMG 和 SHA-256 的情况下手工添加 macOS 条目。
 
 ## 上传前检查
 
@@ -41,7 +41,7 @@
 - 老客户端首次升级时只能自动下载、校验并打开安装器，不会自动退出旧进程；需要按安装器提示关闭旧应用。安装到 `0.6.8` 后，后续更新才会使用新的自动退出安装流程。
 - 旧品牌安装包曾使用 `app.<brand>.desktop` identifier，当前安装包统一使用 `cn.org.hermesagent.desktop`。请确认覆盖后原 profile、模型配置、会话和 managed runtime 可继续读取，并检查 Windows“应用和功能”中没有重复条目。
 - 当前 Windows 安装包没有 Authenticode 签名，测试和发布说明需要提示用户处理 SmartScreen 的“仍要运行”。
-- 不要改动 JSON 中的 `sha256`、`size` 或 `versionedUrl`；它们已经与 TOS 上的实际安装包核对一致。
+- 不要改动 JSON 中的 `sha256`、`size` 或 `versionedUrl`；它们已经与 Linux 服务器上的实际安装包核对一致。
 
 ## 上传示例
 
@@ -83,4 +83,4 @@ done
 "semver": "0.6.8"
 ```
 
-再使用老版本客户端检查更新，确认它显示 `0.6.8`，并从 `huanxing.tos-cn-beijing.volces.com` 下载对应品牌安装包。
+再使用老版本客户端检查更新，确认它显示 `0.6.8`，并从 `huanxing.ai/downloads` 下载对应品牌安装包。

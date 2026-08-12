@@ -30,7 +30,6 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 cookie = "0.18"
 sha2 = "0.10"
-ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 zip = "2"
 dirs = "6"
 regex = "1"

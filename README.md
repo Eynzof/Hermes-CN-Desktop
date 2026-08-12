@@ -8,7 +8,7 @@
 [![License: PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-orange.svg)](./LICENSE)
 [![Hermes Agent 中文社区](https://img.shields.io/badge/Hermes%20Agent-%E4%B8%AD%E6%96%87%E7%A4%BE%E5%8C%BA-7c3aed)](https://hermesagent.org.cn)
 
-Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，原生支持 Windows 与 macOS 系统。项目基于 [Tauri v2](https://v2.tauri.app/)、Rust、React 和 TypeScript 构建，包含 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core) 中文社区修改版的 Hermes Agent 内核。
+Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，原生支持 Windows 与 macOS 系统。项目基于 [Tauri v2](https://v2.tauri.app/)、Rust、React 和 TypeScript 构建，包含 [Hermes-CN-Core](https://github.com/nevermorewish/Hermes-CN-Core) 中文社区修改版的 Hermes Agent 内核。
 
 官网与下载页见 [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn)。桌面端隶属于 [Hermes Agent 中文社区](https://hermesagent.org.cn) 生态，社区主站提供中文文档、实践指南、社群入口和更多生态项目。
 
@@ -78,13 +78,13 @@ Hermes Agent CN Desktop 由 Hermes Agent 中文社区维护。你可以访问 [H
 
 Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外的桌面体验：原生窗口、本地进程管理、文件对话框、托管运行时安装、运行时诊断，以及生产模式下更安全的 REST 代理层与必要时的 WS 中继。
 
-本仓库是桌面端外壳。Agent runtime 和 Dashboard 源码位于 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)。
+本仓库是桌面端外壳。Agent runtime 和 Dashboard 源码位于 [Hermes-CN-Core](https://github.com/nevermorewish/Hermes-CN-Core)。
 
 ## 亮点
 
 - **一键安装，使用门槛极低**：针对 Windows 和 macOS 用户适配，下载安装后配置 API Key 或本地模型端点即可使用。
 - **轻量，跨平台**：Tauri 使用系统 WebView，不需要随应用打包 Chromium，安装包体积小，支持 Windows 及 macOS。
-- **内置独立 Hermes Agent 内核**：桌面端支持安装、更新、签名校验、健康检查和回滚本地 Hermes Agent 内核。
+- **内置独立 Hermes Agent 内核**：桌面端支持从 Linux feed 安装、更新、SHA-256 校验、健康检查和回滚本地 Hermes Agent 内核。
 - **面向 Agent 的完整 UI**：支持聊天、流式输出、附件、MCP 工具、Skills、Memory、Profiles、定时任务、LaTeX/Mermaid 渲染和运行时健康面板。
 - **中文模型与平台生态**：覆盖主流云端模型服务商和 Ollama、vLLM、LM Studio、llama.cpp 等本地部署方案，并提供飞书等平台接入配置；更多中文生态内容见 [Hermes Agent 中文社区](https://hermesagent.org.cn)。
 - **生产级传输桥**：生产模式下通过 Rust command 代理 REST 与上传；Gateway 使用官方 `/api/ws`，打包态必要时通过 Rust WS 中继绕过 WebView 限制，并集中处理鉴权。
@@ -107,7 +107,7 @@ Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外�
 - [Rust](https://rustup.rs/) stable
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 9+
-- [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core) 或本机已安装的 Hermes CLI，用于本地 Dashboard 开发
+- [Hermes-CN-Core](https://github.com/nevermorewish/Hermes-CN-Core) 或本机已安装的 Hermes CLI，用于本地 Dashboard 开发
 
 macOS 还需要安装 Xcode Command Line Tools：
 

@@ -3,7 +3,7 @@
 ## 项目概述
 
 Hermes Agent CN 桌面端 — 用 Tauri v2 + React 构建的独立桌面应用，替代原 Electron 壳。
-对接后端是 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)（CN 核心 runtime，原名 hermes-agent-cn）内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。bundle identifier 固定为 `cn.org.hermesagent.desktop`（升级安全承重标识，勿改）。版本号以 `package.json` 为唯一真相（勿在本文件硬编码版本号），由 `pnpm version:sync` 传播到 `tauri.conf.json` / `Cargo.toml` / `Cargo.lock` / 各 workspace `package.json` / README，`pnpm version:check` 校验。
+对接后端是 [Hermes-CN-Core](https://github.com/nevermorewish/Hermes-CN-Core)（CN 核心 runtime，原名 hermes-agent-cn）内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。bundle identifier 固定为 `cn.org.hermesagent.desktop`（升级安全承重标识，勿改）。版本号以 `package.json` 为唯一真相（勿在本文件硬编码版本号），由 `pnpm version:sync` 传播到 `tauri.conf.json` / `Cargo.toml` / `Cargo.lock` / 各 workspace `package.json` / README，`pnpm version:check` 校验。
 
 ## 项目结构
 
@@ -31,7 +31,7 @@ Hermes-CN-Desktop/
 │   └── process/
 │       ├── dashboard.rs         dashboard 子进程管理（probe/spawn/port fallback）
 │       ├── gateway.rs           gateway 子进程 / 冲突检测
-│       └── runtime.rs           managed runtime 安装/签名验证
+│       └── runtime.rs           managed runtime 安装/SHA-256 校验
 ├── web/                    React 前端（Vite + TanStack Query + Jotai）
 │   ├── src/
 │   │   ├── lib/tauri-bridge.ts    Tauri invoke 包装 + hermesDesktop shim
@@ -199,5 +199,5 @@ webview 拦 `ws://` 时自动回退到 Rust 中继（`ws_proxy.rs`，线协议�
 - **文件系统测试**：用 `tempfile::TempDir`，禁止写 `/tmp`、cwd 或固定路径
 - **HTTP 测试**：用 `wiremock::MockServer`，禁止打真实网络
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
-- **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `Eynzof/Hermes-CN-Core` 真实后端 + fake model）；`release-desktop.yml` 负责发布构建
+- **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `nevermorewish/Hermes-CN-Core` 真实后端 + fake model）；`release-desktop.yml` 负责发布构建
 - **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock

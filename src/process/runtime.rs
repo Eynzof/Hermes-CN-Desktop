@@ -2,7 +2,7 @@
 //
 // Replaces hermes-cn-ui-v1/apps/desktop/src/main/runtime-manager.ts.
 // Handles finding bundled runtimes, checking for updates, downloading,
-// verifying signatures, extracting, smoke-testing, and installing.
+// verifying artifact hashes, extracting, smoke-testing, and installing.
 
 use std::fs;
 use std::io::Read;
@@ -122,6 +122,7 @@ pub struct RuntimeUpdateManifest {
     pub arch: String,
     pub artifact_url: String,
     pub sha256: String,
+    #[serde(default)]
     pub signature: String,
     pub source_repo: String,
     pub source_commit: String,
@@ -703,30 +704,18 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
 // the build environment. Cascade (highest first):
 //   1. Runtime env (HERMES_RUNTIME_UPDATE_*)
 //   2. Compile-time env override (HERMES_RUNTIME_UPDATE_*_DEFAULT)
-//   3. Hardcoded fallback below — points at the Eynzof/Hermes-CN-Core
-//      production release pipeline + its Ed25519 public key.
-// Forks rebuilding the desktop should set the compile-time env override
-// to point at their own release pipeline + key (or edit the constants
-// below).
+//   3. Hardcoded fallback below — points at the production Linux feed.
+// Forks rebuilding the desktop should set the compile-time URL override or
+// edit the constants below.
 // The production fallback below is the managed Linux download server.
 const BAKED_MANIFEST_BASE_URL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
 const BAKED_MANIFEST_CHANNEL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
 const BAKED_ARTIFACT_MIRROR_BASE_URL: Option<&str> =
     option_env!("HERMES_RUNTIME_ARTIFACT_MIRROR_BASE_URL_DEFAULT");
-const BAKED_PUBLIC_KEY_PEM: Option<&str> =
-    option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
-
 const FALLBACK_MANIFEST_BASE_URL: &str =
     "https://huanxing.ai/downloads/Hermes-CN-Core/runtime/stable";
 const FALLBACK_ARTIFACT_MIRROR_BASE_URL: &str =
     "https://huanxing.ai/downloads/Hermes-CN-Core/runtime/stable";
-// The upstream signed manifest is mirrored byte-for-byte; its artifactUrl is
-// not rewritten here because it is covered by the Ed25519 signature.
-const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
-    "-----BEGIN PUBLIC KEY-----\n",
-    "MCowBQYDK2VwAyEAqPkLQ4o67G2GMTgkQQQZXWwDBZM/4hqq5thSZSNhoC0=\n",
-    "-----END PUBLIC KEY-----\n"
-);
 
 fn configured_manifest_url() -> Option<String> {
     // 1. Fully-formed URL via runtime env (highest precedence)
@@ -772,31 +761,6 @@ fn configured_manifest_url() -> Option<String> {
     ))
 }
 
-fn configured_public_key() -> Option<String> {
-    // 1. PEM via runtime env (highest precedence)
-    if let Ok(direct) = std::env::var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM") {
-        let pem = direct.trim().replace("\\n", "\n");
-        if !pem.is_empty() {
-            return Some(pem);
-        }
-    }
-    // 2. PEM from a file path via runtime env
-    if let Ok(file) = std::env::var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_FILE") {
-        if Path::new(&file).is_file() {
-            return fs::read_to_string(&file).ok();
-        }
-    }
-    // 3. Compile-time embedded PEM (baked into release builds via CI)
-    if let Some(baked) = BAKED_PUBLIC_KEY_PEM {
-        let pem = baked.trim().replace("\\n", "\n");
-        if !pem.is_empty() {
-            return Some(pem);
-        }
-    }
-    // 4. Hardcoded fallback — the Eynzof/Hermes-CN-Core production key.
-    Some(FALLBACK_PUBLIC_KEY_PEM.to_string())
-}
-
 fn configured_artifact_mirror_base_url(manifest: &RuntimeUpdateManifest) -> Option<String> {
     if let Ok(value) = std::env::var("HERMES_RUNTIME_ARTIFACT_MIRROR_BASE_URL") {
         let trimmed = value.trim();
@@ -814,7 +778,7 @@ fn configured_artifact_mirror_base_url(manifest: &RuntimeUpdateManifest) -> Opti
         .or_else(|| {
             manifest
                 .source_repo
-                .eq_ignore_ascii_case("Eynzof/Hermes-CN-Core")
+                .eq_ignore_ascii_case("nevermorewish/Hermes-CN-Core")
                 .then(|| FALLBACK_ARTIFACT_MIRROR_BASE_URL.to_string())
         })
 }
@@ -887,7 +851,7 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
         downloads_dir: downloads_dir_display(),
         gateway_runtime_dir: gateway_runtime_dir().to_string_lossy().to_string(),
         update_manifest_url: manifest_url.clone(),
-        updates_configured: manifest_url.is_some() && configured_public_key().is_some(),
+        updates_configured: manifest_url.is_some(),
         executable_sha256,
         source,
         process: None,
@@ -1411,54 +1375,6 @@ fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     format!("{:x}", hasher.finalize())
-}
-
-fn signature_payload(manifest: &RuntimeUpdateManifest) -> Vec<u8> {
-    format!(
-        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
-        manifest.schema_version,
-        manifest.channel,
-        manifest.runtime_version,
-        manifest.kernel_version,
-        manifest.runtime_flavor,
-        manifest.runtime_revision,
-        manifest.platform,
-        manifest.arch,
-        manifest.artifact_url,
-        manifest.sha256,
-        manifest.source_repo,
-        manifest.source_commit,
-    )
-    .into_bytes()
-}
-
-fn verify_signature(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
-    let public_key_pem =
-        configured_public_key().ok_or("Runtime update public key is not configured")?;
-    verify_signature_with_key(manifest, &public_key_pem)
-}
-
-fn verify_signature_with_key(
-    manifest: &RuntimeUpdateManifest,
-    public_key_pem: &str,
-) -> Result<(), String> {
-    use base64::Engine;
-    use ed25519_dalek::pkcs8::DecodePublicKey;
-    use ed25519_dalek::{Signature, VerifyingKey};
-
-    let key = VerifyingKey::from_public_key_pem(public_key_pem.trim())
-        .map_err(|e| format!("Invalid public key PEM: {}", e))?;
-
-    let sig_bytes = base64::engine::general_purpose::STANDARD
-        .decode(&manifest.signature)
-        .map_err(|e| format!("Invalid signature base64: {}", e))?;
-
-    let signature =
-        Signature::from_slice(&sig_bytes).map_err(|e| format!("Invalid signature: {}", e))?;
-
-    let payload = signature_payload(manifest);
-    key.verify_strict(&payload, &signature)
-        .map_err(|_| "Signature verification failed".to_string())
 }
 
 fn safe_version_segment(version: &str) -> Result<String, String> {
@@ -2107,15 +2023,6 @@ pub async fn install_bundled_runtime_if_needed(
         }
     }
 
-    if let Err(e) = verify_signature(&manifest) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(format!("Bundled runtime signature check failed: {}", e)),
-        };
-    }
-
     // Resource overlays are synchronized by the bootstrap caller after the
     // install record is committed. Keeping installation and overlay sync
     // separate prevents an optional plugin packaging error from turning a
@@ -2153,16 +2060,6 @@ pub async fn install_runtime_update(
         }
     };
 
-    // Verify signature
-    if let Err(e) = verify_signature(&resolved) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
-
     let version_segment = match validate_manifest_for_current_platform(&resolved) {
         Ok(version_segment) => version_segment,
         Err(e) => {
@@ -2175,9 +2072,9 @@ pub async fn install_runtime_update(
         }
     };
 
-    // Verify the signed artifact URL first, then optionally use the byte-for-byte
-    // configured mirror as the transport source. The signed manifest is never mutated;
-    // install_runtime_zip still enforces its signed SHA-256 before extraction.
+    // Require an HTTPS artifact URL, then optionally use the configured mirror
+    // as the transport source. install_runtime_zip still enforces the manifest
+    // SHA-256 before extraction.
     let download_url = match artifact_download_url(
         &resolved,
         configured_artifact_mirror_base_url(&resolved).as_deref(),
@@ -2681,9 +2578,6 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine;
-    use ed25519_dalek::pkcs8::EncodePublicKey;
-    use ed25519_dalek::{Signer, SigningKey};
     use pretty_assertions::assert_eq;
     use serial_test::serial;
     use std::io::Write;
@@ -2762,16 +2656,6 @@ mod tests {
 
     // -------- Fixtures --------
 
-    fn test_keypair() -> (SigningKey, String) {
-        // Deterministic seed so signed test vectors are stable across runs.
-        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
-        let pem = signing_key
-            .verifying_key()
-            .to_public_key_pem(ed25519_dalek::pkcs8::spki::der::pem::LineEnding::LF)
-            .unwrap();
-        (signing_key, pem)
-    }
-
     fn fixture_manifest() -> RuntimeUpdateManifest {
         RuntimeUpdateManifest {
             schema_version: MANIFEST_SCHEMA_VERSION,
@@ -2790,12 +2674,6 @@ mod tests {
             min_app_version: None,
             created_at: None,
         }
-    }
-
-    fn sign_manifest(key: &SigningKey, m: &mut RuntimeUpdateManifest) {
-        let payload = signature_payload(m);
-        let sig = key.sign(&payload);
-        m.signature = base64::engine::general_purpose::STANDARD.encode(sig.to_bytes());
     }
 
     // -------- containment roots --------
@@ -3076,17 +2954,13 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn runtime_update_rejects_unsafe_version_before_download() {
-        let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
         manifest.platform = current_platform().to_string();
         manifest.arch = current_arch().to_string();
         manifest.runtime_version = "../../outside".to_string();
-        sign_manifest(&key, &mut manifest);
-        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
 
         let result = install_runtime_update(Some(manifest)).await;
 
-        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
         assert!(!result.ok);
         assert!(result
             .error
@@ -3319,135 +3193,6 @@ mod tests {
             "staging path should stay in runtime versions tree: {}",
             staging_path.display()
         );
-    }
-
-    // -------- signature_payload --------
-
-    #[test]
-    fn signature_payload_has_stable_field_order() {
-        let m = fixture_manifest();
-        let payload = String::from_utf8(signature_payload(&m)).unwrap();
-        let lines: Vec<&str> = payload.split('\n').collect();
-        assert_eq!(
-            lines,
-            vec![
-                "2",                           // schema_version
-                "stable",                      // channel
-                "1.2.3-cn.1",                  // runtime_version
-                "1.2.3",                       // kernel_version
-                "cn",                          // runtime_flavor
-                "1",                           // runtime_revision
-                "linux",                       // platform
-                "x64",                         // arch
-                "https://example.com/foo.zip", // artifact_url
-                "deadbeef",                    // sha256
-                "owner/repo",                  // source_repo
-                "abc123",                      // source_commit
-            ]
-        );
-    }
-
-    #[test]
-    fn signature_payload_differs_when_any_field_changes() {
-        let baseline = signature_payload(&fixture_manifest());
-        let mut m = fixture_manifest();
-        m.sha256 = "tampered".to_string();
-        assert_ne!(signature_payload(&m), baseline);
-        let mut m2 = fixture_manifest();
-        m2.artifact_url = "https://attacker.com/x.zip".to_string();
-        assert_ne!(signature_payload(&m2), baseline);
-    }
-
-    // -------- verify_signature_with_key --------
-
-    #[test]
-    fn verify_accepts_valid_signature() {
-        let (key, pem) = test_keypair();
-        let mut m = fixture_manifest();
-        sign_manifest(&key, &mut m);
-        verify_signature_with_key(&m, &pem).expect("should verify");
-    }
-
-    #[test]
-    fn verify_rejects_tampered_version() {
-        let (key, pem) = test_keypair();
-        let mut m = fixture_manifest();
-        sign_manifest(&key, &mut m);
-        m.runtime_version = "9.9.9-cn.1".to_string();
-        let err = verify_signature_with_key(&m, &pem).unwrap_err();
-        assert!(err.contains("Signature verification failed"));
-    }
-
-    #[test]
-    fn verify_rejects_tampered_sha256() {
-        let (key, pem) = test_keypair();
-        let mut m = fixture_manifest();
-        sign_manifest(&key, &mut m);
-        m.sha256 = "0000".to_string();
-        assert!(verify_signature_with_key(&m, &pem).is_err());
-    }
-
-    #[test]
-    fn verify_rejects_tampered_artifact_url() {
-        let (key, pem) = test_keypair();
-        let mut m = fixture_manifest();
-        sign_manifest(&key, &mut m);
-        m.artifact_url = "https://attacker.example/x.zip".to_string();
-        assert!(verify_signature_with_key(&m, &pem).is_err());
-    }
-
-    #[test]
-    fn verify_rejects_invalid_signature_base64() {
-        let (_, pem) = test_keypair();
-        let mut m = fixture_manifest();
-        m.signature = "!!!not base64!!!".to_string();
-        let err = verify_signature_with_key(&m, &pem).unwrap_err();
-        assert!(err.contains("Invalid signature base64"));
-    }
-
-    #[test]
-    fn verify_rejects_signature_from_different_key() {
-        let (key_a, _) = test_keypair();
-        // Use a different key for verification
-        let key_b = SigningKey::from_bytes(&[42u8; 32]);
-        let pem_b = key_b
-            .verifying_key()
-            .to_public_key_pem(ed25519_dalek::pkcs8::spki::der::pem::LineEnding::LF)
-            .unwrap();
-        let mut m = fixture_manifest();
-        sign_manifest(&key_a, &mut m);
-        assert!(verify_signature_with_key(&m, &pem_b).is_err());
-    }
-
-    #[test]
-    fn verify_rejects_too_short_der() {
-        let bad_pem = "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----\n";
-        let m = fixture_manifest();
-        let err = verify_signature_with_key(&m, bad_pem).unwrap_err();
-        assert!(err.contains("Invalid public key PEM"));
-    }
-
-    #[test]
-    fn verify_rejects_raw_key_pem_without_spki_envelope() {
-        let (key, pem) = test_keypair();
-        let mut m = fixture_manifest();
-        sign_manifest(&key, &mut m);
-
-        let raw_key_pem = format!(
-            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
-            base64::engine::general_purpose::STANDARD.encode(key.verifying_key().to_bytes())
-        );
-        assert!(verify_signature_with_key(&m, &pem).is_ok());
-        let err = verify_signature_with_key(&m, &raw_key_pem).unwrap_err();
-        assert!(err.contains("Invalid public key PEM"));
-    }
-
-    #[test]
-    fn verify_rejects_malformed_pem_base64() {
-        let bad_pem = "-----BEGIN PUBLIC KEY-----\n!!!\n-----END PUBLIC KEY-----\n";
-        let m = fixture_manifest();
-        let err = verify_signature_with_key(&m, bad_pem).unwrap_err();
-        assert!(err.contains("Invalid public key PEM"));
     }
 
     // -------- extract_zip --------
@@ -4066,18 +3811,15 @@ mod tests {
         perms.set_mode(0o755);
         std::fs::set_permissions(&executable, perms).unwrap();
 
-        let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
         manifest.runtime_version = "9.9.9-cn.1".to_string();
         manifest.platform = current_platform().to_string();
         manifest.arch = current_arch().to_string();
         manifest.sha256 =
             "37f4d6d615188f1e84bd361a0292e2a26376d72225b2420e5e91a62e7b2ebd0c".to_string();
-        sign_manifest(&key, &mut manifest);
         write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
 
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
-        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
 
         let result = install_bundled_runtime_if_needed(Some(&resource)).await;
         assert!(result.ok, "unexpected install error: {:?}", result.error);
@@ -4119,7 +3861,6 @@ mod tests {
             .join("SKILL.md")
             .is_file());
 
-        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 
@@ -4140,7 +3881,7 @@ mod tests {
         let bundled = resource.join("bundled-runtime");
         let expanded = bundled_expanded_runtime_dir(&bundled);
 
-        // Stage a valid, signed bundled runtime that WOULD install if the guard
+        // Stage a valid bundled runtime that WOULD install if the guard
         // were removed, so this test fails loudly on regression.
         std::fs::create_dir_all(&expanded).unwrap();
         let bundled_exe = expanded.join(primary_runtime_name());
@@ -4149,7 +3890,6 @@ mod tests {
         perms.set_mode(0o755);
         std::fs::set_permissions(&bundled_exe, perms).unwrap();
 
-        let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
         manifest.runtime_version = "0.14.0-cn.4".to_string();
         manifest.kernel_version = "0.14.0".to_string();
@@ -4157,10 +3897,8 @@ mod tests {
         manifest.arch = current_arch().to_string();
         manifest.sha256 =
             "37f4d6d615188f1e84bd361a0292e2a26376d72225b2420e5e91a62e7b2ebd0c".to_string();
-        sign_manifest(&key, &mut manifest);
 
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
-        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
         std::env::set_var("HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME", "1");
 
         write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
@@ -4196,7 +3934,6 @@ mod tests {
         // Re-read while the runtime-root override is still in effect.
         let after = read_current_record();
 
-        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
         std::env::remove_var("HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME");
 
@@ -4242,7 +3979,6 @@ mod tests {
         perms.set_mode(0o755);
         std::fs::set_permissions(&bundled_exe, perms).unwrap();
 
-        let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
         manifest.runtime_version = "0.14.0-cn.4".to_string();
         manifest.kernel_version = "0.14.0".to_string();
@@ -4250,10 +3986,8 @@ mod tests {
         manifest.arch = current_arch().to_string();
         manifest.sha256 =
             "37f4d6d615188f1e84bd361a0292e2a26376d72225b2420e5e91a62e7b2ebd0c".to_string();
-        sign_manifest(&key, &mut manifest);
 
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
-        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
         std::env::set_var("HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME", "0");
 
         write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
@@ -4288,7 +4022,6 @@ mod tests {
         let archived: Option<RuntimeInstallRecord> =
             read_json_file(&runtime_root.join(LOCAL_SOURCE_ARCHIVE_FILE));
 
-        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
         std::env::remove_var("HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME");
 
@@ -4353,21 +4086,17 @@ mod tests {
             .unwrap();
         writer.finish().unwrap();
 
-        let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
         manifest.runtime_version = "9.9.9-cn.2".to_string();
         manifest.platform = current_platform().to_string();
         manifest.arch = current_arch().to_string();
         manifest.sha256 = file_sha256(&zip_path).unwrap();
-        sign_manifest(&key, &mut manifest);
         write_json_file(&bundled_manifest_path(&bundled), &manifest).unwrap();
 
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
-        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
 
         let result = install_bundled_runtime_if_needed(Some(&resource)).await;
 
-        std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
 
         assert!(result.ok, "unexpected install error: {:?}", result.error);
@@ -4449,15 +4178,13 @@ mod tests {
         assert!(find_executable_in(&nope, 3).is_none());
     }
 
-    // -------- configured_manifest_url / configured_public_key --------
+    // -------- configured manifest and artifact URLs --------
 
     fn clear_runtime_env() {
         for var in [
             "HERMES_RUNTIME_UPDATE_MANIFEST_URL",
             "HERMES_RUNTIME_UPDATE_BASE_URL",
             "HERMES_RUNTIME_UPDATE_CHANNEL",
-            "HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM",
-            "HERMES_RUNTIME_UPDATE_PUBLIC_KEY_FILE",
             "HERMES_RUNTIME_ARTIFACT_MIRROR_BASE_URL",
         ] {
             std::env::remove_var(var);
@@ -4503,14 +4230,14 @@ mod tests {
     }
 
     #[test]
-    fn artifact_download_uses_configured_mirror_without_mutating_signed_url() {
+    fn artifact_download_uses_configured_mirror_without_mutating_manifest_url() {
         let manifest = fixture_manifest();
-        let signed_url = manifest.artifact_url.clone();
+        let manifest_url = manifest.artifact_url.clone();
         let download_url =
             artifact_download_url(&manifest, Some("https://mirror.example/runtime/stable"))
                 .unwrap();
 
-        assert_eq!(manifest.artifact_url, signed_url);
+        assert_eq!(manifest.artifact_url, manifest_url);
         assert_eq!(
             download_url,
             "https://mirror.example/runtime/stable/hermes-agent-cn-runtime-linux-x64.zip"
@@ -4518,7 +4245,7 @@ mod tests {
     }
 
     #[test]
-    fn artifact_download_can_use_the_signed_url_directly() {
+    fn artifact_download_can_use_the_manifest_url_directly() {
         let manifest = fixture_manifest();
         assert_eq!(
             artifact_download_url(&manifest, None).unwrap(),
@@ -4531,7 +4258,7 @@ mod tests {
     fn default_artifact_mirror_only_applies_to_the_official_core_feed() {
         clear_runtime_env();
         let mut official = fixture_manifest();
-        official.source_repo = "Eynzof/Hermes-CN-Core".to_string();
+        official.source_repo = "nevermorewish/Hermes-CN-Core".to_string();
         assert_eq!(
             configured_artifact_mirror_base_url(&official).as_deref(),
             Some(FALLBACK_ARTIFACT_MIRROR_BASE_URL)
@@ -4540,24 +4267,5 @@ mod tests {
         let custom = fixture_manifest();
         assert_eq!(configured_artifact_mirror_base_url(&custom), None);
         clear_runtime_env();
-    }
-
-    #[test]
-    #[serial]
-    fn public_key_uses_explicit_env_when_set() {
-        clear_runtime_env();
-        let custom = "-----BEGIN PUBLIC KEY-----\nCUSTOM\n-----END PUBLIC KEY-----";
-        std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", custom);
-        assert_eq!(configured_public_key().as_deref(), Some(custom));
-        clear_runtime_env();
-    }
-
-    #[test]
-    #[serial]
-    fn public_key_falls_back_to_hardcoded() {
-        clear_runtime_env();
-        let pem = configured_public_key().unwrap();
-        assert!(pem.contains("BEGIN PUBLIC KEY"));
-        assert!(pem.contains("END PUBLIC KEY"));
     }
 }

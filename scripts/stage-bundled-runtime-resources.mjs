@@ -95,7 +95,7 @@ function readRuntimeManifest() {
     /^stable-[^-]+-[^.]+\.json$/u.test(name),
   );
   if (!manifestName) {
-    throw new Error(`signed runtime manifest is missing under ${runtimeDir}`);
+    throw new Error(`runtime manifest is missing under ${runtimeDir}`);
   }
   return JSON.parse(readFileSync(join(runtimeDir, manifestName), "utf8"));
 }

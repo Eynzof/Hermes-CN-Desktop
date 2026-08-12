@@ -2,6 +2,8 @@
 
 > 状态:提案(2026-06-06) · 范围:`hermes-agent-cn-desktop`(外壳)+ `Hermes-CN-Core`(内核 runtime)
 > 相关文档:[`managed-runtime.md`](./managed-runtime.md)、[`macos-signing-and-notarization.md`](./macos-signing-and-notarization.md)
+>
+> **历史文档说明（2026-08-12）**：本文记录旧的签名/CDN 方案，不再描述当前 Core runtime 实现。当前桌面端不验证 Core Ed25519 manifest 签名，manifest 与 ZIP 均从 `huanxing.ai` Linux feed 获取，并保留 HTTPS、平台/架构、路径安全与 ZIP SHA-256 校验。以 `managed-runtime.md` 和实际代码为准。
 
 本方案回答三个核心问题:**(1) 用户侧热更新如何实现、(2) 是否需要后端、(3) 是否需要下载服务器**。
 全部判断基于对真实代码 / CI 的核对,凡是已有机制一律标注「已具备」,缺口给出最小代价补法。

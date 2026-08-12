@@ -29,7 +29,7 @@ jobs:
       - name: Checkout Core backend
         uses: actions/checkout@v4
         with:
-          repository: Eynzof/Hermes-CN-Core
+          repository: nevermorewish/Hermes-CN-Core
           ref: main
           path: Hermes-CN-Core
 

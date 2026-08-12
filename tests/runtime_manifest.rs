@@ -1,8 +1,7 @@
 // HTTP-boundary tests for runtime update manifest fetching.
 //
-// check_runtime_update fetches and parses a remote manifest. It does NOT
-// verify the signature (that happens in install_runtime_update). Tests
-// here cover the fetch/parse/platform-match path.
+// check_runtime_update fetches and parses a remote manifest. Artifact integrity
+// is enforced later by install_runtime_update through the manifest SHA-256.
 //
 // All tests are #[serial] because they mutate HERMES_RUNTIME_UPDATE_*
 // process-global env vars.
@@ -48,6 +47,30 @@ fn manifest_json(runtime_version: &str) -> serde_json::Value {
         "sourceRepo": "owner/repo",
         "sourceCommit": "abc123",
     })
+}
+
+#[tokio::test]
+#[serial]
+async fn accepts_manifest_without_signature_field() {
+    clear_env();
+    let server = MockServer::start().await;
+    let mut manifest = manifest_json("999.999.999-cn.2");
+    manifest.as_object_mut().unwrap().remove("signature");
+    Mock::given(method("GET"))
+        .and(path("/manifest.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(manifest))
+        .mount(&server)
+        .await;
+    std::env::set_var(
+        "HERMES_RUNTIME_UPDATE_MANIFEST_URL",
+        format!("{}/manifest.json", server.uri()),
+    );
+
+    let result = check_runtime_update().await;
+
+    assert!(result.ok, "unexpected error: {:?}", result.error);
+    assert_eq!(result.manifest.unwrap().signature, "");
+    clear_env();
 }
 
 fn clear_env() {
