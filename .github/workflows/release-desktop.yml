@@ -48,10 +48,10 @@ permissions:
 env:
   UPDATE_FEED_BASE_URL: https://huanxing.ai/downloads
   RUNTIME_UPDATE_FEED_BASE_URL: https://huanxing.ai/downloads/Hermes-CN-Core/runtime
-  # Build-time source for immutable, signed runtime release artifacts. Keep
-  # this separate from the client update endpoint so a frontend/feed outage
-  # cannot block every platform in the release matrix.
-  BUNDLED_RUNTIME_FEED_BASE_URL: https://huanxing.tos-accelerate.volces.com/package/Hermes-CN-Core/runtime
+  # Build-time source for immutable, signed runtime release artifacts. Runtime
+  # releases are uploaded to this Linux-backed feed by release-runtime.yml (or
+  # mirrored there by sync-core-runtime.yml for existing tags).
+  BUNDLED_RUNTIME_FEED_BASE_URL: https://huanxing.ai/downloads/Hermes-CN-Core/runtime
 
 jobs:
   resolve-brands:
