@@ -206,6 +206,44 @@ describe("streamSilenceMs (stall watchdog input)", () => {
     expect(streamSilenceMs(runtime, 999_000)).toBeNull();
   });
 
+  it("pauses while a tool is running (backend is working, not stalled)", () => {
+    const runtime = runningRuntime({
+      lastActivityAt: 1_000,
+      messages: [
+        {
+          id: "a1",
+          sessionId: "s1",
+          role: "assistant",
+          createdAt: 1,
+          status: "streaming",
+          parts: [
+            { type: "tool" as const, toolCallId: "tool-1", name: "shell.exec", state: "running" as const },
+          ],
+        },
+      ],
+    });
+    expect(streamSilenceMs(runtime, 999_000)).toBeNull();
+  });
+
+  it("resumes the stall clock once the running tool completes", () => {
+    const runtime = runningRuntime({
+      lastActivityAt: 1_000,
+      messages: [
+        {
+          id: "a1",
+          sessionId: "s1",
+          role: "assistant",
+          createdAt: 1,
+          status: "complete",
+          parts: [
+            { type: "tool" as const, toolCallId: "tool-1", name: "shell.exec", state: "done" as const },
+          ],
+        },
+      ],
+    });
+    expect(streamSilenceMs(runtime, 4_000)).toBe(3_000);
+  });
+
   it("falls back to turnStartedAt when no activity has been recorded yet", () => {
     const runtime = runningRuntime({ lastActivityAt: undefined, turnStartedAt: 2_000 });
     expect(streamSilenceMs(runtime, 5_000)).toBe(3_000);

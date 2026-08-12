@@ -29,11 +29,12 @@ export function isRuntimeRunning(runtime: ChatSessionRuntime | undefined): boole
  * model-provider call (the gateway keeps answering pings while the agent
  * thread is blocked). This task-level watchdog covers that gap. The threshold
  * is deliberately generous: legitimate pre-first-token thinking on large
- * contexts can be tens of seconds, and the backend itself surfaces a live
- * `provider_stalled` status around its own stale timeout — so this only fires
- * when the backend has gone *completely* silent.
+ * contexts can exceed a minute (local models, cold providers), and the
+ * backend has its own inactivity watchdog (`turn_watchdog_seconds`, default
+ * 600s) that eventually fails the turn with a real error event — so this only
+ * fires when the backend has gone *completely* silent for a long stretch.
  */
-export const STALL_WATCHDOG_THRESHOLD_MS = 90_000;
+export const STALL_WATCHDOG_THRESHOLD_MS = 120_000;
 
 /**
  * Milliseconds since the backend last sent anything for a *running* turn, or
@@ -42,12 +43,28 @@ export const STALL_WATCHDOG_THRESHOLD_MS = 90_000;
  * Pending approvals pause the clock: the turn is legitimately waiting on the
  * user, not stalled. Awaiting-approval turns return `null`.
  */
+/** True while the backend is executing at least one tool (proof the turn is
+ * alive and working, not wedged on a dead provider call). */
+export function hasRunningTool(runtime: ChatSessionRuntime | undefined): boolean {
+  if (!runtime) return false;
+  return runtime.messages.some((message) =>
+    message.parts.some((part) => part.type === "tool" && part.state === "running"),
+  );
+}
+
 export function streamSilenceMs(
   runtime: ChatSessionRuntime | undefined,
   now: number = Date.now(),
 ): number | null {
   if (!runtime || !isRuntimeRunning(runtime)) return null;
   if (runtime.pendingApprovals.length > 0) return null;
+  // A running tool is backend activity by definition: `tool.start` was the
+  // last event and `tool.complete` will arrive when the tool finishes. Long
+  // tool runs (tests, builds, shell commands) legitimately produce no stream
+  // events for minutes — pausing the clock here stops the stall notice from
+  // false-positiving while the agent is clearly working. The backend watchdog
+  // still fails truly wedged tool calls.
+  if (hasRunningTool(runtime)) return null;
   const last = runtime.lastActivityAt ?? runtime.turnStartedAt ?? runtime.updatedAt;
   if (typeof last !== "number" || !Number.isFinite(last)) return null;
   return Math.max(0, now - last);

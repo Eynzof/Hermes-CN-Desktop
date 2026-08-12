@@ -158,6 +158,15 @@ function pickErrorText(payload: Record<string, any>, fallback = GENERIC_TURN_FAI
     const value = payload[key];
     if (typeof value === "string" && value.trim().length > 0) return value.trim();
   }
+  // Compute-host turns surface failures as `message.complete` with
+  // `{ status: "error", text: "Error: <reason>" }` and no structured error
+  // key. Without this fallback the real reason was dropped and the generic
+  // "模型服务调用未成功" notice was shown instead.
+  const text = payload.text;
+  if (typeof text === "string" && text.trim().length > 0) {
+    const stripped = text.replace(/^Error:\s*/i, "").trim();
+    if (stripped) return stripped;
+  }
   return fallback;
 }
 
@@ -563,9 +572,15 @@ function completionMetadata(
 function finalizeAssistantParts(
   message: HermesUIMessage,
   payload: Record<string, any>,
+  isErrorCompletion = false,
 ): HermesMessagePart[] {
   let parts = withoutProgressParts(message.parts);
-  const finalText = typeof payload.text === "string" ? payload.text : "";
+  // Error completions carry the failure text in `payload.text` (e.g. the
+  // compute-host `"Error: <reason>"` shape). It is surfaced by the error
+  // notice below, so merging it into the assistant bubble would duplicate it;
+  // keep any partial assistant content streamed before the failure instead.
+  const finalText =
+    !isErrorCompletion && typeof payload.text === "string" ? payload.text : "";
   const finalReasoning = normalizeReasoningText(
     typeof payload.reasoning === "string" ? payload.reasoning : reasoningFromParts(parts),
   );
@@ -808,7 +823,7 @@ function reduceGatewayEventInner(
         sessionId,
         now,
         (message) => {
-          const finalizedParts = finalizeAssistantParts(message, payload);
+          const finalizedParts = finalizeAssistantParts(message, payload, isErrorCompletion);
           const parts = isErrorCompletion ? terminateRunningTools(finalizedParts) : finalizedParts;
           if (parts.length === 0) return null;
           return {
