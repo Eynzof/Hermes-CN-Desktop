@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.12-rc.3`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.12-rc.4`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.12-rc.3)"
+        description: "Tag name to associate the build with (e.g. v0.6.12-rc.4)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -462,10 +462,23 @@ jobs:
           runtime_name="hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}"
           runtime_root="static/bundled-runtime/$runtime_name"
           runtime_zip="static/bundled-runtime/$runtime_name.zip"
+          runtime_manifest="static/bundled-runtime/stable-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.json"
           unzip -q "$runtime_zip" -d static/bundled-runtime
           rm "$runtime_zip"
           bash scripts/sign-macos-runtime-payload.sh "$runtime_root"
           bash scripts/verify-macos-runtime-payload.sh "$runtime_root"
+          (cd static/bundled-runtime && zip -q -r -y "$runtime_name.zip" "$runtime_name")
+          rm -rf "$runtime_root"
+          runtime_sha256="$(shasum -a 256 "$runtime_zip" | awk '{print $1}')"
+          RUNTIME_MANIFEST="$runtime_manifest" RUNTIME_SHA256="$runtime_sha256" node <<'NODE'
+          const fs = require("fs");
+          const path = process.env.RUNTIME_MANIFEST;
+          const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+          manifest.sha256 = process.env.RUNTIME_SHA256;
+          manifest.signature = "";
+          fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+          echo "Repacked signed runtime sha256=$runtime_sha256"
 
       - name: Build + upload installers
         if: matrix.runtime_platform != 'darwin' || steps.macos_signing.outputs.enabled == 'true'
