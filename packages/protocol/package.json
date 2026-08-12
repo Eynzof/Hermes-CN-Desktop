@@ -1,6 +1,6 @@
 {
   "name": "@hermes/protocol",
-  "version": "0.6.12-rc.4",
+  "version": "0.6.12",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
