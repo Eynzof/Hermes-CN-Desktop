@@ -303,17 +303,16 @@ async fn sync_skills(
         if id.is_empty() || id.contains("..") || id.contains('/') || id.contains('\\') {
             return Err("unsafe Team skill id".into());
         }
-        let response = client
-            .get(resolve_url(&skill.download_url)?)
-            .bearer_auth(token)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        let (download_url, authenticate) = resolve_url(&skill.download_url)?;
+        let request = client.get(download_url);
+        let request = if authenticate {
+            request.bearer_auth(token)
+        } else {
+            request
+        };
+        let response = request.send().await.map_err(|e| e.to_string())?;
         let status = response.status();
-        if matches!(
-            status,
-            reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
-        ) {
+        if is_team_token_rejection(status, authenticate) {
             return Err("Team device token was rejected".into());
         }
         if !status.is_success() {
@@ -364,7 +363,15 @@ async fn sync_skills(
     Ok(())
 }
 
-fn resolve_url(reference: &str) -> Result<Url, String> {
+fn is_team_token_rejection(status: reqwest::StatusCode, authenticated: bool) -> bool {
+    authenticated
+        && matches!(
+            status,
+            reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
+        )
+}
+
+fn resolve_url(reference: &str) -> Result<(Url, bool), String> {
     let parsed = Url::parse(reference)
         .or_else(|_| {
             Url::parse(&format!(
@@ -374,14 +381,14 @@ fn resolve_url(reference: &str) -> Result<Url, String> {
             ))
         })
         .map_err(|e| e.to_string())?;
-    let base = Url::parse(&server_url()).map_err(|e| e.to_string())?;
-    if parsed.scheme() != base.scheme()
-        || parsed.host_str() != base.host_str()
-        || parsed.port_or_known_default() != base.port_or_known_default()
-    {
-        return Err("Team skill download must stay on the configured Team server".into());
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("Team skill download URL must use HTTP or HTTPS".into());
     }
-    Ok(parsed)
+    let base = Url::parse(&server_url()).map_err(|e| e.to_string())?;
+    let authenticate = parsed.scheme() == base.scheme()
+        && parsed.host_str() == base.host_str()
+        && parsed.port_or_known_default() == base.port_or_known_default();
+    Ok((parsed, authenticate))
 }
 
 pub async fn sync_home(home: &Path, token: &str) -> Result<TeamSyncStatus, String> {
@@ -579,6 +586,49 @@ mod tests {
             parse_manifest_response(reqwest::StatusCode::FORBIDDEN, b"forbidden").unwrap_err();
 
         assert_eq!(error, "Team device token was rejected");
+    }
+
+    #[test]
+    fn external_http_and_https_skill_downloads_are_allowed_without_team_credentials() {
+        for reference in [
+            "https://downloads.example.test/enterprise/skills/archive.zip?version=2",
+            "http://downloads.example.test/enterprise/skills/archive.zip",
+        ] {
+            let (url, authenticate) = resolve_url(reference).unwrap();
+
+            assert_eq!(url.as_str(), reference);
+            assert!(!authenticate);
+        }
+    }
+
+    #[test]
+    fn relative_skill_download_stays_authenticated_to_team() {
+        let (url, authenticate) = resolve_url("/api/workbuddy/skills/skl_test/download").unwrap();
+        let base = Url::parse(&server_url()).unwrap();
+
+        assert_eq!(url.scheme(), base.scheme());
+        assert_eq!(url.host_str(), base.host_str());
+        assert_eq!(url.port_or_known_default(), base.port_or_known_default());
+        assert!(authenticate);
+    }
+
+    #[test]
+    fn non_http_skill_download_url_is_rejected() {
+        let error = resolve_url("file:///etc/passwd").unwrap_err();
+
+        assert_eq!(error, "Team skill download URL must use HTTP or HTTPS");
+    }
+
+    #[test]
+    fn external_download_auth_errors_do_not_invalidate_the_team_token() {
+        assert!(!is_team_token_rejection(
+            reqwest::StatusCode::FORBIDDEN,
+            false
+        ));
+        assert!(is_team_token_rejection(
+            reqwest::StatusCode::UNAUTHORIZED,
+            true
+        ));
     }
 
     #[test]
