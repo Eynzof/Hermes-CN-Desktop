@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.12-rc.2`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.12-rc.3`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.12-rc.2)"
+        description: "Tag name to associate the build with (e.g. v0.6.12-rc.3)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -464,8 +464,8 @@ jobs:
           runtime_zip="static/bundled-runtime/$runtime_name.zip"
           unzip -q "$runtime_zip" -d static/bundled-runtime
           rm "$runtime_zip"
-          scripts/sign-macos-runtime-payload.sh "$runtime_root"
-          scripts/verify-macos-runtime-payload.sh "$runtime_root"
+          bash scripts/sign-macos-runtime-payload.sh "$runtime_root"
+          bash scripts/verify-macos-runtime-payload.sh "$runtime_root"
 
       - name: Build + upload installers
         if: matrix.runtime_platform != 'darwin' || steps.macos_signing.outputs.enabled == 'true'
