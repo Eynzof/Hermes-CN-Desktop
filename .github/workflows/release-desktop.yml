@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.12`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.13`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.12)"
+        description: "Tag name to associate the build with (e.g. v0.6.13)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -506,6 +506,11 @@ jobs:
 
             Windows 和 macOS 另附免安装（portable）压缩包：解压即用，全部数据保存在
             解压目录的 data 文件夹内，详见压缩包内 README-portable.txt。
+
+            覆盖安装前，请先完全退出正在运行的桌面端。
+
+            Windows 安装器目前未提供 Authenticode 签名；若 SmartScreen 弹出警告，
+            请确认下载来源为本 Release 后选择“仍要运行”。
 
             如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
           releaseDraft: false
