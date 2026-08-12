@@ -523,6 +523,51 @@ describe("chat runtime reducer", () => {
     ]);
   });
 
+  it("extracts the real error from compute-host message.complete text instead of the generic fallback", () => {
+    let rt = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "message.delta",
+        session_id: "s1",
+        payload: { text: "partial" },
+      },
+      10,
+    );
+    rt = reduceGatewayEvent(rt, {
+      type: "message.complete",
+      session_id: "s1",
+      payload: { status: "error", text: "Error: API key invalid (401)" },
+    }, 20);
+
+    const notices = rt.messages.filter((message) => message.role === "system");
+    expect(notices.some((message) =>
+      message.parts.some((part) =>
+        part.type === "notice" && part.level === "error" && part.text === "API key invalid (401)",
+      ),
+    )).toBe(true);
+    // The assistant bubble keeps the partial content — the "Error:" text is
+    // surfaced by the notice, not duplicated into the reply.
+    expect(assistantMessage(rt).parts).toEqual([{ type: "text", text: "partial" }]);
+  });
+
+  it("keeps the generic failure text only when the backend provides no error details", () => {
+    const rt = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      {
+        type: "message.complete",
+        session_id: "s1",
+        payload: { status: "error" },
+      },
+      20,
+    );
+    const notices = rt.messages.filter((message) => message.role === "system");
+    expect(notices.some((message) =>
+      message.parts.some((part) =>
+        part.type === "notice" && part.level === "error" && part.text.includes("模型服务调用未成功"),
+      ),
+    )).toBe(true);
+  });
+
   it("keeps multiple pending approvals for one session", () => {
     const first = reduceGatewayEvent(
       createEmptyChatRuntime(1),

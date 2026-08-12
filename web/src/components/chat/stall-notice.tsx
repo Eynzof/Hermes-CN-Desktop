@@ -22,7 +22,7 @@ export function StallNotice({ silenceMs, onInterrupt, interrupting = false }: St
     <div className={s.notice} role="alert" aria-live="polite">
       <AlertTriangle className={s.icon} size={16} aria-hidden />
       <span className={s.text}>
-        模型服务已 {formatElapsedTimer(silenceMs)} 无响应，可能已卡住。后端会尝试自动重连；如长时间无进展，可手动中断后重试。
+        模型服务已 {formatElapsedTimer(silenceMs)} 无响应，可能已卡住。后端有超时保护，达到时限会自动结束该回合；如长时间无进展，可中断后重试。
       </span>
       <button
         type="button"
