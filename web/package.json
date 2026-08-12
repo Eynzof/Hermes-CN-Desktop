@@ -1,6 +1,6 @@
 {
   "name": "@hermes/web",
-  "version": "0.6.11",
+  "version": "0.6.12-rc.1",
   "private": true,
   "type": "module",
   "scripts": {
