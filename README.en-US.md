@@ -14,6 +14,15 @@ Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermes
 
 > Current release: `v0.8.0-rc4`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
 
+## ❤️ Sponsor
+
+<table>
+<tr>
+<td width="180"><a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn"><img src="./docs/assets/compshare.png" alt="Compshare" width="150"></a></td>
+<td>Thanks to Compshare for sponsoring this project! Compshare is UCloud's AI cloud platform, providing stable and comprehensive domestic and international model APIs with just one key. Featuring cost-effective monthly and per-use domestic-model Coding Plan packages, alongside stable officially-relayed overseas models. Supports Claude Code, Codex, and API access. Enterprise-grade high concurrency, 24/7 technical support, and self-service invoicing. Users who register via <a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn">this link</a> will receive a free 5 CNY platform trial credit!</td>
+</tr>
+</table>
+
 ## Hermes Agent Chinese Community
 
 Hermes Agent CN Desktop is maintained by the Hermes Agent Chinese Community. Visit the [community homepage](https://hermesagent.org.cn) for project updates, read the [Chinese docs](https://hermesagent.org.cn/docs), explore [practice guides](https://hermesagent.org.cn/practice-guides), or use the [community hub](https://hermesagent.org.cn/community) to find more discussion channels.
