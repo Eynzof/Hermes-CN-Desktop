@@ -96,7 +96,13 @@ if (resolve(sourceSkills) === resolve(outDir)) {
 
 mkdirSync(dirname(outDir), { recursive: true });
 rmSync(outDir, { recursive: true, force: true });
-cpSync(sourceSkills, outDir, { recursive: true });
+cpSync(sourceSkills, outDir, {
+  recursive: true,
+  filter: (path) => {
+    const normalized = path.replaceAll("\\", "/");
+    return !/\/tests\/(?:target|trybuild)(?:\/|$)/u.test(normalized);
+  },
+});
 writeFileSync(join(outDir, ".gitkeep"), "\n");
 
 const sourceCommit = isDirectory(join(sourceRoot, ".git"))

@@ -87,7 +87,15 @@ function findDirectory(root, predicate) {
 function copyClean(source, destination) {
   rmSync(destination, { recursive: true, force: true });
   mkdirSync(dirname(destination), { recursive: true });
-  cpSync(source, destination, { recursive: true });
+  cpSync(source, destination, {
+    recursive: true,
+    filter: (path) => !isGeneratedTestPath(path),
+  });
+}
+
+function isGeneratedTestPath(path) {
+  const normalized = path.replaceAll("\\", "/");
+  return /\/tests\/(?:target|trybuild)(?:\/|$)/u.test(normalized);
 }
 
 function readRuntimeManifest() {

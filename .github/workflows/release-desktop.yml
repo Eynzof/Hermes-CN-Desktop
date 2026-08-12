@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.12`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.12-rc.2`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.12)"
+        description: "Tag name to associate the build with (e.g. v0.6.12-rc.2)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
@@ -452,10 +452,20 @@ jobs:
           echo "identity=$selected_identity" >> "$GITHUB_OUTPUT"
           echo "notarization=$notarization_method" >> "$GITHUB_OUTPUT"
 
-      - name: Verify bundled macOS runtime payload signatures
+      - name: Sign and verify bundled macOS runtime payload
         if: matrix.runtime_platform == 'darwin'
         shell: bash
-        run: scripts/verify-macos-runtime-payload.sh "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ steps.macos_signing.outputs.identity }}
+        run: |
+          set -euo pipefail
+          runtime_name="hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}"
+          runtime_root="static/bundled-runtime/$runtime_name"
+          runtime_zip="static/bundled-runtime/$runtime_name.zip"
+          unzip -q "$runtime_zip" -d static/bundled-runtime
+          rm "$runtime_zip"
+          scripts/sign-macos-runtime-payload.sh "$runtime_root"
+          scripts/verify-macos-runtime-payload.sh "$runtime_root"
 
       - name: Build + upload installers
         if: matrix.runtime_platform != 'darwin' || steps.macos_signing.outputs.enabled == 'true'
@@ -531,6 +541,11 @@ jobs:
           set -euo pipefail
           node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
           gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
+
+      - name: Clean Windows portable staging directory
+        if: always() && matrix.runtime_platform == 'win32'
+        shell: bash
+        run: rm -rf target/portable
 
       - name: Notarize, staple, verify, and reupload macOS DMG
         if: matrix.runtime_platform == 'darwin' && steps.macos_signing.outputs.enabled == 'true'
