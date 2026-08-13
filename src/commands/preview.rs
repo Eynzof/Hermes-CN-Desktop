@@ -393,12 +393,19 @@ pub fn read_workspace_file(
     read_file_preview(&input.root, &input.path)
 }
 
+/// Read a local file's bytes as a data URL, capped at `FILE_DATA_URL_MAX_BYTES`.
+///
+/// NOT gated in remote mode: this is the byte-read bridge for the
+/// remote-aware attach pipeline (`prepareComposerPrompt` → `readFileDataUrl` →
+/// `file.attach`/`image.attach_bytes`), which uploads local bytes to the
+/// gateway and returns a gateway-readable ref path. The read is
+/// user-initiated (file picker / drag-drop), size-capped, and the result is
+/// only ever sent to the gateway the user is attached to. The other preview
+/// commands (`read_workspace_file`, `write_workspace_file`,
+/// `watch_preview_file`) keep their local-filesystem gate — those operate on
+/// the workspace, which lives on the remote machine in remote mode.
 #[tauri::command]
-pub fn read_file_data_url(
-    input: ReadFileDataUrlInput,
-    state: State<'_, AppState>,
-) -> AppResult<String> {
-    require_local_preview(&state)?;
+pub fn read_file_data_url(input: ReadFileDataUrlInput) -> AppResult<String> {
     read_file_data_url_impl(&input.path)
 }
 
