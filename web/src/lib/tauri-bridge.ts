@@ -682,6 +682,10 @@ const tauriBridge = {
     return invokeCommand("read_workspace_file", { input });
   },
 
+  async readFileDataUrl(path: string): Promise<string> {
+    return invokeCommand("read_file_data_url", { input: { path } });
+  },
+
   async writeWorkspaceFile(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult> {
     return invokeCommand("write_workspace_file", { input });
   },

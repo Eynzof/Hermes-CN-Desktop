@@ -303,6 +303,7 @@ Shared UI primitives:
 
 | File | Content |
 |------|---------|
+| `agents/` | Coding-agent policy + human git workflow（编码代理不执行 git 写操作；人工双仓同步/worktree/commit/push/PR/tag/Landing 同步见 `git-workflow.md`） |
 | `desktop-prd/` | Product Requirements Document (6 docs: feature inventory, PRD, IA, specs, backend contract, parity gap) |
 | `gateway-connection-overhaul.md` | Gateway connection architecture |
 | `managed-runtime.md` | Managed runtime design |

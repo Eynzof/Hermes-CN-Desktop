@@ -129,6 +129,101 @@ describe("composer prompt preparation", () => {
     expect(readImageBytes).not.toHaveBeenCalled();
   });
 
+  it("attaches an in-browser PDF File via file.attach with a data URL", async () => {
+    vi.stubGlobal("FileReader", FakeFileReader);
+    const bytes = new TextEncoder().encode("%PDF-1.7");
+    const file = {
+      name: "report.pdf",
+      type: "application/pdf",
+      size: bytes.byteLength,
+      arrayBuffer: async () => bytes.buffer,
+    } as unknown as File;
+    const attachFile = vi.fn(async () => ({
+      attached: true,
+      name: "report.pdf",
+      path: "/workspace/.hermes/desktop-attachments/report.pdf",
+      ref_path: ".hermes/desktop-attachments/report.pdf",
+      ref_text: "@file:.hermes/desktop-attachments/report.pdf",
+      uploaded: true,
+    }));
+    const uploadFile = vi.fn();
+    const detectDroppedPath = vi.fn();
+
+    const result = await prepareComposerPrompt(
+      "s1",
+      {
+        text: "读一下 PDF",
+        attachments: [{
+          id: "a1",
+          source: "browser",
+          file,
+          name: "report.pdf",
+          kind: "file",
+          status: "ready",
+          mimeType: "application/pdf",
+        }],
+      },
+      {
+        attachImage: vi.fn(),
+        attachFile,
+        uploadFile,
+        detectDroppedPath,
+      },
+    );
+
+    expect(attachFile).toHaveBeenCalledWith(
+      "s1",
+      undefined,
+      "data:application/pdf;base64,JVBERi0xLjc=",
+      "report.pdf",
+    );
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(detectDroppedPath).not.toHaveBeenCalled();
+    expect(result.promptText).toBe("@file:.hermes/desktop-attachments/report.pdf\n\n读一下 PDF");
+    expect(result.displayText).toBe("读一下 PDF\n\n附件：report.pdf");
+  });
+
+  it("attaches a local non-image path via file.attach before detect_drop", async () => {
+    const attachFile = vi.fn(async () => ({
+      attached: true,
+      name: "report.pdf",
+      path: "/workspace/.hermes/desktop-attachments/report.pdf",
+      ref_text: "@file:.hermes/desktop-attachments/report.pdf",
+      uploaded: false,
+    }));
+    const detectDroppedPath = vi.fn();
+
+    const result = await prepareComposerPrompt(
+      "s1",
+      {
+        text: "总结",
+        attachments: [{
+          id: "a1",
+          source: "path",
+          path: "/Users/enzo/Downloads/report.pdf",
+          name: "report.pdf",
+          kind: "file",
+          status: "ready",
+          mimeType: "application/pdf",
+        }],
+      },
+      {
+        attachImage: vi.fn(),
+        attachFile,
+        detectDroppedPath,
+      },
+    );
+
+    expect(attachFile).toHaveBeenCalledWith(
+      "s1",
+      "/Users/enzo/Downloads/report.pdf",
+      undefined,
+      "report.pdf",
+    );
+    expect(detectDroppedPath).not.toHaveBeenCalled();
+    expect(result.promptText).toBe("@file:.hermes/desktop-attachments/report.pdf\n\n总结");
+  });
+
   it("includes image attach/vision text in the transport prompt but hides it from display text", async () => {
     const result = await prepareComposerPrompt(
       "s1",

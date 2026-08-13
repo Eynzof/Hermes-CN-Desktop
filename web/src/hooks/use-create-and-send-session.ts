@@ -11,7 +11,7 @@ import { buildComposerDisplayText, prepareComposerPrompt } from "@/lib/composer-
 import { resolveComposerSkillCommand } from "@/lib/composer-skills";
 import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
-import { isRemoteConnection, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
+import { isRemoteConnection, readFileDataUrl, readImageBytesFromPath, uploadAttachmentFile } from "@/lib/transport";
 import {
   rememberSessionWorkspace,
   rememberWorkspaceProject,
@@ -19,6 +19,18 @@ import {
 
 interface CreateAndSendOptions {
   createSession?: (options?: { cwd?: string }) => Promise<string>;
+}
+
+function readFileAsDataUrl(file: File): Promise<string | undefined> {
+  if (typeof FileReader === "undefined") return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve(typeof reader.result === "string" ? reader.result : undefined);
+    }, { once: true });
+    reader.addEventListener("error", () => resolve(undefined), { once: true });
+    reader.readAsDataURL(file);
+  });
 }
 
 export function useCreateAndSendSession() {
@@ -34,6 +46,7 @@ export function useCreateAndSendSession() {
     dispatchCommand,
     attachImage,
     attachImageBytes,
+    attachFile,
     detectDroppedPath,
   } = useGateway();
   const setActiveSessionId = useSetAtom(activeSessionIdAtom);
@@ -48,17 +61,17 @@ export function useCreateAndSendSession() {
     const sessionId = await (options?.createSession ?? createSession)({ cwd: workspacePath });
     const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
     const optimisticDisplayText = buildComposerDisplayText(payload);
-    const optimisticDisplayImages = payload.attachments
+    const optimisticDisplayImages = await Promise.all(payload.attachments
       .filter((attachment) => attachment.kind === "image")
-      .map((attachment) => ({
-        url: attachment.previewUrl && !attachment.previewUrl.startsWith("blob:")
-          ? attachment.previewUrl
-          : attachment.path,
+      .map(async (attachment) => ({
+        url: attachment.file
+          ? await readFileAsDataUrl(attachment.file)
+          : attachment.previewUrl || attachment.path,
         alt: attachment.name,
         title: attachment.name,
         name: attachment.name,
         mimeType: attachment.mimeType,
-      }));
+      })));
 
     if (payload.modelSelection?.model) {
       rememberSessionModelOverride(sessionId, payload.modelSelection);
@@ -107,8 +120,10 @@ export function useCreateAndSendSession() {
         const prepared = await prepareComposerPrompt(sessionId, payload, {
           attachImage,
           attachImageBytes,
+          attachFile,
           remote: isRemoteConnection(),
           readImageBytes: readImageBytesFromPath,
+          readFileDataUrl,
           detectDroppedPath,
           uploadFile: uploadAttachmentFile,
           onAttachmentUpdate: controls.updateAttachment,
@@ -141,6 +156,7 @@ export function useCreateAndSendSession() {
   }, [
     attachImage,
     attachImageBytes,
+    attachFile,
     beginPrompt,
     createSession,
     detectDroppedPath,

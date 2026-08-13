@@ -537,6 +537,7 @@ declare global {
       terminalResize?(input: { terminalId: string; cols: number; rows: number }): Promise<boolean>;
       terminalClose?(input: { terminalId: string }): Promise<boolean>;
       onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
+      readFileDataUrl?(path: string): Promise<string>;
       readWorkspaceFile?(input: ReadWorkspaceFileInput): Promise<FilePreview>;
       writeWorkspaceFile?(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult>;
       /** Git ops backing the review pane (issue #328). */
