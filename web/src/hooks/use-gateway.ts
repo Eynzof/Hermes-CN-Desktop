@@ -43,6 +43,7 @@ import {
   sessionBranchCreateParams,
   type SessionBranchMessage,
 } from "@/lib/session-branch";
+import { sessionCreateParams } from "@/lib/session-create";
 import {
   applyGatewayEventAtom,
   chatRuntimeBySessionAtom,
@@ -286,6 +287,11 @@ async function rememberPersistentSessionKey(gatewaySessionId: string) {
 interface CreateSessionOptions {
   activate?: boolean;
   cwd?: string;
+  /** Composer thinking-effort to bake into the session at create time
+   * (backend `session.create` param `reasoning_effort`, per-session override
+   * — see lib/session-create.ts). Without it the backend builds the first
+   * turn with its default (medium). */
+  reasoningEffort?: ReasoningEffort | null;
 }
 
 export interface CreateBranchSessionOptions {
@@ -356,8 +362,9 @@ export function useGateway() {
     ensureSubscribed();
     const result = parseGatewayResult(
       SessionCreateResult,
-      await getGatewayClient().request("session.create",
-        options?.cwd?.trim() ? { cwd: options.cwd.trim() } : {},
+      await getGatewayClient().request(
+        "session.create",
+        sessionCreateParams(options?.cwd, options?.reasoningEffort),
       ),
       "session.create",
     );
