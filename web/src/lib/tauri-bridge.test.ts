@@ -6,6 +6,7 @@ import {
   normalizeTauriInvokeError,
   shouldWaitForManagedRuntimeConfig,
 } from "./tauri-bridge";
+import { EXPECTED_BACKEND_VERSION } from "./build-info";
 
 const mockInvoke = vi.fn();
 const mockFileDropUnlisten = vi.fn();
@@ -304,12 +305,12 @@ describe("isTauriDevMode", () => {
 
   it("verifies backend version before mounting the runtime in Tauri mode", async () => {
     (globalThis as any).window.__TAURI_INTERNALS__ = {};
-    const fetchSpy = vi.fn(async () =>
-      new Response(JSON.stringify({ version: "0.7.0", name: "hermes-agent" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+      const fetchSpy = vi.fn(async () =>
+        new Response(JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
     (globalThis as any).fetch = fetchSpy;
 
     await installTauriBridge();
