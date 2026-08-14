@@ -17,6 +17,8 @@ describe("theme defaults", () => {
     expect(normalizeThemeConfig({ theme: "dark-modern" })).toEqual({ theme: "dark-modern", density: "comfortable", scale: "md" });
     expect(normalizeThemeConfig({ theme: "dracula" })).toEqual({ theme: "dracula", density: "comfortable", scale: "md" });
     expect(normalizeThemeConfig({ theme: "catppuccin-mocha" })).toEqual({ theme: "catppuccin-mocha", density: "comfortable", scale: "md" });
+    expect(normalizeThemeConfig({ theme: "soft-green" })).toEqual({ theme: "soft-green", density: "comfortable", scale: "md" });
+    expect(normalizeThemeConfig({ theme: "soft-warm" })).toEqual({ theme: "soft-warm", density: "comfortable", scale: "md" });
   });
 
   it("falls back to modern light for unsupported stored skins", () => {
