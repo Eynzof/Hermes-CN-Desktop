@@ -287,6 +287,35 @@ describe("composer prompt preparation", () => {
     expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe("看一下这张图里面是什么内容\n\n附件：ga.png");
   });
 
+  it("hides Core attached context while preserving the staged file label", () => {
+    const storedPrompt = [
+      "@file:.hermes/desktop-attachments/report.pdf",
+      "",
+      "总结这个 PDF",
+      "",
+      "--- Attached Context ---",
+      "",
+      "📎 @file:.hermes/desktop-attachments/report.pdf (application/pdf, 29 B) — binary file, not inlined as text.",
+    ].join("\n");
+
+    expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe("总结这个 PDF\n\n附件：report.pdf");
+  });
+
+  it("keeps user-authored workspace refs while hiding their injected context", () => {
+    const storedPrompt = [
+      "请检查 @file:src/main.ts",
+      "",
+      "--- Attached Context ---",
+      "",
+      "📄 @file:src/main.ts (10 tokens)",
+      "```ts",
+      "const main = true;",
+      "```",
+    ].join("\n");
+
+    expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe("请检查 @file:src/main.ts");
+  });
+
   it("uses a dispatched skill invocation as transport text without changing display text", async () => {
     const result = await prepareComposerPrompt(
       "s1",

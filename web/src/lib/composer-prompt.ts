@@ -15,6 +15,10 @@ const IMAGE_ATTACHED_AT_RE = /\n?\[Image attached at: [^\]\n]+\]\n?(?:\[[^\]\n]*
 const IMAGE_FALLBACK_PREAMBLE_RE = /\n?\[The user attached an image(?: but analysis failed)?\.\]\n\[You can examine it with vision_analyze using image_url: [^\]\n]+\]\n?/g;
 const IMAGE_FULL_PREAMBLE_RE = /\n?\[The user attached an image[\s\S]*?\]\n?\[(?:If you need a closer look,? use|You can examine it with) vision_analyze (?:with |using )?image_url: [^\]\n]+\]\n?/g;
 const LEGACY_IMAGE_BLOCK_RE = /^\s*\[User attached image: ([^\]\n]+)\]\n[\s\S]*$/;
+const ATTACHED_CONTEXT_MARKER_RE = /(?:^|\n)--- Attached Context ---\s*\n/;
+const CONTEXT_WARNINGS_MARKER_RE = /(?:^|\n)--- Context Warnings ---[\s\S]*$/;
+const CONTEXT_REF_RE = /@(file|folder|url|image|tool|terminal):(?:"[^"\n]+"|'[^'\n]+'|`[^`\n]+`|\S+)/g;
+const DESKTOP_ATTACHMENT_DIR = ".hermes/desktop-attachments/";
 
 const IMAGE_EXTENSIONS = new Set([
   ".apng",
@@ -63,24 +67,66 @@ function stripLegacyImageContext(value: string, labels: string[]): string {
   return lastSeparator >= 0 ? body.slice(lastSeparator + 2) : "";
 }
 
+function contextRefPath(ref: string): string {
+  const separator = ref.indexOf(":");
+  let path = separator >= 0 ? ref.slice(separator + 1) : ref;
+  const quote = path[0];
+  if ((quote === "\"" || quote === "'" || quote === "`") && path.endsWith(quote)) {
+    path = path.slice(1, -1);
+  }
+  return path.replace(/\\/g, "/");
+}
+
+function desktopAttachmentLabel(ref: string): string | null {
+  if (!ref.startsWith("@file:")) return null;
+  const path = contextRefPath(ref);
+  if (!path.startsWith(DESKTOP_ATTACHMENT_DIR) && !path.includes(`/${DESKTOP_ATTACHMENT_DIR}`)) {
+    return null;
+  }
+  return fileNameFromPath(path);
+}
+
+function stripAttachedContext(value: string, labels: string[]): string {
+  const marker = value.match(ATTACHED_CONTEXT_MARKER_RE);
+  if (!marker || marker.index === undefined) {
+    return value.replace(CONTEXT_WARNINGS_MARKER_RE, "");
+  }
+
+  const context = value.slice(marker.index + marker[0].length);
+  let visible = value.slice(0, marker.index).replace(CONTEXT_WARNINGS_MARKER_RE, "");
+  const refs = [...new Set(context.match(CONTEXT_REF_RE) ?? [])];
+
+  for (const ref of refs) {
+    const label = desktopAttachmentLabel(ref);
+    if (!label) continue;
+    labels.push(label);
+    visible = visible.split(ref).join("");
+  }
+
+  return visible.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function stripHermesUiWorkspaceContext(text: string | null | undefined): string {
   let value = (text ?? "")
     .replace(IMAGE_ATTACHED_AT_RE, "")
     .replace(IMAGE_FALLBACK_PREAMBLE_RE, "")
     .replace(IMAGE_FULL_PREAMBLE_RE, "")
     .replace(WORKSPACE_BLOCK_RE, "");
-  const imageLabels: string[] = [];
+  const attachmentLabels: string[] = [];
+
+  value = stripAttachedContext(value, attachmentLabels);
 
   value = value.replace(IMAGE_BLOCK_RE, (_block, label: string) => {
     const name = label.trim();
-    if (name) imageLabels.push(name);
+    if (name) attachmentLabels.push(name);
     return "\n";
   });
-  value = stripLegacyImageContext(value, imageLabels).trim();
+  value = stripLegacyImageContext(value, attachmentLabels).trim();
 
-  if (imageLabels.length === 0) return value.trimEnd();
+  const labels = [...new Set(attachmentLabels)];
+  if (labels.length === 0) return value.trimEnd();
 
-  const suffix = attachmentSuffix(imageLabels);
+  const suffix = attachmentSuffix(labels);
   return value ? `${value}\n\n${suffix}` : suffix;
 }
 

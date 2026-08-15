@@ -1027,7 +1027,8 @@ mod tests {
 
     #[test]
     fn floor_gate_accepts_packages_below_or_equal_desktop() {
-        // CARGO_PKG_VERSION is 0.7.0; floors at/below it are servable.
+        // The current package version and older floors are servable.
+        assert!(desktop_ge(env!("CARGO_PKG_VERSION")));
         assert!(desktop_ge("0.7.0"));
         assert!(desktop_ge("0.6.3"));
         assert!(desktop_ge("0.0.1"));
@@ -1036,9 +1037,9 @@ mod tests {
 
     #[test]
     fn floor_gate_rejects_packages_above_desktop() {
-        assert!(!desktop_ge("0.7.1"));
-        assert!(!desktop_ge("1.0.0"));
-        assert!(!desktop_ge("99.0.0"));
+        let (major, minor, patch) = semver_parts(env!("CARGO_PKG_VERSION")).unwrap();
+        let next_patch = format!("{major}.{minor}.{}", patch + 1);
+        assert!(!desktop_ge(&next_patch));
     }
 
     #[test]
