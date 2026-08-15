@@ -1511,6 +1511,51 @@ export function buildCurrentModelConfigUpdate(
   };
 }
 
+/**
+ * 「保存配置」是否应顺带把该服务商提升为默认主模型。
+ *
+ * 首次运行时配置页还没有任何可用模型（/api/model/info 返回空 provider /
+ * model），用户点「保存配置」的直觉就是"让工作台用上这个模型"。此时把顶层
+ * model.* 一起落盘，工作台/新会话才会用新模型，而不是继续显示旧的（甚至已
+ * 失效的）默认模型。已有默认模型时保持原语义：保存配置只写 providers.<id>，
+ * 不切换主模型。
+ *
+ * modelInfo 未加载（undefined/null）时保守返回 false，避免在信息未就绪时
+ * 误把正在编辑的服务商提升为默认。
+ */
+export function shouldPromoteProviderOnSave(
+  modelInfo: { model?: string | null; provider?: string | null } | null | undefined,
+): boolean {
+  if (!modelInfo) return false;
+  return !modelInfo.model?.trim() || !modelInfo.provider?.trim();
+}
+
+/**
+ * 「保存配置」是否需要一并更新顶层默认主模型（model.*）。
+ *
+ * 两种情况需要：
+ * 1. 当前选中的服务商就是默认主模型的服务商（provider id 相同，无论用户是否
+ *    改了模型/Base URL）：编辑当前默认服务商后点「保存配置」，默认主模型必须
+ *    跟着更新——否则 config.model 与 providers.<id> 脱节，UI 上「已是当前模
+ *    型」会翻回「设为当前模型」，工作台默认模型仍是旧的（甚至已失效的）。
+ * 2. 首次运行还没有默认模型（shouldPromoteProviderOnSave）。
+ *
+ * modelInfo 未加载时，靠 currentProviderId 是否命中来判断；两者都为空时保守
+ * 返回 false，避免在信息未就绪时误改默认主模型。
+ */
+export function shouldUpdateDefaultModelOnSave(params: {
+  currentProviderId: string;
+  selectedProviderId: string;
+  modelInfo?: { model?: string | null; provider?: string | null } | null;
+}): boolean {
+  if (shouldPromoteProviderOnSave(params.modelInfo)) return true;
+  return Boolean(
+    params.selectedProviderId &&
+      params.currentProviderId &&
+      params.currentProviderId === params.selectedProviderId,
+  );
+}
+
 export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCatalog): ProviderCatalog {
   const byId = new Map(base.providers.map((provider) => [provider.id, provider]));
   for (const provider of remote.providers) {

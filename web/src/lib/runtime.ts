@@ -1,3 +1,4 @@
+import { resetVersionCheck } from "./version-check";
 import type {
   ApplyConnectionResult,
   BackupExportResult,
@@ -37,6 +38,9 @@ import type {
   SwitchProfileInput,
   SwitchProfileResult,
   TestConnectionResult,
+  UiInstallUpdateResult,
+  UiUpdateCheckResult,
+  UiUpdateReadyPayload,
   YoloModeStatus,
 } from "@hermes/protocol";
 
@@ -443,6 +447,8 @@ declare global {
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
+      /** Fatal compatibility/error dialog + force-quit the app. */
+      fatalErrorAndExit?(input: { title: string; message: string }): Promise<never>;
       request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
@@ -460,6 +466,20 @@ declare global {
       environmentCheck?(): Promise<EnvironmentCheckResult>;
       codingAgentsCheck?(): Promise<CodingAgentsCheckResult>;
       checkDesktopUpdate?(): Promise<DesktopUpdateManifestFetchResult>;
+      getUpdateConfig?(): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
+      setUpdateConfig?(config: import("@hermes/protocol").UpdateConfig): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
+      appUpdateCheck?(): Promise<import("@hermes/protocol").AppUpdateCheckResult>;
+      appUpdateInstall?(): Promise<import("@hermes/protocol").AppUpdateInstallResult>;
+      onAppUpdateProgress?(handler: (payload: import("@hermes/protocol").AppUpdateProgressPayload) => void): () => void;
+      /** Track B UI hot update: signed web-dist zip swap without restarting the
+       *  kernel. The Rust side reloads the window after a successful install;
+       *  the `ui-update-ready` listener is the renderer-side fallback. */
+      uiCheckUpdate?(): Promise<UiUpdateCheckResult>;
+      uiInstallUpdate?(): Promise<UiInstallUpdateResult>;
+      uiRollback?(): Promise<UiInstallUpdateResult>;
+      onUiUpdateReady?(handler: (payload: UiUpdateReadyPayload) => void): () => void;
+      hotUpdateBackend?(input: { sourceRoot?: string; skipGit?: boolean }): Promise<import("@hermes/protocol").HotUpdateBackendResult>;
+      onHotUpdateProgress?(handler: (payload: import("@hermes/protocol").HotUpdateProgressPayload) => void): () => void;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
       refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;
       getRuntimeInfo?(): Promise<RuntimeInfo>;
@@ -601,6 +621,9 @@ export const runtime = {
 
   applyRuntimeControlResult(result: RuntimeControlResult): void {
     if (!window.__HERMES_RUNTIME__) return;
+    // A control result may indicate the managed runtime restarted/stopped; force
+    // a fresh version check before the next REST/WebSocket operation.
+    resetVersionCheck();
     window.__HERMES_RUNTIME__.backendReady = result.backendReady;
     window.__HERMES_RUNTIME__.guideState = result.guideState;
     window.__HERMES_RUNTIME__.managedRuntimeDesiredState = result.desiredState;
@@ -659,6 +682,8 @@ export const runtime = {
   // 所以也一起更新。
   applySwitchProfileResult(result: SwitchProfileResult): void {
     if (!result.ok || !window.__HERMES_RUNTIME__) return;
+    // New profile may point to a different backend installation/version.
+    resetVersionCheck();
     if (result.apiBaseUrl) window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;
     if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
     if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
@@ -670,6 +695,8 @@ export const runtime = {
   // transport call and WebSocket reconnect use the live dashboard.
   applyYoloRestartResult(result: SetYoloModeResult): void {
     if (!result.ok || !result.restarted || !window.__HERMES_RUNTIME__) return;
+    // Managed runtime was restarted; re-verify its version on next contact.
+    resetVersionCheck();
     if (result.apiBaseUrl) {
       // In Vite dev `apiBaseUrl` is intentionally undefined (relative paths go
       // through the proxy); only refresh it when production already set it.
@@ -683,6 +710,8 @@ export const runtime = {
   },
   applyConfigMigrationResult(result: ConfigMigrationImportResult): void {
     if (!result.ok || !window.__HERMES_RUNTIME__) return;
+    // Migration may have swapped the backend/profile under us.
+    resetVersionCheck();
     if (result.apiBaseUrl) {
       if (window.__HERMES_RUNTIME__.apiBaseUrl) {
         window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;
@@ -695,6 +724,8 @@ export const runtime = {
   },
   applyBackupImportResult(result: BackupImportResult): void {
     if ((!result.ok && !result.recoveredPreviousProfile) || !window.__HERMES_RUNTIME__) return;
+    // Backup restore may have switched backend/profile; re-verify.
+    resetVersionCheck();
     if (result.apiBaseUrl) {
       if (window.__HERMES_RUNTIME__.apiBaseUrl) {
         window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;

@@ -67,6 +67,12 @@ test("paste a PDF → it stays a file attachment, not a PNG preview", async ({ p
   await page.getByRole("button", { name: "发送消息" }).click();
 
   await expect(page).toHaveURL(/\/tasks\/.+/, { timeout: 20_000 });
+  await expect(
+    page.getByRole("log").locator('[data-role="assistant"]').last(),
+  ).toContainText("PONG", { timeout: 30_000 });
+  // Re-enter from Core's persisted history so this assertion cannot pass only
+  // against the optimistic composer row.
+  await page.reload();
   const lastUser = page.getByRole("log").locator('[data-role="user"]').last();
   await expect(lastUser).toContainText("附件：report.pdf", { timeout: 10_000 });
   await expect(lastUser.getByRole("img", { name: /report\.pdf/i })).toHaveCount(0);

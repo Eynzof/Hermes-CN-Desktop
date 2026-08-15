@@ -61,6 +61,10 @@ export function useSaveConfig() {
       invalidateModelOptionsCache();
       qc.invalidateQueries({ queryKey: ["config"] });
       qc.invalidateQueries({ queryKey: ["model-info"] });
+      // 配置保存会改变已配置供应商集合（新增/删除/改密钥），工作台
+      // 「切换模型」的列表来自 /api/model/options（React Query 缓存 5 分钟），
+      // 必须在这里一并失效，否则保存后工作台仍展示旧的（甚至已失效的）配置。
+      qc.invalidateQueries({ queryKey: ["model-options"] });
     },
   });
 }

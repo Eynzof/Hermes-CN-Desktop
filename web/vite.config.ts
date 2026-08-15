@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { readFile } from "fs/promises";
 import { homedir } from "os";
@@ -75,6 +75,90 @@ function hermesSessionLogPlugin(): Plugin {
 // Override with HERMES_DASHBOARD_ORIGIN to point dev server at a different
 // dashboard without disturbing a user's separately installed dashboard on 9119.
 const API_PROXY_TARGET = process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.1:9120";
+
+/**
+ * Vite's dev port, resolved at startup.
+ *
+ * Windows reserves whole TCP port ranges for Hyper-V / WSL2 / WinNAT
+ * ("excluded port ranges" — see `netsh interface ipv4 show excludedportrange
+ * protocol=tcp`). Binding to a reserved port then fails with EACCES even
+ * though nothing is listening, and the reserved ranges move across reboots —
+ * so a hard-coded 9545 is not safe. We probe the exact addresses Node will
+ * bind for `localhost` and, if the preferred port is blocked, fall back to a
+ * free port (strictPort then applies to the chosen port).
+ *
+ * The probe is skipped when E2E_VITE_PORT is explicitly set (run.py / the e2e
+ * harness have already verified the port) and under `tauri dev`, whose devUrl
+ * is a static http://localhost:9545 — silently moving ports there would just
+ * leave the WebView pointing at a dead URL, so it fails loudly instead.
+ */
+function resolveDevServerPort(): number {
+  const preferred = Number(process.env.E2E_VITE_PORT || 9545);
+  if (process.env.E2E_VITE_PORT || process.env.TAURI_ENV_PLATFORM) return preferred;
+
+  const probeScript = `
+    const net = require("net");
+    const dns = require("dns");
+    const probe = (port, host) => new Promise((resolve) => {
+      const server = net.createServer();
+      server.once("error", () => resolve(false));
+      server.listen(port, host, () => server.close(() => resolve(true)));
+    });
+    (async () => {
+      const preferred = Number(process.argv[1]);
+      const addrs = await new Promise((resolve) => {
+        dns.lookup("localhost", { all: true }, (err, res) => {
+          resolve(err ? [{ address: "127.0.0.1" }] : res);
+        });
+      });
+      const usable = async (port) => {
+        for (const { address } of addrs) {
+          if (!(await probe(port, address))) return false;
+        }
+        return true;
+      };
+      let port = (await usable(preferred)) ? preferred : null;
+      if (port == null) {
+        port = await new Promise((resolve) => {
+          const server = net.createServer();
+          server.once("error", () => resolve(null));
+          server.listen(0, "127.0.0.1", () => {
+            const p = server.address().port;
+            server.close(() => resolve(p));
+          });
+        });
+        if (port == null || !(await usable(port))) process.exit(1);
+      }
+      process.stdout.write(String(port));
+    })();
+  `;
+  try {
+    const out = execFileSync(process.execPath, ["-e", probeScript, String(preferred)], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 10_000,
+    }).trim();
+    const port = Number(out);
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      throw new Error("unexpected probe result: " + out);
+    }
+    if (port !== preferred) {
+      console.warn(
+        "\n[vite] Port " +
+          preferred +
+          " is blocked by the OS (Windows excluded port range, usually reserved " +
+          "by Hyper-V/WSL2). Falling back to port " +
+          port +
+          ".\n",
+      );
+    }
+    return port;
+  } catch {
+    // Probe failed — let Vite try the preferred port and surface its own error.
+    return preferred;
+  }
+}
+
 const devArchivedSessions = new Set<string>();
 
 function gitShortCommit(): string {
@@ -271,13 +355,36 @@ export default defineConfig({
     },
   },
   server: {
-    port: Number(process.env.E2E_VITE_PORT || 9545),
+    port: resolveDevServerPort(),
     strictPort: true,
     proxy: {
       "/api": {
         target: API_PROXY_TARGET,
         changeOrigin: true,
         ws: true,
+      },
+    },
+  },
+  build: {
+    // Split heavy third-party libraries into their own chunks so the app
+    // shell + route chunks stay small and, critically, Rollup never merges a
+    // big vendor (e.g. the 3.3 MB mermaid bundle) into the startup chunk.
+    // Without manualChunks the app bundle used to merge into the mermaid
+    // chunk, forcing ~3.8 MB of JS to download+parse before first paint.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("xterm")) return "vendor-terminal";
+          if (id.includes("recharts")) return "vendor-charts";
+          if (id.includes("mermaid") || id.includes("cytoscape") || id.includes("dagre") || id.includes("elkjs") || id.includes("khroma")) return "vendor-mermaid";
+          if (id.includes("cmdk") || id.includes("@radix-ui") || id.includes("@floating-ui")) return "vendor-ui";
+          if (id.includes("qrcode")) return "vendor-qrcode";
+          if (id.includes("@dnd-kit")) return "vendor-dnd";
+          if (id.includes("lucide-react")) return "vendor-icons";
+          if (id.includes("katex") || id.includes("streamdown") || id.includes("rehype") || id.includes("remark") || id.includes("unified")) return "vendor-markdown";
+          return undefined;
+        },
       },
     },
   },

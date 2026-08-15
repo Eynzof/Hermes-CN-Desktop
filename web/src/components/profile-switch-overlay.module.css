@@ -53,3 +53,41 @@
   border-radius: 0;
   color: var(--h-text);
 }
+
+.progressTrack {
+  height: var(--h-status-dot-size);
+  border-radius: 0;
+  background: var(--h-bg-soft);
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--h-accent);
+  transition: width 180ms ease-out;
+}
+
+.progressLabel {
+  font-size: 12px;
+  color: var(--h-text-2);
+}
+
+.logPanel {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--h-bg-soft);
+  border: 1px solid var(--h-line);
+  border-radius: 0;
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--h-text-2);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.cardWide {
+  max-width: 560px;
+}

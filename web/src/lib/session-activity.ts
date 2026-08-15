@@ -36,11 +36,29 @@ export function isRuntimeRunning(runtime: ChatSessionRuntime | undefined): boole
 export const STALL_WATCHDOG_THRESHOLD_MS = 90_000;
 
 /**
+ * True while any tool part in the live runtime is still executing.
+ *
+ * A running tool is legitimate, expected work — a `terminal` tool can hold a
+ * long task with the backend sending nothing the whole time. While a tool is
+ * running the stall clock must be paused, otherwise the watchdog would
+ * mislabel a busy tool as a wedged model-provider call and surface the
+ * "模型服务已…无响应" notice mid-task.
+ */
+export function hasRunningTool(runtime: ChatSessionRuntime): boolean {
+  return runtime.messages.some((message) =>
+    message.parts.some((part) => part.type === "tool" && part.state === "running"),
+  );
+}
+
+/**
  * Milliseconds since the backend last sent anything for a *running* turn, or
  * `null` when the turn is not running (so callers can stop their timer).
  *
  * Pending approvals pause the clock: the turn is legitimately waiting on the
- * user, not stalled. Awaiting-approval turns return `null`.
+ * user, not stalled. Awaiting-approval turns return `null`. So does a turn
+ * with a tool still running (e.g. a long terminal command): the backend may
+ * legitimately stay silent for the whole tool duration, so the stall
+ * watchdog must not fire while a tool is busy.
  */
 export function streamSilenceMs(
   runtime: ChatSessionRuntime | undefined,
@@ -48,6 +66,7 @@ export function streamSilenceMs(
 ): number | null {
   if (!runtime || !isRuntimeRunning(runtime)) return null;
   if (runtime.pendingApprovals.length > 0) return null;
+  if (hasRunningTool(runtime)) return null;
   const last = runtime.lastActivityAt ?? runtime.turnStartedAt ?? runtime.updatedAt;
   if (typeof last !== "number" || !Number.isFinite(last)) return null;
   return Math.max(0, now - last);

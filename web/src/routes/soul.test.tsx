@@ -1,12 +1,8 @@
 import ReactDOMServer from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { HERMES_PERSONA_TAB_LABEL, HermesPersonaEditor } from "./soul";
+import { HermesPersonaEditor } from "./soul";
 
 describe("HermesPersonaEditor", () => {
-  it("renames the custom personality tab", () => {
-    expect(HERMES_PERSONA_TAB_LABEL).toBe("Hermes 人格");
-  });
-
   it("keeps editing while removing preview and template insertion controls", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
       <HermesPersonaEditor

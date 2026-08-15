@@ -130,7 +130,7 @@ struct LegacyRuntimeInstallRecord {
     pub previous_version: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeUpdateManifest {
     pub schema_version: u32,
@@ -259,7 +259,7 @@ pub struct RuntimeInstallUpdateResult {
     pub error: Option<String>,
 }
 
-fn current_platform() -> &'static str {
+pub(crate) fn current_platform() -> &'static str {
     if cfg!(target_os = "windows") {
         "win32"
     } else if cfg!(target_os = "macos") {
@@ -269,7 +269,7 @@ fn current_platform() -> &'static str {
     }
 }
 
-fn current_arch() -> &'static str {
+pub(crate) fn current_arch() -> &'static str {
     if cfg!(target_arch = "x86_64") {
         "x64"
     } else if cfg!(target_arch = "aarch64") {
@@ -541,7 +541,7 @@ fn versions_root() -> PathBuf {
     runtime_root().join("versions")
 }
 
-fn downloads_root() -> PathBuf {
+pub(crate) fn downloads_root() -> PathBuf {
     runtime_root().join("downloads")
 }
 
@@ -742,6 +742,43 @@ const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
     "-----END PUBLIC KEY-----\n"
 );
 
+/// Runtime manifest URL from the user-editable `update-config.json` layer.
+/// Two forms, highest first:
+///
+/// 1. `runtimeManifestUrl` — fully-formed URL, used verbatim.
+/// 2. `runtimeBaseUrl` + `channel` — constructed with the same
+///    `${base}/${channel}-${platform}-${arch}.json` pattern as the env path.
+///
+/// Returns `None` when the config file is absent/unparsable or resolves to
+/// neither URL — callers then fall through to the legacy env/baked cascade.
+fn configured_manifest_url_from_update_config() -> Option<String> {
+    let cfg = crate::update_config::load_optional()?;
+    let runtime_manifest_url = cfg.runtime_manifest_url.trim().to_string();
+    if !runtime_manifest_url.is_empty() {
+        return Some(runtime_manifest_url);
+    }
+    let base = cfg.runtime_base_url.trim().to_string();
+    if base.is_empty() {
+        return None;
+    }
+    let channel = cfg.channel.trim().to_string();
+    if channel.is_empty() {
+        return None;
+    }
+    let base = if base.ends_with('/') {
+        base.trim_end_matches('/').to_string()
+    } else {
+        base
+    };
+    Some(format!(
+        "{}/{}-{}-{}.json",
+        base,
+        channel,
+        current_platform(),
+        current_arch()
+    ))
+}
+
 fn configured_manifest_url() -> Option<String> {
     // 1. Fully-formed URL via runtime env (highest precedence)
     if let Ok(explicit) = std::env::var("HERMES_RUNTIME_UPDATE_MANIFEST_URL") {
@@ -749,6 +786,15 @@ fn configured_manifest_url() -> Option<String> {
         if !trimmed.is_empty() {
             return Some(trimmed);
         }
+    }
+
+    // 1b. User-editable `update-config.json` layer (new, unified flow):
+    //     `runtimeManifestUrl` verbatim, or `runtimeBaseUrl`+`channel`
+    //     constructed. Active only when the file exists and parses, so the
+    //     legacy env cascade below keeps working untouched until a user
+    //     actually writes a config.
+    if let Some(url) = configured_manifest_url_from_update_config() {
+        return Some(url);
     }
 
     // 2. Construct from base URL — runtime env wins, then compile-time
@@ -786,7 +832,19 @@ fn configured_manifest_url() -> Option<String> {
     ))
 }
 
-fn configured_public_key() -> Option<String> {
+pub(crate) fn configured_public_key() -> Option<String> {
+    // 0. User-editable `update-config.json` layer: `runtimePublicKeyPem`
+    //    overrides the baked/fallback key. Only active when the file exists
+    //    and parses, so the legacy cascade below is untouched otherwise.
+    {
+        if let Some(cfg) = crate::update_config::load_optional() {
+            let pem = cfg.runtime_public_key_pem.trim().replace("\\n", "\n");
+            if !pem.is_empty() {
+                return Some(pem);
+            }
+        }
+    }
+
     // 1. PEM via runtime env (highest precedence)
     if let Ok(direct) = std::env::var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM") {
         let pem = direct.trim().replace("\\n", "\n");
@@ -856,7 +914,7 @@ pub fn get_runtime_info(last_error: Option<String>) -> RuntimeInfo {
     }
 }
 
-fn file_sha256(path: &Path) -> Option<String> {
+pub(crate) fn file_sha256(path: &Path) -> Option<String> {
     let mut file = fs::File::open(path).ok()?;
     let mut hasher = Sha256::new();
     let mut buf = [0u8; 64 * 1024];
@@ -1410,8 +1468,12 @@ fn verify_signature(manifest: &RuntimeUpdateManifest) -> Result<(), String> {
     verify_signature_with_key(manifest, &public_key_pem)
 }
 
-fn verify_signature_with_key(
-    manifest: &RuntimeUpdateManifest,
+/// Verify an Ed25519 signature over an arbitrary payload with a PEM-encoded
+/// public key. Shared by the kernel manifest (12-field payload) and the UI
+/// manifest (10-field payload) so both tracks trust the same baked key.
+pub(crate) fn verify_payload_signature(
+    payload: &[u8],
+    signature_b64: &str,
     public_key_pem: &str,
 ) -> Result<(), String> {
     use base64::Engine;
@@ -1422,18 +1484,25 @@ fn verify_signature_with_key(
         .map_err(|e| format!("Invalid public key PEM: {}", e))?;
 
     let sig_bytes = base64::engine::general_purpose::STANDARD
-        .decode(&manifest.signature)
+        .decode(signature_b64)
         .map_err(|e| format!("Invalid signature base64: {}", e))?;
 
     let signature =
         Signature::from_slice(&sig_bytes).map_err(|e| format!("Invalid signature: {}", e))?;
 
-    let payload = signature_payload(manifest);
-    key.verify_strict(&payload, &signature)
+    key.verify_strict(payload, &signature)
         .map_err(|_| "Signature verification failed".to_string())
 }
 
-fn safe_version_segment(version: &str) -> Result<String, String> {
+fn verify_signature_with_key(
+    manifest: &RuntimeUpdateManifest,
+    public_key_pem: &str,
+) -> Result<(), String> {
+    let payload = signature_payload(manifest);
+    verify_payload_signature(&payload, &manifest.signature, public_key_pem)
+}
+
+pub(crate) fn safe_version_segment(version: &str) -> Result<String, String> {
     const MAX_VERSION_SEGMENT_LEN: usize = 120;
 
     if version.is_empty() {
@@ -2374,7 +2443,7 @@ fn symlink_target_within(dest: &Path, link_parent: &Path, target: &Path) -> bool
     resolved.starts_with(dest)
 }
 
-fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
+pub(crate) fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
 
@@ -2639,7 +2708,7 @@ fn validate_bundled_plugins_tree(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
+pub(crate) fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), String> {
     fs::create_dir_all(dst).map_err(|e| e.to_string())?;
     for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
