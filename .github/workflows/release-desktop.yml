@@ -179,6 +179,12 @@ jobs:
           )
           node "${args[@]}"
 
+      - name: Verify bundled runtime with desktop extractor
+        shell: bash
+        env:
+          HERMES_RELEASE_RUNTIME_ZIP: ${{ github.workspace }}/static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip
+        run: cargo test --locked --all-features --lib release_runtime_zip_extracts_with_installer -- --ignored --nocapture
+
       - name: Prepare macOS signing credentials
         if: matrix.runtime_platform == 'darwin'
         shell: bash
