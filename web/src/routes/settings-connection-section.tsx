@@ -20,6 +20,7 @@ import type {
 } from "@hermes/protocol";
 import { Alert, Button, Input, LoadingIndicator } from "@hermes/shared-ui";
 import { notifyConnectionAuthRestored } from "@/lib/connection-auth-events";
+import { runtime } from "@/lib/runtime";
 import { SettingsHero } from "./settings-hero";
 import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
@@ -108,11 +109,15 @@ export function ConnectionSection({
   const desktop = typeof window !== "undefined" ? window.hermesDesktop : undefined;
   const supported = Boolean(desktop?.getConnectionConfig);
   const browserCompanion = Boolean(window.__HERMES_RUNTIME__?.browserCompanion);
+  const runtimeMode = runtime.getConnectionMode();
+  const initialMode = externalOnly && runtimeMode === "managed" ? "local" : runtimeMode;
 
   const [config, setConfig] = useState<ConnectionConfigView | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [mode, setMode] = useState<ConnectionMode>(externalOnly ? "local" : "managed");
-  const [externalKind, setExternalKind] = useState<Exclude<ConnectionMode, "managed">>("local");
+  const [mode, setMode] = useState<ConnectionMode>(initialMode);
+  const [externalKind, setExternalKind] = useState<Exclude<ConnectionMode, "managed">>(
+    initialMode === "remote" ? "remote" : "local",
+  );
   const [localUrl, setLocalUrl] = useState(DEFAULT_LOCAL_URL);
   const [remoteUrl, setRemoteUrl] = useState("");
   // The saved token never round-trips; this holds only what the user types.

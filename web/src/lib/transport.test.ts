@@ -68,19 +68,23 @@ describe("transport · debug-bus integration", () => {
     resetVersionCheck();
     window.__HERMES_RUNTIME__ = { platform: "tauri" };
     window.__TAURI_INTERNALS__ = {};
-    globalThis.fetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    ) as unknown as typeof globalThis.fetch;
+    const request = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }),
+    }));
+    window.hermesDesktop = { windowType: "tauri", request };
+    globalThis.fetch = vi.fn() as unknown as typeof globalThis.fetch;
 
     await expect(fetchJSON("/api/x")).rejects.toThrow(/backend version check has not completed/);
 
-    // The version probe was issued, but the actual /api/x request was not.
-    const calls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls as [string][];
-    expect(calls.some(([url]) => url.includes("/api/x"))).toBe(false);
-    expect(calls.some(([url]) => url.includes("/api/version"))).toBe(true);
+    // The version probe went through Rust IPC, but the actual /api/x request
+    // was not issued while compatibility was still unchecked.
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith({ path: "/api/version", method: "GET" });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("fetchJSON pushes a REST entry on non-ok response", async () => {

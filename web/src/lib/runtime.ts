@@ -1,4 +1,8 @@
-import { resetVersionCheck } from "./version-check";
+import {
+  deferBackendVersionCheckForOfflineRuntime,
+  resetVersionCheck,
+  type BackendRecoveryReason,
+} from "./version-check";
 import type {
   ApplyConnectionResult,
   BackupExportResult,
@@ -439,6 +443,8 @@ declare global {
       /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;
       backendReady?: boolean;
+      /** Why only the offline repair shell is mounted instead of the backend UI. */
+      backendRecoveryReason?: BackendRecoveryReason;
       guideState?: import("@hermes/protocol").GuideState;
       managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
       managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
@@ -623,10 +629,21 @@ export const runtime = {
 
   applyRuntimeControlResult(result: RuntimeControlResult): void {
     if (!window.__HERMES_RUNTIME__) return;
-    // A control result may indicate the managed runtime restarted/stopped; force
-    // a fresh version check before the next REST/WebSocket operation.
-    resetVersionCheck();
-    window.__HERMES_RUNTIME__.backendReady = result.backendReady;
+    // Managed-runtime control snapshots are also shown while attached to an
+    // external backend. In that mode they must not overwrite the external
+    // backend's readiness/recovery gate. For managed mode, preserve the
+    // intentional-offline exemption after stop/uninstall refreshes.
+    if (window.__HERMES_RUNTIME__.connectionMode !== "local"
+      && window.__HERMES_RUNTIME__.connectionMode !== "remote") {
+      resetVersionCheck();
+      window.__HERMES_RUNTIME__.backendReady = result.backendReady;
+      if (!result.backendReady && result.desiredState !== "running") {
+        deferBackendVersionCheckForOfflineRuntime();
+        window.__HERMES_RUNTIME__.backendRecoveryReason = "managed-runtime-offline";
+      } else {
+        window.__HERMES_RUNTIME__.backendRecoveryReason = undefined;
+      }
+    }
     window.__HERMES_RUNTIME__.guideState = result.guideState;
     window.__HERMES_RUNTIME__.managedRuntimeDesiredState = result.desiredState;
     window.__HERMES_RUNTIME__.managedRuntimeLifecycleState = result.lifecycleState;

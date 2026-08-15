@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertCompatible,
+  deferBackendVersionCheckForOfflineRuntime,
   expectedBackendVersion,
   getVersionCheckState,
   recordRuntimeKernelVersion,
@@ -9,10 +10,32 @@ import {
 } from "./version-check";
 import { EXPECTED_BACKEND_VERSION } from "./build-info";
 
-function stubFetch(response: unknown, status = 200) {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify(response), { status, headers: { "Content-Type": "application/json" } }),
-  ) as unknown as typeof globalThis.fetch;
+function stubDesktopRequest(response: unknown, status = 200) {
+  const request = vi.fn(async () => ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? "OK" : "Not Found",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(response),
+  }));
+  window.hermesDesktop = {
+    ...window.hermesDesktop,
+    windowType: "tauri",
+    request,
+  };
+  return request;
+}
+
+function stubDesktopRequestError(error: Error & { code?: string; kind?: string }) {
+  const request = vi.fn(async () => {
+    throw error;
+  });
+  window.hermesDesktop = {
+    ...window.hermesDesktop,
+    windowType: "tauri",
+    request,
+  };
+  return request;
 }
 
 describe("version-check", () => {
@@ -53,19 +76,20 @@ describe("version-check", () => {
     });
 
     it("returns ok when backend version matches", async () => {
-      stubFetch({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" });
+      const request = stubDesktopRequest({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" });
 
       const state = await verifyBackendVersion();
 
       expect(state.kind).toBe("ok");
       expect(state).toMatchObject({ backendVersion: EXPECTED_BACKEND_VERSION });
-      expect(globalThis.fetch).toHaveBeenCalledWith("http://127.0.0.1:9120/api/version");
+      expect(request).toHaveBeenCalledWith({ path: "/api/version", method: "GET" });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it("returns mismatch when backend version differs", async () => {
-      stubFetch({ version: "0.18.0", name: "hermes-agent" });
+      stubDesktopRequest({ version: "0.18.0", name: "hermes-agent" });
 
-      const state = await verifyBackendVersion();
+      const state = await verifyBackendVersion(undefined, { connectionMode: "remote" });
 
       expect(state.kind).toBe("mismatch");
       expect(state).toMatchObject({
@@ -75,7 +99,7 @@ describe("version-check", () => {
     });
 
     it("returns unavailable when /api/version is missing or unreachable", async () => {
-      globalThis.fetch = vi.fn(async () => new Response("not found", { status: 404 })) as unknown as typeof globalThis.fetch;
+      stubDesktopRequest({ detail: "not found" }, 404);
 
       const state = await verifyBackendVersion();
 
@@ -83,16 +107,91 @@ describe("version-check", () => {
       expect(getVersionCheckState()).toMatchObject({ kind: "unavailable" });
     });
 
+    it.each([401, 403])("opens external auth recovery on HTTP %s", async (status) => {
+      stubDesktopRequest({ detail: "authentication required" }, status);
+
+      const state = await verifyBackendVersion(undefined, { connectionMode: "remote" });
+
+      expect(state).toEqual({
+        kind: "deferred",
+        reason: "external-backend-auth-required",
+      });
+      expect(() => assertCompatible()).not.toThrow();
+    });
+
+    it("opens external connection recovery for a machine-readable reachability failure", async () => {
+      const error = Object.assign(new Error("Dashboard not reachable"), {
+        code: "dashboard_unreachable",
+        kind: "dashboard",
+      });
+      stubDesktopRequestError(error);
+
+      const state = await verifyBackendVersion(undefined, { connectionMode: "local" });
+
+      expect(state).toEqual({
+        kind: "deferred",
+        reason: "external-backend-unreachable",
+      });
+      expect(() => assertCompatible()).not.toThrow();
+    });
+
+    it("keeps the same reachability failure fatal for managed runtime", async () => {
+      const error = Object.assign(new Error("Dashboard not reachable"), {
+        code: "dashboard_unreachable",
+        kind: "dashboard",
+      });
+      stubDesktopRequestError(error);
+
+      const state = await verifyBackendVersion(undefined, { connectionMode: "managed" });
+
+      expect(state).toMatchObject({
+        kind: "unavailable",
+        reason: "Dashboard not reachable",
+      });
+    });
+
+    it("keeps a reachable external backend without /api/version fatal", async () => {
+      stubDesktopRequest({ detail: "not found" }, 404);
+
+      const state = await verifyBackendVersion(undefined, { connectionMode: "remote" });
+
+      expect(state).toMatchObject({ kind: "unavailable", reason: expect.stringContaining("HTTP 404") });
+    });
+
+    it("preserves external recovery semantics when an unchecked request triggers revalidation", async () => {
+      const fatalErrorAndExit = vi.fn(() => new Promise<never>(() => {}));
+      vi.stubGlobal("window", {
+        __TAURI_INTERNALS__: {},
+        __HERMES_RUNTIME__: {
+          platform: "tauri",
+          connectionMode: "remote",
+          apiBaseUrl: "https://remote.example.com",
+        },
+        hermesDesktop: { windowType: "tauri", fatalErrorAndExit },
+        location: { href: "hermesui://localhost/index.html", protocol: "hermesui:" },
+      });
+      stubDesktopRequest({ error: "unauthenticated" }, 401);
+
+      expect(() => assertCompatible()).toThrow("backend version check has not completed");
+      await vi.waitFor(() => {
+        expect(getVersionCheckState()).toEqual({
+          kind: "deferred",
+          reason: "external-backend-auth-required",
+        });
+      });
+      expect(fatalErrorAndExit).not.toHaveBeenCalled();
+    });
+
     it("assertCompatible throws on mismatch and invokes fatal dialog", async () => {
       const fatalErrorAndExit = vi.fn(() => new Promise<never>(() => {}));
       vi.stubGlobal("window", {
         __TAURI_INTERNALS__: {},
         __HERMES_RUNTIME__: { platform: "tauri", apiBaseUrl: "http://127.0.0.1:9120" },
-        hermesDesktop: { fatalErrorAndExit },
+        hermesDesktop: { windowType: "tauri", fatalErrorAndExit },
         location: { href: "http://localhost:9545/", protocol: "http:" },
       });
 
-      stubFetch({ version: "0.18.0", name: "hermes-agent" });
+      stubDesktopRequest({ version: "0.18.0", name: "hermes-agent" });
       await verifyBackendVersion();
 
       expect(() => assertCompatible()).toThrow(/backend version mismatch/);
@@ -107,11 +206,11 @@ describe("version-check", () => {
       vi.stubGlobal("window", {
         __TAURI_INTERNALS__: {},
         __HERMES_RUNTIME__: { platform: "tauri", apiBaseUrl: "http://127.0.0.1:9120" },
-        hermesDesktop: { fatalErrorAndExit },
+        hermesDesktop: { windowType: "tauri", fatalErrorAndExit },
         location: { href: "http://localhost:9545/", protocol: "http:" },
       });
 
-      globalThis.fetch = vi.fn(async () => new Response("not found", { status: 404 })) as unknown as typeof globalThis.fetch;
+      stubDesktopRequest({ detail: "not found" }, 404);
       await verifyBackendVersion();
 
       expect(() => assertCompatible()).toThrow(/backend version unavailable/);
@@ -122,7 +221,7 @@ describe("version-check", () => {
     });
 
     it("resetVersionCheck resets state to unchecked", async () => {
-      stubFetch({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" });
+      stubDesktopRequest({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" });
       await verifyBackendVersion();
       expect(getVersionCheckState().kind).toBe("ok");
 
@@ -131,17 +230,34 @@ describe("version-check", () => {
       expect(getVersionCheckState()).toEqual({ kind: "unchecked" });
     });
 
+    it("allows recovery UI calls while the managed runtime is intentionally offline", () => {
+      deferBackendVersionCheckForOfflineRuntime();
+
+      expect(getVersionCheckState()).toEqual({
+        kind: "deferred",
+        reason: "managed-runtime-offline",
+      });
+      expect(() => assertCompatible()).not.toThrow();
+    });
+
     it("prefers the recorded runtime kernel version over the baked constant", async () => {
       // Unified self-update: after a backend update the kernel version equals
       // the manifest version (0.8.0), which may differ from the baked constant.
       recordRuntimeKernelVersion("0.8.0");
       expect(expectedBackendVersion()).toBe("0.8.0");
-      stubFetch({ version: "0.8.0", name: "hermes-agent" });
+      stubDesktopRequest({ version: "0.8.0", name: "hermes-agent" });
 
       const state = await verifyBackendVersion();
 
       expect(state.kind).toBe("ok");
       expect(state).toMatchObject({ backendVersion: "0.8.0" });
+    });
+
+    it("does not fall back to a CORS-bound browser fetch when the IPC bridge is missing", async () => {
+      const state = await verifyBackendVersion();
+
+      expect(state).toEqual({ kind: "unavailable", reason: "desktop IPC bridge unavailable" });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it("falls back to the baked constant when no kernel version is recorded", () => {
