@@ -305,12 +305,12 @@ describe("isTauriDevMode", () => {
 
   it("verifies backend version before mounting the runtime in Tauri mode", async () => {
     (globalThis as any).window.__TAURI_INTERNALS__ = {};
-      const fetchSpy = vi.fn(async () =>
-        new Response(JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
     (globalThis as any).fetch = fetchSpy;
 
     await installTauriBridge();
@@ -321,6 +321,38 @@ describe("isTauriDevMode", () => {
       // In dev mode with managed connection the runtime hides apiBaseUrl so
       // requests flow through the Vite proxy, but the real dashboard origin is
       // preserved on dashboardApiBaseUrl.
+      dashboardApiBaseUrl: "http://127.0.0.1:9120",
+    });
+  });
+
+  it("uses the managed runtime kernel version for the initial compatibility gate", async () => {
+    (globalThis as any).window.__TAURI_INTERNALS__ = {};
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_runtime_config") {
+        return Promise.resolve({
+          apiBaseUrl: "http://127.0.0.1:9120",
+          gatewayUrl: "ws://127.0.0.1:9120/api/ws",
+          sessionToken: "token",
+          kernelVersion: "0.20.0",
+          currentProfile: "default",
+          connectionMode: "managed",
+        });
+      }
+      return Promise.resolve({});
+    });
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify({ version: "0.20.0", name: "hermes-agent" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    (globalThis as any).fetch = fetchSpy;
+
+    await installTauriBridge();
+
+    expect(fetchSpy).toHaveBeenCalledWith("http://127.0.0.1:9120/api/version");
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      kernelVersion: "0.20.0",
       dashboardApiBaseUrl: "http://127.0.0.1:9120",
     });
   });

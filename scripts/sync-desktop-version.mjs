@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Sync the desktop shell version (root package.json) out to every place that
 // must carry it: web/ + packages/* package.json, tauri.conf.json, Cargo.toml,
-// Cargo.lock, READMEs, docs, release workflow, and (for the unified release
-// flow) web/src/lib/build-info.ts EXPECTED_BACKEND_VERSION.
+// Cargo.lock, READMEs, docs, and the release workflow. The backend/kernel
+// version is a separate contract sourced from the managed runtime record.
 //
 // Usage:
 //   node scripts/sync-desktop-version.mjs            # sync from package.json
@@ -128,15 +128,6 @@ export async function syncDesktopVersion({ version, write = true } = {}) {
     /(\[\[package\]\]\r?\nname = "hermes-agent-cn-desktop"\r?\nversion = )"[^"]+"/,
     `$1"${desktopVersion}"`,
     "Cargo.lock hermes-agent-cn-desktop package version",
-  ));
-
-  // Unified release: the frontend's expected backend version follows the
-  // desktop version (backend and desktop ship the same number).
-  updateText("web/src/lib/build-info.ts", (text) => replaceOrThrow(
-    text,
-    /(export const EXPECTED_BACKEND_VERSION = ")[^"]*(")/,
-    `$1${desktopVersion}$2`,
-    "web/src/lib/build-info.ts EXPECTED_BACKEND_VERSION",
   ));
 
   function syncReadme(text, currentVersionLabelPattern) {

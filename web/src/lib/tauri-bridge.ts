@@ -83,7 +83,12 @@ import type {
   HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
-import { assertCompatible, resetVersionCheck, verifyBackendVersion } from "./version-check";
+import {
+  assertCompatible,
+  recordRuntimeKernelVersion,
+  resetVersionCheck,
+  verifyBackendVersion,
+} from "./version-check";
 import hermesLogo from "@/assets/hermes-default-avatar.png";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
@@ -1108,6 +1113,7 @@ export async function installTauriBridge(): Promise<void> {
     apiBaseUrl: string;
     gatewayUrl: string;
     sessionToken?: string;
+    kernelVersion?: string;
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
     portable?: boolean;
@@ -1163,6 +1169,7 @@ export async function installTauriBridge(): Promise<void> {
   // triggers a fatal dialog and force-quits. We pass the config's apiBaseUrl
   // explicitly because window.__HERMES_RUNTIME__ is not populated yet.
   resetVersionCheck();
+  recordRuntimeKernelVersion(config.kernelVersion);
   const versionState = await verifyBackendVersion(config.apiBaseUrl);
   if (versionState.kind !== "ok") {
     assertCompatible();
@@ -1182,6 +1189,7 @@ export async function installTauriBridge(): Promise<void> {
     dashboardApiBaseUrl: config.apiBaseUrl,
     gatewayUrl: hideUrlsForViteProxy ? undefined : config.gatewayUrl,
     sessionToken: config.sessionToken,
+    kernelVersion: config.kernelVersion,
     currentProfile: config.currentProfile,
     connectionMode,
     portable: config.portable ?? false,

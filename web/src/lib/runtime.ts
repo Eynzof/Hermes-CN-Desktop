@@ -433,6 +433,8 @@ declare global {
       dashboardApiBaseUrl?: string;
       gatewayUrl?: string;
       sessionToken?: string;
+      /** Kernel version from the active managed runtime install record. */
+      kernelVersion?: string;
       currentProfile?: string;
       /** "managed" for desktop-owned runtime, "local"/"remote" for attached backends. */
       connectionMode?: ConnectionMode;

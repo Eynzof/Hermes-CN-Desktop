@@ -3,6 +3,9 @@
   "identifier": "default",
   "description": "Default capabilities for Hermes Agent CN",
   "windows": ["main"],
+  "remote": {
+    "urls": ["http://localhost:9545/*"]
+  },
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
