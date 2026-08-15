@@ -301,6 +301,46 @@ describe("composer prompt preparation", () => {
     expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe("总结这个 PDF\n\n附件：report.pdf");
   });
 
+  it("recognizes Core profile-home attachments without hiding inline workspace refs", () => {
+    const stagedRef = "@file:/opt/hermes/profiles/default/attachments/report.pdf";
+    const storedPrompt = [
+      stagedRef,
+      "",
+      "同时检查 @file:src/main.ts",
+      "",
+      "--- Attached Context ---",
+      "",
+      `📎 ${stagedRef} (application/pdf, 29 B) — binary file, not inlined as text.`,
+      "",
+      "📄 @file:src/main.ts (10 tokens)",
+      "```ts",
+      "const main = true;",
+      "```",
+    ].join("\n");
+
+    expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe(
+      "同时检查 @file:src/main.ts\n\n附件：report.pdf",
+    );
+  });
+
+  it("hides Core native image directives and keeps the original image label", () => {
+    const storedPrompt = [
+      "[Hermes UI Image]",
+      "name=shot.png",
+      "description:",
+      "[User attached image: upload_20260815_1.png]",
+      "[/Hermes UI Image]",
+      "",
+      "图里是什么？",
+      "@image:/opt/hermes/images/upload_20260815_1.png",
+      "[screenshot]",
+    ].join("\n");
+
+    expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe(
+      "图里是什么？\n\n附件：shot.png",
+    );
+  });
+
   it("keeps user-authored workspace refs while hiding their injected context", () => {
     const storedPrompt = [
       "请检查 @file:src/main.ts",

@@ -18,6 +18,8 @@ const LEGACY_IMAGE_BLOCK_RE = /^\s*\[User attached image: ([^\]\n]+)\]\n[\s\S]*$
 const ATTACHED_CONTEXT_MARKER_RE = /(?:^|\n)--- Attached Context ---\s*\n/;
 const CONTEXT_WARNINGS_MARKER_RE = /(?:^|\n)--- Context Warnings ---[\s\S]*$/;
 const CONTEXT_REF_RE = /@(file|folder|url|image|tool|terminal):(?:"[^"\n]+"|'[^'\n]+'|`[^`\n]+`|\S+)/g;
+const IMAGE_DIRECTIVE_LINE_RE = /^@image:(`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|\S+)\s*$/gm;
+const SCREENSHOT_PLACEHOLDER_LINE_RE = /^\[screenshot\]\s*$/gm;
 const DESKTOP_ATTACHMENT_DIR = ".hermes/desktop-attachments/";
 
 const IMAGE_EXTENSIONS = new Set([
@@ -77,13 +79,46 @@ function contextRefPath(ref: string): string {
   return path.replace(/\\/g, "/");
 }
 
+export function extractHermesImageDirectivePaths(value: string | null | undefined): string[] {
+  return [...(value ?? "").matchAll(IMAGE_DIRECTIVE_LINE_RE)]
+    .map((match) => contextRefPath(`@image:${match[1] ?? ""}`))
+    .filter(Boolean);
+}
+
+function stripHermesImageDirectives(value: string, labels: string[]): string {
+  const paths = extractHermesImageDirectivePaths(value);
+  if (paths.length === 0) return value;
+  paths.forEach((path) => labels.push(fileNameFromPath(path)));
+  return value
+    .replace(IMAGE_DIRECTIVE_LINE_RE, "")
+    .replace(SCREENSHOT_PLACEHOLDER_LINE_RE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function isAbsoluteProfileAttachment(path: string): boolean {
+  if (!/^(?:\/|[A-Za-z]:\/|\/\/)/.test(path)) return false;
+  const parts = path.split("/").filter(Boolean);
+  return parts.length >= 2 && parts[parts.length - 2] === "attachments";
+}
+
 function desktopAttachmentLabel(ref: string): string | null {
   if (!ref.startsWith("@file:")) return null;
   const path = contextRefPath(ref);
-  if (!path.startsWith(DESKTOP_ATTACHMENT_DIR) && !path.includes(`/${DESKTOP_ATTACHMENT_DIR}`)) {
+  if (
+    !path.startsWith(DESKTOP_ATTACHMENT_DIR) &&
+    !path.includes(`/${DESKTOP_ATTACHMENT_DIR}`) &&
+    !isAbsoluteProfileAttachment(path)
+  ) {
     return null;
   }
   return fileNameFromPath(path);
+}
+
+function removeStandaloneRefLine(value: string, ref: string): string | null {
+  const lines = value.split("\n");
+  const next = lines.filter((line) => line.trim() !== ref);
+  return next.length === lines.length ? null : next.join("\n");
 }
 
 function stripAttachedContext(value: string, labels: string[]): string {
@@ -99,8 +134,10 @@ function stripAttachedContext(value: string, labels: string[]): string {
   for (const ref of refs) {
     const label = desktopAttachmentLabel(ref);
     if (!label) continue;
+    const nextVisible = removeStandaloneRefLine(visible, ref);
+    if (nextVisible === null) continue;
     labels.push(label);
-    visible = visible.split(ref).join("");
+    visible = nextVisible;
   }
 
   return visible.replace(/\n{3,}/g, "\n\n").trim();
@@ -112,17 +149,25 @@ export function stripHermesUiWorkspaceContext(text: string | null | undefined): 
     .replace(IMAGE_FALLBACK_PREAMBLE_RE, "")
     .replace(IMAGE_FULL_PREAMBLE_RE, "")
     .replace(WORKSPACE_BLOCK_RE, "");
-  const attachmentLabels: string[] = [];
+  const contextAttachmentLabels: string[] = [];
+  const imageBlockLabels: string[] = [];
+  const nativeImageLabels: string[] = [];
 
-  value = stripAttachedContext(value, attachmentLabels);
+  value = stripAttachedContext(value, contextAttachmentLabels);
 
   value = value.replace(IMAGE_BLOCK_RE, (_block, label: string) => {
     const name = label.trim();
-    if (name) attachmentLabels.push(name);
+    if (name) imageBlockLabels.push(name);
     return "\n";
   });
-  value = stripLegacyImageContext(value, attachmentLabels).trim();
+  value = stripHermesImageDirectives(value, nativeImageLabels);
+  value = stripLegacyImageContext(value, imageBlockLabels).trim();
 
+  const attachmentLabels = [
+    ...contextAttachmentLabels,
+    ...imageBlockLabels,
+    ...(imageBlockLabels.length === 0 ? nativeImageLabels : []),
+  ];
   const labels = [...new Set(attachmentLabels)];
   if (labels.length === 0) return value.trimEnd();
 
