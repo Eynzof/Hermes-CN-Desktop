@@ -21,7 +21,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
 use crate::process::port_lock::{
-    claim_port_set, pid_is_running, release_orphaned_port_locks, reset_local_claims, PortLock,
+    claim_port_set, cleanup_stale_port_locks, pid_is_running, release_orphaned_port_locks,
+    reset_local_claims, PortLock,
 };
 use crate::state::{DashboardHandle, DashboardJobHandle};
 
@@ -1012,6 +1013,30 @@ fn spawn_dashboard(
     let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
     let _ = std::fs::create_dir_all(&gateway_lock_dir);
     let _ = std::fs::create_dir_all(&gateway_runtime_dir);
+    if let Some(record) = crate::process::runtime::read_current_record() {
+        match crate::process::gateway::preflight_managed_gateway_restart(
+            &record,
+            &options.hermes_home,
+            &gateway_runtime_dir,
+            &gateway_lock_dir,
+        ) {
+            Ok(report) => {
+                if report.stop_attempted
+                    || report.stale_files_removed > 0
+                    || !report.remaining_pids.is_empty()
+                    || report.lock_active
+                {
+                    log::info!(
+                        "Gateway preflight before dashboard spawn: {}",
+                        report.summary()
+                    );
+                }
+            }
+            Err(err) => {
+                log::warn!("Gateway preflight before dashboard spawn failed: {}", err);
+            }
+        }
+    }
     cmd.args(&prefix_args)
         .env("HERMES_HOME", &options.hermes_home)
         .env(
@@ -1332,6 +1357,10 @@ async fn wait_for_spawned_dashboard(
 pub async fn ensure_hermes_dashboard(
     options: EnsureDashboardOptions,
 ) -> Result<DashboardHandle, AppError> {
+    // Clean up stale locks left by previous dead processes so they do not
+    // interfere with port allocation or fallback decisions.
+    cleanup_stale_port_locks(Path::new(&options.hermes_home));
+
     // Coordinate port usage with other Hermes instances (desktop, CLI
     // dashboards, gateways, proxies) before doing any network probes. We claim
     // the dashboard API port plus the well-known satellite ports (webhook,
@@ -1533,13 +1562,21 @@ pub async fn ensure_hermes_dashboard(
 
     // The effective port set is lock-claimed by us, yet something incompatible
     // still answers on it: an uncoordinated process (non-Hermes service, or a
-    // Hermes runtime predating port locks) is bound there. Shifting away
-    // silently would leak such collisions forever, so surface the conflict.
+    // Hermes runtime predating port locks / using a different HERMES_HOME) is
+    // bound there. In production we allow a bounded port fallback instead of
+    // forcing the user to stop the other process; dev builds surface the
+    // collision immediately because the Vite proxy target is fixed.
     if primary_occupied {
-        return Err(AppError::DashboardStartup(format!(
-            "{} is already occupied by another service. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
-            api_base_url, effective_port
-        )));
+        if !options.allow_port_fallback {
+            return Err(AppError::DashboardStartup(format!(
+                "{} is already occupied by another service. Stop the process on port {} so the desktop can spawn its managed runtime dashboard.",
+                api_base_url, effective_port
+            )));
+        }
+        log::warn!(
+            "{} is occupied by another service; will attempt port fallback",
+            api_base_url
+        );
     }
 
     let mut spawn_options = EnsureDashboardOptions {

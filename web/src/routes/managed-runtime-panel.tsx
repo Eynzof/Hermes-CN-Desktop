@@ -1,9 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, PackageX, Play, RefreshCw, RotateCcw, Square, Trash2 } from "lucide-react";
-import type { RuntimeControlResult } from "@hermes/protocol";
+import { Download, PackageX, Play, RefreshCw, RotateCcw, Settings2, Square, Trash2 } from "lucide-react";
+import type { RuntimeControlResult, UpdateConfig } from "@hermes/protocol";
 import { Alert, Button, LoadingIndicator } from "@hermes/shared-ui";
 import { resolveManagedRuntimePresentation } from "@/lib/managed-runtime-presentation";
+import { useConfirm } from "@/lib/use-confirm";
 import { runtime } from "@/lib/runtime";
+import {
+  defaultUpdateConfig,
+  getUpdateConfig,
+  hasUpdateConfigBridge,
+  normalizeUpdateConfig,
+  setUpdateConfig,
+  validateUpdateConfig,
+} from "@/lib/update-config";
+import { parseAppUpdateCheckResult } from "@/lib/app-update";
+import { useAppUpdateCheck, useAppUpdateInstall } from "@/hooks/use-app-update";
+import { useHotUpdateBackend } from "@/hooks/use-hot-update-backend";
+import { useRuntimeInfo } from "@/hooks/use-runtime-update";
+import { useUiUpdateCheck, useUiUpdateInstall, useUiUpdateRollback } from "@/hooks/use-ui-update";
+import { versionLabel } from "@/lib/build-info";
 import s from "./managed-runtime-panel.module.css";
 
 type RuntimeAction =
@@ -20,7 +35,203 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
   const [control, setControl] = useState<RuntimeControlResult | null>(null);
   const [busy, setBusy] = useState<RuntimeAction | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const { confirm } = useConfirm();
   const attached = runtime.isAttached();
+
+  // --- Unified app update (frontend + backend at one version) ---
+  const appCheck = useAppUpdateCheck();
+  const appInstall = useAppUpdateInstall();
+  const hotUpdate = useHotUpdateBackend();
+  const uiCheck = useUiUpdateCheck();
+  const uiInstall = useUiUpdateInstall();
+  const uiRollback = useUiUpdateRollback();
+  const runtimeInfoQuery = useRuntimeInfo();
+  const isLocalSource =
+    runtimeInfoQuery.data?.current?.source === "local-source";
+  const [lastCheck, setLastCheck] = useState<string | null>(null);
+  const [updateSourceOpen, setUpdateSourceOpen] = useState(false);
+  const [cfgDraft, setCfgDraft] = useState<UpdateConfig>(() => defaultUpdateConfig());
+  const [cfgLoaded, setCfgLoaded] = useState(false);
+  const [cfgSaving, setCfgSaving] = useState(false);
+  const [cfgError, setCfgError] = useState<string | null>(null);
+  const updateBridgeReady = Boolean(desktop?.appUpdateCheck && desktop?.appUpdateInstall);
+  // Track B UI hot update — a pure web-asset swap, independent of the kernel.
+  const uiBridgeReady = Boolean(desktop?.uiCheckUpdate && desktop?.uiInstallUpdate && desktop?.uiRollback);
+  const managed = runtime.isManaged();
+
+  const loadUpdateConfig = useCallback(async () => {
+    if (!hasUpdateConfigBridge()) return;
+    try {
+      const snapshot = await getUpdateConfig();
+      setCfgDraft(normalizeUpdateConfig(snapshot.config));
+      setCfgError(snapshot.configError ?? null);
+      setCfgLoaded(true);
+    } catch (error) {
+      setCfgError(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
+  const handleCheckUpdate = useCallback(async () => {
+    setMessage(null);
+    try {
+      const result = parseAppUpdateCheckResult(await appCheck.mutateAsync());
+      if (!result.ok) {
+        setMessage({ tone: "error", text: result.error ?? "检查更新失败" });
+        setLastCheck(null);
+        return;
+      }
+      if (!result.sameVersion) {
+        setMessage({ tone: "error", text: "清单前后端版本不一致，已暂停更新" });
+        setLastCheck("inconsistent");
+        return;
+      }
+      setLastCheck(result.updateAvailable ? result.latestVersion ?? "new" : "latest");
+      setMessage({
+        tone: result.updateAvailable ? "ok" : "ok",
+        text: result.updateAvailable
+          ? `发现新版本 ${versionLabel(result.latestVersion)}，可一键更新`
+          : `已是最新版本（${versionLabel(result.currentVersion)}）`,
+      });
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  }, [appCheck]);
+
+  const handleInstallUpdate = useCallback(async () => {
+    const ok = await confirm({
+      title: "一键更新 Hermes",
+      body: "将下载并安装新版桌面端与内置内核（同一版本），期间应用会退出并自动重启。确定继续吗？",
+      confirmLabel: "立即更新",
+      danger: false,
+    });
+    if (!ok) return;
+    setMessage(null);
+    try {
+      const result = await appInstall.mutateAsync();
+      if (!result.ok) {
+        setMessage({ tone: "error", text: result.error ?? "更新失败" });
+        return;
+      }
+      setMessage({ tone: "ok", text: "更新已就绪，应用即将退出并自动重启…" });
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  }, [appInstall, confirm]);
+
+  const handleSaveUpdateConfig = useCallback(async (testConnection: boolean) => {
+    setCfgSaving(true);
+    setCfgError(null);
+    try {
+      const saved = await setUpdateConfig(cfgDraft);
+      setCfgDraft(normalizeUpdateConfig(saved.config));
+      setCfgError(saved.configError ?? null);
+      setMessage({ tone: "ok", text: "更新源配置已保存" });
+      if (testConnection) {
+        const result = parseAppUpdateCheckResult(await appCheck.mutateAsync());
+        setMessage({
+          tone: result.ok ? "ok" : "error",
+          text: result.ok
+            ? `连接正常：最新版本 ${versionLabel(result.latestVersion)}`
+            : `连接失败：${result.error ?? "未知错误"}`,
+        });
+      }
+    } catch (error) {
+      setCfgError(error instanceof Error ? error.message : String(error));
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setCfgSaving(false);
+    }
+  }, [cfgDraft, appCheck]);
+
+  const cfgValidationError = validateUpdateConfig(cfgDraft);
+
+  const handleHotUpdateBackend = useCallback(async () => {    const ok = await confirm({
+      title: "热更新后端（本地源码）",
+      body: "将从本地 Core 源码仓库 git pull 最新代码并重装进 dev-runtime，随后自动重启内核。确定继续吗？",
+      confirmLabel: "热更新",
+      danger: false,
+    });
+    if (!ok) return;
+    setMessage(null);
+    try {
+      const result = await hotUpdate.mutateAsync({});
+      if (!result.ok) {
+        setMessage({ tone: "error", text: result.error ?? "热更新失败" });
+        return;
+      }
+      setMessage({
+        tone: "ok",
+        text: `后端已热更新${result.commit ? `（${result.commit.slice(0, 12)}）` : ""}，内核已重启`,
+      });
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  }, [hotUpdate, confirm]);
+
+  const [lastUiCheck, setLastUiCheck] = useState<string | null>(null);
+
+  const handleUiCheckUpdate = useCallback(async () => {
+    setMessage(null);
+    try {
+      const result = await uiCheck.mutateAsync();
+      if (!result.ok) {
+        setMessage({ tone: "error", text: result.error ?? "检查界面更新失败" });
+        setLastUiCheck(null);
+        return;
+      }
+      setLastUiCheck(result.updateAvailable ? result.manifest?.uiVersion ?? "new" : "latest");
+      setMessage({
+        tone: "ok",
+        text: result.updateAvailable
+          ? `发现新界面版本 ${result.manifest?.uiVersion ?? ""}，可热更新`
+          : `界面已是最新（${result.currentUiVersion ?? "内嵌"}）`,
+      });
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  }, [uiCheck]);
+
+  const handleUiInstallUpdate = useCallback(async () => {
+    const ok = await confirm({
+      title: "UI 热更新",
+      body: "将下载并安装新版界面包（仅替换界面资源，不重启内核）。确定继续吗？",
+      confirmLabel: "立即热更新",
+      danger: false,
+    });
+    if (!ok) return;
+    setMessage(null);
+    try {
+      const result = await uiInstall.mutateAsync();
+      if (!result.ok) {
+        setMessage({ tone: "error", text: result.error ?? "界面热更新失败" });
+        return;
+      }
+      setMessage({ tone: "ok", text: "界面已更新，正在刷新…" });
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  }, [uiInstall, confirm]);
+
+  const handleUiRollback = useCallback(async () => {
+    const ok = await confirm({
+      title: "回退界面版本",
+      body: "将回退到上一个界面版本（本机已有，无需联网）。确定继续吗？",
+      confirmLabel: "回退",
+      danger: true,
+    });
+    if (!ok) return;
+    setMessage(null);
+    try {
+      const result = await uiRollback.mutateAsync();
+      if (!result.ok) {
+        setMessage({ tone: "error", text: result.error ?? "界面回退失败" });
+        return;
+      }
+      setMessage({ tone: "ok", text: "界面已回退，正在刷新…" });
+    } catch (error) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  }, [uiRollback, confirm]);
 
   const adopt = useCallback((result: RuntimeControlResult) => {
     setControl(result);
@@ -196,8 +407,16 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             variant="outline"
             tone="danger"
             onClick={() => {
-              if (!window.confirm("确定卸载内置内核吗？模型配置、会话、档案和外部连接设置都会保留。")) return;
-              void run("uninstall", desktop?.uninstallManagedRuntime?.bind(desktop), "内置内核已卸载，用户数据已保留。");
+              void (async () => {
+                const ok = await confirm({
+                  title: "卸载内置内核",
+                  body: "确定卸载内置内核吗？模型配置、会话、档案和外部连接设置都会保留。",
+                  confirmLabel: "卸载",
+                  danger: true,
+                });
+                if (!ok) return;
+                void run("uninstall", desktop?.uninstallManagedRuntime?.bind(desktop), "内置内核已卸载，用户数据已保留。");
+              })();
             }}
             disabled={anyBusy}
           >
@@ -210,6 +429,165 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
           刷新
         </Button>
       </div>
+
+      {managed && (isLocalSource || updateBridgeReady) && (
+        <div className={s.actions}>
+          {managed && isLocalSource && desktop?.hotUpdateBackend && (
+            <Button
+              variant="outline"
+              onClick={() => void handleHotUpdateBackend()}
+              disabled={anyBusy || hotUpdate.isPending}
+            >
+              {hotUpdate.isPending ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+              热更新后端（dev）
+            </Button>
+          )}
+          {updateBridgeReady && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => void handleCheckUpdate()}
+                disabled={anyBusy || appCheck.isPending}
+              >
+                {appCheck.isPending ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+                检查更新
+              </Button>
+              <Button
+                variant="solid"
+                tone="accent"
+                onClick={() => void handleInstallUpdate()}
+                disabled={
+                  anyBusy || appCheck.isPending || appInstall.isPending || lastCheck === null || lastCheck === "inconsistent" || lastCheck === "latest"
+                }
+              >
+                {appInstall.isPending ? <LoadingIndicator size="xs" /> : <Download size={12} />}
+                一键更新
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setUpdateSourceOpen((v) => !v);
+                  if (!cfgLoaded) void loadUpdateConfig();
+                }}
+                disabled={anyBusy}
+              >
+                <Settings2 size={12} />
+                更新源设置
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      {managed && uiBridgeReady && (
+        <div className={s.actions}>
+          <Button
+            variant="outline"
+            onClick={() => void handleUiCheckUpdate()}
+            disabled={anyBusy || uiCheck.isPending}
+          >
+            {uiCheck.isPending ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+            检查界面更新
+          </Button>
+          <Button
+            variant="solid"
+            tone="accent"
+            onClick={() => void handleUiInstallUpdate()}
+            disabled={anyBusy || uiCheck.isPending || uiInstall.isPending || lastUiCheck === "latest"}
+          >
+            {uiInstall.isPending ? <LoadingIndicator size="xs" /> : <Download size={12} />}
+            UI 热更新
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => void handleUiRollback()}
+            disabled={anyBusy || uiRollback.isPending}
+          >
+            {uiRollback.isPending ? <LoadingIndicator size="xs" /> : <RotateCcw size={12} />}
+            回退界面
+          </Button>
+        </div>
+      )}
+
+      {updateSourceOpen && (
+        <div className={s.updateSource}>
+          <p className={s.updateSourceTitle}>更新下载源（update-config.json）</p>
+          <p className={s.updateSourceHint}>
+            统一控制桌面端与内置内核的下载地址。修改后点“保存”立即生效；测试连接会先保存再拉取最新清单。
+          </p>
+          <label className={s.fieldLabel}>
+            channel
+            <select
+              className={s.fieldInput}
+              value={cfgDraft.channel}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, channel: e.target.value }))}
+            >
+              {["stable", "beta", "canary"].map((ch) => (
+                <option key={ch} value={ch}>{ch}</option>
+              ))}
+            </select>
+          </label>
+          <label className={s.fieldLabel}>
+            releaseManifestUrl（统一更新清单）
+            <input
+              className={s.fieldInput}
+              value={cfgDraft.releaseManifestUrl}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, releaseManifestUrl: e.target.value }))}
+              placeholder="https://desktop.hermesagent.org.cn/latest.json"
+            />
+          </label>
+          <label className={s.fieldLabel}>
+            runtimeBaseUrl（内核 runtime 基址）
+            <input
+              className={s.fieldInput}
+              value={cfgDraft.runtimeBaseUrl}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, runtimeBaseUrl: e.target.value }))}
+              placeholder="https://desktop.hermesagent.org.cn/runtime"
+            />
+          </label>
+          <label className={s.fieldLabel}>
+            runtimeManifestUrl（可选，完整覆盖）
+            <input
+              className={s.fieldInput}
+              value={cfgDraft.runtimeManifestUrl}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, runtimeManifestUrl: e.target.value }))}
+              placeholder="留空则按 baseUrl + channel 自动拼接"
+            />
+          </label>
+          <label className={s.fieldLabel}>
+            timeoutSeconds
+            <input
+              className={s.fieldInput}
+              type="number"
+              min={1}
+              max={300}
+              value={cfgDraft.timeoutSeconds}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, timeoutSeconds: Number(e.target.value) }))}
+            />
+          </label>
+          {(cfgError || cfgValidationError) && (
+            <Alert tone="error" size="sm">{cfgError ?? cfgValidationError}</Alert>
+          )}
+          <div className={s.actions}>
+            <Button
+              variant="outline"
+              onClick={() => void handleSaveUpdateConfig(false)}
+              disabled={cfgSaving || Boolean(cfgValidationError)}
+            >
+              {cfgSaving ? <LoadingIndicator size="xs" /> : null}
+              保存
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleSaveUpdateConfig(true)}
+              disabled={cfgSaving || Boolean(cfgValidationError) || appCheck.isPending}
+            >
+              {appCheck.isPending ? <LoadingIndicator size="xs" /> : null}
+              保存并测试连接
+            </Button>
+          </div>
+        </div>
+      )}
 
       {message && <Alert tone={message.tone} size="sm">{message.text}</Alert>}
     </section>

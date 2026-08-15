@@ -6,6 +6,7 @@ import type {
   ComposerSubmitControls,
   ComposerSubmitPayload,
 } from "@/components/chat/composer-types";
+import type { ReasoningEffort } from "@/lib/reasoning-effort";
 import { activeSessionIdAtom } from "@/stores/ui";
 import { buildComposerDisplayText, prepareComposerPrompt } from "@/lib/composer-prompt";
 import { resolveComposerSkillCommand } from "@/lib/composer-skills";
@@ -18,7 +19,7 @@ import {
 } from "@/lib/workspaces";
 
 interface CreateAndSendOptions {
-  createSession?: (options?: { cwd?: string }) => Promise<string>;
+  createSession?: (options?: { cwd?: string; reasoningEffort?: ReasoningEffort | null }) => Promise<string>;
 }
 
 function readFileAsDataUrl(file: File): Promise<string | undefined> {
@@ -58,7 +59,16 @@ export function useCreateAndSendSession() {
   ) => {
     const submittedAt = Date.now();
     const workspacePath = payload.workspacePath?.trim() || undefined;
-    const sessionId = await (options?.createSession ?? createSession)({ cwd: workspacePath });
+    // Bake the composer's thinking-effort into session.create so the backend
+    // builds the first-turn agent with the user's effort instead of its
+    // medium default (lib/session-create.ts). The later config.set below
+    // remains as a hot-update for adopted draft sessions and live agents.
+    const sessionId = await (options?.createSession ?? createSession)({
+      cwd: workspacePath,
+      ...(payload.reasoningEffort
+        ? { reasoningEffort: payload.reasoningEffort }
+        : {}),
+    });
     const title = titleFromPrompt(payload.text || payload.attachments[0]?.name || "");
     const optimisticDisplayText = buildComposerDisplayText(payload);
     const optimisticDisplayImages = await Promise.all(payload.attachments

@@ -12,7 +12,16 @@ Hermes Agent CN Desktop is a desktop client from the Hermes Agent Chinese commun
 
 Official site and downloads: [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn). The desktop app is part of the [Hermes Agent Chinese Community](https://hermesagent.org.cn) ecosystem, where the main site links to Chinese docs, practice guides, community entry points, and more ecosystem projects.
 
-> Current release: `v0.7.0`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
+> Current release: `v0.8.0-rc5`. The project is still moving quickly. APIs, packaging, runtime distribution, and UI details may continue to change.
+
+## ❤️ Sponsor
+
+<table>
+<tr>
+<td width="180"><a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn"><img src="./docs/assets/compshare.png" alt="Compshare" width="150"></a></td>
+<td>Thanks to Compshare for sponsoring this project! Compshare is UCloud's AI cloud platform, providing stable and comprehensive domestic and international model APIs with just one key. Featuring cost-effective monthly and per-use domestic-model Coding Plan packages, alongside stable officially-relayed overseas models. Supports Claude Code, Codex, and API access. Enterprise-grade high concurrency, 24/7 technical support, and self-service invoicing. Users who register via <a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn">this link</a> will receive a free 5 CNY platform trial credit!</td>
+</tr>
+</table>
 
 ## Hermes Agent Chinese Community
 
@@ -95,9 +104,9 @@ Installers are available from the [desktop website](https://desktop.hermesagent.
 
 The current release includes:
 
-- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.7.0_aarch64.dmg`
-- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.7.0_x64.dmg`
-- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.7.0_x64-setup.exe`
+- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.8.0-rc5_aarch64.dmg`
+- macOS Intel DMG: `Hermes.Agent.CN.Desktop_0.8.0-rc5_x64.dmg`
+- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.8.0-rc5_x64-setup.exe`
 
 Both the Windows and macOS installers include a bundled `Hermes-CN-Core` runtime. On first launch, the app initializes the local core from the bundled runtime first; managed runtime download/update is only used for upgrades or fallback repair.
 

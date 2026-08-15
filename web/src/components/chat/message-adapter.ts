@@ -10,7 +10,10 @@ import {
   normalizeCliThinkingProgress,
   normalizeReasoningText,
 } from "@/lib/reasoning-filter";
-import { stripHermesUiWorkspaceContext } from "@/lib/composer-prompt";
+import {
+  extractHermesImageDirectivePaths,
+  stripHermesUiWorkspaceContext,
+} from "@/lib/composer-prompt";
 import {
   dedupeImageParts,
   extractImagePartsFromUnknown,
@@ -111,6 +114,14 @@ function imagePartsFromMessageImages(images: SessionMessage["images"]): HermesIm
 function imagePartsFromTransportText(text: string | null | undefined): HermesImagePart[] {
   if (!text) return [];
   const parts: HermesImagePart[] = [];
+  const imageBlockLabels = [...text.matchAll(HERMES_UI_IMAGE_BLOCK_RE)]
+    .map((match) => match[1]?.trim())
+    .filter((label): label is string => Boolean(label));
+
+  extractHermesImageDirectivePaths(text).forEach((path, index) => {
+    const part = imagePartFromSource(path, imageBlockLabels[index]);
+    if (part) parts.push(part);
+  });
 
   for (const match of text.matchAll(IMAGE_FALLBACK_RE)) {
     const path = match[1]?.trim();
@@ -129,6 +140,9 @@ function imagePartsFromTransportText(text: string | null | undefined): HermesIma
   for (const match of text.matchAll(HERMES_UI_IMAGE_BLOCK_RE)) {
     const name = match[1]?.trim();
     const description = match[2]?.trim();
+    if (/^\[User attached image: [^\]\n]+\]$/.test(description ?? "")) {
+      continue;
+    }
     const extracted = extractImagePartsFromUnknown(description);
     if (extracted.length) {
       parts.push(...extracted.map((part) => ({
@@ -1112,7 +1126,29 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
       canonicalToolComparable(stored) === canonicalToolComparable(live);
   }
 
-  return storedText === liveText && storedReasoning === liveReasoning && storedImages === liveImages;
+  if (storedText === liveText && storedReasoning === liveReasoning && storedImages === liveImages) {
+    return true;
+  }
+
+  // Core persists attached images as authoritative `@image:<gateway path>`
+  // refs, while the optimistic desktop row holds the in-hand data URL and the
+  // original filename. They represent the same current user turn even though
+  // their image URLs differ. Match only near-simultaneous image turns with the
+  // same visible caption; mergeMatchedMessage then keeps the richer live row.
+  if (stored.role === "user" && storedImages && liveImages) {
+    const promptBody = (message: HermesUIMessage) => comparableText(
+      (normalizeContent(textFromParts(message.parts)) ?? "")
+        .replace(/(?:^|\n)附件：[^\n]*$/, ""),
+    );
+    if (
+      Math.abs(stored.createdAt - live.createdAt) <= 5_000 &&
+      promptBody(stored) === promptBody(live)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMessage[] {

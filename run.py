@@ -72,7 +72,7 @@ VENV_HERMES, VENV_PYTHON = _resolve_venv_paths(CORE_ROOT)
 # ── Defaults ────────────────────────────────────────────────────────────────
 
 DEFAULT_BACKEND_PORT = 9120   # Desktop convention (avoids conflict with global agent on 9119)
-DEFAULT_FRONTEND_PORT = 9545  # Vite dev server (strictPort)
+DEFAULT_FRONTEND_PORT = 9545  # Vite dev server (strictPort); verified at runtime — Windows may block it via an excluded port range
 
 # ── Globals ─────────────────────────────────────────────────────────────────
 
@@ -147,7 +147,26 @@ def find_free_port(preferred: int) -> int:
         return s.getsockname()[1]
 
 
+def is_port_bindable(port: int) -> bool:
+    """Return True if a TCP server can actually bind `port` on loopback.
 
+    Windows reserves whole ranges of TCP ports for Hyper-V / WSL2 / WinNAT
+    ("excluded port ranges" — see `netsh interface ipv4 show excludedportrange
+    protocol=tcp`). Binding to a reserved port then fails with EACCES even
+    though nothing is listening, and the reserved ranges move across reboots,
+    so the port must be re-checked at runtime instead of being hard-coded.
+
+    Checks both IPv4 (127.0.0.1) and IPv6 (::1) loopback because the Vite dev
+    server binds every address `localhost` resolves to.
+    """
+    import socket
+    for family, addr in [(socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")]:
+        try:
+            with socket.socket(family, socket.SOCK_STREAM) as s:
+                s.bind((addr, port))
+        except OSError:
+            return False
+    return True
 
 
 def _find_pid_on_port_windows(port: int) -> str | None:
@@ -634,6 +653,8 @@ def main() -> None:
             [
                 str(VENV_HERMES),
                 "dashboard",
+                "--skip-build",     # Serve existing web_dist; skip npm install + Vite build
+                                    # (the Desktop Vite dev server at 9545 is the real frontend)
                 "--no-open",        # Don't open browser
                 "--port", str(backend_port),
                 "--host", "127.0.0.1",
@@ -660,17 +681,33 @@ def main() -> None:
     if not args.backend_only:
         write_connection_json(backend_port)
 
-    # ── Frontend Port Conflict Resolution ────────────────────────────
-    # If the preferred frontend port is occupied, kill the stale process.
-    kill_process_on_port(DEFAULT_FRONTEND_PORT)
+    # ── Frontend Port Resolution ────────────────────────────────────────
+    # Windows can reserve whole ranges of TCP ports (Hyper-V / WSL2 / WinNAT
+    # "excluded port ranges"); binding to a reserved port then fails with
+    # EACCES even though nothing is listening, and the ranges shift across
+    # reboots. Re-check 9545 at runtime and fall back to a free port when the
+    # OS blocks it, passing the chosen port to Vite via E2E_VITE_PORT.
+    frontend_port = DEFAULT_FRONTEND_PORT
+    if not is_port_bindable(frontend_port):
+        fallback = find_free_port(frontend_port)
+        eprint(
+            f"⚠️  Frontend port {frontend_port} is blocked by the OS"
+            f" (Windows excluded port range, usually reserved by Hyper-V/WSL2)."
+            f" Falling back to port {fallback}."
+        )
+        frontend_port = fallback
+
+    # If the resolved frontend port is occupied, kill the stale process.
+    kill_process_on_port(frontend_port)
 
     # ── Start Frontend ──────────────────────────────────────────────────
     if not args.backend_only:
-        eprint(f"🚀 Starting frontend (Vite dev server) on port {DEFAULT_FRONTEND_PORT}...")
+        eprint(f"🚀 Starting frontend (Vite dev server) on port {frontend_port}...")
         frontend_env = {
             **os.environ,
             "PYTHONIOENCODING": "utf-8",
             "HERMES_DASHBOARD_ORIGIN": dashboard_origin,
+            "E2E_VITE_PORT": str(frontend_port),
         }
 
         proc = Popen(
@@ -682,7 +719,7 @@ def main() -> None:
 
         # ── Open Browser ────────────────────────────────────────────────
         if not args.no_browser:
-            frontend_url = f"http://localhost:{DEFAULT_FRONTEND_PORT}"
+            frontend_url = f"http://localhost:{frontend_port}"
             eprint(f"🌐 Opening browser at {frontend_url} ...")
             webbrowser.open(frontend_url)
     else:
@@ -691,11 +728,11 @@ def main() -> None:
     eprint("─" * 50)
     if not args.backend_only and not args.frontend_only:
         eprint(f"   Backend:  http://127.0.0.1:{backend_port}")
-        eprint(f"   Frontend: http://localhost:{DEFAULT_FRONTEND_PORT}")
+        eprint(f"   Frontend: http://localhost:{frontend_port}")
     elif args.backend_only:
         eprint(f"   Backend:  http://127.0.0.1:{backend_port}")
     elif args.frontend_only:
-        eprint(f"   Frontend: http://localhost:{DEFAULT_FRONTEND_PORT}")
+        eprint(f"   Frontend: http://localhost:{frontend_port}")
     eprint("   Press Ctrl+C to stop.")
     eprint("─" * 50)
 

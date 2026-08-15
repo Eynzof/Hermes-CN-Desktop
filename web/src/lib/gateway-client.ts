@@ -1,5 +1,6 @@
 import { parseGatewayEvent, type GatewayEvent } from "@hermes/protocol";
 import { runtime } from "./runtime";
+import { assertCompatible, resetVersionCheck } from "./version-check";
 
 export type ConnectionState = "idle" | "connecting" | "open" | "closed" | "error";
 
@@ -149,6 +150,11 @@ export class GatewayClient {
       };
 
       this.setState("connecting");
+
+      // Hard version-compatibility gate: refuse to open a WebSocket against an
+      // unchecked or incompatible backend. The cached state is invalidated by
+      // runtime reconnect / profile-switch helpers in runtime.ts.
+      assertCompatible();
 
       try {
         ws = this.socketFactory(runtime.getGatewayUrl());

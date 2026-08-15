@@ -61,22 +61,25 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 - Gateway 事件：`tui_gateway/server.py`
 - 上游 Web 实现：`web/src/lib/api.ts`、`gatewayClient.ts`
 
+### 后端版本同步
+
+桌面端在启动时会通过 `GET /api/version` 校验所连后端的版本，期望值写死在 `web/src/lib/build-info.ts` 的 `EXPECTED_BACKEND_VERSION`。 bumps Core `pyproject.toml` 版本时，**必须在同一次发版变更里同步更新 `EXPECTED_BACKEND_VERSION`**，否则新版桌面端启动时会直接弹出版本不匹配对话框并强制退出。
+
 ## 开发流程
 
-### 开发前预检（双仓同步 + Worktree 隔离）
+### Git 操作边界（铁律）
 
-Hermes CN 的需求与 bug 修复通常**同时横跨 Desktop 与 Core 两个仓库**。正式动手写代码前，两个仓库都必须先过这道预检，**不要直接在 `main` 上改**：
+编码代理**绝不自动执行**任何 Git 写操作：不 `git commit` / `git push` / `git pull` / `git fetch` / `git checkout`、不创建 `git worktree` / 分支、不开 PR、不打 tag、不发布 Release、不同步 landing 仓库。
 
-1. **确认主分支已与远端同步**。对 Desktop 与 Core 分别 `git fetch origin`，确认本地 `main` 与 `origin/main` 一致（`git rev-list --left-right --count main...origin/main` 应为 `0  0`）；落后就先快进，工作区脏就先收拾干净。
-2. **为每个仓库开独立的功能分支 + git worktree**，让 Desktop 与 Core 的改动互不干扰、可并行：
-   ```bash
-   git -C <repo> fetch origin
-   git -C <repo> worktree add ../wt/<repo>-<topic> -b <branch> origin/main
-   ```
-   分支命名沿用 Conventional 风格（`feat/` `fix/` `docs/` `chore/` …）。同一任务在两仓用同名分支，方便对应。
-3. 不要在同一个工作目录里来回 `git checkout` 切分支——双仓并行时极易串味；每条线一个 worktree。
+所有仓库同步、分支 / worktree 隔离、commit、push、PR、tag、Release 与 Landing 同步均由**人**执行（或由 CI/CD 流水线触发）。代理只做只读检查（`git status` / `git diff` / `git log` / `git rev-parse`）用于验证与报告。
 
-**收尾流程（每个仓库都要走完，缺一不可）**：改完 → `pnpm typecheck && pnpm test:unit && cargo check` → commit → push → 开 PR → **盯 PR 上 GitHub Actions 的构建与测试全绿**（`rust-test.yml` / `web-test.yml`），没过就回去修，别把任务当完成。
+完整的人工 Git 工作流（双仓同步 + worktree 预检、收尾 commit → push → PR、Commit 风格、发版 tag 与 Landing 同步）见 `docs/agents/git-workflow.md`。
+
+### 开发前准备
+
+- 确认当前工作目录位于**人已准备好**的仓库状态（已同步、已开好分支 / worktree）；不要自己 `git checkout` 切分支或同步远端。
+- 需求同时横跨 Desktop 与 Core 时，人会用独立 worktree 隔离两仓改动；代理不要自己创建 / 操作 worktree。
+- 若发现工作区状态异常（脏树、分支不对、落后远端），**报告给人处理**，不要自行 commit / stash / reset / pull。
 
 ### 仓库技能
 
@@ -86,9 +89,12 @@ Hermes CN 的需求与 bug 修复通常**同时横跨 Desktop 与 Core 两个仓
 `.codex/skills/desktop-dual-repo-test/SKILL.md`。
 
 发版、版本号更新、安装包发布或 GitHub Release 相关任务必须按顺序使用仓库内技能：**先过** `.codex/skills/desktop-release-preflight/SKILL.md`（发版前安全闸门：防内核静默降级 / 防 schema 重置 / identifier 不变 / 公证签名 / 国内镜像先有 artifactUrl 再发清单 / 先发 canary），**再做** `.codex/skills/desktop-release-sync-landing/SKILL.md`（版本同步与官网清单）。
-只要桌面端公开版本发生变化，就必须同步处理 `Eynzof/hermes-agent-cn-desktop-landing`，
+只要桌面端 **stable/正式公开版本** 发生变化，就必须同步处理 `Eynzof/hermes-agent-cn-desktop-landing`，
 更新官网版本与 `https://desktop.hermesagent.org.cn/latest.json` 清单；如果 release 资产尚未生成，
-需要明确说明 Landing 同步被阻塞，不能把桌面端发版任务当作已经完整结束。
+需要明确说明 Landing 同步被阻塞，不能把正式发版任务当作已经完整结束。**Landing 仓库的 commit / push / PR 由人执行**，代理只负责准备与核对内容、报告阻塞情况（见 `docs/agents/git-workflow.md` §5）。
+**RC / beta / alpha / canary 等预发布或内测版本禁止修改 Landing 仓库，禁止更新官网版本，
+禁止让 `https://desktop.hermesagent.org.cn/latest.json` 指向预发布版本。** 预发布版本只能通过
+GitHub Release、手工分发或明确的内测渠道验证，不能暴露给全量用户的官网入口和自动更新清单。
 
 ### 启动顺序
 
@@ -163,17 +169,12 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - ❌ 不要直接调 `gateway-client.ts` 的 raw socket — 走 `hooks/use-gateway.ts`
 - ❌ 不要在 `web/src/routes/` 里塞业务逻辑 — 抽到 `hooks/` 或 `lib/`
 - ❌ 不要在组件里写硬编码颜色 — 用 `packages/shared-ui/src/tokens/` 里的 CSS 变量
-
-## Commit 风格
-
-- Conventional commit：`feat` / `fix` / `style` / `docs` / `refactor` / `chore`
-- 标题用英文短句、命令式（"add ...", "fix ...", "rework ..."）
-- 描述可中英混用，写"为什么"而不是"做了什么"
+- ❌ **不要自动执行任何 Git 写操作**（commit / push / pull / checkout / worktree / 开 PR / 打 tag / 发 Release / 同步 landing）— 全部由人执行，见 `docs/agents/`
 
 ## 端口
 
 - **9120**：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）
-- **9545**：Vite dev server（`web/vite.config.ts` 写死，strictPort）
+- **9545**：Vite dev server（`web/vite.config.ts` 默认值，strictPort；Windows 可能因 Hyper-V/WSL2 的“排除端口范围”屏蔽 9545 —— `run.py` 与 vite config 都会在启动时探测并自动回退到空闲端口，见 `docs/run-py-usage.md` 的 EACCES FAQ）
 
 ## Rust 测试约定
 
@@ -182,6 +183,7 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - **env 依赖测试**：必须 `#[serial_test::serial]`，否则会被并行测试污染
 - **文件系统测试**：用 `tempfile::TempDir`，禁止写 `/tmp`、cwd 或固定路径
 - **HTTP 测试**：用 `wiremock::MockServer`，禁止打真实网络
+- **真实后端测试（opt-in）**：`tests/real_backend.rs` 是 wiremock 套件的真实后端版，默认跳过（无 `HERMES_REAL_BACKEND_URL` 且找不到 `../Hermes-CN-Core` 时静默通过），CI 保持封闭；配置 `HERMES_REAL_BACKEND_URL`（外部后端）或 `HERMES_CORE_DIR`（自动起 Core venv dashboard）后跑 `cargo test --test real_backend`
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
 - **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `Eynzof/Hermes-CN-Core` 真实后端 + fake model）、`release-desktop.yml`（发布构建）
 - **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock

@@ -39,6 +39,7 @@ import {
   providerApiKeyLabels,
   providerHasSavedCredentials,
   resolveSelectedProvider,
+  shouldUpdateDefaultModelOnSave,
   sortProvidersForModelsPage,
   TOP5_PROVIDER_IDS,
   type ProviderPreset,
@@ -54,6 +55,7 @@ import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import { translateEnvCategory, translateEnvVar } from "@/lib/env-translations";
 import { rememberLastUsedModel } from "@/lib/last-used-model";
+import { useConfirm } from "@/lib/use-confirm";
 import { reportPromoClick } from "@/lib/telemetry";
 import { openExternalUrl } from "@/lib/external-links";
 import {
@@ -613,6 +615,7 @@ export function ModelsSection() {
   const { data: moaConfig } = useMoaConfig();
   const moaPresetCount = Object.keys(moaConfig?.presets ?? {}).length;
   const saveConfig = useSaveConfig();
+  const { confirm } = useConfirm();
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const revealEnv = useRevealEnv();
@@ -1199,24 +1202,50 @@ export function ModelsSection() {
     const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
+    const providerName = selectedProvider.name;
+    // 「保存配置」需要一并更新顶层默认主模型（model.*）的两种情况：
+    // 1. 选中的服务商就是当前默认主模型（provider id 相同，无论是否改了模
+    //    型 / Base URL）：编辑当前默认服务商后保存，默认主模型必须跟着更新，
+    //    否则 config.model 与 providers.<id> 脱节——UI 上「已是当前模型」会
+    //    翻回「设为当前模型」，工作台默认模型仍是旧的（甚至已失效的）。
+    // 2. 首次运行还没有默认模型：保存即把该服务商提升为默认主模型。
+    // 其余情况保持原语义：保存配置只写 providers.<id>，不切换主模型。
+    const shouldUpdateDefaultModel = shouldUpdateDefaultModelOnSave({
+      currentProviderId,
+      selectedProviderId: selectedProvider.id,
+      modelInfo,
+    });
     setProviderSavePending(true);
     setProviderSaveError("");
     try {
       await syncProviderApiKeyToCanonicalEnv(selectedProvider, newApiKey);
-      // "保存配置" only touches providers.<id> — it does not switch the active
-      // model. The context-window override is a single field tied to the current
-      // model, so persist it here only when this provider's model is already the
-      // active one (editing the live model's window without re-switching).
-      // Writing it for a non-current provider would stomp the real current
-      // model's override.
-      let settingsUpdate = buildProviderSettingsUpdate(config, selectedProvider, providerForm);
-      if (selectedProviderIsCurrent) {
-        settingsUpdate = {
-          ...settingsUpdate,
-          model_context_length: parseContextWindowInput(providerForm.contextWindow),
-        };
+      let settingsUpdate;
+      if (shouldUpdateDefaultModel) {
+        // buildProviderConfigUpdate = providers.<id> + model.*（provider +
+        // default + base_url + api_key + 上下文覆盖）。
+        settingsUpdate = buildProviderConfigUpdate(config, selectedProvider, providerForm);
+      } else {
+        // 只写 providers.<id>。上下文窗口覆盖是绑定「当前模型」的单槽字段，
+        // 非默认服务商在此保存时不得写入，避免踩掉真正当前模型的覆盖值。
+        settingsUpdate = buildProviderSettingsUpdate(config, selectedProvider, providerForm);
       }
       await saveConfig.mutateAsync(settingsUpdate);
+      if (shouldUpdateDefaultModel) {
+        // 工作台 composer 从 UI store 读默认模型；配置已落盘就立刻播种，
+        // 让「切换模型」/ 新任务的模型设置显示新模型。
+        rememberLastUsedModel({
+          model: savedModel,
+          provider: providerId,
+          providerName,
+        });
+        // Live hot-switch 是尽力而为（全局 config.set，不碰运行中的会话）：
+        // config.yaml 已持久化，失败也不影响下一次会话用新模型。
+        try {
+          await setRuntimeModel(savedModel, providerId);
+        } catch (error) {
+          console.warn("保存默认主模型后热切换运行模型失败（默认配置已保存）", error);
+        }
+      }
       setProviderForm((prev) => ({ ...prev, apiKey: "" }));
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
@@ -1255,9 +1284,6 @@ export function ModelsSection() {
       await saveConfig.mutateAsync(
         buildProviderConfigUpdate(config, selectedProvider, providerForm),
       );
-      // Same hot-switch path as the composer model picker: update the live
-      // gateway runtime explicitly after disk config is already usable.
-      await setRuntimeModel(savedModel, providerId);
       setProviderForm((prev) => ({ ...prev, apiKey: "" }));
       setSavedSnapshot({
         baseUrl: savedBaseUrl,
@@ -1269,12 +1295,25 @@ export function ModelsSection() {
       // PanelComposer seeds its model picker from the UI store.
       // This mirrors picking a model from the workbench composer, so the next
       // new session carries this explicit choice even before /api/model/info
-      // finishes refetching.
+      // finishes refetching. Seed it right after the config lands on disk so a
+      // failed live-switch below can never leave the workbench showing a stale
+      // last-used model while config.model already points at the new one.
       rememberLastUsedModel({
         model: savedModel,
         provider: providerId,
         providerName,
       });
+      // Same hot-switch path as the composer model picker: update the live
+      // gateway runtime explicitly after disk config is already usable.
+      // Best-effort: config.yaml is already persisted, so a refusal (e.g. the
+      // backend rejecting an unresolvable provider, or a busy session) must
+      // not fail the whole action — the default model is already updated and
+      // the workbench will pick it up.
+      try {
+        await setRuntimeModel(savedModel, providerId);
+      } catch (error) {
+        console.warn("设为当前模型后热切换运行模型失败（默认配置已保存）", error);
+      }
     } catch (error) {
       setProviderSaveError(error instanceof Error ? error.message : String(error || "设置失败"));
     } finally {
@@ -1352,7 +1391,13 @@ export function ModelsSection() {
     const confirmMessage = referencedTasks.length > 0
       ? `确定删除「${selectedProvider.name}」吗？引用它的辅助模型（${referencedTasks.join("、")}）会自动恢复为 Auto。`
       : `确定删除「${selectedProvider.name}」吗？此操作会移除该自定义服务商的 Base URL、模型和密钥配置。`;
-    if (!window.confirm(confirmMessage)) return;
+    const confirmed = await confirm({
+      title: "删除服务商",
+      body: confirmMessage,
+      confirmLabel: "删除",
+      danger: true,
+    });
+    if (!confirmed) return;
 
     const nextSelectedProviderId = orderedProviders.find((provider) => provider.id !== providerId)?.id ?? "";
     setProviderDeletePending(true);
@@ -1708,6 +1753,12 @@ export function ModelsSection() {
                       </div>
                     </div>
 
+                    {providerSaveError && (
+                      <div className={s.modelPickerError} style={{ marginTop: 8 }}>
+                        操作失败：{providerSaveError}
+                      </div>
+                    )}
+
                     <div className={s.providerFormGrid}>
                       <Field label={selectedProvider.apiKeyLabel} className={s.fieldRow}>
                         <Input
@@ -1873,11 +1924,6 @@ export function ModelsSection() {
                     </div>
                     {probeForSelected && probeForSelected.status !== "pending" && (
                       <ProbeResultRow probe={probeForSelected} />
-                    )}
-                    {providerSaveError && (
-                      <div className={s.modelPickerError} style={{ marginTop: 8 }}>
-                        操作失败：{providerSaveError}
-                      </div>
                     )}
                   </>
                 )}

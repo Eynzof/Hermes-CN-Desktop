@@ -22,9 +22,48 @@ describe("activeSessionIdAtom", () => {
     store.set(activeSessionIdAtom, "session-1");
     expect(store.get(activeSessionIdAtom)).toBe("session-1");
   });
+
+  it("persists writes to the UI store and removes the key when cleared", async () => {
+    const { activeSessionIdAtom, uiStore } = await loadUi();
+    const store = createStore();
+    store.set(activeSessionIdAtom, "session-xyz-456");
+    expect(uiStore.readUiValue("hermes.active-session-id", null)).toBe("session-xyz-456");
+    store.set(activeSessionIdAtom, null);
+    expect(uiStore.readUiValue("hermes.active-session-id", "fallback")).toBe("fallback");
+  });
+
+  it("restores a persisted active session id after a reload (F5)", async () => {
+    const first = await loadUi();
+    createStore().set(first.activeSessionIdAtom, "session-persisted-789");
+    const second = await loadUi({ "hermes.active-session-id": "session-persisted-789" });
+    expect(createStore().get(second.activeSessionIdAtom)).toBe("session-persisted-789");
+  });
 });
 
 describe("sidebarSearchAtom", () => {
+  const ssStore: Record<string, string> = {};
+  const mockSessionStorage: Storage = {
+    getItem: (key) => ssStore[key] ?? null,
+    setItem: (key, value) => {
+      ssStore[key] = String(value);
+    },
+    removeItem: (key) => {
+      delete ssStore[key];
+    },
+    clear: () => {
+      Object.keys(ssStore).forEach((k) => delete ssStore[k]);
+    },
+    get length() {
+      return Object.keys(ssStore).length;
+    },
+    key: (index) => Object.keys(ssStore)[index] ?? null,
+  };
+
+  beforeEach(() => {
+    Object.keys(ssStore).forEach((k) => delete ssStore[k]);
+    vi.stubGlobal("sessionStorage", mockSessionStorage);
+  });
+
   it("defaults to empty string", async () => {
     const { sidebarSearchAtom } = await loadUi();
     const store = createStore();
@@ -36,6 +75,23 @@ describe("sidebarSearchAtom", () => {
     const store = createStore();
     store.set(sidebarSearchAtom, "tavily");
     expect(store.get(sidebarSearchAtom)).toBe("tavily");
+  });
+
+  it("persists the query to sessionStorage and removes it when cleared", async () => {
+    const { sidebarSearchAtom } = await loadUi();
+    const store = createStore();
+    store.set(sidebarSearchAtom, "tavily research");
+    expect(sessionStorage.getItem("hermes.sidebar-search")).toBe("tavily research");
+    store.set(sidebarSearchAtom, "");
+    expect(sessionStorage.getItem("hermes.sidebar-search")).toBeNull();
+  });
+
+  it("restores the query from sessionStorage after a module reload (F5)", async () => {
+    const first = await loadUi();
+    createStore().set(first.sidebarSearchAtom, "tavily research");
+    // F5: modules reset, sessionStorage survives
+    const second = await loadUi();
+    expect(createStore().get(second.sidebarSearchAtom)).toBe("tavily research");
   });
 });
 
@@ -93,10 +149,10 @@ describe("showReasoningAtom (persisted)", () => {
 });
 
 describe("composerSubmitShortcutAtom (persisted)", () => {
-  it("defaults to Enter submit when nothing is stored", async () => {
+  it("defaults to Ctrl+Enter submit when nothing is stored", async () => {
     const { composerSubmitShortcutAtom } = await loadUi();
     const store = createStore();
-    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
   });
 
   it("restores Ctrl+Enter submit from the UI store", async () => {
@@ -250,6 +306,21 @@ describe("notification settings atoms (persisted)", () => {
   });
 });
 
+describe("rightRailVisibleAtom (persisted)", () => {
+  it("defaults to hidden and restores a persisted visible rail after reload (F5)", async () => {
+    const fresh = await loadUi();
+    expect(createStore().get(fresh.rightRailVisibleAtom)).toBe(false);
+
+    const first = await loadUi();
+    const store = createStore();
+    store.set(first.rightRailVisibleAtom, true);
+    expect(first.uiStore.readUiValue("hermes.right-rail-visible", false)).toBe(true);
+
+    const restored = await loadUi({ "hermes.right-rail-visible": true });
+    expect(createStore().get(restored.rightRailVisibleAtom)).toBe(true);
+  });
+});
+
 describe("profileSwitchingAtom", () => {
   it("defaults to { active: false }", async () => {
     const { profileSwitchingAtom } = await loadUi();
@@ -354,7 +425,7 @@ describe("persisted atoms follow late ui-store hydration (#480)", () => {
     const unsubscribes = atoms.map((targetAtom) => store.sub(targetAtom, () => {}));
 
     expect(store.get(showReasoningAtom)).toBe(false);
-    expect(store.get(composerSubmitShortcutAtom)).toBe("enter");
+    expect(store.get(composerSubmitShortcutAtom)).toBe("ctrl-enter");
     expect(store.get(assistantDisplayNameAtom)).toBe("Hermes");
     expect(store.get(assistantAvatarDataUrlAtom)).toBe("");
 

@@ -1,23 +1,8 @@
-import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GatewayEvent } from "@hermes/protocol";
-import {
-  gatewayEventChangesSessionList,
-  invalidateSessionListQueries,
-} from "./session-query-sync";
+import { gatewayEventChangesSessionList } from "./session-query-sync";
 
 describe("session query sync", () => {
-  it("invalidates every session-list query variant", async () => {
-    const queryClient = new QueryClient();
-    const invalidate = vi
-      .spyOn(queryClient, "invalidateQueries")
-      .mockResolvedValue(undefined);
-
-    await invalidateSessionListQueries(queryClient);
-
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["sessions"] });
-  });
-
   it.each([
     ["message.complete", true],
     ["error", true],

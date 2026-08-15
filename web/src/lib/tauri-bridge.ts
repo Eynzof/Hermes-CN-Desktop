@@ -46,6 +46,16 @@ import type {
   SwitchProfileInput,
   SwitchProfileResult,
   TestConnectionResult,
+  UpdateConfig,
+  UpdateConfigSnapshot,
+  AppUpdateCheckResult,
+  AppUpdateInstallResult,
+  AppUpdateProgressPayload,
+  HotUpdateBackendResult,
+  HotUpdateProgressPayload,
+  UiInstallUpdateResult,
+  UiUpdateCheckResult,
+  UiUpdateReadyPayload,
   YoloModeStatus,
 } from "@hermes/protocol";
 import type {
@@ -73,6 +83,7 @@ import type {
   HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
+import { assertCompatible, resetVersionCheck, verifyBackendVersion } from "./version-check";
 import hermesLogo from "@/assets/hermes-default-avatar.png";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
@@ -234,6 +245,10 @@ function normalizeFileDropPayload(payload: TauriFileDropEventPayload): DesktopFi
 const tauriBridge = {
   windowType: "tauri" as const,
 
+  async fatalErrorAndExit(input: { title: string; message: string }): Promise<never> {
+    return invokeCommand("fatal_error_and_exit", { input });
+  },
+
   async request(input: ApiRequestInput): Promise<ApiRequestResult> {
     return invokeCommand("api_request", { input });
   },
@@ -335,6 +350,101 @@ const tauriBridge = {
 
   async checkDesktopUpdate(): Promise<DesktopUpdateManifestFetchResult> {
     return invokeCommand("desktop_check_update");
+  },
+
+  async getUpdateConfig(): Promise<UpdateConfigSnapshot> {
+    return invokeCommand("get_update_config");
+  },
+
+  async setUpdateConfig(config: UpdateConfig): Promise<UpdateConfigSnapshot> {
+    return invokeCommand("set_update_config", { input: { config } });
+  },
+
+  async appUpdateCheck(): Promise<AppUpdateCheckResult> {
+    return invokeCommand("app_update_check");
+  },
+
+  async appUpdateInstall(): Promise<AppUpdateInstallResult> {
+    return invokeCommand("app_update_install");
+  },
+
+  async hotUpdateBackend(input: {
+    sourceRoot?: string;
+    skipGit?: boolean;
+  }): Promise<HotUpdateBackendResult> {
+    return invokeCommand("hot_update_backend", { input });
+  },
+
+  // Track B UI hot update (custom `hermesui:` scheme). The kernel is never
+  // restarted — after a successful install/rollback the Rust side emits
+  // `ui-update-ready` and reloads the main window itself.
+  async uiCheckUpdate(): Promise<UiUpdateCheckResult> {
+    return invokeCommand("ui_check_update");
+  },
+
+  async uiInstallUpdate(): Promise<UiInstallUpdateResult> {
+    return invokeCommand("ui_install_update");
+  },
+
+  async uiRollback(): Promise<UiInstallUpdateResult> {
+    return invokeCommand("ui_rollback");
+  },
+
+  onUiUpdateReady(handler: (payload: UiUpdateReadyPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<UiUpdateReadyPayload>("ui-update-ready", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
+  },
+
+  onHotUpdateProgress(handler: (payload: HotUpdateProgressPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<HotUpdateProgressPayload>("hot-update-progress", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
+  },
+
+  onAppUpdateProgress(handler: (payload: AppUpdateProgressPayload) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<AppUpdateProgressPayload>("app-update-progress", (event) => {
+          handler(event.payload);
+        }))
+      .then((fn) => {
+        if (disposed) safeUnlisten(fn);
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      safeUnlisten(unlisten);
+    };
   },
 
   getRuntimeConfig() {
@@ -1042,6 +1152,23 @@ export async function installTauriBridge(): Promise<void> {
     config = await invokeCommand("get_runtime_config");
   }
 
+  // Mount the bridge before the version gate so that a mismatch can use the
+  // native fatal-error dialog via hermesDesktop.fatalErrorAndExit. The bridge
+  // is fully functional through Tauri invoke; window.__HERMES_RUNTIME__ is set
+  // after the version check so the platform guard still sees the Tauri context.
+  (window as any).hermesDesktop = tauriBridge;
+
+  // Reset any stale version check state, then verify before we let the React
+  // app run against this backend. A mismatch or unreachable /api/version
+  // triggers a fatal dialog and force-quits. We pass the config's apiBaseUrl
+  // explicitly because window.__HERMES_RUNTIME__ is not populated yet.
+  resetVersionCheck();
+  const versionState = await verifyBackendVersion(config.apiBaseUrl);
+  if (versionState.kind !== "ok") {
+    assertCompatible();
+    throw new Error("version check failed during bridge installation");
+  }
+
   // Attached local/remote mode must keep the real URLs even in Vite dev: the
   // Vite proxy targets the managed dashboard port (9120), so relative URLs
   // would route traffic to the wrong backend. Managed dev still hides URLs and
@@ -1063,8 +1190,6 @@ export async function installTauriBridge(): Promise<void> {
     managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
     managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",
   };
-
-  (window as any).hermesDesktop = tauriBridge;
 
   registerDevtoolsShortcut();
 }

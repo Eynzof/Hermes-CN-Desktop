@@ -1,6 +1,6 @@
 ---
 name: desktop-dual-repo-test
-description: Use when starting or verifying Hermes Agent CN Desktop with the latest Hermes-CN-Desktop and Hermes-CN-Core branches — dev smoke test (pnpm tauri:dev), packaged beta/release install, runtime badge, WS relay, or regression after merging both repos. Covers syncing both repos, dev-runtime isolation, clean DMG install, and the report table for路线 A/B verification.
+description: Use when starting or verifying Hermes Agent CN Desktop with the latest Hermes-CN-Desktop and Hermes-CN-Core branches — dev smoke test (pnpm tauri:dev), packaged beta/release install, runtime badge, WS relay, or regression after merging both repos. Covers human-executed repo sync, dev-runtime isolation, clean DMG install, and the report table for路线 A/B verification.
 ---
 
 # Desktop Dual-Repo Test
@@ -23,32 +23,21 @@ Always sync **both** repos to the intended branch before testing. Never assume a
   - Dev (`pnpm tauri:dev`): `…/cn.org.hermesagent.desktop/dev-runtime/`
   - Packaged app: `…/cn.org.hermesagent.desktop/runtime/`
 - If packaged tests show kernel `dev-local` / commit `de3b` while UI is current, the production `current.json` was polluted by an old dev session — run migration (below), not a rebuild.
+- **Git 写操作（fetch / pull / checkout / worktree / branch / commit / push / PR / tag）一律由人执行**，代理绝不自动执行。代理只允许只读 git（`git status` / `git rev-parse` / `git log` / `git diff`）用于核对与报告；若仓库不在目标分支或落后远端，停下来报告给人处理。
 - macOS: detach all stale `Hermes Agent CN Desktop*` DMG volumes before reading or installing a release DMG. Never trust a mounted volume unless `hdiutil info` shows it came from the DMG you just downloaded.
 
-## Step 0 — Sync both repositories
+## Step 0 — Sync both repositories (由人执行)
 
-```bash
-# Desktop (this repo)
-cd /path/to/Hermes-CN-Desktop
-git fetch origin
-git checkout main && git pull --ff-only origin main
-# or: git checkout <integration-branch> && git pull --ff-only
+> 编码代理**不执行** git 同步 / 切分支 / worktree 等写操作（完整同步命令见 `docs/agents/git-workflow.md` §4）。开始测试前确认两个仓库已由**人**同步到目标分支；若仓库不在目标分支或落后远端，**停下来报告给人处理**。
 
-# Core (sibling)
-cd /path/to/Hermes-CN-Core
-git fetch origin
-git checkout main && git pull --ff-only origin main
-# or: git checkout <feature-branch> && git pull --ff-only
-```
-
-Record SHAs for the report:
+记录 SHA 用于报告（只读，代理可执行）：
 
 ```bash
 cd /path/to/Hermes-CN-Desktop && git rev-parse --short HEAD
 cd /path/to/Hermes-CN-Core && git rev-parse --short HEAD
 ```
 
-Install deps once per repo after pulling:
+同步后每个仓库装一次依赖：
 
 ```bash
 cd /path/to/Hermes-CN-Desktop && pnpm install
@@ -67,7 +56,7 @@ After PR #211 lands, new dev sessions no longer write into production `runtime/`
 
 ## 路线 A — Dev verification (both repos, latest code)
 
-Use before pushing a desktop tag or when validating UI + gateway changes without a signed build.
+Use before creating/publishing a desktop tag or when validating UI + gateway changes without a signed build.
 
 ```bash
 cd /path/to/Hermes-CN-Desktop
@@ -167,4 +156,5 @@ Wait for kernel ready (dashboard **9120** returns 200), then:
 
 - **PR merged, considering tag** → 路线 A on both repos' latest `main` (or integration branch).
 - **Tag pushed, GHA green** → 路线 B on release asset; 路线 A results do not replace B for runtime badge or macOS relay.
-- **Formal public release** → also run `.codex/skills/desktop-release-sync-landing/SKILL.md` for landing / `latest.json`.
+- **Stable/formal public release** → also run `.codex/skills/desktop-release-sync-landing/SKILL.md` for landing / `latest.json`.
+- **RC / beta / alpha / canary prerelease** → do not modify the landing repository and do not point public `latest.json` at the prerelease; distribute and validate through GitHub Release or a dedicated internal channel.

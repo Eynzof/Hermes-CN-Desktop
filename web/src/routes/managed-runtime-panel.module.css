@@ -111,3 +111,49 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.updateSource {
+  display: grid;
+  gap: var(--h-button-gap);
+  padding: var(--h-card-padding-sm);
+  border: 1px solid var(--h-line);
+  border-radius: 0;
+  background: var(--h-bg-pane);
+}
+
+.updateSourceTitle {
+  margin: 0;
+  color: var(--h-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.updateSourceHint {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.fieldLabel {
+  display: grid;
+  gap: 4px;
+  color: var(--h-text-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.fieldInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px var(--h-input-padding-x);
+  border: 1px solid var(--h-line);
+  border-radius: 0;
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+  font: 12px/1.4 var(--h-font-mono);
+}
+
+.fieldInput:focus {
+  outline: 1px solid var(--h-accent);
+}

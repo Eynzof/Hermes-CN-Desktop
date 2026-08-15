@@ -8,6 +8,7 @@ import type {
 import { runtime } from "@/lib/runtime";
 import { raceAbort } from "@/lib/transport";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
+import { recordRuntimeKernelVersion } from "@/lib/version-check";
 import { runtimeUpdatingAtom } from "@/stores/ui";
 
 const RUNTIME_INFO_KEY = ["desktop-runtime-info"] as const;
@@ -32,6 +33,12 @@ export function useRuntimeInfo() {
     enabled: hasRuntimeBridge(),
     refetchInterval: 30_000,
     staleTime: 10_000,
+    // Prefer the installed kernel version (unified self-update keeps it equal
+    // to the desktop version); the baked constant is only the fallback.
+    select: (info) => {
+      recordRuntimeKernelVersion(info.current?.kernelVersion);
+      return info;
+    },
   });
 }
 

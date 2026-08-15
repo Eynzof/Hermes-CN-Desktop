@@ -26,6 +26,7 @@ import {
   togglePinnedWorkspaceProject,
   type WorkspaceProject,
 } from "@/lib/workspaces";
+import { useConfirm } from "@/lib/use-confirm";
 import { runtime } from "@/lib/runtime";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
 import s from "./projects.module.css";
@@ -115,6 +116,7 @@ export function ProjectsRoute() {
   const [pinnedProjectPaths, setPinnedProjectPaths] = useState(readPinnedWorkspaceProjectPaths);
   const [searchQuery, setSearchQuery] = useState("");
   const [openMenuPath, setOpenMenuPath] = useState<string | null>(null);
+  const { confirm, prompt } = useConfirm();
 
   useEffect(() => {
     return subscribeWorkspaceChanges(() => {
@@ -182,12 +184,22 @@ export function ProjectsRoute() {
     try {
       let nextPath = "";
       if (runtime.isRemote()) {
-        nextPath = window.prompt("输入远端服务器上的项目绝对路径", "") ?? "";
+        nextPath = (await prompt({
+          title: "添加远端项目",
+          body: "输入远端服务器上的项目绝对路径",
+          confirmLabel: "添加",
+          input: { placeholder: "/path/to/project" },
+        })) ?? "";
       } else if (desktopAvailable && window.hermesDesktop?.pickDirectory) {
         const result = await window.hermesDesktop.pickDirectory();
         if (!result.canceled) nextPath = result.paths[0] ?? "";
       } else {
-        nextPath = window.prompt("输入项目工作区路径（绝对路径）", "") ?? "";
+        nextPath = (await prompt({
+          title: "添加项目",
+          body: "输入项目工作区路径（绝对路径）",
+          confirmLabel: "添加",
+          input: { placeholder: "C:\\path\\to\\project" },
+        })) ?? "";
       }
       const normalized = normalizeWorkspacePath(nextPath);
       if (!normalized) return;
@@ -196,7 +208,7 @@ export function ProjectsRoute() {
     } catch (error) {
       console.error("Failed to add project:", error);
     }
-  }, [desktopAvailable]);
+  }, [desktopAvailable, prompt]);
 
   const handleOpenInFinder = useCallback(async (project: WorkspaceProject) => {
     setOpenMenuPath(null);
@@ -215,16 +227,19 @@ export function ProjectsRoute() {
     setPinnedProjectPaths(togglePinnedWorkspaceProject(project.path));
   }, []);
 
-  const handleDelete = useCallback((project: WorkspaceProject) => {
+  const handleDelete = useCallback(async (project: WorkspaceProject) => {
     setOpenMenuPath(null);
-    const confirmed = window.confirm(
-      `确认删除项目「${project.name}」？该工作区下的会话会被解除关联，但会话本身不会删除。`,
-    );
+    const confirmed = await confirm({
+      title: "删除项目",
+      body: `确认删除项目「${project.name}」？该工作区下的会话会被解除关联，但会话本身不会删除。`,
+      confirmLabel: "删除",
+      danger: true,
+    });
     if (!confirmed) return;
     removeWorkspaceProject(project.path);
     setProjects(readWorkspaceProjects());
     setPinnedProjectPaths(readPinnedWorkspaceProjectPaths());
-  }, []);
+  }, [confirm]);
 
   const goProject = useCallback(
     (project: WorkspaceProject) => {

@@ -3,6 +3,7 @@ import { runtime } from "./runtime";
 import { debugBus } from "./debug-bus";
 import { activeProfileAtom } from "@/stores/ui";
 import { AttachmentUploadResult } from "@hermes/protocol";
+import { assertCompatible } from "./version-check";
 import type { DownloadExternalImageInput, DownloadedImageResult } from "./runtime";
 
 interface Parser<T> {
@@ -138,6 +139,7 @@ export async function fetchJSON<T>(
   init?: RequestInit,
   parser?: Parser<T>,
 ): Promise<T> {
+  assertCompatible();
   if (shouldUseNativeIpc(path)) {
     return fetchViaElectron(path, init, parser);
   }
@@ -326,18 +328,22 @@ export async function downloadExternalImageFile(url: string): Promise<File> {
 }
 
 export async function putJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
+  assertCompatible();
   return fetchJSON<T>(path, { method: "PUT", body: JSON.stringify(body) }, parser);
 }
 
 export async function postJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
+  assertCompatible();
   return fetchJSON<T>(path, { method: "POST", body: JSON.stringify(body) }, parser);
 }
 
 export async function patchJSON<T>(path: string, body: unknown, parser?: Parser<T>): Promise<T> {
+  assertCompatible();
   return fetchJSON<T>(path, { method: "PATCH", body: JSON.stringify(body) }, parser);
 }
 
 export async function deleteJSON<T>(path: string, body?: unknown, parser?: Parser<T>): Promise<T> {
+  assertCompatible();
   return fetchJSON<T>(path, {
     method: "DELETE",
     ...(body !== undefined && { body: JSON.stringify(body) }),
@@ -349,6 +355,7 @@ export function uploadAttachmentFile(
   file: File,
   onProgress?: (percent: number) => void,
 ): Promise<AttachmentUploadResult> {
+  assertCompatible();
   const uploadFile = window.hermesDesktop?.uploadFile;
   if (uploadFile) {
     return file.arrayBuffer().then(async (data) => {

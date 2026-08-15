@@ -25,6 +25,7 @@ import {
 } from "@/lib/workspaces";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
 import { WorktreePanel } from "@/components/projects/worktree-panel";
+import { useConfirm } from "@/lib/use-confirm";
 import { runtime } from "@/lib/runtime";
 import s from "./project-detail.module.css";
 
@@ -91,6 +92,7 @@ export function ProjectDetailRoute() {
   const [projects, setProjects] = useState<WorkspaceProject[]>(readWorkspaceProjects);
   const [sessionWorkspaceMap, setSessionWorkspaceMap] = useState(readSessionWorkspaceMap);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { confirm } = useConfirm();
 
   useEffect(() => {
     return subscribeWorkspaceChanges(() => {
@@ -157,16 +159,19 @@ export function ProjectDetailRoute() {
     }
   }, [project]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     setMenuOpen(false);
     if (!project) return;
-    const confirmed = window.confirm(
-      `确认删除项目「${project.name}」？该工作区下的会话会被解除关联，但会话本身不会删除。`,
-    );
+    const confirmed = await confirm({
+      title: "删除项目",
+      body: `确认删除项目「${project.name}」？该工作区下的会话会被解除关联，但会话本身不会删除。`,
+      confirmLabel: "删除",
+      danger: true,
+    });
     if (!confirmed) return;
     removeWorkspaceProject(project.path);
     navigate("/projects");
-  }, [navigate, project]);
+  }, [confirm, navigate, project]);
 
   if (!workspacePath) {
     return (

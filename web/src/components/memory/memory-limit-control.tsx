@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Button } from "@hermes/shared-ui";
 import {
   DEFAULT_MEMORY_CHAR_LIMIT,
-  MAX_MEMORY_CHAR_LIMIT,
   useSaveMemoryCharLimit,
 } from "@/hooks/use-memory";
 import s from "./memory-limit-control.module.css";
@@ -32,12 +31,12 @@ export function MemoryLimitControl({ currentLimit, used }: MemoryLimitControlPro
   }, [saved]);
 
   const limit = Number(draft);
-  const invalid = !Number.isInteger(limit) || limit < 1 || limit > MAX_MEMORY_CHAR_LIMIT;
+  const invalid = !Number.isInteger(limit) || limit < 1;
   const unchanged = limit === currentLimit;
   const helper = useMemo(() => {
-    if (invalid) return `请输入 1–${MAX_MEMORY_CHAR_LIMIT.toLocaleString()} 之间的整数。`;
+    if (invalid) return "请输入正整数。";
     if (limit < used) return "新上限低于当前内容长度；已有内容不会被截断，但需精简后才能继续写入。";
-    return `默认 ${DEFAULT_MEMORY_CHAR_LIMIT.toLocaleString()} 字符，硬上限 ${MAX_MEMORY_CHAR_LIMIT.toLocaleString()} 字符。新会话会使用更新后的容量。`;
+    return `最少 1 字符。修改后新会话会使用更新后的容量。`;
   }, [invalid, limit, used]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -59,7 +58,6 @@ export function MemoryLimitControl({ currentLimit, used }: MemoryLimitControlPro
             id="memory-char-limit"
             type="number"
             min={1}
-            max={MAX_MEMORY_CHAR_LIMIT}
             step={1}
             inputMode="numeric"
             value={draft}
