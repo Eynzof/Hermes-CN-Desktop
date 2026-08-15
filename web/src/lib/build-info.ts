@@ -11,7 +11,7 @@ export const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || UN
  * `/api/version` response that does not match this value triggers a fatal
  * compatibility dialog and force-quit.
  */
-export const EXPECTED_BACKEND_VERSION = "0.8.0-rc4";
+export const EXPECTED_BACKEND_VERSION = "0.8.0-rc5";
 export const BUILD_COMMIT = import.meta.env.VITE_HERMES_BUILD_COMMIT || "unknown";
 export const BUILD_DATE = import.meta.env.VITE_HERMES_BUILD_DATE || "unknown";
 
