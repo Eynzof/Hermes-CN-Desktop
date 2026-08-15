@@ -197,7 +197,7 @@ node scripts/sync-release-version.mjs 0.8.0 --core D:/hermes-agent-cn --dry-run 
 node scripts/sync-release-version.mjs --check --core D:/hermes-agent-cn           # CI 门，失配 exit 1
 ```
 
-桌面侧（复用 `sync-desktop-version.mjs`）：`package.json`、`web/`、`packages/`、`tauri.conf.json`、`Cargo.toml`、`Cargo.lock`、README/docs、`release-desktop.yml`、`web/src/lib/build-info.ts`（含 `EXPECTED_BACKEND_VERSION`）。Core 侧：`pyproject.toml [project].version` + `hermes_cli/__init__.py __version__`。
+桌面侧（复用 `sync-desktop-version.mjs`）：`package.json`、`web/`、`packages/`、`tauri.conf.json`、`Cargo.toml`、`Cargo.lock`、README/docs、`release-desktop.yml`。`EXPECTED_BACKEND_VERSION` 不跟随桌面版本改写；托管模式从当前 runtime 记录读取内核版本。Core 侧：`pyproject.toml [project].version` + `hermes_cli/__init__.py __version__`。
 
 ### 7.2 产物与签名
 

@@ -7,8 +7,9 @@
 //
 //   Desktop (this repo):
 //     package.json + web/packages + tauri.conf.json + Cargo.toml + Cargo.lock
-//     + README/docs + release-desktop.yml + web/src/lib/build-info.ts
-//     EXPECTED_BACKEND_VERSION (via the refactored sync-desktop-version.mjs)
+//     + README/docs + release-desktop.yml. The renderer's backend fallback
+//     version is not a Desktop version mirror; managed mode reads it from the
+//     active runtime record.
 //   Core (`--core D:/hermes-agent-cn`):
 //     pyproject.toml [project].version
 //     hermes_cli/__init__.py __version__

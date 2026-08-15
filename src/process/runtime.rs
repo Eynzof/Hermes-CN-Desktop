@@ -2405,8 +2405,42 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
     }
 }
 
+const MAX_ZIP_ENTRIES: usize = 10_000;
 const MAX_ZIP_FILES: usize = 5_000;
 const MAX_ZIP_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
+
+fn validate_zip_entry_counts(
+    archive: &mut zip::ZipArchive<fs::File>,
+) -> Result<(usize, usize), String> {
+    let entry_count = archive.len();
+    if entry_count > MAX_ZIP_ENTRIES {
+        return Err(format!(
+            "Zip contains {} entries (limit {})",
+            entry_count, MAX_ZIP_ENTRIES
+        ));
+    }
+
+    // ZipArchive::len() includes explicit directory records. The file limit
+    // protects payload-bearing files and symlinks; directories remain bounded
+    // separately by MAX_ZIP_ENTRIES. Counting both as files rejected the valid
+    // cn.7 runtime (4011 files + 996 directory records).
+    let mut file_count = 0usize;
+    for index in 0..entry_count {
+        let entry = archive.by_index(index).map_err(|e| e.to_string())?;
+        if !entry.is_dir() {
+            file_count += 1;
+        }
+    }
+
+    if file_count > MAX_ZIP_FILES {
+        return Err(format!(
+            "Zip contains {} files (limit {})",
+            file_count, MAX_ZIP_FILES
+        ));
+    }
+
+    Ok((entry_count, file_count))
+}
 
 /// Returns true when a symlink whose target is `target`, living in directory
 /// `link_parent`, resolves to a path that stays inside `dest`. The target is
@@ -2446,14 +2480,7 @@ fn symlink_target_within(dest: &Path, link_parent: &Path, target: &Path) -> bool
 pub(crate) fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-
-    if archive.len() > MAX_ZIP_FILES {
-        return Err(format!(
-            "Zip contains {} files (limit {})",
-            archive.len(),
-            MAX_ZIP_FILES
-        ));
-    }
+    validate_zip_entry_counts(&mut archive)?;
 
     let dest = dest.canonicalize().unwrap_or_else(|_| dest.to_path_buf());
     let mut total_bytes: u64 = 0;
@@ -3621,14 +3648,84 @@ mod tests {
         let file = std::fs::File::create(&zip_path).unwrap();
         let mut writer = zip::ZipWriter::new(file);
         let opts = zip::write::SimpleFileOptions::default();
-        // MAX_ZIP_FILES = 5000 — push 5001 empty entries.
-        for i in 0..5001 {
+        // MAX_ZIP_FILES = 5000 — push 5001 real file entries.
+        for i in 0..=MAX_ZIP_FILES {
             writer.start_file(format!("f{}", i), opts).unwrap();
         }
         writer.finish().unwrap();
 
         let err = extract_zip(&zip_path, &dest).unwrap_err();
-        assert!(err.contains("Zip contains"), "unexpected error: {}", err);
+        assert_eq!(
+            err,
+            format!(
+                "Zip contains {} files (limit {})",
+                MAX_ZIP_FILES + 1,
+                MAX_ZIP_FILES
+            )
+        );
+    }
+
+    #[test]
+    fn zip_file_limit_does_not_count_directory_records() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("directories.zip");
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+
+        for i in 0..MAX_ZIP_FILES {
+            writer.start_file(format!("f{}", i), opts).unwrap();
+        }
+        writer.add_directory("metadata/", opts).unwrap();
+        writer.finish().unwrap();
+
+        let file = std::fs::File::open(&zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+        assert_eq!(
+            validate_zip_entry_counts(&mut archive).unwrap(),
+            (MAX_ZIP_FILES + 1, MAX_ZIP_FILES)
+        );
+    }
+
+    #[test]
+    fn extract_zip_rejects_too_many_directory_entries() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("directory-bomb.zip");
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        for i in 0..=MAX_ZIP_ENTRIES {
+            writer.add_directory(format!("d{}/", i), opts).unwrap();
+        }
+        writer.finish().unwrap();
+
+        let err = extract_zip(&zip_path, &dest).unwrap_err();
+        assert_eq!(
+            err,
+            format!(
+                "Zip contains {} entries (limit {})",
+                MAX_ZIP_ENTRIES + 1,
+                MAX_ZIP_ENTRIES
+            )
+        );
+    }
+
+    #[test]
+    #[ignore = "release workflow provides HERMES_RELEASE_RUNTIME_ZIP"]
+    fn release_runtime_zip_extracts_with_installer() {
+        let zip_path = std::env::var_os("HERMES_RELEASE_RUNTIME_ZIP")
+            .map(PathBuf::from)
+            .expect("HERMES_RELEASE_RUNTIME_ZIP must point to the staged runtime archive");
+        let dest = TempDir::new().unwrap();
+
+        extract_zip(&zip_path, dest.path()).unwrap();
+        assert!(
+            find_executable_in(dest.path(), 2).is_some(),
+            "runtime executable missing after extraction"
+        );
     }
 
     #[cfg(unix)]
