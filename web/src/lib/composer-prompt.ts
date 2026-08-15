@@ -18,6 +18,7 @@ const LEGACY_IMAGE_BLOCK_RE = /^\s*\[User attached image: ([^\]\n]+)\]\n[\s\S]*$
 const ATTACHED_CONTEXT_MARKER_RE = /(?:^|\n)--- Attached Context ---\s*\n/;
 const CONTEXT_WARNINGS_MARKER_RE = /(?:^|\n)--- Context Warnings ---[\s\S]*$/;
 const CONTEXT_REF_RE = /@(file|folder|url|image|tool|terminal):(?:"[^"\n]+"|'[^'\n]+'|`[^`\n]+`|\S+)/g;
+const FILE_DIRECTIVE_LINE_RE = /^@file:(?:`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|\S+)\s*$/;
 const IMAGE_DIRECTIVE_LINE_RE = /^@image:(`[^`\n]+`|"[^"\n]+"|'[^'\n]+'|\S+)\s*$/gm;
 const SCREENSHOT_PLACEHOLDER_LINE_RE = /^\[screenshot\]\s*$/gm;
 const DESKTOP_ATTACHMENT_DIR = ".hermes/desktop-attachments/";
@@ -121,6 +122,22 @@ function removeStandaloneRefLine(value: string, ref: string): string | null {
   return next.length === lines.length ? null : next.join("\n");
 }
 
+function stripDesktopFileDirectiveLines(value: string, labels: string[]): string {
+  return value
+    .split("\n")
+    .filter((line) => {
+      const ref = line.trim();
+      if (!FILE_DIRECTIVE_LINE_RE.test(ref)) return true;
+      const label = desktopAttachmentLabel(ref);
+      if (!label) return true;
+      labels.push(label);
+      return false;
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function stripAttachedContext(value: string, labels: string[]): string {
   const marker = value.match(ATTACHED_CONTEXT_MARKER_RE);
   if (!marker || marker.index === undefined) {
@@ -154,6 +171,7 @@ export function stripHermesUiWorkspaceContext(text: string | null | undefined): 
   const nativeImageLabels: string[] = [];
 
   value = stripAttachedContext(value, contextAttachmentLabels);
+  value = stripDesktopFileDirectiveLines(value, contextAttachmentLabels);
 
   value = value.replace(IMAGE_BLOCK_RE, (_block, label: string) => {
     const name = label.trim();

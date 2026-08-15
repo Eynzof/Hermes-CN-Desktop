@@ -323,6 +323,18 @@ describe("composer prompt preparation", () => {
     );
   });
 
+  it("normalizes a persisted profile attachment ref even without attached context", () => {
+    const storedPrompt = [
+      "@file:/home/runner/e2e/.runtime/hermes-home/attachments/report.pdf",
+      "",
+      "总结这个 PDF",
+    ].join("\n");
+
+    expect(stripHermesUiWorkspaceContext(storedPrompt)).toBe(
+      "总结这个 PDF\n\n附件：report.pdf",
+    );
+  });
+
   it("hides Core native image directives and keeps the original image label", () => {
     const storedPrompt = [
       "[Hermes UI Image]",
