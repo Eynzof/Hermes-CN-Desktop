@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runtime } from "./runtime";
+import {
+  deferBackendVersionCheckForOfflineRuntime,
+  getVersionCheckState,
+  resetVersionCheck,
+} from "./version-check";
 
 beforeEach(() => {
+  resetVersionCheck();
   (globalThis as any).window = {
     __HERMES_RUNTIME__: {
       platform: "tauri",
@@ -152,10 +158,48 @@ describe("managed runtime control state", () => {
 
     expect(window.__HERMES_RUNTIME__).toMatchObject({
       backendReady: false,
+      backendRecoveryReason: "managed-runtime-offline",
       guideState: "deferred",
       managedRuntimeDesiredState: "uninstalled",
       managedRuntimeLifecycleState: "uninstalled",
     });
+    expect(getVersionCheckState()).toEqual({
+      kind: "deferred",
+      reason: "managed-runtime-offline",
+    });
     expect(window.__HERMES_RUNTIME__?.apiBaseUrl).toBe("http://old");
+  });
+
+  it("does not overwrite an attached backend recovery gate with managed control state", () => {
+    window.__HERMES_RUNTIME__ = {
+      platform: "tauri",
+      connectionMode: "remote",
+      apiBaseUrl: "https://remote.example.com",
+      backendReady: false,
+      backendRecoveryReason: "external-backend-auth-required",
+    };
+    deferBackendVersionCheckForOfflineRuntime();
+
+    runtime.applyRuntimeControlResult({
+      ok: true,
+      guideState: "completed",
+      desiredState: "running",
+      lifecycleState: "stopped",
+      installed: true,
+      running: false,
+      backendReady: true,
+    });
+
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      connectionMode: "remote",
+      backendReady: false,
+      backendRecoveryReason: "external-backend-auth-required",
+      managedRuntimeDesiredState: "running",
+      managedRuntimeLifecycleState: "stopped",
+    });
+    expect(getVersionCheckState()).toEqual({
+      kind: "deferred",
+      reason: "managed-runtime-offline",
+    });
   });
 });
