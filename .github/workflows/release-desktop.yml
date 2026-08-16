@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.8.0-rc6`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.8.0-rc7`).
 #
 # Desktop release build runs in parallel for Windows, macOS, and Linux. Each job:
 #   1. Installs Node 22 + pnpm + Rust toolchain
@@ -30,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.8.0-rc6)"
+        description: "Tag name to associate the build with (e.g. v0.8.0-rc7)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
