@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.6.13`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.14`).
 #
 # Desktop release build runs in parallel for every brand and platform. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -31,11 +31,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.6.13)"
+        description: "Tag name to associate the build with (e.g. v0.6.14)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.20.0-cn.6"
+        default: "runtime-v0.20.0-cn.7"
         required: false
       remote_path:
         description: "Linux server download root. Use /www/wwwroot/downloads, or leave empty to use LINUX_DEPLOY_PATH."
@@ -229,7 +229,7 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_REPO: nevermorewish/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.6' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.7' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -281,7 +281,7 @@ jobs:
           args=(
             scripts/stage-bundled-runtime.mjs
             --repo "nevermorewish/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.6' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.7' }}"
             --feed-base-url "${{ env.BUNDLED_RUNTIME_FEED_BASE_URL }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
