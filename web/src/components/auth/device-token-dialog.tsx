@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAtom } from "jotai";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog } from "@hermes/shared-ui";
 import { ArrowRight, ExternalLink, Eye, EyeOff, KeyRound, Trash2, X } from "lucide-react";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/lib/tauri-bridge";
 import { deviceTokenManagementUrl } from "@/lib/enterprise-sync";
 import { openExternalUrl } from "@/lib/external-links";
+import { invalidateModelConfigurationQueries } from "@/hooks/use-config";
 import s from "./device-token-dialog.module.css";
 
 export interface DeviceTokenDialogProps {
@@ -40,6 +42,7 @@ export function DeviceTokenDialog({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const managementUrl = deviceTokenManagementUrl();
+  const queryClient = useQueryClient();
 
   const setOpen = (next: boolean) => {
     if (controlledOpen !== undefined || (isStartup && !next)) return;
@@ -73,6 +76,7 @@ export function DeviceTokenDialog({
     setNotice("");
     try {
       const next = await setTeamDeviceToken(token);
+      await invalidateModelConfigurationQueries(queryClient);
       setStatus(next);
       setDeviceToken("");
       resetTeamDeviceTokenOnboarding();
@@ -91,6 +95,7 @@ export function DeviceTokenDialog({
     setNotice("");
     try {
       await clearTeamDeviceToken();
+      await invalidateModelConfigurationQueries(queryClient);
       setDeviceToken("");
       setStatus({ configured: false, invalidated: false, syncedModels: 0, syncedSkills: 0 });
       dismissTeamDeviceTokenOnboarding();

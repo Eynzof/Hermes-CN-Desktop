@@ -10,7 +10,11 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useConfig, useSaveConfig } from "@/hooks/use-config";
+import {
+  invalidateModelConfigurationQueries,
+  useConfig,
+  useSaveConfig,
+} from "@/hooks/use-config";
 import {
   buildCustomProviderDeleteUpdate,
   buildProviderSettingsUpdate,
@@ -269,6 +273,7 @@ function CustomModelEditDialog({ title, initial, saving, error, onClose, onSave 
 
 function EnterpriseSection() {
   const { data: config } = useConfig();
+  const queryClient = useQueryClient();
   const [binding, setBinding] = useState<EnterpriseBinding | null>(readEnterpriseBinding);
   const [meta, setMeta] = useState<EnterpriseSyncMeta | null>(readEnterpriseSyncMeta);
   const [serverUrl, setServerUrl] = useState(binding?.serverUrl ?? DEFAULT_TEAM_SERVER_URL);
@@ -304,6 +309,7 @@ function EnterpriseSection() {
       // Rust owns Team config writes. It stores the token privately, fetches
       // the manifest, and applies providers through model_registry atomically.
       const status = await setTeamDeviceToken(nextBinding.deviceToken);
+      await invalidateModelConfigurationQueries(queryClient);
       setBinding(nextBinding);
       writeEnterpriseBinding(nextBinding);
       const nextMeta: EnterpriseSyncMeta = {
@@ -325,6 +331,7 @@ function EnterpriseSection() {
     try {
       if (window.__TAURI_INTERNALS__ != null) {
         await clearTeamDeviceToken();
+        await invalidateModelConfigurationQueries(queryClient);
       }
       setDeviceToken("");
       setBinding(null);

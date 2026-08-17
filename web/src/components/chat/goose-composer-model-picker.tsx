@@ -348,6 +348,13 @@ export interface ModelGroupingOptions {
   savedCustomProviderIds?: ReadonlySet<string>;
 }
 
+export function shouldShowEnterpriseModels(
+  isAccountSignedIn: boolean,
+  enterpriseProviderIds: ReadonlySet<string>,
+): boolean {
+  return isAccountSignedIn || enterpriseProviderIds.size > 0;
+}
+
 export function isTeamServiceProviderUrl(value: unknown): boolean {
   if (typeof value !== "string" || !value.trim() || !BRAND.teamServiceUrl.trim()) return false;
   try {
@@ -462,7 +469,7 @@ export function ModelPickerModal({
   );
   const groups = useMemo(
     () => groupCandidates(modelOptions, {
-      showEnterprise: Boolean(huanxingAccount),
+      showEnterprise: shouldShowEnterpriseModels(Boolean(huanxingAccount), enterpriseProviderIds),
       enterpriseProviderIds,
       savedCustomProviderIds,
     }),

@@ -6,6 +6,7 @@ import {
   groupCandidates,
   isTeamServiceProviderUrl,
   modelButtonText,
+  shouldShowEnterpriseModels,
 } from "./goose-composer-model-picker";
 
 describe("modelButtonText", () => {
@@ -250,13 +251,38 @@ describe("groupCandidates", () => {
       ],
     } as ModelOptionsResult;
 
-    const groups = groupCandidates(options, { showEnterprise: false });
+    const enterpriseProviderIds = new Set<string>();
+    const groups = groupCandidates(options, {
+      showEnterprise: shouldShowEnterpriseModels(false, enterpriseProviderIds),
+      enterpriseProviderIds,
+    });
 
     expect(groups.builtin.map((candidate) => candidate.key)).toEqual([
       `${messagesProvider}:${brandModel}`,
     ]);
     expect(groups.enterprise).toEqual([]);
     expect(groups.custom).toEqual([]);
+  });
+
+  it("shows device-token Team models while logged out", () => {
+    const enterpriseProviderIds = new Set(["custom:team-company-model"]);
+    const options = {
+      providers: [{
+        slug: "custom:team-company-model",
+        name: "Enterprise",
+        models: ["enterprise-model"],
+        authenticated: true,
+      }],
+    } as ModelOptionsResult;
+
+    const groups = groupCandidates(options, {
+      showEnterprise: shouldShowEnterpriseModels(false, enterpriseProviderIds),
+      enterpriseProviderIds,
+    });
+
+    expect(groups.enterprise.map((candidate) => candidate.key)).toEqual([
+      "custom:team-company-model:enterprise-model",
+    ]);
   });
 
   it("shows one row per branded model when chat and Messages providers overlap", () => {

@@ -843,6 +843,7 @@ mod tests {
         let entry = &config["providers"]["custom:acct-brand"];
         assert_eq!(entry["token_id"].as_i64(), Some(42));
         assert_eq!(entry["api_key"].as_str(), Some("wbd_token"));
+        assert_eq!(entry["provider_key"].as_str(), Some("custom:acct-brand"));
     }
 
     #[test]
