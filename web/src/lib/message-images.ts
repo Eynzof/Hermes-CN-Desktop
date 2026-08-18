@@ -80,6 +80,9 @@ export function isLikelyLocalFilePath(value: string): boolean {
   return (
     /^(?:file):/i.test(trimmed) ||
     /^(?:~[\\/]|[A-Za-z]:[\\/]|\\\\)/.test(trimmed) ||
+    // POSIX-style Windows drive path (/D:/foo) — produced by the markdown
+    // harden pass so Windows absolute paths survive rehype-harden.
+    /^\/[A-Za-z]:\//.test(trimmed) ||
     /^\/(?:Applications|Library|System|Users|Volumes|bin|dev|etc|home|opt|private|sbin|tmp|usr|var)(?:\/|$)/.test(trimmed)
   );
 }
@@ -93,10 +96,15 @@ export function normalizeLocalFilePath(value: string): string {
       return trimmed;
     }
   }
+  // /D:/foo → D:/foo: strip the leading slash of the POSIX-style Windows drive
+  // path so the real filesystem path is passed to the media reader.
+  let candidate = trimmed;
+  const posixDriveMatch = trimmed.match(/^\/([A-Za-z]):(\/.*)$/);
+  if (posixDriveMatch) candidate = `${posixDriveMatch[1]}:${posixDriveMatch[2]}`;
   try {
-    return decodeURI(trimmed);
+    return decodeURI(candidate);
   } catch {
-    return trimmed;
+    return candidate;
   }
 }
 
