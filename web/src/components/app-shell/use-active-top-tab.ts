@@ -4,7 +4,8 @@ export type TopTab =
   | "workbench"
   | "skills"
   | "gateway"
-  | "externalMemory"
+  | "wanderMemory"
+  | "hermesMemory"
   | "advanced";
 
 export interface TopTabDef {
@@ -69,15 +70,22 @@ export const TOP_TABS: readonly TopTabDef[] = [
     matches: (path) => path.startsWith("/im"),
   },
   {
-    id: "externalMemory",
+    id: "wanderMemory",
     num: "04",
-    label: "记忆",
+    label: "Wander 记忆",
+    href: "/wander-memory/memories",
+    matches: (path) => path.startsWith("/wander-memory"),
+  },
+  {
+    id: "hermesMemory",
+    num: "05",
+    label: "Hermes 记忆",
     href: "/memory",
     matches: (path) => ["/memory", "/memconfig", "/openviking", "/hindsight"].some((route) => isRoute(path, route)),
   },
   {
     id: "advanced",
-    num: "05",
+    num: "06",
     label: "高级",
     href: "/health",
     matches: (path) =>

@@ -1,0 +1,107 @@
+/* WanderMemory memories route — Hermes tokens only, no hard-coded colors. */
+
+.searchRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.topK {
+  width: 96px;
+  flex: none;
+}
+
+.inlineError {
+  margin: 8px 0 0;
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.results {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.addPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--h-card-padding-md);
+  background: var(--h-bg-pane);
+  border: 1px solid var(--h-line);
+}
+
+.addTextarea {
+  resize: vertical;
+}
+
+.addButton {
+  margin-top: 4px;
+}
+
+.addFeedback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.collisionBox {
+  padding: 8px 12px;
+  background: var(--h-bg-soft);
+  border: 1px solid var(--h-line-soft);
+}
+
+.footnote {
+  margin: 4px 0 0;
+  color: var(--h-text-4);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.dialogContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: min(640px, calc(100vw - 48px));
+}
+
+.dialogTitle {
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 13px;
+}
+
+.dialogDesc {
+  color: var(--h-text-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.jsonBlock {
+  margin: 0;
+  padding: 12px;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--h-bg-code);
+  border: 1px solid var(--h-line);
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

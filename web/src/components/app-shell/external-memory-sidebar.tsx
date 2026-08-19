@@ -46,11 +46,11 @@ export function ExternalMemorySidebar() {
     : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
 
   return (
-    <aside className={s.sidebar} aria-label="记忆侧栏">
+    <aside className={s.sidebar} aria-label="Hermes 记忆侧栏">
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§041 · 记忆</span>
+            <span>§051 · Hermes 记忆</span>
             <span className={s.labelNum}>✕✕</span>
           </div>
           {EXTERNAL_MEMORY_ITEMS.map((item) => {

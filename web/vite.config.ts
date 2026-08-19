@@ -159,6 +159,71 @@ function resolveDevServerPort(): number {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MemOS (WanderMemory) dev proxy targets — port-shift aware at config load.
+// The MemOS backend is CORS-free by default, so every proxy entry needs
+// `changeOrigin: true`. This stays SYNCHRONOUS (vite config load): no network
+// probe here — the browser-side discovery in
+// `web/src/lib/wander-memory/endpoints.ts` handles live probing.
+// ─────────────────────────────────────────────────────────────────────────────
+interface WanderMemoryProxyTargets {
+  apiOrigin: string | null;
+  fsOrigin: string | null;
+}
+
+function envString(name: string): string | null {
+  const value = process.env[name];
+  return value && value.trim() ? value.trim() : null;
+}
+
+function readPortsFile(candidate: string): { api: number; fs: number } | null {
+  try {
+    const raw = JSON.parse(readFileSync(candidate, "utf8")) as { api?: unknown; fs?: unknown };
+    const api = typeof raw.api === "number" && Number.isInteger(raw.api) && raw.api > 0 ? raw.api : null;
+    if (api === null) return null;
+    // `fs` may be missing in a partial ports file — derive api+2 (plan Appendix L).
+    const fs = typeof raw.fs === "number" && Number.isInteger(raw.fs) && raw.fs > 0 ? raw.fs : api + 2;
+    return { api, fs };
+  } catch {
+    return null; // unreadable / not yet written — fall through to the next candidate
+  }
+}
+
+function resolveWanderMemoryTargets(): WanderMemoryProxyTargets {
+  // 1. env override (both the runtime process.env form and the VITE_ form)
+  const apiOrigin =
+    envString("WANDER_MEMORY_API_ORIGIN") ?? envString("VITE_WANDER_MEMORY_API_ORIGIN");
+  const fsOrigin =
+    envString("WANDER_MEMORY_FS_ORIGIN") ?? envString("VITE_WANDER_MEMORY_FS_ORIGIN");
+  if (apiOrigin) return { apiOrigin, fsOrigin };
+
+  // 2. ports file: <data_dir>/wander_memory_ports.json in likely data dirs
+  const repoRoot = resolve(__dirname, "..");
+  const candidates: string[] = [];
+  const dataDir = envString("WANDER_MEMORY_DATA_DIR");
+  if (dataDir) candidates.push(join(dataDir, "wander_memory_ports.json"));
+  candidates.push(
+    join(repoRoot, "..", "Wander-Memory", "data", "wander_memory_ports.json"),
+    join(homedir(), ".wander-memory", "wander_memory_ports.json"),
+    join(process.cwd(), "data", "wander_memory_ports.json"),
+  );
+  for (const candidate of candidates) {
+    const ports = readPortsFile(candidate);
+    if (ports) {
+      return {
+        apiOrigin: `http://127.0.0.1:${ports.api}`,
+        fsOrigin: `http://127.0.0.1:${ports.fs}`,
+      };
+    }
+  }
+
+  // 3. defaults
+  return { apiOrigin: null, fsOrigin: null };
+}
+
+const WANDER_MEMORY_PROXY_TARGETS = resolveWanderMemoryTargets();
+const WANDER_MEMORY_API_DEFAULT = "http://127.0.0.1:18400";
+const WANDER_MEMORY_FS_DEFAULT = "http://127.0.0.1:18402";
 const devArchivedSessions = new Set<string>();
 
 function gitShortCommit(): string {
@@ -362,6 +427,17 @@ export default defineConfig({
         target: API_PROXY_TARGET,
         changeOrigin: true,
         ws: true,
+      },
+      // MemOS FS proxy must be registered BEFORE /v1 — Vite matches proxy
+      // contexts in registration order (see vite proxyMiddleware).
+      "/v1/fs": {
+        target: WANDER_MEMORY_PROXY_TARGETS.fsOrigin ?? WANDER_MEMORY_FS_DEFAULT,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/v1\/fs/, "/v1"),
+      },
+      "/v1": {
+        target: WANDER_MEMORY_PROXY_TARGETS.apiOrigin ?? WANDER_MEMORY_API_DEFAULT,
+        changeOrigin: true,
       },
     },
   },

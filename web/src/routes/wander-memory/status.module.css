@@ -1,0 +1,210 @@
+/* WanderMemory status route — Hermes tokens only, no hard-coded colors. */
+
+.page {
+  width: 100%;
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 960px;
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.headHint {
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .cardsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.card {
+  padding: 16px 16px;
+  background: var(--h-bg-pane);
+  border: 1px solid var(--h-line);
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0 0 12px;
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cardMuted {
+  margin: 0;
+  color: var(--h-text-4);
+  font-size: 13px;
+}
+
+.cardError {
+  margin: 0;
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.defList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.defRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.defTerm {
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  flex: none;
+}
+
+.defValue {
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.endpointValue {
+  color: var(--h-text);
+}
+
+.okValue {
+  color: var(--h-ok);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.errValue {
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.modelWarning {
+  margin-top: 12px;
+}
+
+.deviceTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--h-font-mono);
+  font-size: 11.5px;
+}
+
+.th {
+  padding: 4px 8px 8px 0;
+  color: var(--h-text-4);
+  font-weight: 400;
+  text-align: left;
+}
+
+.thRight {
+  text-align: right;
+}
+
+.td {
+  padding: 8px 8px 8px 0;
+  color: var(--h-text-2);
+  border-top: 1px solid var(--h-line-soft);
+  vertical-align: top;
+}
+
+.tdRight {
+  text-align: right;
+}
+
+.maintRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.maintDesc {
+  margin: 0;
+  color: var(--h-text-3);
+  font-size: 12.5px;
+}
+
+.maintButton {
+  margin-left: auto;
+}
+
+.maintRunning {
+  margin-top: 12px;
+}
+
+.maintResult {
+  margin-top: 12px;
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 13px;
+}
+
+.maintNum {
+  color: var(--h-accent);
+}
+
+.maintError {
+  margin: 12px 0 0;
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.discoverRow {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.discoverHint {
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.discoverError {
+  margin-top: 12px;
+}
