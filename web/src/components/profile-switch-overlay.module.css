@@ -55,7 +55,7 @@
 }
 
 .progressTrack {
-  height: 6px;
+  height: var(--h-status-dot-size);
   border-radius: 0;
   background: var(--h-bg-soft);
   overflow: hidden;
