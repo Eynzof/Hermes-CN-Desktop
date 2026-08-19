@@ -15,6 +15,7 @@ import type { WanderMemoryClient } from '@/lib/wander-memory/client';
 import type { ChatResponse } from '@/lib/wander-memory/types';
 import { clearWanderMemoryChatAtom, wanderMemoryChatMessagesAtom } from '@/stores/wander-memory-chat';
 import {
+  NO_GROUNDING_MESSAGE,
   WANDER_MEMORY_QUERY_KEYS,
   useWanderMemoryAdd,
   useWanderMemoryBackends,
@@ -344,6 +345,44 @@ describe('useWanderMemoryChatStream', () => {
     const [, assistant] = chatStore.get(wanderMemoryChatMessagesAtom);
     expect(assistant.error?.code).toBe('llm_unavailable');
     expect(assistant.error?.message).toBe('LLM server unavailable');
+    expect(result.current.isStreaming).toBe(false);
+  });
+
+  it('shows the friendly no-grounding message when the reply is empty (server cancel)', async () => {
+    // Simulate the real backend's chat_cancel_on_no_grounding behaviour: the
+    // done frame carries an empty reply + empty grounding (no_grounding).
+    clientState.__setClient({
+      mode: 'demo',
+      streamingAvailable: () => true,
+      chatStream: (_query: string, onDelta?: (d: string) => void) => {
+        onDelta?.('');
+        return Promise.resolve<ChatResponse>({
+          reply: '',
+          dreamed_keywords: ['无关', '关键词'],
+          grounded_memories: [],
+        });
+      },
+      chat: async () => ({ reply: '', dreamed_keywords: [], grounded_memories: [] }),
+    } as unknown as WanderMemoryClient);
+    const { result } = renderHook(() => useWanderMemoryChatStream(), {
+      wrapper: wrapperFor(createTestQueryClient()),
+    });
+
+    act(() => result.current.send('peanuts'));
+
+    await waitFor(
+      () => {
+        const messages = chatStore.get(wanderMemoryChatMessagesAtom);
+        expect(messages[1]?.streaming).toBe(false);
+        expect(messages[1]?.error).toBeUndefined();
+      },
+      { timeout: 5000 },
+    );
+
+    const [, assistant] = chatStore.get(wanderMemoryChatMessagesAtom);
+    expect(assistant.text).toBe(NO_GROUNDING_MESSAGE);
+    expect(assistant.groundedCount).toBe(0);
+    expect(assistant.dreamed).toEqual(['无关', '关键词']);
     expect(result.current.isStreaming).toBe(false);
   });
 

@@ -160,6 +160,16 @@ export function useWanderMemoryMaintenance() {
 
 const CANCELLED_SUFFIX = ' [cancelled]';
 
+/**
+ * Friendly fallback shown when the server cancels the reply generation
+ * because nothing relevant was found (``no_grounding`` — the reply is empty
+ * and ``grounded_memories`` is empty). Mirrors the CLI's "no search found"
+ * message (docs/memory_frontend.md §4.2); without this the real backend
+ * path would render a blank assistant bubble.
+ */
+export const NO_GROUNDING_MESSAGE =
+  'no search found — nothing relevant in memory. try /save:<text> or /dialogue:<transcript> to store memories first.';
+
 export interface WanderMemoryChatStreamHandle {
   /** Start a turn: appends the user message + an empty streaming assistant
    *  message, then streams deltas into it. No-op while a stream is running. */
@@ -213,7 +223,10 @@ export function useWanderMemoryChatStream(): WanderMemoryChatStreamHandle {
           if (!isCurrent()) return;
           updateLast((m) => ({
             ...m,
-            text: result.reply,
+            // The done frame's reply is authoritative; when it is empty the
+            // turn was cancelled server-side (no grounding) — surface the
+            // friendly message instead of a blank bubble.
+            text: result.reply || NO_GROUNDING_MESSAGE,
             streaming: false,
             dreamed: result.dreamed_keywords,
             groundedCount: result.grounded_memories?.length,

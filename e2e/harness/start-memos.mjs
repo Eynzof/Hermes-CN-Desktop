@@ -129,7 +129,9 @@ function waitForPattern(child, re, label, timeoutMs = 120_000) {
   });
 }
 
-// Fail fast if any default-trio port is already bound.
+// Fail fast if any default-trio port is already bound — unless
+// MEMOS_REUSE_EXISTING=1, which means an external real backend (llama.cpp +
+// local model) is already serving the default trio and should be reused as-is.
 async function assertTrioFree() {
   const busy = [];
   for (const port of [MEMOS_API_PORT, MEMOS_WS_PORT, MEMOS_FS_PORT]) {
@@ -152,6 +154,39 @@ async function assertTrioFree() {
 }
 
 async function main() {
+  // MEMOS_REUSE_EXISTING=1: reuse a backend already running on the default
+  // trio (real llama.cpp local model). Verify health, publish the ports file
+  // and exit — the external process owns the trio.
+  if (process.env.MEMOS_REUSE_EXISTING === "1") {
+    await waitForHttp(MEMOS_HEALTH_URL, { timeoutMs: 30_000 });
+    mkdirSync(MEMOS_RUNTIME_DIR, { recursive: true });
+    writeFileSync(
+      MEMOS_PORTS_FILE,
+      JSON.stringify(
+        {
+          api: MEMOS_API_PORT,
+          ws: MEMOS_WS_PORT,
+          fs: MEMOS_FS_PORT,
+          llm: "external",
+          apiOrigin: `http://127.0.0.1:${MEMOS_API_PORT}`,
+          wsUrl: `ws://127.0.0.1:${MEMOS_WS_PORT}/v1/ws`,
+          fsOrigin: `http://127.0.0.1:${MEMOS_FS_PORT}`,
+          reused: true,
+        },
+        null,
+        2,
+      ),
+    );
+    console.log(`[harness] reusing external MemOS on ${MEMOS_API_PORT}/${MEMOS_WS_PORT}/${MEMOS_FS_PORT}`);
+    console.log(`[harness] MEMOS_READY`);
+    // Keep the process alive so Playwright's webServer lifecycle stays intact.
+    process.stdin.resume();
+    const keepAlive = setInterval(() => {}, 1 << 30);
+    process.on("SIGINT", () => { clearInterval(keepAlive); process.exit(0); });
+    process.on("SIGTERM", () => { clearInterval(keepAlive); process.exit(0); });
+    return;
+  }
+
   if (!existsSync(WANDER_MEMORY_PYTHON)) {
     throw new Error(
       `WanderMemory python not found at ${WANDER_MEMORY_PYTHON}. ` +
