@@ -1,0 +1,30 @@
+{
+  "name": "hermes-desktop-hot-update-staging",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "hot-update-staging.hermesagent.org.cn",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "staging"
+  },
+  "r2_buckets": [
+    {
+      "binding": "ARTIFACTS",
+      "bucket_name": "hermes-desktop-hot-update-staging"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "UPDATES",
+      "database_name": "hermes-desktop-hot-update-staging",
+      "database_id": "4742bc7a-340f-4dab-ac72-20336451c059",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
