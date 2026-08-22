@@ -14,8 +14,9 @@ export const UPDATE_CHANNELS = ["stable", "beta", "canary"] as const;
 
 export function defaultUpdateConfig(): UpdateConfig {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     channel: DEFAULT_UPDATE_CHANNEL,
+    shellUpdaterEndpoint: "",
     releaseManifestUrl: DEFAULT_RELEASE_MANIFEST_URL,
     runtimeBaseUrl: DEFAULT_RUNTIME_BASE_URL,
     runtimeManifestUrl: "",
@@ -34,6 +35,8 @@ export function normalizeUpdateConfig(input: unknown): UpdateConfig {
   return {
     schemaVersion: typeof raw.schemaVersion === "number" ? raw.schemaVersion : fallback.schemaVersion,
     channel: typeof raw.channel === "string" && raw.channel.trim() ? raw.channel : fallback.channel,
+    shellUpdaterEndpoint:
+      typeof raw.shellUpdaterEndpoint === "string" ? raw.shellUpdaterEndpoint : "",
     releaseManifestUrl:
       typeof raw.releaseManifestUrl === "string" && raw.releaseManifestUrl.trim()
         ? raw.releaseManifestUrl
@@ -68,6 +71,7 @@ export function validateUpdateConfig(config: UpdateConfig): string | null {
     return `channel 必须是 ${UPDATE_CHANNELS.join(" / ")} 之一，当前是 ${config.channel}`;
   }
   for (const [label, value] of [
+    ["shellUpdaterEndpoint", config.shellUpdaterEndpoint],
     ["releaseManifestUrl", config.releaseManifestUrl],
     ["runtimeBaseUrl", config.runtimeBaseUrl],
     ["runtimeManifestUrl", config.runtimeManifestUrl],

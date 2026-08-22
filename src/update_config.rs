@@ -6,8 +6,9 @@
 //!
 //! ```json
 //! {
-//!   "schemaVersion": 1,
+//!   "schemaVersion": 2,
 //!   "channel": "stable",
+//!   "shellUpdaterEndpoint": "",
 //!   "releaseManifestUrl": "https://desktop.hermesagent.org.cn/latest.json",
 //!   "runtimeBaseUrl": "https://desktop.hermesagent.org.cn/runtime",
 //!   "runtimeManifestUrl": "",
@@ -32,7 +33,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-pub const UPDATE_CONFIG_SCHEMA_VERSION: u32 = 1;
+pub const UPDATE_CONFIG_SCHEMA_VERSION: u32 = 2;
 pub const DEFAULT_RELEASE_MANIFEST_URL: &str = "https://desktop.hermesagent.org.cn/latest.json";
 pub const DEFAULT_RUNTIME_BASE_URL: &str = "https://desktop.hermesagent.org.cn/runtime";
 pub const DEFAULT_CHANNEL: &str = "stable";
@@ -62,6 +63,10 @@ pub struct UpdateMirror {
 pub struct UpdateConfig {
     pub schema_version: u32,
     pub channel: String,
+    /// Tauri dynamic updater endpoint. Empty by default so prototype builds
+    /// never contact or mutate the public stable update path accidentally.
+    pub shell_updater_endpoint: String,
+    /// Legacy unified-manifest field retained for migration and diagnostics.
     pub release_manifest_url: String,
     pub runtime_base_url: String,
     pub runtime_manifest_url: String,
@@ -77,6 +82,7 @@ impl Default for UpdateConfig {
         Self {
             schema_version: UPDATE_CONFIG_SCHEMA_VERSION,
             channel: DEFAULT_CHANNEL.to_string(),
+            shell_updater_endpoint: String::new(),
             release_manifest_url: DEFAULT_RELEASE_MANIFEST_URL.to_string(),
             runtime_base_url: DEFAULT_RUNTIME_BASE_URL.to_string(),
             runtime_manifest_url: String::new(),
@@ -137,6 +143,9 @@ pub fn apply_env_overrides(base: &UpdateConfig) -> UpdateConfig {
     let mut cfg = base.clone();
     if let Some(v) = read_env_trimmed("HERMES_UPDATE_CHANNEL") {
         cfg.channel = v;
+    }
+    if let Some(v) = read_env_trimmed("HERMES_SHELL_UPDATE_ENDPOINT") {
+        cfg.shell_updater_endpoint = v;
     }
     if let Some(v) = read_env_trimmed("HERMES_UPDATE_RELEASE_MANIFEST_URL") {
         cfg.release_manifest_url = v;
@@ -217,6 +226,7 @@ pub fn validate(config: &UpdateConfig) -> Result<(), String> {
             config.channel
         ));
     }
+    validate_https_optional(&config.shell_updater_endpoint, "shellUpdaterEndpoint")?;
     validate_https_optional(&config.release_manifest_url, "releaseManifestUrl")?;
     validate_https_optional(&config.runtime_base_url, "runtimeBaseUrl")?;
     validate_https_optional(&config.runtime_manifest_url, "runtimeManifestUrl")?;
@@ -281,6 +291,8 @@ pub struct UpdateConfigSnapshot {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effective_shell_updater_endpoint: Option<String>,
     pub effective_release_manifest_url: String,
     pub effective_runtime_manifest_url: Option<String>,
     pub effective_runtime_public_key_pem: Option<String>,
@@ -293,6 +305,11 @@ fn snapshot(load: &UpdateConfigLoad) -> UpdateConfigSnapshot {
         config: cfg.clone(),
         path: update_config_path().to_string_lossy().to_string(),
         config_error: load.config_error.clone(),
+        effective_shell_updater_endpoint: if cfg.shell_updater_endpoint.trim().is_empty() {
+            None
+        } else {
+            Some(cfg.shell_updater_endpoint.clone())
+        },
         effective_release_manifest_url: cfg.release_manifest_url.clone(),
         effective_runtime_manifest_url: if cfg.runtime_manifest_url.trim().is_empty() {
             None
@@ -343,8 +360,9 @@ mod tests {
     #[test]
     fn defaults_are_cn_server_urls_and_stable_channel() {
         let cfg = UpdateConfig::default();
-        assert_eq!(cfg.schema_version, 1);
+        assert_eq!(cfg.schema_version, 2);
         assert_eq!(cfg.channel, "stable");
+        assert!(cfg.shell_updater_endpoint.is_empty());
         assert_eq!(cfg.release_manifest_url, DEFAULT_RELEASE_MANIFEST_URL);
         assert_eq!(cfg.runtime_base_url, DEFAULT_RUNTIME_BASE_URL);
         assert_eq!(cfg.timeout_seconds, 10);
@@ -379,8 +397,9 @@ mod tests {
         let path = write_config(
             &dir,
             r#"{
-              "schemaVersion": 1,
+              "schemaVersion": 2,
               "channel": "beta",
+              "shellUpdaterEndpoint": "https://staging.example.workers.dev/v1/check/{{target}}/{{arch}}/{{current_version}}",
               "releaseManifestUrl": "https://example.com/latest.json",
               "runtimeBaseUrl": "https://example.com/runtime",
               "runtimeManifestUrl": "https://example.com/runtime/beta-win32-x64.json",
@@ -391,6 +410,10 @@ mod tests {
         let load = load_from(&path);
         assert!(load.config_error.is_none());
         assert_eq!(load.config.channel, "beta");
+        assert!(load
+            .config
+            .shell_updater_endpoint
+            .contains("staging.example.workers.dev"));
         assert_eq!(
             load.config.release_manifest_url,
             "https://example.com/latest.json"
@@ -415,12 +438,21 @@ mod tests {
             "HERMES_UPDATE_RELEASE_MANIFEST_URL",
             "https://env.example/latest.json",
         );
+        std::env::set_var(
+            "HERMES_SHELL_UPDATE_ENDPOINT",
+            "https://staging.example.workers.dev/v1/check/{{target}}/{{arch}}/{{current_version}}",
+        );
         let load = load_from(&path);
         std::env::remove_var("HERMES_UPDATE_RELEASE_MANIFEST_URL");
+        std::env::remove_var("HERMES_SHELL_UPDATE_ENDPOINT");
         assert_eq!(
             load.config.release_manifest_url,
             "https://env.example/latest.json"
         );
+        assert!(load
+            .config
+            .shell_updater_endpoint
+            .contains("staging.example.workers.dev"));
         // Non-env fields still come from the file.
         assert_eq!(load.config.channel, "stable");
     }
@@ -428,7 +460,7 @@ mod tests {
     #[test]
     fn validation_rejects_http_urls() {
         let cfg = UpdateConfig {
-            release_manifest_url: "http://insecure.example/latest.json".to_string(),
+            shell_updater_endpoint: "http://insecure.example/check".to_string(),
             ..UpdateConfig::default()
         };
         let err = validate(&cfg).unwrap_err();

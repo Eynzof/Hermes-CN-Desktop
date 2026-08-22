@@ -265,6 +265,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         // Track B UI hot update: serve the webview from the writable
         // `ui/versions/<v>/` tree (signed `appVersionFloor` gate + path-traversal

@@ -1,17 +1,14 @@
 import { useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import type {
   AppUpdateCheckResult,
   AppUpdateInstallResult,
   AppUpdateProgressPayload,
 } from "@hermes/protocol";
-import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
-import { recordRuntimeKernelVersion } from "@/lib/version-check";
 import { runtime } from "@/lib/runtime";
 import { runtimeUpdatingAtom } from "@/stores/ui";
 
-const RUNTIME_INFO_KEY = ["desktop-runtime-info"] as const;
 const MAX_PROGRESS_LINES = 200;
 
 /**
@@ -42,13 +39,6 @@ function hasAppUpdateBridge(): boolean {
   );
 }
 
-async function refreshDesktopGateway(): Promise<void> {
-  if (window.hermesDesktop?.refreshGatewayUrl) {
-    await runtime.refreshGatewayUrl();
-    forceExistingGatewayReconnect("app-update");
-  }
-}
-
 /** One-shot "检查更新" mutation (also used by the notifier CTA). */
 export function useAppUpdateCheck() {
   return useMutation<AppUpdateCheckResult>({
@@ -66,13 +56,11 @@ export function useAppUpdateCheck() {
 }
 
 /**
- * One-shot "更新" mutation — drives the whole unified update (backend install
- * + respawn + verify + frontend stage + relaunch). While in flight it keeps
- * the blocking overlay up (dashboard restarts rotate the session token) and
- * streams `app-update-progress` events into the overlay's log panel.
+ * One-shot signed shell update. Tauri downloads the candidate, verifies its
+ * updater signature, and starts the platform installer. The running Core is
+ * deliberately left untouched before the shell installer begins.
  */
 export function useAppUpdateInstall() {
-  const qc = useQueryClient();
   const setUpdating = useSetAtom(runtimeUpdatingAtom);
 
   // Register the progress listener once; it only appends when an app-update
@@ -96,15 +84,7 @@ export function useAppUpdateInstall() {
     onMutate: () => {
       setUpdating({ active: true, mode: "app-update", progress: [] });
     },
-    onSettled: async () => {
-      // Runs on success AND failure — a partial install can still have
-      // restarted the dashboard, so always resync the rotated session token.
-      await refreshDesktopGateway();
-      await qc.invalidateQueries({ queryKey: RUNTIME_INFO_KEY });
-      const fresh = qc.getQueryData<{ current?: { kernelVersion?: string } }>(
-        RUNTIME_INFO_KEY,
-      );
-      recordRuntimeKernelVersion(fresh?.current?.kernelVersion);
+    onSettled: () => {
       setUpdating({ active: false });
     },
   });

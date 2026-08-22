@@ -1,5 +1,9 @@
 import { runtime } from "./runtime";
-import { EXPECTED_BACKEND_VERSION } from "./build-info";
+import { DESKTOP_VERSION, EXPECTED_BACKEND_VERSION } from "./build-info";
+import {
+  expectedCoreSeriesLabel,
+  isDesktopCoreCompatible,
+} from "./version-compatibility";
 import type { ConnectionMode } from "@hermes/protocol";
 
 export interface BackendVersionInfo {
@@ -28,10 +32,9 @@ let state: VersionCheckState = { kind: "unchecked" };
 
 /**
  * Kernel version recorded from the managed runtime install record (set by the
- * runtime/app-update hooks). When present it is the preferred expected version
- * for the unified self-update flow — after a backend update the kernel is
- * verified against the manifest version, and the baked constant is only the
- * build-time fallback.
+ * runtime hooks). In managed mode this is an integrity check: the running Core
+ * must match its install record exactly. Desktop↔Core product compatibility is
+ * evaluated separately through compatibility/desktop-core.json.
  */
 let runtimeKernelVersion: string | null = null;
 
@@ -42,6 +45,13 @@ export function recordRuntimeKernelVersion(version: string | null | undefined): 
 /** The backend version the frontend currently expects to connect to. */
 export function expectedBackendVersion(): string {
   return runtimeKernelVersion ?? EXPECTED_BACKEND_VERSION;
+}
+
+function expectedBackendContract(explicit?: string): string {
+  return explicit
+    ?? runtimeKernelVersion
+    ?? expectedCoreSeriesLabel(DESKTOP_VERSION)
+    ?? EXPECTED_BACKEND_VERSION;
 }
 
 export function getVersionCheckState(): VersionCheckState {
@@ -142,7 +152,8 @@ export async function verifyBackendVersion(
   apiBaseUrl?: string,
   options: VersionCheckOptions = {},
 ): Promise<VersionCheckState> {
-  const expected = options.expectedVersion ?? expectedBackendVersion();
+  const exactExpected = options.expectedVersion ?? runtimeKernelVersion;
+  const expected = expectedBackendContract(options.expectedVersion);
   if (runtime.platform === "web") {
     // Web/browser-companion mode: no managed runtime; skip the gate.
     state = { kind: "ok", backendVersion: "web" };
@@ -156,7 +167,10 @@ export async function verifyBackendVersion(
 
   try {
     const info = await fetchBackendVersion(apiBaseUrl);
-    if (info.version !== expected) {
+    const exactMismatch = exactExpected !== null && exactExpected !== undefined
+      && info.version !== exactExpected;
+    const seriesMismatch = !isDesktopCoreCompatible(DESKTOP_VERSION, info.version);
+    if (exactMismatch || seriesMismatch) {
       state = {
         kind: "mismatch",
         backendVersion: info.version,
@@ -213,7 +227,7 @@ export function assertCompatible(): void {
   if (state.kind === "mismatch") {
     const message =
       `前端与后端版本不兼容。\n` +
-      `前端期望后端版本：${state.expectedVersion}\n` +
+      `当前 Desktop 兼容的 Core：${state.expectedVersion}\n` +
       `后端实际版本：${state.backendVersion}\n\n` +
       `请升级 Hermes Agent CN Desktop 到与后端匹配的版本，或重新安装内置内核。`;
     void fatalErrorAndExit("版本不匹配", message);

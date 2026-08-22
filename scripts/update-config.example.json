@@ -1,6 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "channel": "stable",
+  "shellUpdaterEndpoint": "",
   "releaseManifestUrl": "https://desktop.hermesagent.org.cn/latest.json",
   "runtimeBaseUrl": "https://desktop.hermesagent.org.cn/runtime",
   "runtimeManifestUrl": "",

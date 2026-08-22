@@ -14,8 +14,18 @@
       "csp": "default-src 'self' hermesui: http://hermesui.localhost; script-src 'self' 'unsafe-inline' hermesui: http://hermesui.localhost; style-src 'self' 'unsafe-inline' hermesui: http://hermesui.localhost; connect-src 'self' ipc://localhost http://ipc.localhost http://localhost:* http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:*; img-src 'self' data: blob: hermesui: http://hermesui.localhost; font-src 'self' data:; media-src 'self' data: blob:; frame-src 'self' http://localhost:* http://127.0.0.1:*"
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQxQjlERjcxMTg4ODhBRkYKUldUL2lvZ1ljZCs1MFdDSUM3d0NXRlJzVUVSNk9IQWZ6TEwrbmJueWVqcEhHMmh3T3c1elMrOFUK",
+      "endpoints": [],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": [
       "nsis",
       "dmg",

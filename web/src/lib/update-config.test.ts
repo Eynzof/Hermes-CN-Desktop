@@ -8,8 +8,9 @@ import {
 describe("defaultUpdateConfig", () => {
   it("points at the CN landing source with stable channel", () => {
     const cfg = defaultUpdateConfig();
-    expect(cfg.schemaVersion).toBe(1);
+    expect(cfg.schemaVersion).toBe(2);
     expect(cfg.channel).toBe("stable");
+    expect(cfg.shellUpdaterEndpoint).toBe("");
     expect(cfg.releaseManifestUrl).toBe("https://desktop.hermesagent.org.cn/latest.json");
     expect(cfg.runtimeBaseUrl).toBe("https://desktop.hermesagent.org.cn/runtime");
     expect(cfg.timeoutSeconds).toBe(10);
@@ -45,7 +46,7 @@ describe("validateUpdateConfig", () => {
 
   it("rejects http URLs", () => {
     const cfg = defaultUpdateConfig();
-    cfg.releaseManifestUrl = "http://insecure.example/latest.json";
+    cfg.shellUpdaterEndpoint = "http://insecure.example/check";
     expect(validateUpdateConfig(cfg)).toContain("https");
   });
 

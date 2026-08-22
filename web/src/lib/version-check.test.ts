@@ -94,8 +94,16 @@ describe("version-check", () => {
       expect(state.kind).toBe("mismatch");
       expect(state).toMatchObject({
         backendVersion: "0.18.0",
-        expectedVersion: EXPECTED_BACKEND_VERSION,
+        expectedVersion: "0.20.x",
       });
+    });
+
+    it("accepts another patch version in the compatible Core series for an external backend", async () => {
+      stubDesktopRequest({ version: "0.20.9", name: "hermes-agent" });
+
+      const state = await verifyBackendVersion(undefined, { connectionMode: "remote" });
+
+      expect(state).toEqual({ kind: "ok", backendVersion: "0.20.9" });
     });
 
     it("returns unavailable when /api/version is missing or unreachable", async () => {
@@ -197,7 +205,7 @@ describe("version-check", () => {
       expect(() => assertCompatible()).toThrow(/backend version mismatch/);
       expect(fatalErrorAndExit).toHaveBeenCalledWith({
         title: "版本不匹配",
-        message: expect.stringContaining("前端期望后端版本"),
+        message: expect.stringContaining("当前 Desktop 兼容的 Core"),
       });
     });
 
@@ -241,16 +249,27 @@ describe("version-check", () => {
     });
 
     it("prefers the recorded runtime kernel version over the baked constant", async () => {
-      // Unified self-update: after a backend update the kernel version equals
-      // the manifest version (0.8.0), which may differ from the baked constant.
-      recordRuntimeKernelVersion("0.8.0");
-      expect(expectedBackendVersion()).toBe("0.8.0");
-      stubDesktopRequest({ version: "0.8.0", name: "hermes-agent" });
+      recordRuntimeKernelVersion("0.20.1");
+      expect(expectedBackendVersion()).toBe("0.20.1");
+      stubDesktopRequest({ version: "0.20.1", name: "hermes-agent" });
 
       const state = await verifyBackendVersion();
 
       expect(state.kind).toBe("ok");
-      expect(state).toMatchObject({ backendVersion: "0.8.0" });
+      expect(state).toMatchObject({ backendVersion: "0.20.1" });
+    });
+
+    it("keeps the managed runtime install record as an exact integrity check", async () => {
+      recordRuntimeKernelVersion("0.20.0");
+      stubDesktopRequest({ version: "0.20.1", name: "hermes-agent" });
+
+      const state = await verifyBackendVersion(undefined, { connectionMode: "managed" });
+
+      expect(state).toMatchObject({
+        kind: "mismatch",
+        backendVersion: "0.20.1",
+        expectedVersion: "0.20.0",
+      });
     });
 
     it("does not fall back to a CORS-bound browser fetch when the IPC bridge is missing", async () => {
@@ -266,7 +285,7 @@ describe("version-check", () => {
     });
 
     it("resetVersionCheck clears the recorded kernel version", () => {
-      recordRuntimeKernelVersion("0.8.0");
+      recordRuntimeKernelVersion("0.20.1");
       resetVersionCheck();
       expect(expectedBackendVersion()).toBe(EXPECTED_BACKEND_VERSION);
     });

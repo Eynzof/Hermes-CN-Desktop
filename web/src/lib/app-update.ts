@@ -1,14 +1,10 @@
-// Unified self-update bridge helpers — one check/install flow updates BOTH
-// the desktop shell and the backend kernel to the same version.
+// Signed desktop-shell updater bridge. The target installer's bundled Core is
+// checked against the Desktop↔Core compatibility matrix before installation.
 //
 // Mirrors `src/commands/app_update.rs`. Version comparison reuses the semver
 // helpers from `desktop-update.ts` so the two update UIs never disagree.
 
-import type {
-  AppUpdateCheckResult,
-  AppUpdateInstallResult,
-  UnifiedReleaseManifest,
-} from "@hermes/protocol";
+import type { AppUpdateCheckResult, AppUpdateInstallResult } from "@hermes/protocol";
 import { compareDesktopVersions, normalizeDesktopVersion } from "./desktop-update";
 import { DESKTOP_VERSION } from "./build-info";
 
@@ -17,10 +13,15 @@ export const APP_UPDATE_PROGRESS_EVENT = "app-update-progress";
 export interface ParsedAppUpdateCheck {
   ok: boolean;
   updateAvailable: boolean;
-  sameVersion: boolean;
+  compatible: boolean;
   currentVersion: string;
   latestVersion?: string;
-  manifest?: UnifiedReleaseManifest;
+  expectedCoreSeries?: string;
+  targetCoreVersion?: string;
+  targetRuntimeVersion?: string;
+  releaseId?: string;
+  channel?: string;
+  notes?: string;
   error?: string;
 }
 
@@ -32,10 +33,15 @@ export function parseAppUpdateCheckResult(result: AppUpdateCheckResult): ParsedA
     return {
       ok: false,
       updateAvailable: false,
-      sameVersion: false,
+      compatible: false,
       currentVersion: current ?? DESKTOP_VERSION,
       latestVersion: latest ?? undefined,
-      manifest: result.manifest,
+      expectedCoreSeries: result.expectedCoreSeries,
+      targetCoreVersion: result.targetCoreVersion,
+      targetRuntimeVersion: result.targetRuntimeVersion,
+      releaseId: result.releaseId,
+      channel: result.channel,
+      notes: result.notes,
       error: result.error ?? "应用更新检查失败",
     };
   }
@@ -43,11 +49,16 @@ export function parseAppUpdateCheckResult(result: AppUpdateCheckResult): ParsedA
   return {
     ok: true,
     updateAvailable: Boolean(result.updateAvailable && cmp !== null && cmp > 0),
-    sameVersion: result.sameVersion,
+    compatible: result.compatible,
     currentVersion: current ?? DESKTOP_VERSION,
     latestVersion: latest ?? undefined,
-    manifest: result.manifest,
-    error: undefined,
+    expectedCoreSeries: result.expectedCoreSeries,
+    targetCoreVersion: result.targetCoreVersion,
+    targetRuntimeVersion: result.targetRuntimeVersion,
+    releaseId: result.releaseId,
+    channel: result.channel,
+    notes: result.notes,
+    error: result.error,
   };
 }
 
@@ -63,7 +74,7 @@ export async function checkAppUpdate(): Promise<ParsedAppUpdateCheck> {
     return {
       ok: false,
       updateAvailable: false,
-      sameVersion: false,
+      compatible: false,
       currentVersion: DESKTOP_VERSION,
       error: "当前环境没有一键更新能力",
     };
@@ -74,7 +85,7 @@ export async function checkAppUpdate(): Promise<ParsedAppUpdateCheck> {
     return {
       ok: false,
       updateAvailable: false,
-      sameVersion: false,
+      compatible: false,
       currentVersion: DESKTOP_VERSION,
       error: error instanceof Error ? error.message : String(error),
     };

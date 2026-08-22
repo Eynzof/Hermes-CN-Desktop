@@ -381,6 +381,7 @@ export interface UpdateMirror {
 export interface UpdateConfig {
   schemaVersion: number;
   channel: string;
+  shellUpdaterEndpoint: string;
   releaseManifestUrl: string;
   runtimeBaseUrl: string;
   runtimeManifestUrl: string;
@@ -396,45 +397,10 @@ export interface UpdateConfigSnapshot {
   config: UpdateConfig;
   path: string;
   configError?: string;
+  effectiveShellUpdaterEndpoint?: string;
   effectiveReleaseManifestUrl: string;
   effectiveRuntimeManifestUrl?: string;
   effectiveRuntimePublicKeyPem?: string;
-}
-
-export interface UnifiedDesktopAsset {
-  kind: string;
-  fileName: string;
-  url: string;
-  sha256: string;
-  size?: number;
-}
-
-export interface UnifiedRuntimeAsset {
-  kind: string;
-  fileName: string;
-  url: string;
-  sha256: string;
-  size?: number;
-  kernelVersion: string;
-  /** Already-signed track-A runtime manifest (authoritative). */
-  manifest: RuntimeUpdateManifest;
-}
-
-export interface UnifiedPlatformAssets {
-  desktop?: UnifiedDesktopAsset;
-  runtime?: UnifiedRuntimeAsset;
-}
-
-export interface UnifiedReleaseManifest {
-  schemaVersion: number;
-  version: string;
-  publishedAt?: string;
-  notes?: string;
-  minAppVersion?: string;
-  assets: Record<string, UnifiedPlatformAssets>;
-  repository?: string;
-  semver?: string;
-  sourceUrl?: string;
 }
 
 export interface AppUpdateProgressPayload {
@@ -448,18 +414,19 @@ export interface AppUpdateCheckResult {
   currentVersion?: string;
   latestVersion?: string;
   updateAvailable: boolean;
-  sameVersion: boolean;
-  manifest?: UnifiedReleaseManifest;
+  compatible: boolean;
+  expectedCoreSeries?: string;
+  targetCoreVersion?: string;
+  targetRuntimeVersion?: string;
+  releaseId?: string;
+  channel?: string;
+  notes?: string;
   error?: string;
 }
 
 export interface AppUpdateInstallResult {
   ok: boolean;
-  backendInstalled: boolean;
-  frontendStaged: boolean;
-  backendVerified: boolean;
-  frontendInstalled: boolean;
-  restarted: boolean;
+  installStarted: boolean;
   error?: string;
 }
 

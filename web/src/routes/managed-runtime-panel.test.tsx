@@ -11,12 +11,12 @@ vi.mock("@/hooks/use-app-update", () => ({
       currentVersion: "0.7.0",
       latestVersion: "0.8.0",
       updateAvailable: true,
-      sameVersion: true,
+      compatible: true,
     })),
   }),
   useAppUpdateInstall: () => ({
     isPending: false,
-    mutateAsync: vi.fn(async () => ({ ok: true, backendInstalled: true })),
+    mutateAsync: vi.fn(async () => ({ ok: true, installStarted: true })),
   }),
 }));
 
@@ -91,7 +91,7 @@ function stubWindow(overrides: Record<string, unknown> = {}) {
   });
 }
 
-describe("ManagedRuntimePanel — unified app update buttons", () => {
+describe("ManagedRuntimePanel — signed shell update buttons", () => {
   beforeEach(() => {
     stubWindow();
   });
@@ -134,6 +134,7 @@ describe("ManagedRuntimePanel — unified app update buttons", () => {
     // The form only appears once the user opens the section (closed by
     // default); verify the defaults helper backing the form are consistent.
     expect(defaultUpdateConfig().releaseManifestUrl).toContain("desktop.hermesagent.org.cn");
+    expect(defaultUpdateConfig().shellUpdaterEndpoint).toBe("");
     const html = ReactDOMServer.renderToStaticMarkup(<ManagedRuntimePanel />);
     expect(html).not.toContain("releaseManifestUrl（统一更新清单）");
   });

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "desktopSeries": "0.8",
+      "coreSeries": ["0.20"],
+      "runtimeManifestSchemas": [2],
+      "status": "current"
+    },
+    {
+      "desktopSeries": "0.7",
+      "coreSeries": ["0.19"],
+      "runtimeManifestSchemas": [2],
+      "status": "historical"
+    },
+    {
+      "desktopSeries": "0.6",
+      "coreSeries": ["0.18"],
+      "runtimeManifestSchemas": [2],
+      "status": "historical"
+    },
+    {
+      "desktopSeries": "0.5",
+      "coreSeries": ["0.17"],
+      "runtimeManifestSchemas": [2],
+      "status": "historical"
+    }
+  ]
+}

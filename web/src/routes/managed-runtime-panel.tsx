@@ -38,7 +38,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
   const { confirm } = useConfirm();
   const attached = runtime.isAttached();
 
-  // --- Unified app update (frontend + backend at one version) ---
+  // --- Signed shell update (target bundled Core checked by compatibility matrix) ---
   const appCheck = useAppUpdateCheck();
   const appInstall = useAppUpdateInstall();
   const hotUpdate = useHotUpdateBackend();
@@ -80,16 +80,19 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
         setLastCheck(null);
         return;
       }
-      if (!result.sameVersion) {
-        setMessage({ tone: "error", text: "清单前后端版本不一致，已暂停更新" });
-        setLastCheck("inconsistent");
+      if (!result.compatible) {
+        setMessage({
+          tone: "error",
+          text: result.error ?? "候选 Desktop 与其内置 Core 不兼容，已暂停更新",
+        });
+        setLastCheck("incompatible");
         return;
       }
       setLastCheck(result.updateAvailable ? result.latestVersion ?? "new" : "latest");
       setMessage({
         tone: result.updateAvailable ? "ok" : "ok",
         text: result.updateAvailable
-          ? `发现新版本 ${versionLabel(result.latestVersion)}，可一键更新`
+          ? `发现新版本 ${versionLabel(result.latestVersion)}（内置 Core ${result.targetCoreVersion ?? "未知"}），可安全更新`
           : `已是最新版本（${versionLabel(result.currentVersion)}）`,
       });
     } catch (error) {
@@ -99,8 +102,8 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
 
   const handleInstallUpdate = useCallback(async () => {
     const ok = await confirm({
-      title: "一键更新 Hermes",
-      body: "将下载并安装新版桌面端与内置内核（同一版本），期间应用会退出并自动重启。确定继续吗？",
+      title: "更新 Hermes Desktop",
+      body: "将下载并校验新版 Desktop 安装包。当前 Core 不会被预先修改；新版启动后再按兼容矩阵处理其内置 Core。安装期间应用会退出。确定继续吗？",
       confirmLabel: "立即更新",
       danger: false,
     });
@@ -112,7 +115,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
         setMessage({ tone: "error", text: result.error ?? "更新失败" });
         return;
       }
-      setMessage({ tone: "ok", text: "更新已就绪，应用即将退出并自动重启…" });
+      setMessage({ tone: "ok", text: "签名验证通过，安装器已启动…" });
     } catch (error) {
       setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     }
@@ -457,7 +460,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
                 tone="accent"
                 onClick={() => void handleInstallUpdate()}
                 disabled={
-                  anyBusy || appCheck.isPending || appInstall.isPending || lastCheck === null || lastCheck === "inconsistent" || lastCheck === "latest"
+                  anyBusy || appCheck.isPending || appInstall.isPending || lastCheck === null || lastCheck === "incompatible" || lastCheck === "latest"
                 }
               >
                 {appInstall.isPending ? <LoadingIndicator size="xs" /> : <Download size={12} />}
@@ -513,7 +516,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
         <div className={s.updateSource}>
           <p className={s.updateSourceTitle}>更新下载源（update-config.json）</p>
           <p className={s.updateSourceHint}>
-            统一控制桌面端与内置内核的下载地址。修改后点“保存”立即生效；测试连接会先保存再拉取最新清单。
+            壳更新使用 Tauri 动态端点；Runtime 仍使用独立签名清单。内测设备令牌只从 HERMES_SHELL_UPDATE_TOKEN 读取，不写入配置文件。
           </p>
           <label className={s.fieldLabel}>
             channel
@@ -528,7 +531,16 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             </select>
           </label>
           <label className={s.fieldLabel}>
-            releaseManifestUrl（统一更新清单）
+            shellUpdaterEndpoint（Tauri 动态检查端点）
+            <input
+              className={s.fieldInput}
+              value={cfgDraft.shellUpdaterEndpoint}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, shellUpdaterEndpoint: e.target.value }))}
+              placeholder="https://staging.example.workers.dev/v1/check/{{target}}/{{arch}}/{{current_version}}"
+            />
+          </label>
+          <label className={s.fieldLabel}>
+            releaseManifestUrl（旧清单兼容保留）
             <input
               className={s.fieldInput}
               value={cfgDraft.releaseManifestUrl}

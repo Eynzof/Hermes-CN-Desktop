@@ -7,9 +7,11 @@
 // Usage:
 //   node scripts/sync-desktop-version.mjs            # sync from package.json
 //   node scripts/sync-desktop-version.mjs --check    # verify only, exit 1 on drift
+//   node scripts/sync-desktop-version.mjs --version 0.8.1-hotupdate.1
 //
-// The core logic is exported so scripts/sync-release-version.mjs can drive the
-// same writes for the unified cross-repo version bump.
+// The core logic is exported for release tooling that needs the same
+// Desktop-only writes. Core has an independent version line and is checked
+// through compatibility/desktop-core.json.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -180,7 +182,12 @@ export async function syncDesktopVersion({ version, write = true } = {}) {
 const isCli = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isCli) {
   const checkOnly = process.argv.includes("--check");
-  const result = await syncDesktopVersion({ write: !checkOnly });
+  const versionIndex = process.argv.indexOf("--version");
+  const requestedVersion = versionIndex >= 0 ? process.argv[versionIndex + 1] : undefined;
+  if (versionIndex >= 0 && !requestedVersion) {
+    throw new Error("--version requires a SemVer value");
+  }
+  const result = await syncDesktopVersion({ version: requestedVersion, write: !checkOnly });
   if (result.pending.length > 0 || result.changed.length > 0) {
     if (checkOnly) {
       console.error(`Desktop version is not synchronized with package.json (${result.version}):`);
