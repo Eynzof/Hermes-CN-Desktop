@@ -81,6 +81,38 @@ describe("VoiceSettingsView", () => {
     expect(html).toContain("保存配置");
   });
 
+  it("prefers schema-declared options over the hardcoded snapshot", () => {
+    const schemaWithOptions: ConfigSchemaResponse = {
+      category_order: ["stt", "tts", "voice"],
+      fields: {
+        ...schema.fields,
+        "stt.openai.model": {
+          type: "select",
+          description: "OpenAI transcription model",
+          category: "stt",
+          options: ["whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe", "gpt-transcribe"],
+        },
+      },
+    };
+    const draft = voiceSettingsDraftFromConfig({
+      stt: { enabled: true, provider: "openai", openai: { model: "gpt-transcribe" } },
+      tts: { provider: "edge", edge: { voice: "en-US-AriaNeural" } },
+      voice: { auto_tts: false, max_recording_seconds: 120 },
+    });
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <VoiceSettingsView
+        draft={draft}
+        schema={schemaWithOptions}
+        envVars={envVars}
+        sttProviders={voiceProviderOptions("stt", schemaWithOptions, draft.sttProvider)}
+        ttsProviders={voiceProviderOptions("tts", schemaWithOptions, draft.ttsProvider)}
+      />,
+    );
+
+    expect(html).toContain('value="gpt-transcribe"');
+    expect(html).toContain('value="gpt-4o-transcribe"');
+  });
+
   it("renders a macOS dependency note for Edge TTS", () => {
     const draft = voiceSettingsDraftFromConfig({
       stt: { enabled: true, provider: "local" },

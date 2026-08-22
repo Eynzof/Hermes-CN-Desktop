@@ -55,16 +55,16 @@ describe("voice provider helpers", () => {
     expect(voiceProviderEnvKey("tts", "edge")).toBeUndefined();
   });
 
-  it("filters STT providers through the desktop-supported allowlist", () => {
+  it("surfaces all schema-declared STT providers (no desktop allowlist)", () => {
     const providers = voiceProviderOptions("stt", schema, "local").map((item) => item.id);
 
-    expect(providers).toEqual(["local", "groq", "openai", "xai", "elevenlabs"]);
-    expect(providers).not.toContain("mistral");
+    expect(providers).toEqual(["local", "groq", "openai", "mistral", "xai", "elevenlabs"]);
+    expect(providers).toContain("mistral");
   });
 
   it("keeps unsupported current providers visible as compatibility entries", () => {
-    const providers = voiceProviderOptions("stt", schema, "mistral");
-    const current = providers.find((item) => item.id === "mistral");
+    const providers = voiceProviderOptions("stt", schema, "custom-voice");
+    const current = providers.find((item) => item.id === "custom-voice");
 
     expect(current?.unsupported).toBe(true);
     expect(current?.label).toContain("当前配置");

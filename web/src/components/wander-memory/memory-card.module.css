@@ -1,0 +1,59 @@
+/* MemoryCard — Hermes tokens only, no hard-coded colors. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--h-card-padding-md);
+  background: var(--h-bg-pane);
+  border: 1px solid var(--h-line);
+  transition: border-color var(--h-duration-fast) var(--h-ease-standard);
+}
+
+.card:hover {
+  border-color: var(--h-color-border-strong);
+}
+
+.card[data-pending="true"] {
+  opacity: 0.72;
+}
+
+.memory {
+  margin: 0;
+  color: var(--h-text);
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.idChip {
+  font-family: var(--h-font-mono);
+}
+
+.chip {
+  font-family: var(--h-font-mono);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.updatedAt {
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--h-text-4);
+}
+
+.collision {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--h-line-soft);
+}
