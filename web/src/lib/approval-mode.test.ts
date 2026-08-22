@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   approvalModeConfigValue,
+  clearSessionYolo,
+  getProcessApprovalMode,
   hasSmartApprovalCapability,
   isApprovalModeAvailable,
+  isSessionYolo,
   normalizeApprovalMode,
+  setProcessApprovalMode,
+  setSessionYolo,
 } from "./approval-mode";
 
 describe("approval mode helpers", () => {
@@ -16,7 +21,11 @@ describe("approval mode helpers", () => {
     ["off", "yolo"],
     ["deny", "default"],
   ] as const)("normalizes %s to %s", (raw, expected) => {
-    expect(normalizeApprovalMode(raw)).toBe(expected);
+    expect(normalizeApprovalMode(raw as string)).toBe(expected);
+  });
+
+  it("accepts the manual type in the union", () => {
+    expect(normalizeApprovalMode("manual")).toBe("default");
   });
 
   it("prefers values that exist in the backend schema", () => {
@@ -51,5 +60,28 @@ describe("approval mode helpers", () => {
     };
     expect(hasSmartApprovalCapability(staleRuntimeFields)).toBe(true);
     expect(isApprovalModeAvailable("smart", ["ask", "yolo", "deny"], staleRuntimeFields)).toBe(true);
+  });
+
+  describe("session YOLO and process mode", () => {
+    it("tracks per-session YOLO state", () => {
+      setSessionYolo("s-1", true);
+      expect(isSessionYolo("s-1")).toBe(true);
+      expect(isSessionYolo("s-2")).toBe(false);
+      setSessionYolo("s-1", false);
+      expect(isSessionYolo("s-1")).toBe(false);
+    });
+
+    it("clears session YOLO", () => {
+      setSessionYolo("s-1", true);
+      clearSessionYolo("s-1");
+      expect(isSessionYolo("s-1")).toBe(false);
+    });
+
+    it("stores the process-level approval mode", () => {
+      setProcessApprovalMode("smart");
+      expect(getProcessApprovalMode()).toBe("smart");
+      setProcessApprovalMode("manual");
+      expect(getProcessApprovalMode()).toBe("default");
+    });
   });
 });

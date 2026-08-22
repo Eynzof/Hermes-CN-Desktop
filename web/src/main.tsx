@@ -9,6 +9,9 @@ import { applyHostOSToDOM, runtime } from "./lib/runtime";
 import { installDebugCapture } from "./lib/debug-install";
 import { installExternalLinkHandling } from "./lib/external-links";
 import { initUiStore, readUiValue } from "./lib/ui-store";
+// Register in-process web search / X search tools so they override catalog stubs.
+import "./lib/web-search/tools";
+import "./lib/x-search/tool";
 import { ErrorBoundary } from "./components/error-boundary";
 import { ConfirmProvider } from "./lib/use-confirm";
 import "./styles/global.css";
@@ -44,6 +47,12 @@ async function bootstrap() {
     const { installTauriBridge } = await import("./lib/tauri-bridge");
     await installTauriBridge();
   }
+
+  // Register local-first dashboard route handlers once the Tauri bridge is up.
+  // In managed mode these short-circuit the Python REST proxy for fork-only
+  // endpoints like /api/fs/list and /api/upload.
+  const { registerLocalDashboardHandlers } = await import("./lib/dashboard-handlers");
+  registerLocalDashboardHandlers();
 
   installExternalLinkHandling();
   await initUiStore();

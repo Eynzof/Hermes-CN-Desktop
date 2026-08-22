@@ -32,11 +32,12 @@
     "runtime:stage-bundled-linux": "node scripts/stage-bundled-runtime.mjs --platform linux --arch x64",
     "dashboard:stage-web-dist": "node scripts/stage-dashboard-web-dist.mjs",
     "skills:stage-bundled": "node scripts/stage-bundled-skills.mjs",
+    "skills:lint": "node scripts/skill-lint.mjs",
     "plugins:stage-bundled": "node scripts/stage-bundled-plugins.mjs",
     "bundle:stage-windows": "pnpm run runtime:stage-bundled-windows && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
     "bundle:stage-macos": "pnpm run runtime:stage-bundled-macos-arm64 && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
     "bundle:stage-linux": "pnpm run runtime:stage-bundled-linux && pnpm run dashboard:stage-web-dist && pnpm run skills:stage-bundled && pnpm run plugins:stage-bundled",
-    "tauri:build:bundled-windows": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-windows && pnpm exec tauri build --bundles nsis",
+    "tauri:build:bundled-windows": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-windows && pnpm run runtime:verify && pnpm exec tauri build --bundles nsis",
     "tauri:build:bundled-macos": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-arm64 && pnpm exec tauri build --bundles dmg --target aarch64-apple-darwin",
     "tauri:build:bundled-linux": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-linux && pnpm exec tauri build --bundles deb,appimage --target x86_64-unknown-linux-gnu",
     "runtime:stage-bundled-macos-arm64": "node scripts/stage-bundled-runtime.mjs --platform darwin --arch arm64",
@@ -47,7 +48,9 @@
     "tauri:build:bundled-macos-intel": "pnpm run license:sync && pnpm run version:sync && pnpm run bundle:stage-macos-intel && pnpm exec tauri build --bundles dmg --target x86_64-apple-darwin",
     "portable:package-windows": "node scripts/package-portable-windows.mjs --target x86_64-pc-windows-msvc",
     "portable:package-macos-arm64": "node scripts/package-portable-macos.mjs --target aarch64-apple-darwin",
-    "portable:package-macos-intel": "node scripts/package-portable-macos.mjs --target x86_64-apple-darwin"
+    "portable:package-macos-intel": "node scripts/package-portable-macos.mjs --target x86_64-apple-darwin",
+    "runtime:sign": "node scripts/sign-runtime-manifest.mjs",
+    "runtime:verify": "node scripts/verify-runtime-manifest.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"

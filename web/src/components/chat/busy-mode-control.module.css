@@ -1,0 +1,23 @@
+.group {
+  display: inline-flex;
+  gap: var(--h-space-1, 4px);
+}
+
+.modeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--h-space-1, 4px);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text, #374151);
+}
+
+.modeButton[data-active="true"] {
+  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary-soft, #eff6ff);
+  color: var(--color-primary, #2563eb);
+}

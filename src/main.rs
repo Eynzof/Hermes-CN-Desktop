@@ -217,6 +217,160 @@ fn build_hermesui_response(
     empty_hermesui_response(404)
 }
 
+/// Parse a single HTTP `Range: bytes=...` header value.
+/// Mirrors `web/src/lib/httpRange.ts` for the Rust media stream path.
+fn parse_media_range(value: Option<&str>, file_size: u64) -> Option<(u64, u64)> {
+    let value = value?;
+    let trimmed = value.trim();
+    if !trimmed.to_lowercase().starts_with("bytes=") {
+        return None;
+    }
+    let spec = &trimmed[6..].trim();
+    if spec.contains(',') {
+        return None;
+    }
+    let dash = spec.find('-')?;
+    let start_str = &spec[..dash].trim();
+    let end_str = &spec[dash + 1..].trim();
+
+    // Suffix range `-N`.
+    if start_str.is_empty() {
+        let suffix: u64 = end_str.parse().ok()?;
+        if suffix == 0 || file_size == 0 {
+            return None;
+        }
+        let length = suffix.min(file_size);
+        let start = file_size - length;
+        return Some((start, file_size - 1));
+    }
+
+    let start: u64 = start_str.parse().ok()?;
+    if start >= file_size {
+        return None;
+    }
+
+    let end: u64 = if end_str.is_empty() {
+        file_size - 1
+    } else {
+        let parsed: u64 = end_str.parse().ok()?;
+        parsed.min(file_size - 1)
+    };
+
+    if end < start {
+        return None;
+    }
+    Some((start, end))
+}
+
+fn empty_response(status: u16) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(status)
+        .body(Vec::new())
+        .unwrap()
+}
+
+/// Build the response for a `hermes-media:` custom-protocol request.
+/// Mirrors `GET /api/media/file` Range streaming with extension + mime allowlists.
+fn build_hermes_media_response(_app: &tauri::AppHandle, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    let uri = request.uri();
+    let query = uri.query().unwrap_or("");
+    let path = urlencoding::decode(query)
+        .ok()
+        .and_then(|decoded| {
+            decoded
+                .split('&')
+                .find_map(|pair| {
+                    let mut parts = pair.splitn(2, '=');
+                    let key = parts.next()?;
+                    let value = parts.next()?;
+                    if key == "path" {
+                        Some(value.to_string())
+                    } else {
+                        None
+                    }
+                })
+        })
+        .unwrap_or_default();
+
+    if path.is_empty() {
+        return empty_response(400);
+    }
+
+    let resolved = match commands::media_file::resolve_media_path(&path) {
+        Ok(p) => p,
+        Err(_) => return empty_response(404),
+    };
+
+    let mime = commands::media_file::mime_from_path(&resolved).unwrap_or("application/octet-stream");
+    if !commands::media_file::allowed_mime(mime) {
+        return empty_response(415);
+    }
+
+    let metadata = match fs::metadata(&resolved) {
+        Ok(m) if m.is_file() => m,
+        _ => return empty_response(404),
+    };
+
+    let file_size = metadata.len();
+    const CHUNK_SIZE: u64 = 64 * 1024;
+    const MAX_STREAM_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+    let range = parse_media_range(
+        request.headers().get("Range").and_then(|v| v.to_str().ok()),
+        file_size,
+    );
+
+    let (start, end, status, content_range) = match range {
+        Some((s, e)) => {
+            let length = e - s + 1;
+            if length > MAX_STREAM_BYTES {
+                return empty_response(416);
+            }
+            let range_header = format!("bytes {}-{}/{}", s, e, file_size);
+            (s, e, 206, Some(range_header))
+        }
+        None => {
+            let capped = file_size.min(MAX_STREAM_BYTES);
+            (0, capped.saturating_sub(1), 200, None)
+        }
+    };
+
+    let length = end - start + 1;
+    let mut file = match std::fs::File::open(&resolved) {
+        Ok(f) => f,
+        Err(_) => return empty_response(500),
+    };
+    use std::io::{Read, Seek};
+    if let Err(_) = file.seek(std::io::SeekFrom::Start(start)) {
+        return empty_response(500);
+    }
+
+    let mut remaining = length;
+    let mut body = Vec::with_capacity(remaining as usize);
+    let mut buf = vec![0u8; CHUNK_SIZE as usize];
+    while remaining > 0 {
+        let to_read = (remaining as usize).min(buf.len());
+        match file.read(&mut buf[..to_read]) {
+            Ok(0) => break,
+            Ok(n) => {
+                body.extend_from_slice(&buf[..n]);
+                remaining -= n as u64;
+            }
+            Err(_) => return empty_response(500),
+        }
+    }
+
+    let mut builder = tauri::http::Response::builder()
+        .status(status)
+        .header("Content-Type", mime)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Length", body.len());
+    if let Some(cr) = content_range {
+        builder = builder.header("Content-Range", cr);
+    }
+    builder.body(body).unwrap_or_else(|_| empty_response(500))
+}
+
 fn main() {
     env_logger::init();
 
@@ -275,6 +429,14 @@ fn main() {
             let path = request.uri().path().to_string();
             tauri::async_runtime::spawn(async move {
                 let response = build_hermesui_response(&app, &path);
+                responder.respond(response);
+            });
+        })
+        // Local-first authenticated media streaming for chat/preview attachments.
+        .register_asynchronous_uri_scheme_protocol("hermes-media", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let response = build_hermes_media_response(&app, &request);
                 responder.respond(response);
             });
         })
@@ -654,10 +816,64 @@ fn main() {
             commands::connection_auth::connection_oauth_login,
             commands::connection_auth::connection_password_login,
             commands::connection_auth::connection_auth_me,
-            commands::connection_auth::connection_oauth_logout,
-            commands::backup::backup_export_profile,
+              commands::connection_auth::connection_oauth_logout,
+              commands::spotify_oauth::spotify_oauth_start,
+              commands::spotify_oauth::spotify_oauth_wait,
+              commands::spotify_oauth::spotify_oauth_read,
+              commands::spotify_oauth::spotify_oauth_write,
+              commands::spotify_oauth::spotify_oauth_disconnect,
+              commands::spotify_oauth::spotify_oauth_cancel,
+              commands::meet::meet_join,
+              commands::meet::meet_status,
+              commands::meet::meet_transcript,
+              commands::meet::meet_leave,
+              commands::meet::meet_say,
+              commands::meet::meet_setup,
+              commands::mcp::mcp_stdio_spawn,
+              commands::mcp::mcp_stdio_write,
+              commands::mcp::mcp_stdio_kill,
+              commands::mcp::mcp_stdio_status,
+              commands::subscription_proxy::subscription_proxy_start,
+              commands::subscription_proxy::subscription_proxy_stop,
+              commands::subscription_proxy::subscription_proxy_status,
+              commands::subscription_proxy::subscription_proxy_providers,
+              commands::acp::acp_start,
+              commands::acp::acp_stop,
+              commands::acp::acp_status,
+              commands::acp::acp_list_sessions,
+              commands::meet::meet_oauth_start,
+              commands::meet::meet_oauth_wait,
+              commands::meet::meet_oauth_read,
+              commands::meet::meet_oauth_write,
+              commands::meet::meet_oauth_disconnect,
+              commands::meet::meet_oauth_cancel,
+              commands::backup::backup_export_profile,
             commands::backup::backup_import_profile,
             commands::browser_companion::open_browser_companion,
+            commands::browser::browser_cdp_probe,
+            commands::browser::browser_find_free_port,
+            commands::browser::browser_launch_chrome_debug,
+            commands::browser::browser_sidecar_start,
+            commands::browser::browser_sidecar_stop,
+            commands::browser::browser_event_subscribe,
+            commands::browser::browser_navigate,
+            commands::browser::browser_snapshot,
+            commands::browser::browser_click,
+            commands::browser::browser_type,
+            commands::browser::browser_scroll,
+            commands::browser::browser_back,
+            commands::browser::browser_press,
+            commands::browser::browser_console,
+            commands::browser::browser_get_images,
+            commands::browser::browser_vision,
+            commands::browser::browser_cdp,
+            commands::browser::browser_dialog,
+            commands::browser::browser_exec,
+            commands::checkpoints::checkpoint_status,
+            commands::checkpoints::checkpoint_diff,
+            commands::checkpoints::checkpoint_snapshot,
+            commands::cli::cli_spawn,
+            commands::cli::cli_resolve_command,
             commands::config_migration::config_migration_scan,
             commands::config_migration::config_migration_import,
             commands::im_onboarding::im_onboarding_state,
@@ -669,10 +885,37 @@ fn main() {
             commands::file_dialogs::create_workspace_project,
             commands::file_dialogs::open_workspace_path,
             commands::file_dialogs::open_external_url,
-            commands::log_export::export_log_snapshot,
-            commands::session_export::export_session_json,
+            commands::projects::projects_list,
+            commands::projects::projects_create,
+            commands::projects::projects_update,
+            commands::projects::projects_set_active,
+            commands::projects::projects_delete,
+            commands::projects::projects_tree,
+            commands::context_files::read_context_files,
+              commands::log_export::export_log_snapshot,
+              commands::lsp::lsp_spawn,
+              commands::lsp::lsp_write_stdin,
+              commands::lsp::lsp_shutdown,
+              commands::lsp::lsp_probe_binary,
+              commands::lsp::lsp_status,
+              commands::session_export::export_session_json,
+            commands::state_db::state_db_query,
+            commands::state_db::state_db_exec,
+            commands::state_db::state_db_fts_search,
+            commands::state_db::state_db_search_meta,
             commands::debug_bundle::export_debug_bundle,
             commands::desktop_update::desktop_check_update,
+            commands::fs::fs_list,
+            commands::upload::upload_file_local,
+            commands::media_file::media_data_url,
+            commands::media_file::media_file_url,
+            commands::dashboard_local::dashboard_local_status,
+            commands::dashboard_local::dashboard_local_env,
+            commands::dashboard_api::mcp_servers_summary,
+            commands::dashboard_api::active_profile_get,
+            commands::dashboard_api::active_profile_set,
+            commands::dashboard_api::memory_provider_status,
+            commands::dashboard_api::oauth_providers_status,
             commands::app_update::app_update_check,
             commands::app_update::app_update_install,
             hermes_agent_cn::update_config::get_update_config,
@@ -681,9 +924,34 @@ fn main() {
             commands::environment::environment_check,
             commands::coding_agents::coding_agents_check,
             commands::api_proxy::api_request,
+            commands::api_server::api_server_start,
+            commands::api_server::api_server_stop,
+            commands::api_server::api_server_status,
+            commands::egress_proxy::egress_proxy_start,
+            commands::egress_proxy::egress_proxy_stop,
+            commands::egress_proxy::egress_proxy_status,
+            commands::egress_proxy::egress_proxy_set_rules,
+            commands::egress_proxy::egress_proxy_download,
+            commands::egress_proxy::egress_proxy_import_secrets,
+            commands::egress_proxy::egress_proxy_export_secrets,
+            commands::observability::observability_get_config,
+            commands::observability::observability_set_config,
+            commands::codex_app_server::codex_app_server_check,
+            commands::codex_app_server::codex_app_server_start,
+            commands::codex_app_server::codex_app_server_stop,
+            commands::codex_app_server::codex_app_server_status,
+            commands::codex_app_server::codex_app_server_run_turn,
+            commands::codex_app_server::codex_app_server_interrupt,
+            commands::codex_app_server::codex_app_server_close,
+            commands::codex_app_server::codex_app_server_respond,
+            commands::codex_app_server::codex_app_server_plugin_list,
+            commands::codex_app_server::codex_app_server_apply_config_toml,
             commands::api_proxy::external_request,
+            commands::ha_proxy::ha_request,
             commands::api_proxy::upload_file,
             commands::api_proxy::download_external_image,
+            commands::web_tools::web_provider_request,
+            commands::web_tools::web_store_full_text,
             commands::runtime_manager::runtime_info,
             commands::runtime_manager::runtime_check_update,
             commands::runtime_manager::runtime_install_update,
@@ -694,15 +962,20 @@ fn main() {
             commands::runtime_manager::managed_runtime_start,
             commands::runtime_manager::managed_runtime_stop,
             commands::runtime_manager::managed_runtime_uninstall,
-            commands::runtime_manager::managed_runtime_reinstall,
+        commands::runtime_manager::managed_runtime_reinstall,
+            commands::runtime_manager::toolchain_status,
+            commands::smoke::run_dashboard_smoke,
+            commands::windows_env::refresh_windows_path,
             commands::profiles::switch_profile,
             commands::yolo::get_yolo_mode,
             commands::yolo::set_yolo_mode,
-            commands::memory::read_memory,
-            commands::memory::add_memory_entry,
-            commands::memory::update_memory_entry,
-            commands::memory::remove_memory_entry,
-            commands::memory::write_user_profile,
+commands::memory::read_memory,
+commands::memory::add_memory_entry,
+commands::memory::update_memory_entry,
+commands::memory::remove_memory_entry,
+commands::memory::write_user_profile,
+commands::memory_files::read_memory_files,
+            commands::model_config::set_model_config,
             commands::notify::desktop_notify,
             commands::ws_proxy::gateway_ws_open,
             commands::ws_proxy::gateway_ws_send,
@@ -719,11 +992,24 @@ fn main() {
             commands::terminal::terminal_write,
             commands::terminal::terminal_resize,
             commands::terminal::terminal_close,
+            commands::terminal::terminal_detach,
+            commands::terminal_env::terminal_env_exec,
+            commands::terminal_env::terminal_env_create_session,
+            commands::terminal_env::terminal_env_cleanup,
+            commands::pets::pets_list,
+            commands::pets::pet_select,
+            commands::pets::pet_hatch,
+            commands::profile_ops::export_profile,
+            commands::profile_ops::import_profile,
+            commands::profile_ops::distribution_info,
             commands::preview::read_file_data_url,
             commands::preview::read_workspace_file,
             commands::preview::write_workspace_file,
             commands::preview::watch_preview_file,
             commands::preview::stop_preview_file_watch,
+            commands::context_refs::context_refs_folder_list,
+            commands::context_refs::context_refs_git_capture,
+            commands::context_refs::context_refs_http_fetch,
             commands::git::git_review_list,
             commands::git::git_review_diff,
             commands::git::git_review_stage,
@@ -742,9 +1028,21 @@ fn main() {
             commands::git::git_branch_switch,
             commands::git::git_repo_status,
             commands::hot_update::hot_update_backend,
+            commands::wake_word::wake_start,
+            commands::wake_word::wake_stop,
+            commands::wake_word::wake_pause,
+            commands::wake_word::wake_resume,
+            commands::wake_word::wake_status,
+            commands::wake_word::wake_feed,
+            commands::wake_word::wake_frame_info,
             commands::ui_update::ui_check_update,
             commands::ui_update::ui_install_update,
             commands::ui_update::ui_rollback,
+            commands::messaging::get_messaging_platforms,
+            commands::messaging::get_messaging_status,
+            commands::messaging::set_messaging_platform_config,
+            commands::messaging::start_messaging_platform,
+            commands::messaging::stop_messaging_platform,
         ])
         .on_window_event(move |window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. }
@@ -776,4 +1074,49 @@ fn main() {
         }
         _ => {}
     });
+}
+
+#[cfg(test)]
+mod media_stream_tests {
+    use super::parse_media_range;
+
+    #[test]
+    fn parse_range_start_end() {
+        assert_eq!(parse_media_range(Some("bytes=0-99"), 200), Some((0, 99)));
+    }
+
+    #[test]
+    fn parse_range_clamps_end() {
+        assert_eq!(parse_media_range(Some("bytes=0-999"), 100), Some((0, 99)));
+    }
+
+    #[test]
+    fn parse_range_open_end() {
+        assert_eq!(parse_media_range(Some("bytes=50-"), 200), Some((50, 199)));
+    }
+
+    #[test]
+    fn parse_range_suffix() {
+        assert_eq!(parse_media_range(Some("bytes=-50"), 200), Some((150, 199)));
+    }
+
+    #[test]
+    fn parse_range_rejects_multipart() {
+        assert_eq!(parse_media_range(Some("bytes=0-9,20-29"), 100), None);
+    }
+
+    #[test]
+    fn parse_range_rejects_start_beyond_size() {
+        assert_eq!(parse_media_range(Some("bytes=100-"), 100), None);
+    }
+
+    #[test]
+    fn parse_range_rejects_end_before_start() {
+        assert_eq!(parse_media_range(Some("bytes=10-5"), 100), None);
+    }
+
+    #[test]
+    fn parse_range_missing_header() {
+        assert_eq!(parse_media_range(None, 100), None);
+    }
 }

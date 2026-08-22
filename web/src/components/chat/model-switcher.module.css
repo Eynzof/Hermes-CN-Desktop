@@ -1,0 +1,116 @@
+.modelPickerContainer {
+  position: relative;
+  display: inline-block;
+}
+
+.modelPickerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: 0;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  background: var(--surface-elevated, #fff);
+  color: var(--text-primary, #111);
+  font-size: var(--font-sm, 14px);
+  cursor: pointer;
+}
+
+.modelPickerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modelPickerDropdown {
+  position: absolute;
+  top: calc(100% + var(--space-2, 8px));
+  right: 0;
+  min-width: 240px;
+  background: var(--surface-elevated, #fff);
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-radius: 0;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.12));
+  z-index: 50;
+  padding: var(--space-3, 12px);
+}
+
+.modelPickerSection {
+  margin-bottom: var(--space-3, 12px);
+}
+
+.modelPickerSectionTitle {
+  display: block;
+  font-size: var(--font-xs, 12px);
+  color: var(--text-tertiary, #888);
+  margin-bottom: var(--space-2, 8px);
+}
+
+.modelPickerScopeRow {
+  display: flex;
+  gap: var(--space-2, 8px);
+}
+
+.scopeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border-radius: 0;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  background: var(--surface-elevated, #fff);
+  color: var(--text-secondary, #555);
+  font-size: var(--font-xs, 12px);
+  cursor: pointer;
+}
+
+.scopeButtonActive {
+  border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+  background: var(--accent-subtle, rgba(37, 99, 235, 0.08));
+}
+
+.modelPickerItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2, 8px);
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary, #111);
+  font-size: var(--font-sm, 14px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelPickerItem:hover {
+  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.modelPickerItemActive {
+  color: var(--accent, #2563eb);
+  background: var(--accent-subtle, rgba(37, 99, 235, 0.08));
+}
+
+.modelPickerFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2, 8px);
+  border-top: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+}
+
+.modelPickerConfirm {
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  border-radius: 0;
+  border: none;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  font-size: var(--font-sm, 14px);
+  cursor: pointer;
+}
+
+.modelPickerConfirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

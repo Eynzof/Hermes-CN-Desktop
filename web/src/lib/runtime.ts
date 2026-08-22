@@ -2,6 +2,7 @@ import { resetVersionCheck } from "./version-check";
 import type {
   ApplyConnectionResult,
   BackupExportResult,
+  HaRequestFn,
   BackupImportResult,
   ConfigMigrationImportInput,
   ConfigMigrationImportResult,
@@ -42,10 +43,70 @@ import type {
   UiUpdateCheckResult,
   UiUpdateReadyPayload,
   YoloModeStatus,
+  MeetJoinResult,
+  MeetStatusResult,
+  MeetTranscriptResult,
+  MeetLeaveResult,
+  MeetSayResult,
+  MeetSetupResult,
+  GoogleOAuthStartResult as MeetOauthStartResult,
+  GoogleOAuthCallbackResult as MeetOauthCallbackResult,
+  GoogleMeetAuthJsonResult as MeetOauthReadResult,
+  WakeDetectedEvent,
+  WakeFeedResponse,
+  WakeFrameInfoResponse,
+  WakePauseResponse,
+  WakeResumeResponse,
+  WakeStartResponse,
+  WakeStatusResponse,
+  WakeStopResponse,
 } from "@hermes/protocol";
 
 export type RuntimePlatform = "web" | "electron" | "tauri";
 export type HostOS = "macos" | "windows" | "linux" | "unknown";
+
+export interface ToolchainStatus {
+  uv?: string;
+  python?: string;
+  node?: string;
+  rg?: string;
+  ffmpeg?: string;
+  git?: string;
+}
+
+export interface WindowsPathRefreshResult {
+  path: string;
+  pathext?: string;
+  refreshed: boolean;
+}
+
+export interface DashboardSmokeCheck {
+  id: string;
+  label: string;
+  ok: boolean;
+  status?: string;
+  latencyMs?: number;
+  detail?: string;
+}
+
+export interface DashboardSmokeComponent {
+  ok: boolean;
+  state?: string;
+  detail?: string;
+}
+
+export interface DashboardSmokeResult {
+  ok: boolean;
+  overall: "ok" | "degraded" | "failing";
+  at: string;
+  checks: DashboardSmokeCheck[];
+  components: {
+    gateway?: DashboardSmokeComponent;
+    dashboard?: DashboardSmokeComponent;
+    storage?: DashboardSmokeComponent;
+    platforms?: DashboardSmokeComponent;
+  };
+}
 
 export interface ElectronApiRequestInput {
   path: string;
@@ -157,6 +218,33 @@ export interface UiEventInput {
   source?: string;
   props?: Record<string, unknown>;
   appVersion?: string;
+}
+
+export interface StateDbFtsSearchRequest {
+  sql: string;
+  params: (string | number | null)[];
+}
+
+export interface StateDbQueryRequest extends StateDbFtsSearchRequest {
+  readonly?: boolean;
+}
+
+export interface StateDbSearchMeta {
+  schemaVersion: number;
+  ftsStorageVersion: number;
+  ftsRebuildHighWater?: number;
+  ftsRebuildProgress?: number;
+  ftsStale: boolean;
+  ftsCjkStale: boolean;
+  rowCountMessages: number;
+  rowCountSessions: number;
+}
+
+export interface HermesStateDbBridge {
+  query(request: StateDbQueryRequest): Promise<Record<string, unknown>[]>;
+  exec(request: StateDbQueryRequest): Promise<number>;
+  ftsSearch(request: StateDbFtsSearchRequest): Promise<Record<string, unknown>[]>;
+  searchMeta(): Promise<StateDbSearchMeta>;
 }
 
 export interface ExportDebugBundleInput {
@@ -415,6 +503,44 @@ export interface HermesGitBranchBridge {
   switch(input: { repoPath: string; branch: string }): Promise<{ branch: string }>;
 }
 
+export interface HermesCheckpointStatusFile {
+  path: string;
+  status: string;
+  staged: boolean;
+}
+
+export interface HermesCheckpointStatusResult {
+  isRepo: boolean;
+  branch: string | null;
+  clean: boolean;
+  files: HermesCheckpointStatusFile[];
+}
+
+export interface HermesCheckpointDiffStat {
+  path: string;
+  added: number;
+  removed: number;
+  status: string;
+}
+
+export interface HermesCheckpointDiffResult {
+  empty: boolean;
+  stat: HermesCheckpointDiffStat[];
+  diff: string;
+}
+
+export interface HermesCheckpointSnapshotResult {
+  head: string | null;
+  clean: boolean;
+  message: string;
+}
+
+export interface HermesCheckpointBridge {
+  status(input: { cwd: string }): Promise<HermesCheckpointStatusResult>;
+  diff(input: { cwd: string; baseRef?: string | null; statOnly?: boolean }): Promise<HermesCheckpointDiffResult>;
+  snapshot(input: { cwd: string }): Promise<HermesCheckpointSnapshotResult>;
+}
+
 export interface HermesGitBridge {
   review: HermesGitReviewBridge;
   worktree: HermesGitWorktreeBridge;
@@ -449,9 +575,12 @@ declare global {
       windowType: "electron" | "tauri";
       /** Fatal compatibility/error dialog + force-quit the app. */
       fatalErrorAndExit?(input: { title: string; message: string }): Promise<never>;
-      request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
-      externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
-      uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
+  request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
+  externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
+  /** Origin-locked Home Assistant proxy for LAN/private HASS_URLs. */
+  haRequest?: HaRequestFn;
+  uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
+
       downloadExternalImage?(input: DownloadExternalImageInput): Promise<DownloadedImageResult>;
       pickFiles?(): Promise<ElectronFilePickerResult>;
       pickDirectory?(): Promise<ElectronFilePickerResult>;
@@ -502,6 +631,16 @@ declare global {
       reinstallManagedRuntime?(): Promise<RuntimeControlResult>;
       probeConnectionConfig?(remoteUrl: string): Promise<ProbeConnectionResult>;
       connectionOauthLogin?(remoteUrl: string): Promise<OauthLoginResult>;
+      wakeWord?: {
+        start(surface: string, clientCapture?: boolean, persist?: boolean): Promise<WakeStartResponse>;
+        stop(persist?: boolean): Promise<WakeStopResponse>;
+        pause(): Promise<WakePauseResponse>;
+        resume(): Promise<WakeResumeResponse>;
+        status(): Promise<WakeStatusResponse>;
+        feed(pcm: string, sampleRate?: number): Promise<WakeFeedResponse>;
+        frameInfo(): Promise<WakeFrameInfoResponse>;
+        onDetected(handler: (event: WakeDetectedEvent) => void): () => void;
+      };
       connectionPasswordLogin?(input: {
         remoteUrl: string;
         provider: string;
@@ -535,22 +674,57 @@ declare global {
       terminalOpenExternal?(input: TerminalOpenExternalInput): Promise<ExternalTerminalResult>;
       terminalWrite?(input: { terminalId: string; data: string }): Promise<boolean>;
       terminalResize?(input: { terminalId: string; cols: number; rows: number }): Promise<boolean>;
-      terminalClose?(input: { terminalId: string }): Promise<boolean>;
-      onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
+  terminalClose?(input: { terminalId: string }): Promise<boolean>;
+  terminalDetach?(input: { terminalId: string }): Promise<boolean>;
+  onTerminalOutput?(handler: (event: TerminalEventPayload) => void): () => void;
       readFileDataUrl?(path: string): Promise<string>;
       readWorkspaceFile?(input: ReadWorkspaceFileInput): Promise<FilePreview>;
       writeWorkspaceFile?(input: WriteWorkspaceFileInput): Promise<WriteWorkspaceFileResult>;
       /** Git ops backing the review pane (issue #328). */
       git?: HermesGitBridge;
+      /** Read-only checkpoint capture for /rollback /snapshot /diff. */
+      checkpoints?: HermesCheckpointBridge;
+      /** Long-timeout external HTTP for web search/extract providers. */
+      webProviderRequest?(input: {
+        path: string;
+        method?: string;
+        headers?: Record<string, string>;
+        body?: string | null;
+        timeoutSeconds?: number;
+        maxBytes?: number;
+        followRedirects?: boolean;
+      }): Promise<ElectronApiRequestResult>;
+      /** Store extracted full text to $HERMES_HOME/cache/web. */
+      webStoreFullText?(input: { fileName: string; content: string }): Promise<{
+        path: string;
+        storedChars: number;
+        truncated: boolean;
+      }>;
       watchPreviewFile?(input: { path: string }): Promise<WatchPreviewFileResult>;
       stopPreviewFileWatch?(input: { watchId: string }): Promise<boolean>;
       onPreviewFileChanged?(handler: (payload: PreviewFileChangedPayload) => void): () => void;
+      stateDb?: HermesStateDbBridge;
       onFileDrop?(handler: (payload: DesktopFileDropPayload) => void): () => void;
       onSystemResume?(handler: () => void): () => void;
       /** Native webview page zoom (reflows layout + viewport) for the interface
        *  scale setting. Fire-and-forget; far better than CSS `zoom`, which leaves
        *  viewport units un-scaled and overflows the fixed window. */
       setUiZoom?(factor: number): void;
+      /** Local-first dashboard API commands. */
+      fsList?(path: string): Promise<import("@hermes/protocol").FsListResponse>;
+      uploadAttachmentLocal?(input: {
+        sessionId: string;
+        name: string;
+        mimeType: string;
+        data: string;
+      }): Promise<import("@hermes/protocol").AttachmentUploadResult>;
+      mediaDataUrl?(path: string): Promise<{ dataUrl: string; mimeType: string; size: number }>;
+      mediaFileUrl?(path: string): Promise<{ url: string }>;
+      getMcpSummary?(): Promise<import("@hermes/protocol").McpServersResponse>;
+      getActiveProfile?(): Promise<import("@hermes/protocol").ActiveProfileResponse>;
+      setActiveProfile?(input: { name: string }): Promise<import("@hermes/protocol").ActiveProfileResponse>;
+      getMemoryProviderStatus?(provider: string): Promise<import("@hermes/protocol").MemoryProviderRuntimeStatusResponse>;
+      getOAuthProviders?(input?: { refresh?: boolean }): Promise<import("@hermes/protocol").OAuthProvidersResponse>;
     };
   }
 }

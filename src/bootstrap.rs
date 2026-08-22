@@ -349,5 +349,3 @@ pub async fn finalize_bootstrap(
     emit_runtime_status(app, "ready", "");
     log::info!("Hermes Agent 中文社区桌面版 ready");
 }
-
-

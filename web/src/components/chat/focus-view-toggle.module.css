@@ -1,0 +1,12 @@
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--h-space-1, 4px);
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text, #374151);
+}

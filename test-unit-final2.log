@@ -1,0 +1,414 @@
+
+> hermes-agent-cn-desktop@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop
+> pnpm -r --workspace-concurrency=1 test:unit
+
+Scope: 8 of 9 workspace projects
+
+> @hermes/credential-pool@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\credential-pool
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/credential-pool[39m
+
+ [32m✓[39m test/pool.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 14:11:56
+[2m   Duration [22m 300ms[2m (transform 75ms, setup 0ms, import 100ms, tests 4ms, environment 0ms)[22m
+
+
+> @hermes/protocol@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\protocol
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/protocol[39m
+
+ [32m✓[39m src/session-log.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/session-search.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/mcp-api.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/hermes-api.test.ts [2m([22m[2m48 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m80 passed[39m[22m[90m (80)[39m
+[2m   Start at [22m 14:11:57
+[2m   Duration [22m 541ms[2m (transform 648ms, setup 0ms, import 898ms, tests 43ms, environment 0ms)[22m
+
+
+> @hermes/skill-lint@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\skill-lint
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/skill-lint[39m
+
+ [32m✓[39m src/lint.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 14:11:58
+[2m   Duration [22m 305ms[2m (transform 76ms, setup 0ms, import 100ms, tests 6ms, environment 0ms)[22m
+
+
+> @hermes/agent-tools@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\agent-tools
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/agent-tools[39m
+
+ [32m✓[39m src/platform-config.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/toolsets.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/gates.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/registry.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/platform-toolsets.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/model-tools.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/categories.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/dispatch.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/dynamic-toolsets/dynamic-toolsets.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/token-estimate.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 529[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m10 passed[39m[22m[90m (10)[39m
+[2m      Tests [22m [1m[32m88 passed[39m[22m[90m (88)[39m
+[2m   Start at [22m 14:11:59
+[2m   Duration [22m 955ms[2m (transform 1.08s, setup 0ms, import 1.68s, tests 598ms, environment 1ms)[22m
+
+
+> @hermes/agent-core@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\agent-core
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/agent-core[39m
+
+ [32m✓[39m src/plugins/registry.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/compaction/compress.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/self-improvement/scheduler.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/skills/hub.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m src/skills/stacking.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/approval/policy.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/memory/store.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/personality/catalog.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/skills/registry.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/self-improvement/review.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/skills/loader.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/approval/gate.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m src/moa/orchestrator.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/reasoning/extract.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/learning/journey.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/personality/overlay.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/skills/commands.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/moa/council.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/compaction/prompt-cache.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/providers/catalog.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/learning/graph.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/providers/switch.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/skills/bundle.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/providers/aliases.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/run-turn-cache.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/run-turn.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/plugins/context-plugin.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/memory/external.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/memory/providers/providers.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m src/self-improvement/refine.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/plugins/provider-plugin.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/usage/tracker.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/plugins/memory-plugin.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/memory/tool.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/session-search-recall/tool.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/memory/tool-external.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m src/session/store.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/providers/registry.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/runtime/runtime.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/checkpoints/store.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/providers/adapters.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m41 passed[39m[22m[90m (41)[39m
+[2m      Tests [22m [1m[32m370 passed[39m[22m[90m (370)[39m
+[2m   Start at [22m 14:12:01
+[2m   Duration [22m 1.75s[2m (transform 15.12s, setup 0ms, import 19.17s, tests 602ms, environment 4ms)[22m
+
+
+> @hermes/web@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\web
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/web[39m
+
+ [32m✓[39m src/lib/ui-store.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m src/stores/ui.test.ts [2m([22m[2m39 tests[22m[2m)[22m[33m 399[2mms[22m[39m
+     [33m[2m✓[22m[39m starts null and accepts a string id [33m 352[2mms[22m[39m
+ [32m✓[39m src/lib/debug-bus.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 99[2mms[22m[39m
+[90mstderr[2m | src/lib/gateway-socket-path.test.ts[2m > [22m[2mcreateGatewaySocket path selection[2m > [22m[2mflips to relay within the same attempt on a synchronous constructor throw
+[22m[39m[gateway-socket-path] native WS unavailable (constructor threw: SecurityError: blocked) — switching to Rust relay
+
+[90mstderr[2m | src/lib/gateway-socket-path.test.ts[2m > [22m[2mcreateGatewaySocket path selection[2m > [22m[2mflips to relay after two consecutive async pre-open failures
+[22m[39m[gateway-socket-path] native WS unavailable (2 consecutive pre-open failures) — switching to Rust relay
+
+[90mstderr[2m | src/lib/gateway-socket-path.test.ts[2m > [22m[2mcreateGatewaySocket path selection[2m > [22m[2mclears the learned value and reverts to native when the relay keeps failing
+[22m[39m[gateway-socket-path] relay keeps failing pre-open — clearing learned path, re-probing native
+
+ [32m✓[39m src/lib/gateway-socket-path.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 464[2mms[22m[39m
+     [33m[2m✓[22m[39m defaults to the native WebSocket on Tauri [33m 448[2mms[22m[39m
+ [32m✓[39m src/lib/session-store/session-store.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+ [32m✓[39m src/lib/version-check.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m src/lib/notifications.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 819[2mms[22m[39m
+     [33m[2m✓[22m[39m produces an approval action with command body and a stable dedupe key [33m 715[2mms[22m[39m
+ [31m❯[39m src/fallback/fallback.test.ts [2m([22m[2m8 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 12[2mms[22m[39m
+     [32m✓[39m parses fallback providers[32m 3[2mms[22m[39m
+     [32m✓[39m deduplicates entries[32m 0[2mms[22m[39m
+     [32m✓[39m detects same deployment[32m 0[2mms[22m[39m
+[31m     [31m×[31m classifies 429 as rate limit[39m[32m 6[2mms[22m[39m
+     [32m✓[39m classifies 401 as auth[32m 0[2mms[22m[39m
+     [32m✓[39m clamps backoff[32m 0[2mms[22m[39m
+     [32m✓[39m activates fallback on rate limit[32m 0[2mms[22m[39m
+     [32m✓[39m does not fallback to same deployment[32m 0[2mms[22m[39m
+ [32m✓[39m src/lib/transport.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m src/lib/gateway-factory.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 1073[2mms[22m[39m
+     [33m[2m✓[22m[39m returns a WebSocket GatewayClient (the only transport) [33m 1051[2mms[22m[39m
+ [32m✓[39m src/lib/tauri-bridge.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 604[2mms[22m[39m
+     [33m[2m✓[22m[39m encodes large upload buffers in chunks [33m 554[2mms[22m[39m
+ [32m✓[39m src/lib/gateway-client.test.ts [2m([22m[2m40 tests[22m[2m)[22m[32m 79[2mms[22m[39m
+ [32m✓[39m src/lib/persona-market.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 69[2mms[22m[39m
+ [32m✓[39m src/lib/provider-catalog.test.ts [2m([22m[2m58 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m src/lib/browser-companion.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/stores/cli-delegations.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/components/chat/learning-journey-panel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 135[2mms[22m[39m
+ [32m✓[39m src/stores/chat.test.ts [2m([22m[2m51 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m src/components/chat/approval-panel.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 185[2mms[22m[39m
+ [32m✓[39m src/lib/telemetry.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/components/chat/message-adapter.test.ts [2m([22m[2m42 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/lib/memory-page-stats.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m src/f5-refresh-trigger-tests.spec.ts [2m([22m[2m40 tests[22m[2m)[22m[33m 2326[2mms[22m[39m
+     [33m[2m✓[22m[39m reproduces race: atoms imported before initUiStore get defaults, not persisted values [33m 352[2mms[22m[39m
+     [33m[2m✓[22m[39m shows bug: gwSessionIdAtom resets to null after module reload when no persistence data [33m 1370[2mms[22m[39m
+ [32m✓[39m src/lib/cli-delegation.test.ts [2m([22m[2m40 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/lib/local-provider-context.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/lib/wander-memory/rest.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/lifecycle.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/components/chat/tool-activity.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/format.test.ts [2m([22m[2m38 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m src/lib/review-tree.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/components/ui/pill.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/components/chat/context-usage-panel.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 92[2mms[22m[39m
+ [32m✓[39m src/components/profiles/profile-card.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m src/lib/preview-rail.test.ts [2m([22m[2m35 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/components/memory/memory-console-dialog.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/routes/managed-runtime-panel.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m src/components/memory/memory-backends-panel.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m src/components/wander-memory/collision-line.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 137[2mms[22m[39m
+[90mstderr[2m | src/components/desktop-update-notifier.test.tsx[2m > [22m[2mDesktopUpdateNotifier — unified update CTA[2m > [22m[2moffers 立即更新 when the unified update bridge is available
+[22m[39mWarning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+[90mstderr[2m | src/components/desktop-update-notifier.test.tsx[2m > [22m[2mDesktopUpdateNotifier — unified update CTA[2m > [22m[2mfalls back to 去官网下载 when the bridge is unavailable
+[22m[39mWarning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+[90mstderr[2m | src/components/desktop-update-notifier.test.tsx[2m > [22m[2mDesktopUpdateNotifier — unified update CTA[2m > [22m[2m立即更新 triggers the unified install, not the download page
+[22m[39mWarning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+
+ [32m✓[39m src/components/desktop-update-notifier.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 229[2mms[22m[39m
+ [32m✓[39m src/lib/workspaces.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m src/lib/wander-memory/endpoints.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/components/wander-memory/memory-card.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 205[2mms[22m[39m
+ [32m✓[39m src/stores/subagents.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/lib/use-confirm.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 427[2mms[22m[39m
+ [32m✓[39m src/components/chat/conversation-width-control.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/routes/settings-coding-agents.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/routes/voice.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m src/lib/command-palette.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/lib/session-map.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/lib/voice.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/skins.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/hooks/use-sessions.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/lib/session-rename.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/registry.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/components/chat/skill-invocation-message.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m src/lib/composer-prompt.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/builtin-commands.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/routes/soul.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m src/lib/session-activity.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/components/chat/goose-composer-model-picker.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m src/lib/provider-probe.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/stores/composer-queue.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/composer-mentions.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/external-links.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/components/skills/skill-usage-stats.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m src/lib/context-references/expand.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/hooks/use-memory.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/components/chat/message-skeleton.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m src/lib/composer-url.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/session-branch.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/components/ui/diagnostic-copy-button.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/resolve.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/lib/model-usage-log.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/components/top-bar/top-bar.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/lib/reasoning-effort.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/session-export.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/completions.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/components/panel/panel-composer.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/components/chat/goose-composer.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m src/lib/session-ui-state.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/context-references/resolve.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/components/chat/group-tools.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/stores/wander-memory-chat.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/logs-viewer.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/clipboard-image.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/session-search/fts-query.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/gateway-reconnect.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/session-search/engine.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/components/chat/subagent-panel.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/lib/wander-memory/errors.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/lib/composer-skills.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/voice-config.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/desktop-update.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/hooks/use-ui-update.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/skin.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/gateway-delta-coalescer.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/gateway-result.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/components/chat/message-timeline.test.tsx [2m([22m[2m30 tests[22m[2m)[22m[33m 334[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/control.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/settings-model-save.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/approval-mode.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/model.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/components/chat/message-adapter.delegation-merge.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/model-context.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/stores/panel.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/context-usage.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/debug-redact.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/tools-commands.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/lib/last-used-model.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/context-files/loader.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/personality.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/routes/im-onboarding.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/context-usage/formatter.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/compress.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m src/hooks/use-app-update.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/env-translations.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/session-search/router.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/runtime.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/skills.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/usage.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/plugins.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/checkpoints.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m src/lib/gateway-restart.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/skills/hub.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/learning.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/session-search/tokenize.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/context-references/parse.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/message-images.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/components/app-shell/use-active-top-tab.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/analytics.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/memory.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/self-improvement.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/plugins.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m src/lib/session-search/lineage.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/source-meta.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/executors.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/tools-category.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/update-config.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/routes/backup.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/skills/service.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/hooks/use-provider-models.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/model-search-aliases.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/handlers/moa.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/hooks/use-profiles.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/context-files/resolver.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/hooks/use-session-resolution.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/parse.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/components/settings/skills-hub-panel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 364[2mms[22m[39m
+ [32m✓[39m src/lib/theme-defaults.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/lib/model-options-cache.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/connection-auth-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/hooks/use-hot-update-backend.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/hooks/use-config.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/session-create.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/session-tip-redirect.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/session-model-override.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m src/lib/tools/tool-search/tool-search.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/stores/session-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/managed-runtime-presentation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/composer-drafts.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/lib/provider-routing.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/dashboard-url.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/composer-submit-shortcut.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/truncate-middle.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/components/profiles/profile-model-select.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/components/app-shell/sidebar-version-tag.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/terminal/terminal-backends.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/config-update.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/app-update.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/config-migration-assistant.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/paths.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/config-translations.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/cn-provider-slugs.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/components/memory/memory-backend-utils.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/provider-icons.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/components/app-shell/capability-sidebar.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/routes/skills.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/lib/sidebar-session-lists.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/lib/pets/pets.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/command-palette-shortcut.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/external-connection-health.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/provider-id.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/session-title.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/components/app-shell/model-onboarding-dialog.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/compress-feedback.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/reasoning-filter.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/skill-origin.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/health-subtitle.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/profiles/profiles.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/lib/draft-session-prewarm.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/wander-memory/demo.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 8761[2mms[22m[39m
+     [33m[2m✓[22m[39m generates keywords when no lexical match exists and grounds on re-scored memories [33m 928[2mms[22m[39m
+     [33m[2m✓[22m[39m returns empty trace fields when a lexical match exists [33m 912[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps the nothing-relevant message when the store is empty [33m 1683[2mms[22m[39m
+     [33m[2m✓[22m[39m chatStream returns the same contract object while streaming deltas [33m 2151[2mms[22m[39m
+     [33m[2m✓[22m[39m addMemory stores a new memory and search finds it [33m 1004[2mms[22m[39m
+     [33m[2m✓[22m[39m simulates a collision: a near-duplicate supersedes the existing memory [33m 501[2mms[22m[39m
+     [33m[2m✓[22m[39m delete removes the memory; deleting it again raises not_found [33m 829[2mms[22m[39m
+     [33m[2m✓[22m[39m chat validates the query and maintenance reports the store size [33m 746[2mms[22m[39m
+ [32m✓[39m src/components/profiles/profile-model-key.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/session-query-sync.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m src/lib/context-files/merge.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/hooks/use-cron.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/components/settings/model-combobox.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [2m[90m↓[39m[22m src/lib/wander-memory/real-backend.test.ts [2m([22m[2m3 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+ [32m✓[39m src/hooks/use-analytics.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/routes/environment.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/lib/slash-commands/runner.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/components/persona/persona-market-panel.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/hooks/use-wander-memory.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 10812[2mms[22m[39m
+     [33m[2m✓[22m[39m useWanderMemoryAdd calls addMemory and invalidates list + search [33m 518[2mms[22m[39m
+     [33m[2m✓[22m[39m useWanderMemoryDelete calls delete and invalidates list + search [33m 614[2mms[22m[39m
+     [33m[2m✓[22m[39m useWanderMemoryDialogue calls addDialogue and invalidates list + search [33m 1411[2mms[22m[39m
+     [33m[2m✓[22m[39m useWanderMemoryChat (non-streaming) calls chat and invalidates list + search [33m 910[2mms[22m[39m
+     [33m[2m✓[22m[39m useWanderMemoryMaintenance calls maintenance and invalidates list + search [33m 611[2mms[22m[39m
+     [33m[2m✓[22m[39m streams deltas into the assistant message and finalizes with reply + grounding [33m 1719[2mms[22m[39m
+     [33m[2m✓[22m[39m cancel() marks the last message [cancelled] and later deltas are dropped [33m 2131[2mms[22m[39m
+     [33m[2m✓[22m[39m send() is a no-op while a stream is already running [33m 1719[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/fallback/fallback.test.ts[2m > [22merror classifier[2m > [22mclassifies 429 as rate limit
+[31m[1mAssertionError[22m: expected 'unknown' to be 'rate_limit' // Object.is equality[39m
+
+Expected: [32m"rate_limit"[39m
+Received: [31m"unknown"[39m
+
+[36m [2m❯[22m src/fallback/fallback.test.ts:[2m33:22[22m[39m
+    [90m 31|[39m   [34mit[39m([32m"classifies 429 as rate limit"[39m[33m,[39m () [33m=>[39m {
+    [90m 32|[39m     const c = classifyApiError(new Error("HTTP 429 Too Many Requests")…
+    [90m 33|[39m     [34mexpect[39m(c[33m.[39mreason)[33m.[39m[34mtoBe[39m([32m"rate_limit"[39m)[33m;[39m
+    [90m   |[39m                      [31m^[39m
+    [90m 34|[39m     [34mexpect[39m(c[33m.[39mshouldFallback)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m 35|[39m   })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m200 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (202)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1813 passed[39m[22m[2m | [22m[33m2 skipped[39m[90m (1817)[39m
+[2m   Start at [22m 14:12:04
+[2m   Duration [22m 14.44s[2m (transform 109.90s, setup 0ms, import 183.26s, tests 29.88s, environment 9.28s)[22m
+
+D:\Hermes-CN-Desktop\web:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @hermes/web@0.8.0-rc4 test:unit: `vitest run`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.

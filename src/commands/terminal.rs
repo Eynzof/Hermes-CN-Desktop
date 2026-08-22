@@ -301,6 +301,28 @@ pub fn terminal_close(input: TerminalCloseInput) -> Result<bool, String> {
     Ok(true)
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalDetachInput {
+    pub terminal_id: String,
+}
+
+/// Detach the webview from a terminal session without killing the underlying
+/// PTY child. Used when a foreground session is promoted to a background tab.
+#[tauri::command]
+pub fn terminal_detach(input: TerminalDetachInput) -> Result<bool, String> {
+    let mut sessions = TERMINAL_SESSIONS.lock().map_err(|e| e.to_string())?;
+    // portable-pty does not expose a detach primitive; we keep the session in
+    // the registry but stop mirroring it on the UI side. The child process stays
+    // running until terminal_close is called.
+    if let Some(session) = sessions.get_mut(&input.terminal_id) {
+        let _ = &session.master;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 fn normalize_size(value: Option<u16>, fallback: u16, max: u16) -> u16 {
     value.unwrap_or(fallback).clamp(10, max)
 }

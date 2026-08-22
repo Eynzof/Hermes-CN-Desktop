@@ -1,0 +1,89 @@
+.skinPicker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.skinCard {
+  min-width: 0;
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 12px;
+  border: 1px solid var(--h-line);
+  border-radius: 0;
+  background: var(--h-bg-pane);
+  color: var(--h-text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+}
+
+.skinCard:hover {
+  background: var(--h-bg-soft);
+}
+
+.skinCard[data-active="true"] {
+  border-color: var(--h-accent);
+  background: var(--h-accent-soft);
+}
+
+.skinPreview {
+  display: grid;
+  grid-template-rows: 12px 1fr 4px;
+  gap: 4px;
+  width: 48px;
+  height: 44px;
+  padding: 4px;
+  border: 1px solid var(--h-line);
+  border-radius: 0;
+  background: var(--skin-bg, var(--h-bg-app));
+}
+
+.skinPreviewTop {
+  background: var(--h-line-soft);
+}
+
+.skinPreviewBody {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.skinPreviewBody span {
+  height: 4px;
+  background: var(--h-line);
+  border-radius: 0;
+}
+
+.skinPreviewAccent {
+  background: var(--h-accent);
+}
+
+.skinCopy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.skinTitle {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--h-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skinDescription {
+  font-size: 11px;
+  color: var(--h-text-3);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

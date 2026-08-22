@@ -119,6 +119,16 @@ export function speakText(text: string): Promise<AudioSpeakResponse> {
   );
 }
 
+import { createTtsEngine, ttsEngine } from "./voice/engine";
+import type { AudioSpeakResult, TtsEngine } from "./voice/types";
+export { createTtsEngine, ttsEngine };
+export type { AudioSpeakResult, TtsEngine };
+export { prepareSpokenText } from "./voice/normalize";
+
+export function speakTextInProcess(text: string): Promise<AudioSpeakResult> {
+  return ttsEngine.speak(text);
+}
+
 export function getElevenLabsVoices(): Promise<ElevenLabsVoicesResponse> {
   return fetchJSON("/api/audio/elevenlabs/voices", undefined, ElevenLabsVoicesResponse);
 }

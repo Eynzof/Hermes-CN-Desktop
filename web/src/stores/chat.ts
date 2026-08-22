@@ -41,11 +41,16 @@ export interface ImageEntry {
   mimeType?: string;
 }
 
+export interface VideoEntry extends ImageEntry {
+  poster?: string;
+}
+
 export type AssistantTurnBlock =
   | { type: "text"; text: string }
   | { type: "reasoning"; text: string }
   | { type: "progress"; text: string }
   | { type: "image"; image: ImageEntry }
+  | { type: "video"; video: VideoEntry }
   | { type: "tool"; tool: ToolEntry }
   | { type: "moa_reference"; label: string; text: string; index?: number; count?: number };
 

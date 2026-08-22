@@ -4,9 +4,13 @@ import {
   REASONING_EFFORTS,
   REASONING_EFFORT_LABELS,
   REASONING_EFFORT_SHORT_LABELS,
+  clampReasoning,
+  clearSessionReasoning,
+  getSessionReasoning,
   isReasoningEffort,
   normalizeReasoningEffort,
   reasoningEffortFromConfig,
+  setSessionReasoning,
 } from "./reasoning-effort";
 
 describe("reasoning-effort", () => {
@@ -19,6 +23,7 @@ describe("reasoning-effort", () => {
       "high",
       "xhigh",
       "max",
+      "ultra",
     ]);
   });
 
@@ -38,8 +43,8 @@ describe("reasoning-effort", () => {
     it("accepts valid values and rejects everything else", () => {
       expect(isReasoningEffort("high")).toBe(true);
       expect(isReasoningEffort("none")).toBe(true);
+      expect(isReasoningEffort("ultra")).toBe(true);
       expect(isReasoningEffort("HIGH")).toBe(false); // exact match only
-      expect(isReasoningEffort("ultra")).toBe(false);
       expect(isReasoningEffort(2)).toBe(false);
       expect(isReasoningEffort(null)).toBe(false);
     });
@@ -60,6 +65,38 @@ describe("reasoning-effort", () => {
       expect(normalizeReasoningEffort("turbo")).toBeNull();
       expect(normalizeReasoningEffort(undefined)).toBeNull();
       expect(normalizeReasoningEffort(123)).toBeNull();
+    });
+
+    it("normalizes ultra", () => {
+      expect(normalizeReasoningEffort("ULTRA")).toBe("ultra");
+    });
+  });
+
+  describe("session reasoning overrides", () => {
+    it("sets and gets per-session reasoning prefs", () => {
+      const prefs = setSessionReasoning("s-1", { effort: "high", full: true });
+      expect(prefs.effort).toBe("high");
+      expect(getSessionReasoning("s-1").full).toBe(true);
+      clearSessionReasoning("s-1");
+      expect(getSessionReasoning("s-1").effort).toBeNull();
+    });
+
+    it("isolates sessions", () => {
+      setSessionReasoning("s-a", { effort: "low" });
+      setSessionReasoning("s-b", { effort: "max" });
+      expect(getSessionReasoning("s-a").effort).toBe("low");
+      expect(getSessionReasoning("s-b").effort).toBe("max");
+    });
+  });
+
+  describe("clampReasoning", () => {
+    it("collapses reasoning to the configured line count", () => {
+      const text = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11";
+      expect(clampReasoning(text, 5)).toBe("1\n2\n3\n4\n5\n…");
+    });
+
+    it("leaves short text unchanged", () => {
+      expect(clampReasoning("a\nb", 10)).toBe("a\nb");
     });
   });
 

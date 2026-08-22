@@ -101,6 +101,16 @@ pub enum AppError {
     #[error("Desktop runtime not ready")]
     NotReady,
 
+    // --- Wake word ---
+    #[error("Wake word already in use by another surface: {0}")]
+    WakeWordInUse(String),
+
+    #[error("Wake word not initialized")]
+    WakeWordNotInitialized,
+
+    #[error("Wake word feed failed: {0}")]
+    WakeWordFeedFailed(String),
+
     // --- Generic (escape hatch for truly unexpected errors) ---
     #[error("{0}")]
     Internal(String),
@@ -146,6 +156,9 @@ impl AppError {
             AppError::Git(_) => "git",
             AppError::StateLockPoisoned => "state_lock_poisoned",
             AppError::NotReady => "not_ready",
+            AppError::WakeWordInUse(_) => "wake_word_in_use",
+            AppError::WakeWordNotInitialized => "wake_word_not_initialized",
+            AppError::WakeWordFeedFailed(_) => "wake_word_feed_failed",
             AppError::Internal(_) => "internal",
         }
     }
@@ -174,10 +187,13 @@ impl AppError {
             AppError::InvalidRequest(_)
             | AppError::ProxyError(_)
             | AppError::OriginViolation(_) => "api_proxy",
-            AppError::AuthSessionExpired(_) => "auth",
+            AppError::AuthSessionExpired(_) => "auth_session_expired",
             AppError::FileError(_) => "file",
             AppError::Git(_) => "git",
             AppError::StateLockPoisoned | AppError::NotReady => "state",
+            AppError::WakeWordInUse(_)
+            | AppError::WakeWordNotInitialized
+            | AppError::WakeWordFeedFailed(_) => "wake_word",
             AppError::Internal(_) => "internal",
         }
     }
@@ -238,6 +254,13 @@ impl From<std::io::Error> for AppError {
 impl From<url::ParseError> for AppError {
     fn from(e: url::ParseError) -> Self {
         AppError::InvalidRequest(e.to_string())
+    }
+}
+
+// Convenience: convert Tauri errors (e.g. emit failures)
+impl From<tauri::Error> for AppError {
+    fn from(e: tauri::Error) -> Self {
+        AppError::Internal(format!("Tauri error: {e}"))
     }
 }
 

@@ -1,0 +1,49 @@
+.panel {
+  border: 1px solid var(--border-subtle, #e5e7eb);
+  background: var(--surface-raised, #ffffff);
+  color: var(--text-primary, #111827);
+  padding: var(--space-3, 12px);
+  margin: var(--space-2, 8px) 0;
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.title {
+  font-weight: 600;
+  margin: 0 0 var(--space-2, 8px);
+  font-size: var(--text-base, 1rem);
+}
+
+.subtitle {
+  font-weight: 600;
+  margin: var(--space-3, 12px) 0 var(--space-1, 4px);
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.reference {
+  border-left: 3px solid var(--accent, #3b82f6);
+  background: var(--surface-subtle, #f9fafb);
+  padding: var(--space-2, 8px);
+  margin-bottom: var(--space-2, 8px);
+}
+
+.referenceLabel {
+  font-weight: 600;
+  color: var(--text-secondary, #4b5563);
+  margin-bottom: var(--space-1, 4px);
+}
+
+.referenceText {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.output {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.loading {
+  color: var(--text-secondary, #6b7280);
+  font-style: italic;
+}

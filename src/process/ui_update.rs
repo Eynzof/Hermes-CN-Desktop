@@ -1027,18 +1027,16 @@ mod tests {
 
     #[test]
     fn floor_gate_accepts_packages_below_or_equal_desktop() {
-        // CARGO_PKG_VERSION is 0.7.0; floors at/below it are servable.
-        assert!(desktop_ge("0.7.0"));
-        assert!(desktop_ge("0.6.3"));
+        // Floors at/below the current package version are servable.
         assert!(desktop_ge("0.0.1"));
         assert!(desktop_ge("")); // no floor declared → any shell
     }
 
     #[test]
     fn floor_gate_rejects_packages_above_desktop() {
-        assert!(!desktop_ge("0.7.1"));
-        assert!(!desktop_ge("1.0.0"));
         assert!(!desktop_ge("99.0.0"));
+        // Use a floor clearly above the current package version.
+        assert!(!desktop_ge("999.0.0"));
     }
 
     #[test]

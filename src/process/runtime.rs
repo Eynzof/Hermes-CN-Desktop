@@ -2130,16 +2130,21 @@ pub async fn install_bundled_runtime_if_needed(
                     error: Some(format!("failed to clear local-source current.json: {}", e)),
                 };
             }
-        } else if current.runtime_version == manifest.runtime_version {
-            if let Err(e) =
-                sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
-            {
-                return RuntimeInstallUpdateResult {
-                    ok: false,
-                    installed: None,
-                    previous: Some(current),
-                    error: Some(format!("Bundled runtime resource sync failed: {}", e)),
-                };
+        } else if !is_runtime_downgrade(&current.runtime_version, &manifest.runtime_version) {
+            // no-downgrade guard: keep the running runtime if it is already
+            // newer or equal to the bundled payload. This prevents a silent
+            // kernel downgrade when a newer app package ships an older runtime.
+            if current.runtime_version == manifest.runtime_version {
+                if let Err(e) =
+                    sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
+                {
+                    return RuntimeInstallUpdateResult {
+                        ok: false,
+                        installed: None,
+                        previous: Some(current),
+                        error: Some(format!("Bundled runtime resource sync failed: {}", e)),
+                    };
+                }
             }
             return RuntimeInstallUpdateResult {
                 ok: true,
@@ -4528,5 +4533,44 @@ mod tests {
         let pem = configured_public_key().unwrap();
         assert!(pem.contains("BEGIN PUBLIC KEY"));
         assert!(pem.contains("END PUBLIC KEY"));
+    }
+}
+
+// ------------------------------------------------------------------
+// Runtime version comparison (no-downgrade guard)
+// ------------------------------------------------------------------
+
+/// Compare two desktop runtime version strings. Returns true when `current` is
+/// strictly older than `candidate`, i.e. installing `candidate` would be a
+/// downgrade. The strings may include a leading 'v' and a CN suffix such as
+/// `-cn.123`; numeric components are compared in order.
+fn is_runtime_downgrade(current: &str, candidate: &str) -> bool {
+    version_components(current).lt(&version_components(candidate))
+}
+
+fn version_components(version: &str) -> Vec<u32> {
+    let stripped = version.strip_prefix('v').unwrap_or(version);
+    stripped
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| s.parse::<u32>().ok())
+        .collect()
+}
+
+#[cfg(test)]
+mod downgrade_tests {
+    use super::*;
+
+    #[test]
+    fn downgrade_when_older() {
+        assert!(is_runtime_downgrade("v0.5.0-cn.1", "v0.5.4-cn.1"));
+        assert!(is_runtime_downgrade("v0.4.0-cn.1", "v0.5.0-cn.1"));
+    }
+
+    #[test]
+    fn not_downgrade_when_equal_or_newer() {
+        assert!(!is_runtime_downgrade("v0.5.4-cn.1", "v0.5.4-cn.1"));
+        assert!(!is_runtime_downgrade("v0.5.5-cn.1", "v0.5.4-cn.1"));
+        assert!(!is_runtime_downgrade("v0.6.0-cn.1", "v0.5.10-cn.1"));
     }
 }

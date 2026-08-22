@@ -34,6 +34,7 @@ ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
 zip = "2"
 dirs = "6"
 regex = "1"
+chrono = "0.4"
 log = "0.4"
 env_logger = "0.11"
 tempfile = "3"
@@ -41,6 +42,7 @@ base64 = "0.22"
 url = "2"
 urlencoding = "2"
 open = "5"
+async-trait = "0.1"
 # Native filesystem watch powering the right-rail preview's "文件实时刷新"
 # (commands/preview.rs). Raw change events are emitted to the renderer, which
 # debounces before re-reading.

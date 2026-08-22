@@ -9,6 +9,30 @@ export {
   useTheme,
 } from "./hooks/use-theme";
 export type { DensityVariant, ScaleVariant, ThemeConfig, ThemeVariant } from "./hooks/use-theme";
+export {
+  BUILTIN_SKINS,
+  BUILTIN_SKIN_SLUGS,
+  DEFAULT_SKIN_PRESET,
+  SkinValidationError,
+  buildSkinPreset,
+  getSkinBySlug,
+  isSkinSlug,
+  listSkinSlugs,
+  listSkins,
+  loadSkinFromSource,
+  parseSkinSource,
+  skinTokenToCssVar,
+  validateSkinDefinition,
+} from "./tokens/skins";
+export type {
+  SkinBranding,
+  SkinDefinition,
+  SkinPolarity,
+  SkinPreset,
+  SkinSlug,
+  SkinSpinner,
+  SkinToken,
+} from "./tokens/skins";
 export { usePlatform, applyPlatformToDOM } from "./hooks/use-platform";
 export { cn, type ClassValue } from "./utils/cn";
 export * from "./components";

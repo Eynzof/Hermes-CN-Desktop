@@ -430,15 +430,24 @@
 
 .imageBlock,
 .messageImages,
-.toolImages {
+.toolImages,
+.videoBlock,
+.messageVideos {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   margin: 8px 0;
 }
 
-.messageImages {
+.messageImages,
+.messageVideos {
   margin-top: 12px;
+}
+
+.videoBlock,
+.messageVideos video {
+  max-width: 100%;
+  max-height: 480px;
 }
 
 .imageFrame {

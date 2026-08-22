@@ -8,6 +8,8 @@
 import type {
   ApiRequestInput,
   ApiRequestResult,
+  HaRequestInput,
+  HaRequestResult,
   ApplyConnectionResult,
   BackupExportResult,
   BackupImportResult,
@@ -57,6 +59,30 @@ import type {
   UiUpdateCheckResult,
   UiUpdateReadyPayload,
   YoloModeStatus,
+  FsListResponse,
+  AttachmentUploadResult,
+  McpServersResponse,
+  ActiveProfileResponse,
+  MemoryProviderRuntimeStatusResponse,
+  OAuthProvidersResponse,
+  MeetJoinInput,
+  MeetJoinResult,
+  MeetStatusInput,
+  MeetStatusResult,
+  MeetTranscriptInput,
+  MeetTranscriptResult,
+  MeetLeaveInput,
+  MeetLeaveResult,
+  MeetSayInput,
+  MeetSayResult,
+  MeetSetupResult,
+  GoogleOAuthStartInput,
+  GoogleOAuthStartResult as MeetOauthStartResult,
+  GoogleOAuthCallbackResult as MeetOauthCallbackResult,
+  GoogleOAuthTokenInput,
+  GoogleOAuthTokenResponse,
+  GoogleOAuthTokenState,
+  GoogleMeetAuthJsonResult as MeetOauthReadResult,
 } from "@hermes/protocol";
 import type {
   DesktopNotifyInput,
@@ -81,8 +107,22 @@ import type {
   WriteWorkspaceFileInput,
   WriteWorkspaceFileResult,
   HermesGitBridge,
+  DashboardSmokeResult,
+  ToolchainStatus,
+  WindowsPathRefreshResult,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
+import { setWakeWordRequester } from "./wake-word/wake-word-store";
+import type {
+  WakeDetectedEvent,
+  WakeFeedResponse,
+  WakeFrameInfoResponse,
+  WakePauseResponse,
+  WakeResumeResponse,
+  WakeStartResponse,
+  WakeStatusResponse,
+  WakeStopResponse,
+} from "@hermes/protocol";
 import { assertCompatible, resetVersionCheck, verifyBackendVersion } from "./version-check";
 import hermesLogo from "@/assets/hermes-default-avatar.png";
 
@@ -223,7 +263,7 @@ export function normalizeTauriInvokeError(error: unknown): Error {
   return new Error(String(error));
 }
 
-async function invokeCommand<T = any>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function invokeCommand<T = any>(command: string, args?: Record<string, unknown>): Promise<T> {
   const inv = await ensureInvoke();
   try {
     return await inv<T>(command, args);
@@ -255,6 +295,41 @@ const tauriBridge = {
 
   async externalRequest(input: ApiRequestInput): Promise<ApiRequestResult> {
     return invokeCommand("external_request", { input });
+  },
+
+  async haRequest(input: HaRequestInput): Promise<HaRequestResult> {
+    return invokeCommand("ha_request", { input });
+  },
+
+  async webProviderRequest(input: {
+    path: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string | null;
+    timeoutSeconds?: number;
+    maxBytes?: number;
+    followRedirects?: boolean;
+  }): Promise<ApiRequestResult> {
+    return invokeCommand("web_provider_request", { input: {
+      path: input.path,
+      method: input.method,
+      headers: input.headers,
+      body: input.body,
+      timeoutSeconds: input.timeoutSeconds,
+      maxBytes: input.maxBytes,
+      followRedirects: input.followRedirects,
+    } });
+  },
+
+  async webStoreFullText(input: { fileName: string; content: string }): Promise<{
+    path: string;
+    storedChars: number;
+    truncated: boolean;
+  }> {
+    return invokeCommand("web_store_full_text", { input: {
+      fileName: input.fileName,
+      content: input.content,
+    } });
   },
 
   async uploadFile(input: FileUploadInput): Promise<ApiRequestResult> {
@@ -529,6 +604,18 @@ const tauriBridge = {
     return invokeCommand("managed_runtime_reinstall");
   },
 
+  async toolchainStatus(): Promise<ToolchainStatus> {
+    return invokeCommand("toolchain_status");
+  },
+
+  async runDashboardSmoke(): Promise<DashboardSmokeResult> {
+    return invokeCommand("run_dashboard_smoke");
+  },
+
+  async refreshWindowsPath(force = false): Promise<WindowsPathRefreshResult> {
+    return invokeCommand("refresh_windows_path", { force });
+  },
+
   async probeConnectionConfig(remoteUrl: string): Promise<ProbeConnectionResult> {
     return invokeCommand("probe_connection_config", { remoteUrl });
   },
@@ -635,6 +722,35 @@ const tauriBridge = {
     return invokeCommand("ui_store_record_event", { input });
   },
 
+  stateDb: {
+    async query(input: {
+      sql: string;
+      params?: (string | number | null)[];
+      readonly?: boolean;
+    }): Promise<Record<string, unknown>[]> {
+      // Rust command parameter is named `request`, not `input`.
+      return invokeCommand("state_db_query", { request: input });
+    },
+    async exec(input: { sql: string; params?: (string | number | null)[] }): Promise<number> {
+      return invokeCommand("state_db_exec", { request: input });
+    },
+    async ftsSearch(input: { sql: string; params?: (string | number | null)[] }): Promise<Record<string, unknown>[]> {
+      return invokeCommand("state_db_fts_search", { request: input });
+    },
+    async searchMeta(): Promise<{
+      schemaVersion: number;
+      ftsStorageVersion: number;
+      ftsRebuildHighWater?: number;
+      ftsRebuildProgress?: number;
+      ftsStale: boolean;
+      ftsCjkStale: boolean;
+      rowCountMessages: number;
+      rowCountSessions: number;
+    }> {
+      return invokeCommand("state_db_search_meta");
+    },
+  },
+
   async desktopNotify(input: DesktopNotifyInput): Promise<DesktopNotifyResult> {
     return invokeCommand("desktop_notify", { input });
   },
@@ -654,9 +770,55 @@ const tauriBridge = {
   async terminalResize(input: { terminalId: string; cols: number; rows: number }): Promise<boolean> {
     return invokeCommand("terminal_resize", { input });
   },
-
   async terminalClose(input: { terminalId: string }): Promise<boolean> {
     return invokeCommand("terminal_close", { input });
+  },
+  async terminalDetach(input: { terminalId: string }): Promise<boolean> {
+    return invokeCommand("terminal_detach", { input });
+  },
+
+  // Google Meet bundled plugin
+  meet: {
+    async join(input: MeetJoinInput): Promise<MeetJoinResult> {
+      return invokeCommand("meet_join", { input });
+    },
+    async status(input?: MeetStatusInput): Promise<MeetStatusResult> {
+      return invokeCommand("meet_status", { input: input ?? {} });
+    },
+    async transcript(input?: MeetTranscriptInput): Promise<MeetTranscriptResult> {
+      return invokeCommand("meet_transcript", { input: input ?? {} });
+    },
+    async leave(input?: MeetLeaveInput): Promise<MeetLeaveResult> {
+      return invokeCommand("meet_leave", { input: input ?? {} });
+    },
+    async say(input: MeetSayInput): Promise<MeetSayResult> {
+      return invokeCommand("meet_say", { input });
+    },
+    async setup(): Promise<MeetSetupResult> {
+      return invokeCommand("meet_setup");
+    },
+  },
+
+  // Google Meet OAuth loopback flow
+  meetOauth: {
+    async start(input: GoogleOAuthStartInput): Promise<MeetOauthStartResult> {
+      return invokeCommand("meet_oauth_start", { input });
+    },
+    async wait(): Promise<MeetOauthCallbackResult> {
+      return invokeCommand("meet_oauth_wait");
+    },
+    async read(): Promise<MeetOauthReadResult> {
+      return invokeCommand("meet_oauth_read");
+    },
+    async write(provider: GoogleOAuthTokenState): Promise<MeetOauthReadResult> {
+      return invokeCommand("meet_oauth_write", { provider });
+    },
+    async disconnect(): Promise<MeetOauthReadResult> {
+      return invokeCommand("meet_oauth_disconnect");
+    },
+    async cancel(): Promise<boolean> {
+      return invokeCommand("meet_oauth_cancel");
+    },
   },
 
   onTerminalOutput(handler: (event: TerminalEventPayload) => void): () => void {
@@ -719,6 +881,13 @@ const tauriBridge = {
     repoStatus: (input) => invokeCommand("git_repo_status", { input }),
   } satisfies HermesGitBridge,
 
+  checkpoints: {
+    status: (input: { cwd: string }) => invokeCommand("checkpoint_status", { input }),
+    diff: (input: { cwd: string; baseRef?: string | null; statOnly?: boolean }) =>
+      invokeCommand("checkpoint_diff", { input }),
+    snapshot: (input: { cwd: string }) => invokeCommand("checkpoint_snapshot", { input }),
+  },
+
   async watchPreviewFile(input: { path: string }): Promise<WatchPreviewFileResult> {
     return invokeCommand("watch_preview_file", { input });
   },
@@ -765,6 +934,49 @@ const tauriBridge = {
     };
   },
 
+  // Local-first dashboard API surface (dashboard-api-cn v1).
+  async fsList(path: string): Promise<FsListResponse> {
+    return invokeCommand("fs_list", { input: { path } });
+  },
+  async uploadAttachmentLocal(input: {
+    sessionId: string;
+    name: string;
+    mimeType: string;
+    data: string;
+  }): Promise<AttachmentUploadResult> {
+    return invokeCommand("upload_file_local", {
+      input: {
+        sessionId: input.sessionId,
+        name: input.name,
+        mimeType: input.mimeType,
+        data: input.data,
+      },
+    });
+  },
+  async mediaDataUrl(
+    path: string,
+  ): Promise<{ dataUrl: string; mimeType: string; size: number }> {
+    return invokeCommand("media_data_url", { input: { path } });
+  },
+  async mediaFileUrl(path: string): Promise<{ url: string }> {
+    return invokeCommand("media_file_url", { input: { path } });
+  },
+  async getMcpSummary(): Promise<McpServersResponse> {
+    return invokeCommand("mcp_servers_summary");
+  },
+  async getActiveProfile(): Promise<ActiveProfileResponse> {
+    return invokeCommand("active_profile_get");
+  },
+  async setActiveProfile(input: { name: string }): Promise<ActiveProfileResponse> {
+    return invokeCommand("active_profile_set", { input });
+  },
+  async getMemoryProviderStatus(provider: string): Promise<MemoryProviderRuntimeStatusResponse> {
+    return invokeCommand("memory_provider_status", { provider });
+  },
+  async getOAuthProviders(input?: { refresh?: boolean }): Promise<OAuthProvidersResponse> {
+    return invokeCommand("oauth_providers_status", { refresh: input?.refresh ?? false });
+  },
+
   setUiZoom(factor: number): void {
     // Native webview page zoom (WKWebView setPageZoom / WebView2 ZoomFactor /
     // WebKitGTK zoom_level). Unlike CSS `zoom`, page zoom reflows the layout and
@@ -776,7 +988,48 @@ const tauriBridge = {
         console.warn("Failed to apply webview zoom", error);
       });
   },
+
+  wakeWord: {
+    start(surface: string, clientCapture = true, persist = false): Promise<WakeStartResponse> {
+      return invokeCommand("wake_start", { input: { surface, clientCapture, persist } });
+    },
+    stop(persist = false): Promise<WakeStopResponse> {
+      return invokeCommand("wake_stop", { input: { persist } });
+    },
+    pause(): Promise<WakePauseResponse> {
+      return invokeCommand("wake_pause");
+    },
+    resume(): Promise<WakeResumeResponse> {
+      return invokeCommand("wake_resume");
+    },
+    status(): Promise<WakeStatusResponse> {
+      return invokeCommand("wake_status");
+    },
+    feed(pcm: string, sampleRate = 16000): Promise<WakeFeedResponse> {
+      return invokeCommand("wake_feed", { input: { pcm, sampleRate } });
+    },
+    frameInfo(): Promise<WakeFrameInfoResponse> {
+      return invokeCommand("wake_frame_info");
+    },
+    onDetected(handler: (event: WakeDetectedEvent) => void): () => void {
+      let unlisten: (() => void) | null = null;
+      let disposed = false;
+      import("@tauri-apps/api/event")
+        .then(({ listen }) => listen<WakeDetectedEvent>("wake.detected", (event) => handler(event.payload)))
+        .then((fn) => {
+          if (disposed) safeUnlisten(fn);
+          else unlisten = fn;
+        })
+        .catch(() => {});
+      return () => {
+        disposed = true;
+        safeUnlisten(unlisten);
+      };
+    },
+  },
 };
+
+setWakeWordRequester(tauriBridge.wakeWord);
 
 // Overlay shown while the Rust side prepares the managed runtime and
 // dashboard before React can mount. Pre-React, plain DOM — we can't mount

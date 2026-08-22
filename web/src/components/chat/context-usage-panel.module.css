@@ -1,0 +1,176 @@
+.panel {
+  --context-usage-system: #7c3aed;
+  --context-usage-tools: #2563eb;
+  --context-usage-rules: #0891b2;
+  --context-usage-skills: #16a34a;
+  --context-usage-mcp: #ca8a04;
+  --context-usage-subagent: #ea580c;
+  --context-usage-memory: #db2777;
+  --context-usage-conversation: #4b5563;
+
+  border: 1px solid var(--h-line, #d1d5db);
+  padding: 16px;
+  min-width: 280px;
+  max-width: 420px;
+  font-family: var(--h-font-cn, system-ui, sans-serif);
+  background: var(--h-bg-pane, #ffffff);
+  color: var(--h-text, #111827);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.model {
+  font-size: 11px;
+  color: var(--h-text-3, #6b7280);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ringWrap {
+  flex: 0 0 auto;
+}
+
+.numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.big {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.percentLabel {
+  font-size: 13px;
+  color: var(--h-text-2, #374151);
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--h-text-3, #6b7280);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 0px;
+  margin-bottom: 16px;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--h-text-2, #374151);
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+}
+
+.categories {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tokens,
+.percent {
+  flex: 0 0 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tokens {
+  min-width: 56px;
+}
+
+.percent {
+  min-width: 44px;
+}
+
+.toggle {
+  border: 1px solid var(--h-line, #d1d5db);
+  background: transparent;
+  color: var(--h-text-2, #374151);
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  background: var(--h-line-soft, #f3f4f6);
+}
+
+.raw {
+  margin-top: 12px;
+  padding: 8px;
+  background: var(--h-line-soft, #f3f4f6);
+  font-size: 10px;
+  overflow: auto;
+  max-height: 160px;
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--h-text-3, #6b7280);
+}
+
+.ring {
+  display: block;
+}
+
+.ringTrack {
+  stroke: var(--h-line-soft, #e5e7eb);
+}
+
+.ringValue {
+  stroke: var(--h-accent, #2563eb);
+  transition: stroke-dashoffset 0.2s ease;
+}
+
+.ring[data-risk="warning"] .ringValue {
+  stroke: var(--h-warn, #d97706);
+}
+
+.ring[data-risk="danger"] .ringValue {
+  stroke: var(--h-err, #dc2626);
+}

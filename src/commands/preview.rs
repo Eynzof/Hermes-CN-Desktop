@@ -134,7 +134,7 @@ struct PreviewFileChangedPayload {
 }
 
 /// Resolve `path` (preferably absolute, as the renderer's file browser sends)
-/// to a canonical, existing file. Containment in `root` is **best-effort**: it
+/// to a canonical, existing file or directory. Containment in `root` is **best-effort**: it
 /// is enforced only when `root` itself canonicalizes, so a workspace path the
 /// renderer could browse via the (more lenient) `/api/fs/list` endpoint never
 /// gets a valid file read rejected just because `canonicalize()` is stricter.
@@ -142,7 +142,7 @@ struct PreviewFileChangedPayload {
 ///
 /// **Read path only.** Writes go through the strict
 /// [`resolve_within_root_strict`], which never skips containment.
-fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
+pub(crate) fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
     let raw = path.trim();
     if raw.is_empty() {
         return Err(AppError::InvalidRequest("Empty path".to_string()));

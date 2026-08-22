@@ -16,13 +16,15 @@ import {
   extractImagePartsFromUnknown,
   imagePartFromSource,
 } from "@/lib/message-images";
+import { extractVideoPartsFromUnknown } from "@/lib/message-videos";
 import { stableTextHash, type UiTurnStats } from "@/lib/ui-store";
 import { isSkillInvocationText } from "@/lib/skill-invocation";
 import type { AssistantTurnBlock } from "@/stores/chat";
-import type { AssistantMessageStats, ChatImageItem, ChatMessage, ChatToolItem } from "./chat-types";
+import type { AssistantMessageStats, ChatImageItem, ChatMessage, ChatToolItem, ChatVideoItem } from "./chat-types";
 
 type HermesToolPart = Extract<HermesMessagePart, { type: "tool" }>;
 type HermesImagePart = Extract<HermesMessagePart, { type: "image" }>;
+type HermesVideoPart = Extract<HermesMessagePart, { type: "video" }>;
 
 export interface HermesUIMessageUpdate {
   sessionId: string;
@@ -97,6 +99,34 @@ function imagePartToEntry(part: HermesImagePart): ChatImageItem {
     ...(part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type
       ? { mimeType: part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type }
       : {}),
+  };
+}
+
+function videoPartToEntry(part: HermesVideoPart): ChatVideoItem {
+  const record = part as Record<string, unknown>;
+  const url =
+    part.url ||
+    part.src ||
+    part.path ||
+    part.data ||
+    (typeof record.video_url === "string" ? record.video_url : undefined) ||
+    (record.video_url && typeof record.video_url === "object"
+      ? (record.video_url as Record<string, unknown>).url
+      : undefined);
+  const name = part.name || part.filename || part.file_name || (typeof url === "string" && !url.startsWith("data:")
+    ? url.replace(/\\/g, "/").split("/").pop()
+    : undefined);
+  const alt = typeof part.alt === "string" ? part.alt : name;
+  const title = typeof part.title === "string" ? part.title : undefined;
+  return {
+    ...(typeof url === "string" && url ? { url } : {}),
+    ...(alt ? { alt } : {}),
+    ...(title ? { title } : {}),
+    ...(name ? { name } : {}),
+    ...(part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type
+      ? { mimeType: part.mimeType || part.mime_type || part.mediaType || part.contentType || part.content_type }
+      : {}),
+    ...(part.poster ? { poster: part.poster } : {}),
   };
 }
 
@@ -489,6 +519,7 @@ export function messagesResponseToHermesUIMessages(response: MessagesResponse | 
 function toolPartToToolEntry(part: HermesToolPart, message: HermesUIMessage): ChatToolItem {
   const input = parseToolInput(part.input);
   const images = extractImagePartsFromUnknown(part.output).map(imagePartToEntry);
+  const videos = extractVideoPartsFromUnknown(part.output).map(videoPartToEntry);
   return {
     tool_id: part.toolCallId,
     name: part.name,
@@ -501,6 +532,7 @@ function toolPartToToolEntry(part: HermesToolPart, message: HermesUIMessage): Ch
     completedAt: part.completedAt,
     arguments: input.arguments,
     images: images.length ? images : undefined,
+    videos: videos.length ? videos : undefined,
   };
 }
 
@@ -526,6 +558,10 @@ function partsToBlocks(
     }
     if (part.type === "image") {
       blocks.push({ type: "image", image: imagePartToEntry(part) });
+      continue;
+    }
+    if (part.type === "video") {
+      blocks.push({ type: "video", video: videoPartToEntry(part) });
       continue;
     }
     if (part.type === "moa_reference") {
@@ -578,6 +614,13 @@ function imagesFromParts(parts: HermesMessagePart[]): ChatImageItem[] | undefine
     .filter((part): part is HermesImagePart => part.type === "image")
     .map(imagePartToEntry);
   return images.length ? images : undefined;
+}
+
+function videosFromParts(parts: HermesMessagePart[]): ChatVideoItem[] | undefined {
+  const videos = parts
+    .filter((part): part is HermesVideoPart => part.type === "video")
+    .map(videoPartToEntry);
+  return videos.length ? videos : undefined;
 }
 
 function messageHasErrorNotice(message: HermesUIMessage): boolean {
@@ -813,6 +856,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     : msg.role;
   const reasoning = reasoningFromParts(msg.parts);
   const images = imagesFromParts(msg.parts);
+  const videos = videosFromParts(msg.parts);
   const blocks = msg.role === "assistant"
     ? partsToBlocks(msg, { includeProgress })
     : undefined;
@@ -820,7 +864,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     ?.filter((block): block is Extract<AssistantTurnBlock, { type: "tool" }> => block.type === "tool")
     .map((block) => block.tool);
 
-  if (!text && !reasoning && !images?.length && !tools?.length && !blocks?.length) return null;
+  if (!text && !reasoning && !images?.length && !videos?.length && !tools?.length && !blocks?.length) return null;
 
   return {
     id: msg.id,
@@ -829,6 +873,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     text,
     reasoning,
     images,
+    videos: videos?.length ? videos : undefined,
     tools: tools?.length ? tools : undefined,
     blocks,
     status: msg.status,

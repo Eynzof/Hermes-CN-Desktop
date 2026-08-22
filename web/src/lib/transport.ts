@@ -2,7 +2,9 @@ import { getDefaultStore } from "jotai";
 import { runtime } from "./runtime";
 import { debugBus } from "./debug-bus";
 import { activeProfileAtom } from "@/stores/ui";
-import { AttachmentUploadResult } from "@hermes/protocol";
+import { AttachmentUploadResult, type HaRequestInput, type HaRequestResult } from "@hermes/protocol";
+import { getDashboardHandler, type DashboardHandler } from "./dashboard-router";
+import { uploadAttachment } from "./dashboard-local";
 import { assertCompatible } from "./version-check";
 import type { DownloadExternalImageInput, DownloadedImageResult } from "./runtime";
 
@@ -80,6 +82,11 @@ export async function raceAbort<T>(work: Promise<T>, signal?: AbortSignal | null
   return Promise.race([work, aborted]);
 }
 
+function shouldUseLocalDashboard(path: string, method = "GET"): DashboardHandler | undefined {
+  if (!runtime.isManaged()) return undefined;
+  return getDashboardHandler(path, method);
+}
+
 function shouldUseNativeIpc(path: string): boolean {
   const isLocalDesktopRoute =
     path.startsWith("/__hermes_session_log/") || path.startsWith("/__hermes_cron_runs/");
@@ -140,6 +147,16 @@ export async function fetchJSON<T>(
   parser?: Parser<T>,
 ): Promise<T> {
   assertCompatible();
+  const localHandler = shouldUseLocalDashboard(path, init?.method);
+  if (localHandler) {
+    const data = await localHandler({
+      path,
+      method: init?.method ?? "GET",
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+      headers: authHeaders(init?.headers as Record<string, string>),
+    });
+    return parser ? parser.parse(data) : (data as T);
+  }
   if (shouldUseNativeIpc(path)) {
     return fetchViaElectron(path, init, parser);
   }
@@ -259,6 +276,51 @@ export async function fetchExternalJSON<T>(
  * (avoids webview CSP / CORS), otherwise a plain fetch. Used for lightweight
  * metadata scrapes like reading a page's <title>.
  */
+
+/**
+ * Call a Home Assistant instance through the origin-locked Rust proxy.
+ *
+ * Unlike `fetchExternalJSON`, this allows http + LAN/private origins such as
+ * `http://homeassistant.local:8123` because the Rust side validates the target
+ * against the configured HASS_URL origin rather than the public-IP allowlist.
+ */
+export async function haRequest(input: HaRequestInput): Promise<HaRequestResult> {
+  if (runtime.platform !== "tauri" || !window.hermesDesktop?.haRequest) {
+    // Fallback for web/electron testing: direct fetch with the caller's token.
+    const url = new URL(input.path, input.url);
+    const res = await fetch(url.toString(), {
+      method: input.method ?? "GET",
+      headers: input.headers ?? {},
+      ...(input.body !== undefined && input.body !== null && input.method && input.method.toUpperCase() !== "GET"
+        ? { body: input.body }
+        : {}),
+      signal: timeoutSignal(),
+    });
+    const body = await res.text();
+    return {
+      ok: res.ok,
+      status: res.status,
+      statusText: res.statusText,
+      headers: Object.fromEntries(res.headers.entries()),
+      body,
+    };
+  }
+  return window.hermesDesktop.haRequest(input);
+}
+
+export async function fetchHomeAssistantJSON<T>(
+  input: HaRequestInput,
+  parser?: Parser<T>,
+): Promise<T> {
+  const result = await haRequest(input);
+  if (!result.ok) {
+    reportRestFailure(input.method ?? "GET", input.path, result.status, result.body);
+    throw new Error(`HTTP ${result.status}: ${result.body}`);
+  }
+  const data = result.body ? JSON.parse(result.body) : null;
+  return parser ? parser.parse(data) : (data as T);
+}
+
 export async function fetchExternalText(url: string, init?: RequestInit): Promise<string> {
   const headers = (init?.headers as Record<string, string>) ?? {};
   const externalRequest = window.hermesDesktop?.externalRequest;
@@ -356,6 +418,24 @@ export function uploadAttachmentFile(
   onProgress?: (percent: number) => void,
 ): Promise<AttachmentUploadResult> {
   assertCompatible();
+
+  // Managed mode: write directly to HERMES_HOME/uploads/<session_id> via Rust.
+  // Avoids the generic HTTP proxy and the multipart round-trip.
+  if (runtime.isManaged() && window.hermesDesktop?.uploadAttachmentLocal) {
+    return file.arrayBuffer().then(async (buffer) => {
+      onProgress?.(0);
+      const result = await uploadAttachment({
+        sessionId,
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        data: new Uint8Array(buffer),
+      });
+      onProgress?.(100);
+      return result;
+    });
+  }
+
+  // Attached / remote mode: keep the generic IPC proxy or raw XHR multipart path.
   const uploadFile = window.hermesDesktop?.uploadFile;
   if (uploadFile) {
     return file.arrayBuffer().then(async (data) => {

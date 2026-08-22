@@ -503,6 +503,47 @@ pub async fn managed_runtime_uninstall(
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolchainStatus {
+    pub uv: Option<String>,
+    pub python: Option<String>,
+    pub node: Option<String>,
+    pub rg: Option<String>,
+    pub ffmpeg: Option<String>,
+    pub git: Option<String>,
+}
+
+fn tool_version(path: &std::path::Path) -> Option<String> {
+    if !path.exists() {
+        return None;
+    }
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .map(|t| {
+            let dur = std::time::SystemTime::now()
+                .duration_since(t)
+                .unwrap_or_default();
+            format!("present ({} days old)", dur.as_secs() / 86400)
+        })
+}
+
+/// Return a coarse snapshot of the managed third-party toolchain.
+#[tauri::command]
+pub fn toolchain_status(state: State<'_, AppState>) -> Result<ToolchainStatus, AppError> {
+    let inner = state.inner.lock()?;
+    let tools_root = std::path::Path::new(&inner.hermes_home).join("tools");
+    Ok(ToolchainStatus {
+        uv: tool_version(&tools_root.join("uv")),
+        python: tool_version(&tools_root.join("python")),
+        node: tool_version(&tools_root.join("node")),
+        rg: tool_version(&tools_root.join("rg.exe")),
+        ffmpeg: tool_version(&tools_root.join("ffmpeg.exe")),
+        git: tool_version(&tools_root.join("git")),
+    })
+}
+
 #[tauri::command]
 pub async fn managed_runtime_reinstall(
     app: tauri::AppHandle,

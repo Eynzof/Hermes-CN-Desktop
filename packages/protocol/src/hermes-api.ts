@@ -97,6 +97,18 @@ export const ElevenLabsVoicesResponse = z
   .passthrough();
 export type ElevenLabsVoicesResponse = z.infer<typeof ElevenLabsVoicesResponse>;
 
+export const VoiceBubble = z
+  .object({
+    data_url: z.string(),
+    mime_type: z.string(),
+    provider: z.string(),
+    duration_ms: z.number(),
+    peaks: z.array(z.number()).optional(),
+    voice_compatible: z.boolean().optional(),
+  })
+  .passthrough();
+export type VoiceBubble = z.infer<typeof VoiceBubble>;
+
 // ── Messaging platforms (/api/messaging/platforms) ────────────────────
 
 export const MessagingEnvVarInfo = z
@@ -381,14 +393,47 @@ const HermesMoaReferenceMessagePart = z.object({
   count: z.number().optional(),
 });
 
+const HermesVideoMessagePart = z
+  .object({
+    type: z.literal("video"),
+    url: z.string().optional(),
+    src: z.string().optional(),
+    path: z.string().optional(),
+    data: z.string().optional(),
+    name: z.string().optional(),
+    filename: z.string().optional(),
+    file_name: z.string().optional(),
+    mimeType: z.string().optional(),
+    mime_type: z.string().optional(),
+    mediaType: z.string().optional(),
+    contentType: z.string().optional(),
+    content_type: z.string().optional(),
+    poster: z.string().optional(),
+  })
+  .passthrough();
+
+const HermesFileMessagePart = z
+  .object({
+    type: z.literal("file"),
+    path: z.string().optional(),
+    url: z.string().optional(),
+    name: z.string().optional(),
+    mimeType: z.string().optional(),
+    size: z.number().optional(),
+    content: z.string().optional(),
+  })
+  .passthrough();
+
 export const HermesMessagePart = z.discriminatedUnion("type", [
   HermesTextMessagePart,
   HermesReasoningMessagePart,
   HermesProgressMessagePart,
   HermesImageMessagePart,
+  HermesVideoMessagePart,
   HermesToolMessagePart,
   HermesNoticeMessagePart,
   HermesMoaReferenceMessagePart,
+  HermesFileMessagePart,
 ]);
 export type HermesMessagePart = z.infer<typeof HermesMessagePart>;
 
@@ -722,6 +767,42 @@ export const SkillsHubSearchResponse = z.object({
 });
 export type SkillsHubSearchResponse = z.infer<typeof SkillsHubSearchResponse>;
 
+// 技能 hub 安装/卸载/更新（POST /api/skills/hub/*）。
+// 这些端点与 Core 的 skills_hub CLI 语义保持一致，用于桌面端的在线安装。
+export const InstallSkillResponse = z.object({
+  ok: z.boolean(),
+  message: z.string().optional(),
+  installed: SkillHubResult.optional(),
+});
+export type InstallSkillResponse = z.infer<typeof InstallSkillResponse>;
+
+export const UninstallSkillResponse = z.object({
+  ok: z.boolean(),
+  message: z.string().optional(),
+});
+export type UninstallSkillResponse = z.infer<typeof UninstallSkillResponse>;
+
+export const SkillUpdateStatus = z.object({
+  name: z.string(),
+  current: z.string().optional(),
+  latest: z.string().optional(),
+  has_update: z.boolean().optional(),
+});
+export type SkillUpdateStatus = z.infer<typeof SkillUpdateStatus>;
+
+export const CheckSkillUpdatesResponse = z.object({
+  updates: z.array(SkillUpdateStatus).default([]),
+});
+export type CheckSkillUpdatesResponse = z.infer<typeof CheckSkillUpdatesResponse>;
+
+export const UpdateSkillResponse = z.object({
+  ok: z.boolean(),
+  updated: z.array(z.string()).default([]),
+  failed: z.array(z.string()).default([]),
+  message: z.string().optional(),
+});
+export type UpdateSkillResponse = z.infer<typeof UpdateSkillResponse>;
+
 // ── Toolsets (/api/tools/toolsets) ────────────────────────────────────
 
 export const ToolsetInfo = z.object({
@@ -732,6 +813,30 @@ export const ToolsetInfo = z.object({
   tools: z.array(z.any()).optional(),
 });
 export type ToolsetInfo = z.infer<typeof ToolsetInfo>;
+
+export const PlatformToolsetsConfig = z.object({
+  platform: z.string(),
+  enabled: z.array(z.string()),
+});
+export type PlatformToolsetsConfig = z.infer<typeof PlatformToolsetsConfig>;
+
+export const CustomToolset = z.object({
+  name: z.string(),
+  tools: z.array(z.string()).default([]),
+  includes: z.array(z.string()).default([]),
+  description: z.string().default(""),
+});
+export type CustomToolset = z.infer<typeof CustomToolset>;
+
+export const ToolCatalogEntry = z.object({
+  name: z.string(),
+  toolset: z.string(),
+  description: z.string(),
+  requiresEnv: z.array(z.string()).default([]),
+  gate: z.enum(["none", "capability", "workflow"]).default("none"),
+  enabled: z.boolean(),
+});
+export type ToolCatalogEntry = z.infer<typeof ToolCatalogEntry>;
 
 // ── MCP Servers (/api/mcp-servers) ────────────────────────────────────
 
@@ -1738,3 +1843,195 @@ export function parseGatewayEvent(value: unknown): GatewayEvent {
   if (known.success) return known.data;
   return RawGatewayEvent.parse(value);
 }
+
+// ── Automation feature wire schemas ─────────────────────────────────────
+
+export const SubagentConfig = z.object({
+  id: z.string(),
+  name: z.string(),
+  model: z.string().optional(),
+  instructions: z.string().optional(),
+});
+export type SubagentConfig = z.infer<typeof SubagentConfig>;
+
+export const SubagentTask = z.object({
+  agentId: z.string(),
+  task: z.string(),
+  context: z.string().optional(),
+  timeout: z.number().optional(),
+});
+export type SubagentTask = z.infer<typeof SubagentTask>;
+
+export const SubagentResult = z.object({
+  ok: z.boolean(),
+  agentId: z.string(),
+  task: z.string(),
+  output: z.string(),
+  durationMs: z.number().optional(),
+});
+export type SubagentResult = z.infer<typeof SubagentResult>;
+
+export const CodeRunRequest = z.object({
+  code: z.string(),
+  language: z.enum(["python", "typescript", "javascript", "bash"]),
+  timeout: z.number().optional(),
+});
+export type CodeRunRequest = z.infer<typeof CodeRunRequest>;
+
+export const CodeRun = z.object({
+  id: z.string(),
+  status: z.enum(["queued", "running", "success", "timeout", "error"]),
+  stdout: z.string().optional(),
+  stderr: z.string().optional(),
+  exitCode: z.number().optional(),
+  durationMs: z.number().optional(),
+});
+export type CodeRun = z.infer<typeof CodeRun>;
+
+export const EventHook = z.object({
+  id: z.string(),
+  event: z.enum(["message", "tool_call", "turn_complete", "session_start", "custom"]),
+  pattern: z.string().optional(),
+  condition: z.string().optional(),
+  action: z.string(),
+  enabled: z.boolean().default(true),
+});
+export type EventHook = z.infer<typeof EventHook>;
+
+export const BatchItem = z.object({
+  id: z.string(),
+  input: z.string(),
+});
+export type BatchItem = z.infer<typeof BatchItem>;
+
+export const BatchJob = z.object({
+  id: z.string(),
+  items: z.array(BatchItem),
+  concurrency: z.number().default(4),
+  createdAt: z.number(),
+  status: z.enum(["pending", "running", "done"]),
+  progress: z.number().default(0),
+  results: z.array(z.record(z.unknown())).default([]),
+});
+export type BatchJob = z.infer<typeof BatchJob>;
+
+export const KanbanWorker = z.object({
+  id: z.string(),
+  name: z.string(),
+  model: z.string().optional(),
+});
+export type KanbanWorker = z.infer<typeof KanbanWorker>;
+
+export const KanbanTask = z.object({
+  id: z.string(),
+  title: z.string(),
+  laneId: z.string(),
+  assignee: z.string().optional(),
+  createdAt: z.number(),
+});
+export type KanbanTask = z.infer<typeof KanbanTask>;
+
+export const KanbanLane = z.object({
+  id: z.string(),
+  name: z.string(),
+  tasks: z.array(KanbanTask),
+});
+export type KanbanLane = z.infer<typeof KanbanLane>;
+
+export const KanbanBoard = z.object({
+  id: z.string(),
+  name: z.string(),
+  lanes: z.array(KanbanLane),
+  createdAt: z.number(),
+});
+export type KanbanBoard = z.infer<typeof KanbanBoard>;
+
+export const HeartbeatConfig = z.object({
+  sessionId: z.string(),
+  intervalMs: z.number(),
+  prompt: z.string(),
+  enabled: z.boolean(),
+  nextBeat: z.number().optional(),
+});
+export type HeartbeatConfig = z.infer<typeof HeartbeatConfig>;
+
+export const Goal = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  text: z.string(),
+  status: z.enum(["active", "paused", "completed"]),
+  subgoals: z.array(
+    z.object({
+      id: z.string(),
+      text: z.string(),
+      status: z.enum(["active", "paused", "completed"]),
+    }),
+  ),
+  createdAt: z.number(),
+});
+export type Goal = z.infer<typeof Goal>;
+
+export const DeliverableArtifact = z.object({
+  path: z.string(),
+  name: z.string().optional(),
+  mimeType: z.string().optional(),
+  content: z.string().optional(),
+});
+export type DeliverableArtifact = z.infer<typeof DeliverableArtifact>;
+
+export const Deliverable = z.object({
+  id: z.string(),
+  name: z.string(),
+  format: z.enum(["zip", "tar", "folder", "markdown"]),
+  artifacts: z.array(DeliverableArtifact),
+  createdAt: z.number(),
+});
+export type Deliverable = z.infer<typeof Deliverable>;
+
+export const CuratorSnapshot = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  capturedAt: z.number(),
+  summary: z.string(),
+  artifactPaths: z.array(z.string()),
+});
+export type CuratorSnapshot = z.infer<typeof CuratorSnapshot>;
+
+export const CuratorRun = z.object({
+  id: z.string(),
+  startedAt: z.number(),
+  status: z.enum(["running", "done", "error"]),
+  snapshots: z.array(CuratorSnapshot),
+  report: z.string(),
+});
+export type CuratorRun = z.infer<typeof CuratorRun>;
+
+export const AutomationBlueprint = z.object({
+  id: z.string(),
+  name: z.string(),
+  steps: z.array(z.string()),
+  tags: z.array(z.string()).default([]),
+  createdAt: z.number(),
+});
+export type AutomationBlueprint = z.infer<typeof AutomationBlueprint>;
+
+export const AutomationSuggestion = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  confidence: z.number(),
+  blueprintId: z.string().optional(),
+});
+export type AutomationSuggestion = z.infer<typeof AutomationSuggestion>;
+
+export const AutomationSuggestionsResponse = z.object({
+  topic: z.string(),
+  suggestions: z.array(AutomationSuggestion),
+});
+export type AutomationSuggestionsResponse = z.infer<typeof AutomationSuggestionsResponse>;
+
+export const AutomationRunRequest = z.object({
+  blueprintId: z.string(),
+  variables: z.record(z.string()).optional(),
+});
+export type AutomationRunRequest = z.infer<typeof AutomationRunRequest>;

@@ -35,6 +35,7 @@ const ProjectsRoute = lazy(() => import("@/routes/projects").then((m) => ({ defa
 const ProjectDetailRoute = lazy(() => import("@/routes/project-detail").then((m) => ({ default: m.ProjectDetailRoute })));
 const KanbanRoute = lazy(() => import("@/routes/kanban").then((m) => ({ default: m.KanbanRoute })));
 const SkillsRoute = lazy(() => import("@/routes/skills").then((m) => ({ default: m.SkillsRoute })));
+const ToolsRoute = lazy(() => import("@/routes/tools").then((m) => ({ default: m.ToolsRoute })));
 const ModelsRoute = lazy(() => import("@/routes/models").then((m) => ({ default: m.ModelsRoute })));
 const VoiceRoute = lazy(() => import("@/routes/voice").then((m) => ({ default: m.VoiceRoute })));
 const BackupRoute = lazy(() => import("@/routes/backup").then((m) => ({ default: m.BackupRoute })));
@@ -103,8 +104,9 @@ function BackendApp() {
             <Route path="/projects" element={withBoundary(<ProjectsRoute />)} />
             <Route path="/projects/:workspacePath" element={withBoundary(<ProjectDetailRoute />)} />
             <Route path="/kanban" element={withBoundary(<KanbanRoute />)} />
-            <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
-            <Route path="/models" element={withBoundary(<ModelsRoute />)} />
+              <Route path="/skills" element={withBoundary(<SkillsRoute />)} />
+              <Route path="/tools" element={withBoundary(<ToolsRoute />)} />
+              <Route path="/models" element={withBoundary(<ModelsRoute />)} />
             <Route path="/voice" element={withBoundary(<VoiceRoute />)} />
             <Route path="/backup" element={withBoundary(<BackupRoute />)} />
             <Route path="/config-migration" element={withBoundary(<ConfigMigrationRoute />)} />

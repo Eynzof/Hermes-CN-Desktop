@@ -5,9 +5,14 @@ export type ChatRole = "user" | "assistant" | "system" | "tool";
 export interface ChatToolItem extends ToolEntry {
   arguments?: Record<string, unknown>;
   images?: ChatImageItem[];
+  videos?: ChatVideoItem[];
 }
 
 export type ChatImageItem = ImageEntry;
+
+export interface ChatVideoItem extends ImageEntry {
+  poster?: string;
+}
 
 export interface AssistantMessageStats {
   ttftMs?: number;
@@ -32,6 +37,7 @@ export interface ChatMessage {
   text?: string;
   reasoning?: string;
   images?: ChatImageItem[];
+  videos?: ChatVideoItem[];
   tools?: ChatToolItem[];
   blocks?: AssistantTurnBlock[];
   status?: "streaming" | "complete" | "error";

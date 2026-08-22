@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Copy,
-  ExternalLink,
   BarChart3,
+  Copy,
   Folder,
   Info,
   Languages,
@@ -35,6 +34,7 @@ import { MarkdownText } from "@/components/chat/markdown-renderer";
 import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
 import { CopyButton } from "@/components/ui/copy-button";
 import { SkillUsageStats } from "@/components/skills/skill-usage-stats";
+import { SkillsHubPanel } from "@/components/settings/skills-hub-panel";
 import {
   isUserSkill,
   resolveSkillOrigin,
@@ -46,50 +46,6 @@ import s from "./skills.module.css";
 type Tab = "builtin" | "market" | "stats" | "user";
 type Filter = "all" | "enabled" | "disabled";
 type Lang = "zh" | "en";
-
-type Marketplace = {
-  name: string;
-  url: string;
-  host: string;
-  tagline: string;
-  why: string;
-  cta: string;
-};
-
-const marketplaces: Marketplace[] = [
-  {
-    name: "虾评",
-    url: "https://xiaping.coze.com/",
-    host: "xiaping.coze.com",
-    tagline: "精品 Skill 分享评测平台，470+ 个 Skill 按场景分类。",
-    why: "有排行榜、合集和真实评测，能看到别人在用什么、哪些好用，找 Skill 不用一个个翻。覆盖开发辅助、效率工具、办公、自媒体、设计等 17+ 类。",
-    cta: "去虾评逛逛",
-  },
-  {
-    name: "SkillHub",
-    url: "https://skillhub.cn/skills",
-    host: "skillhub.cn",
-    tagline: "腾讯维护的 AI Skill 社区，面向中国用户，精选 Top 50。",
-    why: "由腾讯团队运营，每个 Skill 都经过安全审核和多维度评估再上架。数量不堆，挑的都是靠谱货，适合不想自己一个个鉴别的人。",
-    cta: "去 SkillHub 看精选",
-  },
-  {
-    name: "Skills.sh",
-    url: "https://www.skills.sh/",
-    host: "skills.sh",
-    tagline: "开放 Agent Skills 生态目录，有排行榜、趋势榜和安装量。",
-    why: "如果你想知道大家最近在装什么，先看这里很省事。它把 GitHub 上的 Skill 做成榜单和主题目录，支持 Claude Code、Codex、Cursor 等工具，适合用来找灵感、看热度、追踪新技能。",
-    cta: "去 Skills.sh 看榜单",
-  },
-  {
-    name: "SkillsMP",
-    url: "https://skillsmp.com/zh",
-    host: "skillsmp.com",
-    tagline: "中文 Agent Skills 市场，支持搜索、职业筛选和分类浏览。",
-    why: "当你已经知道自己要解决什么问题时，它更像一本可搜索的技能黄页。可以按职业、用途、作者和热度筛选，也能查看质量指标，适合从海量开源 Skill 里快速缩小范围。",
-    cta: "去 SkillsMP 搜 Skill",
-  },
-];
 
 function sourceLabel(origin: SkillOrigin): string {
   if (origin === "builtin") return "Hermes 内置";
@@ -277,7 +233,7 @@ export function SkillsRoute() {
 
       {/* 主体 */}
       {tab === "market" ? (
-        <SkillMarket />
+        <SkillsHubPanel onInstalled={() => void refetch()} onUninstalled={() => void refetch()} />
       ) : tab === "stats" ? (
         <SkillUsageStats profileOverride={scope} />
       ) : isLoading ? (
@@ -691,40 +647,3 @@ function UserEmptyState() {
   );
 }
 
-function SkillMarket() {
-  return (
-    <section className={s.marketPage}>
-      <div className={s.marketHero}>
-        <span className={s.marketEyebrow}>Skill Market</span>
-        <h1>好用的 Skill 去哪找？</h1>
-        <p>
-          下面几个网站适合用来找 Skill：有的像精选书单，帮你先筛一遍；有的像搜索引擎，
-          适合按场景慢慢淘。找到合适的 Skill 后，可以按对方页面说明安装到当前 Hermes 环境。
-        </p>
-      </div>
-
-      <div className={s.marketGrid} aria-label="高质量 Skill 市场与目录">
-        {marketplaces.map((item) => (
-          <a
-            key={item.url}
-            className={s.marketCard}
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <div className={s.marketCardHead}>
-              <h2>{item.name}</h2>
-              <span>{item.host}</span>
-            </div>
-            <p className={s.marketTagline}>{item.tagline}</p>
-            <p className={s.marketWhy}>{item.why}</p>
-            <span className={s.marketCta}>
-              {item.cta}
-              <ExternalLink size={12} />
-            </span>
-          </a>
-        ))}
-      </div>
-    </section>
-  );
-}

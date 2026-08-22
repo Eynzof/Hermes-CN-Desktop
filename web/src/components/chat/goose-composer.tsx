@@ -102,7 +102,8 @@ import {
 import { WorkspacePickerModal } from "@/components/composer/workspace-picker";
 import { UrlDialog } from "@/components/composer/url-dialog";
 import { isSingleUrl, urlReferenceText } from "@/lib/composer-url";
-import { filesFromClipboardData, imageFileFromClipboardData, readClipboardImageAsFile } from "@/lib/clipboard-image";
+import { filesFromClipboardData, imageFileFromClipboardData } from "@/lib/clipboard-image";
+import { classifyImageFiles, readImagesFromClipboard } from "@/lib/image-paste";
 import { downloadExternalImageFile } from "@/lib/transport";
 import { runtime } from "@/lib/runtime";
 import { ReasoningEffortMenu } from "@/components/composer/reasoning-effort-menu";
@@ -709,12 +710,20 @@ export function GooseComposer({
     if (controlsDisabled) return;
     setSubmitError("");
     try {
-      const file = await readClipboardImageAsFile();
-      if (!file) {
-        setSubmitError("剪贴板中没有可读取的图片。");
+      const { accepted, rejected, usedNativeFallback } = await readImagesFromClipboard();
+      if (rejected.length) {
+        setSubmitError(rejected.slice(0, 2).map((r) => `${r.file.name}: ${r.reason.guidance}`).join("；"));
+      }
+      if (!accepted.length) {
+        if (!rejected.length && usedNativeFallback) {
+          setSubmitError("剪贴板中没有可读取的图片。");
+        }
         return;
       }
-      addBrowserFiles([file]);
+      const enriched = await Promise.all(
+        accepted.map(async (candidate) => createFileAttachment(candidate.file, Date.now() + Math.random())),
+      );
+      appendAttachmentDrafts(enriched);
     } catch (error) {
       setSubmitError(messageFromError(error));
     }
@@ -1006,17 +1015,35 @@ export function GooseComposer({
       void send();
     }
   };
-
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     if (controlsDisabled) return;
     const clipboardData = event.clipboardData;
     const text = clipboardData.getData("text/plain");
     const pastedFiles = filesFromClipboardData(clipboardData);
-    if (pastedFiles.length) {
+    const imageFiles = pastedFiles.filter((file) => file.type.startsWith("image/"));
+    const nonImageFiles = pastedFiles.filter((file) => !file.type.startsWith("image/"));
+
+    if (imageFiles.length) {
       event.preventDefault();
-      addBrowserFiles(pastedFiles);
+      const { accepted, rejected } = classifyImageFiles(imageFiles, "clipboard");
+      if (rejected.length) {
+        setSubmitError(rejected.slice(0, 2).map((r) => `${r.file.name}: ${r.reason.guidance}`).join("；"));
+      }
+      if (accepted.length) {
+        addBrowserFiles(accepted.map((candidate) => candidate.file));
+      }
+      if (nonImageFiles.length) {
+        addBrowserFiles(nonImageFiles);
+      }
       return;
     }
+
+    if (nonImageFiles.length) {
+      event.preventDefault();
+      addBrowserFiles(nonImageFiles);
+      return;
+    }
+
     const pastedImage = imageFileFromClipboardData(clipboardData);
     if (pastedImage) {
       event.preventDefault();
@@ -1025,12 +1052,17 @@ export function GooseComposer({
     }
     if (!text) {
       event.preventDefault();
-      void readClipboardImageAsFile(null).then((file) => {
-        if (!file) return;
-        addBrowserFiles([file]);
+      void readImagesFromClipboard(clipboardData).then(({ accepted, rejected }) => {
+        if (rejected.length) {
+          setSubmitError(rejected.slice(0, 2).map((r) => `${r.file.name}: ${r.reason.guidance}`).join("；"));
+        }
+        if (accepted.length) {
+          addBrowserFiles(accepted.map((candidate) => candidate.file));
+        }
       });
       return;
     }
+
     // A bare-URL paste offers to attach it as an `@url:` reference (only where
     // backend ref expansion is wired, i.e. a mention source is present).
     if (mentionPicker && !mentionPicker.disabled) {

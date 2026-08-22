@@ -14,6 +14,28 @@ use tokio::sync::mpsc;
 use tokio::sync::Notify;
 
 use crate::process::port_lock::PortLock;
+use crate::wake_word::WakeWordService;
+
+/// Handle to a spawned MCP stdio child process.
+pub struct McpStdioProcess {
+    pub child: std::sync::Mutex<Child>,
+    pub stop: Arc<AtomicBool>,
+}
+
+/// Handle to the in-process OpenAI-compatible API server.
+#[derive(Clone)]
+pub struct ApiServerHandle {
+    pub port: u16,
+    pub cancel: Arc<tokio::sync::Notify>,
+}
+
+/// Handle to the subscription proxy server.
+#[derive(Clone)]
+pub struct SubscriptionProxyHandle {
+    pub port: u16,
+    pub provider: String,
+    pub cancel: Arc<tokio::sync::Notify>,
+}
 
 /// Handle to the live Rust→runtime `/api/ws` relay (see commands/ws_proxy.rs).
 /// Holds only std/tokio types so this module stays decoupled from the WS crate.
@@ -239,13 +261,21 @@ pub struct AppStateInner {
     /// Debounce marker for `connection-auth-expired` emits (a burst of 401s
     /// must not storm the UI with re-login banners).
     pub last_auth_expired_emit: Option<std::time::Instant>,
-    /// Set while the unified app update (backend + frontend, one version) is
+    /// Set while a unified app update (backend + frontend, one version) is
     /// in flight. Guards against two concurrent updates racing on the runtime
     /// tree and the dashboard restart.
     pub app_update_in_flight: bool,
     /// Set while a Track B UI hot update (install/rollback) is in flight.
     /// Guards against two threads extracting/activating UI packages at once.
     pub ui_update_in_flight: bool,
+    /// In-process wake-word detector and machine mic lock.
+    pub wake_word: WakeWordService,
+    /// Active MCP stdio child processes keyed by child id.
+    pub mcp_stdio_children: std::collections::HashMap<String, McpStdioProcess>,
+    /// In-process OpenAI-compatible API server handle.
+    pub api_server: Option<ApiServerHandle>,
+    /// Subscription proxy handle.
+    pub subscription_proxy: Option<SubscriptionProxyHandle>,
 }
 
 /// A snapshot of how the currently-connected dashboard authenticates, taken
@@ -294,6 +324,10 @@ impl AppState {
                 last_auth_expired_emit: None,
                 app_update_in_flight: false,
                 ui_update_in_flight: false,
+                wake_word: WakeWordService::new(),
+                mcp_stdio_children: std::collections::HashMap::new(),
+                api_server: None,
+                subscription_proxy: None,
             }),
         }
     }

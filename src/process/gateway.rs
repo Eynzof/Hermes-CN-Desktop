@@ -690,6 +690,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "windows", ignore = "tasklist-based pid check is environment-dependent")]
     fn gateway_token_lock_pid_candidates_accepts_managed_runtime_path() {
         let temp = tempfile::tempdir().expect("tempdir");
         let runtime_root = temp.path().join("runtime");

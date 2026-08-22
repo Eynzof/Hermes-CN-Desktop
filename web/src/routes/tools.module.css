@@ -1,0 +1,133 @@
+/* =============================================================
+   Tools page — Capabilities → 工具
+   ============================================================= */
+
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--h-bg-pane);
+  overflow: hidden;
+}
+
+.content {
+  width: 100%;
+  max-width: var(--h-page-content-max-width);
+  margin-inline: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  background: var(--h-bg-input);
+  border: 1px solid var(--h-line);
+  font-size: 12px;
+  color: var(--h-text);
+}
+
+.search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--h-text);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  padding: 12px;
+  background: var(--h-color-bg-secondary-surface);
+  border: 1px solid var(--h-line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--h-text);
+}
+
+.cardDesc {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--h-text-2);
+}
+
+.cardMeta {
+  font-size: 11px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+}
+
+.categorySection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.categoryTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--h-text);
+}
+
+.categoryTitleEn {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--h-text-2);
+}
+
+.categoryCount {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+}
+
+.empty {
+  padding: 48px;
+  text-align: center;
+  color: var(--h-text-3);
+  font-size: 13px;
+}
+
+.status {
+  font-size: 11px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+}

@@ -5,6 +5,19 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./mcp": "./src/mcp.ts",
+    "./api-server": "./src/api-server.ts",
+    "./acp": "./src/acp.ts",
+    "./lsp": "./src/lsp.ts",
+    "./document-extract": "./src/document-extract.ts",
+    "./subscription-proxy": "./src/subscription-proxy.ts",
+    "./tool-gateway": "./src/tool-gateway.ts",
+    "./codex-runtime": "./src/codex-runtime.ts",
+    "./egress-proxy": "./src/egress-proxy.ts",
+    "./observability": "./src/observability.ts"
+  },
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",

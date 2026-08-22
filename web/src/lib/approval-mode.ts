@@ -1,4 +1,4 @@
-export type ApprovalMode = "default" | "smart" | "yolo";
+export type ApprovalMode = "default" | "manual" | "smart" | "yolo";
 
 const DEFAULT_VALUES = ["manual", "default", "ask"];
 const YOLO_VALUES = ["yolo", "off"];
@@ -20,10 +20,43 @@ export function approvalModeLabel(mode: ApprovalMode): string {
       return "Smart 智能审批";
     case "yolo":
       return "YOLO 全部放行";
+    case "manual":
+      return "手动审批";
     case "default":
     default:
       return "默认手动审批";
   }
+}
+
+/** In-memory process-level approval mode. */
+let processApprovalMode: ApprovalMode = "default";
+
+/** Per-session YOLO toggles. */
+const sessionYolo = new Map<string, boolean>();
+
+export function getProcessApprovalMode(): ApprovalMode {
+  return processApprovalMode;
+}
+
+export function setProcessApprovalMode(mode: ApprovalMode): void {
+  processApprovalMode = normalizeApprovalMode(mode);
+}
+
+export function setSessionYolo(sessionId: string, enabled: boolean): void {
+  if (enabled) {
+    sessionYolo.set(sessionId, true);
+  } else {
+    sessionYolo.delete(sessionId);
+  }
+}
+
+export function isSessionYolo(sessionId: string | null | undefined): boolean {
+  if (!sessionId) return false;
+  return sessionYolo.get(sessionId) ?? false;
+}
+
+export function clearSessionYolo(sessionId: string): void {
+  sessionYolo.delete(sessionId);
 }
 
 export function approvalModeConfigValue(

@@ -61,7 +61,7 @@ fn active_profile_sticky_path(base: &str) -> PathBuf {
     Path::new(base).join("active_profile")
 }
 
-fn write_active_profile_sticky(base: &str, profile: &str) {
+pub fn write_active_profile_sticky(base: &str, profile: &str) {
     let path = active_profile_sticky_path(base);
     if profile == "default" {
         let _ = fs::remove_file(&path);

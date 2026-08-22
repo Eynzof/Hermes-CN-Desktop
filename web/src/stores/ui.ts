@@ -1,5 +1,6 @@
 import { atom } from "jotai";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
+import { normalizeBusyMode, type ComposerBusyMode } from "@/lib/composer-busy-mode";
 import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 import hermesDefaultAvatar from "@/assets/hermes-default-avatar.png";
 
@@ -303,6 +304,37 @@ export const composerSubmitShortcutAtom = atom(
     const value = normalizeComposerSubmitShortcut(next);
     set(composerSubmitShortcutBaseAtom, value);
     writeUiValue(COMPOSER_SUBMIT_SHORTCUT_KEY, value);
+  },
+);
+
+// TUI parity: focus view suppresses tool-progress lines and adds a status-bar
+// segment. Persisted so the user's preference survives reload.
+const FOCUS_VIEW_ENABLED_KEY = "hermes.focus-view-enabled";
+const focusViewEnabledBaseAtom = persistedUiBaseAtom<boolean>(
+  () => readUiValue<unknown>(FOCUS_VIEW_ENABLED_KEY, false) === true,
+);
+export const focusViewEnabledAtom = atom(
+  (get) => get(focusViewEnabledBaseAtom),
+  (_get, set, next: boolean) => {
+    const value = next === true;
+    set(focusViewEnabledBaseAtom, value);
+    writeUiValue(FOCUS_VIEW_ENABLED_KEY, value);
+  },
+);
+
+// TUI parity: composer busy mode controls what happens when the agent is busy
+// and the user submits another prompt. `interrupt` (default) stops the current
+// turn; `queue` enqueues the prompt; `steer` sends it as a steering message.
+const BUSY_MODE_KEY = "hermes.composer-busy-mode";
+const busyModeBaseAtom = persistedUiBaseAtom<ComposerBusyMode>(
+  () => normalizeBusyMode(readUiValue(BUSY_MODE_KEY, "interrupt")),
+);
+export const busyModeAtom = atom(
+  (get) => get(busyModeBaseAtom),
+  (_get, set, next: ComposerBusyMode) => {
+    const value = normalizeBusyMode(next);
+    set(busyModeBaseAtom, value);
+    writeUiValue(BUSY_MODE_KEY, value);
   },
 );
 

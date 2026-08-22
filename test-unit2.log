@@ -1,0 +1,47 @@
+
+> hermes-agent-cn-desktop@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop
+> pnpm -r --workspace-concurrency=1 test:unit
+
+Scope: 8 of 9 workspace projects
+
+> @hermes/credential-pool@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\credential-pool
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/credential-pool[39m
+
+ [32m✓[39m test/pool.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 13:55:58
+[2m   Duration [22m 226ms[2m (transform 45ms, setup 0ms, import 61ms, tests 2ms, environment 0ms)[22m
+
+
+> @hermes/protocol@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\protocol
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/protocol[39m
+
+ [32m✓[39m src/session-log.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/session-search.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/mcp-api.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/hermes-api.test.ts [2m([22m[2m48 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m80 passed[39m[22m[90m (80)[39m
+[2m   Start at [22m 13:55:59
+[2m   Duration [22m 418ms[2m (transform 414ms, setup 0ms, import 630ms, tests 41ms, environment 0ms)[22m
+
+
+> @hermes/skill-lint@0.8.0-rc4 test:unit D:\Hermes-CN-Desktop\packages\skill-lint
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.6 [39m[90mD:/Hermes-CN-Desktop/packages/skill-lint[39m
+
+D:\Hermes-CN-Desktop\packages\skill-lint:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @hermes/skill-lint@0.8.0-rc4 test:unit: `vitest run`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.

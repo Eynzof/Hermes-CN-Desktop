@@ -89,6 +89,20 @@ describe("filterComposerCommands", () => {
     expect(filterComposerCommands("compact").map((c) => c.token)).toEqual(["compress"]);
   });
 
+  it("includes checkpoint commands when includeCheckpoints is true", () => {
+    const commands = filterComposerCommands("", { includeCheckpoints: true }).map((c) => c.command);
+    expect(commands).toContain("/rollback");
+    expect(commands).toContain("/snapshot");
+    expect(commands).toContain("/diff");
+  });
+
+  it("excludes checkpoint commands by default", () => {
+    const commands = filterComposerCommands("").map((c) => c.command);
+    expect(commands).not.toContain("/rollback");
+    expect(commands).not.toContain("/snapshot");
+    expect(commands).not.toContain("/diff");
+  });
+
   it("returns nothing for an unrelated query", () => {
     expect(filterComposerCommands("deploy", { skillsAvailable: true })).toEqual([]);
   });

@@ -14,6 +14,7 @@ export const REASONING_EFFORTS = [
   "high",
   "xhigh",
   "max",
+  "ultra",
 ] as const;
 
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
@@ -27,6 +28,7 @@ export const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
   high: "高",
   xhigh: "极高",
   max: "最大",
+  ultra: "极限",
 };
 
 // 工具栏 trigger 上的紧凑标签（"关闭思考" 在 trigger 里显得啰嗦）。
@@ -38,6 +40,7 @@ export const REASONING_EFFORT_SHORT_LABELS: Record<ReasoningEffort, string> = {
   high: "高",
   xhigh: "极高",
   max: "最大",
+  ultra: "极限",
 };
 
 // 后端在 `agent.reasoning_effort` 为空时的默认取值（tui_gateway/server.py
@@ -76,4 +79,59 @@ export function reasoningEffortFromConfig(
   return normalizeReasoningEffort(
     (agent as Record<string, unknown>)["reasoning_effort"],
   );
+}
+
+export type ReasoningDisplayMode = "hidden" | "collapsed" | "full";
+
+export interface SessionReasoningPrefs {
+  effort: ReasoningEffort | null;
+  enabled: boolean;
+  show: boolean;
+  full: boolean;
+}
+
+const sessionReasoningOverrides = new Map<string, SessionReasoningPrefs>();
+
+export function setSessionReasoning(
+  sessionId: string,
+  prefs: Partial<SessionReasoningPrefs>,
+): SessionReasoningPrefs {
+  const current = sessionReasoningOverrides.get(sessionId) ?? {
+    effort: null,
+    enabled: true,
+    show: true,
+    full: false,
+  };
+  const next: SessionReasoningPrefs = { ...current, ...prefs };
+  sessionReasoningOverrides.set(sessionId, next);
+  return next;
+}
+
+export function getSessionReasoning(sessionId: string | null | undefined): SessionReasoningPrefs {
+  if (!sessionId) {
+    return { effort: null, enabled: true, show: true, full: false };
+  }
+  return (
+    sessionReasoningOverrides.get(sessionId) ?? {
+      effort: null,
+      enabled: true,
+      show: true,
+      full: false,
+    }
+  );
+}
+
+export function clearSessionReasoning(sessionId: string): void {
+  sessionReasoningOverrides.delete(sessionId);
+}
+
+/**
+ * Collapse a reasoning recap to at most `maxLines`.
+ *
+ * Mirrors Python's 10-line clamp in the CLI reasoning command recap box.
+ */
+export function clampReasoning(text: string, maxLines = 10): string {
+  const lines = text.split("\n");
+  if (lines.length <= maxLines) return text;
+  return lines.slice(0, maxLines).join("\n") + "\n…";
 }

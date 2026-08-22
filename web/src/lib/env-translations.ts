@@ -92,6 +92,18 @@ const ENV_VAR_TRANSLATIONS: Record<string, EnvVarTranslation> = {
     label: "GitHub Token",
     description: "用于 Skill Hub，提高 GitHub API 额度并支持发布 skill。",
   },
+  HASS_TOKEN: {
+    label: "Home Assistant 长期访问令牌",
+    description: "Home Assistant 个人资料中生成的 Long-Lived Access Token。",
+  },
+  HASS_URL: {
+    label: "Home Assistant 服务地址",
+    description: "Home Assistant REST API 地址，默认 http://homeassistant.local:8123。",
+  },
+  HOME_ASSISTANT_TOKEN: {
+    label: "Home Assistant 长期访问令牌（别名）",
+    description: "HASS_TOKEN 的别名，用于兼容历史配置。",
+  },
   HONCHO_API_KEY: {
     label: "Honcho API Key",
     description: "用于 AI 原生持久记忆。",

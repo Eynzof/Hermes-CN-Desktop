@@ -114,8 +114,15 @@ fn zip_dir(src_dir: &Path, zip_path: &Path) -> Vec<u8> {
 fn resolve_dist(root: &Path) -> PathBuf {
     if let Ok(dir) = std::env::var("HOT_UPDATE_TEST_DIST") {
         let dir = PathBuf::from(dir.trim());
-        assert!(dir.is_dir(), "HOT_UPDATE_TEST_DIST is not a directory: {}", dir.display());
-        assert!(dir.join("index.html").is_file(), "HOT_UPDATE_TEST_DIST has no index.html");
+        assert!(
+            dir.is_dir(),
+            "HOT_UPDATE_TEST_DIST is not a directory: {}",
+            dir.display()
+        );
+        assert!(
+            dir.join("index.html").is_file(),
+            "HOT_UPDATE_TEST_DIST has no index.html"
+        );
         return dir;
     }
     let fixture = root.join("fixture-dist");
@@ -127,7 +134,11 @@ fn resolve_dist(root: &Path) -> PathBuf {
          </body></html>",
     )
     .unwrap();
-    std::fs::write(fixture.join("assets/app-dummyserver.js"), "console.log('dummy');\n").unwrap();
+    std::fs::write(
+        fixture.join("assets/app-dummyserver.js"),
+        "console.log('dummy');\n",
+    )
+    .unwrap();
     fixture
 }
 
@@ -248,8 +259,17 @@ fn serve_one(stream: &mut TcpStream, routes: &Arc<Mutex<HashMap<String, Vec<u8>>
         .and_then(|line| line.split_whitespace().nth(1))
         .unwrap_or("/")
         .to_string();
-    let body = routes.lock().unwrap().get(&path).cloned().unwrap_or_default();
-    let status = if body.is_empty() { "404 Not Found" } else { "200 OK" };
+    let body = routes
+        .lock()
+        .unwrap()
+        .get(&path)
+        .cloned()
+        .unwrap_or_default();
+    let status = if body.is_empty() {
+        "404 Not Found"
+    } else {
+        "200 OK"
+    };
     let content_type = if path.ends_with(".json") {
         "application/json"
     } else {
@@ -382,7 +402,11 @@ fn ui_hot_update_against_dummy_server() {
     assert_eq!(current["uiVersion"], "0.7.0");
     // The serving dir must resolve to the freshly installed version.
     let serving = ui_serving_version_dir().expect("a hot UI is servable");
-    assert!(serving.ends_with("0.7.0"), "serving dir: {}", serving.display());
+    assert!(
+        serving.ends_with("0.7.0"),
+        "serving dir: {}",
+        serving.display()
+    );
 
     // -- phase 2: upgrade to 0.7.1 (records the previous) --------------------
     let mut m071 = manifest_for("0.7.1", &zip_071);

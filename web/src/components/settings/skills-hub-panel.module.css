@@ -1,0 +1,124 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--h-space-3, 12px);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--h-space-1, 4px);
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--h-space-2, 8px);
+}
+
+.searchInput {
+  flex: 1;
+}
+
+.hint {
+  font-size: var(--h-font-size-xs, 11px);
+  color: var(--h-color-fg-subtle);
+}
+
+.error {
+  padding: var(--h-card-padding-sm, 12px);
+  border-radius: 0;
+  background: var(--h-color-danger-bg);
+  color: var(--h-color-danger-fg);
+  border: 1px solid var(--h-color-danger-border);
+  font-size: var(--h-font-size-sm, 12px);
+}
+
+.message {
+  padding: var(--h-card-padding-sm, 12px);
+  border-radius: 0;
+  background: var(--h-color-success-bg);
+  color: var(--h-color-success-fg);
+  border: 1px solid var(--h-color-success-border);
+  font-size: var(--h-font-size-sm, 12px);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--h-space-2, 8px);
+}
+
+.resultCard {
+  --card-bg: var(--h-color-bg-surface);
+}
+
+.resultTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--h-space-2, 8px);
+}
+
+.resultName {
+  font-weight: 600;
+  color: var(--h-color-fg-default);
+  font-size: var(--h-font-size-md, 12.5px);
+}
+
+.resultDescription {
+  margin: 0;
+  color: var(--h-color-fg-muted);
+  font-size: var(--h-font-size-sm, 12px);
+  line-height: 1.5;
+}
+
+.resultFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--h-space-2, 8px);
+  flex-wrap: wrap;
+}
+
+.resultMeta {
+  font-family: var(--h-font-mono, ui-monospace, monospace);
+  font-size: var(--h-font-size-xs, 11px);
+  color: var(--h-color-fg-subtle);
+}
+
+.resultActions {
+  display: flex;
+  align-items: center;
+  gap: var(--h-space-2, 8px);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--h-space-1, 4px);
+  margin-top: var(--h-space-1, 4px);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--h-space-2, 8px);
+  padding: var(--h-card-padding-lg, 20px);
+  color: var(--h-color-fg-subtle);
+  font-size: var(--h-font-size-sm, 12px);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

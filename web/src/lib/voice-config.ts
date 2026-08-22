@@ -148,6 +148,19 @@ const TTS_PROVIDER_META: Record<string, VoiceProviderMeta> = {
 };
 
 export const VOICE_FIELD_LABELS: Record<string, string> = {
+  "voice.record_key": "录音快捷键",
+  "voice.submit_mode": "提交模式",
+  "voice.max_recording_seconds": "最大录音时长（秒）",
+  "voice.auto_tts": "自动朗读回复",
+  "voice.beep_enabled": "启用提示音",
+  "voice.beep_volume": "提示音音量",
+  "voice.thinking_sound": "思考提示音",
+  "voice.silence_threshold": "静音阈值（RMS）",
+  "voice.silence_duration": "静音停止时长（秒）",
+  "voice.barge_in": "启用打断",
+  "voice.barge_in_grace_seconds": "打断 grace 时长（秒）",
+  "voice.barge_in_threshold_multiplier": "打断阈值倍数",
+  "voice.stop_phrases": "停止短语",
   "stt.local.model": "本地识别模型",
   "stt.local.language": "识别语言",
   "stt.openai.model": "OpenAI 识别模型",

@@ -40,6 +40,28 @@ export interface ApiRequestResult {
   body: string;
 }
 
+/** Input for the Home Assistant origin-locked HTTP proxy command (`ha_request`). */
+export interface HaRequestInput {
+  /** Full HASS_URL base (e.g. `http://homeassistant.local:8123`). */
+  url: string;
+  method?: string;
+  /** API path relative to `url` (e.g. `/api/states`). */
+  path: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+}
+
+/** Result from the Home Assistant origin-locked HTTP proxy command. */
+export interface HaRequestResult {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export type HaRequestFn = (input: HaRequestInput) => Promise<HaRequestResult>;
+
 export interface FileUploadInput {
   sessionId: string;
   name: string;

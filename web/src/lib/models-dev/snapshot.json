@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2025-01-01T00:00:00Z",
+  "providers": [
+    {
+      "id": "volcengine-ark",
+      "name": "Volcengine Ark",
+      "env": ["ARK_API_KEY"],
+      "api": "https://ark.cn-beijing.volces.com/api/v3",
+      "doc": "https://www.volcengine.com/docs/82379",
+      "modelCount": 2
+    },
+    {
+      "id": "qianfan",
+      "name": "Baidu Qianfan",
+      "env": ["QIANFAN_API_KEY"],
+      "api": "https://qianfan.baidubce.com/v2",
+      "doc": "https://cloud.baidu.com/doc/WENXINWORKSHOP/index.html",
+      "modelCount": 2
+    },
+    {
+      "id": "hunyuan",
+      "name": "Tencent Hunyuan",
+      "env": ["HUNYUAN_API_KEY"],
+      "api": "https://hunyuan.tencentcloudapi.com/v1",
+      "doc": "https://cloud.tencent.com/document/product/1729",
+      "modelCount": 1
+    },
+    {
+      "id": "siliconflow",
+      "name": "SiliconFlow",
+      "env": ["SILICONFLOW_API_KEY"],
+      "api": "https://api.siliconflow.cn/v1",
+      "doc": "https://docs.siliconflow.cn/",
+      "modelCount": 2
+    }
+  ],
+  "models": [
+    {
+      "id": "doubao-pro-32k",
+      "name": "Doubao Pro 32K",
+      "family": "doubao",
+      "providerId": "volcengine-ark",
+      "reasoning": false,
+      "toolCall": true,
+      "supportsVision": false,
+      "structuredOutput": false,
+      "openWeights": false,
+      "contextWindow": 32768,
+      "maxOutput": 4096,
+      "costInput": 0.5,
+      "costOutput": 1.0,
+      "status": "stable",
+      "knowledgeCutoff": "2024-06"
+    },
+    {
+      "id": "doubao-vision-pro-32k",
+      "name": "Doubao Vision Pro 32K",
+      "family": "doubao",
+      "providerId": "volcengine-ark",
+      "reasoning": false,
+      "toolCall": true,
+      "supportsVision": true,
+      "structuredOutput": false,
+      "openWeights": false,
+      "contextWindow": 32768,
+      "maxOutput": 4096,
+      "costInput": 0.6,
+      "costOutput": 1.2,
+      "status": "stable",
+      "knowledgeCutoff": "2024-06"
+    },
+    {
+      "id": "ernie-4.0",
+      "name": "ERNIE 4.0",
+      "family": "ernie",
+      "providerId": "qianfan",
+      "reasoning": false,
+      "toolCall": true,
+      "supportsVision": false,
+      "structuredOutput": false,
+      "openWeights": false,
+      "contextWindow": 8192,
+      "maxOutput": 2048,
+      "costInput": 0.8,
+      "costOutput": 2.0,
+      "status": "stable",
+      "knowledgeCutoff": "2024-03"
+    },
+    {
+      "id": "hunyuan-standard-256k",
+      "name": "Hunyuan Standard 256K",
+      "family": "hunyuan",
+      "providerId": "hunyuan",
+      "reasoning": false,
+      "toolCall": true,
+      "supportsVision": false,
+      "structuredOutput": false,
+      "openWeights": false,
+      "contextWindow": 262144,
+      "maxOutput": 4096,
+      "costInput": 0.4,
+      "costOutput": 0.8,
+      "status": "stable",
+      "knowledgeCutoff": "2024-06"
+    },
+    {
+      "id": "deepseek-v3",
+      "name": "DeepSeek V3",
+      "family": "deepseek",
+      "providerId": "siliconflow",
+      "reasoning": false,
+      "toolCall": true,
+      "supportsVision": false,
+      "structuredOutput": false,
+      "openWeights": true,
+      "contextWindow": 65536,
+      "maxOutput": 8192,
+      "costInput": 0.2,
+      "costOutput": 0.4,
+      "status": "stable",
+      "knowledgeCutoff": "2024-06"
+    },
+    {
+      "id": "deepseek-r1",
+      "name": "DeepSeek R1",
+      "family": "deepseek",
+      "providerId": "siliconflow",
+      "reasoning": true,
+      "toolCall": false,
+      "supportsVision": false,
+      "structuredOutput": false,
+      "openWeights": true,
+      "contextWindow": 65536,
+      "maxOutput": 8192,
+      "costInput": 0.3,
+      "costOutput": 0.6,
+      "status": "stable",
+      "knowledgeCutoff": "2024-06"
+    }
+  ]
+}

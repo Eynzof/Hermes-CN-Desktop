@@ -9,6 +9,7 @@ import { AssistantProfileCard } from "./assistant-profile-card";
 import { CliDelegationCard, entryFromChatTool } from "./cli-delegation-card";
 import { cliDelegationsByToolIdAtom } from "@/stores/cli-delegations";
 import { MessageImage } from "./message-image";
+import { MessageVideo } from "./message-video";
 import { MessageSkeleton } from "./message-skeleton";
 import { MessageText } from "./message-text";
 import { SkillInvocationMessage } from "./skill-invocation-message";
@@ -547,14 +548,22 @@ function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage, progre
       return;
     }
 
-    if (block.type === "image") {
-      items.push(
-        <div key={`image-${index}`} className={s.imageBlock}>
-          <MessageImage image={block.image} />
-        </div>,
-      );
-      return;
-    }
+              if (block.type === "image") {
+                items.push(
+                  <div key={`image-${index}`} className={s.imageBlock}>
+                    <MessageImage image={block.image} />
+                  </div>,
+                );
+                return;
+              }
+              if (block.type === "video") {
+                items.push(
+                  <div key={`video-${index}`} className={s.videoBlock}>
+                    <MessageVideo video={block.video} />
+                  </div>,
+                );
+                return;
+              }
 
     if (block.type === "moa_reference") {
       // MoA 参考模型输出块——不受 showReasoning 门控：它是委员会成员的
@@ -900,16 +909,26 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
           ) : (
             <>
               {message.text ? <MessageText text={message.text} streaming={streaming} /> : null}
-              {message.images?.length ? (
-                <div className={s.messageImages}>
-                  {message.images.map((image, index) => (
-                    <MessageImage
-                      key={`${image.url ?? image.name ?? image.alt ?? "image"}-${index}`}
-                      image={image}
-                    />
-                  ))}
-                </div>
-              ) : null}
+          {message.images?.length ? (
+            <div className={s.messageImages}>
+              {message.images.map((image, index) => (
+                <MessageImage
+                  key={`${image.url ?? image.name ?? image.alt ?? "image"}-${index}`}
+                  image={image}
+                />
+              ))}
+            </div>
+          ) : null}
+          {message.videos?.length ? (
+            <div className={s.messageVideos}>
+              {message.videos.map((video, index) => (
+                <MessageVideo
+                  key={`${video.url ?? video.name ?? video.alt ?? "video"}-${index}`}
+                  video={video}
+                />
+              ))}
+            </div>
+          ) : null}
               {showReasoning && message.reasoning ? (
                 <ReasoningBlock text={message.reasoning} streaming={streaming && !message.text} />
               ) : null}

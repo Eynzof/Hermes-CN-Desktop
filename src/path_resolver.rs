@@ -48,7 +48,7 @@ pub enum PathSource {
     WellKnown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShellProbeOutcome {
     Ok {
         shell: String,
@@ -93,6 +93,58 @@ fn applied_to_runtime() -> &'static RwLock<Option<OsString>> {
     APPLIED.get_or_init(|| RwLock::new(None))
 }
 
+#[cfg(target_os = "windows")]
+const PATH_SIGNATURE_MAX_AGE: Duration = Duration::from_secs(30);
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PathSignature {
+    machine_low: u32,
+    machine_high: u32,
+    user_low: u32,
+    user_high: u32,
+}
+
+#[cfg(target_os = "windows")]
+impl PathSignature {
+    fn from_registry_keys(
+        machine: Option<&winreg::RegKey>,
+        user: Option<&winreg::RegKey>,
+    ) -> Self {
+        fn key_signature(key: &winreg::RegKey) -> (u32, u32) {
+            match key.query_info() {
+                Ok(info) => (
+                    info.last_write_time.dwLowDateTime,
+                    info.last_write_time.dwHighDateTime,
+                ),
+                Err(_) => (0, 0),
+            }
+        }
+
+        let (machine_low, machine_high) = machine.map(key_signature).unwrap_or((0, 0));
+        let (user_low, user_high) = user.map(key_signature).unwrap_or((0, 0));
+        Self {
+            machine_low,
+            machine_high,
+            user_low,
+            user_high,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+struct SignatureCacheState {
+    signature: PathSignature,
+    value: Arc<EffectivePath>,
+    resolved_at: Instant,
+}
+
+#[cfg(target_os = "windows")]
+fn signature_cache() -> &'static RwLock<Option<SignatureCacheState>> {
+    static CACHE: OnceLock<RwLock<Option<SignatureCacheState>>> = OnceLock::new();
+    CACHE.get_or_init(|| RwLock::new(None))
+}
+
 /// Resolve the effective PATH now and update the cache. Blocking for at most
 /// `timeout` plus a small epsilon. Non-forced calls within
 /// `MIN_REFRESH_INTERVAL` of the last resolution return the cached value.
@@ -119,6 +171,59 @@ pub fn snapshot() -> Arc<EffectivePath> {
         return value;
     }
     refresh_blocking(SHELL_PROBE_TIMEOUT, true)
+}
+
+/// Refresh the Windows effective PATH from HKLM+HKCU, keyed on the registry
+/// keys' last-write FILETIME signatures. If the signature has not changed and
+/// the cache is less than 30 s old, the existing snapshot is reused.
+/// Returns the effective PATH and whether a fresh registry read was performed.
+#[cfg(target_os = "windows")]
+pub fn refresh_windows_path(force: bool) -> (Arc<EffectivePath>, bool) {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    use winreg::RegKey;
+
+    const MACHINE_ENV: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+
+    let machine_key = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(MACHINE_ENV)
+        .ok();
+    let user_key = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey("Environment")
+        .ok();
+    let signature = PathSignature::from_registry_keys(
+        machine_key.as_ref(),
+        user_key.as_ref(),
+    );
+
+    if !force {
+        let cache = signature_cache().read().expect("signature cache poisoned");
+        if let Some(state) = cache.as_ref() {
+            if state.signature == signature && state.resolved_at.elapsed() < PATH_SIGNATURE_MAX_AGE {
+                return (state.value.clone(), false);
+            }
+        }
+    }
+
+    let resolved = Arc::new(resolve(Duration::from_millis(1)));
+    {
+        let mut cache = signature_cache().write().expect("signature cache poisoned");
+        *cache = Some(SignatureCacheState {
+            signature,
+            value: resolved.clone(),
+            resolved_at: Instant::now(),
+        });
+    }
+    {
+        let mut cache = cache().write().expect("path cache poisoned");
+        cache.value = Some(resolved.clone());
+        cache.resolved_at = Some(Instant::now());
+    }
+    (resolved, true)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn refresh_windows_path(_force: bool) -> (Arc<EffectivePath>, bool) {
+    (snapshot(), false)
 }
 
 /// Joined PATH for `cmd.env("PATH", ...)`. Falls back to the process PATH if
@@ -793,5 +898,29 @@ mod tests {
         assert!(runtime_path_stale());
         // Reset so other tests see a clean slate.
         mark_applied_to_runtime(&current);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[serial_test::serial]
+    fn path_signature_from_missing_keys_is_zero() {
+        let sig = PathSignature::from_registry_keys(None, None);
+        assert_eq!(sig, PathSignature {
+            machine_low: 0,
+            machine_high: 0,
+            user_low: 0,
+            user_high: 0,
+        });
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[serial_test::serial]
+    fn refresh_windows_path_resolves_without_panic() {
+        let (path, refreshed) = refresh_windows_path(true);
+        assert!(!path.entries.is_empty() || path.probe == ShellProbeOutcome::NotApplicable);
+        // We cannot assert `refreshed` because the signature cache may already
+        // hold a value from other tests; just ensure the call returns.
+        let _ = refreshed;
     }
 }

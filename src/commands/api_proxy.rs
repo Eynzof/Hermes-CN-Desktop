@@ -57,7 +57,7 @@ static UPLOAD_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
         .build()
         .expect("valid upload HTTP client")
 });
-static EXTERNAL_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+pub(crate) static EXTERNAL_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(EXTERNAL_TIMEOUT)
         .redirect(reqwest::redirect::Policy::none())
@@ -156,7 +156,7 @@ fn ensure_upload_decoded_size(decoded_len: usize) -> Result<(), AppError> {
     Ok(())
 }
 
-fn is_blocked_external_ip(ip: IpAddr) -> bool {
+pub(crate) fn is_blocked_external_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             let octets = v4.octets();
@@ -181,7 +181,7 @@ fn is_blocked_external_ip(ip: IpAddr) -> bool {
     }
 }
 
-fn is_allowed_local_external_ip(ip: IpAddr) -> bool {
+pub(crate) fn is_allowed_local_external_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => v4.is_loopback() || v4.is_unspecified(),
         IpAddr::V6(v6) => {
@@ -194,12 +194,12 @@ fn is_allowed_local_external_ip(ip: IpAddr) -> bool {
     }
 }
 
-fn is_allowed_local_external_domain(host: &str) -> bool {
+pub(crate) fn is_allowed_local_external_domain(host: &str) -> bool {
     let lower_host = host.trim_end_matches('.').to_ascii_lowercase();
     lower_host == "localhost" || lower_host.ends_with(".localhost")
 }
 
-fn is_allowed_local_external_url(url: &url::Url) -> bool {
+pub(crate) fn is_allowed_local_external_url(url: &url::Url) -> bool {
     match url.host() {
         Some(url::Host::Domain(host)) => is_allowed_local_external_domain(host),
         Some(url::Host::Ipv4(ip)) => is_allowed_local_external_ip(IpAddr::V4(ip)),
@@ -208,7 +208,7 @@ fn is_allowed_local_external_url(url: &url::Url) -> bool {
     }
 }
 
-fn validate_external_url_shape(raw: &str) -> Result<url::Url, AppError> {
+pub(crate) fn validate_external_url_shape(raw: &str) -> Result<url::Url, AppError> {
     let url = url::Url::parse(raw)?;
     let is_local_url = is_allowed_local_external_url(&url);
     if url.scheme() != "https" && !(url.scheme() == "http" && is_local_url) {
@@ -243,7 +243,7 @@ fn validate_external_url_shape(raw: &str) -> Result<url::Url, AppError> {
     Ok(url)
 }
 
-async fn validate_external_url(raw: &str) -> Result<url::Url, AppError> {
+pub(crate) async fn validate_external_url(raw: &str) -> Result<url::Url, AppError> {
     let url = validate_external_url_shape(raw)?;
 
     if let Some(url::Host::Domain(host)) = url.host() {

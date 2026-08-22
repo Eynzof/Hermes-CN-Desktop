@@ -11,6 +11,7 @@ import {
   Sparkles,
   SquareCode,
   TerminalSquare,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { useActiveProfileName } from "@/hooks/use-profiles";
@@ -37,6 +38,7 @@ export const CONFIG_ITEMS: readonly CapabilityItem[] = [
     title: "档案：拥有独立配置、密钥、会话和技能的环境",
   },
   { label: "技能", path: "/skills", icon: Sparkles },
+  { label: "工具", path: "/tools", icon: Wrench },
   { label: "MCP", path: "/mcp", icon: Puzzle },
   { label: "终端", path: "/console", icon: TerminalSquare, title: "Hermes Console：直接运行 Hermes 命令" },
   {

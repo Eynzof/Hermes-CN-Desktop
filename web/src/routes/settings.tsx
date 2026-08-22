@@ -81,6 +81,7 @@ import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import wechatCommunityQr from "@/assets/wechat-community-qr.png";
 import feishuCommunityQr from "@/assets/feishu-community-qr.png";
 import { WandermindsMark } from "@/components/brand/wanderminds-mark";
+import { SkinSelector } from "@/components/settings/skin-selector";
 import { SettingsHero } from "./settings-hero";
 import { ManagedRuntimePanel } from "./managed-runtime-panel";
 import s from "./settings.module.css";
@@ -341,6 +342,16 @@ export function ThemeSection({ showHeading = true }: SettingsSectionProps) {
           }
         />
         <AppearanceRow
+          label="皮肤"
+          sub="在主题之上叠加强调色、状态色与品牌元数据，实时生效。"
+          right={
+            <SkinSelector
+              value={config.skin}
+              onChange={(skin) => update({ skin })}
+            />
+          }
+        />
+        <AppearanceRow
           label="界面缩放"
           sub="整体放大或缩小界面（文字、间距、图标一起缩放），适配高分屏 / 4K 显示器。标准为 100%。"
           right={
@@ -518,6 +529,7 @@ function ThemeSkinPicker({
 
 const APPROVAL_MODE_DESC: Record<ApprovalMode, string> = {
   default: "遇到有风险的命令会请你手动确认，适合大多数情况的默认安全策略。",
+  manual: "每次有风险的命令都请你手动确认，最保守的安全策略。",
   smart: "先由辅助模型判断风险：低风险自动放行，高风险自动拒绝，不确定时再请你手动决定。",
   yolo: "自动批准所有有风险的命令。请仅在受信任或隔离的环境中使用。",
 };

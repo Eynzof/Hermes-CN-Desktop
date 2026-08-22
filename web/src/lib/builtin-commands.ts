@@ -1,12 +1,12 @@
 import { parseLeadingSlashCommand, SKILL_NAMESPACE } from "./composer-skills";
+import { resolveCommand } from "./slash-commands/registry";
 
-// Desktop-native slash commands handled by the client itself — distinct from
-// skill commands (which dispatch to the backend skill registry via
-// `command.dispatch`). Today this is just manual context compaction; the list
-// is intentionally tiny and explicit so a typo never silently becomes a prompt
-// sent to the model.
+// Desktop-native slash commands handled by the client itself on composer Enter —
+// distinct from skill commands (which dispatch to the backend skill registry via
+// `command.dispatch`). The canonical set is derived from the central registry
+// (`local` handler present and not CLI-only); today that is just `/compress`.
 
-export type BuiltinCommandName = "compress";
+export type BuiltinCommandName = "compress" | "rollback" | "snapshot" | "diff";
 
 export interface BuiltinCommandMatch {
   name: BuiltinCommandName;
@@ -14,13 +14,17 @@ export interface BuiltinCommandMatch {
   arg: string;
 }
 
-const BUILTIN_ALIASES: Readonly<Record<string, BuiltinCommandName>> = {
-  compress: "compress",
-  compact: "compress",
-};
-
 function canonicalName(raw: string): BuiltinCommandName | null {
-  return BUILTIN_ALIASES[raw.replace(/^\/+/, "").trim().toLowerCase()] ?? null;
+  const def = resolveCommand(raw.replace(/^\//, "").trim());
+  if (!def || def.cliOnly || !def.local) return null;
+  // Keep /skill and /skills as namespace/management openers, not composer builtins.
+  if (def.name === "skill" || def.name === "skills") return null;
+  // Composer builtins are exactly the local checkpoint and compression commands.
+  if (def.name === "compress" || def.aliases?.includes("compact")) return "compress";
+  if (def.name === "rollback") return "rollback";
+  if (def.name === "snapshot") return "snapshot";
+  if (def.name === "diff") return "diff";
+  return null;
 }
 
 /**
@@ -67,9 +71,8 @@ interface CommandSpec extends ComposerCommandCandidate {
 }
 
 // `/skill` is a namespace opener, NOT a built-in alias — keeping it out of
-// BUILTIN_ALIASES means `isBuiltinComposerCommandToken("/skill")` stays false,
-// so typing `/skill` keeps the palette open instead of being treated as a
-// client-handled command.
+// `isBuiltinComposerCommandToken("/skill")` stays false, so typing `/skill`
+// keeps the palette open instead of being treated as a client-handled command.
 const SKILL_NAMESPACE_COMMAND: CommandSpec = {
   token: SKILL_NAMESPACE,
   command: `/${SKILL_NAMESPACE}`,
@@ -79,17 +82,30 @@ const SKILL_NAMESPACE_COMMAND: CommandSpec = {
   aliases: [SKILL_NAMESPACE],
 };
 
+const compressDef = resolveCommand("compress");
+const rollbackDef = resolveCommand("rollback");
+const snapshotDef = resolveCommand("snapshot");
+const diffDef = resolveCommand("diff");
+
+function builtinSpec(name: string, displayName: string, def?: ReturnType<typeof resolveCommand>): CommandSpec[] {
+  if (!def) return [];
+  return [
+    {
+      token: name,
+      command: `/${name}`,
+      displayName,
+      description: def.description,
+      kind: "builtin",
+      aliases: [name, ...(def.aliases ?? [])],
+    },
+  ];
+}
+
 const BUILTIN_COMMAND_SPECS: readonly CommandSpec[] = [
-  {
-    token: "compress",
-    command: "/compress",
-    displayName: "压缩上下文",
-    description: "压缩当前会话上下文，可追加聚焦主题（如 /compress 保留鉴权讨论）",
-    kind: "builtin",
-    aliases: Object.entries(BUILTIN_ALIASES)
-      .filter(([, name]) => name === "compress")
-      .map(([alias]) => alias),
-  },
+  ...builtinSpec("compress", "压缩上下文", compressDef),
+  ...builtinSpec("rollback", "回滚检查点", rollbackDef),
+  ...builtinSpec("snapshot", "创建快照", snapshotDef),
+  ...builtinSpec("diff", "查看差异", diffDef),
 ];
 
 function rankCommandSpec(spec: CommandSpec, q: string): number | null {
@@ -106,6 +122,11 @@ export interface ComposerCommandOptions {
   skillsAvailable?: boolean;
   /** Include built-in context compression commands such as `/compress`. */
   includeCompress?: boolean;
+  /**
+   * Include checkpoint commands (`/rollback`, `/snapshot`, `/diff`). Defaults to
+   * false until the composer explicitly wires checkpoint support.
+   */
+  includeCheckpoints?: boolean;
 }
 
 /**
@@ -123,6 +144,12 @@ export function filterComposerCommands(
   const specs: CommandSpec[] = [];
   if (options.skillsAvailable) specs.push(SKILL_NAMESPACE_COMMAND);
   if (options.includeCompress !== false) specs.push(...BUILTIN_COMMAND_SPECS);
+  if (options.includeCheckpoints !== true) {
+    const hidden = new Set(["rollback", "snapshot", "diff"]);
+    const filtered = specs.filter((s) => !hidden.has(s.token));
+    specs.length = 0;
+    specs.push(...filtered);
+  }
 
   const ranked: { spec: CommandSpec; rank: number }[] = [];
   for (const spec of specs) {

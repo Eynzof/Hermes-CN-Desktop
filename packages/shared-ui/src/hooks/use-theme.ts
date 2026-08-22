@@ -1,4 +1,5 @@
 import { atom, useAtom } from "jotai";
+import { type SkinSlug, isSkinSlug } from "../tokens/skins";
 
 export type ThemeVariant =
   | "light"
@@ -16,12 +17,15 @@ export interface ThemeConfig {
   theme: ThemeVariant;
   density: DensityVariant;
   scale: ScaleVariant;
+  /** Active skin preset slug layered on top of the UI theme. */
+  skin: SkinSlug;
 }
 
 export const DEFAULT_THEME_CONFIG: ThemeConfig = {
   theme: "light-modern",
   density: "comfortable",
   scale: "md",
+  skin: "default",
 };
 
 /** Interface-scale step → zoom factor.
@@ -62,6 +66,7 @@ export function normalizeThemeConfig(value: Partial<ThemeConfig> | null | undefi
     theme: isThemeVariant(value?.theme) ? value.theme : DEFAULT_THEME_CONFIG.theme,
     density: value?.density === "compact" ? "compact" : DEFAULT_THEME_CONFIG.density,
     scale: isScaleVariant(value?.scale) ? value.scale : DEFAULT_THEME_CONFIG.scale,
+    skin: isSkinSlug(value?.skin) ? value.skin : DEFAULT_THEME_CONFIG.skin,
   };
 }
 
@@ -93,6 +98,7 @@ export function applyThemeToDOM(config: ThemeConfig) {
   root.setAttribute("data-theme", config.theme);
   root.setAttribute("data-density", config.density);
   root.setAttribute("data-scale", config.scale);
+  root.setAttribute("data-skin", config.skin);
 
   const factor = SCALE_FACTORS[config.scale] ?? 1;
   const desktop = (globalThis as unknown as { hermesDesktop?: DesktopZoomBridge })
