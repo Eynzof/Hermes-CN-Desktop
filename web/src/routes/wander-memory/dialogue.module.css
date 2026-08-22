@@ -1,0 +1,79 @@
+/* WanderMemory dialogue route — Hermes tokens only, no hard-coded colors. */
+
+.dialogueGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--h-pad);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .dialogueGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--h-page-content-gutter-x);
+  }
+}
+
+.dialogueTextarea {
+  resize: vertical;
+  min-height: 260px;
+}
+
+.jsonHint {
+  margin: 8px 0 0;
+  color: var(--h-ok);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.inlineError {
+  margin: 8px 0 0;
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.importActions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.degradedHint {
+  color: var(--h-warn);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+}
+
+.runningBox {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footnote {
+  margin: 16px 0 0;
+  color: var(--h-text-4);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.resultSummary {
+  margin: 0 0 12px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.resultNum {
+  color: var(--h-accent);
+}
+
+.resultsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

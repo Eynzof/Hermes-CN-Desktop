@@ -1,0 +1,84 @@
+/* Route-local toast — Hermes tokens only, no hard-coded colors. */
+
+.stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: var(--h-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px;
+  background: var(--h-bg-pane);
+  border: 1px solid var(--h-line);
+  color: var(--h-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+  animation: wmToastIn var(--h-duration-normal) var(--h-ease-standard);
+}
+
+.statusDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--h-text-4);
+}
+
+.toast[data-kind="success"] {
+  border-color: var(--h-ok-border);
+}
+
+.toast[data-kind="success"] .statusDot {
+  background: var(--h-ok);
+}
+
+.toast[data-kind="error"] {
+  border-color: var(--h-err-border);
+}
+
+.toast[data-kind="error"] .statusDot {
+  background: var(--h-err);
+}
+
+.message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.close {
+  flex: none;
+  border: none;
+  background: transparent;
+  padding: 4px 4px;
+  color: var(--h-text-4);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover {
+  color: var(--h-text);
+}
+
+@keyframes wmToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -59,10 +59,19 @@ function fieldValue(draft: VoiceSettingsDraft, key: string): string | boolean | 
   return draft.values[key] ?? "";
 }
 
-function fieldOptions(key: string, elevenLabsVoices?: ElevenLabsVoicesResponse | null): string[] | undefined {
+function fieldOptions(
+  key: string,
+  schema: ConfigSchemaResponse,
+  elevenLabsVoices?: ElevenLabsVoicesResponse | null,
+): string[] | undefined {
   if (key === "tts.elevenlabs.voice_id" && elevenLabsVoices?.available && elevenLabsVoices.voices.length > 0) {
     return elevenLabsVoices.voices.map((voice) => voice.voice_id);
   }
+  // Schema-first: the backend CONFIG_SCHEMA is the source of truth for
+  // select options. Fall back to the hardcoded snapshot only when the
+  // schema declares no options (older backends / free-form fields).
+  const schemaOptions = schema.fields[key]?.options;
+  if (schemaOptions && schemaOptions.length > 0) return schemaOptions;
   return VOICE_SELECT_OPTIONS[key];
 }
 
@@ -146,7 +155,7 @@ function ProviderFields({
       {provider.configKeys.map((key) => {
         const field = schema.fields[key];
         const value = fieldValue(draft, key);
-        const options = fieldOptions(key, elevenLabsVoices);
+        const options = fieldOptions(key, schema, elevenLabsVoices);
         const label = VOICE_FIELD_LABELS[key] ?? key;
         if (field?.type === "boolean") {
           return (

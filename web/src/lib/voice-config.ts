@@ -30,8 +30,6 @@ export interface VoiceEnvUpdate {
   value: string;
 }
 
-const STT_PROVIDER_ALLOWLIST = new Set(["local", "groq", "openai", "xai", "elevenlabs"]);
-
 const STT_PROVIDER_META: Record<string, VoiceProviderMeta> = {
   local: {
     id: "local",
@@ -45,7 +43,7 @@ const STT_PROVIDER_META: Record<string, VoiceProviderMeta> = {
     label: "Groq Whisper",
     description: "云端 Whisper，速度快，有免费额度，需要 GROQ_API_KEY。",
     envKey: "GROQ_API_KEY",
-    configKeys: [],
+    configKeys: ["stt.groq.model"],
   },
   openai: {
     id: "openai",
@@ -105,12 +103,55 @@ const TTS_PROVIDER_META: Record<string, VoiceProviderMeta> = {
     local: true,
     configKeys: ["tts.neutts.model", "tts.neutts.device", "tts.neutts.ref_audio", "tts.neutts.ref_text"],
   },
+  xai: {
+    id: "xai",
+    label: "xAI Grok TTS",
+    description: "xAI Grok 语音合成，使用 xAI OAuth 或 XAI_API_KEY。",
+    envKey: "XAI_API_KEY",
+    configKeys: ["tts.xai.voice_id", "tts.xai.language", "tts.xai.speed", "tts.xai.auto_speech_tags"],
+  },
+  minimax: {
+    id: "minimax",
+    label: "MiniMax TTS",
+    description: "MiniMax 语音合成，需要 MINIMAX_API_KEY。",
+    envKey: "MINIMAX_API_KEY",
+    configKeys: ["tts.minimax.model", "tts.minimax.voice_id"],
+  },
+  mistral: {
+    id: "mistral",
+    label: "Mistral TTS",
+    description: "Mistral Voxtral 语音合成，需要 MISTRAL_API_KEY。",
+    envKey: "MISTRAL_API_KEY",
+    configKeys: ["tts.mistral.model", "tts.mistral.voice_id"],
+  },
+  gemini: {
+    id: "gemini",
+    label: "Gemini TTS",
+    description: "Google Gemini 语音合成，需要 GEMINI_API_KEY。",
+    envKey: "GEMINI_API_KEY",
+    configKeys: ["tts.gemini.model", "tts.gemini.voice"],
+  },
+  kittentts: {
+    id: "kittentts",
+    label: "KittenTTS",
+    description: "本地语音合成，需要本机已安装 KittenTTS 依赖。",
+    local: true,
+    configKeys: ["tts.kittentts.model", "tts.kittentts.voice"],
+  },
+  piper: {
+    id: "piper",
+    label: "Piper",
+    description: "本地轻量语音合成，需要本机已安装 piper 依赖。",
+    local: true,
+    configKeys: ["tts.piper.voice"],
+  },
 };
 
 export const VOICE_FIELD_LABELS: Record<string, string> = {
   "stt.local.model": "本地识别模型",
   "stt.local.language": "识别语言",
   "stt.openai.model": "OpenAI 识别模型",
+  "stt.groq.model": "Groq 识别模型",
   "stt.elevenlabs.model_id": "ElevenLabs STT 模型",
   "stt.elevenlabs.language_code": "ElevenLabs 语言代码",
   "stt.elevenlabs.tag_audio_events": "标记音频事件",
@@ -120,6 +161,19 @@ export const VOICE_FIELD_LABELS: Record<string, string> = {
   "tts.openai.voice": "OpenAI 语音",
   "tts.elevenlabs.voice_id": "ElevenLabs 语音",
   "tts.elevenlabs.model_id": "ElevenLabs 模型",
+  "tts.xai.voice_id": "xAI 语音",
+  "tts.xai.language": "xAI 语言",
+  "tts.xai.speed": "xAI 语速",
+  "tts.xai.auto_speech_tags": "xAI 自动语音标签",
+  "tts.minimax.model": "MiniMax 模型",
+  "tts.minimax.voice_id": "MiniMax 语音",
+  "tts.mistral.model": "Mistral 模型",
+  "tts.mistral.voice_id": "Mistral 语音",
+  "tts.gemini.model": "Gemini 模型",
+  "tts.gemini.voice": "Gemini 语音",
+  "tts.kittentts.model": "KittenTTS 模型",
+  "tts.kittentts.voice": "KittenTTS 语音",
+  "tts.piper.voice": "Piper 语音",
   "tts.neutts.model": "NeuTTS 模型",
   "tts.neutts.device": "NeuTTS 设备",
   "tts.neutts.ref_audio": "NeuTTS 参考音频",
@@ -129,6 +183,7 @@ export const VOICE_FIELD_LABELS: Record<string, string> = {
 export const VOICE_FIELD_PLACEHOLDERS: Record<string, string> = {
   "stt.local.model": "base",
   "stt.local.language": "zh",
+  "stt.groq.model": "whisper-large-v3-turbo",
   "stt.openai.model": "whisper-1",
   "stt.elevenlabs.model_id": "scribe_v2",
   "stt.elevenlabs.language_code": "zho",
@@ -136,14 +191,30 @@ export const VOICE_FIELD_PLACEHOLDERS: Record<string, string> = {
   "tts.openai.model": "gpt-4o-mini-tts",
   "tts.openai.voice": "alloy",
   "tts.elevenlabs.model_id": "eleven_multilingual_v2",
+  "tts.xai.voice_id": "eve",
+  "tts.xai.language": "en",
+  "tts.xai.speed": "1.0",
+  "tts.minimax.model": "speech-02-hd",
+  "tts.minimax.voice_id": "English_expressive_narrator",
+  "tts.mistral.model": "voxtral-mini-tts-2603",
+  "tts.mistral.voice_id": "c69964a6-ab8b-4f8a-9465-ec0925096ec8",
+  "tts.gemini.model": "gemini-2.5-flash-preview-tts",
+  "tts.gemini.voice": "Kore",
+  "tts.kittentts.model": "KittenML/kitten-tts-nano-0.8-int8",
+  "tts.kittentts.voice": "Jasper",
+  "tts.piper.voice": "en_US-lessac-medium",
   "tts.neutts.device": "cpu",
 };
 
 export const VOICE_SELECT_OPTIONS: Record<string, string[]> = {
   "stt.local.model": ["tiny", "base", "small", "medium", "large-v3"],
-  "stt.openai.model": ["whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe"],
+  "stt.openai.model": ["whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe", "gpt-transcribe"],
   "stt.elevenlabs.model_id": ["scribe_v2", "scribe_v1"],
-  "tts.openai.voice": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+  "tts.openai.model": ["gpt-4o-mini-tts", "gpt-4o-tts", "tts-1", "tts-1-hd"],
+  "tts.openai.voice": [
+    "alloy", "ash", "ballad", "cedar", "coral", "echo", "fable",
+    "marin", "nova", "onyx", "sage", "shimmer", "verse",
+  ],
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -184,10 +255,10 @@ export function voiceProviderOptions(
   current: string,
 ): VoiceProviderMeta[] {
   const schemaKey = kind === "stt" ? "stt.provider" : "tts.provider";
-  const schemaOptions = schema?.fields[schemaKey]?.options ?? [];
-  const supported = kind === "stt"
-    ? schemaOptions.filter((id) => STT_PROVIDER_ALLOWLIST.has(id))
-    : schemaOptions;
+  // Schema is the source of truth for provider options (backend merges
+  // command/plugin providers per-request). No desktop-side allowlist —
+  // mirror TTS behaviour so custom command STT providers are visible.
+  const supported = schema?.fields[schemaKey]?.options ?? [];
 
   const options = supported.map((id) => providerMeta(kind, id));
   if (current && !supported.includes(current)) {

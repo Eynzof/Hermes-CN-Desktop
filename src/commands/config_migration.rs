@@ -754,9 +754,10 @@ fn harden_secret_permissions(_target: &Path) {
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 fn decode_command_output(bytes: &[u8]) -> String {
     if bytes.len() >= 2 && bytes.iter().filter(|b| **b == 0).count() > bytes.len() / 4 {
-        let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        let (chunks, _) = bytes.as_chunks::<2>();
+        let units: Vec<u16> = chunks
+            .iter()
+            .map(|chunk| u16::from_le_bytes(*chunk))
             .filter(|unit| *unit != 0)
             .collect();
         String::from_utf16_lossy(&units)

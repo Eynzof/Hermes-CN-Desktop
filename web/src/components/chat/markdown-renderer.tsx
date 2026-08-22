@@ -242,11 +242,27 @@ function normalizeTexMathDelimiters(text: string): string {
   return result;
 }
 
+function toMarkdownSafeImageDestination(url: string): string {
+  // Windows absolute paths (D:\foo or D:/foo) parse as an unknown URL scheme
+  // ("d:") in rehype-harden and get blocked → "[Image blocked]" before the
+  // local-path handling in MessageImage ever runs. Convert them to a
+  // POSIX-style /D:/foo so the harden pass keeps them as relative paths;
+  // MessageImage maps them back to the real path in normalizeLocalFilePath.
+  const drive = url.match(/^([A-Za-z]):[\\/](.*)$/);
+  if (!drive) return url;
+  return `/${drive[1]}:/${drive[2].replace(/\\/g, "/")}`;
+}
+
 function normalizeMarkdownImageDestinations(text: string): string {
   return text.replace(MARKDOWN_IMAGE_DEST_RE, (match, alt: string, rawUrl: string) => {
     const url = rawUrl.trim();
-    if (!/\s/.test(url) || !isImageReference(url)) return match;
-    return `![${alt}](<${url}>)`;
+    if (!isImageReference(url)) return match;
+    const normalized = toMarkdownSafeImageDestination(url);
+    if (normalized !== url) {
+      return /\s/.test(normalized) ? `![${alt}](<${normalized}>)` : `![${alt}](${normalized})`;
+    }
+    if (/\s/.test(url)) return `![${alt}](<${url}>)`;
+    return match;
   });
 }
 

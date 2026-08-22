@@ -1,0 +1,214 @@
+/* WanderMemory files route — Hermes tokens only, no hard-coded colors. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scanArea {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scanRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.scanInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.fileGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--h-pad);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .fileGrid {
+    grid-template-columns: 340px minmax(0, 1fr);
+    gap: var(--h-page-content-gutter-x);
+  }
+}
+
+.panel {
+  border: 1px solid var(--h-line);
+  background: var(--h-bg-pane);
+  padding: 16px;
+  min-width: 0;
+}
+
+.panelEmpty {
+  margin: 0;
+  padding: 32px 8px;
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 13px;
+  text-align: center;
+}
+
+.fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fileRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px;
+  text-align: left;
+  background: var(--h-bg-soft);
+  border: 1px solid var(--h-line-soft);
+  cursor: pointer;
+  transition: border-color var(--h-duration-fast) var(--h-ease-standard);
+}
+
+.fileRow:hover {
+  border-color: var(--h-color-border-strong);
+}
+
+.fileRow[data-active="true"] {
+  border-color: var(--h-accent-border);
+  background: var(--h-accent-soft);
+}
+
+.fileRowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filePath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12.5px;
+}
+
+.ingestDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--h-ok);
+}
+
+.fileRowMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fileCategory {
+  padding: 4px 8px;
+  color: var(--h-text-3);
+  border: 1px solid var(--h-line);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+.fileSize {
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detailPath {
+  margin: 0;
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.detailMeta {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.memoriesHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.memoriesHint {
+  color: var(--h-text-4);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.memoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ingestEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.ingestLabel {
+  color: var(--h-accent);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ingestTextarea {
+  resize: vertical;
+}
+
+.ingestActions {
+  display: flex;
+  align-items: center;
+}
+
+.collisionBox {
+  padding: 8px 12px;
+  background: var(--h-bg-soft);
+  border: 1px solid var(--h-line-soft);
+}

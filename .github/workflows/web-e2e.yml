@@ -15,6 +15,12 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    env:
+      # The backend repository is private. Fork PRs and Dependabot do not
+      # receive repository secrets, so they run the rest of the E2E suite and
+      # skip only the Wander-Memory server/spec. Pushes, manual runs and
+      # trusted same-repository PRs exercise the full integration.
+      WANDER_MEMORY_E2E: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
     defaults:
       run:
         working-directory: Hermes-CN-Desktop
@@ -32,6 +38,28 @@ jobs:
           repository: Eynzof/Hermes-CN-Core
           ref: main
           path: Hermes-CN-Core
+
+      - name: Verify Wander-Memory access is configured
+        if: env.WANDER_MEMORY_E2E == 'true'
+        env:
+          WANDER_MEMORY_DEPLOY_KEY: ${{ secrets.WANDER_MEMORY_DEPLOY_KEY }}
+        run: |
+          if [ -z "$WANDER_MEMORY_DEPLOY_KEY" ]; then
+            echo "::error::WANDER_MEMORY_DEPLOY_KEY is not configured"
+            exit 1
+          fi
+
+      # Canonical private MemOS backend. Keep the full SHA paired with the
+      # Desktop integration instead of following a moving branch head.
+      - name: Checkout Wander-Memory backend
+        if: env.WANDER_MEMORY_E2E == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Wander-Minds/Wander-Memory
+          ref: efea8c6b0ea8c16cf1593082a93905acd7a055e3
+          path: Wander-Memory
+          ssh-key: ${{ secrets.WANDER_MEMORY_DEPLOY_KEY }}
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:
@@ -57,6 +85,18 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -U pip
           .venv/bin/pip install -e ".[all]"
+
+      - name: Install Wander-Memory (Python) into .venv
+        if: env.WANDER_MEMORY_E2E == 'true'
+        working-directory: Wander-Memory
+        # wandermemory (hatchling). The backend runs `python -m src.memory`,
+        # which needs the package deps (orjson/websockets/numpy/msgspec/apsw/…).
+        # MemoryOS resolves from PyPI under plain pip — the `tool.uv.sources`
+        # path override in pyproject.toml is a uv dev-time shortcut only.
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e .
 
       - name: Install desktop deps
         run: pnpm install --frozen-lockfile

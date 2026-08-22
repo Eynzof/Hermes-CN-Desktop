@@ -210,6 +210,22 @@ describe("MessageTimeline", () => {
     expect(html).toContain("alt=\"趋势图\"");
   });
 
+  it("routes a Windows local-path Markdown image to the local preview instead of blocking it", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(
+      <MarkdownText
+        text={"模型生成图片：![生成图](D:\\Hermes-CN-Desktop\\e2e\\.runtime\\hermes-home\\images\\generated previews\\model output.png)"}
+      />,
+    );
+
+    // rehype-harden must not swallow the drive-letter path as a blocked image.
+    expect(html).not.toContain("[Image blocked");
+    // It must reach MessageImage's local-path handling (async media fetch →
+    // loading placeholder in SSR), with the POSIX-style drive path mapped back.
+    expect(html).toContain("图片加载中");
+    expect(html).toContain("generated%20previews");
+    expect(html).toContain("/D:/Hermes-CN-Desktop/e2e/.runtime/hermes-home/images");
+  });
+
   it("renders single-dollar inline LaTeX formulas", () => {
     const html = ReactDOMServer.renderToStaticMarkup(
       <MarkdownText text={String.raw`设 $\boldsymbol{v}_i \in \mathbb{R}^n$ 且 $A\boldsymbol{v}_i = \boldsymbol{0}$。`} />,

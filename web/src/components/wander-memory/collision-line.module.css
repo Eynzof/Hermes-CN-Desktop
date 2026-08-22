@@ -1,0 +1,72 @@
+/* CollisionLine — Hermes tokens only, no hard-coded colors. */
+
+.clean {
+  margin: 0;
+  color: var(--h-ok);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--h-warn-soft);
+  border: 1px solid var(--h-warn-border);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title {
+  color: var(--h-warn);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.notStored {
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.detail {
+  margin: 0;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.snippets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.snippets li {
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-left: 8px;
+  border-left: 2px solid var(--h-warn-border);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
