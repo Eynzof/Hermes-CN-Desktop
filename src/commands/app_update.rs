@@ -34,7 +34,12 @@ const PRIMARY_DOWNLOAD_HOSTS: &[&str] = &[
 ];
 const UPDATER_CACHE_DIR: &str = "desktop-updater-cache";
 const PENDING_RECORD_FILE: &str = "pending.json";
+#[cfg(target_os = "windows")]
+const PENDING_PACKAGE_FILE: &str = "pending-update.exe";
+#[cfg(not(target_os = "windows"))]
 const PENDING_PACKAGE_FILE: &str = "pending-update.bin";
+#[cfg(target_os = "windows")]
+const WINDOWS_NSIS_INSTALL_ARGS: [&str; 4] = ["/P", "/R", "/UPDATE", "/ARGS"];
 const MAX_UPDATER_BYTES: u64 = 480 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1050,7 +1055,7 @@ async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateI
         Some(&source),
         fallback_used,
     );
-    match update.install(bytes) {
+    match launch_verified_update(&update, bytes) {
         Ok(()) => AppUpdateInstallResult {
             ok: true,
             install_started: true,
@@ -1059,8 +1064,41 @@ async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateI
             fallback_used,
             error: None,
         },
-        Err(error) => install_failure(format!("启动安装器失败：{error}")),
+        Err(error) => install_failure(error),
     }
+}
+
+#[cfg(target_os = "windows")]
+fn launch_verified_update(_update: &Update, bytes: Vec<u8>) -> Result<(), String> {
+    let installer = pending_package_path();
+    let cached_size = fs::metadata(&installer)
+        .map_err(|error| format!("读取 Windows updater 缓存失败：{error}"))?
+        .len();
+    if cached_size != bytes.len() as u64 {
+        return Err(format!(
+            "Windows updater 缓存大小不匹配：期望 {}，实际 {cached_size}",
+            bytes.len()
+        ));
+    }
+
+    // `tauri-plugin-updater` 2.10.1 ignores ShellExecuteW's return value and
+    // exits the running app even when Windows did not start the installer.
+    // The package has already passed the plugin's detached-signature check and
+    // our size/SHA checks. Launch the owned persistent cache file directly so
+    // CreateProcess errors are observable before the current app exits.
+    drop(bytes);
+    let _child = std::process::Command::new(&installer)
+        .args(WINDOWS_NSIS_INSTALL_ARGS)
+        .spawn()
+        .map_err(|error| format!("启动 Windows updater 失败：{error}"))?;
+    std::process::exit(0);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn launch_verified_update(update: &Update, bytes: Vec<u8>) -> Result<(), String> {
+    update
+        .install(bytes)
+        .map_err(|error| format!("启动安装器失败：{error}"))
 }
 
 fn stop_owned_runtime(state: &State<'_, AppState>) -> Result<(), String> {
