@@ -59,7 +59,7 @@
 - 无论 smoke 成败，最后 job 都把 release pause/0%。
 - 只删除超过保留策略且未被 D1 引用的旧 nightly；默认最近 7 个成功或 14 天。
 
-Nightly 工作流、交互式 runner、staging Tauri/Authenticode 身份和大部分 Environment 配置已经准备好。首个公开候选尚未获授权，Cloudflare CI token 尚未写入 Environment，因此工作流没有被触发，不能称为已经跑通。
+Nightly 工作流、交互式 runner、staging Tauri/Authenticode 身份和 Environment 配置已经准备好。首个公开候选尚未获授权，而且新增工作流尚未落到 GitHub 远端，因此工作流没有被触发，Cloudflare token 也尚未通过 Actions 实际验权，不能称为已经跑通。
 
 ## 6. 管理 CLI
 
@@ -83,4 +83,4 @@ release status
 - Staging vars：D1 名、控制 endpoint、镜像 origin、baseline EXE、timestamp URL、Nightly Runtime tag。
 - Production secrets 必须是另一套身份；Tauri 与 OS 代码签名不得与 D1 promotion 共用一个万能身份。
 
-截至 2026-08-23，`hot-update-staging` 已配置除 `CLOUDFLARE_API_TOKEN` 外的上述 secret/variable；`hot-update-production` 尚未创建或部署。配置完成不等于流水线验收，本轮没有触发任何公开 Release 或 Nightly。
+截至 2026-08-23，`hot-update-staging` 已配置上述 secret/variable，包括 `CLOUDFLARE_API_TOKEN`；GitHub 只会显示 secret 名称和更新时间，不能据此证明 token 内容及权限有效。`hot-update-production` 尚未创建或部署。本轮没有触发任何公开 Release 或 Nightly。
