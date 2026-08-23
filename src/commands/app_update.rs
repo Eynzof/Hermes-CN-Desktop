@@ -864,13 +864,13 @@ pub async fn app_update_check(app: AppHandle) -> AppUpdateCheckResult {
     result
 }
 
-fn set_in_flight(state: &State<'_, AppState>) -> Result<(), AppUpdateDownloadResult> {
-    let mut inner = match state.inner.lock() {
-        Ok(inner) => inner,
-        Err(error) => return Err(download_failure(format!("更新状态锁失败：{error}"))),
-    };
+fn set_in_flight(state: &State<'_, AppState>) -> Result<(), String> {
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|error| format!("更新状态锁失败：{error}"))?;
     if inner.app_update_in_flight {
-        return Err(download_failure("已有 Desktop 更新正在进行，请稍候"));
+        return Err("已有 Desktop 更新正在进行，请稍候".to_string());
     }
     inner.app_update_in_flight = true;
     Ok(())
@@ -887,8 +887,8 @@ pub async fn app_update_download(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<AppUpdateDownloadResult, AppError> {
-    if let Err(result) = set_in_flight(&state) {
-        return Ok(result);
+    if let Err(error) = set_in_flight(&state) {
+        return Ok(download_failure(error));
     }
     let result = run_download(&app).await;
     clear_in_flight(&state);
@@ -959,11 +959,8 @@ pub async fn app_update_install(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<AppUpdateInstallResult, AppError> {
-    if let Err(result) = set_in_flight(&state) {
-        return Ok(AppUpdateInstallResult {
-            error: result.error,
-            ..Default::default()
-        });
+    if let Err(error) = set_in_flight(&state) {
+        return Ok(install_failure(error));
     }
     let result = run_install(&app, &state).await;
     clear_in_flight(&state);
