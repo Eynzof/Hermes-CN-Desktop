@@ -218,6 +218,11 @@ fn build_hermesui_response(
 }
 
 fn main() {
+    #[cfg(windows)]
+    if commands::app_update::run_windows_updater_helper_if_requested() {
+        return;
+    }
+
     env_logger::init();
 
     // Windows: keep the WebView2 user-data folder (network cache, IndexedDB,

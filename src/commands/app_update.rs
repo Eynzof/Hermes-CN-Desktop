@@ -5,7 +5,11 @@
 //! GitHub Release URL. Download requests never inherit the control-plane bearer
 //! token, and only transport/429/5xx failures are eligible for GitHub fallback.
 
+#[cfg(target_os = "windows")]
+use std::ffi::{OsStr, OsString};
 use std::fs;
+#[cfg(target_os = "windows")]
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -39,7 +43,11 @@ const PENDING_PACKAGE_FILE: &str = "pending-update.exe";
 #[cfg(not(target_os = "windows"))]
 const PENDING_PACKAGE_FILE: &str = "pending-update.bin";
 #[cfg(target_os = "windows")]
-const WINDOWS_NSIS_INSTALL_ARGS: [&str; 4] = ["/P", "/R", "/UPDATE", "/ARGS"];
+const WINDOWS_NSIS_INSTALL_ARGS: [&str; 2] = ["/P", "/UPDATE"];
+#[cfg(target_os = "windows")]
+const WINDOWS_UPDATER_HELPER_FLAG: &str = "--hermes-windows-updater-helper";
+#[cfg(target_os = "windows")]
+const WINDOWS_UPDATER_HELPER_LOG: &str = "updater-helper.log";
 const MAX_UPDATER_BYTES: u64 = 480 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1085,12 +1093,27 @@ fn launch_verified_update(_update: &Update, bytes: Vec<u8>) -> Result<(), String
     // exits the running app even when Windows did not start the installer.
     // The package has already passed the plugin's detached-signature check and
     // our size/SHA checks. Launch the owned persistent cache file directly so
-    // CreateProcess errors are observable before the current app exits.
+    // CreateProcess errors are observable before the current app exits. A copy
+    // of the current executable acts as a tiny detached helper: it waits for
+    // this process, runs NSIS, checks its exit status, and relaunches the newly
+    // installed executable. Running the helper from the cache keeps the old
+    // mapped EXE from blocking NSIS replacement and avoids relying on NSIS
+    // RunAsUser, which is unavailable in disconnected/session-0 test contexts.
     drop(bytes);
-    let _child = std::process::Command::new(&installer)
-        .args(WINDOWS_NSIS_INSTALL_ARGS)
+    let current_exe =
+        std::env::current_exe().map_err(|error| format!("读取当前 Desktop 路径失败：{error}"))?;
+    let helper = updater_cache_dir().join(format!("updater-helper-{}.exe", std::process::id()));
+    fs::copy(&current_exe, &helper)
+        .map_err(|error| format!("准备 Windows updater helper 失败：{error}"))?;
+    let restart_args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    let _child = std::process::Command::new(&helper)
+        .arg(WINDOWS_UPDATER_HELPER_FLAG)
+        .arg(std::process::id().to_string())
+        .arg(&installer)
+        .arg(&current_exe)
+        .args(restart_args)
         .spawn()
-        .map_err(|error| format!("启动 Windows updater 失败：{error}"))?;
+        .map_err(|error| format!("启动 Windows updater helper 失败：{error}"))?;
     std::process::exit(0);
 }
 
@@ -1099,6 +1122,104 @@ fn launch_verified_update(update: &Update, bytes: Vec<u8>) -> Result<(), String>
     update
         .install(bytes)
         .map_err(|error| format!("启动安装器失败：{error}"))
+}
+
+#[cfg(target_os = "windows")]
+fn append_windows_updater_helper_log(path: &Path, message: &str) {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{timestamp} {message}");
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wait_for_windows_updater_parent(parent_pid: u32) -> Result<(), String> {
+    let pid = sysinfo::Pid::from_u32(parent_pid);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while process_snapshot().process(pid).is_some() {
+        if Instant::now() >= deadline {
+            return Err(format!("等待旧 Desktop 进程 {parent_pid} 退出超时"));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn run_windows_updater_helper(args: &[OsString], log_path: &Path) -> Result<(), String> {
+    if args.len() < 3 {
+        return Err("Windows updater helper 参数不足".to_string());
+    }
+    let parent_pid = args[0]
+        .to_string_lossy()
+        .parse::<u32>()
+        .map_err(|_| "Windows updater helper parent PID 无效".to_string())?;
+    let installer = PathBuf::from(&args[1]);
+    let app_exe = PathBuf::from(&args[2]);
+    if installer.extension() != Some(OsStr::new("exe")) || !installer.is_file() {
+        return Err(format!(
+            "Windows updater 安装器无效：{}",
+            installer.display()
+        ));
+    }
+    if app_exe.extension() != Some(OsStr::new("exe")) || !app_exe.is_file() {
+        return Err(format!("Windows Desktop 路径无效：{}", app_exe.display()));
+    }
+
+    wait_for_windows_updater_parent(parent_pid)?;
+    append_windows_updater_helper_log(log_path, "parent-exited");
+    let status = std::process::Command::new(&installer)
+        .args(WINDOWS_NSIS_INSTALL_ARGS)
+        .status()
+        .map_err(|error| format!("运行 Windows updater 失败：{error}"))?;
+    append_windows_updater_helper_log(log_path, &format!("installer-exit={status}"));
+
+    let restart = std::process::Command::new(&app_exe)
+        .args(&args[3..])
+        .spawn()
+        .map_err(|error| format!("重新启动 Desktop 失败：{error}"));
+    if !status.success() {
+        let restart_note = restart
+            .as_ref()
+            .map(|child| format!("；已尝试恢复 Desktop pid={}", child.id()))
+            .unwrap_or_else(|error| format!("；恢复 Desktop 也失败：{error}"));
+        return Err(format!("Windows updater 安装失败：{status}{restart_note}"));
+    }
+    let child = restart?;
+    append_windows_updater_helper_log(log_path, &format!("desktop-restarted={}", child.id()));
+    Ok(())
+}
+
+/// Handle the detached Windows updater-helper invocation before Tauri,
+/// WebView2, runtime-root locking, or the single-instance guard starts.
+#[cfg(target_os = "windows")]
+pub fn run_windows_updater_helper_if_requested() -> bool {
+    let mut process_args = std::env::args_os();
+    let _current_exe = process_args.next();
+    if process_args.next().as_deref() != Some(OsStr::new(WINDOWS_UPDATER_HELPER_FLAG)) {
+        return false;
+    }
+
+    let args: Vec<OsString> = process_args.collect();
+    let log_path = args
+        .get(1)
+        .map(PathBuf::from)
+        .and_then(|path| {
+            path.parent()
+                .map(|parent| parent.join(WINDOWS_UPDATER_HELPER_LOG))
+        })
+        .unwrap_or_else(|| std::env::temp_dir().join(WINDOWS_UPDATER_HELPER_LOG));
+    append_windows_updater_helper_log(&log_path, "helper-started");
+    match run_windows_updater_helper(&args, &log_path) {
+        Ok(()) => append_windows_updater_helper_log(&log_path, "helper-complete"),
+        Err(error) => {
+            append_windows_updater_helper_log(&log_path, &format!("helper-error={error}"))
+        }
+    }
+    true
 }
 
 fn stop_owned_runtime(state: &State<'_, AppState>) -> Result<(), String> {

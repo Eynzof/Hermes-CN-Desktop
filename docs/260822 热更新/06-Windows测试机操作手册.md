@@ -49,7 +49,7 @@ prototype.<pr>.<run>.<attempt>.3.badsig   坏签名负向候选
 
 先手工覆盖安装 `.1`，再让 `.1` 通过控制面升级到 `.2`；`.badsig` 只允许在重置到 `.1` 后验证拒绝下载，完成后立即 revoke。
 
-PR 内测试由 `hot-update-windows-test` label 触发。`hot-update-staging` Environment 必须先配置 required reviewer、关闭管理员绕过，并让 deployment branch rule 精确允许 `refs/pull/<PR>/merge`；只允许 `main` 还不足以放行 PR job。
+PR 内测试由 `hot-update-windows-test` label 触发。`hot-update-staging` Environment 必须先配置 required reviewer，并让 deployment branch rule 精确允许 `refs/pull/<PR>/merge`；只允许 `main` 还不足以放行 PR job。当前 staging 按仓库所有者决定保留管理员绕过，但本测试仍走普通 reviewer 批准并保留 deployment 记录，不调用绕过入口；production 不自动继承这项例外。
 
 ## 3. 网络预热
 
