@@ -11,14 +11,9 @@
     }
   ],
   "vars": {
-    "ENVIRONMENT": "staging"
+    "ENVIRONMENT": "staging",
+    "MIRROR_ORIGIN": "https://hot-update-download-staging.hermesagent.org.cn"
   },
-  "r2_buckets": [
-    {
-      "binding": "ARTIFACTS",
-      "bucket_name": "hermes-desktop-hot-update-staging"
-    }
-  ],
   "d1_databases": [
     {
       "binding": "UPDATES",

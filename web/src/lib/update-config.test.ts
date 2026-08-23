@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   defaultUpdateConfig,
   normalizeUpdateConfig,
+  parseUpdateInvitation,
   validateUpdateConfig,
 } from "./update-config";
 
@@ -33,6 +34,28 @@ describe("normalizeUpdateConfig", () => {
   });
 });
 
+describe("parseUpdateInvitation", () => {
+  it("accepts a restricted-ring invitation", () => {
+    expect(parseUpdateInvitation(JSON.stringify({
+      schemaVersion: 1,
+      endpoint: "https://hot-update-staging.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}",
+      channel: "prototype",
+      deviceId: "primelab-win",
+      token: "one-time-secret",
+    }))).toMatchObject({ channel: "prototype", deviceId: "primelab-win" });
+  });
+
+  it("rejects stable invitations", () => {
+    expect(() => parseUpdateInvitation(JSON.stringify({
+      schemaVersion: 1,
+      endpoint: "https://staging.example/v1/check/x",
+      channel: "stable",
+      deviceId: "device",
+      token: "secret",
+    }))).toThrow(/channel/);
+  });
+});
+
 describe("validateUpdateConfig", () => {
   it("accepts a valid config", () => {
     expect(validateUpdateConfig(defaultUpdateConfig())).toBeNull();
@@ -48,6 +71,12 @@ describe("validateUpdateConfig", () => {
     const cfg = defaultUpdateConfig();
     cfg.shellUpdaterEndpoint = "http://insecure.example/check";
     expect(validateUpdateConfig(cfg)).toContain("https");
+  });
+
+  it("rejects an external HTTPS updater control host", () => {
+    const cfg = defaultUpdateConfig();
+    cfg.shellUpdaterEndpoint = "https://evil.example/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}";
+    expect(validateUpdateConfig(cfg)).toContain("Hermes Cloudflare");
   });
 
   it("rejects out-of-range timeouts", () => {

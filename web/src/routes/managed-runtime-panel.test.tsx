@@ -14,6 +14,17 @@ vi.mock("@/hooks/use-app-update", () => ({
       compatible: true,
     })),
   }),
+  useAppUpdateDownload: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(async () => ({
+      ok: true,
+      ready: true,
+      version: "0.8.0",
+      manifestSource: "cloudflare-control",
+      downloadSource: "cloudflare-cache",
+      fallbackUsed: false,
+    })),
+  }),
   useAppUpdateInstall: () => ({
     isPending: false,
     mutateAsync: vi.fn(async () => ({ ok: true, installStarted: true })),
@@ -79,6 +90,8 @@ function stubWindow(overrides: Record<string, unknown> = {}) {
     },
     hermesDesktop: {
       appUpdateCheck: vi.fn(),
+      appUpdateDownload: vi.fn(),
+      appUpdatePending: vi.fn(),
       appUpdateInstall: vi.fn(),
       uiCheckUpdate: vi.fn(),
       uiInstallUpdate: vi.fn(),
@@ -116,7 +129,7 @@ describe("ManagedRuntimePanel — signed shell update buttons", () => {
   });
 
   it("hides the UI hot-update buttons when the ui bridge is missing", () => {
-    stubWindow({ hermesDesktop: { appUpdateCheck: vi.fn(), appUpdateInstall: vi.fn(), getDesktopControlState: vi.fn() } });
+    stubWindow({ hermesDesktop: { appUpdateCheck: vi.fn(), appUpdateDownload: vi.fn(), appUpdateInstall: vi.fn(), getDesktopControlState: vi.fn() } });
     const html = ReactDOMServer.renderToStaticMarkup(<ManagedRuntimePanel />);
     expect(html).not.toContain("UI 热更新");
     expect(html).not.toContain("检查界面更新");

@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, PackageX, Play, RefreshCw, RotateCcw, Settings2, Square, Trash2 } from "lucide-react";
-import type { RuntimeControlResult, UpdateConfig } from "@hermes/protocol";
+import type { RuntimeControlResult, UpdateConfig, UpdateCredentialStatus } from "@hermes/protocol";
 import { Alert, Button, LoadingIndicator } from "@hermes/shared-ui";
 import { resolveManagedRuntimePresentation } from "@/lib/managed-runtime-presentation";
 import { useConfirm } from "@/lib/use-confirm";
 import { runtime } from "@/lib/runtime";
 import {
   defaultUpdateConfig,
+  getUpdateCredentialStatus,
   getUpdateConfig,
   hasUpdateConfigBridge,
+  importUpdateInvitation,
   normalizeUpdateConfig,
   setUpdateConfig,
   validateUpdateConfig,
 } from "@/lib/update-config";
 import { parseAppUpdateCheckResult } from "@/lib/app-update";
-import { useAppUpdateCheck, useAppUpdateInstall } from "@/hooks/use-app-update";
+import { useAppUpdateCheck, useAppUpdateDownload, useAppUpdateInstall } from "@/hooks/use-app-update";
 import { useHotUpdateBackend } from "@/hooks/use-hot-update-backend";
 import { useRuntimeInfo } from "@/hooks/use-runtime-update";
 import { useUiUpdateCheck, useUiUpdateInstall, useUiUpdateRollback } from "@/hooks/use-ui-update";
@@ -40,6 +42,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
 
   // --- Signed shell update (target bundled Core checked by compatibility matrix) ---
   const appCheck = useAppUpdateCheck();
+  const appDownload = useAppUpdateDownload();
   const appInstall = useAppUpdateInstall();
   const hotUpdate = useHotUpdateBackend();
   const uiCheck = useUiUpdateCheck();
@@ -54,7 +57,11 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
   const [cfgLoaded, setCfgLoaded] = useState(false);
   const [cfgSaving, setCfgSaving] = useState(false);
   const [cfgError, setCfgError] = useState<string | null>(null);
-  const updateBridgeReady = Boolean(desktop?.appUpdateCheck && desktop?.appUpdateInstall);
+  const [invitationText, setInvitationText] = useState("");
+  const [credentialStatus, setCredentialStatus] = useState<UpdateCredentialStatus | null>(null);
+  const updateBridgeReady = Boolean(
+    desktop?.appUpdateCheck && desktop?.appUpdateDownload && desktop?.appUpdateInstall,
+  );
   // Track B UI hot update — a pure web-asset swap, independent of the kernel.
   const uiBridgeReady = Boolean(desktop?.uiCheckUpdate && desktop?.uiInstallUpdate && desktop?.uiRollback);
   const managed = runtime.isManaged();
@@ -65,6 +72,9 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
       const snapshot = await getUpdateConfig();
       setCfgDraft(normalizeUpdateConfig(snapshot.config));
       setCfgError(snapshot.configError ?? null);
+      if (window.hermesDesktop?.getUpdateCredentialStatus) {
+        setCredentialStatus(await getUpdateCredentialStatus());
+      }
       setCfgLoaded(true);
     } catch (error) {
       setCfgError(error instanceof Error ? error.message : String(error));
@@ -103,23 +113,58 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
   const handleInstallUpdate = useCallback(async () => {
     const ok = await confirm({
       title: "更新 Hermes Desktop",
-      body: "将下载并校验新版 Desktop 安装包。当前 Core 不会被预先修改；新版启动后再按兼容矩阵处理其内置 Core。安装期间应用会退出。确定继续吗？",
-      confirmLabel: "立即更新",
+      body: "将先下载完整 Desktop 包并校验 Tauri 签名与 SHA-256。下载完成前不会停止当前 Runtime。确定继续吗？",
+      confirmLabel: "下载并验证",
       danger: false,
     });
     if (!ok) return;
     setMessage(null);
     try {
-      const result = await appInstall.mutateAsync();
-      if (!result.ok) {
-        setMessage({ tone: "error", text: result.error ?? "更新失败" });
+      const downloaded = await appDownload.mutateAsync();
+      if (!downloaded.ok) {
+        setMessage({ tone: "error", text: downloaded.error ?? "更新包下载失败" });
         return;
       }
-      setMessage({ tone: "ok", text: "签名验证通过，安装器已启动…" });
+      const source = downloaded.downloadSource === "github-release" ? "GitHub 回退源" : "Cloudflare 缓存";
+      const installNow = await confirm({
+        title: "更新包已准备好",
+        body: `签名验证通过，实际下载源：${source}。立即安装会停止本应用管理的 Runtime 并退出；也可以稍后再安装。`,
+        confirmLabel: "立即重启安装",
+        cancelLabel: "稍后",
+        danger: false,
+      });
+      if (!installNow) {
+        setMessage({ tone: "ok", text: `更新包已缓存（${source}），可稍后继续安装` });
+        return;
+      }
+      const installed = await appInstall.mutateAsync();
+      if (!installed.ok) {
+        setMessage({ tone: "error", text: installed.error ?? "启动安装器失败" });
+        return;
+      }
+      setMessage({ tone: "ok", text: "授权已复核，安装器已启动…" });
     } catch (error) {
       setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     }
-  }, [appInstall, confirm]);
+  }, [appDownload, appInstall, confirm]);
+
+  const handleImportInvitation = useCallback(async () => {
+    setCfgSaving(true);
+    setCfgError(null);
+    try {
+      const saved = await importUpdateInvitation(invitationText);
+      setCfgDraft(normalizeUpdateConfig(saved.config));
+      setInvitationText("");
+      setCredentialStatus(await getUpdateCredentialStatus());
+      setMessage({ tone: "ok", text: "邀请配置已导入，令牌已写入系统凭据库" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCfgError(message);
+      setMessage({ tone: "error", text: message });
+    } finally {
+      setCfgSaving(false);
+    }
+  }, [invitationText]);
 
   const handleSaveUpdateConfig = useCallback(async (testConnection: boolean) => {
     setCfgSaving(true);
@@ -460,10 +505,10 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
                 tone="accent"
                 onClick={() => void handleInstallUpdate()}
                 disabled={
-                  anyBusy || appCheck.isPending || appInstall.isPending || lastCheck === null || lastCheck === "incompatible" || lastCheck === "latest"
+                  anyBusy || appCheck.isPending || appDownload.isPending || appInstall.isPending || lastCheck === null || lastCheck === "incompatible" || lastCheck === "latest"
                 }
               >
-                {appInstall.isPending ? <LoadingIndicator size="xs" /> : <Download size={12} />}
+                {appDownload.isPending || appInstall.isPending ? <LoadingIndicator size="xs" /> : <Download size={12} />}
                 一键更新
               </Button>
               <Button
@@ -516,7 +561,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
         <div className={s.updateSource}>
           <p className={s.updateSourceTitle}>更新下载源（update-config.json）</p>
           <p className={s.updateSourceHint}>
-            壳更新使用 Tauri 动态端点；Runtime 仍使用独立签名清单。内测设备令牌只从 HERMES_SHELL_UPDATE_TOKEN 读取，不写入配置文件。
+            壳更新清单来自 Cloudflare 控制面，安装包优先走 Cloudflare 缓存并可按规则回退 GitHub。令牌只保存在系统凭据库，不写入 update-config.json。
           </p>
           <label className={s.fieldLabel}>
             channel
@@ -525,7 +570,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
               value={cfgDraft.channel}
               onChange={(e) => setCfgDraft((c) => ({ ...c, channel: e.target.value }))}
             >
-              {["stable", "beta", "canary"].map((ch) => (
+              {["stable", "beta", "canary", "prototype"].map((ch) => (
                 <option key={ch} value={ch}>{ch}</option>
               ))}
             </select>
@@ -536,9 +581,31 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
               className={s.fieldInput}
               value={cfgDraft.shellUpdaterEndpoint}
               onChange={(e) => setCfgDraft((c) => ({ ...c, shellUpdaterEndpoint: e.target.value }))}
-              placeholder="https://staging.example.workers.dev/v1/check/{{target}}/{{arch}}/{{current_version}}"
+              placeholder="https://staging.example.workers.dev/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}"
             />
           </label>
+          <label className={s.fieldLabel}>
+            deviceId（非密钥）
+            <input
+              className={s.fieldInput}
+              value={cfgDraft.deviceId}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, deviceId: e.target.value }))}
+              placeholder="稳定渠道首次检查时自动生成；内测由邀请配置提供"
+            />
+          </label>
+          <label className={s.fieldLabel}>
+            一次性邀请配置（JSON）
+            <textarea
+              className={s.fieldInput}
+              rows={5}
+              value={invitationText}
+              onChange={(e) => setInvitationText(e.target.value)}
+              placeholder='{"schemaVersion":1,"endpoint":"https://.../v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}","channel":"canary","deviceId":"...","token":"..."}'
+            />
+          </label>
+          <p className={s.updateSourceHint}>
+            凭据状态：{credentialStatus?.configured ? "已配置（系统凭据库）" : "未配置或不可读取"}
+          </p>
           <label className={s.fieldLabel}>
             releaseManifestUrl（旧清单兼容保留）
             <input
@@ -581,6 +648,13 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             <Alert tone="error" size="sm">{cfgError ?? cfgValidationError}</Alert>
           )}
           <div className={s.actions}>
+            <Button
+              variant="outline"
+              onClick={() => void handleImportInvitation()}
+              disabled={cfgSaving || !invitationText.trim()}
+            >
+              导入邀请配置
+            </Button>
             <Button
               variant="outline"
               onClick={() => void handleSaveUpdateConfig(false)}

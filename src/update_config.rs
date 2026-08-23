@@ -39,9 +39,14 @@ pub const DEFAULT_RUNTIME_BASE_URL: &str = "https://desktop.hermesagent.org.cn/r
 pub const DEFAULT_CHANNEL: &str = "stable";
 pub const DEFAULT_TIMEOUT_SECONDS: u64 = 10;
 const UPDATE_CONFIG_FILE: &str = "update-config.json";
-const ALLOWED_CHANNELS: &[&str] = &["stable", "beta", "canary"];
+const ALLOWED_CHANNELS: &[&str] = &["stable", "beta", "canary", "prototype"];
 const MIN_TIMEOUT_SECONDS: u64 = 1;
 const MAX_TIMEOUT_SECONDS: u64 = 300;
+const UPDATE_TOKEN_SERVICE: &str = "cn.org.hermesagent.desktop.hot-update";
+const UPDATE_CONTROL_HOSTS: &[&str] = &[
+    "hot-update-staging.hermesagent.org.cn",
+    "hot-update.hermesagent.org.cn",
+];
 
 /// A mirror entry shown in the settings UI. Only the two URL fields are
 /// functionally used today; mirrors exist so users can flip the whole source
@@ -63,6 +68,9 @@ pub struct UpdateMirror {
 pub struct UpdateConfig {
     pub schema_version: u32,
     pub channel: String,
+    /// Opaque installation/device identifier. The bearer token is deliberately
+    /// kept out of this file and stored in the operating-system credential store.
+    pub device_id: String,
     /// Tauri dynamic updater endpoint. Empty by default so prototype builds
     /// never contact or mutate the public stable update path accidentally.
     pub shell_updater_endpoint: String,
@@ -79,10 +87,17 @@ pub struct UpdateConfig {
 
 impl Default for UpdateConfig {
     fn default() -> Self {
+        let baked_channel = option_env!("HERMES_BAKED_UPDATE_CHANNEL")
+            .filter(|channel| ALLOWED_CHANNELS.contains(channel))
+            .unwrap_or(DEFAULT_CHANNEL);
+        let baked_shell_endpoint = option_env!("HERMES_BAKED_SHELL_UPDATE_ENDPOINT")
+            .unwrap_or("")
+            .trim();
         Self {
             schema_version: UPDATE_CONFIG_SCHEMA_VERSION,
-            channel: DEFAULT_CHANNEL.to_string(),
-            shell_updater_endpoint: String::new(),
+            channel: baked_channel.to_string(),
+            device_id: String::new(),
+            shell_updater_endpoint: baked_shell_endpoint.to_string(),
             release_manifest_url: DEFAULT_RELEASE_MANIFEST_URL.to_string(),
             runtime_base_url: DEFAULT_RUNTIME_BASE_URL.to_string(),
             runtime_manifest_url: String::new(),
@@ -143,6 +158,9 @@ pub fn apply_env_overrides(base: &UpdateConfig) -> UpdateConfig {
     let mut cfg = base.clone();
     if let Some(v) = read_env_trimmed("HERMES_UPDATE_CHANNEL") {
         cfg.channel = v;
+    }
+    if let Some(v) = read_env_trimmed("HERMES_UPDATE_DEVICE_ID") {
+        cfg.device_id = v;
     }
     if let Some(v) = read_env_trimmed("HERMES_SHELL_UPDATE_ENDPOINT") {
         cfg.shell_updater_endpoint = v;
@@ -226,7 +244,19 @@ pub fn validate(config: &UpdateConfig) -> Result<(), String> {
             config.channel
         ));
     }
-    validate_https_optional(&config.shell_updater_endpoint, "shellUpdaterEndpoint")?;
+    validate_shell_updater_endpoint(&config.shell_updater_endpoint)?;
+    if !config.device_id.is_empty() {
+        if config.device_id.len() > 128 {
+            return Err("deviceId 不能超过 128 个字符".to_string());
+        }
+        if !config
+            .device_id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        {
+            return Err("deviceId 只能包含字母、数字、点、下划线和连字符".to_string());
+        }
+    }
     validate_https_optional(&config.release_manifest_url, "releaseManifestUrl")?;
     validate_https_optional(&config.runtime_base_url, "runtimeBaseUrl")?;
     validate_https_optional(&config.runtime_manifest_url, "runtimeManifestUrl")?;
@@ -259,6 +289,35 @@ fn validate_https_optional(value: &str, label: &str) -> Result<(), String> {
         Ok(u) => Err(format!("{label} 必须是 https 地址，当前是 {}", u.scheme())),
         Err(e) => Err(format!("{label} 不是有效 URL：{}", e)),
     }
+}
+
+pub fn validate_shell_updater_endpoint(value: &str) -> Result<(), String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+    let endpoint = url::Url::parse(trimmed)
+        .map_err(|error| format!("shellUpdaterEndpoint 不是有效 URL：{error}"))?;
+    let segments = endpoint
+        .path_segments()
+        .map(|items| items.collect::<Vec<_>>())
+        .unwrap_or_default();
+    if endpoint.scheme() != "https"
+        || !UPDATE_CONTROL_HOSTS.contains(&endpoint.host_str().unwrap_or_default())
+        || !endpoint.username().is_empty()
+        || endpoint.password().is_some()
+        || endpoint.query().is_some()
+        || endpoint.fragment().is_some()
+        || segments.len() != 6
+        || segments[0] != "v1"
+        || segments[1] != "check"
+    {
+        return Err(
+            "shellUpdaterEndpoint 必须是 Hermes Cloudflare 控制域名的 /v1/check/{channel}/{target}/{arch}/{current_version} https 模板"
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 /// Atomically persist the config: write a temp sibling then rename over the
@@ -343,6 +402,104 @@ pub fn set_update_config(input: SetUpdateConfigInput) -> Result<UpdateConfigSnap
     save(&config)?;
     let load = UpdateConfigLoad::ok(apply_env_overrides(&config));
     Ok(snapshot(&load))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportUpdateInvitationInput {
+    pub schema_version: u32,
+    pub endpoint: String,
+    pub channel: String,
+    pub device_id: String,
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCredentialStatus {
+    pub configured: bool,
+    pub device_id: String,
+    pub channel: String,
+    pub storage: String,
+}
+
+fn credential_entry(device_id: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(UPDATE_TOKEN_SERVICE, device_id)
+        .map_err(|error| format!("系统凭据库不可用：{error}"))
+}
+
+pub fn read_device_token(device_id: &str) -> Result<Option<String>, String> {
+    if device_id.trim().is_empty() {
+        return Ok(None);
+    }
+    match credential_entry(device_id)?.get_password() {
+        Ok(token) if !token.trim().is_empty() => Ok(Some(token)),
+        Ok(_) => Ok(None),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(error) => Err(format!("读取系统凭据库失败：{error}")),
+    }
+}
+
+fn validate_invitation(input: &ImportUpdateInvitationInput) -> Result<(), String> {
+    if input.schema_version != 1 {
+        return Err(format!(
+            "邀请配置 schemaVersion 必须为 1，当前是 {}",
+            input.schema_version
+        ));
+    }
+    if !matches!(input.channel.as_str(), "prototype" | "canary" | "beta") {
+        return Err("邀请配置只允许 prototype / canary / beta".to_string());
+    }
+    if input.device_id.trim().is_empty() || input.token.trim().is_empty() {
+        return Err("邀请配置缺少 deviceId 或 token".to_string());
+    }
+    let candidate = UpdateConfig {
+        channel: input.channel.clone(),
+        device_id: input.device_id.clone(),
+        shell_updater_endpoint: input.endpoint.clone(),
+        ..UpdateConfig::default()
+    };
+    validate(&candidate)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn import_update_invitation(
+    input: ImportUpdateInvitationInput,
+) -> Result<UpdateConfigSnapshot, String> {
+    validate_invitation(&input)?;
+    let mut config = load().config;
+    config.schema_version = UPDATE_CONFIG_SCHEMA_VERSION;
+    config.channel = input.channel;
+    config.device_id = input.device_id.trim().to_string();
+    config.shell_updater_endpoint = input.endpoint.trim().to_string();
+
+    credential_entry(&config.device_id)?
+        .set_password(input.token.trim())
+        .map_err(|error| format!("写入系统凭据库失败：{error}"))?;
+    save(&config)?;
+    Ok(snapshot(&UpdateConfigLoad::ok(apply_env_overrides(
+        &config,
+    ))))
+}
+
+#[tauri::command]
+pub fn get_update_credential_status() -> UpdateCredentialStatus {
+    let config = load().config;
+    let configured = if config.channel == "stable" {
+        !config.device_id.trim().is_empty()
+    } else {
+        read_device_token(&config.device_id)
+            .ok()
+            .flatten()
+            .is_some()
+    };
+    UpdateCredentialStatus {
+        configured,
+        device_id: config.device_id,
+        channel: config.channel,
+        storage: "system-credential-store".to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -468,6 +625,18 @@ mod tests {
     }
 
     #[test]
+    fn validation_rejects_external_control_host() {
+        let cfg = UpdateConfig {
+            shell_updater_endpoint:
+                "https://evil.example/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}"
+                    .to_string(),
+            ..UpdateConfig::default()
+        };
+        let err = validate(&cfg).unwrap_err();
+        assert!(err.contains("Hermes Cloudflare 控制域名"), "{err}");
+    }
+
+    #[test]
     fn validation_rejects_unknown_channel() {
         let cfg = UpdateConfig {
             channel: "nightly".to_string(),
@@ -475,6 +644,35 @@ mod tests {
         };
         let err = validate(&cfg).unwrap_err();
         assert!(err.contains("channel"), "{}", err);
+    }
+
+    #[test]
+    fn validation_accepts_prototype_channel() {
+        let cfg = UpdateConfig {
+            channel: "prototype".to_string(),
+            ..UpdateConfig::default()
+        };
+        validate(&cfg).unwrap();
+    }
+
+    #[test]
+    fn invitation_never_places_token_in_update_config() {
+        let invitation = ImportUpdateInvitationInput {
+            schema_version: 1,
+            endpoint: "https://hot-update-staging.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}".to_string(),
+            channel: "canary".to_string(),
+            device_id: "device-001".to_string(),
+            token: "super-secret".to_string(),
+        };
+        validate_invitation(&invitation).unwrap();
+        let config = UpdateConfig {
+            channel: invitation.channel,
+            device_id: invitation.device_id,
+            shell_updater_endpoint: invitation.endpoint,
+            ..UpdateConfig::default()
+        };
+        let serialized = serde_json::to_string(&config).unwrap();
+        assert!(!serialized.contains("super-secret"));
     }
 
     #[test]

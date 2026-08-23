@@ -381,6 +381,7 @@ export interface UpdateMirror {
 export interface UpdateConfig {
   schemaVersion: number;
   channel: string;
+  deviceId: string;
   shellUpdaterEndpoint: string;
   releaseManifestUrl: string;
   runtimeBaseUrl: string;
@@ -403,10 +404,28 @@ export interface UpdateConfigSnapshot {
   effectiveRuntimePublicKeyPem?: string;
 }
 
+export interface ImportUpdateInvitationInput {
+  schemaVersion: number;
+  endpoint: string;
+  channel: "prototype" | "canary" | "beta";
+  deviceId: string;
+  token: string;
+}
+
+export interface UpdateCredentialStatus {
+  configured: boolean;
+  deviceId: string;
+  channel: string;
+  storage: "system-credential-store" | string;
+}
+
 export interface AppUpdateProgressPayload {
   phase: string;
   percent: number;
   message: string;
+  manifestSource?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
 }
 
 export interface AppUpdateCheckResult {
@@ -420,13 +439,37 @@ export interface AppUpdateCheckResult {
   targetRuntimeVersion?: string;
   releaseId?: string;
   channel?: string;
+  manifestSource?: string;
   notes?: string;
+  error?: string;
+}
+
+export interface AppUpdateDownloadResult {
+  ok: boolean;
+  ready: boolean;
+  version?: string;
+  releaseId?: string;
+  manifestSource?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
+  error?: string;
+}
+
+export interface AppUpdatePendingResult {
+  ready: boolean;
+  version?: string;
+  releaseId?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
   error?: string;
 }
 
 export interface AppUpdateInstallResult {
   ok: boolean;
   installStarted: boolean;
+  manifestSource?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
   error?: string;
 }
 

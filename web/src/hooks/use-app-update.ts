@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import type {
   AppUpdateCheckResult,
+  AppUpdateDownloadResult,
   AppUpdateInstallResult,
   AppUpdateProgressPayload,
 } from "@hermes/protocol";
@@ -35,7 +36,11 @@ function hasAppUpdateBridge(): boolean {
   return (
     typeof window !== "undefined" &&
     runtime.platform !== "web" &&
-    Boolean(window.hermesDesktop?.appUpdateCheck && window.hermesDesktop?.appUpdateInstall)
+    Boolean(
+      window.hermesDesktop?.appUpdateCheck &&
+      window.hermesDesktop?.appUpdateDownload &&
+      window.hermesDesktop?.appUpdateInstall,
+    )
   );
 }
 
@@ -55,10 +60,28 @@ export function useAppUpdateCheck() {
   });
 }
 
+/** Download and verify the authorised package without starting the installer. */
+export function useAppUpdateDownload() {
+  const setUpdating = useSetAtom(runtimeUpdatingAtom);
+  return useMutation<AppUpdateDownloadResult>({
+    mutationFn: () => {
+      if (!window.hermesDesktop?.appUpdateDownload) {
+        throw new Error("当前版本不支持预下载更新包");
+      }
+      return window.hermesDesktop.appUpdateDownload();
+    },
+    onMutate: () => {
+      setUpdating({ active: true, mode: "app-update", progress: [] });
+    },
+    onSettled: () => {
+      setUpdating({ active: false });
+    },
+  });
+}
+
 /**
- * One-shot signed shell update. Tauri downloads the candidate, verifies its
- * updater signature, and starts the platform installer. The running Core is
- * deliberately left untouched before the shell installer begins.
+ * Apply a previously verified package. The Rust side rechecks rollout
+ * authorisation before stopping the managed Runtime and starting the installer.
  */
 export function useAppUpdateInstall() {
   const setUpdating = useSetAtom(runtimeUpdatingAtom);
@@ -80,7 +103,10 @@ export function useAppUpdateInstall() {
   }, [setUpdating]);
 
   return useMutation<AppUpdateInstallResult>({
-    mutationFn: () => window.hermesDesktop!.appUpdateInstall!(),
+    mutationFn: () => {
+      if (!window.hermesDesktop?.appUpdateInstall) throw new Error("更新桥接不可用");
+      return window.hermesDesktop.appUpdateInstall();
+    },
     onMutate: () => {
       setUpdating({ active: true, mode: "app-update", progress: [] });
     },

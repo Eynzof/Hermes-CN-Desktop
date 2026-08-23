@@ -4,7 +4,12 @@
 // Mirrors `src/commands/app_update.rs`. Version comparison reuses the semver
 // helpers from `desktop-update.ts` so the two update UIs never disagree.
 
-import type { AppUpdateCheckResult, AppUpdateInstallResult } from "@hermes/protocol";
+import type {
+  AppUpdateCheckResult,
+  AppUpdateDownloadResult,
+  AppUpdateInstallResult,
+  AppUpdatePendingResult,
+} from "@hermes/protocol";
 import { compareDesktopVersions, normalizeDesktopVersion } from "./desktop-update";
 import { DESKTOP_VERSION } from "./build-info";
 
@@ -21,6 +26,7 @@ export interface ParsedAppUpdateCheck {
   targetRuntimeVersion?: string;
   releaseId?: string;
   channel?: string;
+  manifestSource?: string;
   notes?: string;
   error?: string;
 }
@@ -41,6 +47,7 @@ export function parseAppUpdateCheckResult(result: AppUpdateCheckResult): ParsedA
       targetRuntimeVersion: result.targetRuntimeVersion,
       releaseId: result.releaseId,
       channel: result.channel,
+      manifestSource: result.manifestSource,
       notes: result.notes,
       error: result.error ?? "应用更新检查失败",
     };
@@ -57,6 +64,7 @@ export function parseAppUpdateCheckResult(result: AppUpdateCheckResult): ParsedA
     targetRuntimeVersion: result.targetRuntimeVersion,
     releaseId: result.releaseId,
     channel: result.channel,
+    manifestSource: result.manifestSource,
     notes: result.notes,
     error: result.error,
   };
@@ -65,7 +73,11 @@ export function parseAppUpdateCheckResult(result: AppUpdateCheckResult): ParsedA
 export function hasAppUpdateBridge(): boolean {
   return (
     typeof window !== "undefined" &&
-    Boolean(window.hermesDesktop?.appUpdateCheck && window.hermesDesktop?.appUpdateInstall)
+    Boolean(
+      window.hermesDesktop?.appUpdateCheck &&
+      window.hermesDesktop?.appUpdateDownload &&
+      window.hermesDesktop?.appUpdateInstall,
+    )
   );
 }
 
@@ -97,4 +109,18 @@ export async function installAppUpdate(): Promise<AppUpdateInstallResult> {
     throw new Error("当前环境没有一键更新能力");
   }
   return window.hermesDesktop.appUpdateInstall();
+}
+
+export async function downloadAppUpdate(): Promise<AppUpdateDownloadResult> {
+  if (!window.hermesDesktop?.appUpdateDownload) {
+    throw new Error("当前环境没有预下载更新能力");
+  }
+  return window.hermesDesktop.appUpdateDownload();
+}
+
+export async function getPendingAppUpdate(): Promise<AppUpdatePendingResult> {
+  if (!window.hermesDesktop?.appUpdatePending) {
+    return { ready: false, fallbackUsed: false };
+  }
+  return window.hermesDesktop.appUpdatePending();
 }

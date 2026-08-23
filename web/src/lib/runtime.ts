@@ -476,7 +476,11 @@ declare global {
       checkDesktopUpdate?(): Promise<DesktopUpdateManifestFetchResult>;
       getUpdateConfig?(): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
       setUpdateConfig?(config: import("@hermes/protocol").UpdateConfig): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
+      importUpdateInvitation?(input: import("@hermes/protocol").ImportUpdateInvitationInput): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
+      getUpdateCredentialStatus?(): Promise<import("@hermes/protocol").UpdateCredentialStatus>;
       appUpdateCheck?(): Promise<import("@hermes/protocol").AppUpdateCheckResult>;
+      appUpdatePending?(): Promise<import("@hermes/protocol").AppUpdatePendingResult>;
+      appUpdateDownload?(): Promise<import("@hermes/protocol").AppUpdateDownloadResult>;
       appUpdateInstall?(): Promise<import("@hermes/protocol").AppUpdateInstallResult>;
       onAppUpdateProgress?(handler: (payload: import("@hermes/protocol").AppUpdateProgressPayload) => void): () => void;
       /** Track B UI hot update: signed web-dist zip swap without restarting the
