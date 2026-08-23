@@ -11,6 +11,7 @@ import { useGateway } from "@/hooks/use-gateway";
 import { rememberSessionModelOverride } from "@/lib/session-model-override";
 import type { ComposerModelSelection } from "@/components/chat/composer-types";
 import { invalidateModelOptionsCache } from "@/lib/model-options-cache";
+import { readUiValue, writeUiValue } from "@/lib/ui-store";
 
 export interface UseModelSwitchRequest {
   sessionId: string;
@@ -20,15 +21,36 @@ export interface UseModelSwitchRequest {
   currentSelection: ComposerModelSelection;
 }
 
+const LOCAL_MODEL_CONFIG_KEY = "hermes.active-model-config";
+
+export function readLocalModelConfig(): { model?: string; provider?: string } | null {
+  return readUiValue<{ model?: string; provider?: string } | null>(LOCAL_MODEL_CONFIG_KEY, null);
+}
+
+function writeLocalModelConfig(model: string, provider?: string): void {
+  writeUiValue(LOCAL_MODEL_CONFIG_KEY, { model, provider: provider ?? null });
+}
+
 async function persistGlobalDefault(
   model: string,
   provider?: string,
 ): Promise<void> {
-  // In production this lands in HERMES_HOME/config.yaml via a Rust command.
-  await invoke("set_model_config", {
-    model,
-    provider: provider ?? null,
-  });
+  const hasNativeBridge = typeof window !== "undefined" && (window.__TAURI_INTERNALS__ || window.hermesDesktop);
+  if (hasNativeBridge) {
+    // In the Tauri shell this lands in HERMES_HOME/config.yaml via a Rust
+    // command. In standalone (no-backend) mode below, keep the selection in
+    // the renderer's local UI store so the model-config UI still works.
+    await invoke("set_model_config", {
+      model,
+      provider: provider ?? null,
+    });
+    return;
+  }
+  persistLocalModelConfig(model, provider);
+}
+
+function persistLocalModelConfig(model: string, provider?: string): void {
+  writeLocalModelConfig(model, provider);
 }
 
 async function persistSessionOverride(

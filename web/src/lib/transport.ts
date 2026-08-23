@@ -3,7 +3,7 @@ import { runtime } from "./runtime";
 import { debugBus } from "./debug-bus";
 import { activeProfileAtom } from "@/stores/ui";
 import { AttachmentUploadResult, type HaRequestInput, type HaRequestResult } from "@hermes/protocol";
-import { getDashboardHandler, type DashboardHandler } from "./dashboard-router";
+import { getDashboardHandler, getLocalOnlyDashboardHandler, type DashboardHandler } from "./dashboard-router";
 import { uploadAttachment } from "./dashboard-local";
 import { assertCompatible } from "./version-check";
 import type { DownloadExternalImageInput, DownloadedImageResult } from "./runtime";
@@ -83,8 +83,26 @@ export async function raceAbort<T>(work: Promise<T>, signal?: AbortSignal | null
 }
 
 function shouldUseLocalDashboard(path: string, method = "GET"): DashboardHandler | undefined {
-  if (!runtime.isManaged()) return undefined;
-  return getDashboardHandler(path, method);
+  // Standalone web app (run.py — no Tauri shell, no Python backend):
+  // 1. Check the local-only registry first for routes that have a browser-
+  //    specific fallback (profiles, model/info, analytics, skills, logs).
+  // 2. Fall back to the main registry for pure handlers that don't call
+  //    window.hermesDesktop.* (status, config, env, themes, etc.).
+  // 3. Routes that DO call window.hermesDesktop.* (fs/list, upload, media,
+  //    mcp-servers, providers/oauth) will fail in browser mode, but that's
+  //    acceptable — those features require native OS access.
+  if (runtime.isLocalOnly()) {
+    return (
+      getLocalOnlyDashboardHandler(path, method) ??
+      getDashboardHandler(path, method)
+    );
+  }
+  // Managed desktop (Tauri shell with bundled runtime): the main registry
+  // short-circuits the Python REST proxy for routes the TS side can serve.
+  if (runtime.isManaged()) {
+    return getDashboardHandler(path, method);
+  }
+  return undefined;
 }
 
 function shouldUseNativeIpc(path: string): boolean {

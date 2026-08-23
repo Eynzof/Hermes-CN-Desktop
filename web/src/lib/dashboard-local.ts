@@ -34,6 +34,13 @@ function isManagedDesktop(): boolean {
   return runtime.isManaged() && typeof window !== "undefined" && !!window.hermesDesktop;
 }
 
+/** Standalone web app (run.py): no Tauri shell, no Python dashboard. The
+ *  local-only registry serves these routes; never fall through to fetchJSON
+ *  or the handler re-enters itself in an infinite async loop. */
+function isLocalOnlyWeb(): boolean {
+  return runtime.isLocalOnly();
+}
+
 export async function listFs(path: string): Promise<FsListResponse> {
   if (isManagedDesktop() && window.hermesDesktop?.fsList) {
     return FsListResponse.parse(await window.hermesDesktop.fsList(path));
@@ -69,12 +76,18 @@ export async function getActiveProfile(): Promise<ActiveProfileResponse> {
   if (isManagedDesktop() && window.hermesDesktop?.getActiveProfile) {
     return ActiveProfileResponse.parse(await window.hermesDesktop.getActiveProfile());
   }
+  if (isLocalOnlyWeb()) {
+    return ActiveProfileResponse.parse({ active: "default", current: "default" });
+  }
   return fetchJSON<ActiveProfileResponse>("/api/profiles/active", undefined, ActiveProfileResponse);
 }
 
 export async function setActiveProfile(name: string): Promise<ActiveProfileResponse> {
   if (isManagedDesktop() && window.hermesDesktop?.setActiveProfile) {
     return ActiveProfileResponse.parse(await window.hermesDesktop.setActiveProfile({ name }));
+  }
+  if (isLocalOnlyWeb()) {
+    return ActiveProfileResponse.parse({ active: name, current: name });
   }
   return fetchJSON<ActiveProfileResponse>(
     "/api/profiles/active",

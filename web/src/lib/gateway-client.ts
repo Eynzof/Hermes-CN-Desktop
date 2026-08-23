@@ -1,6 +1,11 @@
 import { parseGatewayEvent, type GatewayEvent } from "@hermes/protocol";
 import { runtime } from "./runtime";
 import { assertCompatible, resetVersionCheck } from "./version-check";
+// Static import so getGatewayClient stays synchronous — it has dozens of
+// call sites that use it immediately (`.on()`, `.state`, `.request()`).
+// The module is already in the managed-mode bundle (dashboard-handlers
+// imports LOCAL_MODEL_CATALOG from it), so this adds no dead weight there.
+import { GatewayInProcessTransport } from "./gateway-inprocess";
 
 export type ConnectionState = "idle" | "connecting" | "open" | "closed" | "error";
 
@@ -536,7 +541,13 @@ import { createGatewaySocket } from "./gateway-socket-path";
 
 export function getGatewayClient(): GatewayClientLike {
   if (instance) return instance;
-  instance = new GatewayClient(createGatewaySocket);
+  if (runtime.isLocalOnly()) {
+    // Standalone (no-backend) mode: dispatch JSON-RPC to the in-process
+    // transport instead of opening a WebSocket to a Python gateway.
+    instance = new GatewayClient(() => new GatewayInProcessTransport() as unknown as WebSocket);
+  } else {
+    instance = new GatewayClient(createGatewaySocket);
+  }
   return instance;
 }
 

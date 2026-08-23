@@ -770,6 +770,19 @@ export const runtime = {
     return this.getConnectionMode() === "managed";
   },
 
+  /** True when running the standalone web app (plain browser via run.py, no
+   *  Tauri shell and no attached Python dashboard): the in-process TS agent
+   *  is the only runtime, so the gateway must use the in-process transport
+   *  and the dashboard REST layer must resolve locally. */
+  isLocalOnly(): boolean {
+    // Guard for non-browser test environments (Node/jsdom without a window)
+    // where accessing `window` would throw a ReferenceError. In those
+    // environments the desktop is never in standalone-browser mode.
+    if (typeof window === "undefined") return false;
+    if (this.platform !== "web") return false;
+    return !window.__HERMES_RUNTIME__;
+  },
+
   /** True when the desktop is attached to a loopback Hermes Agent CLI dashboard. */
   isLocalConnection(): boolean {
     return this.getConnectionMode() === "local";

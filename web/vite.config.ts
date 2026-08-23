@@ -355,6 +355,49 @@ async function filteredDashboardResponse(
   return { status: upstream.status, contentType, body };
 }
 
+function hermesLlmProxyPlugin(): Plugin {
+  // CORS-free proxy for LLM API calls from the browser. The local-agent's
+  // callRemoteModel routes /chat/completions through this proxy to avoid
+  // cross-origin restrictions when calling e.g. api.kimi.com directly.
+  return {
+    name: "hermes-dev-llm-proxy",
+    configureServer(server) {
+      server.middlewares.use("/__llm_proxy", async (req, res) => {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        const target = url.searchParams.get("target");
+        if (!target) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ message: "missing target query" }));
+          return;
+        }
+        // Collect request body
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+        }
+        const body = Buffer.concat(chunks);
+        try {
+          const upstream = await fetch(target, {
+            method: req.method ?? "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}),
+            },
+            body: body.length > 0 ? body : undefined,
+          });
+          res.statusCode = upstream.status;
+          res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
+          const respBody = await upstream.text();
+          res.end(respBody);
+        } catch (err) {
+          res.statusCode = 502;
+          res.end(JSON.stringify({ message: err instanceof Error ? err.message : String(err) }));
+        }
+      });
+    },
+  };
+}
+
 function hermesSessionArchivePlugin(): Plugin {
   return {
     name: "hermes-dev-session-archive",
@@ -407,7 +450,7 @@ export default defineConfig({
   // Packaged Tauri builds load web/dist through a custom protocol, so asset
   // URLs must stay relative instead of resolving to tauri://localhost/assets/*.
   base: "./",
-  plugins: [react(), hermesTokenPlugin(), hermesSessionLogPlugin(), hermesSessionArchivePlugin()],
+  plugins: [react(), hermesTokenPlugin(), hermesSessionLogPlugin(), hermesLlmProxyPlugin(), hermesSessionArchivePlugin()],
   define: {
     "import.meta.env.VITE_HERMES_BUILD_COMMIT": JSON.stringify(gitShortCommit()),
     "import.meta.env.VITE_HERMES_BUILD_DATE": JSON.stringify(gitCommitDate()),

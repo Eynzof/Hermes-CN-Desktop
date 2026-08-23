@@ -29,7 +29,7 @@ describe("GatewayTransport contract", () => {
     ws.close();
   });
 
-  it("GatewayInProcessTransport opens and reports not-implemented on send", async () => {
+  it("GatewayInProcessTransport opens and dispatches JSON-RPC locally", async () => {
     const transport = new GatewayInProcessTransport();
     const opened = await new Promise<boolean>((resolve) => {
       transport.onopen = () => resolve(true);
@@ -37,14 +37,27 @@ describe("GatewayTransport contract", () => {
     expect(opened).toBe(true);
     expect(transport.readyState).toBe(1);
 
-    const error = await new Promise<unknown>((resolve) => {
-      transport.onerror = (ev) => resolve(ev);
-      transport.send('{"jsonrpc":"2.0"}');
-    });
-    if (typeof ErrorEvent !== "undefined" && error instanceof ErrorEvent) {
-      expect((error as ErrorEvent).error).toBeInstanceOf(Error);
-    } else {
-      expect(error).toBeInstanceOf(Event);
-    }
+    const request = (json: string) =>
+      new Promise<unknown>((resolve) => {
+        transport.onmessage = (ev) => resolve(JSON.parse(ev.data));
+        transport.send(json);
+      });
+
+    // Known method — local catalog response.
+    const ok = (await request('{"jsonrpc":"2.0","id":"w1","method":"model.options","params":{}}')) as {
+      id: string;
+      result: { providers?: unknown[] };
+    };
+    expect(ok.id).toBe("w1");
+    expect(Array.isArray(ok.result?.providers)).toBe(true);
+    expect(ok.result!.providers!.length).toBeGreaterThan(0);
+
+    // Unknown method — JSON-RPC error frame.
+    const bad = (await request('{"jsonrpc":"2.0","id":"w2","method":"does.not.exist","params":{}}')) as {
+      id: string;
+      error?: { code: number; message: string };
+    };
+    expect(bad.id).toBe("w2");
+    expect(bad.error?.code).toBe(-32000);
   });
 });

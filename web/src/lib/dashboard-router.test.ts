@@ -3,9 +3,12 @@ import {
   clearDashboardRegistry,
   createDashboardRouter,
   getDashboardHandler,
+  getLocalOnlyDashboardHandler,
   listDashboardRoutes,
   registerDashboardHandler,
   registerDashboardPrefixHandler,
+  registerLocalOnlyHandler,
+  registerLocalOnlyPrefixHandler,
   unregisterDashboardHandler,
 } from "./dashboard-router";
 
@@ -60,5 +63,42 @@ describe("dashboard-router", () => {
     expect(getDashboardHandler("/api/memory/providers/foo/status", "GET")?.(ctx)).toBe("memory");
     expect(getDashboardHandler("/api/memory/providers", "GET")?.(ctx)).toBe("memory");
     expect(getDashboardHandler("/api/other", "GET")).toBeUndefined();
+  });
+
+  it("strips the query string before exact matching", () => {
+    registerDashboardHandler("/api/logs", () => ({ file: "agent", lines: [] }));
+    expect(getDashboardHandler("/api/logs?file=errors&lines=50", "GET")?.(ctx)).toEqual({ file: "agent", lines: [] });
+  });
+
+  it("strips the query string before prefix matching", () => {
+    registerDashboardPrefixHandler("/api/sessions", () => "sessions", "GET");
+    expect(getDashboardHandler("/api/sessions/abc/messages?limit=10", "GET")?.(ctx)).toBe("sessions");
+  });
+});
+
+describe("local-only registry (run.py browser fallback)", () => {
+  beforeEach(() => {
+    clearDashboardRegistry();
+  });
+
+  it("serves handlers registered in the local-only registry", () => {
+    registerLocalOnlyHandler("/api/profiles", () => ({ profiles: [] }));
+    expect(getLocalOnlyDashboardHandler("/api/profiles")?.(ctx)).toEqual({ profiles: [] });
+  });
+
+  it("is not consulted by getDashboardHandler (managed mode)", () => {
+    registerLocalOnlyHandler("/api/profiles", () => ({ profiles: [] }));
+    expect(getDashboardHandler("/api/profiles")).toBeUndefined();
+  });
+
+  it("supports prefix handlers", () => {
+    registerLocalOnlyPrefixHandler("/api/profiles/", () => "soul", "GET");
+    expect(getLocalOnlyDashboardHandler("/api/profiles/foo/soul", "GET")?.(ctx)).toBe("soul");
+    expect(getLocalOnlyDashboardHandler("/api/profiles", "GET")).toBeUndefined();
+  });
+
+  it("strips query strings too", () => {
+    registerLocalOnlyHandler("/api/logs", () => ({ file: "agent", lines: [] }));
+    expect(getLocalOnlyDashboardHandler("/api/logs?file=errors&lines=50", "GET")?.(ctx)).toEqual({ file: "agent", lines: [] });
   });
 });
