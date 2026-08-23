@@ -1,127 +1,94 @@
-# 05. Tauri 客户端状态机与回滚
+# 05. Tauri 客户端状态机、回退与回滚
 
-## 1. 为什么改用 Tauri 官方 updater
-
-Desktop 壳更新现在使用 `tauri-plugin-updater`，不再由项目脚本自行下载并调用安装器。官方插件负责版本比较、下载、detached signature 校验和平台安装行为，项目代码只增加：动态内测端点、设备鉴权、兼容矩阵、UI 进度和发布元数据检查。
-
-参考：[Tauri Updater 官方文档](https://v2.tauri.app/plugin/updater/)；[Windows 安装包签名说明](https://v2.tauri.app/distribute/sign/windows/)。
-
-## 2. 客户端信任边界
+## 1. 状态机
 
 ```text
-HTTPS 域名证书
-  ↓ 保护传输
-Bearer device token
-  ↓ 决定这台设备是否能看到/下载候选
-Tauri updater public key
-  ↓ 验证安装包确实由发布方签过
-Desktop↔Core compatibility matrix
-  ↓ 验证包内版本组合能运行
-Windows Authenticode / macOS code signing
-  ↓ 操作系统确认发布者与二进制身份
+idle
+  → check-control
+  → 204 / unauthorised / incompatible → idle（不发现 GitHub）
+  → authorised
+  → 用户确认
+  → download-cloudflare
+      → 可回退网络错误 → download-github（完整重下）
+      → 签名/SHA/格式/权限错误 → failed
+  → verified-pending
+  → 用户“立即重启安装”或“稍后”
+  → recheck-control
+  → stop-owned-runtime
+  → launch-tauri-installer
+  → process-exit / relaunch
 ```
 
-四层互不替代。设备 token 泄漏不能伪造签名包；Tauri 私钥安全也不能弥补错误的版本兼容声明；Tauri 签名也不能替代 Windows SmartScreen 需要的 Authenticode 信誉。
+对应 Rust commands：`app_update_check`、`app_update_pending`、`app_update_download`、`app_update_install`。
 
-## 3. 配置
+## 2. 检查阶段
 
-`tauri.conf.json` 中：
+- endpoint 必须是 HTTPS `/v1/check/` 模板。
+- restricted ring 从系统凭据库读取 token；环境变量只用于 CI/旧原型迁移。
+- stable 首次生成随机 installation ID 并持久化。
+- Tauri 拿到响应后继续验证 metadata schema、channel、release ID、GitHub allowlist、Desktop↔Core、Runtime revision、大小和 tag/version。
+- `manifestSource` 固定报告 `cloudflare-control`。
 
-- 内置 staging updater 公钥；
-- `endpoints` 为空，避免原型构建自动访问公开 stable；
-- `createUpdaterArtifacts: true`；
-- Windows `installMode: passive`。
+自动检查：启动后 60 秒一次；此后每 12 小时一次，每次抖动 ±30 分钟。仍保留手动检查。
 
-运行时端点优先从 `HERMES_SHELL_UPDATE_ENDPOINT` 读取，也可来自 schema 2 的 `update-config.json.shellUpdaterEndpoint`。端点必须是 HTTPS。
+## 3. 下载阶段与 GitHub 回退分类
 
-内测模板：
+下载前清空 `Update.headers`，因此控制请求的 Authorization、device/install ID 都不会进入镜像或 GitHub。
+
+允许回退：
+
+- Reqwest/Network 传输错误、DNS/TLS/连接超时。
+- HTTP 429。
+- HTTP 5xx。
+- 没有可判定 HTTP status 的网络错误。
+
+禁止回退：
+
+- 控制面 204、401、403。
+- 下载 401、403、404。
+- metadata/兼容矩阵/allowlist 错误。
+- Tauri Minisign 错误、SHA/大小错误、安装包格式错误。
+
+回退只替换同一个 `Update` 的下载 URL，为固定 tag 的 `githubFallbackUrl`。两个来源均由 Tauri updater 验证同一 detached signature；下载后再核对 SHA-256 和大小。
+
+当前 Tauri 2.10.1 没有本方案需要的真正断点续传。Cloudflare 下载失败后，GitHub 从 0 开始重下完整包；差分/续传不阻塞本次上线。
+
+## 4. Pending 与 Windows 恢复
+
+验证成功后只写本应用 runtime root 下的：
 
 ```text
-HERMES_SHELL_UPDATE_ENDPOINT=https://hot-update-staging.hermesagent.org.cn/v1/check/{{target}}/{{arch}}/{{current_version}}
-HERMES_SHELL_UPDATE_TOKEN=<per-device token>
+desktop-updater-cache/pending.json
+desktop-updater-cache/pending-update.bin
 ```
 
-token 只从环境/未来的 OS 凭据存储进入 updater 请求，不写入 `update-config.json`。
+下次启动可恢复“立即重启/稍后”。清理只允许这个精确子目录，禁止通配删除 `%LOCALAPPDATA%`、Tauri 全局缓存或其他应用目录。若 pending 版本已等于当前版本，视为安装成功后的陈旧缓存并清理。
 
-## 4. 状态机
+## 5. 安装前复核
 
-```mermaid
-stateDiagram-v2
-  [*] --> Idle
-  Idle --> Checking: 用户检查更新
-  Checking --> Latest: 204 / 没有更高版本
-  Checking --> Rejected: 未授权 / 元数据缺失 / 版本不兼容
-  Checking --> Available: 更高版本且兼容
-  Available --> Confirming: 用户点击一键更新
-  Confirming --> Checking: 安装前重新检查
-  Checking --> Downloading: 候选仍有效
-  Downloading --> Verifying: 下载完成
-  Verifying --> Installing: Tauri 签名有效
-  Verifying --> Failed: 签名或内容无效
-  Installing --> Restarting: 安装器接管
-  Restarting --> Idle: 新版本启动
-  Downloading --> Failed: 网络/授权/磁盘失败
-  Failed --> Idle: 记录错误，可重试
-```
+用户选择安装时，客户端再次访问控制面：
 
-安装前重新检查非常重要：用户第一次看到候选后，管理员可能已经暂停它。第二次检查能在下载前收回许可。
+- release 已 pause/revoke、设备被禁用、灰度不再命中或控制面不可达，均不安装。
+- pending 文件 SHA/size 必须仍与记录一致。
+- 只停止当前 Desktop 拥有的 managed Runtime/WS relay，再启动 detached updater。
+- 其他同应用实例由安装期精确路径策略处理，不做进程名大范围终止。
 
-## 5. 进度和错误语义
+## 6. 进度与诊断
 
-Rust 通过 `app-update-progress` 发送：
+检查、下载和事件都携带：
 
-| phase | 百分比范围 | 含义 |
-|---|---:|---|
-| `check` | 1–2 | 初始化 updater、重新获取候选、检查 metadata/兼容矩阵 |
-| `download` | 8–90 | 下载字节进度；无 Content-Length 时保持最近值 |
-| `verify-signature` | 92 | 下载结束，Tauri 正在验签/准备安装 |
-| `install` | 100 | 平台安装器已启动 |
+- `manifestSource`
+- `downloadSource`：`cloudflare-cache` 或 `github-release`
+- `fallbackUsed`
+- `releaseId/channel/version`
 
-当前实现一次只允许一个壳更新。网络失败、401、无候选、签名错误、安装器错误均回到 UI，不改变当前 Runtime；安装流程开始前不会先替换 Core。
+UI 在下载完成后明确显示实际来源；事件接口记录最小来源和错误分类，token 永不进入日志或配置文件。
 
-## 6. 暂停、撤销与“回滚”
+## 7. 回滚策略
 
-### 6.1 尚未升级的设备
+- **未安装**：pause/revoke/0% 立即阻止新设备安装。
+- **已安装且能启动**：不自动降级；制作更高版本号的前向修复，从 prototype 重新灰度。
+- **Runtime/UI**：继续使用本地 previous pointer，独立于 Desktop 壳版本。
+- **壳完全无法启动**：提供上一稳定版人工恢复安装包和操作说明；这是灾难恢复，不是假装自动回滚。
 
-将 release 改为 `paused` 且比例设为 `0`：
-
-- 检查返回 `204`；
-- 对应 artifact 路由返回 `404`；
-- 即使用户之前看见过候选，安装前的重新检查也会阻断；
-- 已经建立的单个下载响应或已经完整下载并启动的安装器无法远程收回。
-
-### 6.2 已经升级的设备
-
-不自动下发低版本。桌面安装通常会迁移配置和数据，降级后的旧代码未必能读取新结构；攻击者也可能利用降级重新引入已修漏洞。
-
-正确处理：
-
-1. 立即暂停问题 release；
-2. 保持新版本的数据格式向后/向前兼容，禁止破坏性迁移；
-3. 从最后已知良好提交制作一个**更高 Desktop 版本号**的前向修复；
-4. 用相同 canary 顺序重新发布；
-5. 只有在应用完全无法启动且有专门灾难恢复包时，才人工执行受控降级，并先备份用户数据。
-
-### 6.3 Runtime/UI
-
-Runtime 与 UI 使用自己的本地版本目录和 previous 指针，可以在 Desktop 不变时回退上一版。壳发布暂停不会自动改动这两条轨道；事故处理必须明确是哪条轨道出问题。
-
-## 7. 失败场景与预期结果
-
-| 场景 | 客户端结果 | 服务端动作 |
-|---|---|---|
-| token 缺失/错误 | 401，UI 显示检查失败 | 检查设备是否误禁用；不泄露 release 信息 |
-| ring 没有候选/比例未命中 | 204，显示已是最新 | 无 |
-| Core 元数据与矩阵不符 | 显示不兼容，一键更新禁用 | 修正构建，不允许只改 D1 元数据掩盖错误 |
-| 下载中网络中断 | 当前版继续运行，可重试 | 查看 Range/错误率；必要时暂停 |
-| 安装包被改动 | Tauri 验签失败，不安装 | 立即暂停，核对 R2 回读 SHA 和签名顺序 |
-| 安装后无法启动 | watchdog/人工检测失败 | 暂停，制作前向修复；保留数据和 Runtime 证据 |
-| 控制面不可达 | 当前版继续运行 | 不应阻塞应用启动；按网络灾备切换域名/镜像 |
-
-## 8. 生产前还要补的客户端能力
-
-- 将设备 token 迁移到 Credential Manager/Keychain，并支持轮换。
-- 上报不含隐私内容的阶段性结果：check/download/verify/install/relaunch，以及 release ID 和匿名设备 ID。
-- 新版本首次启动写“升级完成”标记；若连续启动失败，提供人工恢复入口，不自动静默降级。
-- 将 staging 和 production 公钥/域名彻底分离；正式包不能信任 staging 私钥。
-- 明确代理、系统证书、超时、限速和断点续传在三大平台上的行为。
+不要把同一 SemVer 的 GitHub 资产覆盖成另一份字节，也不要把 beta D1 记录改名为 stable。签名、SHA 和客户端版本比较都要求版本化资产不可变。
