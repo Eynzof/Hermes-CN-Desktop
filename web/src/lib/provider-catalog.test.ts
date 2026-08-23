@@ -41,7 +41,7 @@ beforeEach(() => {
 
 describe("builtin provider catalog", () => {
   it("ships the current Kimi and SiliconFlow coding models", () => {
-    expect(BUILTIN_PROVIDER_CATALOG_VERSION).toBe("2026.07.26.1");
+    expect(BUILTIN_PROVIDER_CATALOG_VERSION).toBe("2026.08.23.1");
 
     const kimi = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "kimi-for-coding");
     expect(kimi).toMatchObject({
@@ -75,6 +75,22 @@ describe("builtin provider catalog", () => {
         }),
       ]),
     );
+  });
+
+  it("ships Wander as the recommended desktop-managed provider", () => {
+    const wander = BUILTIN_PROVIDER_CATALOG.providers.find(
+      (provider) => provider.id === "wander",
+    );
+
+    expect(wander).toMatchObject({
+      baseUrl: "https://inference-staging.wanderminds.ai/v1",
+      apiMode: "chat_completions",
+      defaultModel: "wander-beta",
+      managedCredential: true,
+      recommended: true,
+      supportsModelListing: true,
+    });
+    expect(providerHasSavedCredentials({}, "wander", {}, wander)).toBe(true);
   });
 });
 

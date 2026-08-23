@@ -587,6 +587,16 @@ function noticeTextFromParts(parts: HermesMessagePart[]): string | undefined {
   return normalizeContent(text);
 }
 
+function recoveryActionFromParts(
+  parts: HermesMessagePart[],
+): "wander_topup" | undefined {
+  return parts.some(
+    (part) => part.type === "notice" && part.action === "wander_topup",
+  )
+    ? "wander_topup"
+    : undefined;
+}
+
 function imagesFromParts(parts: HermesMessagePart[]): ChatImageItem[] | undefined {
   const images = parts
     .filter((part): part is HermesImagePart => part.type === "image")
@@ -847,6 +857,7 @@ export function hermesUIMessageToChatMessage(msg: HermesUIMessage): ChatMessage 
     blocks,
     status: msg.status,
     error: msg.status === "error" || messageHasErrorNotice(msg),
+    recoveryAction: recoveryActionFromParts(msg.parts),
     stats: deriveAssistantStats(msg),
   };
 }

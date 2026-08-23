@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
+import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ChevronRight, Info, Volume2, VolumeX } from "lucide-react";
 import { LoadingIndicator } from "@hermes/shared-ui";
 import { assistantAvatarEffectiveAtom, assistantDisplayNameAtom, showReasoningAtom } from "@/stores/ui";
@@ -782,6 +783,7 @@ interface MessageBubbleProps {
 }
 
 function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
+  const navigate = useNavigate();
   const showReasoning = useAtomValue(showReasoningAtom);
   const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
   const assistantAvatarDataUrl = useAtomValue(assistantAvatarEffectiveAtom);
@@ -856,6 +858,15 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
             ) : (
               <SystemNoticeText text={text} />
             )}
+            {message.recoveryAction === "wander_topup" ? (
+              <button
+                type="button"
+                className={s.systemNoticeAction}
+                onClick={() => navigate("/portal")}
+              >
+                充值并继续
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

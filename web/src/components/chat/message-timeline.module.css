@@ -206,6 +206,23 @@
   overflow-wrap: anywhere;
 }
 
+.systemNoticeAction {
+  appearance: none;
+  min-height: 32px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--h-accent);
+  background: var(--h-accent);
+  color: var(--h-accent-contrast);
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.systemNoticeAction:hover {
+  filter: brightness(1.04);
+}
+
 /* 长系统通知的「展开全文 / 收起」轻量动作。 */
 .systemNoticeToggle {
   align-self: flex-start;

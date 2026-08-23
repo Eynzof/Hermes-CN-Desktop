@@ -304,6 +304,15 @@ fn main() {
             window_builder.build()?;
             let bundled_resource_dir = app.path().resource_dir().ok();
 
+            // Start the process-local credential broker before the managed Core.
+            // Its random capability is inherited only by this desktop-owned
+            // process tree and is never persisted in HERMES_HOME.
+            if let Err(error) = tauri::async_runtime::block_on(
+                commands::wander_token_broker::start_token_broker(),
+            ) {
+                log::warn!("Wander token broker unavailable; Wander provider disabled: {error}");
+            }
+
             // Focus channel for the single-instance guard: consume any stale
             // request from a previous run, then watch for new ones. Armed
             // before dashboard bootstrap so a second launch gets its focus
@@ -655,6 +664,16 @@ fn main() {
             commands::connection_auth::connection_password_login,
             commands::connection_auth::connection_auth_me,
             commands::connection_auth::connection_oauth_logout,
+            commands::wanderminds_id::wanderminds_id_login,
+            commands::wanderminds_id::wanderminds_id_refresh,
+            commands::wanderminds_id::wanderminds_id_status,
+            commands::wanderminds_id::wanderminds_id_logout,
+            commands::wander_portal::wander_portal_account_state,
+            commands::wander_portal::wander_portal_plans,
+            commands::wander_portal::wander_portal_redeem_invite,
+            commands::wander_portal::wander_portal_create_checkout,
+            commands::wander_portal::wander_portal_order,
+            commands::wander_portal::wander_portal_usage,
             commands::backup::backup_export_profile,
             commands::backup::backup_import_profile,
             commands::browser_companion::open_browser_companion,

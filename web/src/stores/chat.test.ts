@@ -791,6 +791,37 @@ describe("full conversation lifecycle", () => {
       { type: "notice", level: "error", text: "rate limit exceeded" },
     ]);
   });
+
+  it("Wander credit wall exposes a Portal top-up recovery action", () => {
+    let rt = reduceGatewayEvent(
+      createEmptyChatRuntime(1),
+      { type: "message.start", session_id: "s1" },
+      10,
+    );
+
+    rt = reduceGatewayEvent(rt, {
+      type: "message.complete",
+      session_id: "s1",
+      payload: {
+        status: "error",
+        error: "payment required",
+        billing: {
+          provider: "wander",
+          billing_url: "https://portal-staging.wanderminds.ai/portal",
+        },
+      },
+    }, 20);
+
+    expect(rt.streamStatus).toBe("error");
+    expect(systemMessage(rt).parts).toEqual([
+      {
+        type: "notice",
+        level: "error",
+        text: "Wander 额度已用完。充值后回到这里即可继续使用，无需重启。",
+        action: "wander_topup",
+      },
+    ]);
+  });
 });
 
 describe("markStreamsReconnectingAtom", () => {

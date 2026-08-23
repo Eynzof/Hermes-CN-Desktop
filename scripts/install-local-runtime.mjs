@@ -67,19 +67,39 @@ function capture(command, args, options = {}) {
   return result.stdout.trim();
 }
 
-function findPython() {
+function readMinimumPython() {
+  const pyproject = readFileSync(join(sourceRoot, "pyproject.toml"), "utf8");
+  const requirement = pyproject.match(/^requires-python\s*=\s*"([^"]+)"/m)?.[1] ?? ">=3.11";
+  const minimum = requirement.match(/>=\s*(\d+)\.(\d+)/);
+  if (!minimum) {
+    throw new Error(`Unsupported requires-python constraint in Core pyproject.toml: ${requirement}`);
+  }
+  return {
+    major: Number(minimum[1]),
+    minor: Number(minimum[2]),
+    requirement,
+  };
+}
+
+function findPython(minimum) {
+  const exactBinary = `python${minimum.major}.${minimum.minor}`;
   const candidates = [
     process.env.PYTHON,
     process.platform === "win32" ? "python" : "python3",
     "python",
+    exactBinary,
   ].filter(Boolean);
-  for (const candidate of candidates) {
+  for (const candidate of [...new Set(candidates)]) {
     const version = capture(candidate, ["-c", "import sys; print('.'.join(map(str, sys.version_info[:2])))"]);
     if (!version) continue;
     const [major, minor] = version.split(".").map(Number);
-    if (major > 3 || (major === 3 && minor >= 11)) return candidate;
+    if (major > minimum.major || (major === minimum.major && minor >= minimum.minor)) {
+      return candidate;
+    }
   }
-  throw new Error("Python 3.11+ was not found. Set PYTHON=/path/to/python3.11 and retry.");
+  throw new Error(
+    `Python ${minimum.requirement} was not found. Set PYTHON=/path/to/${exactBinary} and retry.`,
+  );
 }
 
 function dataDir() {
@@ -236,7 +256,8 @@ if (force || existsSync(target)) {
 
 mkdirSync(target, { recursive: true });
 
-const python = findPython();
+const minimumPython = readMinimumPython();
+const python = findPython(minimumPython);
 const venv = join(target, "venv");
 
 console.log(`Installing local Hermes-CN-Core runtime`);

@@ -91,6 +91,28 @@ describe("protocol schemas", () => {
     expect(parsed.metadata?.persistedId).toBe(42);
   });
 
+  it("preserves Wander top-up actions on error notices", () => {
+    const parsed = HermesUIMessageSchema.parse(uiMessage({
+      role: "system",
+      status: "error",
+      parts: [
+        {
+          type: "notice",
+          level: "error",
+          text: "Wander 额度已用完",
+          action: "wander_topup",
+        },
+      ],
+    }));
+
+    expect(hermesUIMessageToChatMessage(parsed)).toEqual(
+      expect.objectContaining({
+        error: true,
+        recoveryAction: "wander_topup",
+      }),
+    );
+  });
+
   it("keeps MessagesResponse compatible with legacy messages and optional ui_messages", () => {
     const legacy = MessagesResponse.parse({
       session_id: "s1",

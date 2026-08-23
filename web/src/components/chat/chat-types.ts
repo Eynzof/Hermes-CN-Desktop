@@ -37,5 +37,6 @@ export interface ChatMessage {
   status?: "streaming" | "complete" | "error";
   title?: string;
   error?: boolean;
+  recoveryAction?: "wander_topup";
   stats?: AssistantMessageStats;
 }

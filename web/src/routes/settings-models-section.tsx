@@ -810,7 +810,8 @@ export function ModelsSection() {
   const selectedProviderIsLocal = selectedProvider
     ? isLocalProviderBaseUrl(providerForm.baseUrl || selectedProvider.baseUrl)
     : false;
-  const selectedProviderCanOmitApiKey = selectedProviderIsLocal;
+  const selectedProviderManaged = selectedProvider?.managedCredential === true;
+  const selectedProviderCanOmitApiKey = selectedProviderIsLocal || selectedProviderManaged;
   const customBaseUrl = customForm.baseUrl.trim();
   const customBaseUrlValid = !customBaseUrl || isValidProviderBaseUrl(customBaseUrl);
   const duplicateBaseUrlProvider = useMemo(() => {
@@ -1014,7 +1015,9 @@ export function ModelsSection() {
   // Base URL 的语义随接口格式变化（Anthropic 自动补 /v1/messages，OpenAI 补
   // /chat/completions），把最终请求端点直接摆给用户看，避免手改 URL 踩坑。
   const selectedProviderEndpointPreview = selectedProvider
-    ? chatEndpointPreviewUrl(selectedProvider.apiMode, providerForm.baseUrl.trim() || selectedProvider.baseUrl)
+    ? selectedProviderManaged
+      ? ""
+      : chatEndpointPreviewUrl(selectedProvider.apiMode, providerForm.baseUrl.trim() || selectedProvider.baseUrl)
     : "";
   const selectedProviderIsCurrent = Boolean(
     selectedProvider &&
@@ -1160,7 +1163,7 @@ export function ModelsSection() {
     provider: ProviderPreset,
     explicitApiKey: string,
   ) => {
-    if (provider.id.startsWith("custom:")) return;
+    if (provider.id.startsWith("custom:") || provider.managedCredential) return;
 
     const canonicalKey = provider.apiKeyLabel.trim();
     if (!isWritableProviderEnvKey(canonicalKey)) return;
@@ -1551,7 +1554,7 @@ export function ModelsSection() {
               当前独立 runtime 的 Hermes home 还没有可用模型。请选择一个服务商，粘贴 API Key，点击「保存配置」，再点击「设为当前模型」。
             </p>
           </div>
-          <span>推荐从 DeepSeek 开始 · <a href="https://platform.deepseek.com/" target="_blank" rel="noreferrer" className={s.link}>DeepSeek 开放平台 ↗</a></span>
+          <span>推荐从 Wander 开始 · <button type="button" className={s.inlineLinkButton} onClick={() => navigate("/portal")}>登录并查看额度 →</button></span>
         </div>
       )}
       {envLoadWarning && (
@@ -1715,7 +1718,11 @@ export function ModelsSection() {
                       </div>
                       <div className={s.providerHeaderActions}>
                         <span className={s.statusBadge} data-on={selectedHasCredentials}>
-                          {selectedHasCredentials ? "已保存密钥" : "未设置"}
+                          {selectedProviderManaged
+                            ? "Wanderminds ID"
+                            : selectedHasCredentials
+                              ? "已保存密钥"
+                              : "未设置"}
                         </span>
                         {(selectedProvider.promotion?.url || selectedProvider.websiteUrl) && (
                           <Button
@@ -1759,29 +1766,43 @@ export function ModelsSection() {
                       </div>
                     )}
 
+                    {selectedProviderManaged && (
+                      <div className={s.managedProviderNotice}>
+                        <div>
+                          <strong>桌面端托管凭据</strong>
+                          <p>无需填写 API Key。managed Core 通过本机短期令牌代理调用 Wander，不会持久化 Wanderminds Refresh Token。</p>
+                        </div>
+                        <Button type="button" variant="outline" onClick={() => navigate("/portal")}>打开 Wander Portal</Button>
+                      </div>
+                    )}
+
                     <div className={s.providerFormGrid}>
-                      <Field label={selectedProvider.apiKeyLabel} className={s.fieldRow}>
-                        <Input
-                          mono
-                          type="password"
-                          value={providerForm.apiKey}
-                          placeholder={
-                            selectedHasCredentials
-                              ? selectedProviderCredentialPreview ?? "已保存"
-                              : selectedProviderCanOmitApiKey
-                                ? "本地服务一般可留空"
-                                : "粘贴 API Key"
-                          }
-                          onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
-                        />
-                      </Field>
-                      <Field label="Base URL" className={s.fieldRow}>
-                        <Input
-                          mono
-                          value={providerForm.baseUrl}
-                          onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
-                        />
-                      </Field>
+                      {!selectedProviderManaged && (
+                        <>
+                          <Field label={selectedProvider.apiKeyLabel} className={s.fieldRow}>
+                            <Input
+                              mono
+                              type="password"
+                              value={providerForm.apiKey}
+                              placeholder={
+                                selectedHasCredentials
+                                  ? selectedProviderCredentialPreview ?? "已保存"
+                                  : selectedProviderCanOmitApiKey
+                                    ? "本地服务一般可留空"
+                                    : "粘贴 API Key"
+                              }
+                              onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
+                            />
+                          </Field>
+                          <Field label="Base URL" className={s.fieldRow}>
+                            <Input
+                              mono
+                              value={providerForm.baseUrl}
+                              onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                            />
+                          </Field>
+                        </>
+                      )}
                       {selectedProviderEndpointPreview && (
                         <div className={s.modelPickerHint}>
                           请求将发送到 <code>{selectedProviderEndpointPreview}</code>
@@ -2265,6 +2286,7 @@ function SortableProviderPresetCard({
       <ProviderCardIcon provider={provider} />
       <span className={s.presetCardName}>{provider.name}</span>
       <span className={s.presetCardMeta}>
+        {provider.recommended && <span className={s.presetCardRecommended}>推荐</span>}
         {protoTag && (
           <span className={s.presetCardProtoTag} title={apiModeDisplayName(provider.apiMode)}>
             {protoTag}

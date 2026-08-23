@@ -813,6 +813,96 @@ export interface OauthLoginResult {
   error?: string;
 }
 
+export interface WandermindsUserInfo {
+  sub: string;
+  email?: string | null;
+  name?: string | null;
+}
+
+export interface WandermindsAuthResult {
+  user: WandermindsUserInfo;
+  expiresAt?: number | null;
+}
+
+export interface WanderPortalIdentity {
+  issuer: string;
+  subject: string;
+  email?: string | null;
+  display_name?: string | null;
+}
+
+export interface WanderPortalPlan {
+  id: string;
+  slug: string;
+  version: number;
+  name: string;
+  price_fen: number;
+  included_micro_cny: number;
+  period_days: number;
+  test_only: boolean;
+}
+
+export interface WanderPortalSubscription {
+  status: string;
+  auto_renew: boolean;
+  current_period_start: string;
+  current_period_end: string;
+  plan: WanderPortalPlan;
+}
+
+export interface WanderPortalBalance {
+  included_micro_cny: number;
+  purchased_micro_cny: number;
+  total_micro_cny: number;
+}
+
+export interface WanderPortalAccountState {
+  identity: WanderPortalIdentity;
+  invite_eligible: boolean;
+  subscription?: WanderPortalSubscription | null;
+  balance: WanderPortalBalance;
+  current_period_usage_micro_cny: number;
+  portal_url: string;
+  environment_notice: string;
+}
+
+export interface WanderPortalCheckoutSession {
+  order_id: string;
+  checkout_url: string;
+  status: string;
+  expires_at: string;
+}
+
+export interface WanderPortalOrder {
+  id: string;
+  kind: string;
+  status: "pending" | "paid" | "fulfilled" | "failed" | "cancelled";
+  amount_fen: number;
+  grant_micro_cny: number;
+  checkout_expires_at: string;
+  created_at: string;
+  paid_at?: string | null;
+  fulfilled_at?: string | null;
+}
+
+export interface WanderPortalUsageItem {
+  id: string;
+  relay_request_id: string;
+  pricing_version: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cached_tokens: number;
+  cost_micro_cny: number;
+  status: string;
+  created_at: string;
+}
+
+export interface WanderPortalUsagePage {
+  items: WanderPortalUsageItem[];
+  next_cursor?: string | null;
+}
+
 // On `ok: true` the connection switched live; the renderer should reload the
 // webview so transport, socket-path selection, and all query caches rebuild
 // from get_runtime_config. On `ok: false` the previous backend is untouched
