@@ -30,8 +30,9 @@ export class ToolRegistry {
   }
 
   getToolNamesForToolset(toolset: string): string[] {
+    const resolved = this.resolveToolsetAlias(toolset);
     return this.getAllEntries()
-      .filter((e) => e.toolset === toolset || this.resolveToolsetAlias(e.toolset) === toolset)
+      .filter((e) => e.toolset === resolved || this.resolveToolsetAlias(e.toolset) === resolved)
       .map((e) => e.name);
   }
 

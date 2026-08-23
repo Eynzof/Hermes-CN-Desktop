@@ -20,8 +20,11 @@ export class ToolsetRegistry {
 
   constructor(private toolRegistry: ToolRegistry) {}
 
-  getToolset(name: string, opts?: { includeRegistry?: boolean }): DynamicToolsetDef | undefined {
+  getToolset(name: string, opts?: { includeRegistry?: boolean; seen?: Set<string> }): DynamicToolsetDef | undefined {
     const include = opts?.includeRegistry ?? true;
+    const seen = opts?.seen ?? new Set<string>();
+    if (seen.has(name)) return undefined;
+    seen.add(name);
     const staticDef = TOOLSETS[name];
     if (staticDef) return staticDef as DynamicToolsetDef;
     if (this.custom.has(name)) return this.custom.get(name);
@@ -29,7 +32,11 @@ export class ToolsetRegistry {
       if (this.mcp.has(name)) return this.mcp.get(name);
       if (this.plugins.has(name)) return this.plugins.get(name);
       const alias = this.toolRegistry.getToolsetAliasTarget(name);
-      if (alias) return this.getToolset(alias, { includeRegistry: false });
+      if (alias) {
+        // Resolve the canonical target with registry lookups enabled; the seen
+        // set guards against alias cycles (a -> b -> a).
+        return this.getToolset(alias, { includeRegistry: true, seen });
+      }
       const tools = this.toolRegistry.getToolNamesForToolset(name);
       if (tools.length) {
         return { description: `Dynamic toolset ${name}`, tools, includes: [] } as DynamicToolsetDef;

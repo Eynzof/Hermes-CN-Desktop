@@ -59,7 +59,7 @@ function isDataUrl(url: string): boolean {
 
 export async function visionAnalyze(options: VisionAnalyzeOptions): Promise<VisionAnalyzeResult> {
   const { input, activeModel, supportsNativeToolResult, callAuxiliaryVision } = options;
-  const prompt = (input.userPrompt || "Describe this image concisely.").trim();
+      const prompt = (input.userPrompt?.trim() || "Describe this image concisely.").trim();
 
   if (activeModel.supportsVision && (supportsNativeToolResult?.() ?? true)) {
     return {

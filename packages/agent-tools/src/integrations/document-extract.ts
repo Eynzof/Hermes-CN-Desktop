@@ -11,5 +11,7 @@ register({
     path: z.string().describe("Document path"),
     maxBytes: z.number().optional().describe("Maximum bytes to read"),
   }),
-  handler: async (args) => ({ content: `Would extract text from ${(args as any).path}` }),
+  handler: async (args) => ({
+    content: `Would extract text from ${(args as { path?: string } | undefined)?.path}`,
+  }),
 });

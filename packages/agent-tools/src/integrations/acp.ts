@@ -2,7 +2,7 @@ import { z } from "zod";
 import { register } from "../registry.js";
 import { objectSchema } from "../catalog.js";
 
-const echo = async (args: unknown) => ({ content: JSON.stringify(args) });
+const echo = async (args: unknown) => ({ content: JSON.stringify(args ?? {}) });
 
 register({
   name: "acp_ide_start",

@@ -28,7 +28,7 @@ export class McpStdioClientTransport implements McpTransport {
     this.opts.deps.listen(`mcp_stdio_data:${this.childId}`, (payload) => {
       if (this.onmessage && payload && typeof payload === "object") {
         const bytes = (payload as { bytes?: number[] }).bytes;
-        if (bytes && Array.isArray(bytes)) {
+        if (bytes && Array.isArray(bytes) && bytes.length > 0) {
           const text = new TextDecoder().decode(Uint8Array.from(bytes));
           try {
             this.onmessage(JSON.parse(text));

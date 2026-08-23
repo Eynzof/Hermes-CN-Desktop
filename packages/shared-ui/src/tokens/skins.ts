@@ -102,10 +102,10 @@ function isHex(value: string): boolean {
 function normalizeHex(value: string): string {
   const trimmed = value.trim();
   if (!isHex(trimmed)) return "";
-  // Expand 3/4-digit shorthand to 6/8 digits.
+  // Expand 3/4-digit shorthand to 6/8 digits (lowercased like the full path).
   if (trimmed.length === 4 || trimmed.length === 5) {
     const digits = trimmed.slice(1).split("");
-    return "#" + digits.map((d) => d + d).join("");
+    return "#" + digits.map((d) => d + d).join("").toLowerCase();
   }
   return trimmed.toLowerCase();
 }

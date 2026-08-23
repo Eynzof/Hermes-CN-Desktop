@@ -53,7 +53,7 @@ const PLATFORMS = [
 ] as const;
 
 export async function messagingConfigure(args: unknown, _ctx?: MessagingToolContext): Promise<ToolResult> {
-  const { platform, enabled, credentials = {} } = args as {
+  const { platform, enabled, credentials = {} } = (args ?? {}) as {
     platform: string;
     enabled: boolean;
     credentials?: Record<string, string>;
@@ -65,7 +65,7 @@ export async function messagingConfigure(args: unknown, _ctx?: MessagingToolCont
 }
 
 export async function messagingStatus(args: unknown, _ctx?: MessagingToolContext): Promise<ToolResult> {
-  const { platform } = args as { platform?: string };
+  const { platform } = (args ?? {}) as { platform?: string };
   if (platform && !PLATFORMS.includes(platform as (typeof PLATFORMS)[number])) {
     return err(`Unknown platform: ${platform}`);
   }
@@ -82,16 +82,16 @@ export async function messagingStatus(args: unknown, _ctx?: MessagingToolContext
 }
 
 export async function messagingStart(args: unknown, _ctx?: MessagingToolContext): Promise<ToolResult> {
-  const { platform } = args as { platform?: string };
+  const { platform } = (args ?? {}) as { platform?: string };
   return ok({ started: platform ?? "gateway", liveConnection: false });
 }
 
 export async function messagingStop(args: unknown, _ctx?: MessagingToolContext): Promise<ToolResult> {
-  const { platform } = args as { platform?: string };
+  const { platform } = (args ?? {}) as { platform?: string };
   return ok({ stopped: platform ?? "gateway" });
 }
 
 export async function messagingSend(args: unknown, _ctx?: MessagingToolContext): Promise<ToolResult> {
-  const { platform, chatId, text } = args as { platform: string; chatId: string; text: string };
+  const { platform, chatId, text } = (args ?? {}) as { platform: string; chatId: string; text: string };
   return ok({ platform, chatId, text, messageId: `${platform}_stub_${Date.now()}` });
 }

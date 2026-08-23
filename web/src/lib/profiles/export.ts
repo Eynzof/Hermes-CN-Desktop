@@ -14,5 +14,5 @@ export async function exportProfile(
 
 export function scrubSecret(text: string): string {
   // Naive redaction stub for parity.
-  return text.replace(/(?:api[_-]?key|token|secret)\s*[:=]\s*[^\s]+/gi, (m) => `${m.split(/[:=]/)[0]}: ***`);
+  return text.replace(/(?:api[_-]?key|token|secret)\s*[:=]\s*[^\s]+/gi, (m) => `${m.split(/[:=]/)[0].trim()}: ***`);
 }

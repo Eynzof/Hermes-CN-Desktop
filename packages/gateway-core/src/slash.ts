@@ -89,10 +89,14 @@ export class SlashDispatcher {
     const cmd = this.commands.get(ctx.command);
     if (!cmd) return Promise.resolve(`Unknown command: /${ctx.command}`);
     if (cmd.adminOnly && !ctx.isAdmin) return Promise.resolve("Admin only.");
-    return cmd.handler(ctx);
+    // Resolve aliases to the canonical command name before invoking the handler,
+    // mirroring Python `resolve_command` (alias → canonical def).
+    const canonicalCtx = ctx.command === cmd.name ? ctx : { ...ctx, command: cmd.name };
+    return cmd.handler(canonicalCtx);
   }
 
   list(): SlashCommand[] {
-    return [...this.commands.values()];
+    // One entry per command (aliases map to the same object).
+    return [...new Set(this.commands.values())];
   }
 }

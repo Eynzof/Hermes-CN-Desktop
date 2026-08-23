@@ -2,7 +2,7 @@ import { z } from "zod";
 import { register } from "../registry.js";
 import { objectSchema } from "../catalog.js";
 
-const echoHandler = async (args: unknown) => ({ content: JSON.stringify(args, null, 2) });
+const echoHandler = async (args: unknown) => ({ content: JSON.stringify(args ?? {}, null, 2) });
 
 register({
   name: "mcp_server_add",

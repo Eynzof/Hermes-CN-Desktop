@@ -23,7 +23,36 @@ export interface OpenVikingProviderConfig {
   fetchImpl?: typeof fetch;
 }
 
-const BLOCKED_HOSTS = /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|0\.0\.0\.0|::1)$/iu;
+const BLOCKED_HOSTS =
+  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|0\.0\.0\.0|::|::1|169\.254\.\d+\.\d+|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+)$/iu;
+
+/** Convert an IPv4-mapped IPv6 suffix (`7f00:1`, `192.168.1.1`) to dotted quad. */
+function mappedIpv4ToDotted(value: string): string {
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(value)) return value;
+  const words = value
+    .split(":")
+    .map((word) => word.padStart(4, "0"))
+    .join("");
+  if (!/^[0-9a-f]{8}$/i.test(words)) return value;
+  const n = Number.parseInt(words, 16);
+  return `${(n >>> 24) & 0xff}.${(n >>> 16) & 0xff}.${(n >>> 8) & 0xff}.${n & 0xff}`;
+}
+
+/**
+ * Normalize hostnames for the private-range guard: URL.hostname keeps brackets
+ * around IPv6 literals, and Node renders IPv4-mapped IPv6 in hex (e.g.
+ * `[::ffff:7f00:1]`).  Both are unwrapped so `BLOCKED_HOSTS` still applies.
+ * Full-form IPv6 literals beyond `::` / `::1` are out of scope for the regex.
+ */
+function normalizeHostname(hostname: string): string {
+  const bare =
+    hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  const mapped = bare.match(/^::ffff:(.+)$/i);
+  if (mapped && mapped[1]) {
+    return mappedIpv4ToDotted(mapped[1]);
+  }
+  return bare;
+}
 
 function assertAllowedEndpoint(url: string): void {
   let parsed: URL;
@@ -35,7 +64,7 @@ function assertAllowedEndpoint(url: string): void {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new ProviderError(`OpenViking endpoint must use http/https: ${url}`, "openviking");
   }
-  if (BLOCKED_HOSTS.test(parsed.hostname)) {
+  if (BLOCKED_HOSTS.test(normalizeHostname(parsed.hostname))) {
     throw new ProviderError(`OpenViking endpoint is blocked: ${parsed.hostname}`, "openviking");
   }
 }
