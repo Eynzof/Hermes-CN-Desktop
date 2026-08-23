@@ -15,8 +15,8 @@ import {
   MutationOkResponse,
 } from "@hermes/protocol";
 
-// 桌面版的 MCP 管理直接打官方上游接口 /api/mcp/*（增删改 / 启停 / 测试 / 目录），
-// 与只读的 fork 端点 /api/mcp-servers（health 面板用）相互独立。
+// 桌面版的 MCP 管理与健康面板统一使用官方上游接口 /api/mcp/*
+//（增删改 / 启停 / 测试 / 目录），不再依赖 CN fork 私有端点。
 
 const SERVERS_KEY = "mcp-servers-full";
 const CATALOG_KEY = "mcp-catalog";
@@ -25,7 +25,7 @@ const mcpPath = (name: string, suffix = "") =>
   `/api/mcp/servers/${encodeURIComponent(name)}${suffix}`;
 
 // GET /api/mcp/servers — 完整服务列表（env 已脱敏）。queryKey 含 profile，
-// 与 use-mcp-servers / use-profiles 的 profile-aware 失效保持一致。
+// 与健康摘要、use-profiles 的 profile-aware 失效保持一致。
 export function useMcpServersFull() {
   const profile = useActiveProfileName();
   return useQuery<McpServer[]>({

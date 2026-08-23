@@ -233,6 +233,7 @@ function HealthItemCard({ item, onNavigate }: { item: HealthItem; onNavigate: (t
         className={s.item}
         data-tone={item.tone}
         data-action="true"
+        data-health-item={item.id}
         title={title}
         aria-label={`${item.label}: ${item.value}${item.sub ? `，${item.sub}` : ""}`}
         onClick={() => onNavigate(actionTo)}
@@ -243,7 +244,7 @@ function HealthItemCard({ item, onNavigate }: { item: HealthItem; onNavigate: (t
   }
 
   return (
-    <div className={s.item} data-tone={item.tone} title={title}>
+    <div className={s.item} data-tone={item.tone} data-health-item={item.id} title={title}>
       {content}
     </div>
   );

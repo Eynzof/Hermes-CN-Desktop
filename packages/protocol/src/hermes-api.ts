@@ -733,7 +733,10 @@ export const ToolsetInfo = z.object({
 });
 export type ToolsetInfo = z.infer<typeof ToolsetInfo>;
 
-// ── MCP Servers (/api/mcp-servers) ────────────────────────────────────
+// ── MCP Servers（健康面板归一化摘要）────────────────────────────────────
+
+// Desktop 从官方 GET /api/mcp/servers 响应中派生此最小视图，避免健康面板
+// 依赖 CN fork 私有的旧端点 /api/mcp-servers。
 
 export const McpServerInfo = z.object({
   name: z.string(),
