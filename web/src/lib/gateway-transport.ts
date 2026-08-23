@@ -6,9 +6,9 @@
  * `WebSocket` and `GatewayRelaySocket` can be used without changing the
  * protocol layer.
  *
- * Note: the SSE+POST fallback carrier described in `plans/sse-post-gateway-
- * transport.md` is intentionally NOT implemented. The Rust relay solves the
- * same problem with one ordered channel and no per-RPC HTTP round-trip.
+ * Note: the SSE+POST fallback carrier is intentionally NOT implemented. The
+ * Rust relay solves the same problem with one ordered channel and no
+ * per-RPC HTTP round-trip.
  */
 
 export interface GatewayTransport {

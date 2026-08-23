@@ -1,8 +1,8 @@
 /**
  * Desktop Projects client — transport-agnostic interface.
  *
- * Phase A (managed runtime) uses the gateway JSON-RPC methods defined in
- * `plans/desktop-electron-app.md` §2.3–2.4. Phase B swaps the transport to
+ * Phase A (managed runtime) uses the gateway JSON-RPC methods
+ * (projects.list / projects.get / ...). Phase B swaps the transport to
  * Tauri IPC via `IpcProjectsClient` without changing consumers.
  */
 import {

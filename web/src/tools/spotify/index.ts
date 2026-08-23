@@ -2,7 +2,7 @@
 //
 // The core implementation lives in @hermes/agent-tools/spotify so it can be
 // consumed by both the web UI and headless/desktop runtimes. This module is
-// the web-specific entry point referenced by plans/spotify.md: it wires the
+// the web-specific entry point for the desktop: it wires the
 // Rust auth.json persistence into the in-process credential provider.
 
 export {

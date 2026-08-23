@@ -2,9 +2,9 @@
 """
 run.py - Start Hermes Agent CN Desktop (frontend only, no backend).
 
-The agent runtime now lives inside the TypeScript web app (see plans/):
-there is no Python backend, no Dashboard REST service and no gateway
-WebSocket to start. This script only boots the Vite dev server so you can
+The agent runtime now lives inside the TypeScript web app (see
+packages/ and docs/typescript-runtime.md): there is no Python backend,
+no Dashboard REST service and no gateway WebSocket to start. This script only boots the Vite dev server so you can
 develop / smoke-test the web UI in a plain browser (no Tauri shell needed).
 
 Cleanly stops the Vite process on exit (Ctrl+C / SIGTERM).

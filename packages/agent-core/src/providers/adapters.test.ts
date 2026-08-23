@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  AnthropicAdapter,
   AzureAdapter,
   BedrockAdapter,
   GeminiAdapter,
   OpenAIChatAdapter,
-  OpenAIResponsesAdapter,
   VertexAdapter,
 } from "../index.js";
 import { ProviderError } from "../errors.js";
@@ -92,8 +90,6 @@ describe("Provider adapter seams", () => {
   it("stubs throw ProviderError with the provider name", async () => {
     const adapters: Array<{ name: string; adapter: { chat: (params: never) => Promise<unknown> } }> =
       [
-        { name: "anthropic", adapter: new AnthropicAdapter({ model: "claude-3" }) },
-        { name: "openai-responses", adapter: new OpenAIResponsesAdapter({ model: "o3-mini" }) },
         { name: "gemini", adapter: new GeminiAdapter({ model: "gemini-1.5" }) },
         { name: "bedrock", adapter: new BedrockAdapter({ model: "claude-3" }) },
         { name: "vertex", adapter: new VertexAdapter({ model: "claude-3" }) },

@@ -40,9 +40,17 @@ Hermes-CN-Desktop/
 │   │   ├── lib/gateway-client.ts  网关 WS 客户端（JSON-RPC over /api/ws，退避/唤醒重连/session.resume）
 │   │   └── lib/gateway-socket-path.ts  原生 WS vs Rust 中继的 socket 路径选择与自动回退
 │   └── vite.config.ts
-├── packages/
-│   ├── protocol/              Zod schemas（hermes-api.ts）、IPC 类型、会话日志解析
-│   └── shared-ui/             设计 token（tokens/*.css）、components/composites/hooks
+├── packages/                TypeScript runtime（Python 后端已全量重写为 TS，详见 docs/typescript-runtime.md）
+│   ├── agent-core/            agent 核心：回合循环、LLM provider 适配、会话、审批、压缩、记忆、skills、MoA…
+│   ├── agent-tools/           工具目录/注册/分发、toolsets、Spotify/消息/HA/Meet 集成
+│   ├── browser/               浏览器自动化（backend 注册、SSRF 防护、快照）
+│   ├── credential-pool/       凭证池与轮换策略
+│   ├── dashboard/             本地 dashboard 路由/鉴权/REST
+│   ├── gateway-core/          网关服务：事件总线、会话、投递、slash 命令
+│   ├── messaging-platforms/   29 个消息平台 adapter（Telegram/Discord/钉钉/飞书/企微/微信…）
+│   ├── protocol/              Zod schemas、IPC 类型、会话日志解析
+│   ├── shared-ui/             设计 token（tokens/*.css）、components/composites/hooks
+│   └── skill-lint/            SKILL.md lint 规则与 CLI
 ├── e2e/                       Playwright E2E（真实 web → 真实 Core 后端 → 本地 fake model）
 ├── tests/                     Rust 集成测试（crate 名 hermes_agent_cn）
 ├── static/                    打包 stage 目标（bundled-runtime / -skills / -plugins / dashboard）
@@ -55,6 +63,10 @@ Hermes-CN-Desktop/
 ## 后端事实来源
 
 UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**。
+
+> 注意：Python 后端功能已在 `packages/` monorepo 全量重写为 TypeScript（进程内运行，
+> 无浏览器/无后端也可跑，架构见 `docs/typescript-runtime.md`）；managed runtime（Python
+> Hermes-CN-Core）仍保留作为桌面端托管内核路径。
 
 后端源码在同级的 `../Hermes-CN-Core`（`pnpm tauri:dev` 默认从这里把 backend 装进桌面 dev-runtime，可用 `--source` 覆盖）。查：
 - REST 路由：`hermes_cli/web_server.py`

@@ -8,7 +8,7 @@
 //
 // The default in-process engine is a lightweight template matcher that works
 // without model downloads. A production build can slot a `sherpa-onnx` engine
-// behind the same `WakeWordEngine` trait (see §5 of `plans/wake-word.md`).
+// behind the same `WakeWordEngine` trait.
 
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};

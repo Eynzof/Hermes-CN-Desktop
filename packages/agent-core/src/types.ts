@@ -91,6 +91,8 @@ export interface LLMChatParams {
   messages: Message[];
   tools: readonly Tool[];
   signal?: AbortSignal;
+  /** When true, request a streaming response (SSE deltas). */
+  stream?: boolean;
   onTextDelta?(delta: string): void;
   onThinkDelta?(delta: string): void;
   onToolCallDelta?(delta: ToolCallDelta): void;
@@ -102,6 +104,17 @@ export interface LLMChatResponse {
   toolCalls: ToolCall[];
   providerFinishReason?: FinishReason;
   usage: TokenUsage;
+  /**
+   * Reasoning / chain-of-thought text extracted from the provider response.
+   *
+   * - OpenAI-compatible (DeepSeek, Moonshot): the `reasoning_content` field.
+   * - Anthropic: concatenated `thinking` block text.
+   * - OpenAI Responses: concatenated `reasoning_text` content.
+   *
+   * Empty string when the model produced no thinking block. Always paired with
+   * a non-empty `text` for a successful reasoning turn.
+   */
+  reasoning?: string;
 }
 
 export interface LLM {
@@ -121,6 +134,8 @@ export interface ReasoningConfig {
   effort?: "low" | "medium" | "high";
   budgetTokens?: number;
   disabled?: boolean;
+  /** When true, reasoning/thinking is explicitly enabled. */
+  enabled?: boolean;
 }
 
 export interface PlatformIdentity {

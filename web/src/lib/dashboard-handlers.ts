@@ -541,7 +541,7 @@ export function registerLocalDashboardHandlers(): void {
   });
   registerDashboardPrefixHandler("/api/memory/providers", dashboardMemoryProviderStatusHandler, "GET");
 
-  // Local-first dashboard auth routes (Phase 0 of plans/web-dashboard.md).
+  // Local-first dashboard auth routes (dashboard local-auth phase).
   const authSessionStore = createInMemorySessionStore();
 
   // Local-first dashboard routes for the standalone (no-backend) mode:

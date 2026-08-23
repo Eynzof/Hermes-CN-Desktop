@@ -24,11 +24,12 @@ export const ContextFileSchema = z.object({
   provenance: z.string().optional(),
 }) as z.ZodType<ContextFile>;
 
-export const ReasoningConfigSchema = z.object({
-  effort: z.enum(["low", "medium", "high"]).optional(),
-  budgetTokens: z.number().int().nonnegative().optional(),
-  disabled: z.boolean().optional(),
-});
+  export const ReasoningConfigSchema = z.object({
+    effort: z.enum(["low", "medium", "high"]).optional(),
+    budgetTokens: z.number().int().nonnegative().optional(),
+    disabled: z.boolean().optional(),
+    enabled: z.boolean().optional(),
+  });
 
 export const PlatformIdentitySchema = z.object({
   platform: z.string().optional(),

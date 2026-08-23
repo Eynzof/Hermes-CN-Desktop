@@ -1,7 +1,7 @@
 /**
  * Local-first dashboard route registry.
  *
- * Implements the in-process REST layer described in `plans/web-dashboard.md`.
+ * Implements the local-first REST layer (see docs/typescript-runtime.md).
  * Handlers are registered per path/method and take precedence over the remote
  * `api_request` proxy when the desktop is in managed mode. Unregistered paths
  * fall back to the existing transport so migration can happen route-by-route.

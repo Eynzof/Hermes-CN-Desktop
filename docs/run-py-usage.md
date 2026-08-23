@@ -4,8 +4,8 @@
 
 ## 背景：为什么不再需要后端
 
-自 `plans/` 全套 TS 重写完成后，agent runtime（会话、模型配置、消息流）已经在
-TypeScript 侧实现并通过**进程内网关（in-process gateway）**承载：
+自 Python → TypeScript 重写完成后（实现全部落在 `packages/` monorepo，架构总览见 `docs/typescript-runtime.md`），
+agent runtime（会话、模型配置、消息流）已经在 TypeScript 侧实现并通过**进程内网关（in-process gateway）**承载：
 
 - `web/src/lib/gateway-inprocess.ts` — 进程内 JSON-RPC 分发（session.create /
   prompt.submit / model.options / provider.probe / config.set …），替代 Python

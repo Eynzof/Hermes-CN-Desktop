@@ -24,9 +24,17 @@ The desktop-managed runtime defaults to port **9120**, avoiding port 9119 used b
 Hermes-CN-Desktop/
 ├── src/                          Rust Tauri backend (~24,000 lines)
 ├── web/                          React frontend (Vite + TanStack Query + Jotai)
-├── packages/
-│   ├── protocol/                 Shared Zod schemas, IPC types, session log parsing
-│   └── shared-ui/                Design tokens, shared React components, hooks
+├── packages/                    TypeScript runtime (Python backend fully rewritten in TS; see docs/typescript-runtime.md)
+│   ├── agent-core/              Agent core: turn loop, LLM provider adapters, sessions, approvals, memory, skills, MoA…
+│   ├── agent-tools/             Tool catalog/registry/dispatch, toolsets, Spotify/messaging/HA/Meet integrations
+│   ├── browser/                 Browser automation (backend registry, SSRF guard, snapshots)
+│   ├── credential-pool/         Credential pools with rotation strategies
+│   ├── dashboard/               Local dashboard router, auth, REST routes
+│   ├── gateway-core/            Gateway service: event bus, sessions, delivery, slash commands
+│   ├── messaging-platforms/     29 messaging platform adapters (Telegram/Discord/DingTalk/Feishu/WeCom/Weixin…)
+│   ├── protocol/                Shared Zod schemas, IPC types, session log parsing
+│   ├── shared-ui/               Design tokens, shared React components, hooks
+│   └── skill-lint/              SKILL.md lint rules + CLI
 ├── e2e/                          Playwright E2E (real web → real Core backend → fake model)
 ├── tests/                        Rust integration tests (crate: hermes_agent_cn)
 ├── scripts/                      Build & dev automation scripts (.mjs)
@@ -213,21 +221,23 @@ web/src/
 
 ## Packages (`packages/`)
 
-### `@hermes/protocol`
-Shared type definitions and validation:
-- Zod schemas for the Hermes API (`hermes-api.ts`)
-- IPC types
-- Session log parsing (`session-log.ts`)
-- MCP API schemas
-- Channel types
+The Python backend has been fully rewritten in TypeScript across these
+workspaces (architecture overview: `docs/typescript-runtime.md`). Dependency
+rule: `protocol` is consumed by everything; business logic lives here, not in
+`web/` routes/components.
 
-### `@hermes/shared-ui`
-Shared UI primitives:
-- Design tokens (`tokens/`): colors, typography, spacing, motion, z-index, component tokens, semantic tokens, primitives
-- Components: alert, badge, button, card, copy-button, empty-state, field, input
-- Composites: dialog, popover
-- Hooks
-- Utilities
+| Package | Purpose |
+|---------|---------|
+| `@hermes/agent-core` | Agent core: turn loop, LLM provider adapters (OpenAI/Anthropic/Gemini/Bedrock/Vertex/Azure), sessions, approvals, compaction, memory, learning, checkpoints, skills, MoA, plugins, cron, kanban, goals, subagents; `runtime/` facade |
+| `@hermes/agent-tools` | Tool catalog/registry/dispatch, toolsets (built-in/platform/dynamic), tool search, Spotify/messaging/Home Assistant/Google Meet integrations |
+| `@hermes/browser` | Browser automation: backend registry, provider, session manager, snapshots, SSRF guard |
+| `@hermes/credential-pool` | Credential pools + rotation strategies |
+| `@hermes/dashboard` | Local-first dashboard router, auth, REST routes |
+| `@hermes/gateway-core` | Gateway service: adapter contract, event bus, sessions, delivery, slash registry |
+| `@hermes/messaging-platforms` | 29 messaging platform adapters + registry |
+| `@hermes/protocol` | Zod schemas (API/MCP/ACP/LSP/…), IPC types, session log parsing |
+| `@hermes/shared-ui` | Design tokens (`tokens/`), components, composites, hooks |
+| `@hermes/skill-lint` | SKILL.md lint rules + CLI (`pnpm skills:lint`) |
 
 ---
 
@@ -303,6 +313,7 @@ Shared UI primitives:
 
 | File | Content |
 |------|---------|
+| `typescript-runtime.md` | **TypeScript runtime (`packages/`) architecture overview** — Python backend fully rewritten in TS, in-process gateway, package map |
 | `agents/` | Coding-agent policy + human git workflow（编码代理不执行 git 写操作；人工双仓同步/worktree/commit/push/PR/tag/Landing 同步见 `git-workflow.md`） |
 | `desktop-prd/` | Product Requirements Document (6 docs: feature inventory, PRD, IA, specs, backend contract, parity gap) |
 | `gateway-connection-overhaul.md` | Gateway connection architecture |
