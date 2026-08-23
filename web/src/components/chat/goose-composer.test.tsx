@@ -104,3 +104,33 @@ describe("GooseComposer workspace picker", () => {
     expect(html).not.toContain("不指定默认工作区：");
   });
 });
+
+// issue #365/#372：composer 曾在会话没有自己工作区时回退显示"上次使用的全局
+// 工作区"，把上一个会话的目录静默画到（并在发送时写到）毫不相干的会话上。
+describe("GooseComposer workspace isolation (#365/#372)", () => {
+  it("不继承全局 last-used 工作区：无 initialWorkspacePath 时显示为未选择", async () => {
+    const { __resetUiStoreForTests } = await import("@/lib/ui-store");
+    __resetUiStoreForTests({
+      "hermes-cn-ui.workspacePath": "/Users/enzo/OtherSessionProject",
+    });
+
+    const html = renderComposer(<GooseComposer />);
+
+    expect(html).not.toContain("OtherSessionProject");
+    expect(html).not.toContain("不指定默认工作区：");
+  });
+
+  it("仍显示会话自己的工作区（initialWorkspacePath）", async () => {
+    const { __resetUiStoreForTests } = await import("@/lib/ui-store");
+    __resetUiStoreForTests({
+      "hermes-cn-ui.workspacePath": "/Users/enzo/OtherSessionProject",
+    });
+
+    const html = renderComposer(
+      <GooseComposer initialWorkspacePath="/Users/enzo/OwnProject" />,
+    );
+
+    expect(html).toContain("OwnProject");
+    expect(html).not.toContain("OtherSessionProject");
+  });
+});
