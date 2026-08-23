@@ -1,0 +1,326 @@
+name: hot-update-nightly
+
+on:
+  schedule:
+    - cron: "30 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hot-update-nightly
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.nightly.outputs.changed }}
+      desktop_sha: ${{ steps.nightly.outputs.desktop_sha }}
+      core_sha: ${{ steps.nightly.outputs.core_sha }}
+      runtime_tag: ${{ steps.nightly.outputs.runtime_tag }}
+      core_version: ${{ steps.nightly.outputs.core_version }}
+      version: ${{ steps.nightly.outputs.version }}
+      tag: ${{ steps.nightly.outputs.tag }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NIGHTLY_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.20.0-cn.9' }}
+      NIGHTLY_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.8.1' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve Desktop/Core SHA and skip unchanged inputs
+        id: nightly
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NIGHTLY_RUNTIME_TAG" && test "$NIGHTLY_RUNTIME_TAG" != latest
+          desktop_sha="$(git rev-parse HEAD)"
+          manifest_url="https://github.com/Eynzof/Hermes-CN-Core/releases/download/$NIGHTLY_RUNTIME_TAG/stable-win32-x64.json"
+          curl --fail --location --retry 3 "$manifest_url" --output /tmp/runtime.json
+          core_sha="$(node -p "JSON.parse(require('fs').readFileSync('/tmp/runtime.json')).sourceCommit")"
+          core_version="$(node -p "JSON.parse(require('fs').readFileSync('/tmp/runtime.json')).kernelVersion")"
+          test -n "$core_sha" && test -n "$core_version"
+          latest_tag="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,publishedAt \
+            --jq '[.[] | select(.tagName | contains("-nightly."))] | sort_by(.publishedAt) | last | .tagName // ""')"
+          changed=true
+          if [ -n "$latest_tag" ]; then
+            mkdir -p /tmp/previous
+            if gh release download "$latest_tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern release-record.json --dir /tmp/previous; then
+              previous_desktop="$(node -p "require('/tmp/previous/release-record.json').desktopSha")"
+              previous_core="$(node -p "require('/tmp/previous/release-record.json').coreSha")"
+              if [ "$previous_desktop" = "$desktop_sha" ] && [ "$previous_core" = "$core_sha" ]; then
+                changed=false
+              fi
+            fi
+          fi
+          day="$(date -u +%Y%m%d)"
+          count="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName \
+            --jq "[.[] | select(.tagName | contains(\"-nightly.$day.\"))] | length")"
+          sequence=$((count + 1))
+          version="$NIGHTLY_BASE_VERSION-nightly.$day.$sequence"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "desktop_sha=$desktop_sha" >> "$GITHUB_OUTPUT"
+          echo "core_sha=$core_sha" >> "$GITHUB_OUTPUT"
+          echo "runtime_tag=$NIGHTLY_RUNTIME_TAG" >> "$GITHUB_OUTPUT"
+          echo "core_version=$core_version" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.desktop_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - run: pnpm install --frozen-lockfile
+      - name: Set ephemeral nightly version
+        run: node scripts/sync-desktop-version.mjs --version "${{ needs.prepare.outputs.version }}"
+      - name: Stage pinned Runtime, Dashboard, skills and plugins
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/Eynzof/Hermes-CN-Core/releases/download/${{ needs.prepare.outputs.runtime_tag }}/stable-win32-x64.json" \
+            --output "$RUNNER_TEMP/runtime.json"
+          source_repo="$(node -p "JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP + '/runtime.json')).sourceRepo")"
+          source_commit="$(node -p "JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP + '/runtime.json')).sourceCommit")"
+          git clone "https://github.com/$source_repo.git" hermes-agent-cn-source
+          git -C hermes-agent-cn-source checkout "$source_commit"
+          node scripts/stage-dashboard-web-dist.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-plugins.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-runtime.mjs --repo Eynzof/Hermes-CN-Core \
+            --tag "${{ needs.prepare.outputs.runtime_tag }}" --platform win32 --arch x64
+      - name: Verify pinned contracts
+        shell: bash
+        env:
+          HERMES_RELEASE_RUNTIME_ZIP: ${{ github.workspace }}/static/bundled-runtime/hermes-agent-cn-runtime-win32-x64.zip
+        run: |
+          pnpm compatibility:check
+          test "$(node -p "require('./compatibility/desktop-core.json').runtimeManifestSchema.current")" = 2
+          cargo test --locked --all-features --lib release_runtime_zip_extracts_with_installer -- --ignored --nocapture
+      - name: Import staging Authenticode identity
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_STAGING_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_STAGING_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) { throw "nightly 缺少 Windows staging Authenticode 证书" }
+          $pfx = Join-Path $env:RUNNER_TEMP "staging-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          $cer = Join-Path $env:RUNNER_TEMP "staging-signing.cer"
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          # Nightly uses a deliberately self-signed staging identity. Trust it
+          # only inside this disposable hosted runner so Authenticode can be
+          # verified as Valid; canary/beta/stable use the public CA identity.
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+          @{
+            bundle = @{ windows = @{
+              certificateThumbprint = $cert.Thumbprint
+              digestAlgorithm = "sha256"
+              timestampUrl = $env:WINDOWS_TIMESTAMP_URL
+            }}
+          } | ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding utf8 windows-signing-config.json
+      - name: Build signed nightly updater
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_STAGING_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_STAGING_SIGNING_PRIVATE_KEY_PASSWORD }}
+          HERMES_BAKED_UPDATE_CHANNEL: prototype
+          HERMES_BAKED_SHELL_UPDATE_ENDPOINT: ${{ vars.HOT_UPDATE_STAGING_ENDPOINT }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          pnpm exec tauri build --target x86_64-pc-windows-msvc --bundles nsis \
+            --config windows-signing-config.json
+          node scripts/package-portable-windows.mjs --target x86_64-pc-windows-msvc
+          node scripts/collect-release-artifacts.mjs --platform win32 --arch x64 \
+            --target x86_64-pc-windows-msvc --runtime-tag "${{ needs.prepare.outputs.runtime_tag }}" \
+            --desktop-sha "${{ needs.prepare.outputs.desktop_sha }}" --output release-assets
+      - name: Verify final installer Authenticode
+        shell: pwsh
+        run: |
+          Get-ChildItem release-assets/*.exe | ForEach-Object {
+            $signature = Get-AuthenticodeSignature $_.FullName
+            if ($signature.Status -ne "Valid") { throw "$($_.Name): $($signature.Status)" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-windows
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-register-promote:
+    needs: [prepare, build-windows]
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment: hot-update-staging
+    outputs:
+      release_id: ${{ steps.record.outputs.release_id }}
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      MIRROR_ORIGIN: ${{ vars.HOT_UPDATE_STAGING_MIRROR_ORIGIN || 'https://hot-update-download-staging.hermesagent.org.cn' }}
+      D1_DATABASE: ${{ vars.HOT_UPDATE_STAGING_D1 || 'hermes-desktop-hot-update-staging' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.desktop_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: nightly-windows
+          path: release-assets
+      - name: Finalize single-platform nightly record
+        id: record
+        shell: bash
+        run: |
+          set -euo pipefail
+          fragment="$(find release-assets -name 'release-fragment-*.json' -print -quit)"
+          node - "$fragment" <<'NODE'
+          const fs = require("node:fs");
+          const fragment = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          delete fragment.runtimeManifestSchemaVersion;
+          fragment.generatedAt = new Date().toISOString();
+          fs.writeFileSync("release-assets/release-record.json", JSON.stringify(fragment, null, 2) + "\n");
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_id=${fragment.assets[0].releaseId}\n`);
+          NODE
+          rm -f release-assets/release-fragment-*.json release-assets/checksums.txt
+          cd release-assets
+          sha256sum * | sort -k2 > checksums.txt
+      - name: Create public prerelease, never latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.prepare.outputs.tag }}"
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+            --target "${{ needs.prepare.outputs.desktop_sha }}" --prerelease --latest=false \
+            --title "Hermes Desktop ${{ needs.prepare.outputs.version }}" \
+            --notes "自动 Nightly，仅供 prototype/primelab-win 热更新验证。"
+          gh release upload "$tag" release-assets/* --repo "$GITHUB_REPOSITORY"
+      - name: Verify Cloudflare mirror and register draft from real assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.prepare.outputs.tag }}"
+          updater="$(node -p "require('./release-assets/release-record.json').assets[0].fileName")"
+          expected="$(awk -v name="$updater" '$2 == name { print $1 }' release-assets/checksums.txt)"
+          curl --fail --location --retry 3 "$MIRROR_ORIGIN/$tag/$updater" --output /tmp/nightly-updater
+          test "$(sha256sum /tmp/nightly-updater | awk '{print $1}')" = "$expected"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --range 0-1023 "$MIRROR_ORIGIN/$tag/$updater")" = 206
+          node scripts/hot-update-control.mjs release register-draft \
+            --database "$D1_DATABASE" --remote --tag "$tag" --channel prototype \
+            --mirror-origin "$MIRROR_ORIGIN"
+          node scripts/hot-update-control.mjs release promote \
+            --database "$D1_DATABASE" --remote --id "${{ steps.record.outputs.release_id }}" --percent 100
+
+  primelab-win-smoke:
+    needs: [prepare, publish-register-promote]
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: [self-hosted, windows, x64, primelab-win]
+    timeout-minutes: 45
+    environment: hot-update-staging
+    env:
+      HERMES_UPDATE_CHANNEL: prototype
+      HERMES_UPDATE_DEVICE_ID: primelab-win
+      HERMES_SHELL_UPDATE_ENDPOINT: ${{ vars.HOT_UPDATE_STAGING_ENDPOINT }}
+      HERMES_SHELL_UPDATE_TOKEN: ${{ secrets.PRIMELAB_WIN_UPDATE_TOKEN }}
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --remote-debugging-port=9222
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.desktop_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - name: Prepare isolated Desktop data root
+        shell: pwsh
+        run: |
+          "HERMES_DESKTOP_RUNTIME_ROOT=$env:RUNNER_TEMP\hermes-hot-update-nightly" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - run: pnpm install --frozen-lockfile
+      - name: Launch isolated baseline Desktop
+        shell: pwsh
+        env:
+          BASELINE_EXE: ${{ vars.PRIMELAB_BASELINE_EXE }}
+        run: |
+          if (-not (Test-Path $env:BASELINE_EXE)) { throw "PRIMELAB_BASELINE_EXE 不存在" }
+          Get-Process | Where-Object { $_.Path -eq $env:BASELINE_EXE } | Stop-Process -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:HERMES_DESKTOP_RUNTIME_ROOT | Out-Null
+          Start-Process -FilePath $env:BASELINE_EXE
+      - name: Exercise check, signed download, installer restart, Core 9120 and current.json
+        shell: bash
+        run: >-
+          node scripts/windows-hot-update-smoke.mjs
+          --expected-version "${{ needs.prepare.outputs.version }}"
+          --expected-core-version "${{ needs.prepare.outputs.core_version }}"
+          | tee windows-hot-update-smoke.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-primelab-win-smoke
+          path: windows-hot-update-smoke.json
+          retention-days: 14
+
+  pause-after-smoke:
+    needs: [prepare, publish-register-promote, primelab-win-smoke]
+    if: always() && needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment: hot-update-staging
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE: ${{ vars.HOT_UPDATE_STAGING_D1 || 'hermes-desktop-hot-update-staging' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - run: pnpm install --frozen-lockfile
+      - name: Restore nightly to paused / 0%
+        run: |
+          node scripts/hot-update-control.mjs release pause \
+            --database "$D1_DATABASE" --remote \
+            --id "${{ needs.publish-register-promote.outputs.release_id }}"
+      - name: Prune only old, unreferenced nightly prereleases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/prune-nightly-releases.mjs --database "$D1_DATABASE" --apply
