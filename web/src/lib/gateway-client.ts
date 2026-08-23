@@ -304,6 +304,12 @@ export class GatewayClient {
       const ev = parseGatewayEvent({
         type: frame.params.type,
         session_id: frame.params.session_id,
+        // Core stamps every event of a turn with a stable turn_id. This
+        // projection is explicit (not a spread), so a field omitted here is
+        // dropped before the reducer ever sees it — turn_id must be carried
+        // through by name. Absent on older runtimes; the reducer falls back to
+        // its activeAssistantId heuristic then.
+        turn_id: frame.params.turn_id,
         payload: frame.params.payload,
       });
       this.emit(ev);

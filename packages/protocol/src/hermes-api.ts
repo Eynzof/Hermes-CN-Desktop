@@ -1727,6 +1727,10 @@ export type GatewayKnownEvent = z.infer<typeof GatewayKnownEvent>;
 export const RawGatewayEvent = z.object({
   type: z.string(),
   session_id: z.string().optional(),
+  // Stable per-turn id stamped by Core on every event of a turn. Optional:
+  // older runtimes don't send it, and idle/global frames have no turn.
+  // Consumers must treat "absent" as "unknown turn", never as "same turn".
+  turn_id: z.string().optional(),
   payload: z.unknown().optional(),
 }).passthrough();
 export type RawGatewayEvent = z.infer<typeof RawGatewayEvent>;
