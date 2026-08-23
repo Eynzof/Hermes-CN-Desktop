@@ -4,6 +4,7 @@ import { Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "@hermes/shared-ui";
 import { useCommandPalette } from "@/components/command-palette";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
+import { WandermindsAccount } from "./wanderminds-account";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import { openExternalUrl } from "@/lib/external-links";
 import { TOP_TABS } from "./use-active-top-tab";
@@ -79,6 +80,7 @@ export function AppTopBar() {
       </button>
 
       <div className={s.actions}>
+        <WandermindsAccount />
         <ProfileSelector variant="topbar" />
         <button
           type="button"

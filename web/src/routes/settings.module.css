@@ -1848,6 +1848,20 @@
   padding-top: 4px;
 }
 
+.inlineLinkButton {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.inlineLinkButton:hover {
+  text-decoration: underline;
+}
+
 .modelsSettings {
   min-height: 100%;
   display: flex;
@@ -2380,6 +2394,18 @@
   white-space: nowrap;
 }
 
+.presetCardRecommended {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 42%, var(--h-line));
+  background: color-mix(in srgb, var(--h-accent) 9%, transparent);
+  color: var(--h-accent);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .presetCardBadge {
   /* 返佣标记 = 卡片右下角探出的半颗星水印：低透明度大字符，下半由
      卡片 overflow:hidden 裁掉，只露上半。 */
@@ -2498,6 +2524,29 @@ button.providerWebsiteButton:hover {
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
+}
+
+.managedProviderNotice {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--h-accent) 38%, var(--h-line));
+  background: color-mix(in srgb, var(--h-accent) 7%, var(--h-bg-pane));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.managedProviderNotice strong {
+  color: var(--h-text);
+  font-size: 12px;
+}
+
+.managedProviderNotice p {
+  margin: 4px 0 0;
+  color: var(--h-text-3);
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .providerFormGrid .fieldRow {

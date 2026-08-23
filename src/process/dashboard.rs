@@ -1092,6 +1092,7 @@ fn spawn_dashboard(
         .env("HERMES_DESKTOP_MANAGED", "1")
         .env("HERMES_DESKTOP", "1")
         .env("HERMES_GATEWAY_DETACHED", "1");
+    crate::commands::wander_token_broker::configure_managed_core(&mut cmd);
     // Identity-proving readiness channel: the kernel atomically writes
     // {"port": N} here once its socket is bound (Core:
     // _write_dashboard_ready_file). The unique path doubles as the identity

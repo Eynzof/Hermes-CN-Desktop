@@ -368,6 +368,7 @@ const HermesNoticeMessagePart = z.object({
   type: z.literal("notice"),
   level: z.enum(["info", "warning", "error", "system"]),
   text: z.string(),
+  action: z.literal("wander_topup").optional(),
 });
 
 // MoA（Mixture of Agents）参考模型输出块：网关在聚合器回答之前，为每个

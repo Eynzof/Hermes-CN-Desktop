@@ -9,6 +9,7 @@
 // gateway returns.
 
 export const CN_BACKEND_PROVIDER_SLUGS = [
+  "wander",
   "alibaba",
   "deepseek",
   "zai",

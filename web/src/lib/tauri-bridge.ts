@@ -56,6 +56,13 @@ import type {
   UiInstallUpdateResult,
   UiUpdateCheckResult,
   UiUpdateReadyPayload,
+  WanderPortalAccountState,
+  WanderPortalCheckoutSession,
+  WanderPortalOrder,
+  WanderPortalPlan,
+  WanderPortalUsagePage,
+  WandermindsAuthResult,
+  WandermindsUserInfo,
   YoloModeStatus,
 } from "@hermes/protocol";
 import type {
@@ -205,6 +212,9 @@ export interface TauriIpcError extends Error {
   code?: string;
   kind?: string;
   details?: unknown;
+  requestId?: string;
+  retryable?: boolean;
+  billingUrl?: string;
   raw?: unknown;
 }
 
@@ -223,6 +233,9 @@ export function normalizeTauriInvokeError(error: unknown): Error {
     if (typeof error.code === "string") normalized.code = error.code;
     if (typeof error.kind === "string") normalized.kind = error.kind;
     if ("details" in error) normalized.details = error.details;
+    if (typeof error.request_id === "string") normalized.requestId = error.request_id;
+    if (typeof error.retryable === "boolean") normalized.retryable = error.retryable;
+    if (typeof error.billing_url === "string") normalized.billingUrl = error.billing_url;
     normalized.raw = error;
     return normalized;
   }
@@ -559,6 +572,50 @@ const tauriBridge = {
 
   async connectionOauthLogout(remoteUrl: string): Promise<void> {
     return invokeCommand("connection_oauth_logout", { input: { remoteUrl } });
+  },
+
+  async wandermindsIdLogin(): Promise<WandermindsAuthResult> {
+    return invokeCommand("wanderminds_id_login");
+  },
+
+  async wandermindsIdRefresh(): Promise<WandermindsAuthResult> {
+    return invokeCommand("wanderminds_id_refresh");
+  },
+
+  async wandermindsIdLogout(): Promise<void> {
+    return invokeCommand("wanderminds_id_logout");
+  },
+
+  async wandermindsIdStatus(): Promise<WandermindsUserInfo | null> {
+    return invokeCommand("wanderminds_id_status");
+  },
+
+  async wanderPortalAccountState(): Promise<WanderPortalAccountState> {
+    return invokeCommand("wander_portal_account_state");
+  },
+
+  async wanderPortalPlans(): Promise<WanderPortalPlan[]> {
+    return invokeCommand("wander_portal_plans");
+  },
+
+  async wanderPortalRedeemInvite(code: string): Promise<{ granted: boolean }> {
+    return invokeCommand("wander_portal_redeem_invite", { input: { code } });
+  },
+
+  async wanderPortalCreateCheckout(input: {
+    kind: "subscription" | "topup";
+    planSlug?: string | null;
+    idempotencyKey: string;
+  }): Promise<WanderPortalCheckoutSession> {
+    return invokeCommand("wander_portal_create_checkout", { input });
+  },
+
+  async wanderPortalOrder(orderId: string): Promise<WanderPortalOrder> {
+    return invokeCommand("wander_portal_order", { input: { orderId } });
+  },
+
+  async wanderPortalUsage(cursor?: string | null): Promise<WanderPortalUsagePage> {
+    return invokeCommand("wander_portal_usage", { input: { cursor: cursor ?? null } });
   },
 
 

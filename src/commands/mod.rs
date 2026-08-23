@@ -27,5 +27,8 @@ pub mod session_export;
 pub mod terminal;
 pub mod ui_store;
 pub mod ui_update;
+pub mod wander_portal;
+pub mod wander_token_broker;
+pub mod wanderminds_id;
 pub mod ws_proxy;
 pub mod yolo;

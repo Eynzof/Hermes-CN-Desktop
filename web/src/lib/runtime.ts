@@ -45,6 +45,13 @@ import type {
   UiInstallUpdateResult,
   UiUpdateCheckResult,
   UiUpdateReadyPayload,
+  WanderPortalAccountState,
+  WanderPortalCheckoutSession,
+  WanderPortalOrder,
+  WanderPortalPlan,
+  WanderPortalUsagePage,
+  WandermindsAuthResult,
+  WandermindsUserInfo,
   YoloModeStatus,
 } from "@hermes/protocol";
 
@@ -518,6 +525,20 @@ declare global {
       }): Promise<OauthLoginResult>;
       connectionAuthMe?(remoteUrl: string): Promise<OauthLoginResult>;
       connectionOauthLogout?(remoteUrl: string): Promise<void>;
+      wandermindsIdLogin?(): Promise<WandermindsAuthResult>;
+      wandermindsIdRefresh?(): Promise<WandermindsAuthResult>;
+      wandermindsIdLogout?(): Promise<void>;
+      wandermindsIdStatus?(): Promise<WandermindsUserInfo | null>;
+      wanderPortalAccountState?(): Promise<WanderPortalAccountState>;
+      wanderPortalPlans?(): Promise<WanderPortalPlan[]>;
+      wanderPortalRedeemInvite?(code: string): Promise<{ granted: boolean }>;
+      wanderPortalCreateCheckout?(input: {
+        kind: "subscription" | "topup";
+        planSlug?: string | null;
+        idempotencyKey: string;
+      }): Promise<WanderPortalCheckoutSession>;
+      wanderPortalOrder?(orderId: string): Promise<WanderPortalOrder>;
+      wanderPortalUsage?(cursor?: string | null): Promise<WanderPortalUsagePage>;
       scanConfigMigration?(input?: ConfigMigrationScanInput): Promise<ConfigMigrationScanResult>;
       importConfigMigration?(input: ConfigMigrationImportInput): Promise<ConfigMigrationImportResult>;
       getYoloMode?(): Promise<YoloModeStatus>;

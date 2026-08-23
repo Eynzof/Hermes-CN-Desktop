@@ -52,6 +52,10 @@ export interface ProviderPreset {
   supportsModelListing?: boolean;
   /** True when this preset was added by the user at runtime (custom OpenAI-compat entry). */
   isCustom?: boolean;
+  /** Credential is supplied by the desktop broker, never typed or persisted here. */
+  managedCredential?: boolean;
+  /** Featured first-party path shown with a recommendation badge. */
+  recommended?: boolean;
 }
 
 export interface ProviderCatalog {
@@ -141,6 +145,7 @@ export type EnvVarPreviewMap = Record<string, {
  * this list reorders the Models tab list and the onboarding picker.
  */
 export const TOP5_PROVIDER_IDS = [
+  "wander",
   "deepseek",
   "minimax-cn",
   "kimi-for-coding",
@@ -325,11 +330,30 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.26.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.08.23.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
   providers: [
+    {
+      id: "wander",
+      name: "Wander",
+      vendor: "Wanderminds",
+      region: "cn",
+      baseUrl: "https://inference-staging.wanderminds.ai/v1",
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "WANDER_BROKER_MANAGED",
+      websiteUrl: "https://portal-staging.wanderminds.ai/portal",
+      docsUrl: "https://portal-staging.wanderminds.ai/portal",
+      defaultModel: "wander-beta",
+      models: [
+        { id: "wander-beta", label: "Wander Beta", supportsTools: true, supportsReasoning: true },
+      ],
+      supportsModelListing: true,
+      managedCredential: true,
+      recommended: true,
+    },
     {
       id: "cp.compshare.cn",
       name: "优云智算 · Agent Plan",
@@ -1416,6 +1440,7 @@ export function providerHasSavedCredentials(
   envVars?: EnvVarPreviewMap,
   provider?: ProviderPreset,
 ): boolean {
+  if (provider?.managedCredential) return true;
   const entry = getProviderEntry(config, providerId);
   if (provider && providerApiKeyLabels(provider).some((key) => envVars?.[key]?.is_set)) return true;
   const keyEnv = typeof entry.key_env === "string" ? entry.key_env : "";
@@ -1573,6 +1598,8 @@ export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCata
         apiMode: builtin.apiMode,
         transport: builtin.transport,
         apiKeyLabel: builtin.apiKeyLabel,
+        managedCredential: builtin.managedCredential,
+        recommended: builtin.recommended,
       }
       : provider);
   }

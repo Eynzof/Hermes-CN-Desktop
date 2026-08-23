@@ -470,6 +470,7 @@ function appendNoticeMessage(
   now: number,
   text: string,
   level: "info" | "warning" | "error" | "system",
+  action?: "wander_topup",
 ): ChatSessionRuntime {
   const trimmed = text.trim();
   if (!trimmed) return runtime;
@@ -483,7 +484,11 @@ function appendNoticeMessage(
         role: "system",
         createdAt: now,
         status: level === "error" ? "error" : "complete",
-        parts: [{ type: "notice", level, text: trimmed }],
+        parts: [
+          action
+            ? { type: "notice", level, text: trimmed, action }
+            : { type: "notice", level, text: trimmed },
+        ],
       },
     ],
   };
@@ -828,7 +833,21 @@ function reduceGatewayEventInner(
         next = appendNoticeMessage(next, sessionId, now + 1, warningText, "warning");
       }
       if (isErrorCompletion) {
-        next = appendNoticeMessage(next, sessionId, now + 2, pickErrorText(payload), "error");
+        const billing = payload.billing;
+        const wanderCreditWall =
+          billing &&
+          typeof billing === "object" &&
+          String((billing as Record<string, unknown>).provider ?? "").toLowerCase() === "wander";
+        next = appendNoticeMessage(
+          next,
+          sessionId,
+          now + 2,
+          wanderCreditWall
+            ? "Wander 额度已用完。充值后回到这里即可继续使用，无需重启。"
+            : pickErrorText(payload),
+          "error",
+          wanderCreditWall ? "wander_topup" : undefined,
+        );
       }
 
       return {
