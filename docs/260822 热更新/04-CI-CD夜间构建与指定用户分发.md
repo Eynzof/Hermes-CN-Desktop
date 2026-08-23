@@ -151,3 +151,9 @@ Runtime manifest 与 compatibility matrix 检查
 ```
 
 全量单元/E2E 可以在合并前主流水线继续执行；热更新 staging 构建不应因为追求速度而跳过上述发布安全门。
+
+## 9. Microsoft Store production lane
+
+微软商店 EXE/NSIS 版本不能直接复用普通 stable 的 promotion：必须使用离线 WebView2 安装包、完成所有 PE 的 Authenticode，并让同一 SHA 的版本化公开 URL 先通过 Partner Center 认证。只有 submission 状态为 `PUBLISHED` 后，Cloudflare `store-stable` 才允许从 0% 扩大。
+
+完整流水线和政策依据见[微软商店上架与热更新](./11-微软商店上架与热更新.md)。

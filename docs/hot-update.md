@@ -13,6 +13,7 @@
 - Desktop、Core、Runtime 使用独立版本线；兼容关系以 [`../compatibility/desktop-core.json`](../compatibility/desktop-core.json) 为唯一事实源。
 - Desktop `0.8.x` 当前兼容 Core/Runtime `0.20.x`，不要求三者 SemVer 相同。
 - 内测候选只对登记设备/ring 可见，可按百分比灰度并立即暂停。
+- Microsoft Store 近期采用 Tauri NSIS/EXE 路径：保留完整壳 updater，但 Store 风味首版关闭独立 Runtime/UI 热更，只下发 Partner Center 已认证的安装包。
 - 当前 staging 候选已暂停；没有修改公开 stable、Landing、GitHub Release 或线上更新清单。
 
 ## 三条更新轨道
@@ -89,4 +90,5 @@ infra/hot-update-staging/
 - [Cloudflare 成本与大陆网络](./260822%20热更新/03-Cloudflare控制面与成本.md)
 - [CI/CD 与指定用户分发](./260822%20热更新/04-CI-CD夜间构建与指定用户分发.md)
 - [CNB/Gitea 调研](./260822%20热更新/07-CNB-Gitea国内托管调研.md)
+- [微软商店上架与热更新](./260822%20热更新/11-微软商店上架与热更新.md)
 - [原型实测记录](./260822%20热更新/10-原型实测记录.md)
