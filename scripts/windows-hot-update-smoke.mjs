@@ -48,7 +48,10 @@ async function connect(timeoutSeconds = 300) {
       if (response.ok) {
         const browser = await chromium.connectOverCDP(cdp);
         const page = browser.contexts().flatMap((context) => context.pages())[0];
-        if (page) return { browser, page };
+        const bridgeReady = page && await page.evaluate(() =>
+          typeof window.hermesDesktop?.appUpdateCheck === "function",
+        ).catch(() => false);
+        if (bridgeReady) return { browser, page };
         await browser.close();
       }
     } catch (error) {
@@ -57,6 +60,24 @@ async function connect(timeoutSeconds = 300) {
     await wait(1_000);
   }
   throw new Error(`等待 WebView2 CDP 超时：${lastError?.message || "unknown"}`);
+}
+
+async function waitForCoreVersion(page, version, timeoutSeconds = 180) {
+  const until = deadline(timeoutSeconds);
+  let lastResult;
+  while (Date.now() < until) {
+    try {
+      lastResult = await page.evaluate(async () => {
+        const result = await window.hermesDesktop.request({ path: "/api/version", method: "GET" });
+        return { status: result.status, body: result.body };
+      });
+      if (lastResult.status === 200 && lastResult.body.includes(version)) return lastResult;
+    } catch (error) {
+      lastResult = { error: error.message };
+    }
+    await wait(1_000);
+  }
+  throw new Error(`Core 9120 /api/version 等待超时：${JSON.stringify(lastResult)}`);
 }
 
 async function bridge(page, method) {
@@ -171,13 +192,7 @@ async function main() {
   if (runtimeInfo.current?.kernelVersion !== expectedCoreVersion) {
     throw new Error(`Runtime current.json 核心版本异常：${JSON.stringify(runtimeInfo.current)}`);
   }
-  const coreVersion = await second.page.evaluate(async () => {
-    const result = await window.hermesDesktop.request({ path: "/api/version", method: "GET" });
-    return { status: result.status, body: result.body };
-  });
-  if (coreVersion.status !== 200 || !coreVersion.body.includes(expectedCoreVersion)) {
-    throw new Error(`Core 9120 /api/version 异常：${JSON.stringify(coreVersion)}`);
-  }
+  const coreVersion = await waitForCoreVersion(second.page, expectedCoreVersion);
   let sentinelEvidence;
   if (sentinel) {
     const value = readFileSync(sentinel, "utf8");

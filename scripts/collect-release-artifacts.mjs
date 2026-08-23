@@ -34,7 +34,8 @@ const runtimeManifest = JSON.parse(
 );
 
 const suffixes = {
-  win32: [".exe", ".nsis.zip", ".nsis.zip.sig"],
+  // Tauri v2 signs and distributes the final NSIS executable itself.
+  win32: [".exe", ".exe.sig"],
   darwin: [".dmg", ".app.tar.gz", ".app.tar.gz.sig"],
   linux: [".deb", ".AppImage", ".AppImage.tar.gz", ".AppImage.tar.gz.sig"],
 }[platform];
@@ -61,7 +62,7 @@ for (const source of candidates) {
 }
 
 const updaterSuffix = {
-  win32: ".nsis.zip",
+  win32: ".exe",
   darwin: ".app.tar.gz",
   linux: ".AppImage.tar.gz",
 }[platform];

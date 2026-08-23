@@ -9,7 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-if (-not $env:HERMES_SHELL_UPDATE_TOKEN) { throw "缺少 HERMES_SHELL_UPDATE_TOKEN" }
+if (-not $env:HERMES_SHELL_UPDATE_TOKEN) { throw "HERMES_SHELL_UPDATE_TOKEN is required" }
 $application = (Resolve-Path -LiteralPath $AppExe).Path
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 
@@ -19,7 +19,7 @@ Get-Process | ForEach-Object {
       Stop-Process -Id $_.Id -Force
     }
   } catch {
-    Write-Verbose "跳过无法读取 Path 的无关系统进程：$($_.Exception.Message)"
+    Write-Verbose "Skipping unrelated process with inaccessible Path: $($_.Exception.Message)"
   }
 }
 

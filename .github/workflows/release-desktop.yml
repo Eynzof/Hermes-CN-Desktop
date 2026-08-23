@@ -383,7 +383,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/finalize-release-record.mjs release-assets
-          find release-assets -maxdepth 1 -type f \( -name '*.nsis.zip' -o -name '*.app.tar.gz' -o -name '*.AppImage.tar.gz' \) \
+          find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.app.tar.gz' -o -name '*.AppImage.tar.gz' \) \
             -size +480M -print -quit | grep -q . && { echo "updater asset exceeds 480 MiB" >&2; exit 1; } || true
           rm -f release-assets/checksums.txt
           cd release-assets

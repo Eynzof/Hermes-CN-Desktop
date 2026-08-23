@@ -24,11 +24,10 @@ test("corrupts one base64 character without changing signature length", () => {
 test("finalizes one Windows fragment and checksums the corrupted signature", () => {
   const root = mkdtempSync(path.join(tmpdir(), "hermes-single-release-"));
   try {
-    const updater = "Hermes_0.8.1_x64-setup.nsis.zip";
+    const updater = "Hermes_0.8.1_x64-setup.exe";
     const signature = `${updater}.sig`;
     writeFileSync(path.join(root, updater), "updater-bytes");
     writeFileSync(path.join(root, signature), "QUJDRA==\n");
-    writeFileSync(path.join(root, "installer.exe"), "installer-bytes");
     writeFileSync(
       path.join(root, "release-fragment-win32-x64.json"),
       JSON.stringify({

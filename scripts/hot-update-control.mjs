@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { resolveD1DatabaseIdentifier } from "./d1-database.mjs";
 
 const FIXED_REPOSITORY = "Eynzof/Hermes-CN-Desktop";
 const RESTRICTED_RINGS = new Set(["prototype", "canary", "beta"]);
@@ -74,6 +75,15 @@ function workflowUrl() {
   return server && repository && runId ? `${server}/${repository}/actions/runs/${runId}` : null;
 }
 
+const resolvedDatabases = new Map();
+
+function resolvedDatabase(database) {
+  if (!resolvedDatabases.has(database)) {
+    resolvedDatabases.set(database, resolveD1DatabaseIdentifier(database, shell));
+  }
+  return resolvedDatabases.get(database);
+}
+
 function actor() {
   return process.env.GITHUB_ACTOR || process.env.USER || process.env.USERNAME || "local-operator";
 }
@@ -93,12 +103,13 @@ function executeD1(sql, options, json = false) {
     process.stdout.write(`${sql}\n`);
     return "";
   }
+  const database = resolvedDatabase(ctx.database);
   const args = [
     "exec",
     "wrangler",
     "d1",
     "execute",
-    ctx.database,
+    database,
     ctx.remote ? "--remote" : "--local",
     "--command",
     sql,

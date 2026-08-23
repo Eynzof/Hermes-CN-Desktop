@@ -5,6 +5,18 @@ import {
   sqlValue,
   validateReleaseChannel,
 } from "./hot-update-control.mjs";
+import { selectD1DatabaseIdentifier } from "./d1-database.mjs";
+
+test("D1 name resolves to the UUID required by Wrangler without a config file", () => {
+  const uuid = "4742bc7a-340f-4dab-ac72-20336451c059";
+  const databases = [{ uuid, name: "hermes-desktop-hot-update-staging" }];
+  assert.equal(selectD1DatabaseIdentifier(uuid, databases), uuid);
+  assert.equal(
+    selectD1DatabaseIdentifier("hermes-desktop-hot-update-staging", databases),
+    uuid,
+  );
+  assert.throws(() => selectD1DatabaseIdentifier("missing", databases), /找不到 D1 database/);
+});
 
 test("SQL quoting does not permit string breakout", () => {
   assert.equal(sqlValue("a'b"), "'a''b'");

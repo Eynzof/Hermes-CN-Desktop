@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
+import { resolveD1DatabaseIdentifier } from "./d1-database.mjs";
 
 function option(name) {
   const index = process.argv.indexOf(`--${name}`);
@@ -15,6 +16,7 @@ function run(command, args) {
 }
 
 const database = option("database");
+const databaseId = resolveD1DatabaseIdentifier(database, run);
 const apply = process.argv.includes("--apply");
 const releases = JSON.parse(
   run("gh", ["release", "list", "--limit", "100", "--json", "tagName,publishedAt,isPrerelease"]),
@@ -24,7 +26,7 @@ const releases = JSON.parse(
 
 const d1 = JSON.parse(
   run("pnpm", [
-    "exec", "wrangler", "d1", "execute", database, "--remote", "--json",
+    "exec", "wrangler", "d1", "execute", databaseId, "--remote", "--json",
     "--command", "SELECT DISTINCT github_release_tag FROM releases WHERE github_release_tag != '';",
   ]),
 );
