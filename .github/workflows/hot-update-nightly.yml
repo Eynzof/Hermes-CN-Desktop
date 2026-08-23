@@ -136,7 +136,7 @@ jobs:
           # Nightly uses a deliberately self-signed staging identity. Trust it
           # only inside this disposable hosted runner so Authenticode can be
           # verified as Valid; canary/beta/stable use the public CA identity.
-          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root -Confirm:$false | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
           @{

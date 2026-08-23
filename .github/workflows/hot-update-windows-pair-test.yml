@@ -145,7 +145,7 @@ jobs:
           $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
           $cer = Join-Path $env:GITHUB_WORKSPACE "staging-publisher.cer"
           Export-Certificate -Cert $cert -FilePath $cer | Out-Null
-          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root -Confirm:$false | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
           @{

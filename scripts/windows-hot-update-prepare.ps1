@@ -21,7 +21,7 @@ if ($ExistingRuntimeRoot) {
 }
 $stoppedProcesses = @()
 
-Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\LocalMachine\Root -Confirm:$false | Out-Null
 Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
 Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
 $installerSignature = Get-AuthenticodeSignature -FilePath $installer
