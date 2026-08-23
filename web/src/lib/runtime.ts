@@ -244,9 +244,15 @@ export interface TerminalEventPayload {
 // Right-rail rich preview (issue #233). Mirrors the Rust commands in
 // src/commands/preview.rs and the upstream Electron preload API.
 export interface ReadWorkspaceFileInput {
-  /** Absolute path, or relative to `root`. Must resolve inside `root`. */
+  /**
+   * Absolute path, or relative to `root`. Must resolve inside `root` (or,
+   * when `root` is empty/stale, inside the user's home subtree).
+   */
   path: string;
-  /** Session workspace root; reads are confined to this directory. */
+  /**
+   * Session workspace root; reads are confined to this directory. When it
+   * cannot be resolved, reads are confined to the home subtree instead.
+   */
   root: string;
 }
 

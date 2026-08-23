@@ -8,7 +8,8 @@
 // Two capabilities:
 // - `read_workspace_file`: read a single file from the session workspace,
 //   capped and binary-safe, with a containment guard so the renderer can't
-//   steer it outside the workspace root.
+//   steer it outside the workspace root (or, when the root is empty/stale,
+//   outside the user's home subtree — see `resolve_within_root`).
 // - `watch_preview_file` / `stop_preview_file_watch`: native fs watch that
 //   emits a `preview-file-changed` event on every change. The renderer
 //   debounces (matching the upstream 200ms FILE_RELOAD_DEBOUNCE_MS) before
@@ -54,9 +55,11 @@ const TEXT_WRITE_MAX_BYTES: usize = 1_000_000;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadWorkspaceFileInput {
-    /// File to read. Absolute or relative to `root`; must resolve inside `root`.
+    /// File to read. Absolute or relative to `root`; must resolve inside `root`
+    /// (or, when `root` is empty/stale, inside the user's home subtree).
     pub path: String,
-    /// Session workspace root. Reads are confined to this directory.
+    /// Session workspace root. Reads are confined to this directory; when it
+    /// cannot be resolved, they are confined to the home subtree instead.
     pub root: String,
 }
 
@@ -134,15 +137,28 @@ struct PreviewFileChangedPayload {
 }
 
 /// Resolve `path` (preferably absolute, as the renderer's file browser sends)
-/// to a canonical, existing file. Containment in `root` is **best-effort**: it
-/// is enforced only when `root` itself canonicalizes, so a workspace path the
-/// renderer could browse via the (more lenient) `/api/fs/list` endpoint never
-/// gets a valid file read rejected just because `canonicalize()` is stricter.
-/// Traversal/symlink escapes are still caught when containment applies.
+/// to a canonical, existing file, confined to an authorization boundary
+/// (#288):
+///
+/// - when `root` canonicalizes, the boundary is the workspace root;
+/// - when `root` is empty or stale (fails to canonicalize), the boundary
+///   falls back to the user's **home subtree** — the same gate the
+///   dashboard's `/api/fs/list` browser enforces, so everything the browser
+///   can list stays readable (the "no content" bug #265 fixed) without
+///   turning a stale root into an arbitrary absolute-path read primitive.
+///
+/// Traversal (`..`) and symlink escapes are always caught: both sides of the
+/// comparison are canonicalized.
 ///
 /// **Read path only.** Writes go through the strict
-/// [`resolve_within_root_strict`], which never skips containment.
+/// [`resolve_within_root_strict`], which never falls back past the root.
 fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
+    resolve_within_boundary(root, path, dirs::home_dir())
+}
+
+/// [`resolve_within_root`] with the home-subtree fallback injectable so tests
+/// stay hermetic (never touch the real `$HOME`).
+fn resolve_within_boundary(root: &str, path: &str, home: Option<PathBuf>) -> AppResult<PathBuf> {
     let raw = path.trim();
     if raw.is_empty() {
         return Err(AppError::InvalidRequest("Empty path".to_string()));
@@ -166,19 +182,24 @@ fn resolve_within_root(root: &str, path: &str) -> AppResult<PathBuf> {
         .canonicalize()
         .map_err(|e| AppError::FileError(format!("Path not accessible: {e}")))?;
 
-    // Enforce containment only when the workspace root canonicalizes. The file
-    // browser is already gated to the user's home subtree by the dashboard, so
-    // skipping the check for an un-canonicalizable root is safe and avoids a
-    // spurious rejection that surfaces to the user as "no content".
-    if !root.is_empty() {
-        if let Ok(root_real) = PathBuf::from(root).canonicalize() {
-            if !real.starts_with(&root_real) {
-                return Err(AppError::OriginViolation(format!(
-                    "Path escapes workspace: {}",
-                    real.display()
-                )));
-            }
-        }
+    let root_boundary = if root.is_empty() {
+        None
+    } else {
+        PathBuf::from(root).canonicalize().ok()
+    };
+    let boundary = root_boundary
+        .or_else(|| home.and_then(|h| h.canonicalize().ok()))
+        .ok_or_else(|| {
+            AppError::FileError(
+                "Workspace root is not accessible and no home directory could be resolved"
+                    .to_string(),
+            )
+        })?;
+    if !real.starts_with(&boundary) {
+        return Err(AppError::OriginViolation(format!(
+            "Path escapes workspace: {}",
+            real.display()
+        )));
     }
 
     Ok(real)
@@ -636,16 +657,86 @@ mod tests {
     }
 
     #[test]
-    fn reads_absolute_file_when_root_uncanonicalizable() {
+    fn stale_root_falls_back_to_home_subtree_for_reads() {
         // The file browser always sends an absolute path; a workspace root that
-        // canonicalize() can't resolve must not block a valid read (the bug
-        // that surfaced as "no content"). Containment is skipped, not fatal.
+        // canonicalize() can't resolve must not block a valid read of a file
+        // the browser can list (the "no content" bug, #265). The browser is
+        // gated to the home subtree, so that is the fallback boundary (#288).
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join("a.txt");
+        std::fs::write(&file, b"hello").unwrap();
+
+        let resolved = resolve_within_boundary(
+            "/no/such/root-xyz-404",
+            &file.to_string_lossy(),
+            Some(home.path().to_path_buf()),
+        )
+        .unwrap();
+        assert_eq!(resolved, file.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn stale_root_rejects_absolute_path_outside_home() {
+        // A stale/missing root must NOT grant arbitrary absolute-path reads
+        // (#288): outside the home-subtree fallback boundary → hard error.
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let secret = outside.path().join("secret.txt");
+        std::fs::write(&secret, b"nope").unwrap();
+
+        let err = resolve_within_boundary(
+            "/no/such/root-xyz-404",
+            &secret.to_string_lossy(),
+            Some(home.path().to_path_buf()),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, AppError::OriginViolation(_)),
+            "expected OriginViolation, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn empty_root_confines_absolute_reads_to_home() {
+        let home = tempfile::tempdir().unwrap();
+        let inside = home.path().join("ok.txt");
+        std::fs::write(&inside, b"ok").unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let secret = outside.path().join("secret.txt");
+        std::fs::write(&secret, b"nope").unwrap();
+
+        let resolved = resolve_within_boundary(
+            "",
+            &inside.to_string_lossy(),
+            Some(home.path().to_path_buf()),
+        )
+        .unwrap();
+        assert_eq!(resolved, inside.canonicalize().unwrap());
+
+        let err = resolve_within_boundary(
+            "",
+            &secret.to_string_lossy(),
+            Some(home.path().to_path_buf()),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, AppError::OriginViolation(_)),
+            "expected OriginViolation, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn stale_root_without_home_is_a_hard_error() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("a.txt");
         std::fs::write(&file, b"hello").unwrap();
 
-        let preview = read_file_preview("/no/such/root-xyz-404", &file.to_string_lossy()).unwrap();
-        assert_eq!(preview.text.as_deref(), Some("hello"));
+        let err = resolve_within_boundary("/no/such/root-xyz-404", &file.to_string_lossy(), None)
+            .unwrap_err();
+        assert!(
+            matches!(err, AppError::FileError(_)),
+            "expected FileError, got {err:?}"
+        );
     }
 
     #[test]
