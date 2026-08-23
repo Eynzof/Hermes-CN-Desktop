@@ -67,7 +67,7 @@ async fn returns_manifest_when_remote_responds_with_valid_json() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/manifest.json"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_json("999.999.999-cn.1")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_json("0.20.0-cn.1")))
         .mount(&server)
         .await;
     std::env::set_var(
@@ -79,7 +79,7 @@ async fn returns_manifest_when_remote_responds_with_valid_json() {
 
     assert!(result.ok, "unexpected error: {:?}", result.error);
     let manifest = result.manifest.expect("manifest should be present");
-    assert_eq!(manifest.runtime_version, "999.999.999-cn.1");
+    assert_eq!(manifest.runtime_version, "0.20.0-cn.1");
     assert_eq!(manifest.platform, host_platform());
 
     clear_env();

@@ -218,6 +218,11 @@ fn build_hermesui_response(
 }
 
 fn main() {
+    #[cfg(windows)]
+    if commands::app_update::run_windows_updater_helper_if_requested() {
+        return;
+    }
+
     env_logger::init();
 
     // Windows: keep the WebView2 user-data folder (network cache, IndexedDB,
@@ -265,6 +270,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(app_state)
         // Track B UI hot update: serve the webview from the writable
         // `ui/versions/<v>/` tree (signed `appVersionFloor` gate + path-traversal
@@ -674,9 +680,13 @@ fn main() {
             commands::debug_bundle::export_debug_bundle,
             commands::desktop_update::desktop_check_update,
             commands::app_update::app_update_check,
+            commands::app_update::app_update_pending,
+            commands::app_update::app_update_download,
             commands::app_update::app_update_install,
             hermes_agent_cn::update_config::get_update_config,
             hermes_agent_cn::update_config::set_update_config,
+            hermes_agent_cn::update_config::import_update_invitation,
+            hermes_agent_cn::update_config::get_update_credential_status,
             commands::devtools::toggle_devtools,
             commands::environment::environment_check,
             commands::coding_agents::coding_agents_check,

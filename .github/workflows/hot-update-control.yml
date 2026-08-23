@@ -1,0 +1,139 @@
+name: hot-update-control
+
+on:
+  workflow_dispatch:
+    inputs:
+      control_environment:
+        description: "GitHub Environment；production 必须配置审批人"
+        type: choice
+        options: [hot-update-staging, hot-update-production]
+        default: hot-update-staging
+        required: true
+      action:
+        type: choice
+        options:
+          - device-create
+          - device-disable
+          - release-register-draft
+          - release-promote
+          - release-set-percent
+          - release-pause
+          - release-revoke
+          - release-status
+        required: true
+      device_id:
+        description: "device-create/device-disable 使用"
+        required: false
+      ring:
+        description: "prototype/canary/beta"
+        required: false
+      release_id:
+        description: "release 操作使用"
+        required: false
+      release_tag:
+        description: "register-draft 使用的已发布 GitHub Release tag"
+        required: false
+      release_channel:
+        description: "register-draft 使用"
+        type: choice
+        options: [prototype, canary, beta, stable]
+        default: canary
+        required: false
+      percent:
+        description: "promote/set-percent 使用，0–100"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ inputs.control_environment }}-release-control
+  cancel-in-progress: false
+
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.control_environment }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE: ${{ inputs.control_environment == 'hot-update-production' && vars.HOT_UPDATE_PRODUCTION_D1 || vars.HOT_UPDATE_STAGING_D1 }}
+      CONTROL_ENDPOINT: ${{ inputs.control_environment == 'hot-update-production' && vars.HOT_UPDATE_PRODUCTION_ENDPOINT || vars.HOT_UPDATE_STAGING_ENDPOINT }}
+      MIRROR_ORIGIN: ${{ inputs.control_environment == 'hot-update-production' && vars.HOT_UPDATE_PRODUCTION_MIRROR_ORIGIN || vars.HOT_UPDATE_STAGING_MIRROR_ORIGIN }}
+      HERMES_ALLOW_PRODUCTION_HOT_UPDATE: ${{ inputs.control_environment == 'hot-update-production' && secrets.HERMES_ALLOW_PRODUCTION_HOT_UPDATE || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - run: pnpm install --frozen-lockfile
+      - name: Validate protected inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$D1_DATABASE"
+          if [ "${{ inputs.control_environment }}" = hot-update-production ]; then
+            test "$HERMES_ALLOW_PRODUCTION_HOT_UPDATE" = 1
+          fi
+          case "${{ inputs.action }}" in
+            device-create|device-disable) test -n "${{ inputs.device_id }}" ;;
+            release-register-draft)
+              test -n "${{ inputs.release_tag }}"
+              test -n "${{ inputs.release_channel }}"
+              test -n "$MIRROR_ORIGIN"
+              ;;
+            release-*) test -n "${{ inputs.release_id }}" ;;
+          esac
+      - name: Execute one audited control operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          common=(--database "$D1_DATABASE" --remote)
+          if [ "${{ inputs.control_environment }}" = hot-update-production ]; then
+            common+=(--production)
+          fi
+          case "${{ inputs.action }}" in
+            device-create)
+              node scripts/hot-update-control.mjs device create "${common[@]}" \
+                --id "${{ inputs.device_id }}" --ring "${{ inputs.ring }}" \
+                --endpoint "$CONTROL_ENDPOINT" | tee invitation.json
+              ;;
+            device-disable)
+              node scripts/hot-update-control.mjs device disable "${common[@]}" --id "${{ inputs.device_id }}"
+              ;;
+            release-register-draft)
+              node scripts/hot-update-control.mjs release register-draft "${common[@]}" \
+                --tag "${{ inputs.release_tag }}" --channel "${{ inputs.release_channel }}" \
+                --mirror-origin "$MIRROR_ORIGIN"
+              ;;
+            release-promote)
+              node scripts/hot-update-control.mjs release promote "${common[@]}" \
+                --id "${{ inputs.release_id }}" --percent "${{ inputs.percent }}"
+              ;;
+            release-set-percent)
+              node scripts/hot-update-control.mjs release set-percent "${common[@]}" \
+                --id "${{ inputs.release_id }}" --percent "${{ inputs.percent }}"
+              ;;
+            release-pause)
+              node scripts/hot-update-control.mjs release pause "${common[@]}" --id "${{ inputs.release_id }}"
+              ;;
+            release-revoke)
+              node scripts/hot-update-control.mjs release revoke "${common[@]}" --id "${{ inputs.release_id }}"
+              ;;
+            release-status)
+              node scripts/hot-update-control.mjs release status "${common[@]}" --id "${{ inputs.release_id }}"
+              ;;
+          esac
+      - name: Upload one-time invitation
+        if: inputs.action == 'device-create'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hot-update-invitation-${{ inputs.device_id }}
+          path: invitation.json
+          retention-days: 1
+          if-no-files-found: error

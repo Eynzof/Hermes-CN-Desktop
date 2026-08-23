@@ -1,58 +1,76 @@
-//! Unified self-update — one button updates BOTH the desktop shell and the
-//! backend kernel to the same version.
+//! Signed desktop-shell updates powered by the official Tauri updater.
 //!
-//! Flow (see `docs/hot-update.md` §2):
-//!
-//! ```text
-//! app_update_check   → fetch unified manifest (releaseManifestUrl) →
-//!                      same-version validation (desktop == kernel) → result
-//!
-//! app_update_install → guards (managed + try_begin_restart + in-flight)
-//!    ├─ [1] runtime::install_runtime_update(Some(embedded track-A manifest))
-//!    │        (download + sha256 + Ed25519 + extract + smoke + record)
-//!    ├─ [2] respawn_managed_dashboard → GET /api/version == manifest.version
-//!    │        (fail → rollback_runtime + respawn + abort)
-//!    ├─ [3] stage desktop installer (download + sha256 + Authenticode best-effort)
-//!    ├─ [4] write pending-app-update.json + detached apply-desktop-update.mjs
-//!    └─ app.exit(0) → updater waits for exit → silent install → relaunch
-//! ```
-//!
-//! Progress is streamed to the renderer as `app-update-progress` events
-//! (`{ phase, percent, message }`).
+//! The Cloudflare control plane is the only discovery source. Once a device is
+//! authorised it receives an immutable Cloudflare mirror URL plus the matching
+//! GitHub Release URL. Download requests never inherit the control-plane bearer
+//! token, and only transport/429/5xx failures are eligible for GitHub fallback.
 
-use std::cmp::Ordering;
+#[cfg(target_os = "windows")]
+use std::ffi::{OsStr, OsString};
 use std::fs;
+#[cfg(target_os = "windows")]
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
-use std::time::Duration;
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
 use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_updater::{Error as UpdaterError, Update, Updater, UpdaterExt};
+use url::Url;
 
 use crate::error::AppError;
-use crate::process::runtime;
+use crate::process::dashboard;
 use crate::state::AppState;
-use crate::unified_manifest::{UnifiedReleaseManifest, UNIFIED_MANIFEST_SCHEMA_VERSION};
+use crate::update_config::UpdateConfig;
+use crate::version_compatibility::CompatibilityMatrix;
 
 pub const APP_UPDATE_PROGRESS_EVENT: &str = "app-update-progress";
-const PENDING_APP_UPDATE_FILE: &str = "pending-app-update.json";
-const UPDATER_DIR: &str = "updater";
-const UPDATER_SCRIPT_FILE: &str = "apply-desktop-update.mjs";
-const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
-const ARTIFACT_HTTP_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const SHELL_UPDATE_TOKEN_ENV: &str = "HERMES_SHELL_UPDATE_TOKEN";
+const MANIFEST_SOURCE: &str = "cloudflare-control";
+const PRIMARY_DOWNLOAD_SOURCE: &str = "cloudflare-cache";
+const FALLBACK_DOWNLOAD_SOURCE: &str = "github-release";
+const PRIMARY_DOWNLOAD_HOSTS: &[&str] = &[
+    "hot-update-download-staging.hermesagent.org.cn",
+    "dl-desktop.hermesagent.org.cn",
+];
+const UPDATER_CACHE_DIR: &str = "desktop-updater-cache";
+const PENDING_RECORD_FILE: &str = "pending.json";
+#[cfg(target_os = "windows")]
+const PENDING_PACKAGE_FILE: &str = "pending-update.exe";
+#[cfg(not(target_os = "windows"))]
+const PENDING_PACKAGE_FILE: &str = "pending-update.bin";
+#[cfg(target_os = "windows")]
+const WINDOWS_NSIS_INSTALL_ARGS: [&str; 2] = ["/P", "/UPDATE"];
+#[cfg(target_os = "windows")]
+const WINDOWS_UPDATER_HELPER_FLAG: &str = "--hermes-windows-updater-helper";
+#[cfg(target_os = "windows")]
+const WINDOWS_UPDATER_HELPER_LOG: &str = "updater-helper.log";
+const MAX_UPDATER_BYTES: u64 = 480 * 1024 * 1024;
 
-/// The detached updater script, embedded so packaged builds are fully
-/// self-contained (no repo files needed at update time).
-const APPLY_DESKTOP_UPDATE_SOURCE: &str = include_str!("../../scripts/apply-desktop-update.mjs");
-
-static APP_UPDATE_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
-    reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .user_agent("hermes-agent-cn-desktop-unified-update")
-        .build()
-        .expect("valid app-update HTTP client")
-});
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellUpdateMetadata {
+    pub schema_version: u32,
+    #[serde(default)]
+    pub release_id: String,
+    #[serde(default)]
+    pub channel: String,
+    #[serde(default)]
+    pub github_release_tag: String,
+    #[serde(default)]
+    pub github_fallback_url: String,
+    #[serde(default)]
+    pub sha256: String,
+    pub size: u64,
+    #[serde(default)]
+    pub bundled_core_version: String,
+    #[serde(default)]
+    pub bundled_runtime_version: String,
+    pub runtime_revision: u32,
+}
 
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,9 +81,54 @@ pub struct AppUpdateCheckResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_version: Option<String>,
     pub update_available: bool,
-    pub same_version: bool,
+    pub compatible: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub manifest: Option<UnifiedReleaseManifest>,
+    pub expected_core_series: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_core_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_runtime_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdateDownloadResult {
+    pub ok: bool,
+    pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_source: Option<String>,
+    pub fallback_used: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdatePendingResult {
+    pub ready: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_source: Option<String>,
+    pub fallback_used: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -74,11 +137,12 @@ pub struct AppUpdateCheckResult {
 #[serde(rename_all = "camelCase")]
 pub struct AppUpdateInstallResult {
     pub ok: bool,
-    pub backend_installed: bool,
-    pub frontend_staged: bool,
-    pub backend_verified: bool,
-    pub frontend_installed: bool,
-    pub restarted: bool,
+    pub install_started: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_source: Option<String>,
+    pub fallback_used: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -89,285 +153,742 @@ pub struct AppUpdateProgressPayload {
     pub phase: String,
     pub percent: u8,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_source: Option<String>,
+    pub fallback_used: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PendingAppUpdateMarker {
-    pub schema_version: u32,
-    pub pid: u32,
-    pub installer_path: String,
-    pub target_version: String,
-    pub kind: String,
-    pub exe_path: String,
-    pub timeout_ms: u64,
-    pub created_at: String,
+struct PendingUpdateRecord {
+    schema_version: u32,
+    version: String,
+    release_id: String,
+    sha256: String,
+    size: u64,
+    download_source: String,
+    fallback_used: bool,
+    downloaded_at: u64,
 }
 
-fn emit_progress(app: &AppHandle, phase: &str, percent: u8, message: impl Into<String>) {
+struct DownloadOutcome {
+    bytes: Vec<u8>,
+    source: &'static str,
+    fallback_used: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClientUpdateEvent<'a> {
+    channel: &'a str,
+    event: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    release_id: Option<&'a str>,
+    app_version: &'a str,
+    manifest_source: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    download_source: Option<&'a str>,
+    fallback_used: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error_code: Option<&'a str>,
+}
+
+fn emit_progress(
+    app: &AppHandle,
+    phase: &str,
+    percent: u8,
+    message: impl Into<String>,
+    download_source: Option<&str>,
+    fallback_used: bool,
+) {
     let _ = app.emit(
         APP_UPDATE_PROGRESS_EVENT,
         AppUpdateProgressPayload {
             phase: phase.to_string(),
             percent,
             message: message.into(),
+            manifest_source: Some(MANIFEST_SOURCE.to_string()),
+            download_source: download_source.map(str::to_string),
+            fallback_used,
         },
     );
 }
 
-/// Numeric semver comparison on the `major.minor.patch` core (ignores
-/// prerelease/build suffixes for ordering decisions). Returns `None` when
-/// either side is not a parseable version.
-fn compare_versions(left: &str, right: &str) -> Option<Ordering> {
-    fn parse(v: &str) -> Option<Vec<u32>> {
-        let core = v.trim().trim_start_matches('v').split(['-', '+']).next()?;
-        let parts: Vec<u32> = core
-            .split('.')
-            .map(|p| p.parse::<u32>().ok())
-            .collect::<Option<Vec<u32>>>()?;
-        if parts.is_empty() {
-            None
-        } else {
-            Some(parts)
-        }
+fn read_trimmed_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn resolved_device_token(device_id: &str) -> Result<String, String> {
+    match crate::update_config::read_device_token(device_id) {
+        Ok(Some(token)) => Ok(token),
+        Ok(None) => read_trimmed_env(SHELL_UPDATE_TOKEN_ENV)
+            .ok_or_else(|| "内测设备令牌未配置，请重新导入邀请配置".to_string()),
+        Err(credential_error) => read_trimmed_env(SHELL_UPDATE_TOKEN_ENV).ok_or(credential_error),
     }
-    let a = parse(left)?;
-    let b = parse(right)?;
-    for i in 0..a.len().max(b.len()) {
-        let av = a.get(i).copied().unwrap_or(0);
-        let bv = b.get(i).copied().unwrap_or(0);
-        if av != bv {
-            return Some(av.cmp(&bv));
-        }
+}
+
+fn expected_release_id(version: &str) -> Result<String, String> {
+    let target = match std::env::consts::OS {
+        "windows" => "windows",
+        "macos" => "darwin",
+        "linux" => "linux",
+        other => return Err(format!("当前系统不支持 Desktop updater：{other}")),
+    };
+    let arch = match std::env::consts::ARCH {
+        "x86" => "i686",
+        "x86_64" => "x86_64",
+        "arm" => "armv7",
+        "aarch64" => "aarch64",
+        other => return Err(format!("当前架构不支持 Desktop updater：{other}")),
+    };
+    Ok(format!("desktop-{version}-{target}-{arch}"))
+}
+
+fn random_installation_id() -> Result<String, String> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).map_err(|error| format!("生成 installation ID 失败：{error}"))?;
+    Ok(format!(
+        "installation-{}",
+        bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    ))
+}
+
+fn resolved_config() -> Result<UpdateConfig, String> {
+    let mut config = crate::update_config::load().config;
+    if config.channel == "stable" && config.device_id.trim().len() < 16 {
+        config.device_id = random_installation_id()?;
+        crate::update_config::save(&config)?;
     }
-    Some(Ordering::Equal)
+    Ok(config)
 }
 
-fn now_rfc3339() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let days = (secs / 86_400) as i64;
-    let rem = secs % 86_400;
-    let hh = rem / 3_600;
-    let mm = (rem % 3_600) / 60;
-    let ss = rem % 60;
-    let (year, month, day) = civil_from_days(days);
-    format!("{year:04}-{month:02}-{day:02}T{hh:02}:{mm:02}:{ss:02}Z")
+fn updater_endpoint(config: &UpdateConfig) -> Result<(Url, Duration), String> {
+    let endpoint = config
+        .shell_updater_endpoint
+        .trim()
+        .replace("{{channel}}", &config.channel);
+    if endpoint.is_empty() {
+        return Err("壳更新未配置：请导入邀请配置，或设置 shellUpdaterEndpoint".to_string());
+    }
+    crate::update_config::validate_shell_updater_endpoint(&endpoint)?;
+    let endpoint = Url::parse(&endpoint)
+        .map_err(|error| format!("shellUpdaterEndpoint 不是有效 URL：{error}"))?;
+    if endpoint.scheme() != "https" {
+        return Err("shellUpdaterEndpoint 必须使用 https".to_string());
+    }
+    Ok((endpoint, Duration::from_secs(config.timeout_seconds)))
 }
 
-/// Days since 1970-01-01 → proleptic Gregorian `(year, month, day)`, adapted
-/// from Howard Hinnant's `civil_from_days` (mirrors runtime.rs).
-fn civil_from_days(z: i64) -> (i64, u32, u32) {
-    let z = z + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if month <= 2 { year + 1 } else { year };
-    (year, month as u32, day)
+fn events_endpoint(config: &UpdateConfig) -> Result<Url, String> {
+    let raw = config
+        .shell_updater_endpoint
+        .trim()
+        .replace("{{channel}}", &config.channel);
+    let mut endpoint = Url::parse(&raw).map_err(|error| format!("事件端点无效：{error}"))?;
+    if !endpoint.path().contains("/v1/check/") {
+        return Err("无法从更新检查地址推导 /v1/events".to_string());
+    }
+    endpoint.set_path("/v1/events");
+    endpoint.set_query(None);
+    endpoint.set_fragment(None);
+    Ok(endpoint)
 }
 
-async fn fetch_unified_manifest(manifest_url: &str) -> Result<UnifiedReleaseManifest, String> {
-    let response = APP_UPDATE_HTTP_CLIENT
-        .get(manifest_url)
-        .timeout(DEFAULT_HTTP_TIMEOUT)
+async fn send_event(
+    config: &UpdateConfig,
+    event: &str,
+    release_id: Option<&str>,
+    download_source: Option<&str>,
+    fallback_used: bool,
+    error_code: Option<&str>,
+) -> Result<(), String> {
+    let endpoint = events_endpoint(config)?;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(config.timeout_seconds.min(5)))
+        .build()
+        .map_err(|error| format!("更新事件客户端初始化失败：{error}"))?;
+    let mut request = client.post(endpoint).json(&ClientUpdateEvent {
+        channel: &config.channel,
+        event,
+        release_id,
+        app_version: env!("CARGO_PKG_VERSION"),
+        manifest_source: MANIFEST_SOURCE,
+        download_source,
+        fallback_used,
+        error_code,
+    });
+    if config.channel == "stable" {
+        request = request.header("X-Installation-Id", &config.device_id);
+    } else {
+        let token = resolved_device_token(&config.device_id)?;
+        request = request
+            .bearer_auth(token)
+            .header("X-Device-Id", &config.device_id);
+    }
+    let response = request
         .send()
         .await
-        .map_err(|e| format!("检查更新失败：{}", e))?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "检查更新失败：服务返回异常（{}）",
-            response.status().as_u16()
-        ));
+        .map_err(|error| format!("更新事件发送失败：{error}"))?;
+    if response.status().as_u16() != 204 {
+        return Err(format!("更新事件接口返回 HTTP {}", response.status()));
     }
-    let manifest: UnifiedReleaseManifest = response
-        .json()
-        .await
-        .map_err(|e| format!("更新清单格式异常：{}", e))?;
-    if manifest.schema_version != UNIFIED_MANIFEST_SCHEMA_VERSION {
-        return Err(format!(
-            "统一清单 schemaVersion 为 {}，期望 {}",
-            manifest.schema_version, UNIFIED_MANIFEST_SCHEMA_VERSION
-        ));
-    }
-    Ok(manifest)
-}
-
-async fn download_file(url: &str, dest: &Path) -> Result<(), String> {
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("无法创建下载目录：{}", e))?;
-    }
-    let response = APP_UPDATE_HTTP_CLIENT
-        .get(url)
-        .timeout(ARTIFACT_HTTP_TIMEOUT)
-        .send()
-        .await
-        .map_err(|e| format!("下载失败：{}", e))?;
-    if !response.status().is_success() {
-        return Err(format!("下载失败：HTTP {}", response.status().as_u16()));
-    }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("下载失败：{}", e))?;
-    fs::write(dest, bytes).map_err(|e| format!("保存安装包失败：{}", e))?;
     Ok(())
 }
 
-fn file_sha256_hex(path: &Path) -> Result<String, String> {
-    let bytes = fs::read(path).map_err(|e| format!("读取文件失败：{}", e))?;
-    let mut hasher = Sha256::new();
-    hasher.update(&bytes);
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
-fn verify_file_sha256(path: &Path, expected: &str) -> Result<(), String> {
-    let actual = file_sha256_hex(path)?;
-    if !actual.eq_ignore_ascii_case(expected.trim()) {
-        return Err(format!(
-            "安装包 sha256 不匹配：期望 {}，实际 {}",
-            expected.trim(),
-            actual
-        ));
-    }
-    Ok(())
-}
-
-/// Windows Authenticode check, best-effort: a signature claiming corruption
-/// (`HashMismatch`/`Invalid`/`UnknownError`) aborts the install; unsigned
-/// dev builds and `Valid` signatures pass. On non-Windows this is a no-op
-/// (macOS Gatekeeper/notarization is enforced by the OS at first launch).
-fn verify_authenticode_best_effort(path: &Path) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        let escaped = path.to_string_lossy().replace('\'', "''");
-        let script = format!(
-            "$s = Get-AuthenticodeSignature -FilePath '{escaped}'; \
-             if ($null -eq $s.Status) {{ exit 0 }}; \
-             if ($s.Status -in @('HashMismatch','Invalid','UnknownError')) {{ exit 2 }}; \
-             exit 0"
-        );
-        match Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .output()
+fn report_event(
+    config: UpdateConfig,
+    event: &'static str,
+    release_id: Option<String>,
+    download_source: Option<String>,
+    fallback_used: bool,
+) {
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = send_event(
+            &config,
+            event,
+            release_id.as_deref(),
+            download_source.as_deref(),
+            fallback_used,
+            None,
+        )
+        .await
         {
-            Ok(out) if out.status.success() => Ok(()),
-            Ok(out) => Err(format!(
-                "安装包签名校验失败：{}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )),
-            Err(e) => Err(format!("无法执行签名校验：{}", e)),
+            log::debug!("best-effort update event failed: {error}");
         }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = path;
-        Ok(())
-    }
+    });
 }
 
-/// Fetch `GET /api/version` from the (freshly respawned) managed dashboard and
-/// compare it against the manifest version. Returns `false` (not an error) when
-/// the dashboard responds but reports a different version — the caller rolls
-/// back the runtime.
-async fn verify_backend_version(api_base_url: &str, expected: &str) -> Result<bool, String> {
-    let url = format!("{}/api/version", api_base_url.trim_end_matches('/'));
-    let response = APP_UPDATE_HTTP_CLIENT
-        .get(&url)
-        .timeout(DEFAULT_HTTP_TIMEOUT)
-        .send()
-        .await
-        .map_err(|e| format!("后端探活失败：{}", e))?;
-    if !response.status().is_success() {
-        return Err(format!("后端探活 HTTP {}", response.status().as_u16()));
-    }
-    let json: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("后端探活响应解析失败：{}", e))?;
-    let actual = json
-        .get("version")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| "后端探活响应缺少 version 字段".to_string())?;
-    Ok(actual.trim().trim_start_matches('v') == expected.trim().trim_start_matches('v'))
-}
+fn build_updater(app: &AppHandle) -> Result<(Updater, UpdateConfig), String> {
+    let config = resolved_config()?;
+    let (endpoint, timeout) = updater_endpoint(&config)?;
+    let mut builder = app
+        .updater_builder()
+        .endpoints(vec![endpoint])
+        .map_err(|error| format!("更新端点配置失败：{error}"))?
+        .timeout(timeout);
 
-fn desktop_asset_extension(kind: &str) -> &'static str {
-    match kind {
-        "nsis" => ".exe",
-        "dmg" => ".dmg",
-        "zip" | "portable" => ".zip",
-        "deb" => ".deb",
-        "appimage" => ".AppImage",
-        _ => ".bin",
-    }
-}
-
-fn write_pending_marker(marker: &PendingAppUpdateMarker) -> Result<PathBuf, String> {
-    let path = runtime::runtime_root().join(PENDING_APP_UPDATE_FILE);
-    let body = serde_json::to_string_pretty(marker).map_err(|e| e.to_string())?;
-    fs::write(&path, format!("{}\n", body)).map_err(|e| format!("写入更新标记失败：{}", e))?;
-    Ok(path)
-}
-
-/// Write the embedded updater script to the runtime tree and launch it
-/// detached (survives the app exit). Uses the bundled runtime `node` when
-/// present, falling back to the system `node` for dev.
-fn spawn_detached_updater(script_path: &Path, marker_path: &Path) -> Result<(), String> {
-    let node = runtime::current_node_binary().unwrap_or_else(|| PathBuf::from("node"));
-    let mut cmd = std::process::Command::new(&node);
-    cmd.arg(script_path).arg(marker_path);
-    cmd.stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        const DETACHED_PROCESS: u32 = 0x00000008;
-        cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
-    }
-
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("无法启动更新器（node 不可用？）：{}", e))?;
-    std::thread::sleep(Duration::from_millis(800));
-    match child.try_wait() {
-        Ok(Some(status)) => Err(format!("更新器过早退出：{}", status)),
-        Ok(None) => {
-            std::thread::spawn(move || {
-                let _ = child.wait();
-            });
-            Ok(())
+    if config.channel == "stable" {
+        builder = builder
+            .header("X-Installation-Id", config.device_id.clone())
+            .map_err(|error| format!("更新 installation ID 配置失败：{error}"))?;
+    } else {
+        if config.device_id.trim().is_empty() {
+            return Err("内测邀请缺少 device ID，请重新导入邀请配置".to_string());
         }
-        Err(e) => Err(format!("更新器状态检查失败：{}", e)),
+        let token = resolved_device_token(&config.device_id)?;
+        builder = builder
+            .header("Authorization", format!("Bearer {token}"))
+            .and_then(|builder| builder.header("X-Device-Id", config.device_id.clone()))
+            .map_err(|error| format!("更新认证头配置失败：{error}"))?;
     }
+
+    let updater = builder
+        .build()
+        .map_err(|error| format!("Tauri updater 初始化失败：{error}"))?;
+    Ok((updater, config))
 }
 
-fn install_failure(error: String) -> AppUpdateInstallResult {
-    AppUpdateInstallResult {
-        ok: false,
-        error: Some(error),
+fn parse_update_metadata(raw_json: &serde_json::Value) -> Result<ShellUpdateMetadata, String> {
+    let value = raw_json
+        .get("metadata")
+        .ok_or_else(|| "更新响应缺少 metadata".to_string())?
+        .clone();
+    let metadata: ShellUpdateMetadata = serde_json::from_value(value)
+        .map_err(|error| format!("更新 metadata 格式无效：{error}"))?;
+    if metadata.schema_version != 2 {
+        return Err(format!(
+            "更新 metadata schemaVersion 必须为 2，当前是 {}",
+            metadata.schema_version
+        ));
+    }
+    if metadata.release_id.trim().is_empty() {
+        return Err("更新 metadata 缺少 releaseId".to_string());
+    }
+    if metadata.channel.trim().is_empty() {
+        return Err("更新 metadata 缺少 channel".to_string());
+    }
+    if metadata.github_release_tag.trim().is_empty() {
+        return Err("更新 metadata 缺少 githubReleaseTag".to_string());
+    }
+    if metadata.sha256.len() != 64 || !metadata.sha256.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return Err("更新 metadata 的 sha256 无效".to_string());
+    }
+    if metadata.size == 0 || metadata.size > MAX_UPDATER_BYTES {
+        return Err(format!(
+            "更新资产大小必须在 1 到 {MAX_UPDATER_BYTES} 字节之间"
+        ));
+    }
+    if metadata.bundled_core_version.trim().is_empty() {
+        return Err("更新 metadata 缺少 bundledCoreVersion".to_string());
+    }
+    if metadata.bundled_runtime_version.trim().is_empty() {
+        return Err("更新 metadata 缺少 bundledRuntimeVersion".to_string());
+    }
+    validate_github_fallback_url(&metadata)?;
+    Ok(metadata)
+}
+
+fn validate_github_fallback_url(metadata: &ShellUpdateMetadata) -> Result<Url, String> {
+    let url = Url::parse(&metadata.github_fallback_url)
+        .map_err(|error| format!("githubFallbackUrl 无效：{error}"))?;
+    if url.scheme() != "https"
+        || url.host_str() != Some("github.com")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("githubFallbackUrl 必须是无凭据、无查询参数的 GitHub HTTPS 直链".to_string());
+    }
+    let segments = url
+        .path_segments()
+        .map(|items| items.collect::<Vec<_>>())
+        .unwrap_or_default();
+    let valid = segments.len() == 6
+        && segments[0] == "Eynzof"
+        && segments[1] == "Hermes-CN-Desktop"
+        && segments[2] == "releases"
+        && segments[3] == "download"
+        && segments[4] == metadata.github_release_tag
+        && !segments[5].is_empty()
+        && !segments[5].contains('%');
+    if !valid {
+        return Err(
+            "githubFallbackUrl 必须指向 Eynzof/Hermes-CN-Desktop 的固定 tag 单层资产".to_string(),
+        );
+    }
+    Ok(url)
+}
+
+fn validate_primary_download_url(
+    primary: &Url,
+    metadata: &ShellUpdateMetadata,
+) -> Result<(), String> {
+    let fallback = validate_github_fallback_url(metadata)?;
+    let primary_segments = primary
+        .path_segments()
+        .map(|items| items.collect::<Vec<_>>())
+        .unwrap_or_default();
+    let fallback_segments = fallback
+        .path_segments()
+        .map(|items| items.collect::<Vec<_>>())
+        .unwrap_or_default();
+    let valid = primary.scheme() == "https"
+        && PRIMARY_DOWNLOAD_HOSTS.contains(&primary.host_str().unwrap_or_default())
+        && primary.username().is_empty()
+        && primary.password().is_none()
+        && primary.query().is_none()
+        && primary.fragment().is_none()
+        && primary_segments.len() == 2
+        && fallback_segments.len() == 6
+        && primary_segments[0] == metadata.github_release_tag
+        && primary_segments[1] == fallback_segments[5]
+        && !primary_segments[1].contains('%');
+    if !valid {
+        return Err(
+            "更新主下载 URL 必须指向 Hermes Cloudflare 镜像中的同一固定 tag/资产".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_update_target(
+    target_desktop_version: &str,
+    raw_json: &serde_json::Value,
+    expected_channel: &str,
+) -> Result<ShellUpdateMetadata, String> {
+    let metadata = parse_update_metadata(raw_json)?;
+    if metadata.channel != expected_channel {
+        return Err(format!(
+            "更新 channel 不匹配：请求 {expected_channel}，响应 {}",
+            metadata.channel
+        ));
+    }
+    if metadata.github_release_tag != format!("v{target_desktop_version}") {
+        return Err("githubReleaseTag 与目标 Desktop 版本不一致".to_string());
+    }
+    let expected_release_id = expected_release_id(target_desktop_version)?;
+    if metadata.release_id != expected_release_id {
+        return Err(format!(
+            "releaseId 与目标平台不一致：期望 {expected_release_id}，实际 {}",
+            metadata.release_id
+        ));
+    }
+    let matrix = CompatibilityMatrix::parse_embedded()?;
+    matrix.check(target_desktop_version, &metadata.bundled_core_version)?;
+    matrix.check(target_desktop_version, &metadata.bundled_runtime_version)?;
+    Ok(metadata)
+}
+
+fn no_update_result(channel: &str) -> AppUpdateCheckResult {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let expected_core_series = CompatibilityMatrix::parse_embedded()
+        .ok()
+        .and_then(|matrix| matrix.expected_core_series(&current_version));
+    AppUpdateCheckResult {
+        ok: true,
+        current_version: Some(current_version.clone()),
+        latest_version: Some(current_version),
+        update_available: false,
+        compatible: true,
+        expected_core_series,
+        channel: Some(channel.to_string()),
+        manifest_source: Some(MANIFEST_SOURCE.to_string()),
         ..Default::default()
     }
 }
 
-/// Clear the in-flight guard. Must run on every exit path of
-/// [`app_update_install`] (except the final `app.exit(0)`, where the process
-/// dies anyway).
+fn check_failure(error: impl Into<String>) -> AppUpdateCheckResult {
+    AppUpdateCheckResult {
+        ok: false,
+        current_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        manifest_source: Some(MANIFEST_SOURCE.to_string()),
+        error: Some(error.into()),
+        ..Default::default()
+    }
+}
+
+fn checked_update_result(update: &Update, channel: &str) -> AppUpdateCheckResult {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let matrix = match CompatibilityMatrix::parse_embedded() {
+        Ok(matrix) => matrix,
+        Err(error) => return check_failure(error),
+    };
+    let expected_core_series = matrix.expected_core_series(&update.version);
+    match validate_update_target(&update.version, &update.raw_json, channel) {
+        Ok(metadata) => AppUpdateCheckResult {
+            ok: true,
+            current_version: Some(current_version),
+            latest_version: Some(update.version.clone()),
+            update_available: true,
+            compatible: true,
+            expected_core_series,
+            target_core_version: Some(metadata.bundled_core_version),
+            target_runtime_version: Some(metadata.bundled_runtime_version),
+            release_id: Some(metadata.release_id),
+            channel: Some(metadata.channel),
+            manifest_source: Some(MANIFEST_SOURCE.to_string()),
+            notes: update.body.clone(),
+            error: None,
+        },
+        Err(error) => AppUpdateCheckResult {
+            ok: true,
+            current_version: Some(current_version),
+            latest_version: Some(update.version.clone()),
+            update_available: false,
+            compatible: false,
+            expected_core_series,
+            manifest_source: Some(MANIFEST_SOURCE.to_string()),
+            notes: update.body.clone(),
+            error: Some(error),
+            ..Default::default()
+        },
+    }
+}
+
+fn fallback_allowed(error: &UpdaterError) -> bool {
+    match error {
+        UpdaterError::Reqwest(_) => true,
+        UpdaterError::Network(message) => {
+            let status = message
+                .rsplit_once("status:")
+                .and_then(|(_, value)| value.split_whitespace().next())
+                .and_then(|value| value.parse::<u16>().ok());
+            match status {
+                Some(429) => true,
+                Some(code) => (500..=599).contains(&code),
+                None => true,
+            }
+        }
+        _ => false,
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn validate_downloaded_bytes(bytes: &[u8], metadata: &ShellUpdateMetadata) -> Result<(), String> {
+    if bytes.len() as u64 != metadata.size {
+        return Err(format!(
+            "更新资产大小不匹配：期望 {}，实际 {}",
+            metadata.size,
+            bytes.len()
+        ));
+    }
+    let actual = sha256_hex(bytes);
+    if !actual.eq_ignore_ascii_case(&metadata.sha256) {
+        return Err(format!(
+            "更新资产 SHA-256 不匹配：期望 {}，实际 {actual}",
+            metadata.sha256
+        ));
+    }
+    Ok(())
+}
+
+async fn download_from(
+    app: &AppHandle,
+    update: &Update,
+    source: &'static str,
+    fallback_used: bool,
+) -> Result<Vec<u8>, UpdaterError> {
+    let progress_app = app.clone();
+    let finish_app = app.clone();
+    let mut downloaded = 0_u64;
+    let mut last_reported = 8_u8;
+    update
+        .download(
+            move |chunk_length, content_length| {
+                downloaded = downloaded.saturating_add(chunk_length as u64);
+                let percent = content_length
+                    .filter(|total| *total > 0)
+                    .map(|total| {
+                        let ratio = downloaded.saturating_mul(82) / total;
+                        8_u8.saturating_add(ratio.min(82) as u8)
+                    })
+                    .unwrap_or(last_reported);
+                if percent >= last_reported.saturating_add(2) || percent >= 90 {
+                    last_reported = percent;
+                    emit_progress(
+                        &progress_app,
+                        "download",
+                        percent,
+                        format!("已从 {source} 下载 {} MiB", downloaded / 1_048_576),
+                        Some(source),
+                        fallback_used,
+                    );
+                }
+            },
+            move || {
+                emit_progress(
+                    &finish_app,
+                    "verify-signature",
+                    92,
+                    "下载完成，Tauri 签名验证通过",
+                    Some(source),
+                    fallback_used,
+                );
+            },
+        )
+        .await
+}
+
+async fn download_with_fallback(
+    app: &AppHandle,
+    update: &Update,
+    metadata: &ShellUpdateMetadata,
+) -> Result<DownloadOutcome, String> {
+    validate_primary_download_url(&update.download_url, metadata)?;
+    let mut primary = update.clone();
+    primary.headers.clear();
+    emit_progress(
+        app,
+        "download",
+        8,
+        format!("正在通过 Cloudflare 缓存下载 Desktop {}…", update.version),
+        Some(PRIMARY_DOWNLOAD_SOURCE),
+        false,
+    );
+    match download_from(app, &primary, PRIMARY_DOWNLOAD_SOURCE, false).await {
+        Ok(bytes) => {
+            validate_downloaded_bytes(&bytes, metadata)?;
+            return Ok(DownloadOutcome {
+                bytes,
+                source: PRIMARY_DOWNLOAD_SOURCE,
+                fallback_used: false,
+            });
+        }
+        Err(error) if fallback_allowed(&error) => {
+            emit_progress(
+                app,
+                "fallback",
+                8,
+                format!("Cloudflare 下载失败（{error}），改用 GitHub Release 直链"),
+                Some(FALLBACK_DOWNLOAD_SOURCE),
+                true,
+            );
+        }
+        Err(error) => {
+            return Err(format!(
+                "Cloudflare 下载或签名验证失败，已禁止回退：{error}"
+            ));
+        }
+    }
+
+    let mut fallback = update.clone();
+    fallback.headers.clear();
+    fallback.download_url = validate_github_fallback_url(metadata)?;
+    let bytes = download_from(app, &fallback, FALLBACK_DOWNLOAD_SOURCE, true)
+        .await
+        .map_err(|error| format!("GitHub Release 回退下载失败：{error}"))?;
+    validate_downloaded_bytes(&bytes, metadata)?;
+    Ok(DownloadOutcome {
+        bytes,
+        source: FALLBACK_DOWNLOAD_SOURCE,
+        fallback_used: true,
+    })
+}
+
+fn updater_cache_dir() -> PathBuf {
+    crate::process::runtime::runtime_root().join(UPDATER_CACHE_DIR)
+}
+
+fn pending_record_path() -> PathBuf {
+    updater_cache_dir().join(PENDING_RECORD_FILE)
+}
+
+fn pending_package_path() -> PathBuf {
+    updater_cache_dir().join(PENDING_PACKAGE_FILE)
+}
+
+fn validate_cache_dir(path: &Path) -> Result<(), String> {
+    let runtime_root = crate::process::runtime::runtime_root();
+    if path.file_name().and_then(|name| name.to_str()) != Some(UPDATER_CACHE_DIR)
+        || path.parent() != Some(runtime_root.as_path())
+    {
+        return Err("拒绝操作非本应用 updater 缓存目录".to_string());
+    }
+    Ok(())
+}
+
+fn clear_pending_cache() -> Result<(), String> {
+    let dir = updater_cache_dir();
+    validate_cache_dir(&dir)?;
+    if dir.exists() {
+        fs::remove_dir_all(&dir)
+            .map_err(|error| format!("清理 updater 缓存失败 {}：{error}", dir.display()))?;
+    }
+    Ok(())
+}
+
+fn persist_pending(
+    version: &str,
+    metadata: &ShellUpdateMetadata,
+    outcome: &DownloadOutcome,
+) -> Result<(), String> {
+    let dir = updater_cache_dir();
+    validate_cache_dir(&dir)?;
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("创建 updater 缓存失败 {}：{error}", dir.display()))?;
+    let package_tmp = dir.join("pending-update.bin.tmp");
+    fs::write(&package_tmp, &outcome.bytes)
+        .map_err(|error| format!("写入 updater 缓存失败：{error}"))?;
+    fs::rename(&package_tmp, pending_package_path())
+        .map_err(|error| format!("替换 updater 包失败：{error}"))?;
+
+    let record = PendingUpdateRecord {
+        schema_version: 1,
+        version: version.to_string(),
+        release_id: metadata.release_id.clone(),
+        sha256: metadata.sha256.to_ascii_lowercase(),
+        size: metadata.size,
+        download_source: outcome.source.to_string(),
+        fallback_used: outcome.fallback_used,
+        downloaded_at: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+    };
+    let record_tmp = dir.join("pending.json.tmp");
+    let body = serde_json::to_vec_pretty(&record)
+        .map_err(|error| format!("序列化 updater 缓存记录失败：{error}"))?;
+    fs::write(&record_tmp, body).map_err(|error| format!("写入 updater 缓存记录失败：{error}"))?;
+    fs::rename(&record_tmp, pending_record_path())
+        .map_err(|error| format!("替换 updater 缓存记录失败：{error}"))?;
+    Ok(())
+}
+
+fn read_pending_record() -> Result<Option<PendingUpdateRecord>, String> {
+    let record_path = pending_record_path();
+    let package_path = pending_package_path();
+    if !record_path.is_file() || !package_path.is_file() {
+        return Ok(None);
+    }
+    let record: PendingUpdateRecord = serde_json::from_slice(
+        &fs::read(&record_path).map_err(|error| format!("读取 updater 缓存记录失败：{error}"))?,
+    )
+    .map_err(|error| format!("updater 缓存记录无效：{error}"))?;
+    if record.schema_version != 1 {
+        return Err("updater 缓存记录 schemaVersion 无效".to_string());
+    }
+    if record.version == env!("CARGO_PKG_VERSION") {
+        clear_pending_cache()?;
+        return Ok(None);
+    }
+    let size = fs::metadata(&package_path)
+        .map_err(|error| format!("读取 updater 缓存文件信息失败：{error}"))?
+        .len();
+    if size != record.size || size == 0 || size > MAX_UPDATER_BYTES {
+        return Err("updater 缓存包大小与记录不一致".to_string());
+    }
+    Ok(Some(record))
+}
+
+#[tauri::command]
+pub fn app_update_pending() -> AppUpdatePendingResult {
+    match read_pending_record() {
+        Ok(Some(record)) => AppUpdatePendingResult {
+            ready: true,
+            version: Some(record.version),
+            release_id: Some(record.release_id),
+            download_source: Some(record.download_source),
+            fallback_used: record.fallback_used,
+            error: None,
+        },
+        Ok(None) => AppUpdatePendingResult::default(),
+        Err(error) => AppUpdatePendingResult {
+            error: Some(error),
+            ..Default::default()
+        },
+    }
+}
+
+#[tauri::command]
+pub async fn app_update_check(app: AppHandle) -> AppUpdateCheckResult {
+    emit_progress(
+        &app,
+        "check",
+        1,
+        "正在检查可下发的 Desktop 更新…",
+        None,
+        false,
+    );
+    let (updater, config) = match build_updater(&app) {
+        Ok(value) => value,
+        Err(error) => return check_failure(error),
+    };
+    let result = match updater.check().await {
+        Ok(Some(update)) => checked_update_result(&update, &config.channel),
+        Ok(None) => no_update_result(&config.channel),
+        Err(error) => check_failure(format!("检查更新失败：{error}")),
+    };
+    report_event(config, "check", result.release_id.clone(), None, false);
+    result
+}
+
+fn set_in_flight(state: &State<'_, AppState>) -> Result<(), String> {
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|error| format!("更新状态锁失败：{error}"))?;
+    if inner.app_update_in_flight {
+        return Err("已有 Desktop 更新正在进行，请稍候".to_string());
+    }
+    inner.app_update_in_flight = true;
+    Ok(())
+}
+
 fn clear_in_flight(state: &State<'_, AppState>) {
     if let Ok(mut inner) = state.inner.lock() {
         inner.app_update_in_flight = false;
@@ -375,43 +896,73 @@ fn clear_in_flight(state: &State<'_, AppState>) {
 }
 
 #[tauri::command]
-pub async fn app_update_check(app: AppHandle) -> AppUpdateCheckResult {
-    let config = crate::update_config::load().config;
-    let manifest_url = config.release_manifest_url.trim().to_string();
-    if manifest_url.is_empty() {
-        return AppUpdateCheckResult {
-            ok: false,
-            error: Some("更新清单 URL 未配置".to_string()),
-            ..Default::default()
-        };
+pub async fn app_update_download(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<AppUpdateDownloadResult, AppError> {
+    if let Err(error) = set_in_flight(&state) {
+        return Ok(download_failure(error));
     }
-    emit_progress(&app, "check-manifest", 1, "检查统一更新清单…");
-    let manifest = match fetch_unified_manifest(&manifest_url).await {
-        Ok(m) => m,
-        Err(e) => {
-            return AppUpdateCheckResult {
-                ok: false,
-                error: Some(e),
-                ..Default::default()
-            }
-        }
+    let result = run_download(&app).await;
+    clear_in_flight(&state);
+    Ok(result)
+}
+
+async fn run_download(app: &AppHandle) -> AppUpdateDownloadResult {
+    emit_progress(app, "check", 2, "重新确认候选版本与兼容矩阵…", None, false);
+    let (updater, config) = match build_updater(app) {
+        Ok(value) => value,
+        Err(error) => return download_failure(error),
     };
-    let current_version = env!("CARGO_PKG_VERSION").to_string();
-    let latest_version = manifest.normalized_version();
-    let same_version = manifest.same_version();
-    let update_available = match (&latest_version, same_version) {
-        (Some(latest), true) => {
-            compare_versions(latest, &current_version) == Some(Ordering::Greater)
-        }
-        _ => false,
+    let update = match updater.check().await {
+        Ok(Some(update)) => update,
+        Ok(None) => return download_failure("当前没有获准下载的更新"),
+        Err(error) => return download_failure(format!("检查更新失败：{error}")),
     };
-    AppUpdateCheckResult {
+    let metadata = match validate_update_target(&update.version, &update.raw_json, &config.channel)
+    {
+        Ok(metadata) => metadata,
+        Err(error) => return download_failure(error),
+    };
+    let outcome = match download_with_fallback(app, &update, &metadata).await {
+        Ok(outcome) => outcome,
+        Err(error) => return download_failure(error),
+    };
+    if let Err(error) = persist_pending(&update.version, &metadata, &outcome) {
+        return download_failure(error);
+    }
+    if outcome.fallback_used {
+        report_event(
+            config.clone(),
+            "fallback",
+            Some(metadata.release_id.clone()),
+            Some(outcome.source.to_string()),
+            true,
+        );
+    }
+    report_event(
+        config,
+        "download-success",
+        Some(metadata.release_id.clone()),
+        Some(outcome.source.to_string()),
+        outcome.fallback_used,
+    );
+    emit_progress(
+        app,
+        "ready",
+        96,
+        "更新包已验证并缓存，可立即重启安装或稍后处理",
+        Some(outcome.source),
+        outcome.fallback_used,
+    );
+    AppUpdateDownloadResult {
         ok: true,
-        current_version: Some(current_version),
-        latest_version,
-        update_available,
-        same_version,
-        manifest: Some(manifest),
+        ready: true,
+        version: Some(update.version),
+        release_id: Some(metadata.release_id),
+        manifest_source: Some(MANIFEST_SOURCE.to_string()),
+        download_source: Some(outcome.source.to_string()),
+        fallback_used: outcome.fallback_used,
         error: None,
     }
 }
@@ -421,216 +972,371 @@ pub async fn app_update_install(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<AppUpdateInstallResult, AppError> {
-    // Guard 1 — managed mode only (updating someone else's backend is unsafe).
-    {
-        let inner = match state.inner.lock() {
-            Ok(inner) => inner,
-            Err(_) => return Ok(install_failure("应用状态锁不可用".to_string())),
-        };
-        if let Err(e) = crate::connection::require_managed_mode(inner.connection_mode, "应用更新")
-        {
-            return Ok(install_failure(e.to_string()));
-        }
+    if let Err(error) = set_in_flight(&state) {
+        return Ok(install_failure(error));
     }
-    // Guard 2 — no concurrent app updates.
-    {
-        let mut inner = match state.inner.lock() {
-            Ok(inner) => inner,
-            Err(_) => return Ok(install_failure("应用状态锁不可用".to_string())),
-        };
-        if inner.app_update_in_flight {
-            return Ok(install_failure("已有应用更新正在进行，请稍候".to_string()));
-        }
-        inner.app_update_in_flight = true;
-    }
-    // Guard 3 — the dashboard-restart guard (profile switch / YOLO / runtime
-    // update all serialize through this).
-    match crate::commands::restart::try_begin_restart(&state) {
-        Ok(true) => {}
-        Ok(false) => {
-            clear_in_flight(&state);
-            return Ok(install_failure("已有内核重启操作正在进行".to_string()));
-        }
-        Err(e) => {
-            clear_in_flight(&state);
-            return Ok(install_failure(e.to_string()));
-        }
-    }
-
     let result = run_install(&app, &state).await;
-
-    crate::commands::restart::end_restart(&state);
     clear_in_flight(&state);
     Ok(result)
 }
 
 async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateInstallResult {
-    // --- Fetch + validate the unified manifest ---
-    let config = crate::update_config::load().config;
-    let manifest_url = config.release_manifest_url.trim().to_string();
+    emit_progress(app, "check", 2, "安装前重新确认灰度授权…", None, false);
+    let (updater, config) = match build_updater(app) {
+        Ok(value) => value,
+        Err(error) => return install_failure(error),
+    };
+    let update = match updater.check().await {
+        Ok(Some(update)) => update,
+        Ok(None) => return install_failure("当前没有获准安装的更新"),
+        Err(error) => return install_failure(format!("检查更新失败：{error}")),
+    };
+    let metadata = match validate_update_target(&update.version, &update.raw_json, &config.channel)
+    {
+        Ok(metadata) => metadata,
+        Err(error) => return install_failure(error),
+    };
+
+    let (bytes, source, fallback_used) = match read_pending_record() {
+        Ok(Some(record))
+            if record.version == update.version
+                && record.release_id == metadata.release_id
+                && record.sha256.eq_ignore_ascii_case(&metadata.sha256) =>
+        {
+            let bytes = match fs::read(pending_package_path()) {
+                Ok(bytes) => bytes,
+                Err(error) => return install_failure(format!("读取已缓存更新包失败：{error}")),
+            };
+            if let Err(error) = validate_downloaded_bytes(&bytes, &metadata) {
+                return install_failure(error);
+            }
+            (bytes, record.download_source, record.fallback_used)
+        }
+        Ok(_) => {
+            let outcome = match download_with_fallback(app, &update, &metadata).await {
+                Ok(outcome) => outcome,
+                Err(error) => return install_failure(error),
+            };
+            if let Err(error) = persist_pending(&update.version, &metadata, &outcome) {
+                return install_failure(error);
+            }
+            (
+                outcome.bytes,
+                outcome.source.to_string(),
+                outcome.fallback_used,
+            )
+        }
+        Err(error) => return install_failure(error),
+    };
+
     emit_progress(
         app,
-        "check-manifest",
-        2,
-        format!("读取统一更新清单 {}", manifest_url),
+        "stop-runtime",
+        97,
+        "正在停止本应用管理的 Runtime…",
+        Some(&source),
+        fallback_used,
     );
-    let manifest = match fetch_unified_manifest(&manifest_url).await {
-        Ok(m) => m,
-        Err(e) => return install_failure(e),
-    };
-    let version = match manifest.normalized_version() {
-        Some(v) => v,
-        None => return install_failure("统一清单缺少版本号".to_string()),
-    };
-    if !manifest.same_version() {
-        return install_failure(
-            manifest
-                .same_version_error()
-                .unwrap_or_else(|| "前后端版本不一致".to_string()),
-        );
+    if let Err(error) = stop_owned_runtime(state) {
+        return install_failure(error);
     }
-    let runtime_asset = manifest.runtime_update_manifest().cloned();
-    let desktop_asset = manifest.current_desktop_asset().cloned();
-    let (Some(runtime_manifest), Some(desktop_asset)) = (runtime_asset, desktop_asset) else {
-        return install_failure("当前平台缺少 runtime 或桌面端安装包产物".to_string());
-    };
-
-    let mut result = AppUpdateInstallResult::default();
-
-    // --- [1] Install the backend (track-A engine: download + sha256 +
-    // ---     Ed25519 + extract + smoke + current.json record) ---
-    emit_progress(app, "download-runtime", 8, "下载并安装后端内核…");
-    let install = runtime::install_runtime_update(Some(runtime_manifest)).await;
-    if !install.ok {
-        return install_failure(
-            install
-                .error
-                .unwrap_or_else(|| "后端内核安装失败".to_string()),
-        );
+    if let Err(error) = stop_sibling_desktop_instances() {
+        return install_failure(error);
     }
-    result.backend_installed = true;
-
-    // --- [2] Restart the managed dashboard and verify the backend version ---
-    let (host, port) = crate::commands::restart::host_and_port();
-    let (hermes_home, recovery_home) = {
-        let inner = match state.inner.lock() {
-            Ok(inner) => inner,
-            Err(_) => {
-                let _ = runtime::rollback_runtime();
-                return install_failure("应用状态锁不可用".to_string());
-            }
-        };
-        (inner.hermes_home.clone(), inner.hermes_home_base.clone())
-    };
-
-    emit_progress(app, "respawn-backend", 45, "重启后端内核…");
-    let respawn = crate::commands::restart::respawn_managed_dashboard(
-        state,
-        &host,
-        port,
-        &hermes_home,
-        &recovery_home,
+    if let Err(error) = send_event(
+        &config,
+        "install-start",
+        Some(&metadata.release_id),
+        Some(&source),
+        fallback_used,
+        None,
     )
-    .await;
+    .await
+    {
+        log::debug!("best-effort install-start event failed: {error}");
+    }
+    emit_progress(
+        app,
+        "install",
+        99,
+        "正在启动系统安装器，应用即将退出…",
+        Some(&source),
+        fallback_used,
+    );
+    match launch_verified_update(&update, bytes) {
+        Ok(()) => AppUpdateInstallResult {
+            ok: true,
+            install_started: true,
+            manifest_source: Some(MANIFEST_SOURCE.to_string()),
+            download_source: Some(source),
+            fallback_used,
+            error: None,
+        },
+        Err(error) => install_failure(error),
+    }
+}
 
-    let api_base_url = match respawn {
-        Ok(r) => r.api_base_url,
-        Err(e) => {
-            let _ = runtime::rollback_runtime();
-            return install_failure(format!("后端重启失败：{}，已回滚内核", e));
+#[cfg(target_os = "windows")]
+fn launch_verified_update(_update: &Update, bytes: Vec<u8>) -> Result<(), String> {
+    let installer = pending_package_path();
+    let cached_size = fs::metadata(&installer)
+        .map_err(|error| format!("读取 Windows updater 缓存失败：{error}"))?
+        .len();
+    if cached_size != bytes.len() as u64 {
+        return Err(format!(
+            "Windows updater 缓存大小不匹配：期望 {}，实际 {cached_size}",
+            bytes.len()
+        ));
+    }
+
+    // `tauri-plugin-updater` 2.10.1 ignores ShellExecuteW's return value and
+    // exits the running app even when Windows did not start the installer.
+    // The package has already passed the plugin's detached-signature check and
+    // our size/SHA checks. Launch the owned persistent cache file directly so
+    // CreateProcess errors are observable before the current app exits. A copy
+    // of the current executable acts as a tiny detached helper: it waits for
+    // this process, runs NSIS, checks its exit status, and relaunches the newly
+    // installed executable. Running the helper from the cache keeps the old
+    // mapped EXE from blocking NSIS replacement and avoids relying on NSIS
+    // RunAsUser, which is unavailable in disconnected/session-0 test contexts.
+    drop(bytes);
+    let current_exe =
+        std::env::current_exe().map_err(|error| format!("读取当前 Desktop 路径失败：{error}"))?;
+    let helper = updater_cache_dir().join(format!("updater-helper-{}.exe", std::process::id()));
+    fs::copy(&current_exe, &helper)
+        .map_err(|error| format!("准备 Windows updater helper 失败：{error}"))?;
+    let restart_args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    let _child = std::process::Command::new(&helper)
+        .arg(WINDOWS_UPDATER_HELPER_FLAG)
+        .arg(std::process::id().to_string())
+        .arg(&installer)
+        .arg(&current_exe)
+        .args(restart_args)
+        .spawn()
+        .map_err(|error| format!("启动 Windows updater helper 失败：{error}"))?;
+    std::process::exit(0);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn launch_verified_update(update: &Update, bytes: Vec<u8>) -> Result<(), String> {
+    update
+        .install(bytes)
+        .map_err(|error| format!("启动安装器失败：{error}"))
+}
+
+#[cfg(target_os = "windows")]
+fn append_windows_updater_helper_log(path: &Path, message: &str) {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{timestamp} {message}");
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wait_for_windows_updater_parent(parent_pid: u32) -> Result<(), String> {
+    let pid = sysinfo::Pid::from_u32(parent_pid);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while process_snapshot().process(pid).is_some() {
+        if Instant::now() >= deadline {
+            return Err(format!("等待旧 Desktop 进程 {parent_pid} 退出超时"));
         }
-    };
-    let Some(api_base_url) = api_base_url else {
-        let _ = runtime::rollback_runtime();
-        return install_failure("后端重启后未就绪，已回滚内核".to_string());
-    };
-    result.restarted = true;
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Ok(())
+}
 
-    emit_progress(app, "verify-backend", 60, "校验后端版本…");
-    match verify_backend_version(&api_base_url, &version).await {
-        Ok(true) => result.backend_verified = true,
-        Ok(false) => {
-            let _ = runtime::rollback_runtime();
-            let _ = crate::commands::restart::respawn_managed_dashboard(
-                state,
-                &host,
-                port,
-                &recovery_home,
-                &recovery_home,
+#[cfg(target_os = "windows")]
+fn run_windows_updater_helper(args: &[OsString], log_path: &Path) -> Result<(), String> {
+    if args.len() < 3 {
+        return Err("Windows updater helper 参数不足".to_string());
+    }
+    let parent_pid = args[0]
+        .to_string_lossy()
+        .parse::<u32>()
+        .map_err(|_| "Windows updater helper parent PID 无效".to_string())?;
+    let installer = PathBuf::from(&args[1]);
+    let app_exe = PathBuf::from(&args[2]);
+    if installer.extension() != Some(OsStr::new("exe")) || !installer.is_file() {
+        return Err(format!(
+            "Windows updater 安装器无效：{}",
+            installer.display()
+        ));
+    }
+    if app_exe.extension() != Some(OsStr::new("exe")) || !app_exe.is_file() {
+        return Err(format!("Windows Desktop 路径无效：{}", app_exe.display()));
+    }
+
+    wait_for_windows_updater_parent(parent_pid)?;
+    append_windows_updater_helper_log(log_path, "parent-exited");
+    let status = std::process::Command::new(&installer)
+        .args(WINDOWS_NSIS_INSTALL_ARGS)
+        .status()
+        .map_err(|error| format!("运行 Windows updater 失败：{error}"))?;
+    append_windows_updater_helper_log(log_path, &format!("installer-exit={status}"));
+
+    let restart = std::process::Command::new(&app_exe)
+        .args(&args[3..])
+        .spawn()
+        .map_err(|error| format!("重新启动 Desktop 失败：{error}"));
+    if !status.success() {
+        let restart_note = restart
+            .as_ref()
+            .map(|child| format!("；已尝试恢复 Desktop pid={}", child.id()))
+            .unwrap_or_else(|error| format!("；恢复 Desktop 也失败：{error}"));
+        return Err(format!("Windows updater 安装失败：{status}{restart_note}"));
+    }
+    let child = restart?;
+    append_windows_updater_helper_log(log_path, &format!("desktop-restarted={}", child.id()));
+    Ok(())
+}
+
+/// Handle the detached Windows updater-helper invocation before Tauri,
+/// WebView2, runtime-root locking, or the single-instance guard starts.
+#[cfg(target_os = "windows")]
+pub fn run_windows_updater_helper_if_requested() -> bool {
+    let mut process_args = std::env::args_os();
+    let _current_exe = process_args.next();
+    if process_args.next().as_deref() != Some(OsStr::new(WINDOWS_UPDATER_HELPER_FLAG)) {
+        return false;
+    }
+
+    let args: Vec<OsString> = process_args.collect();
+    let log_path = args
+        .get(1)
+        .map(PathBuf::from)
+        .and_then(|path| {
+            path.parent()
+                .map(|parent| parent.join(WINDOWS_UPDATER_HELPER_LOG))
+        })
+        .unwrap_or_else(|| std::env::temp_dir().join(WINDOWS_UPDATER_HELPER_LOG));
+    append_windows_updater_helper_log(&log_path, "helper-started");
+    match run_windows_updater_helper(&args, &log_path) {
+        Ok(()) => append_windows_updater_helper_log(&log_path, "helper-complete"),
+        Err(error) => {
+            append_windows_updater_helper_log(&log_path, &format!("helper-error={error}"))
+        }
+    }
+    true
+}
+
+fn stop_owned_runtime(state: &State<'_, AppState>) -> Result<(), String> {
+    let (relay, mut dashboard_handle, session_token) = {
+        let mut inner = state
+            .inner
+            .lock()
+            .map_err(|error| format!("停止 Runtime 时状态锁失败：{error}"))?;
+        (
+            inner.gateway_ws.take(),
+            inner.dashboard_handle.take(),
+            inner.session_token.clone(),
+        )
+    };
+    if let Some(relay) = relay {
+        relay.abort.store(true, Ordering::Relaxed);
+        relay.notify.notify_waiters();
+    }
+    let stop_failed = dashboard_handle.as_mut().is_some_and(|handle| {
+        handle.owns_process
+            && !dashboard::terminate_owned_dashboard_tree(
+                &handle.api_base_url,
+                handle.child.as_mut(),
+                handle.attached_pid,
+                session_token.as_deref(),
             )
-            .await;
-            return install_failure(format!("后端版本探活失败（期望 {}），已回滚内核", version));
+    });
+    if stop_failed {
+        if let Ok(mut inner) = state.inner.lock() {
+            if inner.dashboard_handle.is_none() {
+                inner.dashboard_handle = dashboard_handle;
+            }
         }
-        Err(e) => {
-            let _ = runtime::rollback_runtime();
-            let _ = crate::commands::restart::respawn_managed_dashboard(
-                state,
-                &host,
-                port,
-                &recovery_home,
-                &recovery_home,
-            )
-            .await;
-            return install_failure(format!("{}，已回滚内核", e));
+        return Err("无法停止本应用管理的 Runtime，已取消安装".to_string());
+    }
+    Ok(())
+}
+
+fn executable_key(path: &Path) -> String {
+    let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let value = path.to_string_lossy().to_string();
+    if cfg!(target_os = "windows") {
+        value.to_ascii_lowercase()
+    } else {
+        value
+    }
+}
+
+fn process_snapshot() -> System {
+    System::new_with_specifics(
+        RefreshKind::nothing()
+            .with_processes(ProcessRefreshKind::nothing().with_exe(UpdateKind::Always)),
+    )
+}
+
+fn sibling_desktop_pids(executable: &Path) -> Vec<sysinfo::Pid> {
+    let current_pid = sysinfo::get_current_pid().ok();
+    let expected = executable_key(executable);
+    process_snapshot()
+        .processes()
+        .iter()
+        .filter_map(|(pid, process)| {
+            if Some(*pid) == current_pid {
+                return None;
+            }
+            process
+                .exe()
+                .filter(|path| executable_key(path) == expected)
+                .map(|_| *pid)
+        })
+        .collect()
+}
+
+fn stop_sibling_desktop_instances() -> Result<(), String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("无法确认当前 Desktop 可执行文件：{error}"))?;
+    let system = process_snapshot();
+    let siblings = sibling_desktop_pids(&executable);
+    for pid in &siblings {
+        let process = system
+            .process(*pid)
+            .ok_or_else(|| format!("Desktop 实例 {pid} 在停止前已不可见"))?;
+        if !process.kill() {
+            return Err(format!(
+                "无法停止同一可执行文件的 Desktop 实例 {pid}，已取消安装"
+            ));
         }
     }
-
-    // --- [3] Stage the desktop installer ---
-    emit_progress(app, "download-desktop", 72, "下载桌面端安装包…");
-    let ext = desktop_asset_extension(&desktop_asset.kind);
-    let staging_path = runtime::downloads_root().join(format!("desktop-update-{version}{ext}"));
-    if let Err(e) = download_file(&desktop_asset.url, &staging_path).await {
-        return install_failure(e);
-    }
-    emit_progress(app, "verify-desktop", 85, "校验桌面端安装包…");
-    if let Err(e) = verify_file_sha256(&staging_path, &desktop_asset.sha256) {
-        return install_failure(e);
-    }
-    if let Err(e) = verify_authenticode_best_effort(&staging_path) {
-        return install_failure(e);
-    }
-    result.frontend_staged = true;
-
-    // --- [4] Marker + detached updater + exit ---
-    emit_progress(app, "stage-frontend", 92, "准备应用重启…");
-    let updater_dir = runtime::runtime_root().join(UPDATER_DIR);
-    if let Err(e) = fs::create_dir_all(&updater_dir) {
-        return install_failure(format!("无法创建更新器目录：{}", e));
-    }
-    let updater_script = updater_dir.join(UPDATER_SCRIPT_FILE);
-    if let Err(e) = fs::write(&updater_script, APPLY_DESKTOP_UPDATE_SOURCE) {
-        return install_failure(format!("写入更新器脚本失败：{}", e));
+    if siblings.is_empty() {
+        return Ok(());
     }
 
-    let marker = PendingAppUpdateMarker {
-        schema_version: 1,
-        pid: std::process::id(),
-        installer_path: staging_path.to_string_lossy().to_string(),
-        target_version: version.clone(),
-        kind: desktop_asset.kind.clone(),
-        exe_path: std::env::current_exe()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default(),
-        timeout_ms: 120_000,
-        created_at: now_rfc3339(),
-    };
-    let marker_path = match write_pending_marker(&marker) {
-        Ok(p) => p,
-        Err(e) => return install_failure(e),
-    };
-
-    match spawn_detached_updater(&updater_script, &marker_path) {
-        Ok(()) => {
-            result.frontend_installed = true;
-            result.ok = true;
-            emit_progress(app, "relaunch-app", 98, "正在退出并安装新版桌面端…");
-            // Give the detached child a moment to be fully spawned (it will
-            // outlive us), then exit so the installer can replace the exe.
-            tokio::time::sleep(Duration::from_millis(1500)).await;
-            app.exit(0);
-            result
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if sibling_desktop_pids(&executable).is_empty() {
+            return Ok(());
         }
-        Err(e) => install_failure(e),
+        if Instant::now() >= deadline {
+            return Err("等待其他 Desktop 实例退出超时，已取消安装".to_string());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn download_failure(error: impl Into<String>) -> AppUpdateDownloadResult {
+    AppUpdateDownloadResult {
+        manifest_source: Some(MANIFEST_SOURCE.to_string()),
+        error: Some(error.into()),
+        ..Default::default()
+    }
+}
+
+fn install_failure(error: impl Into<String>) -> AppUpdateInstallResult {
+    AppUpdateInstallResult {
+        manifest_source: Some(MANIFEST_SOURCE.to_string()),
+        error: Some(error.into()),
+        ..Default::default()
     }
 }
 
@@ -638,231 +1344,136 @@ async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateI
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use tempfile::TempDir;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    fn sample_manifest(version: &str) -> UnifiedReleaseManifest {
-        serde_json::from_value(serde_json::json!({
-            "schemaVersion": 1,
-            "version": version,
-            "minAppVersion": "0.7.0",
-            "assets": {
-                crate::unified_manifest::platform_asset_key(): {
-                    "desktop": {
-                        "kind": "nsis",
-                        "fileName": "Hermes.Agent.CN.Desktop_setup.exe",
-                        "url": "https://example.com/setup.exe",
-                        "sha256": "abc",
-                        "size": 1
-                    },
-                    "runtime": {
-                        "kind": "runtime",
-                        "fileName": "r.zip",
-                        "url": "https://example.com/r.zip",
-                        "sha256": "def",
-                        "size": 2,
-                        "kernelVersion": version,
-                        "manifest": {
-                            "schemaVersion": 2,
-                            "channel": "stable",
-                            "runtimeVersion": version,
-                            "kernelVersion": version,
-                            "runtimeFlavor": "cn",
-                            "runtimeRevision": 0,
-                            "platform": crate::process::runtime::current_platform(),
-                            "arch": crate::process::runtime::current_arch(),
-                            "artifactUrl": "https://example.com/r.zip",
-                            "sha256": "def",
-                            "signature": "ZmFrZXNpZw==",
-                            "sourceRepo": "Eynzof/Hermes-CN-Core",
-                            "sourceCommit": "deadbeef"
-                        }
-                    }
-                }
+    fn raw_update(core: &str, runtime: &str) -> serde_json::Value {
+        let bytes = b"signed updater bytes";
+        let release_id = expected_release_id("0.8.1-hotupdate.1").unwrap();
+        serde_json::json!({
+            "version": "0.8.1-hotupdate.1",
+            "url": "https://dl-desktop.hermesagent.org.cn/v0.8.1-hotupdate.1/update.exe",
+            "signature": "signed",
+            "metadata": {
+                "schemaVersion": 2,
+                "releaseId": release_id,
+                "channel": "prototype",
+                "githubReleaseTag": "v0.8.1-hotupdate.1",
+                "githubFallbackUrl": "https://github.com/Eynzof/Hermes-CN-Desktop/releases/download/v0.8.1-hotupdate.1/update.exe",
+                "sha256": sha256_hex(bytes),
+                "size": bytes.len(),
+                "bundledCoreVersion": core,
+                "bundledRuntimeVersion": runtime,
+                "runtimeRevision": 9
             }
-        }))
-        .unwrap()
+        })
     }
 
     #[test]
-    fn compare_versions_orders_numerically() {
-        assert_eq!(compare_versions("0.8.0", "0.7.0"), Some(Ordering::Greater));
-        assert_eq!(compare_versions("0.7.0", "0.8.0"), Some(Ordering::Less));
-        assert_eq!(compare_versions("0.8.0", "0.8.0"), Some(Ordering::Equal));
-        assert_eq!(compare_versions("v0.8.0", "0.8.0"), Some(Ordering::Equal));
-        assert_eq!(compare_versions("0.10.0", "0.9.9"), Some(Ordering::Greater));
+    fn parses_required_tauri_metadata() {
+        let metadata = parse_update_metadata(&raw_update("0.20.0", "0.20.0-cn.9")).unwrap();
         assert_eq!(
-            compare_versions("0.8.0-beta.1", "0.8.0"),
-            Some(Ordering::Equal)
+            metadata.release_id,
+            expected_release_id("0.8.1-hotupdate.1").unwrap()
         );
-        assert_eq!(compare_versions("abc", "0.8.0"), None);
+        assert_eq!(metadata.channel, "prototype");
+        assert_eq!(metadata.bundled_core_version, "0.20.0");
+        assert_eq!(metadata.runtime_revision, 9);
     }
 
     #[test]
-    fn desktop_asset_extension_maps_kinds() {
-        assert_eq!(desktop_asset_extension("nsis"), ".exe");
-        assert_eq!(desktop_asset_extension("dmg"), ".dmg");
-        assert_eq!(desktop_asset_extension("zip"), ".zip");
-        assert_eq!(desktop_asset_extension("unknown"), ".bin");
+    fn accepts_desktop_08_with_core_020() {
+        let metadata = validate_update_target(
+            "0.8.1-hotupdate.1",
+            &raw_update("0.20.0", "0.20.0-cn.9"),
+            "prototype",
+        )
+        .unwrap();
+        assert_eq!(metadata.bundled_runtime_version, "0.20.0-cn.9");
     }
 
     #[test]
-    fn sha256_hex_matches_known_digest() {
-        let dir = TempDir::new().unwrap();
-        let path = dir.path().join("f.bin");
-        fs::write(&path, b"hello").unwrap();
-        assert_eq!(
-            file_sha256_hex(&path).unwrap(),
-            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
-        );
+    fn rejects_target_with_incompatible_core() {
+        let error = validate_update_target(
+            "0.8.1-hotupdate.1",
+            &raw_update("0.19.9", "0.19.9-cn.7"),
+            "prototype",
+        )
+        .unwrap_err();
+        assert!(error.contains("仅兼容 Core 0.20.x"));
     }
 
     #[test]
-    fn verify_file_sha256_rejects_mismatch() {
-        let dir = TempDir::new().unwrap();
-        let path = dir.path().join("f.bin");
-        fs::write(&path, b"hello").unwrap();
-        let err = verify_file_sha256(&path, "deadbeef").unwrap_err();
-        assert!(err.contains("sha256 不匹配"), "{}", err);
+    fn rejects_channel_mismatch() {
+        let error = validate_update_target(
+            "0.8.1-hotupdate.1",
+            &raw_update("0.20.0", "0.20.0-cn.9"),
+            "canary",
+        )
+        .unwrap_err();
+        assert!(error.contains("channel 不匹配"));
     }
 
     #[test]
-    fn marker_round_trip_json() {
-        let marker = PendingAppUpdateMarker {
-            schema_version: 1,
-            pid: 4242,
-            installer_path: r"C:\tmp\setup.exe".to_string(),
-            target_version: "0.8.0".to_string(),
-            kind: "nsis".to_string(),
-            exe_path: r"C:\Program Files\Hermes Agent CN Desktop.exe".to_string(),
-            timeout_ms: 120_000,
-            created_at: "2026-01-01T00:00:00Z".to_string(),
-        };
-        let json = serde_json::to_string(&marker).unwrap();
-        let parsed: PendingAppUpdateMarker = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.pid, 4242);
-        assert_eq!(parsed.kind, "nsis");
-        assert_eq!(parsed.target_version, "0.8.0");
-    }
-
-    #[tokio::test]
-    async fn fetch_unified_manifest_parses_same_version() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/latest.json"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::to_value(sample_manifest("0.8.0")).unwrap()),
-            )
-            .mount(&server)
-            .await;
-        let manifest = fetch_unified_manifest(&format!("{}/latest.json", server.uri()))
-            .await
-            .unwrap();
-        assert!(manifest.same_version());
-        assert_eq!(manifest.normalized_version().as_deref(), Some("0.8.0"));
-    }
-
-    #[tokio::test]
-    async fn fetch_unified_manifest_rejects_bad_schema() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/latest.json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "schemaVersion": 99,
-                "version": "0.8.0",
-                "assets": {}
-            })))
-            .mount(&server)
-            .await;
-        let err = fetch_unified_manifest(&format!("{}/latest.json", server.uri()))
-            .await
-            .unwrap_err();
-        assert!(err.contains("schemaVersion"), "{}", err);
-    }
-
-    #[tokio::test]
-    async fn fetch_unified_manifest_reports_http_error() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/latest.json"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&server)
-            .await;
-        let err = fetch_unified_manifest(&format!("{}/latest.json", server.uri()))
-            .await
-            .unwrap_err();
-        assert!(err.contains("404"), "{}", err);
-    }
-
-    #[tokio::test]
-    async fn verify_backend_version_matches() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/api/version"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "version": "0.8.0"
-            })))
-            .mount(&server)
-            .await;
-        assert_eq!(
-            verify_backend_version(&server.uri(), "0.8.0")
-                .await
-                .unwrap(),
-            true
-        );
-        assert_eq!(
-            verify_backend_version(&server.uri(), "0.7.0")
-                .await
-                .unwrap(),
-            false
-        );
-    }
-
-    #[tokio::test]
-    async fn verify_backend_version_reports_missing_field() {
-        let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/api/version"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
-            .mount(&server)
-            .await;
-        let err = verify_backend_version(&server.uri(), "0.8.0")
-            .await
-            .unwrap_err();
-        assert!(err.contains("version"), "{}", err);
+    fn rejects_release_id_for_another_target() {
+        let mut raw = raw_update("0.20.0", "0.20.0-cn.9");
+        raw["metadata"]["releaseId"] = serde_json::json!("desktop-0.8.1-hotupdate.1-other-x86_64");
+        let error = validate_update_target("0.8.1-hotupdate.1", &raw, "prototype").unwrap_err();
+        assert!(error.contains("releaseId 与目标平台不一致"));
     }
 
     #[test]
-    fn write_pending_marker_lands_in_runtime_root() {
-        let dir = TempDir::new().unwrap();
-        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", dir.path());
-        let marker = PendingAppUpdateMarker {
-            schema_version: 1,
-            pid: 1,
-            installer_path: "x.exe".to_string(),
-            target_version: "0.8.0".to_string(),
-            kind: "nsis".to_string(),
-            exe_path: "y.exe".to_string(),
-            timeout_ms: 100,
-            created_at: "t".to_string(),
-        };
-        let path = write_pending_marker(&marker).unwrap();
-        assert!(path.ends_with(PENDING_APP_UPDATE_FILE));
-        assert!(path.is_file());
-        let parsed: PendingAppUpdateMarker =
-            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(parsed.target_version, "0.8.0");
-        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    fn fallback_url_is_closed_to_the_fixed_repository() {
+        let mut metadata = parse_update_metadata(&raw_update("0.20.0", "0.20.0-cn.9")).unwrap();
+        metadata.github_fallback_url =
+            "https://example.com/Eynzof/Hermes-CN-Desktop/releases/download/v0.8.1-hotupdate.1/update.exe"
+                .to_string();
+        assert!(validate_github_fallback_url(&metadata).is_err());
     }
 
     #[test]
-    fn embedded_updater_script_is_valid_js_smoke() {
-        // The embedded source must at least mention the marker arg and the
-        // APP_UPDATE_DONE sentinel we rely on in logs.
-        assert!(APPLY_DESKTOP_UPDATE_SOURCE.contains("markerPath"));
-        assert!(APPLY_DESKTOP_UPDATE_SOURCE.contains("APP_UPDATE_DONE"));
-        assert!(APPLY_DESKTOP_UPDATE_SOURCE.contains("HERMES_APP_UPDATED"));
+    fn primary_url_is_closed_to_the_matching_cloudflare_asset() {
+        let metadata = parse_update_metadata(&raw_update("0.20.0", "0.20.0-cn.9")).unwrap();
+        let valid =
+            Url::parse("https://dl-desktop.hermesagent.org.cn/v0.8.1-hotupdate.1/update.exe")
+                .unwrap();
+        validate_primary_download_url(&valid, &metadata).unwrap();
+        let external = Url::parse("https://example.com/v0.8.1-hotupdate.1/update.exe").unwrap();
+        assert!(validate_primary_download_url(&external, &metadata).is_err());
+        let other_asset =
+            Url::parse("https://dl-desktop.hermesagent.org.cn/v0.8.1-hotupdate.1/other.exe")
+                .unwrap();
+        assert!(validate_primary_download_url(&other_asset, &metadata).is_err());
+    }
+
+    #[test]
+    fn fallback_only_accepts_429_and_5xx_http_statuses() {
+        assert!(fallback_allowed(&UpdaterError::Network(
+            "Download request failed with status: 429 Too Many Requests".to_string()
+        )));
+        assert!(fallback_allowed(&UpdaterError::Network(
+            "Download request failed with status: 503 Service Unavailable".to_string()
+        )));
+        assert!(!fallback_allowed(&UpdaterError::Network(
+            "Download request failed with status: 401 Unauthorized".to_string()
+        )));
+        assert!(!fallback_allowed(&UpdaterError::Network(
+            "Download request failed with status: 403 Forbidden".to_string()
+        )));
+        assert!(!fallback_allowed(&UpdaterError::Network(
+            "Download request failed with status: 404 Not Found".to_string()
+        )));
+    }
+
+    #[test]
+    fn validates_metadata_sha_and_size_after_signature() {
+        let bytes = b"signed updater bytes";
+        let metadata = parse_update_metadata(&raw_update("0.20.0", "0.20.0-cn.9")).unwrap();
+        validate_downloaded_bytes(bytes, &metadata).unwrap();
+        assert!(validate_downloaded_bytes(b"tampered", &metadata).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_metadata() {
+        let error = parse_update_metadata(&serde_json::json!({"version": "0.8.1"})).unwrap_err();
+        assert_eq!(error, "更新响应缺少 metadata");
     }
 }

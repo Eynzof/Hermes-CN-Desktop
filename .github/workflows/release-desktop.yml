@@ -1,47 +1,102 @@
-# Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.8.0-rc7`).
-#
-# Desktop release build runs in parallel for Windows, macOS, and Linux. Each job:
-#   1. Installs Node 22 + pnpm + Rust toolchain
-#   2. Caches cargo registry and target dir
-#   3. `pnpm install`
-#   4. Stages the bundled dashboard frontend, bundled skills, bundled plugins,
-#      and bundled Hermes-CN-Core runtime payload + manifest for the target platform.
-#      macOS keeps the upstream signed zip opaque and verifies nested Mach-O
-#      signatures before notarization.
-#   5. Builds the Tauri release bundle. The HERMES_RUNTIME_UPDATE_*_DEFAULT
-#      env vars are NOT set here; src/process/runtime.rs ships hardcoded
-#      production fallbacks. Set them only if you fork the project and
-#      want to point the auto-update at a different runtime release
-#      pipeline.
-#   6. tauri-action uploads .exe / .dmg / .deb / .AppImage to the GitHub Release
-#      it creates on first run, or appends to an existing tag's release.
-#   7. Extra portable (unzip-and-run) zip artifacts are packaged from the same
-#      build output and uploaded alongside the installers: Windows collects
-#      exe + resources from the cargo target dir; macOS staples the already
-#      notarized .app and zips it with ditto. See docs/portable-mode.md.
+# Build a pinned, signed Hermes CN Desktop release. Platform jobs only upload
+# Actions artifacts. A draft GitHub Release is created after every platform is
+# complete; D1 registration is a separate 0%-rollout staging step.
 
 name: release-desktop
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.8.0-rc7)"
+        description: "已存在且指向本次 Desktop SHA 的 tag（例如 v0.8.1）"
         required: true
       bundled_runtime_tag:
-        description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.20.0-cn.8"
-        required: false
+        description: "要内置的 Hermes-CN-Core runtime 固定 tag；禁止 latest"
+        default: "runtime-v0.20.0-cn.9"
+        required: true
+      channel:
+        description: "D1 注册渠道；注册后仍为 draft / 0%"
+        type: choice
+        options: [prototype, canary, beta, stable]
+        default: canary
+        required: true
 
 permissions:
   contents: write
 
+concurrency:
+  group: desktop-release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      channel: ${{ steps.meta.outputs.channel }}
+      runtime_tag: ${{ steps.meta.outputs.runtime_tag }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - run: pnpm install --frozen-lockfile
+      - name: Resolve immutable release inputs
+        id: meta
+        shell: bash
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          INPUT_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.9' }}
+          INPUT_CHANNEL: ${{ github.event.inputs.channel }}
+        run: |
+          set -euo pipefail
+          tag="$INPUT_TAG"
+          runtime_tag="$INPUT_RUNTIME_TAG"
+          channel="$INPUT_CHANNEL"
+          if [ -z "$channel" ]; then
+            case "$tag" in
+              *-beta*) channel=beta ;;
+              *-rc*|*-canary*) channel=canary ;;
+              *-nightly*|*-prototype*) channel=prototype ;;
+              *) channel=stable ;;
+            esac
+          fi
+          if [ "$runtime_tag" = latest ] || [[ "$runtime_tag" == */latest ]]; then
+            echo "bundled_runtime_tag 禁止使用 latest" >&2
+            exit 1
+          fi
+          version="$(node -p "require('./package.json').version")"
+          test "$tag" = "v$version"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$tag^{commit}")"
+          test "$(node -p "require('./tauri.conf.json').identifier")" = "cn.org.hermesagent.desktop"
+          node scripts/check-desktop-core-compatibility.mjs --runtime-schema 2
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "runtime_tag=$runtime_tag" >> "$GITHUB_OUTPUT"
+          if [ "$channel" = stable ]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Validate version, compatibility matrix and generated files
+        run: |
+          pnpm typecheck
+          pnpm hot-update:control:test
+          pnpm --dir infra/hot-update-staging test
+          pnpm --dir infra/release-mirror test
+
   build:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:
@@ -66,126 +121,118 @@ jobs:
             runtime_platform: linux
             runtime_arch: x64
             bundles: deb,appimage
-
     runs-on: ${{ matrix.runner }}
-
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          ref: ${{ needs.preflight.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22.22.0"
-
       - uses: pnpm/action-setup@v3
         with:
           version: "9"
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
       - name: Install Linux build dependencies
         if: matrix.runtime_platform == 'linux'
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            curl \
-            file \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            patchelf \
-            wget
-
-      - name: Cargo cache
-        uses: Swatinem/rust-cache@v2
+          sudo apt-get install -y --no-install-recommends build-essential curl file \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev \
+            libwebkit2gtk-4.1-dev libxdo-dev patchelf wget
+      - uses: Swatinem/rust-cache@v2
         with:
-          # The Tauri sub-crate uses the project root as the manifest dir.
           workspaces: ". -> target"
+      - run: pnpm install --frozen-lockfile
 
-      - name: Install JS deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Resolve bundled runtime manifest
+      - name: Resolve pinned runtime manifest
         id: runtime_manifest
         shell: bash
         env:
-          BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.8' }}
+          RUNTIME_TAG: ${{ needs.preflight.outputs.runtime_tag }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
           node - <<'NODE'
           const fs = require("node:fs");
           (async () => {
-            const repo = process.env.BUNDLED_RUNTIME_REPO || "Eynzof/Hermes-CN-Core";
-            const tag = process.env.BUNDLED_RUNTIME_TAG || "latest";
-            const baseUrl = tag === "latest"
-              ? `https://github.com/${repo}/releases/latest/download`
-              : `https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}`;
-            const platform = process.env.RUNTIME_PLATFORM;
-            const arch = process.env.RUNTIME_ARCH;
-            const response = await fetch(`${baseUrl}/stable-${platform}-${arch}.json`, {
-              headers: { "User-Agent": "hermes-agent-cn-desktop-release-workflow" },
-            });
-            if (!response.ok) {
-              throw new Error(`manifest download failed: HTTP ${response.status}`);
-            }
+            const tag = process.env.RUNTIME_TAG;
+            if (!tag || tag === "latest") throw new Error("runtime tag must be immutable");
+            const url = `https://github.com/Eynzof/Hermes-CN-Core/releases/download/${encodeURIComponent(tag)}/stable-${process.env.RUNTIME_PLATFORM}-${process.env.RUNTIME_ARCH}.json`;
+            const response = await fetch(url, { headers: { "User-Agent": "hermes-desktop-release" } });
+            if (!response.ok) throw new Error(`runtime manifest HTTP ${response.status}`);
             const manifest = await response.json();
-            if (!manifest.sourceCommit) {
-              throw new Error("runtime manifest missing sourceCommit");
+            for (const field of ["sourceRepo", "sourceCommit", "runtimeVersion", "kernelVersion", "runtimeRevision"]) {
+              if (manifest[field] === undefined || manifest[field] === "") throw new Error(`runtime manifest missing ${field}`);
             }
-            if (!manifest.sourceRepo) {
-              throw new Error("runtime manifest missing sourceRepo");
-            }
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_repo=${manifest.sourceRepo}\n`);
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `source_commit=${manifest.sourceCommit}\n`);
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `runtime_version=${manifest.runtimeVersion}\n`);
-          })().catch((err) => {
-            console.error(err);
-            process.exit(1);
-          });
+            if (manifest.schemaVersion !== 2) throw new Error(`runtime schema ${manifest.schemaVersion} is not 2`);
+            for (const [key, value] of Object.entries({
+              source_repo: manifest.sourceRepo,
+              source_commit: manifest.sourceCommit,
+              runtime_version: manifest.runtimeVersion,
+              kernel_version: manifest.kernelVersion,
+              runtime_revision: manifest.runtimeRevision,
+            })) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+          })().catch((error) => { console.error(error); process.exit(1); });
           NODE
-
-      - name: Checkout runtime source for dashboard assets
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: ${{ steps.runtime_manifest.outputs.source_repo }}
           ref: ${{ steps.runtime_manifest.outputs.source_commit }}
           path: hermes-agent-cn-source
-
-      - name: Stage bundled dashboard frontend
-        run: node scripts/stage-dashboard-web-dist.mjs --source hermes-agent-cn-source
-
-      - name: Stage bundled skills
-        run: node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
-
-      - name: Stage bundled plugins
-        run: node scripts/stage-bundled-plugins.mjs --source hermes-agent-cn-source
-
-      - name: Stage bundled Hermes-CN-Core runtime
+          persist-credentials: false
+      - name: Stage pinned bundled content
         shell: bash
         run: |
-          args=(
-            scripts/stage-bundled-runtime.mjs
-            --repo "Eynzof/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.8' }}"
-            --platform "${{ matrix.runtime_platform }}"
+          node scripts/stage-dashboard-web-dist.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-plugins.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-runtime.mjs \
+            --repo Eynzof/Hermes-CN-Core \
+            --tag "${{ needs.preflight.outputs.runtime_tag }}" \
+            --platform "${{ matrix.runtime_platform }}" \
             --arch "${{ matrix.runtime_arch }}"
-          )
-          node "${args[@]}"
-
-      - name: Verify bundled runtime with desktop extractor
+      - name: Verify bundled runtime extraction and anti-downgrade contract
         shell: bash
         env:
           HERMES_RELEASE_RUNTIME_ZIP: ${{ github.workspace }}/static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip
         run: cargo test --locked --all-features --lib release_runtime_zip_extracts_with_installer -- --ignored --nocapture
 
-      - name: Prepare macOS signing credentials
+      - name: Prepare Windows Authenticode identity
+        if: matrix.runtime_platform == 'win32'
+        shell: pwsh
+        env:
+          RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) {
+            if ($env:RELEASE_CHANNEL -ne "prototype") {
+              throw "canary/beta/stable 必须配置 Windows Authenticode 证书"
+            }
+            '{}' | Set-Content -Encoding utf8 windows-signing-config.json
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP "hermes-windows-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          if (-not $cert.Thumbprint) { throw "无法导入 Windows 签名证书" }
+          @{
+            bundle = @{ windows = @{
+              certificateThumbprint = $cert.Thumbprint
+              digestAlgorithm = "sha256"
+              timestampUrl = $env:WINDOWS_TIMESTAMP_URL
+            }}
+          } | ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding utf8 windows-signing-config.json
+
+      - name: Prepare macOS signing and notarization identity
         if: matrix.runtime_platform == 'darwin'
         shell: bash
         env:
@@ -195,244 +242,231 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
-          test -n "$APPLE_CERTIFICATE"
-          test -n "$APPLE_CERTIFICATE_PASSWORD"
-          test -n "$APPLE_SIGNING_IDENTITY"
-          test -n "$APPLE_API_KEY"
-          test -n "$APPLE_API_PRIVATE_KEY"
-
+          set -euo pipefail
+          test -n "$APPLE_CERTIFICATE" && test -n "$APPLE_CERTIFICATE_PASSWORD"
+          test -n "$APPLE_SIGNING_IDENTITY" && test -n "$APPLE_API_KEY" && test -n "$APPLE_API_PRIVATE_KEY"
           mkdir -p "$RUNNER_TEMP/appstoreconnect/private_keys"
           printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8"
           chmod 600 "$RUNNER_TEMP/appstoreconnect/private_keys/AuthKey_${APPLE_API_KEY}.p8"
-
-          signing_keychain_password="$(uuidgen)"
-          signing_keychain="$RUNNER_TEMP/hermes-signing.keychain-db"
-          certificate_path="$RUNNER_TEMP/hermes-apple-certificate.p12"
-
-          security create-keychain -p "$signing_keychain_password" "$signing_keychain"
-          security set-keychain-settings -lut 21600 "$signing_keychain"
-          security unlock-keychain -p "$signing_keychain_password" "$signing_keychain"
-
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
-          security import "$certificate_path" \
-            -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -A \
-            -t cert \
-            -f pkcs12 \
-            -k "$signing_keychain"
-          security set-key-partition-list \
-            -S apple-tool:,apple: \
-            -s \
-            -k "$signing_keychain_password" \
-            "$signing_keychain"
-          security list-keychains -d user -s "$signing_keychain" $(security list-keychains -d user | tr -d '"')
-          security find-identity -v -p codesigning "$signing_keychain"
-
-      - name: Verify bundled macOS runtime payload signatures
+          keychain_password="$(uuidgen)"
+          keychain="$RUNNER_TEMP/hermes-signing.keychain-db"
+          certificate="$RUNNER_TEMP/hermes-apple-certificate.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate"
+          security import "$certificate" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$keychain"
+      - name: Verify bundled macOS Runtime signatures
         if: matrix.runtime_platform == 'darwin'
         shell: bash
         run: scripts/verify-macos-runtime-payload.sh "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"
 
-      - name: Build + upload installers
-        uses: tauri-apps/tauri-action@v0
+      - name: Build signed Tauri bundles
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        with:
-          # tauri-action looks up the tag from this input. On a push:tags
-          # trigger it falls back to GITHUB_REF, but we pass it explicitly
-          # so workflow_dispatch also works.
-          tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: "Hermes Agent 中文社区桌面版 ${{ github.event.inputs.tag || github.ref_name }}"
-          releaseBody: |
-            自动构建的 Hermes Agent 中文社区桌面版安装包。
-
-            Windows 系统安装名称、安装目录和卸载注册表项使用英文名
-            Hermes Agent CN Desktop，避免中文路径造成兼容性问题。
-
-            覆盖安装前，请先完全退出正在运行的 Hermes Agent CN Desktop。
-
-            Windows 安装包暂未做 Authenticode 签名。如遇 SmartScreen 拦截，请选择
-            “更多信息” → “仍要运行”。
-
-            安装包已内置来自 ${{ steps.runtime_manifest.outputs.source_repo }}
-            ${{ steps.runtime_manifest.outputs.source_commit }} 的 Dashboard 前端、内置技能和内置插件。
-
-            Windows、macOS 和 Linux 安装包同时内置 Hermes-CN-Core runtime
-            ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。
-
-            Linux x64 版本提供 Debian 安装包（.deb）和免安装 AppImage。
-
-            Windows 和 macOS 另附免安装（portable）压缩包：解压即用，全部数据保存在
-            解压目录的 data 文件夹内，详见压缩包内 README-portable.txt。
-
-            已知限制：本版本保持 runtime manifest schema 2，不包含 schema 2/3 双读能力。
-            后续发布 schema 3 runtime manifest 前，必须先发布支持双读的桌面端，或将
-            minAppVersion 提升到对应的桌面端版本，避免旧桌面端用户停留在旧内核。
-
-            如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
-          releaseDraft: false
-          # Mark SemVer prerelease tags as prerelease on GitHub Releases.
-          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
-          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
-
-      - name: Package + upload Windows portable zip
-        if: matrix.runtime_platform == 'win32'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          HERMES_BAKED_UPDATE_CHANNEL: ${{ needs.preflight.outputs.channel }}
+          HERMES_BAKED_SHELL_UPDATE_ENDPOINT: ${{ vars.HOT_UPDATE_CONTROL_ENDPOINT }}
         run: |
           set -euo pipefail
-          node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
-          gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          args=(--target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}")
+          if [ -f windows-signing-config.json ]; then
+            args+=(--config windows-signing-config.json)
+          fi
+          pnpm exec tauri build "${args[@]}"
 
-      - name: Notarize, staple, verify, and reupload macOS DMG
+      - name: Verify Windows Authenticode
+        if: matrix.runtime_platform == 'win32'
+        shell: pwsh
+        env:
+          RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+        run: |
+          $installers = Get-ChildItem "target/${{ matrix.target }}/release/bundle/nsis/*.exe"
+          if (-not $installers) { throw "缺少 NSIS installer" }
+          if ($env:RELEASE_CHANNEL -ne "prototype" -or $env:WINDOWS_CERTIFICATE) {
+            foreach ($installer in $installers) {
+              $signature = Get-AuthenticodeSignature $installer.FullName
+              if ($signature.Status -ne "Valid") { throw "$($installer.Name) Authenticode: $($signature.Status)" }
+            }
+          }
+      - name: Package Windows portable build
+        if: matrix.runtime_platform == 'win32'
+        run: node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
+
+      - name: Notarize/staple macOS and regenerate final updater package
         if: matrix.runtime_platform == 'darwin'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/appstoreconnect/private_keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-
           dmgs=(target/${{ matrix.target }}/release/bundle/dmg/*.dmg)
-          if [ ${#dmgs[@]} -eq 0 ]; then
-            echo "No macOS DMG bundle found" >&2
-            exit 1
-          fi
-
-          for dmg in "${dmgs[@]}"; do
-            echo "Notarizing final DMG: $dmg"
-            submit_json="$RUNNER_TEMP/notary-submit-$(basename "$dmg").json"
-            xcrun notarytool submit "$dmg" \
-              --key "$APPLE_API_KEY_PATH" \
-              --key-id "$APPLE_API_KEY" \
-              --issuer "$APPLE_API_ISSUER" \
-              --wait \
-              --output-format json | tee "$submit_json"
-
-            submission_id="$(python3 - "$submit_json" <<'PY'
-          import json, sys
-          with open(sys.argv[1], "r", encoding="utf-8") as fh:
-              print(json.load(fh).get("id", ""))
-          PY
-          )"
-            submission_status="$(python3 - "$submit_json" <<'PY'
-          import json, sys
-          with open(sys.argv[1], "r", encoding="utf-8") as fh:
-              print(json.load(fh).get("status", ""))
-          PY
-          )"
-
-            if [ "$submission_status" != "Accepted" ]; then
-              echo "Notarization failed with status: $submission_status" >&2
-              if [ -n "$submission_id" ]; then
-                xcrun notarytool log "$submission_id" \
-                  --key "$APPLE_API_KEY_PATH" \
-                  --key-id "$APPLE_API_KEY" \
-                  --issuer "$APPLE_API_ISSUER" \
-                  --output-format json | tee "$RUNNER_TEMP/notary-log-$submission_id.json" || true
-              fi
-              exit 1
-            fi
-
-            xcrun stapler staple "$dmg"
-            xcrun stapler validate "$dmg"
-            spctl -a -vvv -t open --context context:primary-signature "$dmg"
-
-            # tauri-action already uploaded the first DMG. Replace it with the
-            # final notarized + stapled DMG so the release asset is the one users download.
-            gh release upload "$RELEASE_TAG" "$dmg" --clobber
-          done
-
-      - name: Package + upload macOS portable zip
-        if: matrix.runtime_platform == 'darwin'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-        run: |
-          set -euo pipefail
+          updaters=(target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz)
+          test ${#dmgs[@]} -eq 1 && test ${#updaters[@]} -eq 1
+          dmg="${dmgs[0]}"
+          updater="${updaters[0]}"
+          submit="$RUNNER_TEMP/notary-submit.json"
+          xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" --wait --output-format json | tee "$submit"
+          test "$(node -p "JSON.parse(require('fs').readFileSync('$submit','utf8')).status")" = Accepted
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          spctl -a -vvv -t open --context context:primary-signature "$dmg"
           app="target/${{ matrix.target }}/release/bundle/macos/Hermes Agent CN Desktop.app"
-
-          # Tauri's updater bundler compresses the .app into the .app.tar.gz
-          # updater artifact and then REMOVES the plain .app ("Cleaning …"),
-          # so by the time this step runs the bundle dir may only hold the
-          # tarball. Re-extract the .app from the final notarized DMG — the
-          # exact bits users download, covered by the notarization ticket.
-          if [ ! -d "$app" ]; then
-            dmgs=(target/${{ matrix.target }}/release/bundle/dmg/*.dmg)
-            mnt="$(mktemp -d)"
-            hdiutil attach "${dmgs[0]}" -mountpoint "$mnt" -nobrowse -quiet
-            mkdir -p "$(dirname "$app")"
-            ditto "$mnt/Hermes Agent CN Desktop.app" "$app"
-            hdiutil detach "$mnt" -quiet
-          fi
-
-          # The DMG notarization above produced a ticket covering the nested
-          # .app; staple the .app itself so the portable copy also validates
-          # offline. If Apple's ticket lookup ever fails here, the fallback is
-          # to notarize the portable zip separately:
-          #   ditto -c -k --keepParent "$app" app.zip && xcrun notarytool submit app.zip ...
+          mount="$(mktemp -d)"
+          hdiutil attach "$dmg" -mountpoint "$mount" -nobrowse -quiet
+          rm -rf "$app"
+          ditto "$mount/Hermes Agent CN Desktop.app" "$app"
+          hdiutil detach "$mount" -quiet
           xcrun stapler staple "$app"
           xcrun stapler validate "$app"
           spctl -a -vvv --type exec "$app"
-
+          rm -f "$updater" "$updater.sig"
+          tar -czf "$updater" -C "$(dirname "$app")" "$(basename "$app")"
+          pnpm exec tauri signer sign "$updater"
           node scripts/package-portable-macos.mjs --target ${{ matrix.target }}
-          gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
-  # Mirror all release assets to Cloudflare R2 so the dl-desktop download
-  # mirror (landing repo workers/release-mirror) serves from R2 instead of
-  # proxying GitHub. Runs after every build leg finishes, i.e. after the
-  # notarized DMG --clobber re-uploads and portable zips are final.
-  #
-  # Failure here never blocks the release: the mirror Worker falls back to
-  # GitHub for any object missing from R2. Re-run this job from the Actions
-  # UI after a failure — every step is idempotent.
-  #
-  # Required repo secrets (R2 API token scoped to the bucket, created in
-  # Cloudflare Dashboard → R2 → Manage API Tokens):
-  #   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ACCOUNT_ID
-  mirror-sync:
-    needs: build
+      - name: Collect final platform assets and release provenance
+        shell: bash
+        run: |
+          node scripts/collect-release-artifacts.mjs \
+            --platform "${{ matrix.runtime_platform }}" \
+            --arch "${{ matrix.runtime_arch }}" \
+            --target "${{ matrix.target }}" \
+            --runtime-tag "${{ needs.preflight.outputs.runtime_tag }}" \
+            --desktop-sha "$(git rev-parse HEAD)" \
+            --output release-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-github:
+    needs: [preflight, build]
     runs-on: ubuntu-latest
+    outputs:
+      mirror_origin: ${{ steps.meta.outputs.mirror_origin }}
     env:
-      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-      BUCKET: hermes-desktop-releases
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: auto
-      AWS_ENDPOINT_URL: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
-      # aws cli v2.23+ 默认的数据完整性校验头与 R2 不兼容,必须降级
-      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
-      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+      RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+      PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
     steps:
-      - name: Download all release assets
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Build release record, size gate and checksums
         run: |
-          mkdir -p assets && cd assets
-          gh release download "$RELEASE_TAG" -R "$GITHUB_REPOSITORY"
-
-      - name: Generate and upload checksums.txt
+          set -euo pipefail
+          node scripts/finalize-release-record.mjs release-assets
+          find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.app.tar.gz' -o -name '*.AppImage.tar.gz' \) \
+            -size +480M -print -quit | grep -q . && { echo "updater asset exceeds 480 MiB" >&2; exit 1; } || true
+          rm -f release-assets/checksums.txt
+          cd release-assets
+          find . -maxdepth 1 -type f ! -name 'release-fragment-*' ! -name 'checksums.txt' -print0 \
+            | sort -z | xargs -0 sha256sum > checksums.txt
+      - name: Create draft only after all platforms pass
         run: |
-          cd assets
-          rm -f checksums.txt
-          sha256sum * | sort -k2 > checksums.txt
-          gh release upload "$RELEASE_TAG" checksums.txt -R "$GITHUB_REPOSITORY" --clobber
-
-      - name: Sync assets to R2
-        run: aws s3 sync assets/ "s3://$BUCKET/$RELEASE_TAG/"
-
-      - name: Prune old versions from R2 (keep newest 5 tags)
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft >/tmp/release.json 2>/dev/null; then
+            test "$(node -p "JSON.parse(require('fs').readFileSync('/tmp/release.json')).isDraft")" = true
+          else
+            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+              --title "Hermes Agent 中文社区桌面版 $RELEASE_TAG" \
+              --notes "固定 Desktop/Core/Runtime 输入构建；自动更新由 Cloudflare/D1 另行灰度。")
+            if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
+            gh "${args[@]}"
+          fi
+          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f ! -name 'release-fragment-*' -print0)
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Re-download draft assets and verify exact bytes
         run: |
-          aws s3 ls "s3://$BUCKET/" | awk '{print $2}' | tr -d '/' \
-            | sort -V | head -n -5 | while read -r old; do
-              [ -n "$old" ] && aws s3 rm "s3://$BUCKET/$old/" --recursive
-            done
+          mkdir verify-github
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir verify-github
+          cd verify-github
+          sha256sum -c checksums.txt
+      - name: Publish; prerelease never becomes GitHub latest
+        run: |
+          latest=false
+          if [ "$PRERELEASE" = false ]; then latest=true; fi
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --draft=false --prerelease="$PRERELEASE" --latest="$latest"
+      - name: Verify GitHub and Cloudflare full downloads, SHA and Range
+        id: meta
+        env:
+          MIRROR_ORIGIN: ${{ vars.HOT_UPDATE_MIRROR_ORIGIN || 'https://hot-update-download-staging.hermesagent.org.cn' }}
+        run: |
+          set -euo pipefail
+          echo "mirror_origin=$MIRROR_ORIGIN" >> "$GITHUB_OUTPUT"
+          node - <<'NODE' > /tmp/updater-assets.txt
+          const record = require(process.cwd() + "/release-assets/release-record.json");
+          for (const asset of record.assets) console.log(asset.fileName);
+          NODE
+          while IFS= read -r asset; do
+            expected="$(awk -v name="./$asset" '$2 == name { print $1 }' release-assets/checksums.txt)"
+            test -n "$expected"
+            curl --fail --location --retry 3 \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$asset" \
+              --output "/tmp/github-$asset"
+            test "$(sha256sum "/tmp/github-$asset" | awk '{print $1}')" = "$expected"
+            curl --fail --location --retry 3 "$MIRROR_ORIGIN/$RELEASE_TAG/$asset" \
+              --output "/tmp/mirror-$asset" --dump-header "/tmp/mirror-$asset.headers"
+            test "$(sha256sum "/tmp/mirror-$asset" | awk '{print $1}')" = "$expected"
+            grep -qi '^x-mirror-upstream: github' "/tmp/mirror-$asset.headers"
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --range 0-1023 "$MIRROR_ORIGIN/$RELEASE_TAG/$asset")"
+            test "$status" = 206
+          done < /tmp/updater-assets.txt
+
+  register-staging-draft:
+    needs: [preflight, publish-github]
+    runs-on: ubuntu-latest
+    environment: hot-update-staging
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - run: pnpm install --frozen-lockfile
+      - name: Register from real GitHub assets as draft / 0%
+        run: |
+          pnpm hot-update:control release register-draft \
+            --database "${{ vars.HOT_UPDATE_STAGING_D1 || 'hermes-desktop-hot-update-staging' }}" \
+            --remote \
+            --tag "${{ needs.preflight.outputs.tag }}" \
+            --channel "${{ needs.preflight.outputs.channel }}" \
+            --mirror-origin "${{ needs.publish-github.outputs.mirror_origin }}"

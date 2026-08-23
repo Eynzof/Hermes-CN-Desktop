@@ -381,6 +381,8 @@ export interface UpdateMirror {
 export interface UpdateConfig {
   schemaVersion: number;
   channel: string;
+  deviceId: string;
+  shellUpdaterEndpoint: string;
   releaseManifestUrl: string;
   runtimeBaseUrl: string;
   runtimeManifestUrl: string;
@@ -396,51 +398,34 @@ export interface UpdateConfigSnapshot {
   config: UpdateConfig;
   path: string;
   configError?: string;
+  effectiveShellUpdaterEndpoint?: string;
   effectiveReleaseManifestUrl: string;
   effectiveRuntimeManifestUrl?: string;
   effectiveRuntimePublicKeyPem?: string;
 }
 
-export interface UnifiedDesktopAsset {
-  kind: string;
-  fileName: string;
-  url: string;
-  sha256: string;
-  size?: number;
-}
-
-export interface UnifiedRuntimeAsset {
-  kind: string;
-  fileName: string;
-  url: string;
-  sha256: string;
-  size?: number;
-  kernelVersion: string;
-  /** Already-signed track-A runtime manifest (authoritative). */
-  manifest: RuntimeUpdateManifest;
-}
-
-export interface UnifiedPlatformAssets {
-  desktop?: UnifiedDesktopAsset;
-  runtime?: UnifiedRuntimeAsset;
-}
-
-export interface UnifiedReleaseManifest {
+export interface ImportUpdateInvitationInput {
   schemaVersion: number;
-  version: string;
-  publishedAt?: string;
-  notes?: string;
-  minAppVersion?: string;
-  assets: Record<string, UnifiedPlatformAssets>;
-  repository?: string;
-  semver?: string;
-  sourceUrl?: string;
+  endpoint: string;
+  channel: "prototype" | "canary" | "beta";
+  deviceId: string;
+  token: string;
+}
+
+export interface UpdateCredentialStatus {
+  configured: boolean;
+  deviceId: string;
+  channel: string;
+  storage: "system-credential-store" | string;
 }
 
 export interface AppUpdateProgressPayload {
   phase: string;
   percent: number;
   message: string;
+  manifestSource?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
 }
 
 export interface AppUpdateCheckResult {
@@ -448,18 +433,43 @@ export interface AppUpdateCheckResult {
   currentVersion?: string;
   latestVersion?: string;
   updateAvailable: boolean;
-  sameVersion: boolean;
-  manifest?: UnifiedReleaseManifest;
+  compatible: boolean;
+  expectedCoreSeries?: string;
+  targetCoreVersion?: string;
+  targetRuntimeVersion?: string;
+  releaseId?: string;
+  channel?: string;
+  manifestSource?: string;
+  notes?: string;
+  error?: string;
+}
+
+export interface AppUpdateDownloadResult {
+  ok: boolean;
+  ready: boolean;
+  version?: string;
+  releaseId?: string;
+  manifestSource?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
+  error?: string;
+}
+
+export interface AppUpdatePendingResult {
+  ready: boolean;
+  version?: string;
+  releaseId?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
   error?: string;
 }
 
 export interface AppUpdateInstallResult {
   ok: boolean;
-  backendInstalled: boolean;
-  frontendStaged: boolean;
-  backendVerified: boolean;
-  frontendInstalled: boolean;
-  restarted: boolean;
+  installStarted: boolean;
+  manifestSource?: string;
+  downloadSource?: string;
+  fallbackUsed: boolean;
   error?: string;
 }
 

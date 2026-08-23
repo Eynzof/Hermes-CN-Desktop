@@ -8,13 +8,13 @@ function result(overrides: Partial<AppUpdateCheckResult> = {}): AppUpdateCheckRe
     currentVersion: "0.7.0",
     latestVersion: "0.8.0",
     updateAvailable: true,
-    sameVersion: true,
+    compatible: true,
     ...overrides,
   };
 }
 
 describe("parseAppUpdateCheckResult", () => {
-  it("reports update available for a newer same-version manifest", () => {
+  it("reports update available for a newer compatible candidate", () => {
     const parsed = parseAppUpdateCheckResult(result());
     expect(parsed.ok).toBe(true);
     expect(parsed.updateAvailable).toBe(true);
@@ -29,9 +29,9 @@ describe("parseAppUpdateCheckResult", () => {
     expect(parsed.updateAvailable).toBe(false);
   });
 
-  it("keeps sameVersion=false visible when the manifest is inconsistent", () => {
-    const parsed = parseAppUpdateCheckResult(result({ sameVersion: false, updateAvailable: false }));
-    expect(parsed.sameVersion).toBe(false);
+  it("keeps compatible=false visible when the target Core is incompatible", () => {
+    const parsed = parseAppUpdateCheckResult(result({ compatible: false, updateAvailable: false }));
+    expect(parsed.compatible).toBe(false);
     expect(parsed.updateAvailable).toBe(false);
   });
 
@@ -45,7 +45,7 @@ describe("parseAppUpdateCheckResult", () => {
 
   it("surfaces errors from a failed check", () => {
     const parsed = parseAppUpdateCheckResult(
-      result({ ok: false, updateAvailable: false, sameVersion: false, error: "网络错误" }),
+      result({ ok: false, updateAvailable: false, compatible: false, error: "网络错误" }),
     );
     expect(parsed.ok).toBe(false);
     expect(parsed.error).toBe("网络错误");

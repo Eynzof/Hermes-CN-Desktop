@@ -1,0 +1,19 @@
+{
+  "name": "hermes-desktop-release-mirror-staging",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-23",
+  "cache": {
+    "enabled": true
+  },
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "hot-update-download-staging.hermesagent.org.cn",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "staging"
+  }
+}

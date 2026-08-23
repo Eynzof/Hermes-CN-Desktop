@@ -1274,6 +1274,74 @@ fn validate_manifest_for_current_platform(
     safe_version_segment(&manifest.runtime_version)
 }
 
+fn validate_manifest_for_desktop_compatibility(
+    manifest: &RuntimeUpdateManifest,
+) -> Result<(), String> {
+    let desktop_version = env!("CARGO_PKG_VERSION");
+    let matrix = crate::version_compatibility::CompatibilityMatrix::parse_embedded()?;
+    matrix.check(desktop_version, &manifest.kernel_version)?;
+    matrix.check(desktop_version, &manifest.runtime_version)?;
+    let rule = matrix
+        .rule_for_desktop(desktop_version)
+        .ok_or_else(|| format!("兼容矩阵未声明 Desktop {desktop_version}"))?;
+    if !rule.runtime_manifest_schemas.is_empty()
+        && !rule
+            .runtime_manifest_schemas
+            .contains(&manifest.schema_version)
+    {
+        return Err(format!(
+            "Desktop {} 不接受 runtime manifest schema {}",
+            desktop_version, manifest.schema_version
+        ));
+    }
+    Ok(())
+}
+
+fn numeric_version(version: &str) -> Option<(u64, u64, u64)> {
+    let core = version
+        .trim()
+        .trim_start_matches(['v', 'V'])
+        .split(['-', '+'])
+        .next()?;
+    let mut parts = core.split('.');
+    let parsed = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    if parts.next().is_some() {
+        None
+    } else {
+        Some(parsed)
+    }
+}
+
+fn bundled_runtime_would_downgrade(
+    current: &RuntimeInstallRecord,
+    bundled: &RuntimeUpdateManifest,
+) -> bool {
+    let desktop_version = env!("CARGO_PKG_VERSION");
+    let Ok(matrix) = crate::version_compatibility::CompatibilityMatrix::parse_embedded() else {
+        return false;
+    };
+    if matrix
+        .check(desktop_version, &current.kernel_version)
+        .is_err()
+    {
+        return false;
+    }
+    match (
+        numeric_version(&current.kernel_version),
+        numeric_version(&bundled.kernel_version),
+    ) {
+        (Some(current_kernel), Some(bundled_kernel)) if current_kernel > bundled_kernel => true,
+        (Some(current_kernel), Some(bundled_kernel)) if current_kernel == bundled_kernel => {
+            current.runtime_revision > bundled.runtime_revision
+        }
+        _ => false,
+    }
+}
+
 fn runtime_source_info(record: &RuntimeInstallRecord) -> Option<RuntimeSourceInfo> {
     let repo = record.source_repo.as_ref()?;
     let repo_path = Path::new(repo);
@@ -1396,6 +1464,15 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
                             current_platform(),
                             current_arch()
                         )),
+                    };
+                }
+                if let Err(error) = validate_manifest_for_desktop_compatibility(&manifest) {
+                    return RuntimeUpdateCheckResult {
+                        ok: false,
+                        update_available: false,
+                        current_runtime_version: None,
+                        manifest: None,
+                        error: Some(error),
                     };
                 }
                 let current = read_current_record();
@@ -2096,6 +2173,7 @@ pub async fn install_bundled_runtime_if_needed(
         };
     }
 
+    let compatibility_error = validate_manifest_for_desktop_compatibility(&manifest).err();
     if let Some(current) = read_current_record() {
         // Dev/debug builds keep `local-source` runtimes (see dev-runtime tree).
         // Release builds archive the stale pointer and fall through to bundled
@@ -2107,6 +2185,14 @@ pub async fn install_bundled_runtime_if_needed(
                     installed: None,
                     previous: Some(current),
                     error: None,
+                };
+            }
+            if let Some(error) = compatibility_error.as_ref() {
+                return RuntimeInstallUpdateResult {
+                    ok: false,
+                    installed: None,
+                    previous: Some(current),
+                    error: Some(error.clone()),
                 };
             }
             log::info!(
@@ -2130,24 +2216,60 @@ pub async fn install_bundled_runtime_if_needed(
                     error: Some(format!("failed to clear local-source current.json: {}", e)),
                 };
             }
-        } else if current.runtime_version == manifest.runtime_version {
-            if let Err(e) =
-                sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
-            {
+        } else {
+            if let Some(error) = compatibility_error.as_ref() {
                 return RuntimeInstallUpdateResult {
                     ok: false,
                     installed: None,
                     previous: Some(current),
-                    error: Some(format!("Bundled runtime resource sync failed: {}", e)),
+                    error: Some(error.clone()),
                 };
             }
-            return RuntimeInstallUpdateResult {
-                ok: true,
-                installed: None,
-                previous: Some(current),
-                error: None,
-            };
+            if current.runtime_version == manifest.runtime_version {
+                if let Err(e) =
+                    sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
+                {
+                    return RuntimeInstallUpdateResult {
+                        ok: false,
+                        installed: None,
+                        previous: Some(current),
+                        error: Some(format!("Bundled runtime resource sync failed: {}", e)),
+                    };
+                }
+                return RuntimeInstallUpdateResult {
+                    ok: true,
+                    installed: None,
+                    previous: Some(current),
+                    error: None,
+                };
+            }
+            if bundled_runtime_would_downgrade(&current, &manifest) {
+                log::info!(
+                    "Preserving newer compatible runtime {} (kernel {}, revision {}) over bundled {} (kernel {}, revision {})",
+                    current.runtime_version,
+                    current.kernel_version,
+                    current.runtime_revision,
+                    manifest.runtime_version,
+                    manifest.kernel_version,
+                    manifest.runtime_revision,
+                );
+                return RuntimeInstallUpdateResult {
+                    ok: true,
+                    installed: None,
+                    previous: Some(current),
+                    error: None,
+                };
+            }
         }
+    }
+
+    if let Some(error) = compatibility_error {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(error),
+        };
     }
 
     if let Err(e) = verify_signature(&manifest) {
@@ -2224,6 +2346,14 @@ pub async fn install_runtime_update(
             };
         }
     };
+    if let Err(e) = validate_manifest_for_desktop_compatibility(&resolved) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous: None,
+            error: Some(e),
+        };
+    }
 
     // Validate URL scheme before downloading
     match url::Url::parse(&resolved.artifact_url) {
@@ -2892,8 +3022,8 @@ mod tests {
         RuntimeUpdateManifest {
             schema_version: MANIFEST_SCHEMA_VERSION,
             channel: "stable".to_string(),
-            runtime_version: "1.2.3-cn.1".to_string(),
-            kernel_version: "1.2.3".to_string(),
+            runtime_version: "0.20.0-cn.1".to_string(),
+            kernel_version: "0.20.0".to_string(),
             runtime_flavor: "cn".to_string(),
             runtime_revision: 1,
             platform: "linux".to_string(),
@@ -2912,6 +3042,52 @@ mod tests {
         let payload = signature_payload(m);
         let sig = key.sign(&payload);
         m.signature = base64::engine::general_purpose::STANDARD.encode(sig.to_bytes());
+    }
+
+    fn fixture_install_record(kernel_version: &str, runtime_revision: u32) -> RuntimeInstallRecord {
+        RuntimeInstallRecord {
+            schema_version: MANIFEST_SCHEMA_VERSION,
+            runtime_version: format!("{kernel_version}-cn.{runtime_revision}"),
+            kernel_version: kernel_version.to_string(),
+            runtime_flavor: "cn".to_string(),
+            runtime_revision,
+            platform: current_platform().to_string(),
+            arch: current_arch().to_string(),
+            path: "/runtime".to_string(),
+            executable_path: "/runtime/hermes".to_string(),
+            source: "update".to_string(),
+            installed_at: "2026-08-22T00:00:00Z".to_string(),
+            source_repo: None,
+            source_commit: None,
+            local_dirty_hash: None,
+            artifact_sha256: None,
+            previous_runtime_version: None,
+        }
+    }
+
+    #[test]
+    fn bundled_runtime_downgrade_guard_preserves_newer_compatible_runtime() {
+        let current = fixture_install_record("0.20.1", 1);
+        let mut bundled = fixture_manifest();
+        bundled.runtime_version = "0.20.0-cn.9".to_string();
+        bundled.runtime_revision = 9;
+        assert!(bundled_runtime_would_downgrade(&current, &bundled));
+
+        let current = fixture_install_record("0.20.0", 10);
+        assert!(bundled_runtime_would_downgrade(&current, &bundled));
+    }
+
+    #[test]
+    fn bundled_runtime_downgrade_guard_allows_upgrade_or_compatibility_repair() {
+        let mut bundled = fixture_manifest();
+        bundled.runtime_version = "0.20.0-cn.9".to_string();
+        bundled.runtime_revision = 9;
+
+        let older = fixture_install_record("0.20.0", 8);
+        assert!(!bundled_runtime_would_downgrade(&older, &bundled));
+
+        let incompatible = fixture_install_record("0.21.0", 10);
+        assert!(!bundled_runtime_would_downgrade(&incompatible, &bundled));
     }
 
     // -------- containment roots --------
@@ -3477,8 +3653,8 @@ mod tests {
             vec![
                 "2",                           // schema_version
                 "stable",                      // channel
-                "1.2.3-cn.1",                  // runtime_version
-                "1.2.3",                       // kernel_version
+                "0.20.0-cn.1",                 // runtime_version
+                "0.20.0",                      // kernel_version
                 "cn",                          // runtime_flavor
                 "1",                           // runtime_revision
                 "linux",                       // platform
@@ -4190,7 +4366,8 @@ mod tests {
 
         let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
-        manifest.runtime_version = "9.9.9-cn.1".to_string();
+        manifest.runtime_version = "0.20.0-cn.9".to_string();
+        manifest.runtime_revision = 9;
         manifest.platform = current_platform().to_string();
         manifest.arch = current_arch().to_string();
         manifest.sha256 =
@@ -4208,7 +4385,7 @@ mod tests {
 
         assert!(result.ok, "unexpected install error: {:?}", result.error);
         let installed = result.installed.expect("runtime should be installed");
-        assert_eq!(installed.runtime_version, "9.9.9-cn.1");
+        assert_eq!(installed.runtime_version, "0.20.0-cn.9");
         assert_eq!(installed.source, "bundled");
         assert_eq!(
             installed.artifact_sha256.as_deref(),
@@ -4258,8 +4435,9 @@ mod tests {
 
         let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
-        manifest.runtime_version = "0.14.0-cn.4".to_string();
-        manifest.kernel_version = "0.14.0".to_string();
+        manifest.runtime_version = "0.20.0-cn.4".to_string();
+        manifest.kernel_version = "0.20.0".to_string();
+        manifest.runtime_revision = 4;
         manifest.platform = current_platform().to_string();
         manifest.arch = current_arch().to_string();
         manifest.sha256 =
@@ -4351,8 +4529,9 @@ mod tests {
 
         let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
-        manifest.runtime_version = "0.14.0-cn.4".to_string();
-        manifest.kernel_version = "0.14.0".to_string();
+        manifest.runtime_version = "0.20.0-cn.4".to_string();
+        manifest.kernel_version = "0.20.0".to_string();
+        manifest.runtime_revision = 4;
         manifest.platform = current_platform().to_string();
         manifest.arch = current_arch().to_string();
         manifest.sha256 =
@@ -4408,7 +4587,7 @@ mod tests {
         assert_eq!(archived.source, "local-source");
         let after = after.expect("bundled current record should exist");
         assert_eq!(after.source, "bundled");
-        assert_eq!(after.runtime_version, "0.14.0-cn.4");
+        assert_eq!(after.runtime_version, "0.20.0-cn.4");
     }
 
     #[cfg(unix)]
@@ -4462,7 +4641,8 @@ mod tests {
 
         let (key, pem) = test_keypair();
         let mut manifest = fixture_manifest();
-        manifest.runtime_version = "9.9.9-cn.2".to_string();
+        manifest.runtime_version = "0.20.0-cn.10".to_string();
+        manifest.runtime_revision = 10;
         manifest.platform = current_platform().to_string();
         manifest.arch = current_arch().to_string();
         manifest.sha256 = file_sha256(&zip_path).unwrap();
@@ -4480,7 +4660,7 @@ mod tests {
         assert!(result.ok, "unexpected install error: {:?}", result.error);
         let installed = result.installed.expect("runtime should be installed");
         let installed_root = Path::new(&installed.path).join(runtime_dir_name);
-        assert_eq!(installed.runtime_version, "9.9.9-cn.2");
+        assert_eq!(installed.runtime_version, "0.20.0-cn.10");
         assert_eq!(
             std::fs::read_link(installed_root.join("link.txt")).unwrap(),
             PathBuf::from("target.txt")

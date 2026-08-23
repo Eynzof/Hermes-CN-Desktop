@@ -29,10 +29,10 @@ export function AppUpdateOverlay() {
       <div className={s.card}>
         <div className={s.title}>
           <LoadingIndicator size="sm" />
-          正在更新 Hermes（前后端一体化）…
+          正在准备 Hermes Desktop 更新…
         </div>
         <div className={s.body}>
-          更新将依次安装后端内核与桌面端，期间应用会退出并自动重启。请勿手动关闭。
+          正在下载完整 Desktop 包并校验签名；只有启动安装器前才会停止本应用管理的 Runtime。
         </div>
         <div className={s.progressTrack} aria-hidden="true">
           <div

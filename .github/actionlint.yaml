@@ -1,0 +1,6 @@
+self-hosted-runner:
+  labels:
+    - primelab-win
+    # GitHub-hosted Intel label; keep it here until actionlint's embedded
+    # runner list catches up with the public GitHub-hosted runner catalogue.
+    - macos-15-intel

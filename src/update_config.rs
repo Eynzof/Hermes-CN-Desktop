@@ -6,8 +6,9 @@
 //!
 //! ```json
 //! {
-//!   "schemaVersion": 1,
+//!   "schemaVersion": 2,
 //!   "channel": "stable",
+//!   "shellUpdaterEndpoint": "",
 //!   "releaseManifestUrl": "https://desktop.hermesagent.org.cn/latest.json",
 //!   "runtimeBaseUrl": "https://desktop.hermesagent.org.cn/runtime",
 //!   "runtimeManifestUrl": "",
@@ -32,15 +33,20 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-pub const UPDATE_CONFIG_SCHEMA_VERSION: u32 = 1;
+pub const UPDATE_CONFIG_SCHEMA_VERSION: u32 = 2;
 pub const DEFAULT_RELEASE_MANIFEST_URL: &str = "https://desktop.hermesagent.org.cn/latest.json";
 pub const DEFAULT_RUNTIME_BASE_URL: &str = "https://desktop.hermesagent.org.cn/runtime";
 pub const DEFAULT_CHANNEL: &str = "stable";
 pub const DEFAULT_TIMEOUT_SECONDS: u64 = 10;
 const UPDATE_CONFIG_FILE: &str = "update-config.json";
-const ALLOWED_CHANNELS: &[&str] = &["stable", "beta", "canary"];
+const ALLOWED_CHANNELS: &[&str] = &["stable", "beta", "canary", "prototype"];
 const MIN_TIMEOUT_SECONDS: u64 = 1;
 const MAX_TIMEOUT_SECONDS: u64 = 300;
+const UPDATE_TOKEN_SERVICE: &str = "cn.org.hermesagent.desktop.hot-update";
+const UPDATE_CONTROL_HOSTS: &[&str] = &[
+    "hot-update-staging.hermesagent.org.cn",
+    "hot-update.hermesagent.org.cn",
+];
 
 /// A mirror entry shown in the settings UI. Only the two URL fields are
 /// functionally used today; mirrors exist so users can flip the whole source
@@ -62,6 +68,13 @@ pub struct UpdateMirror {
 pub struct UpdateConfig {
     pub schema_version: u32,
     pub channel: String,
+    /// Opaque installation/device identifier. The bearer token is deliberately
+    /// kept out of this file and stored in the operating-system credential store.
+    pub device_id: String,
+    /// Tauri dynamic updater endpoint. Empty by default so prototype builds
+    /// never contact or mutate the public stable update path accidentally.
+    pub shell_updater_endpoint: String,
+    /// Legacy unified-manifest field retained for migration and diagnostics.
     pub release_manifest_url: String,
     pub runtime_base_url: String,
     pub runtime_manifest_url: String,
@@ -74,9 +87,17 @@ pub struct UpdateConfig {
 
 impl Default for UpdateConfig {
     fn default() -> Self {
+        let baked_channel = option_env!("HERMES_BAKED_UPDATE_CHANNEL")
+            .filter(|channel| ALLOWED_CHANNELS.contains(channel))
+            .unwrap_or(DEFAULT_CHANNEL);
+        let baked_shell_endpoint = option_env!("HERMES_BAKED_SHELL_UPDATE_ENDPOINT")
+            .unwrap_or("")
+            .trim();
         Self {
             schema_version: UPDATE_CONFIG_SCHEMA_VERSION,
-            channel: DEFAULT_CHANNEL.to_string(),
+            channel: baked_channel.to_string(),
+            device_id: String::new(),
+            shell_updater_endpoint: baked_shell_endpoint.to_string(),
             release_manifest_url: DEFAULT_RELEASE_MANIFEST_URL.to_string(),
             runtime_base_url: DEFAULT_RUNTIME_BASE_URL.to_string(),
             runtime_manifest_url: String::new(),
@@ -137,6 +158,12 @@ pub fn apply_env_overrides(base: &UpdateConfig) -> UpdateConfig {
     let mut cfg = base.clone();
     if let Some(v) = read_env_trimmed("HERMES_UPDATE_CHANNEL") {
         cfg.channel = v;
+    }
+    if let Some(v) = read_env_trimmed("HERMES_UPDATE_DEVICE_ID") {
+        cfg.device_id = v;
+    }
+    if let Some(v) = read_env_trimmed("HERMES_SHELL_UPDATE_ENDPOINT") {
+        cfg.shell_updater_endpoint = v;
     }
     if let Some(v) = read_env_trimmed("HERMES_UPDATE_RELEASE_MANIFEST_URL") {
         cfg.release_manifest_url = v;
@@ -217,6 +244,19 @@ pub fn validate(config: &UpdateConfig) -> Result<(), String> {
             config.channel
         ));
     }
+    validate_shell_updater_endpoint(&config.shell_updater_endpoint)?;
+    if !config.device_id.is_empty() {
+        if config.device_id.len() > 128 {
+            return Err("deviceId 不能超过 128 个字符".to_string());
+        }
+        if !config
+            .device_id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        {
+            return Err("deviceId 只能包含字母、数字、点、下划线和连字符".to_string());
+        }
+    }
     validate_https_optional(&config.release_manifest_url, "releaseManifestUrl")?;
     validate_https_optional(&config.runtime_base_url, "runtimeBaseUrl")?;
     validate_https_optional(&config.runtime_manifest_url, "runtimeManifestUrl")?;
@@ -251,6 +291,35 @@ fn validate_https_optional(value: &str, label: &str) -> Result<(), String> {
     }
 }
 
+pub fn validate_shell_updater_endpoint(value: &str) -> Result<(), String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+    let endpoint = url::Url::parse(trimmed)
+        .map_err(|error| format!("shellUpdaterEndpoint 不是有效 URL：{error}"))?;
+    let segments = endpoint
+        .path_segments()
+        .map(|items| items.collect::<Vec<_>>())
+        .unwrap_or_default();
+    if endpoint.scheme() != "https"
+        || !UPDATE_CONTROL_HOSTS.contains(&endpoint.host_str().unwrap_or_default())
+        || !endpoint.username().is_empty()
+        || endpoint.password().is_some()
+        || endpoint.query().is_some()
+        || endpoint.fragment().is_some()
+        || segments.len() != 6
+        || segments[0] != "v1"
+        || segments[1] != "check"
+    {
+        return Err(
+            "shellUpdaterEndpoint 必须是 Hermes Cloudflare 控制域名的 /v1/check/{channel}/{target}/{arch}/{current_version} https 模板"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 /// Atomically persist the config: write a temp sibling then rename over the
 /// target so a crash mid-write never leaves a corrupt file.
 pub fn save(config: &UpdateConfig) -> Result<PathBuf, String> {
@@ -281,6 +350,8 @@ pub struct UpdateConfigSnapshot {
     pub path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effective_shell_updater_endpoint: Option<String>,
     pub effective_release_manifest_url: String,
     pub effective_runtime_manifest_url: Option<String>,
     pub effective_runtime_public_key_pem: Option<String>,
@@ -293,6 +364,11 @@ fn snapshot(load: &UpdateConfigLoad) -> UpdateConfigSnapshot {
         config: cfg.clone(),
         path: update_config_path().to_string_lossy().to_string(),
         config_error: load.config_error.clone(),
+        effective_shell_updater_endpoint: if cfg.shell_updater_endpoint.trim().is_empty() {
+            None
+        } else {
+            Some(cfg.shell_updater_endpoint.clone())
+        },
         effective_release_manifest_url: cfg.release_manifest_url.clone(),
         effective_runtime_manifest_url: if cfg.runtime_manifest_url.trim().is_empty() {
             None
@@ -328,6 +404,104 @@ pub fn set_update_config(input: SetUpdateConfigInput) -> Result<UpdateConfigSnap
     Ok(snapshot(&load))
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportUpdateInvitationInput {
+    pub schema_version: u32,
+    pub endpoint: String,
+    pub channel: String,
+    pub device_id: String,
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCredentialStatus {
+    pub configured: bool,
+    pub device_id: String,
+    pub channel: String,
+    pub storage: String,
+}
+
+fn credential_entry(device_id: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(UPDATE_TOKEN_SERVICE, device_id)
+        .map_err(|error| format!("系统凭据库不可用：{error}"))
+}
+
+pub fn read_device_token(device_id: &str) -> Result<Option<String>, String> {
+    if device_id.trim().is_empty() {
+        return Ok(None);
+    }
+    match credential_entry(device_id)?.get_password() {
+        Ok(token) if !token.trim().is_empty() => Ok(Some(token)),
+        Ok(_) => Ok(None),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(error) => Err(format!("读取系统凭据库失败：{error}")),
+    }
+}
+
+fn validate_invitation(input: &ImportUpdateInvitationInput) -> Result<(), String> {
+    if input.schema_version != 1 {
+        return Err(format!(
+            "邀请配置 schemaVersion 必须为 1，当前是 {}",
+            input.schema_version
+        ));
+    }
+    if !matches!(input.channel.as_str(), "prototype" | "canary" | "beta") {
+        return Err("邀请配置只允许 prototype / canary / beta".to_string());
+    }
+    if input.device_id.trim().is_empty() || input.token.trim().is_empty() {
+        return Err("邀请配置缺少 deviceId 或 token".to_string());
+    }
+    let candidate = UpdateConfig {
+        channel: input.channel.clone(),
+        device_id: input.device_id.clone(),
+        shell_updater_endpoint: input.endpoint.clone(),
+        ..UpdateConfig::default()
+    };
+    validate(&candidate)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn import_update_invitation(
+    input: ImportUpdateInvitationInput,
+) -> Result<UpdateConfigSnapshot, String> {
+    validate_invitation(&input)?;
+    let mut config = load().config;
+    config.schema_version = UPDATE_CONFIG_SCHEMA_VERSION;
+    config.channel = input.channel;
+    config.device_id = input.device_id.trim().to_string();
+    config.shell_updater_endpoint = input.endpoint.trim().to_string();
+
+    credential_entry(&config.device_id)?
+        .set_password(input.token.trim())
+        .map_err(|error| format!("写入系统凭据库失败：{error}"))?;
+    save(&config)?;
+    Ok(snapshot(&UpdateConfigLoad::ok(apply_env_overrides(
+        &config,
+    ))))
+}
+
+#[tauri::command]
+pub fn get_update_credential_status() -> UpdateCredentialStatus {
+    let config = load().config;
+    let configured = if config.channel == "stable" {
+        !config.device_id.trim().is_empty()
+    } else {
+        read_device_token(&config.device_id)
+            .ok()
+            .flatten()
+            .is_some()
+    };
+    UpdateCredentialStatus {
+        configured,
+        device_id: config.device_id,
+        channel: config.channel,
+        storage: "system-credential-store".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,8 +517,9 @@ mod tests {
     #[test]
     fn defaults_are_cn_server_urls_and_stable_channel() {
         let cfg = UpdateConfig::default();
-        assert_eq!(cfg.schema_version, 1);
+        assert_eq!(cfg.schema_version, 2);
         assert_eq!(cfg.channel, "stable");
+        assert!(cfg.shell_updater_endpoint.is_empty());
         assert_eq!(cfg.release_manifest_url, DEFAULT_RELEASE_MANIFEST_URL);
         assert_eq!(cfg.runtime_base_url, DEFAULT_RUNTIME_BASE_URL);
         assert_eq!(cfg.timeout_seconds, 10);
@@ -379,8 +554,9 @@ mod tests {
         let path = write_config(
             &dir,
             r#"{
-              "schemaVersion": 1,
+              "schemaVersion": 2,
               "channel": "beta",
+              "shellUpdaterEndpoint": "https://staging.example.workers.dev/v1/check/{{target}}/{{arch}}/{{current_version}}",
               "releaseManifestUrl": "https://example.com/latest.json",
               "runtimeBaseUrl": "https://example.com/runtime",
               "runtimeManifestUrl": "https://example.com/runtime/beta-win32-x64.json",
@@ -391,6 +567,10 @@ mod tests {
         let load = load_from(&path);
         assert!(load.config_error.is_none());
         assert_eq!(load.config.channel, "beta");
+        assert!(load
+            .config
+            .shell_updater_endpoint
+            .contains("staging.example.workers.dev"));
         assert_eq!(
             load.config.release_manifest_url,
             "https://example.com/latest.json"
@@ -415,12 +595,21 @@ mod tests {
             "HERMES_UPDATE_RELEASE_MANIFEST_URL",
             "https://env.example/latest.json",
         );
+        std::env::set_var(
+            "HERMES_SHELL_UPDATE_ENDPOINT",
+            "https://staging.example.workers.dev/v1/check/{{target}}/{{arch}}/{{current_version}}",
+        );
         let load = load_from(&path);
         std::env::remove_var("HERMES_UPDATE_RELEASE_MANIFEST_URL");
+        std::env::remove_var("HERMES_SHELL_UPDATE_ENDPOINT");
         assert_eq!(
             load.config.release_manifest_url,
             "https://env.example/latest.json"
         );
+        assert!(load
+            .config
+            .shell_updater_endpoint
+            .contains("staging.example.workers.dev"));
         // Non-env fields still come from the file.
         assert_eq!(load.config.channel, "stable");
     }
@@ -428,11 +617,23 @@ mod tests {
     #[test]
     fn validation_rejects_http_urls() {
         let cfg = UpdateConfig {
-            release_manifest_url: "http://insecure.example/latest.json".to_string(),
+            shell_updater_endpoint: "http://insecure.example/check".to_string(),
             ..UpdateConfig::default()
         };
         let err = validate(&cfg).unwrap_err();
         assert!(err.contains("https"), "{}", err);
+    }
+
+    #[test]
+    fn validation_rejects_external_control_host() {
+        let cfg = UpdateConfig {
+            shell_updater_endpoint:
+                "https://evil.example/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}"
+                    .to_string(),
+            ..UpdateConfig::default()
+        };
+        let err = validate(&cfg).unwrap_err();
+        assert!(err.contains("Hermes Cloudflare 控制域名"), "{err}");
     }
 
     #[test]
@@ -443,6 +644,35 @@ mod tests {
         };
         let err = validate(&cfg).unwrap_err();
         assert!(err.contains("channel"), "{}", err);
+    }
+
+    #[test]
+    fn validation_accepts_prototype_channel() {
+        let cfg = UpdateConfig {
+            channel: "prototype".to_string(),
+            ..UpdateConfig::default()
+        };
+        validate(&cfg).unwrap();
+    }
+
+    #[test]
+    fn invitation_never_places_token_in_update_config() {
+        let invitation = ImportUpdateInvitationInput {
+            schema_version: 1,
+            endpoint: "https://hot-update-staging.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}".to_string(),
+            channel: "canary".to_string(),
+            device_id: "device-001".to_string(),
+            token: "super-secret".to_string(),
+        };
+        validate_invitation(&invitation).unwrap();
+        let config = UpdateConfig {
+            channel: invitation.channel,
+            device_id: invitation.device_id,
+            shell_updater_endpoint: invitation.endpoint,
+            ..UpdateConfig::default()
+        };
+        let serialized = serde_json::to_string(&config).unwrap();
+        assert!(!serialized.contains("super-secret"));
     }
 
     #[test]

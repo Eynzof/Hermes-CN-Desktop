@@ -23,7 +23,10 @@
     "tauri:build": "pnpm run license:sync && pnpm run version:sync && pnpm exec tauri build",
     "tauri:build:debug": "pnpm run license:sync && pnpm run version:sync && pnpm exec tauri build --debug",
     "tauri:run": "pnpm run version:sync && cargo run",
-    "typecheck": "pnpm run license:check && pnpm run version:check && pnpm run grid:check && pnpm -r run typecheck",
+    "compatibility:check": "node scripts/check-desktop-core-compatibility.mjs",
+    "hot-update:control": "node scripts/hot-update-control.mjs",
+    "hot-update:control:test": "node --test scripts/hot-update-control.test.mjs scripts/collect-release-artifacts.test.mjs scripts/prepare-single-platform-release.test.mjs",
+    "typecheck": "pnpm run license:check && pnpm run version:check && pnpm run compatibility:check && pnpm run grid:check && pnpm -r run typecheck",
     "test:unit": "pnpm -r --workspace-concurrency=1 test:unit",
     "test:e2e": "pnpm --filter @hermes/e2e test",
     "test:e2e:smoke": "pnpm --filter @hermes/e2e smoke",
@@ -50,6 +53,7 @@
     "portable:package-macos-intel": "node scripts/package-portable-macos.mjs --target x86_64-apple-darwin"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.5.0"
+    "@tauri-apps/cli": "^2.5.0",
+    "wrangler": "^4.125.0"
   }
 }

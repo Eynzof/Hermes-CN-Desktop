@@ -67,19 +67,17 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 
 ## 开发流程
 
-### Git 操作边界（铁律）
+### Git 操作边界
 
-编码代理**绝不自动执行**任何 Git 写操作：不 `git commit` / `git push` / `git pull` / `git fetch` / `git checkout`、不创建 `git worktree` / 分支、不开 PR、不打 tag、不发布 Release、不同步 landing 仓库。
+在用户已明确授权的独立 worktree 与任务分支内，编码代理可以执行完成任务所需的 Git 操作。不得把该授权扩展到其他工作树、其他仓库或正式发布动作；公开 Release、正式 tag 与 Landing 同步仍须遵守下方发版边界。
 
-所有仓库同步、分支 / worktree 隔离、commit、push、PR、tag、Release 与 Landing 同步均由**人**执行（或由 CI/CD 流水线触发）。代理只做只读检查（`git status` / `git diff` / `git log` / `git rev-parse`）用于验证与报告。
-
-完整的人工 Git 工作流（双仓同步 + worktree 预检、收尾 commit → push → PR、Commit 风格、发版 tag 与 Landing 同步）见 `docs/agents/git-workflow.md`。
+完整的 Git 工作流（双仓同步 + worktree 预检、收尾 commit → push → PR、Commit 风格、发版 tag 与 Landing 同步）见 `docs/agents/git-workflow.md`。
 
 ### 开发前准备
 
-- 确认当前工作目录位于**人已准备好**的仓库状态（已同步、已开好分支 / worktree）；不要自己 `git checkout` 切分支或同步远端。
-- 需求同时横跨 Desktop 与 Core 时，人会用独立 worktree 隔离两仓改动；代理不要自己创建 / 操作 worktree。
-- 若发现工作区状态异常（脏树、分支不对、落后远端），**报告给人处理**，不要自行 commit / stash / reset / pull。
+- 确认当前工作目录位于本任务获准使用的独立分支 / worktree，不要改动其他工作树。
+- 需求同时横跨 Desktop 与 Core 时，使用彼此独立的 worktree 隔离两仓改动。
+- 若发现工作区状态异常（脏树、分支不对、落后远端），先核对影响范围；只在本任务获准的 worktree 内处理。
 
 ### 仓库技能
 
@@ -169,7 +167,6 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - ❌ 不要直接调 `gateway-client.ts` 的 raw socket — 走 `hooks/use-gateway.ts`
 - ❌ 不要在 `web/src/routes/` 里塞业务逻辑 — 抽到 `hooks/` 或 `lib/`
 - ❌ 不要在组件里写硬编码颜色 — 用 `packages/shared-ui/src/tokens/` 里的 CSS 变量
-- ❌ **不要自动执行任何 Git 写操作**（commit / push / pull / checkout / worktree / 开 PR / 打 tag / 发 Release / 同步 landing）— 全部由人执行，见 `docs/agents/`
 
 ## 端口
 

@@ -3,7 +3,7 @@ import { appendAppUpdateProgress, type AppUpdateProgressLine } from "./use-app-u
 import type { AppUpdateProgressPayload } from "@hermes/protocol";
 
 function line(percent: number, phase = "download-runtime"): AppUpdateProgressPayload {
-  return { phase, percent, message: `step ${percent}` };
+  return { phase, percent, message: `step ${percent}`, fallbackUsed: false };
 }
 
 describe("appendAppUpdateProgress", () => {

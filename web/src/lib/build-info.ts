@@ -4,11 +4,12 @@ export const UNKNOWN_DATE = "日期未知";
 /** Desktop shell version (Tauri package version). */
 export const DESKTOP_VERSION = import.meta.env.VITE_HERMES_DESKTOP_VERSION || UNKNOWN_VALUE;
 
-/** Fallback backend/kernel version for external connections.
+/** Fallback backend/kernel version used only when compatibility metadata is unavailable.
  *
  * Managed mode records the installed runtime's `kernelVersion` before the
- * initial compatibility check. This constant is intentionally independent of
- * the Desktop shell version and is only used when no runtime record exists.
+ * initial integrity check. Product compatibility is sourced from
+ * compatibility/desktop-core.json; this constant remains independent of the
+ * Desktop shell version.
  */
 export const EXPECTED_BACKEND_VERSION = "0.20.0";
 export const BUILD_COMMIT = import.meta.env.VITE_HERMES_BUILD_COMMIT || "unknown";
