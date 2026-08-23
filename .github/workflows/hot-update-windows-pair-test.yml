@@ -1,0 +1,295 @@
+name: hot-update-windows-pair-test
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hot-update-windows-pair-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      github.event.label.name == 'hot-update-windows-test' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      desktop_sha: ${{ steps.pair.outputs.desktop_sha }}
+      core_sha: ${{ steps.pair.outputs.core_sha }}
+      core_version: ${{ steps.pair.outputs.core_version }}
+      runtime_tag: ${{ steps.pair.outputs.runtime_tag }}
+      matrix: ${{ steps.pair.outputs.matrix }}
+      baseline_version: ${{ steps.pair.outputs.baseline_version }}
+      candidate_version: ${{ steps.pair.outputs.candidate_version }}
+      badsig_version: ${{ steps.pair.outputs.badsig_version }}
+      baseline_tag: ${{ steps.pair.outputs.baseline_tag }}
+      candidate_tag: ${{ steps.pair.outputs.candidate_tag }}
+      badsig_tag: ${{ steps.pair.outputs.badsig_tag }}
+    env:
+      PAIR_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.8.1' }}
+      PAIR_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.20.0-cn.9' }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve exact pair inputs
+        id: pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PR_HEAD_SHA"
+          test -n "$PAIR_RUNTIME_TAG" && test "$PAIR_RUNTIME_TAG" != latest
+          manifest_url="https://github.com/Eynzof/Hermes-CN-Core/releases/download/$PAIR_RUNTIME_TAG/stable-win32-x64.json"
+          curl --fail --location --retry 3 "$manifest_url" --output /tmp/runtime.json
+          core_sha="$(node -p "JSON.parse(require('fs').readFileSync('/tmp/runtime.json')).sourceCommit")"
+          core_version="$(node -p "JSON.parse(require('fs').readFileSync('/tmp/runtime.json')).kernelVersion")"
+          prefix="$PAIR_BASE_VERSION-prototype.${{ github.event.pull_request.number }}.${{ github.run_number }}.${{ github.run_attempt }}"
+          baseline_version="$prefix.1"
+          candidate_version="$prefix.2"
+          badsig_version="$prefix.3.badsig"
+          matrix="$(node -e '
+            const prefix = process.argv[1];
+            process.stdout.write(JSON.stringify({ include: [
+              { variant: "baseline", version: `${prefix}.1`, corruptSignature: false },
+              { variant: "candidate", version: `${prefix}.2`, corruptSignature: false },
+              { variant: "badsig", version: `${prefix}.3.badsig`, corruptSignature: true },
+            ] }));
+          ' "$prefix")"
+          {
+            echo "desktop_sha=$PR_HEAD_SHA"
+            echo "core_sha=$core_sha"
+            echo "core_version=$core_version"
+            echo "runtime_tag=$PAIR_RUNTIME_TAG"
+            echo "matrix=$matrix"
+            echo "baseline_version=$baseline_version"
+            echo "candidate_version=$candidate_version"
+            echo "badsig_version=$badsig_version"
+            echo "baseline_tag=v$baseline_version"
+            echo "candidate_tag=v$candidate_version"
+            echo "badsig_tag=v$badsig_version"
+          } >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    needs: prepare
+    environment: hot-update-staging
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.desktop_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+      - uses: pnpm/action-setup@v3
+        with:
+          version: "9"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - run: pnpm install --frozen-lockfile
+      - name: Set ephemeral pair version
+        run: node scripts/sync-desktop-version.mjs --version "${{ matrix.version }}"
+      - name: Stage pinned Runtime, Dashboard, skills and plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            "https://github.com/Eynzof/Hermes-CN-Core/releases/download/${{ needs.prepare.outputs.runtime_tag }}/stable-win32-x64.json" \
+            --output "$RUNNER_TEMP/runtime.json"
+          source_repo="$(node -p "JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP + '/runtime.json')).sourceRepo")"
+          source_commit="$(node -p "JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP + '/runtime.json')).sourceCommit")"
+          test "$source_commit" = "${{ needs.prepare.outputs.core_sha }}"
+          git clone "https://github.com/$source_repo.git" hermes-agent-cn-source
+          git -C hermes-agent-cn-source checkout "$source_commit"
+          node scripts/stage-dashboard-web-dist.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-skills.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-plugins.mjs --source hermes-agent-cn-source
+          node scripts/stage-bundled-runtime.mjs --repo Eynzof/Hermes-CN-Core \
+            --tag "${{ needs.prepare.outputs.runtime_tag }}" --platform win32 --arch x64
+      - name: Verify pinned contracts
+        shell: bash
+        env:
+          HERMES_RELEASE_RUNTIME_ZIP: ${{ github.workspace }}/static/bundled-runtime/hermes-agent-cn-runtime-win32-x64.zip
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./compatibility/desktop-core.json').runtimeManifestSchema.current")" = 2
+          pnpm compatibility:check
+          cargo test --locked --all-features --lib release_runtime_zip_extracts_with_installer -- --ignored --nocapture
+      - name: Import staging Authenticode identity
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_STAGING_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_STAGING_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) { throw "pair test 缺少 Windows staging Authenticode 证书" }
+          $pfx = Join-Path $env:RUNNER_TEMP "staging-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          $cer = Join-Path $env:GITHUB_WORKSPACE "staging-publisher.cer"
+          Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+          @{
+            bundle = @{ windows = @{
+              certificateThumbprint = $cert.Thumbprint
+              digestAlgorithm = "sha256"
+              timestampUrl = $env:WINDOWS_TIMESTAMP_URL
+            }}
+          } | ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding utf8 windows-signing-config.json
+      - name: Build signed pair updater
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_STAGING_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_STAGING_SIGNING_PRIVATE_KEY_PASSWORD }}
+          HERMES_BAKED_UPDATE_CHANNEL: prototype
+          HERMES_BAKED_SHELL_UPDATE_ENDPOINT: ${{ vars.HOT_UPDATE_STAGING_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          pnpm exec tauri build --target x86_64-pc-windows-msvc --bundles nsis \
+            --config windows-signing-config.json
+          node scripts/package-portable-windows.mjs --target x86_64-pc-windows-msvc
+          node scripts/collect-release-artifacts.mjs --platform win32 --arch x64 \
+            --target x86_64-pc-windows-msvc --runtime-tag "${{ needs.prepare.outputs.runtime_tag }}" \
+            --desktop-sha "${{ needs.prepare.outputs.desktop_sha }}" --output release-assets
+          cp staging-publisher.cer release-assets/staging-publisher.cer
+          corrupt=()
+          if [ "${{ matrix.corruptSignature }}" = true ]; then corrupt+=(--corrupt-signature); fi
+          node scripts/prepare-single-platform-release.mjs --root release-assets "${corrupt[@]}"
+      - name: Verify final installer and record
+        shell: pwsh
+        run: |
+          Get-ChildItem release-assets/*.exe | ForEach-Object {
+            $signature = Get-AuthenticodeSignature $_.FullName
+            if ($signature.Status -ne "Valid") { throw "$($_.Name): $($signature.Status)" }
+          }
+          $record = Get-Content release-assets/release-record.json -Raw | ConvertFrom-Json
+          if ($record.desktopVersion -ne "${{ matrix.version }}") { throw "release record version 不匹配" }
+          if ($record.desktopSha -ne "${{ needs.prepare.outputs.desktop_sha }}") { throw "release record SHA 不匹配" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hot-update-pair-${{ matrix.variant }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-prereleases:
+    needs: [prepare, build-windows]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MIRROR_ORIGIN: https://hot-update-download-staging.hermesagent.org.cn
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.desktop_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hot-update-pair-*
+          path: pair-releases
+      - name: Verify and create three draft prereleases
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variant in baseline candidate badsig; do
+            root="pair-releases/hot-update-pair-$variant"
+            (cd "$root" && sha256sum --check checksums.txt)
+            version="$(node -p "require('./$root/release-record.json').desktopVersion")"
+            tag="v$version"
+            test "$(node -p "require('./$root/release-record.json').desktopSha")" = "${{ needs.prepare.outputs.desktop_sha }}"
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --target "${{ needs.prepare.outputs.desktop_sha }}" --draft --prerelease --latest=false \
+              --title "Hermes Desktop $version [STAGING ONLY]" \
+              --notes "PR #${{ github.event.pull_request.number }} Windows 热更新真机测试资产；仅供 prototype/primelab-win，禁止用于 stable。"
+          done
+          for variant in baseline candidate badsig; do
+            root="pair-releases/hot-update-pair-$variant"
+            version="$(node -p "require('./$root/release-record.json').desktopVersion")"
+            tag="v$version"
+            gh release upload "$tag" "$root"/* --repo "$GITHUB_REPOSITORY"
+          done
+          for variant in baseline candidate badsig; do
+            root="pair-releases/hot-update-pair-$variant"
+            version="$(node -p "require('./$root/release-record.json').desktopVersion")"
+            tag="v$version"
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
+              --draft=false --prerelease --latest=false
+          done
+      - name: Verify candidate through Cloudflare cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="pair-releases/hot-update-pair-candidate"
+          tag="${{ needs.prepare.outputs.candidate_tag }}"
+          updater="$(node -p "require('./$root/release-record.json').assets[0].fileName")"
+          expected="$(awk -v name="$updater" '$2 == name { print $1 }' "$root/checksums.txt")"
+          curl --fail --location --retry 3 "$MIRROR_ORIGIN/$tag/$updater" --output /tmp/pair-updater
+          test "$(sha256sum /tmp/pair-updater | awk '{print $1}')" = "$expected"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --range 0-1023 "$MIRROR_ORIGIN/$tag/$updater")" = 206
+      - name: Write pair manifest
+        shell: bash
+        env:
+          DESKTOP_SHA: ${{ needs.prepare.outputs.desktop_sha }}
+          CORE_SHA: ${{ needs.prepare.outputs.core_sha }}
+          CORE_VERSION: ${{ needs.prepare.outputs.core_version }}
+          RUNTIME_TAG: ${{ needs.prepare.outputs.runtime_tag }}
+          BASELINE_TAG: ${{ needs.prepare.outputs.baseline_tag }}
+          CANDIDATE_TAG: ${{ needs.prepare.outputs.candidate_tag }}
+          BADSIG_TAG: ${{ needs.prepare.outputs.badsig_tag }}
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const root = path.resolve("pair-releases");
+          const variants = Object.fromEntries([
+            ["baseline", process.env.BASELINE_TAG],
+            ["candidate", process.env.CANDIDATE_TAG],
+            ["badsig", process.env.BADSIG_TAG],
+          ].map(([variant, tag]) => {
+            const dir = path.join(root, `hot-update-pair-${variant}`);
+            const record = JSON.parse(fs.readFileSync(path.join(dir, "release-record.json"), "utf8"));
+            const installer = fs.readdirSync(dir).find((name) => name.endsWith(".exe"));
+            return [variant, {
+              tag,
+              version: record.desktopVersion,
+              releaseId: record.assets[0].releaseId,
+              updater: record.assets[0].fileName,
+              installer,
+              certificate: "staging-publisher.cer",
+            }];
+          }));
+          const manifest = {
+            schemaVersion: 1,
+            desktopSha: process.env.DESKTOP_SHA,
+            coreSha: process.env.CORE_SHA,
+            coreVersion: process.env.CORE_VERSION,
+            runtimeTag: process.env.RUNTIME_TAG,
+            workflowUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            variants,
+          };
+          fs.writeFileSync("hot-update-pair-manifest.json", JSON.stringify(manifest, null, 2) + "\n");
+          NODE
+          cat hot-update-pair-manifest.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hot-update-pair-manifest
+          path: hot-update-pair-manifest.json
+          retention-days: 14

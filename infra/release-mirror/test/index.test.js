@@ -5,6 +5,7 @@ import worker, {
   MAX_ASSET_BYTES,
   parseMirrorRoute,
   responseSize,
+  stagingFaultResponse,
 } from "../src/index.js";
 
 test("accepts only version tags and a single safe asset segment", () => {
@@ -31,7 +32,7 @@ test("reads full object size from a range response", () => {
   assert.equal(responseSize(new Headers({ "content-length": "99" })), 99);
 });
 
-test("never forwards credentials or Range to the GitHub origin", async () => {
+test("never forwards Range or cache validators to the GitHub origin", async () => {
   const originalFetch = globalThis.fetch;
   const observed = [];
   globalThis.fetch = async (url, init) => {
@@ -43,13 +44,12 @@ test("never forwards credentials or Range to the GitHub origin", async () => {
   try {
     const response = await worker.fetch(
       new Request("https://mirror.example/v0.8.1/asset.zip", {
-        headers: { authorization: "Bearer secret", range: "bytes=0-4" },
+        headers: { range: "bytes=0-4", "if-none-match": "stale-etag" },
       }),
       { ENVIRONMENT: "test" },
     );
     assert.equal(observed.length, 2);
     for (const call of observed) {
-      assert.equal(call.init.headers.get("authorization"), null);
       assert.equal(call.init.headers.get("range"), null);
       assert.equal(call.init.headers.get("if-none-match"), null);
     }
@@ -100,6 +100,46 @@ test("rejects a GitHub response without a trustworthy full size", async () => {
       { ENVIRONMENT: "test" },
     );
     assert.equal(response.status, 502);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("staging fault injection is exact and never active outside staging", async () => {
+  const route = { tag: "v0.8.1-prototype.1.2", asset: "update.nsis.zip" };
+  const env = {
+    ENVIRONMENT: "staging",
+    STAGING_FAULT_TAG: route.tag,
+    STAGING_FAULT_ASSET: route.asset,
+    STAGING_FAULT_STATUS: "503",
+  };
+  const response = stagingFaultResponse(env, route);
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("x-hermes-staging-fault"), "503");
+  assert.equal(stagingFaultResponse({ ...env, ENVIRONMENT: "production" }, route), null);
+  assert.equal(stagingFaultResponse({ ...env, STAGING_FAULT_TAG: "v0.8.1" }, route), null);
+  assert.equal(stagingFaultResponse({ ...env, STAGING_FAULT_ASSET: "other.zip" }, route), null);
+  assert.equal(stagingFaultResponse({ ...env, STAGING_FAULT_STATUS: "500" }, route), null);
+});
+
+test("rejects credentials at the public download boundary", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("credentialed download must not reach GitHub");
+  };
+  try {
+    for (const headers of [
+      { authorization: "Bearer secret" },
+      { cookie: "session=secret" },
+    ]) {
+      const response = await worker.fetch(
+        new Request("https://mirror.example/v0.8.1/asset.zip", { headers }),
+        { ENVIRONMENT: "test" },
+      );
+      assert.equal(response.status, 400);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

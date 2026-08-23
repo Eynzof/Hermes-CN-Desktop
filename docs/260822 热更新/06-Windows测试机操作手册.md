@@ -39,6 +39,18 @@ GitHub runner 安装在 `C:\actions-runner-hermes`，仓库 runner ID 为 22，�
 
 当前 baseline 是 `%LOCALAPPDATA%\Hermes Agent CN Desktop\hermes-agent-cn-desktop.exe`，已安装 Desktop `0.8.1-hotupdate.1`、Core `0.20.0`、Runtime `0.20.0-cn.9`。Nightly 仍必须使用 `%RUNNER_TEMP%` 下的隔离 Runtime root，不能把这份现状当作可覆盖的线上安装。
 
+这份 `.hotupdate.1` 来自旧 R2 原型，只能证明既有 Tauri/NSIS 安装边界，不能证明新客户端的 GitHub fallback。PR #592 首次验收必须运行 `.github/workflows/hot-update-windows-pair-test.yml`，从同一个 Desktop/Core SHA 构建：
+
+```text
+prototype.<pr>.<run>.<attempt>.1          承重基线
+prototype.<pr>.<run>.<attempt>.2          正常候选
+prototype.<pr>.<run>.<attempt>.3.badsig   坏签名负向候选
+```
+
+先手工覆盖安装 `.1`，再让 `.1` 通过控制面升级到 `.2`；`.badsig` 只允许在重置到 `.1` 后验证拒绝下载，完成后立即 revoke。
+
+PR 内测试由 `hot-update-windows-test` label 触发。`hot-update-staging` Environment 必须先配置 required reviewer、关闭管理员绕过，并让 deployment branch rule 精确允许 `refs/pull/<PR>/merge`；只允许 `main` 还不足以放行 PR job。
+
 ## 3. 网络预热
 
 大陆 Windows 首次构建可能访问失败：GitHub checkout/Release、rustup/crates.io、npm/pnpm、Tauri NSIS、WebView2、时间戳和 Cloudflare 自定义域名。
@@ -78,6 +90,13 @@ WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222
 7. 请求 `/api/version`，证明 managed Core 9120 正常。
 
 预期 Desktop/Core version 都由工作流参数传入，脚本不硬编码未来版本。
+
+PR 双包测试还使用：
+
+- `scripts/windows-hot-update-prepare.ps1`：导入公开 staging 证书、验证 Authenticode、覆盖安装基线并创建数据保留 sentinel。
+- `scripts/windows-hot-update-launch.ps1`：用隔离 Runtime root、prototype device 和 WebView2 CDP 启动真实安装包。
+- `scripts/windows-hot-update-smoke.mjs --mode ...`：支持 install、download-only、错误 token、下载失败和 pause 后安装阻止五类断言。
+- staging 镜像的 `STAGING_FAULT_TAG` / `STAGING_FAULT_ASSET` / `STAGING_FAULT_STATUS`：只在 `ENVIRONMENT=staging` 且 tag、资产完全相等时返回 404/429/503；恢复时重新部署无故障变量版本。
 
 ## 6. 候选验收矩阵
 

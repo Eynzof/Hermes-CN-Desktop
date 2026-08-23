@@ -207,18 +207,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          fragment="$(find release-assets -name 'release-fragment-*.json' -print -quit)"
-          node - "$fragment" <<'NODE'
-          const fs = require("node:fs");
-          const fragment = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-          delete fragment.runtimeManifestSchemaVersion;
-          fragment.generatedAt = new Date().toISOString();
-          fs.writeFileSync("release-assets/release-record.json", JSON.stringify(fragment, null, 2) + "\n");
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `release_id=${fragment.assets[0].releaseId}\n`);
-          NODE
-          rm -f release-assets/release-fragment-*.json release-assets/checksums.txt
-          cd release-assets
-          sha256sum * | sort -k2 > checksums.txt
+          node scripts/prepare-single-platform-release.mjs --root release-assets
+          echo "release_id=$(node -p "require('./release-assets/release-record.json').assets[0].releaseId")" >> "$GITHUB_OUTPUT"
       - name: Create public prerelease, never latest
         shell: bash
         run: |

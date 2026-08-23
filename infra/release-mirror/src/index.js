@@ -4,6 +4,7 @@ const VERSION_TTL = 30 * 24 * 60 * 60;
 const LATEST_TTL = 5 * 60;
 const ASSET_NAME = /^[0-9A-Za-z][0-9A-Za-z._-]{0,254}$/;
 const VERSION_TAG = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const STAGING_FAULT_STATUSES = new Set([404, 429, 503]);
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -51,6 +52,18 @@ export function responseSize(headers) {
   if (rangeMatch) return Number(rangeMatch[1]);
   const length = headers.get("content-length");
   return length ? Number(length) : null;
+}
+
+export function stagingFaultResponse(env, route) {
+  if (env?.ENVIRONMENT !== "staging") return null;
+  const tag = env.STAGING_FAULT_TAG?.trim();
+  const asset = env.STAGING_FAULT_ASSET?.trim();
+  const status = Number(env.STAGING_FAULT_STATUS);
+  if (!tag || route.tag !== tag || (asset && route.asset !== asset)) return null;
+  if (!STAGING_FAULT_STATUSES.has(status)) return null;
+  const response = json({ error: "staging mirror fault injection", status }, status);
+  response.headers.set("x-hermes-staging-fault", String(status));
+  return response;
 }
 
 function mirroredResponse(upstream, route) {
@@ -165,6 +178,11 @@ export default {
     if (!new Set(["GET", "HEAD"]).has(request.method)) return json({ error: "not found" }, 404);
     const route = parseMirrorRoute(url.pathname);
     if (!route) return json({ error: "not found" }, 404);
+    if (request.headers.has("authorization") || request.headers.has("cookie")) {
+      return json({ error: "download mirror does not accept credentials" }, 400);
+    }
+    const fault = stagingFaultResponse(env, route);
+    if (fault) return fault;
     return proxyAsset(request, route);
   },
 };
