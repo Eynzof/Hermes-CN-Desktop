@@ -35,11 +35,11 @@ Get-Command signtool -ErrorAction SilentlyContinue
 Get-Command ssh -ErrorAction SilentlyContinue
 ```
 
-GitHub runner 安装在 `C:\actions-runner-hermes`，仓库 runner ID 为 22，标签为 `self-hosted, Windows, X64, primelab-win`。它由计划任务 `Hermes GitHub Actions Runner` 在管理员已登录的交互式会话中启动，`Runner.Listener.exe` 应位于 Session 1；不要改成 Windows service/Session 0，因为 Nightly 需要启动 Tauri WebView2 并通过 CDP 驱动真实 UI。机器离线、交互式会话不存在、证书缺失或 baseline 不存在时让 job 失败，不回落到普通机器。
+GitHub runner 安装在 `C:\actions-runner-hermes`，仓库 runner ID 为 22，标签为 `self-hosted, Windows, X64, primelab-win`。它由计划任务 `Hermes GitHub Actions Runner` 在 `admin` 已登录的交互式会话中启动，必须同时满足 `SessionId >= 1`、`LogonType=Interactive`、`RunLevel=Limited`；`Run with highest privileges` 必须关闭。不要改成 Windows service/Session 0，也不要改回 Highest：前者不能可靠创建 WebView2，后者会让 WebView2 忽略环境变量/注册表中的 CDP flags。微软的 [WebView2 browser flags 文档](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/webview-features-flags) 也明确说明 elevated app 会忽略 local device environment flags。机器离线、交互式会话不存在、证书缺失或 baseline 不存在时让 job 失败，不回落到普通机器。
 
-当前 baseline 是 `%LOCALAPPDATA%\Hermes Agent CN Desktop\hermes-agent-cn-desktop.exe`，已安装 Desktop `0.8.1-hotupdate.1`、Core `0.20.0`、Runtime `0.20.0-cn.9`。Nightly 仍必须使用 `%RUNNER_TEMP%` 下的隔离 Runtime root，不能把这份现状当作可覆盖的线上安装。
+2026-08-23 PR 验收清理后的 baseline 是 `%LOCALAPPDATA%\Hermes Agent CN Desktop\hermes-agent-cn-desktop.exe`，ProductVersion 为 `0.8.1-prototype.592.7.1.1`，进程已停止；隔离 Runtime 保持 Core `0.20.0`、Runtime `0.20.0-cn.9` 和 preservation sentinel。Nightly 仍必须使用 `%RUNNER_TEMP%` 下的隔离 Runtime root，不能把机器当前状态当成可复用的线上安装。
 
-这份 `.hotupdate.1` 来自旧 R2 原型，只能证明既有 Tauri/NSIS 安装边界，不能证明新客户端的 GitHub fallback。PR #592 首次验收必须运行 `.github/workflows/hot-update-windows-pair-test.yml`，从同一个 Desktop/Core SHA 构建：
+旧 `.hotupdate.1` 来自 R2 原型，只能证明既有 Tauri/NSIS 安装边界。PR #592 已运行 `.github/workflows/hot-update-windows-pair-test.yml`，从同一个 Desktop/Core SHA 构建：
 
 ```text
 prototype.<pr>.<run>.<attempt>.1          承重基线
@@ -91,12 +91,16 @@ WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222
 
 预期 Desktop/Core version 都由工作流参数传入，脚本不硬编码未来版本。
 
+Windows 安装阶段不依赖 NSIS `/R`。客户端从 updater 缓存启动不同文件名的 detached helper；helper 等旧 Desktop 退出，等待 NSIS 返回成功，再显式拉起已安装 EXE。诊断日志位于隔离 Runtime root 的 `desktop-updater-cache/updater-helper.log`，只允许包含阶段、退出码和 PID。通过 SSH 直接启动 GUI 会落入 Session 0，真机已复现 WebView2 `0x80070578`，不能用于完整 UI smoke；helper 可单独覆盖 Session 0 安装边界，完整 Nightly 必须由 Session 1、非提升 runner 驱动。
+
 PR 双包测试还使用：
 
 - `scripts/windows-hot-update-prepare.ps1`：导入公开 staging 证书、验证 Authenticode、覆盖安装基线并创建数据保留 sentinel。
 - `scripts/windows-hot-update-launch.ps1`：用隔离 Runtime root、prototype device 和 WebView2 CDP 启动真实安装包。
 - `scripts/windows-hot-update-smoke.mjs --mode ...`：支持 install、download-only、错误 token、下载失败和 pause 后安装阻止五类断言。
 - staging 镜像的 `STAGING_FAULT_TAG` / `STAGING_FAULT_ASSET` / `STAGING_FAULT_STATUS`：只在 `ENVIRONMENT=staging` 且 tag、资产完全相等时返回 404/429/503；恢复时重新部署无故障变量版本。
+
+故障注入必须在目标机器先核对 `x-hermes-staging-fault`。版本化对象一旦在该边缘 HIT，缓存层可能在 Worker 执行前直接返回旧响应；应使用尚未预热的新 tag/资产，不能仅凭 Wrangler deploy 成功就认为故障已生效。
 
 ## 6. 候选验收矩阵
 

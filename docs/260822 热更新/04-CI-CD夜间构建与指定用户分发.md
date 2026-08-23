@@ -49,17 +49,18 @@
 
 ## 5. Nightly
 
-版本格式：`0.8.1-nightly.YYYYMMDD.N`。
+版本格式：`0.8.1-prototype.nightly.YYYYMMDD.N`。这里故意保留 `prototype` 作为第一个 prerelease identifier：专机当前承重基线是 `0.8.1-prototype.<数字>...`，按 SemVer 规则，第二段非数字 `nightly` 高于数字段，因此首个 Nightly 和后续日期/序号都能单调升级；最终无 prerelease 后缀的 `0.8.1` stable 仍高于全部内测版本。若专机以后安装了 `0.8.1` stable，必须先把 `NIGHTLY_BASE_VERSION` 提升到 `0.8.2`，禁止靠允许降级绕过。
 
 - 先比较最近 nightly 的 `release-record.json`；Desktop/Core SHA 都没变则跳过。
 - 只构建 Windows prototype，使用 staging Authenticode/Tauri 身份。
 - 创建公开 prerelease，显式不设 latest，不写 Landing。
 - 完整核验 GitHub/Cloudflare 后，D1 注册 draft 并临时 promote prototype 100%。
 - `primelab-win` outbound-only runner 启动隔离 baseline，真实执行检查、签名下载、安装退出、重启、版本、Runtime `current.json` 和 Core 9120。
+- runner 必须在已登录用户的 Session 1+ 中以非提升权限运行；Windows service/Session 0 无法可靠创建 WebView2，`RunLevel=Highest` 又会让 WebView2 忽略本地 CDP flags。工作流和启动脚本都对此 fail-fast。
 - 无论 smoke 成败，最后 job 都把 release pause/0%。
 - 只删除超过保留策略且未被 D1 引用的旧 nightly；默认最近 7 个成功或 14 天。
 
-Nightly 工作流、交互式 runner、staging Tauri/Authenticode 身份和 Environment 配置已经准备好。首个公开候选尚未获授权，而且新增工作流尚未落到 GitHub 远端，因此工作流没有被触发，Cloudflare token 也尚未通过 Actions 实际验权，不能称为已经跑通。
+PR #592 的同 SHA Windows 三包工作流已由 `hot-update-staging` required reviewer 正常批准并全绿，证明 staging Tauri/Authenticode 身份、公开 prerelease、Cloudflare 镜像核验和 Actions artifact 聚合可用。完整 `hot-update-nightly.yml` 尚未在默认分支触发；Cloudflare token 也尚未通过 `hot-update-control.yml` 的 Actions D1 管理入口验权，因此不能把 PR 三包测试等同于定时 Nightly 已跑通。
 
 ## 6. 管理 CLI
 
@@ -83,4 +84,4 @@ release status
 - Staging vars：D1 名、控制 endpoint、镜像 origin、baseline EXE、timestamp URL、Nightly Runtime tag。
 - Production secrets 必须是另一套身份；Tauri 与 OS 代码签名不得与 D1 promotion 共用一个万能身份。
 
-截至 2026-08-23，`hot-update-staging` 已配置上述 secret/variable，包括 `CLOUDFLARE_API_TOKEN`；GitHub 只会显示 secret 名称和更新时间，不能据此证明 token 内容及权限有效。`hot-update-production` 尚未创建或部署。本轮没有触发任何公开 Release 或 Nightly。
+截至 2026-08-23，`hot-update-staging` 已配置上述 secret/variable，包括 `CLOUDFLARE_API_TOKEN`。PR 三包 workflow 已在该 Environment 中获得审批并创建 `[STAGING ONLY]` public prerelease，但没有调用 D1 管理 token；只有默认分支上的管理工作流读写成功才能证明该 token 权限。`hot-update-production` 尚未创建或部署，定时 Nightly 尚未触发。

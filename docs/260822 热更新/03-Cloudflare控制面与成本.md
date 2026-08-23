@@ -66,6 +66,10 @@ GitHub 承担真实源站字节，Cloudflare 账户没有对象存储费用。�
 
 GitHub 回退是必要安全网，但不是大陆加速方案。每个候选都要在电信、联通、移动和企业/校园网络采集 DNS、TLS、TTFB、完整下载、`CF-Cache-Status`、Range 和 fallback 结果。
 
+2026-08-23 的 `primelab-win` 样本验证了这个边界：Cloudflare 已缓存 candidate 能完成安装；同一固定 tag 的 GitHub 直连 1 MiB 只有约 `60,051 B/s`，完整回退约 40 分钟后因 `error decoding response body` 失败。经临时 loopback SSH 代理后，客户端的 GitHub fallback、同签名安装和重启完整通过。后一个结果只证明客户端逻辑，不代表大陆无代理网络可用；前一个失败才是当前直连网络事实。
+
+版本化缓存还意味着故障注入必须在目标边缘缓存该精确 URL 之前完成。若对象已 HIT，边缘可能在 Worker 执行前直接返回缓存响应；测试脚本必须先在目标机器核对 `x-hermes-staging-fault`，不能只看部署成功。
+
 若规模扩大后大陆成功率仍不合格，应单独做合规/商务决策（ICP、Cloudflare China Network 或新的大陆 CDN）。这属于未来架构变更，不能在本期悄悄引入另一套制品事实源。
 
 ## 6. R2 迁移边界

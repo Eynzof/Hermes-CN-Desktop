@@ -15,8 +15,8 @@ idle
   → 用户“立即重启安装”或“稍后”
   → recheck-control
   → stop-owned-runtime
-  → launch-tauri-installer
-  → process-exit / relaunch
+  → Windows: launch-detached-helper → process-exit → NSIS → relaunch
+  → macOS/Linux: launch-tauri-installer
 ```
 
 对应 Rust commands：`app_update_check`、`app_update_pending`、`app_update_download`、`app_update_install`。
@@ -59,7 +59,8 @@ idle
 
 ```text
 desktop-updater-cache/pending.json
-desktop-updater-cache/pending-update.bin
+desktop-updater-cache/pending-update.exe   # Windows
+desktop-updater-cache/pending-update.bin   # macOS/Linux
 ```
 
 下次启动可恢复“立即重启/稍后”。清理只允许这个精确子目录，禁止通配删除 `%LOCALAPPDATA%`、Tauri 全局缓存或其他应用目录。若 pending 版本已等于当前版本，视为安装成功后的陈旧缓存并清理。
@@ -72,6 +73,10 @@ desktop-updater-cache/pending-update.bin
 - pending 文件 SHA/size 必须仍与记录一致。
 - 只停止当前 Desktop 拥有的 managed Runtime/WS relay，再启动 detached updater。
 - 其他同应用实例由安装期精确路径策略处理，不做进程名大范围终止。
+
+Windows 不直接调用 `tauri-plugin-updater 2.10.1` 的 `Update.install`：该版本会忽略 `ShellExecuteW` 返回值并立即退出，测试机还证明 NSIS `/R` 在 Session 0/断开会话下不能作为可靠重启保证。客户端把当前已签名 EXE 复制成缓存目录内的 `updater-helper-<pid>.exe`；helper 在 Tauri/WebView2/单实例锁启动前分流，等待旧进程退出，执行已通过 Tauri detached signature 与 SHA/size 校验的 `pending-update.exe /P /UPDATE`，核对 NSIS 退出码后再拉起新 EXE。helper 与主程序文件名不同，因此不会被 NSIS 的旧应用进程检查误杀。
+
+helper 日志只写阶段、退出码和重启 PID，不写 token、下载 URL 或用户数据。安装失败时它会尝试重新拉起仍存在的旧 EXE；不能把失败伪装成安装成功。
 
 ## 6. 进度与诊断
 

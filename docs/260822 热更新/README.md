@@ -7,11 +7,12 @@
 | 状态 | 内容 |
 |---|---|
 | 已在独立分支实现 | Tauri 检查/下载/安装三阶段、Cloudflare→GitHub 受限回退、系统凭据、pending 恢复、兼容矩阵、控制 Worker、D1 追加迁移、无存储下载 Worker、管理 CLI、正式/Nightly/审批工作流 |
-| 已做代码/staging 验证 | Rust/Web 针对性测试、两个 Worker 与管理 CLI 单测、工作流静态检查；两个 staging Worker 和 D1 迁移已部署，真实 GitHub 资产的 Range 已验证 MISS→HIT |
-| 已准备测试基础设施 | `primelab-win` 交互式 self-hosted runner 在线；staging Cloudflare/Tauri/专机 token、自签名 PFX、Runtime 固定输入已进入受保护 Environment，没有触发工作流 |
+| 已做代码/staging 验证 | PR #592 常规 Rust/Web/E2E 和 Windows 三包 run `32638984307` 全绿；两个 staging Worker、D1 迁移、真实 GitHub 资产完整回读、Range 和故障注入均已验证 |
+| 已做 Windows 真机验收 | `primelab-win` 完成 Cloudflare 主源安装、受控 GitHub fallback 安装、401、404、坏签名、pause 后安装阻止、Core 9120/Runtime/sentinel 保留；测试后 candidate 已 paused、badsig 已 revoked、设备已 disabled |
+| 已准备测试基础设施 | self-hosted runner 22 在线，固定为 Session 1、交互式、非提升权限；staging Tauri/专机 token、自签名 PFX、Runtime 固定输入已进入受保护 Environment |
 | 历史原型已验证 | 2026-08-22 曾用隔离 R2 staging 在 `primelab-win` 跑通 `.0 → .1`；这只是历史证据，已被本方案取代 |
-| 尚未完成 | 新 GitHub→Cloudflare 方案的公开 prerelease 真实安装；Cloudflare token 的 Actions 只读验权；公开可信 Windows Authenticode；macOS 双架构签名/公证；多运营商抽样 |
-| 明确未操作 | 线上 Release、公开 stable、Landing、官网 `latest.json`、production Worker/D1、现有用户安装 |
+| 尚未完成 | 公开可信 Windows Authenticode；macOS 双架构签名/公证与 updater 重启；Linux AppImage 验收；Cloudflare token 的管理工作流验权；第二次独立候选；多运营商抽样；production 部署 |
+| 明确未操作 | 现有 stable Release、公开 stable 指针、Landing、官网 `latest.json`、production Worker/D1、现有用户安装；新建内容仅限 `[STAGING ONLY]` public prerelease |
 
 “代码已实现”不等于“已上线”。没有单独发布授权前，本目录中的任何命令都不得创建公开 Release、修改 Landing 或推进 production。
 
