@@ -21,7 +21,10 @@ const apply = process.argv.includes("--apply");
 const releases = JSON.parse(
   run("gh", ["release", "list", "--limit", "100", "--json", "tagName,publishedAt,isPrerelease"]),
 )
-  .filter((release) => release.isPrerelease && /-nightly\.\d{8}\.\d+$/.test(release.tagName))
+  .filter(
+    (release) =>
+      release.isPrerelease && /-(?:nightly|prototype\.nightly)\.\d{8}\.\d+$/.test(release.tagName),
+  )
   .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
 
 const d1 = JSON.parse(

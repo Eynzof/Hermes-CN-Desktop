@@ -45,7 +45,7 @@ jobs:
           core_version="$(node -p "JSON.parse(require('fs').readFileSync('/tmp/runtime.json')).kernelVersion")"
           test -n "$core_sha" && test -n "$core_version"
           latest_tag="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,publishedAt \
-            --jq '[.[] | select(.tagName | contains("-nightly."))] | sort_by(.publishedAt) | last | .tagName // ""')"
+            --jq '[.[] | select(.tagName | contains("-prototype.nightly."))] | sort_by(.publishedAt) | last | .tagName // ""')"
           changed=true
           if [ -n "$latest_tag" ]; then
             mkdir -p /tmp/previous
@@ -60,9 +60,9 @@ jobs:
           fi
           day="$(date -u +%Y%m%d)"
           count="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName \
-            --jq "[.[] | select(.tagName | contains(\"-nightly.$day.\"))] | length")"
+            --jq "[.[] | select(.tagName | contains(\"-prototype.nightly.$day.\"))] | length")"
           sequence=$((count + 1))
-          version="$NIGHTLY_BASE_VERSION-nightly.$day.$sequence"
+          version="$NIGHTLY_BASE_VERSION-prototype.nightly.$day.$sequence"
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
           echo "desktop_sha=$desktop_sha" >> "$GITHUB_OUTPUT"
           echo "core_sha=$core_sha" >> "$GITHUB_OUTPUT"
@@ -256,6 +256,16 @@ jobs:
       HERMES_SHELL_UPDATE_TOKEN: ${{ secrets.PRIMELAB_WIN_UPDATE_TOKEN }}
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: --remote-debugging-port=9222
     steps:
+      - name: Verify interactive non-elevated runner
+        shell: pwsh
+        run: |
+          $sessionId = (Get-Process -Id $PID).SessionId
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+          $isElevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          if ($sessionId -eq 0) { throw "Nightly updater smoke requires an interactive Windows session" }
+          if ($isElevated) { throw "Nightly updater smoke must be non-elevated so WebView2 honors CDP flags" }
+          "runner session=$sessionId elevated=$isElevated"
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.desktop_sha }}
@@ -277,9 +287,14 @@ jobs:
           BASELINE_EXE: ${{ vars.PRIMELAB_BASELINE_EXE }}
         run: |
           if (-not (Test-Path $env:BASELINE_EXE)) { throw "PRIMELAB_BASELINE_EXE 不存在" }
-          Get-Process | Where-Object { $_.Path -eq $env:BASELINE_EXE } | Stop-Process -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $env:HERMES_DESKTOP_RUNTIME_ROOT | Out-Null
-          Start-Process -FilePath $env:BASELINE_EXE
+          & scripts/windows-hot-update-launch.ps1 `
+            -AppExe $env:BASELINE_EXE `
+            -RuntimeRoot $env:HERMES_DESKTOP_RUNTIME_ROOT `
+            -Endpoint $env:HERMES_SHELL_UPDATE_ENDPOINT `
+            -DeviceId $env:HERMES_UPDATE_DEVICE_ID `
+            -Channel $env:HERMES_UPDATE_CHANNEL `
+            -CdpPort 9222
       - name: Exercise check, signed download, installer restart, Core 9120 and current.json
         shell: bash
         run: >-

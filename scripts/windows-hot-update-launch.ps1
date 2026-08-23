@@ -10,6 +10,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 if (-not $env:HERMES_SHELL_UPDATE_TOKEN) { throw "HERMES_SHELL_UPDATE_TOKEN is required" }
+$sessionId = (Get-Process -Id $PID).SessionId
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+$isElevated = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($sessionId -eq 0) {
+  throw "Windows hot-update smoke requires an interactive Session 1+; Session 0 cannot create WebView2 reliably"
+}
+if ($isElevated) {
+  throw "Windows hot-update smoke must run non-elevated; elevated WebView2 hosts ignore local remote-debugging flags"
+}
 $application = (Resolve-Path -LiteralPath $AppExe).Path
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 
@@ -40,4 +50,6 @@ $process = Start-Process -FilePath $application -PassThru
   deviceId = $DeviceId
   endpoint = $Endpoint
   cdp = "http://127.0.0.1:$CdpPort"
+  sessionId = $sessionId
+  elevated = $isElevated
 } | ConvertTo-Json -Depth 3
