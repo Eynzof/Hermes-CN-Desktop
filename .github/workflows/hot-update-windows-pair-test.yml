@@ -145,6 +145,7 @@ jobs:
           $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
           $cer = Join-Path $env:GITHUB_WORKSPACE "staging-publisher.cer"
           Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
           @{
@@ -177,9 +178,15 @@ jobs:
       - name: Verify final installer and record
         shell: pwsh
         run: |
+          $expectedThumbprint = "${{ vars.WINDOWS_STAGING_CERT_THUMBPRINT }}"
           Get-ChildItem release-assets/*.exe | ForEach-Object {
             $signature = Get-AuthenticodeSignature $_.FullName
-            if ($signature.Status -ne "Valid") { throw "$($_.Name): $($signature.Status)" }
+            if ($signature.Status -ne "Valid") {
+              throw "$($_.Name): $($signature.Status) - $($signature.StatusMessage)"
+            }
+            if ($signature.SignerCertificate.Thumbprint -ne $expectedThumbprint) {
+              throw "$($_.Name): staging signer thumbprint mismatch"
+            }
           }
           $record = Get-Content release-assets/release-record.json -Raw | ConvertFrom-Json
           if ($record.desktopVersion -ne "${{ matrix.version }}") { throw "release record version 不匹配" }

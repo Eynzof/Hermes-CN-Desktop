@@ -136,6 +136,7 @@ jobs:
           # Nightly uses a deliberately self-signed staging identity. Trust it
           # only inside this disposable hosted runner so Authenticode can be
           # verified as Valid; canary/beta/stable use the public CA identity.
+          Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
           @{
@@ -163,9 +164,15 @@ jobs:
       - name: Verify final installer Authenticode
         shell: pwsh
         run: |
+          $expectedThumbprint = "${{ vars.WINDOWS_STAGING_CERT_THUMBPRINT }}"
           Get-ChildItem release-assets/*.exe | ForEach-Object {
             $signature = Get-AuthenticodeSignature $_.FullName
-            if ($signature.Status -ne "Valid") { throw "$($_.Name): $($signature.Status)" }
+            if ($signature.Status -ne "Valid") {
+              throw "$($_.Name): $($signature.Status) - $($signature.StatusMessage)"
+            }
+            if ($signature.SignerCertificate.Thumbprint -ne $expectedThumbprint) {
+              throw "$($_.Name): staging signer thumbprint mismatch"
+            }
           }
       - uses: actions/upload-artifact@v4
         with:
