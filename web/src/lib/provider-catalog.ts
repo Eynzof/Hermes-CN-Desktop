@@ -238,10 +238,17 @@ export function buildProviderOrderUpdate(
   };
 }
 
+export interface CustomProviderDeleteUpdate {
+  config: Record<string, any>;
+  /** 被删 provider 的点分路径。PUT /api/config 的深合并不会删除缺失的 key，
+   * 内核（P-042）按这些路径在合并后显式删除，否则条目会从磁盘复活（#370/#188）。 */
+  deletedPaths: string[];
+}
+
 export function buildCustomProviderDeleteUpdate(
   config: Record<string, any>,
   providerId: string,
-): Record<string, any> {
+): CustomProviderDeleteUpdate {
   if (!providerId.startsWith("custom:")) {
     throw new Error("只能删除用户添加的自定义服务商。");
   }
@@ -301,7 +308,7 @@ export function buildCustomProviderDeleteUpdate(
     };
   }
 
-  return nextConfig;
+  return { config: nextConfig, deletedPaths: [`providers.${providerId}`] };
 }
 
 export interface ProviderConfigInput {

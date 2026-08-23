@@ -11,8 +11,30 @@ import {
   MutationOkResponse,
 } from "@hermes/protocol";
 
-export function buildConfigUpdateRequest(config: Record<string, any>): ConfigUpdateRequest {
-  return ConfigUpdateRequest.parse({ config });
+export function buildConfigUpdateRequest(
+  config: Record<string, any>,
+  deletedPaths?: string[],
+): ConfigUpdateRequest {
+  return ConfigUpdateRequest.parse(
+    deletedPaths?.length ? { config, deleted_paths: deletedPaths } : { config },
+  );
+}
+
+/** 带显式删除的保存输入：config 为删除后的完整配置，deletedPaths 是被删 key 的
+ * 点分路径。后端深合并无法表达删除（P-042），必须显式声明。 */
+export interface SaveConfigDeletion {
+  config: Record<string, any>;
+  deletedPaths: string[];
+}
+
+function isSaveConfigDeletion(
+  input: Record<string, any> | SaveConfigDeletion,
+): input is SaveConfigDeletion {
+  return (
+    Array.isArray((input as SaveConfigDeletion).deletedPaths)
+    && typeof (input as SaveConfigDeletion).config === "object"
+    && (input as SaveConfigDeletion).config !== null
+  );
 }
 
 export function useConfig() {
@@ -55,8 +77,15 @@ export function useModelInfo() {
 export function useSaveConfig() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (config: Record<string, any>) =>
-      putJSON("/api/config", buildConfigUpdateRequest(config), MutationOkResponse),
+    mutationFn: (input: Record<string, any> | SaveConfigDeletion) => {
+      const config = isSaveConfigDeletion(input) ? input.config : input;
+      const deletedPaths = isSaveConfigDeletion(input) ? input.deletedPaths : undefined;
+      return putJSON(
+        "/api/config",
+        buildConfigUpdateRequest(config, deletedPaths),
+        MutationOkResponse,
+      );
+    },
     onSuccess: () => {
       invalidateModelOptionsCache();
       qc.invalidateQueries({ queryKey: ["config"] });
