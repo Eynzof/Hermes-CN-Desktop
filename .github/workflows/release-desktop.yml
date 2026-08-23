@@ -79,7 +79,7 @@ jobs:
           test "$tag" = "v$version"
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$tag^{commit}")"
           test "$(node -p "require('./tauri.conf.json').identifier")" = "cn.org.hermesagent.desktop"
-          test "$(node -p "require('./compatibility/desktop-core.json').runtimeManifestSchema.current")" = "2"
+          node scripts/check-desktop-core-compatibility.mjs --runtime-schema 2
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "runtime_tag=$runtime_tag" >> "$GITHUB_OUTPUT"

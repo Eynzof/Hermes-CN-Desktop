@@ -47,6 +47,13 @@ for (const rule of matrix.rules) {
     throw new Error(`desktopSeries=${rule.desktopSeries} 缺少 coreSeries`);
   }
   for (const coreSeries of rule.coreSeries) validateSeries(coreSeries, "coreSeries");
+  if (
+    !Array.isArray(rule.runtimeManifestSchemas)
+    || rule.runtimeManifestSchemas.length === 0
+    || rule.runtimeManifestSchemas.some((value) => !Number.isInteger(value) || value <= 0)
+  ) {
+    throw new Error(`desktopSeries=${rule.desktopSeries} 的 runtimeManifestSchemas 无效`);
+  }
 }
 
 const packageJson = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8"));
@@ -64,6 +71,22 @@ function assertCoreCompatible(coreVersion, label) {
   }
 }
 
+function assertRuntimeSchemaCompatible(schemaVersion, label) {
+  if (!Number.isInteger(schemaVersion) || schemaVersion <= 0) {
+    throw new Error(`${label} schemaVersion 无效：${schemaVersion}`);
+  }
+  if (!rule.runtimeManifestSchemas.includes(schemaVersion)) {
+    throw new Error(
+      `Desktop ${desktopSeries}.x 不接受 ${label} schema ${schemaVersion}`,
+    );
+  }
+}
+
+const explicitRuntimeSchema = option("--runtime-schema");
+if (explicitRuntimeSchema !== undefined) {
+  assertRuntimeSchemaCompatible(Number(explicitRuntimeSchema), "Runtime manifest");
+}
+
 const coreRoot = option("--core");
 if (coreRoot) assertCoreCompatible(parseCoreVersion(resolve(coreRoot)), "Core source");
 
@@ -72,14 +95,7 @@ if (runtimeManifestPath) {
   const manifest = JSON.parse(readFileSync(resolve(runtimeManifestPath), "utf8"));
   assertCoreCompatible(manifest.kernelVersion, "Runtime kernel");
   assertCoreCompatible(manifest.runtimeVersion, "Runtime package");
-  if (
-    Array.isArray(rule.runtimeManifestSchemas)
-    && !rule.runtimeManifestSchemas.includes(manifest.schemaVersion)
-  ) {
-    throw new Error(
-      `Desktop ${desktopSeries}.x 不接受 runtime manifest schema ${manifest.schemaVersion}`,
-    );
-  }
+  assertRuntimeSchemaCompatible(manifest.schemaVersion, "Runtime manifest");
 }
 
 console.log(

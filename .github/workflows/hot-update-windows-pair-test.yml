@@ -127,8 +127,9 @@ jobs:
           HERMES_RELEASE_RUNTIME_ZIP: ${{ github.workspace }}/static/bundled-runtime/hermes-agent-cn-runtime-win32-x64.zip
         run: |
           set -euo pipefail
-          test "$(node -p "require('./compatibility/desktop-core.json').runtimeManifestSchema.current")" = 2
-          pnpm compatibility:check
+          node scripts/check-desktop-core-compatibility.mjs \
+            --runtime-schema 2 \
+            --runtime-manifest static/bundled-runtime/stable-win32-x64.json
           cargo test --locked --all-features --lib release_runtime_zip_extracts_with_installer -- --ignored --nocapture
       - name: Import staging Authenticode identity
         shell: pwsh
