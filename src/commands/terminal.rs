@@ -14,6 +14,7 @@ use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
+use crate::commands::terminal_bash_fix::{bash_compatibility_prelude, fix_bash_command};
 use crate::process::runtime;
 use crate::state::AppState;
 
@@ -183,8 +184,30 @@ fn terminal_start_impl(
         .map_err(|e| format!("无法启动终端 Shell：{e}"))?;
     drop(pair.slave);
 
+    // On Windows Git Bash shells the same compatibility rules as the Python
+    // Bash tool apply: the fallback prelude is injected once (so interactive
+    // commands like `rev`/`wget`/`pgrep` resolve), and non-interactive
+    // `initialInput` commands are scanned and rewritten (Windows backslash
+    // paths, `cd /d`, Git Bash virtual paths, redundant `bash` wrappers).
+    // Interactive keystrokes stay raw — incomplete fragments must never be
+    // scanned and prefixed independently.
+    let bash_fix = cfg!(target_os = "windows") && shell_is_bash(&shell);
+    if bash_fix {
+        let prelude = bash_compatibility_prelude();
+        if !prelude.is_empty() {
+            let _ = writer.write_all(prelude.as_bytes());
+            let _ = writer.write_all(b"\n");
+            let _ = writer.flush();
+        }
+    }
+
     let initial_input = initial_input_for(input.purpose.as_deref(), input.initial_input.as_deref());
     if let Some(data) = initial_input {
+        let data = if bash_fix {
+            fix_bash_command(&data).command
+        } else {
+            data
+        };
         writer
             .write_all(data.as_bytes())
             .map_err(|e| format!("无法写入初始命令：{e}"))?;
@@ -345,6 +368,17 @@ fn default_shell_program() -> String {
             }
         })
     }
+}
+
+/// Return True when *shell* is a bash-family shell (e.g. Git Bash on
+/// Windows).  The `terminal_bash_fix` scanner only applies to bash; cmd.exe
+/// and PowerShell legitimately use backslashes and must stay untouched.
+fn shell_is_bash(shell: &str) -> bool {
+    Path::new(shell)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_ascii_lowercase().contains("bash"))
+        .unwrap_or(false)
 }
 
 fn resolve_cwd(requested: Option<&str>, context: &TerminalContext) -> Result<PathBuf, String> {

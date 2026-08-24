@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetUiStoreForTests, readUiValue } from "./ui-store";
 import {
   dashboardConfigHandler,
@@ -18,11 +18,54 @@ describe("dashboard-handlers", () => {
     __resetUiStoreForTests({});
   });
 
-  it("returns a valid local-first status payload", () => {
-    const result = dashboardStatusHandler();
+  it("returns a valid local-first status payload", async () => {
+    const result = await dashboardStatusHandler();
     expect(() => StatusResponse.parse(result)).not.toThrow();
     expect(result.gateway_running).toBe(false);
     expect(result.active_sessions).toBe(0);
+  });
+
+  it("fills hermes_home from the desktop runtime info (stable work directory)", async () => {
+    // Regression: the local-first /api/status stub shadows the Python backend
+    // in managed mode (transport.ts shouldUseLocalDashboard), and it used to
+    // hardcode hermes_home: undefined — so the health grid showed
+    // "Hermes Home — 正在读取数据目录" forever even though the desktop's
+    // HERMES_HOME is stable and known via runtime_info.process.hermesHome.
+    const originalWindow = (globalThis as any).window;
+    (globalThis as any).window = {
+      hermesDesktop: {
+        getRuntimeInfo: vi.fn(async () => ({
+          mode: "managed",
+          packaged: false,
+          platform: "win32",
+          arch: "x64",
+          runtimeRoot: "",
+          currentRecordPath: "",
+          versionsDir: "",
+          downloadsDir: "",
+          gatewayRuntimeDir: "",
+          updatesConfigured: false,
+          process: {
+            apiBaseUrl: "http://127.0.0.1:9120",
+            gatewayUrl: "ws://127.0.0.1:9120/api/ws",
+            hermesHome: "C:\\Users\\test\\.hermes",
+            hermesHomeBase: "C:\\Users\\test\\.hermes",
+            currentProfile: "default",
+            ownsProcess: true,
+            commandArgs: [],
+            sessionTokenPresent: true,
+            gatewayWsRelayActive: false,
+          },
+        })),
+      },
+    };
+    try {
+      const result = await dashboardStatusHandler();
+      expect(result.hermes_home).toBe("C:\\Users\\test\\.hermes");
+      expect(() => StatusResponse.parse(result)).not.toThrow();
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
   });
 
   it("returns an empty config scaffold on first run", () => {

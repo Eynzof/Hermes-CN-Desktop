@@ -16,6 +16,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { Button } from "@hermes/shared-ui";
 import { useStatus } from "@/hooks/use-status";
+import { useRuntimeInfo } from "@/hooks/use-runtime-update";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useEnvVars } from "@/hooks/use-env";
 import { useSkills } from "@/hooks/use-skills";
@@ -263,6 +264,7 @@ function MetricCard({ metric }: { metric: HealthMetric }) {
 export function HealthGrid({ variant = "compact" }: HealthGridProps) {
   const navigate = useNavigate();
   const statusQuery = useStatus();
+  const runtimeInfoQuery = useRuntimeInfo();
   const modelInfoQuery = useModelInfo();
   const configQuery = useConfig();
   const envQuery = useEnvVars();
@@ -277,6 +279,11 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
   const mcp = mcpQuery.data;
   const oauthProviders = oauthQuery.data;
   const lastUsedModel = useLastUsedModel();
+  // HERMES_HOME is a stable, fixed work directory resolved by the desktop at
+  // startup. /api/status may omit it (local-first stub, gated/remote backends
+  // that intentionally hide host paths) — fall back to runtime info so the
+  // Hermes Home card never hangs on "正在读取数据目录" when the path is known.
+  const hermesHome = status?.hermes_home ?? runtimeInfoQuery.data?.process?.hermesHome;
 
   const health = useMemo(() => {
     // `gateway_running` is the *PTY daemon* status — a Python subprocess
@@ -346,9 +353,9 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         id: "home",
         group: "runtime",
         label: "Hermes Home",
-        tone: status?.hermes_home ? "ok" : "warn",
-        value: status?.hermes_home || "—",
-        sub: status?.hermes_home ? "数据目录已识别" : "正在读取数据目录",
+        tone: hermesHome ? "ok" : "warn",
+        value: hermesHome || "—",
+        sub: hermesHome ? "数据目录已识别" : "正在读取数据目录",
         detail: status?.config_path || status?.env_path
           ? `配置：${status?.config_path ?? "—"}；环境变量：${status?.env_path ?? "—"}`
           : "这是桌面端当前 profile 的配置、会话和环境变量根目录。",
@@ -475,7 +482,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         { label: "异常项", value: String(counts.err), sub: counts.err ? "影响功能可用性" : "未发现异常", tone: counts.err ? "err" as Tone : "ok" as Tone },
       ] satisfies HealthMetric[],
     };
-  }, [config, env, envQuery.isError, lastUsedModel, mcp, mcpQuery.isError, modelInfo, oauthProviders, skills, skillsQuery.isError, status, statusQuery.isError]);
+  }, [config, env, envQuery.isError, hermesHome, lastUsedModel, mcp, mcpQuery.isError, modelInfo, oauthProviders, skills, skillsQuery.isError, status, statusQuery.isError]);
 
   const isRefreshing = statusQuery.isFetching
     || modelInfoQuery.isFetching
@@ -498,8 +505,8 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
   };
 
   const openHermesHome = () => {
-    if (!status?.hermes_home || !window.hermesDesktop?.openWorkspacePath) return;
-    void window.hermesDesktop.openWorkspacePath({ path: status.hermes_home }).catch(() => undefined);
+    if (!hermesHome || !window.hermesDesktop?.openWorkspacePath) return;
+    void window.hermesDesktop.openWorkspacePath({ path: hermesHome }).catch(() => undefined);
   };
 
   const attentionItems = health.items.filter((item) => item.tone !== "ok");
@@ -551,7 +558,7 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
               size="md"
               type="button"
               onClick={openHermesHome}
-              disabled={!status?.hermes_home || !window.hermesDesktop?.openWorkspacePath}
+              disabled={!hermesHome || !window.hermesDesktop?.openWorkspacePath}
               leadingIcon={<FolderOpen size={12} aria-hidden="true" />}
             >
               打开 HERMES_HOME

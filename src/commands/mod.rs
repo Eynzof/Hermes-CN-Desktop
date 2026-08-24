@@ -53,6 +53,7 @@ pub mod spotify_oauth;
 pub mod state_db;
 pub mod subscription_proxy;
 pub mod terminal;
+pub mod terminal_bash_fix;
 pub mod terminal_env;
 pub mod ui_store;
 pub mod ui_update;

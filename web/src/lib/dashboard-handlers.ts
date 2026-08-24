@@ -47,6 +47,7 @@ import {
   SessionDetail,
   SessionsResponse,
   SkillsResponse,
+  StatusResponse,
 } from "@hermes/protocol";
 import { getLocalSessionStore } from "./session-store/local-store";
 import { LOCAL_MODEL_CATALOG } from "./gateway-inprocess";
@@ -121,8 +122,25 @@ function writeLocalEnvVars(vars: Record<string, string>): void {
   writeUiValue(ENV_VARS_KEY, vars);
 }
 
-export function dashboardStatusHandler() {
-  return LOCAL_STATUS;
+export async function dashboardStatusHandler(): Promise<StatusResponse> {
+  // The desktop resolves HERMES_HOME once at startup — it is a stable, fixed
+  // work directory, never something that needs polling a backend to discover.
+  // The Python backend only emits hermes_home on a loopback/insecure bind
+  // (gated binds omit host paths for security), and this local stub shadows
+  // the real /api/status in managed mode (transport.ts shouldUseLocalDashboard).
+  // Fill it from runtime_info.process.hermesHome so the health grid shows
+  // the real directory instead of "正在读取数据目录" forever.
+  let hermesHome: string | undefined;
+  try {
+    const info =
+      typeof window === "undefined"
+        ? undefined
+        : await window.hermesDesktop?.getRuntimeInfo?.();
+    hermesHome = info?.process?.hermesHome ?? undefined;
+  } catch {
+    // Best-effort enrichment — runtime_info must never break the liveness probe.
+  }
+  return { ...LOCAL_STATUS, hermes_home: hermesHome };
 }
 
 export function dashboardConfigHandler() {
