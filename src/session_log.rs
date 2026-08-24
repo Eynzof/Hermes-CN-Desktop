@@ -3,14 +3,20 @@
 // Replaces the /__hermes_session_log/ route handler in
 // hermes-cn-ui-v1/apps/desktop/src/main/main.ts lines 507-529.
 //
-// Returns the raw session log JSON — the frontend's existing
-// sessionLogToMessages() handles the transform to avoid duplicating logic.
+// Returns a `MessagesResponse`-shaped JSON body (`{ session_id, messages,
+// ui_messages? }`) so the Tauri shell satisfies the UI's existing
+// `MessagesResponse.parse` (see web/src/hooks/use-sessions.ts), matching the
+// browser-dev `sessionLogHandler` behavior. The transform lives in
+// `crate::schema::session_log::session_log_to_messages`.
 
 use std::fs;
 use std::path::Path;
 
-/// Read a session log file and return the raw JSON content.
-/// Returns (status_code, json_body).
+use crate::schema::session_log::session_log_to_messages;
+
+/// Read a session log file and return `(status_code, json_body)`.
+///
+/// On 200 the body is a `MessagesResponse`-compatible JSON object.
 pub fn handle_session_log_request(session_id: &str, hermes_home: &str) -> (u16, serde_json::Value) {
     // Validate session ID (alphanumeric + underscore + dash only)
     if !session_id
@@ -26,13 +32,11 @@ pub fn handle_session_log_request(session_id: &str, hermes_home: &str) -> (u16, 
 
     match fs::read_to_string(&log_path) {
         Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
-            Ok(log_data) => (
-                200,
-                serde_json::json!({
-                    "session_id": session_id,
-                    "raw_log": log_data,
-                }),
-            ),
+            Ok(log_data) => {
+                let response = session_log_to_messages(session_id, &log_data);
+                let body = serde_json::to_value(response).unwrap_or_else(|_| serde_json::json!({}));
+                (200, body)
+            }
             Err(_) => (
                 500,
                 serde_json::json!({ "message": "failed to parse session log" }),
@@ -59,15 +63,21 @@ mod tests {
     }
 
     #[test]
-    fn valid_id_with_existing_file_returns_200() {
+    fn valid_id_with_existing_file_returns_200_messages_response() {
         let dir = TempDir::new().unwrap();
-        write_session_log(dir.path(), "abc123", r#"{"events":[{"type":"hi"}]}"#);
+        write_session_log(
+            dir.path(),
+            "abc123",
+            r#"{"session_start":"2024-01-01T00:00:00Z","messages":[{"role":"user","content":"hi"}]}"#,
+        );
 
         let (status, body) = handle_session_log_request("abc123", dir.path().to_str().unwrap());
 
         assert_eq!(status, 200);
         assert_eq!(body["session_id"], "abc123");
-        assert_eq!(body["raw_log"]["events"][0]["type"], "hi");
+        assert_eq!(body["messages"][0]["role"], "user");
+        assert_eq!(body["messages"][0]["content"], "hi");
+        assert!(body.get("raw_log").is_none());
     }
 
     #[test]
@@ -121,7 +131,7 @@ mod tests {
     #[test]
     fn underscore_and_dash_ids_accepted() {
         let dir = TempDir::new().unwrap();
-        write_session_log(dir.path(), "a_b-c", "{}");
+        write_session_log(dir.path(), "a_b-c", r#"{"messages":[]}"#);
         let (status, _) = handle_session_log_request("a_b-c", dir.path().to_str().unwrap());
         assert_eq!(status, 200);
     }

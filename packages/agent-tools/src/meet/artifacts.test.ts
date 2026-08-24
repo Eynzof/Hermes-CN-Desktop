@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   parseTranscript,
   formatTranscript,
+  formatTranscriptLine,
+  TRANSCRIPT_LINE_RE,
   transcriptTail,
   dedupeKey,
   CaptionStore,
@@ -106,5 +108,36 @@ describe("botStatusSummary", () => {
 
   it("handles missing status", () => {
     expect(botStatusSummary(undefined)).toBe("No meeting status available.");
+  });
+});
+
+describe("formatTranscriptLine", () => {
+  it("formats a transcript line as [ts] speaker: text", () => {
+    expect(formatTranscriptLine({ ts: "10:05:01", speaker: "Alice", text: "Hello everyone" })).toBe(
+      "[10:05:01] Alice: Hello everyone",
+    );
+  });
+});
+
+describe("TRANSCRIPT_LINE_RE", () => {
+  it("matches formatted caption lines and captures ts, speaker, text", () => {
+    const match = "[10:05:01] Alice: Hello".match(TRANSCRIPT_LINE_RE);
+    expect(match).not.toBeNull();
+    expect(match![1]).toBe("10:05:01");
+    expect(match![2]).toBe("Alice");
+    expect(match![3]).toBe("Hello");
+  });
+
+  it("tolerates extra whitespace after brackets and colon", () => {
+    const match = "[10:05:01]   Alice   :   Hello  ".match(TRANSCRIPT_LINE_RE);
+    expect(match).not.toBeNull();
+    expect(match![2]).toBe("Alice   ");
+    expect(match![3]).toBe("Hello  ");
+  });
+
+  it("rejects malformed lines", () => {
+    expect("10:05:01 Alice: Hello".match(TRANSCRIPT_LINE_RE)).toBeNull();
+    expect("[10:05] Alice: Hi".match(TRANSCRIPT_LINE_RE)).toBeNull();
+    expect("[10:05:01] Alice no colon".match(TRANSCRIPT_LINE_RE)).toBeNull();
   });
 });

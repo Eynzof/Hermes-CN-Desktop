@@ -1,38 +1,6 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LspProcessStatus {
-    pub process_key: String,
-    pub alive: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LspSpawnArgs {
-    pub server_id: String,
-    pub command: String,
-    pub args: Vec<String>,
-    pub cwd: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LspWriteArgs {
-    pub process_key: String,
-    pub bytes_base64: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LspShutdownArgs {
-    pub process_key: String,
-}
-
-#[derive(Deserialize)]
-pub struct LspProbeArgs {
-    pub name: String,
-}
+use crate::schema::lsp::{
+    LspProbeArgs, LspProcessStatus, LspShutdownArgs, LspSpawnArgs, LspWriteArgs,
+};
 
 static LSP_PROCESSES: std::sync::LazyLock<
     std::sync::Mutex<std::collections::HashMap<String, std::process::Child>>,
@@ -49,7 +17,10 @@ pub async fn lsp_spawn(args: LspSpawnArgs) -> Result<LspProcessStatus, String> {
     let key = format!("{}-{}", args.server_id, std::process::id());
     let mut map = LSP_PROCESSES.lock().map_err(|e| e.to_string())?;
     map.insert(key.clone(), child);
-    Ok(LspProcessStatus { process_key: key, alive: true })
+    Ok(LspProcessStatus {
+        process_key: key,
+        alive: true,
+    })
 }
 
 #[tauri::command]
@@ -63,7 +34,10 @@ pub async fn lsp_write_stdin(args: LspWriteArgs) -> Result<(), String> {
         .decode(&args.bytes_base64)
         .map_err(|e| e.to_string())?;
     use std::io::Write;
-    let stdin = child.stdin.as_mut().ok_or_else(|| "stdin closed".to_string())?;
+    let stdin = child
+        .stdin
+        .as_mut()
+        .ok_or_else(|| "stdin closed".to_string())?;
     stdin.write_all(&bytes).map_err(|e| e.to_string())?;
     stdin.flush().map_err(|e| e.to_string())?;
     Ok(())
@@ -81,7 +55,9 @@ pub async fn lsp_shutdown(args: LspShutdownArgs) -> Result<(), String> {
 #[tauri::command]
 pub async fn lsp_probe_binary(args: LspProbeArgs) -> Result<bool, String> {
     // v1: best-effort probe via `command --version` without external crates.
-    let output = std::process::Command::new(&args.name).arg("--version").output();
+    let output = std::process::Command::new(&args.name)
+        .arg("--version")
+        .output();
     Ok(output.is_ok())
 }
 

@@ -1,0 +1,16 @@
+{
+  "id": 1,
+  "session_id": "s-1",
+  "role": "assistant",
+  "content": "hello",
+  "tool_call_id": "tc1",
+  "tool_calls": { "id": "t1" },
+  "tool_name": "read_file",
+  "timestamp": 1704067200.0,
+  "token_count": 42,
+  "finish_reason": "stop",
+  "reasoning": null,
+  "reasoning_details": null,
+  "codex_reasoning_items": null,
+  "reasoning_content": null
+}

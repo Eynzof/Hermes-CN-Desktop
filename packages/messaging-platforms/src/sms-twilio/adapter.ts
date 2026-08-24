@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import type { PlatformAdapter, InboundMessageEvent, OutboundContent, SendMeta, SendResult, PlatformStatus } from "@hermes/gateway-core";
+import { constantTimeStringEqual } from "../webhook-secret.js";
 
 export const smsTwilioConfigSchema = z.object({
   enabled: z.boolean().default(false),
@@ -74,7 +75,7 @@ export class SmsTwilioAdapter implements PlatformAdapter {
 
   verifyWebhookSecret(payload: string, signature?: string): boolean {
     if (!this.config.webhookSecret) return true;
-    // v1: constant-time compare placeholder.
-    return signature === this.config.webhookSecret;
+    // v1: constant-time compare (no early-exit on length mismatch).
+    return constantTimeStringEqual(signature ?? "", this.config.webhookSecret);
   }
 }

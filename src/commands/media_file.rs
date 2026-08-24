@@ -16,7 +16,13 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 
 const MEDIA_DATA_URL_MAX_BYTES: u64 = 25 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"];
+const ALLOWED_IMAGE_TYPES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+];
 const ALLOWED_VIDEO_TYPES: &[&str] = &["video/mp4", "video/webm", "video/ogg"];
 
 #[derive(Debug, Deserialize)]
@@ -65,10 +71,13 @@ pub fn resolve_media_path(raw: &str) -> AppResult<PathBuf> {
     let candidate = if expanded.is_absolute() {
         expanded
     } else {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join(expanded)
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(expanded)
     };
 
-    fs::canonicalize(&candidate).map_err(|e| AppError::FileError(format!("Cannot resolve media path: {}", e)))
+    fs::canonicalize(&candidate)
+        .map_err(|e| AppError::FileError(format!("Cannot resolve media path: {}", e)))
 }
 
 pub fn mime_from_path(path: &Path) -> Option<&'static str> {
@@ -91,21 +100,27 @@ pub fn allowed_mime(mime: &str) -> bool {
 
 /// Return a base64 data URL for a local media file. Mirrors `GET /api/media`.
 #[tauri::command]
-pub fn media_data_url(_state: State<'_, AppState>, input: MediaDataUrlInput) -> Result<MediaDataUrlResult, AppError> {
+pub fn media_data_url(
+    _state: State<'_, AppState>,
+    input: MediaDataUrlInput,
+) -> Result<MediaDataUrlResult, AppError> {
     let resolved = resolve_media_path(&input.path)?;
     let meta = fs::metadata(&resolved)?;
     if !meta.is_file() {
         return Err(AppError::FileError("Not a regular file".to_string()));
     }
     if meta.len() > MEDIA_DATA_URL_MAX_BYTES {
-        return Err(AppError::InvalidRequest(
-            format!("Media file exceeds {} MiB cap", MEDIA_DATA_URL_MAX_BYTES / (1024 * 1024))
-        ));
+        return Err(AppError::InvalidRequest(format!(
+            "Media file exceeds {} MiB cap",
+            MEDIA_DATA_URL_MAX_BYTES / (1024 * 1024)
+        )));
     }
 
     let mime = mime_from_path(&resolved).unwrap_or("application/octet-stream");
     if !allowed_mime(mime) {
-        return Err(AppError::InvalidRequest("Unsupported media type".to_string()));
+        return Err(AppError::InvalidRequest(
+            "Unsupported media type".to_string(),
+        ));
     }
 
     let bytes = fs::read(&resolved)?;
@@ -122,7 +137,10 @@ pub fn media_data_url(_state: State<'_, AppState>, input: MediaDataUrlInput) -> 
 
 /// Return a custom-protocol URL that the webview can request for streaming.
 #[tauri::command]
-pub fn media_file_url(_state: State<'_, AppState>, input: MediaFileUrlInput) -> Result<MediaFileUrlResult, AppError> {
+pub fn media_file_url(
+    _state: State<'_, AppState>,
+    input: MediaFileUrlInput,
+) -> Result<MediaFileUrlResult, AppError> {
     let resolved = resolve_media_path(&input.path)?;
     let resolved_str = resolved.to_string_lossy().to_string();
     let encoded = urlencoding::encode(&resolved_str);
@@ -163,14 +181,14 @@ mod tests {
         let mut f = fs::File::create(&file).unwrap();
         // Minimal PNG header: 8 signature + 4 len + 4 IHDR + 4 width + 4 height + 5 bit depth...
         let mut header = vec![
-            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-            0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-            0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-            0xde,
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xde,
         ];
         // Add a trailing chunk to make it a valid-ish PNG.
-        header.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+        header.extend_from_slice(&[
+            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ]);
         f.write_all(&header).unwrap();
 
         let result = media_data_url_impl(&file.to_string_lossy()).unwrap();

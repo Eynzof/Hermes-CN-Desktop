@@ -107,8 +107,14 @@ pub async fn cli_spawn(input: CliSpawnInput) -> Result<CliSpawnResult, AppError>
         .spawn()
         .map_err(|err| AppError::Internal(format!("failed to spawn hermes CLI: {err}")))?;
 
-    let mut stdout_pipe = child.stdout.take().ok_or_else(|| AppError::Internal("missing stdout".to_string()))?;
-    let mut stderr_pipe = child.stderr.take().ok_or_else(|| AppError::Internal("missing stderr".to_string()))?;
+    let mut stdout_pipe = child
+        .stdout
+        .take()
+        .ok_or_else(|| AppError::Internal("missing stdout".to_string()))?;
+    let mut stderr_pipe = child
+        .stderr
+        .take()
+        .ok_or_else(|| AppError::Internal("missing stderr".to_string()))?;
 
     let mut stdout_bytes = Vec::new();
     let mut stderr_bytes = Vec::new();
@@ -142,7 +148,11 @@ pub async fn cli_spawn(input: CliSpawnInput) -> Result<CliSpawnResult, AppError>
     let error = if ok {
         None
     } else {
-        stderr.lines().next().map(|s| s.to_string()).or_else(|| Some("hermes CLI failed".to_string()))
+        stderr
+            .lines()
+            .next()
+            .map(|s| s.to_string())
+            .or_else(|| Some("hermes CLI failed".to_string()))
     };
 
     Ok(CliSpawnResult {
@@ -271,14 +281,15 @@ pub fn cli_resolve_command(input: CliResolveInput) -> Result<CliResolveResult, A
     // When the binary name is followed by a real subcommand, treat the
     // subcommand as the canonical command; otherwise keep the binary token
     // (e.g. `hermes -z prompt` has no subcommand).
-    let command = if positional.len() >= 2 && positional.first().map(|s| s.as_str()) == Some("hermes") {
-        positional.remove(0);
-        positional.remove(0)
-    } else if !positional.is_empty() {
-        positional.remove(0)
-    } else {
-        String::new()
-    };
+    let command =
+        if positional.len() >= 2 && positional.first().map(|s| s.as_str()) == Some("hermes") {
+            positional.remove(0);
+            positional.remove(0)
+        } else if !positional.is_empty() {
+            positional.remove(0)
+        } else {
+            String::new()
+        };
 
     Ok(CliResolveResult {
         command,
@@ -295,7 +306,9 @@ mod tests {
 
     #[test]
     fn cli_spawn_input_serializes_camel_case() {
-        let input = CliSpawnInput { argv: vec!["version".to_string(), "--json".to_string()] };
+        let input = CliSpawnInput {
+            argv: vec!["version".to_string(), "--json".to_string()],
+        };
         let json = serde_json::to_string(&input).unwrap();
         assert!(json.contains("\"argv\""));
         assert!(json.contains("version"));

@@ -40,15 +40,23 @@ static CODEX_RUNNING: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
 #[tauri::command]
 pub async fn codex_app_server_check() -> Result<bool, String> {
     // v1: best-effort probe for `codex` binary.
-    let output = std::process::Command::new("codex").arg("--version").output();
+    let output = std::process::Command::new("codex")
+        .arg("--version")
+        .output();
     Ok(output.is_ok())
 }
 
 #[tauri::command]
-pub async fn codex_app_server_start(_args: CodexAppServerStartArgs) -> Result<CodexAppServerStatus, String> {
+pub async fn codex_app_server_start(
+    _args: CodexAppServerStartArgs,
+) -> Result<CodexAppServerStatus, String> {
     let mut running = CODEX_RUNNING.lock().map_err(|e| e.to_string())?;
     *running = true;
-    Ok(CodexAppServerStatus { running: true, binary_ok: true, runtime: "codex_app_server".into() })
+    Ok(CodexAppServerStatus {
+        running: true,
+        binary_ok: true,
+        runtime: "codex_app_server".into(),
+    })
 }
 
 #[tauri::command]
@@ -61,11 +69,17 @@ pub async fn codex_app_server_stop() -> Result<(), String> {
 #[tauri::command]
 pub async fn codex_app_server_status() -> Result<CodexAppServerStatus, String> {
     let running = CODEX_RUNNING.lock().map_err(|e| e.to_string())?;
-    Ok(CodexAppServerStatus { running: *running, binary_ok: true, runtime: "auto".into() })
+    Ok(CodexAppServerStatus {
+        running: *running,
+        binary_ok: true,
+        runtime: "auto".into(),
+    })
 }
 
 #[tauri::command]
-pub async fn codex_app_server_run_turn(args: CodexAppServerRunTurnArgs) -> Result<serde_json::Value, String> {
+pub async fn codex_app_server_run_turn(
+    args: CodexAppServerRunTurnArgs,
+) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
         "finalText": format!("Codex turn {} stub", args.request_id),
         "projectedMessages": [],
@@ -97,6 +111,8 @@ pub async fn codex_app_server_plugin_list() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub async fn codex_app_server_apply_config_toml(_args: CodexApplyConfigTomlArgs) -> Result<(), String> {
+pub async fn codex_app_server_apply_config_toml(
+    _args: CodexApplyConfigTomlArgs,
+) -> Result<(), String> {
     Ok(())
 }

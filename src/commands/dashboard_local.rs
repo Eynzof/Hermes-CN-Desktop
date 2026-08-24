@@ -51,12 +51,16 @@ fn host_platform() -> &'static str {
 
 /// Return the local dashboard status without contacting a remote dashboard.
 #[tauri::command]
-pub fn dashboard_local_status(input: DashboardLocalStatusInput) -> Result<DashboardLocalStatus, AppError> {
+pub fn dashboard_local_status(
+    input: DashboardLocalStatusInput,
+) -> Result<DashboardLocalStatus, AppError> {
     Ok(DashboardLocalStatus {
         ok: true,
         platform: host_platform().to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
-        connection_mode: input.connection_mode.unwrap_or_else(|| "managed".to_string()),
+        connection_mode: input
+            .connection_mode
+            .unwrap_or_else(|| "managed".to_string()),
     })
 }
 
@@ -66,7 +70,10 @@ pub fn dashboard_local_env() -> Result<DashboardLocalEnv, AppError> {
     let mut env: Vec<(String, String)> = std::env::vars()
         .filter(|(k, _)| {
             let k = k.to_lowercase();
-            k.starts_with("hermes_") || k.starts_with("hermes-") || k == "home" || k == "userprofile"
+            k.starts_with("hermes_")
+                || k.starts_with("hermes-")
+                || k == "home"
+                || k == "userprofile"
         })
         .map(|(k, v)| (k, v))
         .collect();
@@ -80,7 +87,10 @@ mod tests {
 
     #[test]
     fn dashboard_local_status_returns_managed_mode_by_default() {
-        let status = dashboard_local_status(DashboardLocalStatusInput { connection_mode: None }).unwrap();
+        let status = dashboard_local_status(DashboardLocalStatusInput {
+            connection_mode: None,
+        })
+        .unwrap();
         assert!(status.ok);
         assert_eq!(status.connection_mode, "managed");
         assert!(!status.version.is_empty());
@@ -100,6 +110,9 @@ mod tests {
     fn dashboard_local_env_lists_hermes_vars() {
         std::env::set_var("HERMES_DASHBOARD_TEST_FLAG", "1");
         let result = dashboard_local_env().unwrap();
-        assert!(result.env.iter().any(|(k, _)| k == "HERMES_DASHBOARD_TEST_FLAG"));
+        assert!(result
+            .env
+            .iter()
+            .any(|(k, _)| k == "HERMES_DASHBOARD_TEST_FLAG"));
     }
 }

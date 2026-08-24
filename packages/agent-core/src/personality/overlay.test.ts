@@ -4,6 +4,8 @@ import {
   DEFAULT_AGENT_IDENTITY,
   applyPersonalityToSystemPrompt,
   buildIdentityBlock,
+  formatContextBlock,
+  resolvePersonalityOverlay,
   resolveSystemPrompt,
   splitContextFilesBySoul,
 } from "./overlay.js";
@@ -118,5 +120,70 @@ describe("personality overlay", () => {
     expect(resolution.systemPrompt).toContain(DEFAULT_AGENT_IDENTITY);
     expect(resolution.systemPrompt).toContain("Arr.");
     expect(resolution.personalityUsed).toBe(true);
+  });
+});
+
+describe("formatContextBlock", () => {
+  it("returns empty string for no files", () => {
+    expect(formatContextBlock([])).toBe("");
+  });
+
+  it("uses provenance labels when present", () => {
+    const files: ContextFile[] = [
+      { path: "/p/AGENTS.md", source: "hermes", content: "rules", provenance: "AGENTS.md" },
+    ];
+    const block = formatContextBlock(files);
+    expect(block).toContain("# Project Context");
+    expect(block).toContain("## AGENTS.md");
+    expect(block).toContain("rules");
+  });
+
+  it("falls back to the file basename across path separators", () => {
+    const files: ContextFile[] = [
+      { path: "/p/CLAUDE.md", source: "claude", content: "claude rules" },
+      { path: "C:\\p\\other.md", source: "hermes", content: "other rules" },
+    ];
+    const block = formatContextBlock(files);
+    expect(block).toContain("## CLAUDE.md");
+    expect(block).toContain("## other.md");
+    expect(block).toContain("# Project Context");
+  });
+
+  it("joins multiple sections with blank lines", () => {
+    const files: ContextFile[] = [
+      { path: "/p/a.md", source: "hermes", content: "A" },
+      { path: "/p/b.md", source: "hermes", content: "B" },
+    ];
+    const block = formatContextBlock(files);
+    expect(block).toContain("## a.md\nA\n\n## b.md\nB");
+  });
+});
+
+describe("resolvePersonalityOverlay", () => {
+  it("returns empty string without config", () => {
+    expect(resolvePersonalityOverlay()).toBe("");
+    expect(resolvePersonalityOverlay({})).toBe("");
+  });
+
+  it("resolves a named personality from config", () => {
+    const overlay = resolvePersonalityOverlay({ display: { personality: "concise" } });
+    expect(overlay).toContain("Keep responses short");
+  });
+
+  it("prefers personality over agent.system_prompt", () => {
+    const overlay = resolvePersonalityOverlay({
+      display: { personality: "concise" },
+      agent: { system_prompt: "Manual." },
+    });
+    expect(overlay).toContain("Keep responses short");
+    expect(overlay).not.toBe("Manual.");
+  });
+
+  it("falls back to agent.system_prompt", () => {
+    expect(resolvePersonalityOverlay({ agent: { system_prompt: "Manual." } })).toBe("Manual.");
+  });
+
+  it("returns empty for unknown personality without a system prompt", () => {
+    expect(resolvePersonalityOverlay({ display: { personality: "nope" } })).toBe("");
   });
 });

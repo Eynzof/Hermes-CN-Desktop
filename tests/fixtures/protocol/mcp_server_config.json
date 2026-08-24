@@ -1,0 +1,9 @@
+{
+  "name": "fs",
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "server"],
+  "tools": { "include": ["read_file"], "exclude": [] },
+  "lazy": true,
+  "enabled": false
+}

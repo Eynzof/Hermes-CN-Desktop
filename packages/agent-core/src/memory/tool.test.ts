@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { registry } from "@hermes/agent-tools";
 import { BoundedMemoryStore, createMemoryTool } from "./index.js";
+import { registerMemoryTool } from "./tool.js";
 import type { ToolContext } from "../types.js";
 
 const dummyContext: ToolContext = { sessionId: "s1" };
@@ -72,5 +74,57 @@ describe("createMemoryTool", () => {
     );
     expect(result.isError).toBe(true);
     expect(result.content).toContain("Unknown memory action");
+  });
+});
+
+describe("registerMemoryTool", () => {
+  it("registers the memory tool with the global agent-tools registry", () => {
+    registerMemoryTool();
+    const entry = registry.get("memory");
+    expect(entry).toBeDefined();
+    expect(entry?.name).toBe("memory");
+    expect(entry?.toolset).toBe("memory");
+    expect(entry?.handler).toBeTypeOf("function");
+  });
+
+  it("dispatches add and search through the registered handler with a default store", async () => {
+    registerMemoryTool();
+    const addResult = await registry.dispatch(
+      "memory",
+      { action: "add_memory", scope: "memory", content: "hello world" },
+      { sessionId: "s1" },
+    );
+    expect(addResult.isError).toBe(false);
+
+    const searchResult = await registry.dispatch(
+      "memory",
+      { action: "search_memory", scope: "memory", query: "hello" },
+      { sessionId: "s1" },
+    );
+    expect(searchResult.isError).toBeUndefined();
+    expect(searchResult.content).toContain("hello world");
+  });
+
+  it("uses a caller-supplied store", async () => {
+    const store = new BoundedMemoryStore();
+    store.load("memory", "existing value");
+    registerMemoryTool(store);
+    const result = await registry.dispatch(
+      "memory",
+      { action: "search_memory", scope: "memory", query: "existing" },
+      { sessionId: "s1" },
+    );
+    expect(result.content).toContain("existing value");
+  });
+
+  it("passes options through to external provider error handling", async () => {
+    registerMemoryTool(undefined, {});
+    const result = await registry.dispatch(
+      "memory",
+      { action: "search_memory", scope: "memory", provider: "honcho", query: "x" },
+      { sessionId: "s1" },
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain("no registry is configured");
   });
 });

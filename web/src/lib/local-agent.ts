@@ -1,6 +1,7 @@
 import type { SessionStore } from "./session-store/session-store";
 import { getLocalSessionStore } from "./session-store/local-store";
 import { readUiValue } from "./ui-store";
+import { resolveModelMaxTokens } from "./model-defaults";
 
 export interface LocalTurnEvent {
   type: string;
@@ -37,6 +38,7 @@ function resolveLocalModelConfig(): {
   baseUrl: string;
   apiKey: string;
   model: string;
+  contextLength?: number;
 } | null {
   const config = readUiValue<Record<string, unknown>>("hermes.active-config", {});
   const model = isRecord(config.model) ? config.model : {};
@@ -71,7 +73,11 @@ function resolveLocalModelConfig(): {
   const modelName = typeof model.default === "string" ? model.default : "";
 
   if (!baseUrl || !apiKey || !modelName) return null;
-  return { baseUrl, apiKey, model: modelName };
+  const contextLength =
+    typeof config.model_context_length === "number" && Number.isFinite(config.model_context_length)
+      ? config.model_context_length
+      : undefined;
+  return { baseUrl, apiKey, model: modelName, contextLength };
 }
 
 /**
@@ -79,12 +85,19 @@ function resolveLocalModelConfig(): {
  * return the assistant reply text. Uses a simple fetch — the in-process
  * gateway transport is not a streaming HTTP client, so we buffer the full
  * reply and then emit it in chunks via the normal message.delta path.
+ *
+ * `messages` must carry the full conversation (previous user + assistant turns
+ * plus the current user message). Sending only the current message makes every
+ * follow-up a stateless prompt: real reasoning models can then legitimately
+ * answer with `content: null` (reasoning-only), which surfaced as the
+ * "model returned empty reply" bug on the second turn of a resumed session.
  */
 async function callRemoteModel(
   baseUrl: string,
   apiKey: string,
   model: string,
-  userText: string,
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  maxTokens: number,
 ): Promise<string> {
   // Construct the chat completions URL. Most OpenAI-compatible APIs follow
   // the pattern <base_url>/chat/completions (when base_url already includes
@@ -112,9 +125,14 @@ async function callRemoteModel(
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: userText }],
+      messages,
       stream: false,
-      max_tokens: 1024,
+      // Derive the output-token budget from the model name (kimi-agent's
+      // `_resolve_model_defaults` semantics), falling back to
+      // configured context_length // 4 and finally a conservative default.
+      // A hard-coded 1024 was small enough that a reasoning-heavy follow-up
+      // could exhaust the budget and come back with empty `content`.
+      max_tokens: maxTokens,
     }),
   });
   if (!res.ok) {
@@ -122,10 +140,23 @@ async function callRemoteModel(
     throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
   }
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+        reasoning_content?: string | null;
+      };
+    }>;
   };
-  const reply = data.choices?.[0]?.message?.content;
-  if (typeof reply !== "string" || !reply.trim()) {
+  const message = data.choices?.[0]?.message;
+  const content = typeof message?.content === "string" ? message.content.trim() : "";
+  // Reasoning models (DeepSeek Reasoner, Kimi thinking, OpenAI o-series, ...)
+  // put the chain of thought in `reasoning_content` and can leave `content`
+  // empty when the budget runs out. Surface the reasoning instead of failing
+  // the whole turn with "model returned empty reply".
+  const reasoning =
+    typeof message?.reasoning_content === "string" ? message.reasoning_content.trim() : "";
+  const reply = content || reasoning;
+  if (!reply) {
     throw new Error("model returned empty reply");
   }
   return reply;
@@ -135,7 +166,28 @@ async function defaultReply(req: LocalTurnRequest): Promise<string | undefined> 
   // Try to call the real model configured in the local config store.
   const cfg = resolveLocalModelConfig();
   if (cfg) {
-    return callRemoteModel(cfg.baseUrl, cfg.apiKey, cfg.model, req.text);
+    // streamLocalTurn already appended the current user message before the
+    // handler runs, so the stored history IS the full conversation: previous
+    // user/assistant turns + this message. Handing it to the model lets the
+    // "next talk" of a resumed session actually continue the conversation
+    // instead of arriving as a context-free single prompt.
+    const store = getLocalSessionStore();
+    const history = await store.getMessages(req.sessionId);
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
+    for (const m of history) {
+      if (
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string" &&
+        m.content.length > 0
+      ) {
+        messages.push({ role: m.role, content: m.content });
+      }
+    }
+    if (messages.length === 0) {
+      messages.push({ role: "user", content: req.text });
+    }
+    const maxTokens = resolveModelMaxTokens(cfg.model, cfg.contextLength);
+    return callRemoteModel(cfg.baseUrl, cfg.apiKey, cfg.model, messages, maxTokens);
   }
   // Fall back to echo mode when no provider is configured.
   const img = req.images?.length ? `\n[已附带 ${req.images.length} 张图片]` : "";

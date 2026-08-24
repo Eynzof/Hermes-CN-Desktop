@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PluginRegistry, validateManifest } from "./registry.js";
+import { PluginRegistry, materializeRecord, validateManifest } from "./registry.js";
 import type { PluginManifest } from "./types.js";
 
 function makeManifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
@@ -184,5 +184,51 @@ describe("PluginRegistry", () => {
     });
 
     expect(registry.get("bundled")?.source).toBe("bundled");
+  });
+});
+
+describe("materializeRecord", () => {
+  it("builds an ok record from a valid manifest with defaults", () => {
+    const record = materializeRecord(makeManifest());
+    expect(record.id).toBe("test-plugin");
+    expect(record.state).toBe("ok");
+    expect(record.diagnostics).toEqual([]);
+    expect(record.source).toBe("local");
+    expect(record.root).toBe("");
+    expect(record.enabled).toBe(false);
+  });
+
+  it("normalizes the plugin id", () => {
+    const record = materializeRecord(makeManifest({ name: "My Plugin!" }));
+    expect(record.id).toBe("my-plugin");
+  });
+
+  it("honors source, root, and enabled parameters", () => {
+    const record = materializeRecord(makeManifest(), "bundled", "/root", true);
+    expect(record.source).toBe("bundled");
+    expect(record.root).toBe("/root");
+    expect(record.enabled).toBe(true);
+  });
+
+  it("marks invalid manifests as errors with diagnostics", () => {
+    const record = materializeRecord(makeManifest({ name: "", version: "" }));
+    expect(record.state).toBe("error");
+    const codes = record.diagnostics.map((d) => d.code);
+    expect(codes).toContain("missing_name");
+    expect(codes).toContain("missing_version");
+  });
+
+  it("coerces unknown kinds and emits a warning", () => {
+    const manifest = makeManifest({ kind: "weird" as "general" });
+    const record = materializeRecord(manifest);
+    expect(record.state).toBe("ok");
+    expect(record.diagnostics[0]?.code).toBe("unknown_kind");
+    expect(manifest.kind).toBe("general");
+  });
+
+  it("keeps the same manifest reference in the record", () => {
+    const manifest = makeManifest();
+    const record = materializeRecord(manifest);
+    expect(record.manifest).toBe(manifest);
   });
 });

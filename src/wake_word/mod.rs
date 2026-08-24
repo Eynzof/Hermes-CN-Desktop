@@ -129,6 +129,7 @@ impl TemplateEngine {
         for i in 0..(word_count * 2) {
             let center = i * syllable_width + syllable_width / 2;
             let half = syllable_width / 4;
+            #[allow(clippy::needless_range_loop)]
             for j in center.saturating_sub(half)..(center + half).min(samples) {
                 let dist = ((j as isize) - (center as isize)).unsigned_abs();
                 template[j] = (1.0 - (dist as f32) / (half as f32).max(1.0)).max(0.0);
@@ -301,7 +302,11 @@ impl WakeWordDetector {
         let frame_length = DEFAULT_FRAME_LENGTH;
         let engine: Box<dyn WakeWordEngine> = match config.provider.as_str() {
             "stub" => Box::new(StubEngine::new(frame_length, 1000, 1)),
-            _ => Box::new(TemplateEngine::new(phrase.clone(), config.sensitivity, frame_length)),
+            _ => Box::new(TemplateEngine::new(
+                phrase.clone(),
+                config.sensitivity,
+                frame_length,
+            )),
         };
         Self::new(config, engine)
     }
@@ -470,7 +475,7 @@ impl WakeWordService {
             ));
         }
 
-        let mut cfg = config.unwrap_or_else(WakeWordConfig::default);
+        let mut cfg = config.unwrap_or_default();
         cfg.clamp();
 
         let lock = if client_capture {
@@ -486,7 +491,11 @@ impl WakeWordService {
             started: true,
             phrase: detector.phrase().to_string(),
             provider: detector.provider().to_string(),
-            capture: if client_capture { "client".to_string() } else { "local".to_string() },
+            capture: if client_capture {
+                "client".to_string()
+            } else {
+                "local".to_string()
+            },
             sample_rate: detector.sample_rate(),
             frame_length: detector.frame_length(),
         };
@@ -559,11 +568,19 @@ impl WakeWordService {
             available: true,
             hint: None,
             enabled: self.config.enabled,
-            audio_silent: self.detector.as_ref().map(|d| d.is_silent()).unwrap_or(false),
+            audio_silent: self
+                .detector
+                .as_ref()
+                .map(|d| d.is_silent())
+                .unwrap_or(false),
             capture: "client".to_string(),
             local_input_available: false,
             sample_rate: TARGET_SAMPLE_RATE,
-            frame_length: self.detector.as_ref().map(|d| d.frame_length()).unwrap_or(DEFAULT_FRAME_LENGTH),
+            frame_length: self
+                .detector
+                .as_ref()
+                .map(|d| d.frame_length())
+                .unwrap_or(DEFAULT_FRAME_LENGTH),
         }
     }
 
@@ -660,7 +677,9 @@ pub struct MachineLock {
 impl MachineLock {
     pub fn acquire(path: Option<&Path>) -> AppResult<Self> {
         let path = path.map(PathBuf::from).unwrap_or_else(|| {
-            crate::process::runtime::runtime_root().join("runtime").join("wake-word.lock")
+            crate::process::runtime::runtime_root()
+                .join("runtime")
+                .join("wake-word.lock")
         });
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -677,7 +696,7 @@ impl MachineLock {
         let mut f = file.try_clone()?;
         f.set_len(0)?;
         f.seek(SeekFrom::Start(0))?;
-        write!(f, "{pid}\n")?;
+        writeln!(f, "{pid}")?;
         f.flush()?;
         Ok(Self { file })
     }
@@ -765,7 +784,10 @@ mod tests {
         let mut samples = loud_frame();
         samples.extend_from_slice(&loud_frame()[..loud_frame().len() / 2]);
         let event = detector.feed(&samples);
-        assert!(event.is_some(), "stub engine should fire after enough loud samples");
+        assert!(
+            event.is_some(),
+            "stub engine should fire after enough loud samples"
+        );
         assert_eq!(event.unwrap().phrase, "stub phrase");
     }
 
@@ -871,7 +893,9 @@ mod tests {
         let mut cfg = WakeWordConfig::default();
         cfg.provider = "stub".to_string();
         cfg.confirmation_frames = 1;
-        service.start("gui".to_string(), true, Some(cfg), Some(path)).unwrap();
+        service
+            .start("gui".to_string(), true, Some(cfg), Some(path))
+            .unwrap();
 
         let mut bytes = Vec::new();
         for s in &loud_frame() {
@@ -888,9 +912,7 @@ mod tests {
     fn service_pause_resume() {
         let mut service = WakeWordService::new();
         assert!(!service.pause().paused);
-        service
-            .start("gui".to_string(), true, None, None)
-            .unwrap();
+        service.start("gui".to_string(), true, None, None).unwrap();
         assert!(service.pause().paused);
         assert!(!service.pause().paused);
         assert!(service.resume().resumed);

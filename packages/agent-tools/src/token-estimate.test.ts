@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countTokens, estimateToolTokens, estimateToolSetTokensSync } from "./token-estimate.js";
+import { countTokens, estimateToolTokens, estimateToolSetTokensSync, estimateToolSetTokens } from "./token-estimate.js";
 import type { ToolDefinition } from "./types.js";
 
 describe("token estimation", () => {
@@ -34,5 +34,28 @@ describe("token estimation", () => {
     ];
     const n = estimateToolSetTokensSync(defs);
     expect(n).toBeGreaterThan(0);
+  });
+});
+
+describe("estimateToolSetTokens", () => {
+  const def = (name: string): ToolDefinition => ({
+    type: "function",
+    function: {
+      name,
+      description: `Does ${name}.`,
+      parameters: { type: "object", properties: { [name]: { type: "string" } } },
+    },
+  });
+
+  it("sums per-tool estimates", async () => {
+    const defs = [def("alpha"), def("beta")];
+    const total = await estimateToolSetTokens(defs);
+    const expected = (await estimateToolTokens(defs[0])) + (await estimateToolTokens(defs[1]));
+    expect(total).toBe(expected);
+    expect(total).toBeGreaterThan(0);
+  });
+
+  it("returns 0 for an empty tool set", async () => {
+    expect(await estimateToolSetTokens([])).toBe(0);
   });
 });

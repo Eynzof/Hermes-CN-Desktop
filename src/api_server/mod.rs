@@ -41,11 +41,18 @@ pub async fn start_api_server(app: tauri::AppHandle) -> Result<ApiServerHandle, 
         .map_err(|e| AppError::Internal(format!("api server port: {e}")))?
         .port();
     let cancel = Arc::new(Notify::new());
-    let handle = ApiServerHandle { port, cancel: cancel.clone() };
+    let handle = ApiServerHandle {
+        port,
+        cancel: cancel.clone(),
+    };
 
     {
         let state = app.state::<AppState>();
-        state.inner.lock().map_err(|e| AppError::Internal(e.to_string()))?.api_server = Some(handle.clone());
+        state
+            .inner
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .api_server = Some(handle.clone());
     }
 
     let server_app = app.clone();
@@ -82,7 +89,11 @@ async fn serve(
     }
     {
         let state = app.state::<AppState>();
-        state.inner.lock().map_err(|e| AppError::Internal(e.to_string()))?.api_server = None;
+        state
+            .inner
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .api_server = None;
     }
     Ok(())
 }
@@ -96,7 +107,12 @@ async fn handle_request(
 
     let bytes = match read_body(req).await {
         Ok(b) => b,
-        Err(e) => return Ok(json_response(StatusCode::PAYLOAD_TOO_LARGE, json!({"error": e}))),
+        Err(e) => {
+            return Ok(json_response(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                json!({"error": e}),
+            ))
+        }
     };
     let body_json = serde_json::from_slice::<serde_json::Value>(&bytes).unwrap_or_default();
 
@@ -131,20 +147,35 @@ fn route(method: Method, path: String, body: serde_json::Value) -> (StatusCode, 
         ("GET", "/v1/skills") => (StatusCode::OK, json!({"skills": []})),
         ("GET", "/v1/toolsets") => (StatusCode::OK, json!({"toolsets": []})),
         ("POST", "/v1/chat/completions") => {
-            let model = body.get("model").and_then(|v| v.as_str()).unwrap_or("unknown");
-            (StatusCode::OK, json!({
-                "id": format!("chatcmpl-{now}"),
-                "object": "chat.completion",
-                "created": now,
-                "model": model,
-                "choices": [{"index":0,"message":{"role":"assistant","content":"v1 stub"},"finish_reason":"stop"}]
-            }))
+            let model = body
+                .get("model")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            (
+                StatusCode::OK,
+                json!({
+                    "id": format!("chatcmpl-{now}"),
+                    "object": "chat.completion",
+                    "created": now,
+                    "model": model,
+                    "choices": [{"index":0,"message":{"role":"assistant","content":"v1 stub"},"finish_reason":"stop"}]
+                }),
+            )
         }
-        ("POST", "/v1/responses") => (StatusCode::OK, json!({"id": format!("resp-{now}"), "output": []})),
-        ("POST", "/v1/runs") => (StatusCode::OK, json!({"run_id": format!("run-{now}"), "status": "queued"})),
+        ("POST", "/v1/responses") => (
+            StatusCode::OK,
+            json!({"id": format!("resp-{now}"), "output": []}),
+        ),
+        ("POST", "/v1/runs") => (
+            StatusCode::OK,
+            json!({"run_id": format!("run-{now}"), "status": "queued"}),
+        ),
         ("GET", "/v1/sessions") => (StatusCode::OK, json!({"sessions": []})),
         ("GET", "/v1/jobs") => (StatusCode::OK, json!({"jobs": []})),
-        _ => (StatusCode::NOT_FOUND, json!({"error": "not_found", "path": path})),
+        _ => (
+            StatusCode::NOT_FOUND,
+            json!({"error": "not_found", "path": path}),
+        ),
     }
 }
 

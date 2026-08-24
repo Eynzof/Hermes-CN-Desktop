@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildManualCompressReport,
   compressSessionContext,
   estimateMessageTokens,
   estimateMessagesTokens,
@@ -8,7 +9,7 @@ import {
   resolveCompactionConfig,
   shouldCompress,
 } from "./compress.js";
-import type { CompactionConfig, CompactionMessage, CompactionSummarizer } from "./types.js";
+import type { CompactionConfig, CompactionMessage, CompactionResult, CompactionSummarizer } from "./types.js";
 
 function makeMessages(count: number): CompactionMessage[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -213,5 +214,77 @@ describe("compressSessionContext deterministic fallback", () => {
     expect(parseCompressArgs("here 3")).toEqual({ keepLast: 3 });
     expect(parseCompressArgs("here 3 --preview")).toEqual({ keepLast: 3, preview: true, dryRun: true });
     expect(parseCompressArgs("")).toEqual({});
+  });
+});
+
+describe("buildManualCompressReport", () => {
+  function result(partial: Partial<CompactionResult> = {}): CompactionResult {
+    return {
+      status: "noop",
+      messages: [],
+      removed: 0,
+      beforeMessages: 10,
+      afterMessages: 10,
+      beforeTokens: 100,
+      afterTokens: 100,
+      compactionId: "c-1",
+      ...partial,
+    };
+  }
+
+  it("reports no compression needed for noop results", () => {
+    const report = buildManualCompressReport(result());
+    expect(report.status).toBe("noop");
+    expect(report.headline).toBe("No compression needed.");
+    expect(report.tokenLine).toBe("100 → 100 tokens");
+    expect(report.note).toBeUndefined();
+  });
+
+  it("reports compressed message counts for fallback results", () => {
+    const report = buildManualCompressReport(
+      result({
+        status: "fallback",
+        removed: 5,
+        beforeMessages: 12,
+        afterMessages: 7,
+        beforeTokens: 300,
+        afterTokens: 40,
+        fallbackUsed: true,
+      }),
+    );
+    expect(report.headline).toBe("Compressed 5 messages");
+    expect(report.tokenLine).toBe("300 → 40 tokens");
+    expect(report.note).toBe("Used deterministic fallback (truncation).");
+    expect(report.fallbackUsed).toBe(true);
+  });
+
+  it("omits the fallback note when a summarizer was used", () => {
+    const report = buildManualCompressReport(
+      result({
+        status: "compacted",
+        removed: 3,
+        beforeMessages: 10,
+        afterMessages: 7,
+        beforeTokens: 200,
+        afterTokens: 30,
+        fallbackUsed: false,
+      }),
+    );
+    expect(report.headline).toBe("Compressed 3 messages");
+    expect(report.note).toBeUndefined();
+    expect(report.fallbackUsed).toBe(false);
+  });
+
+  it("reports aborted results as compressed counts", () => {
+    const report = buildManualCompressReport(
+      result({
+        status: "aborted",
+        removed: 0,
+        beforeTokens: 120,
+        afterTokens: 120,
+      }),
+    );
+    expect(report.headline).toBe("Compressed 0 messages");
+    expect(report.tokenLine).toBe("120 → 120 tokens");
   });
 });

@@ -1,11 +1,9 @@
 use tauri::State;
 
 use crate::error::AppResult;
+use crate::schema::state_db::{StateDbFtsSearchRequest, StateDbQueryRequest, StateDbSearchMeta};
 use crate::state::AppState;
-use crate::state_db::{
-    exec, fts_search, query, search_meta, StateDbFtsSearchRequest, StateDbQueryRequest,
-    StateDbSearchMeta,
-};
+use crate::state_db::{exec, fts_search, query, search_meta};
 
 fn hermes_home(state: &State<'_, AppState>) -> AppResult<String> {
     let inner = state.inner.lock()?;

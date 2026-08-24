@@ -50,7 +50,9 @@ fn home_dir() -> Option<PathBuf> {
 /// Reject paths containing NUL bytes (Windows / POSIX both treat NUL as invalid).
 fn reject_nul(path: &str) -> AppResult<()> {
     if path.contains('\0') {
-        return Err(AppError::InvalidRequest("Path contains NUL byte".to_string()));
+        return Err(AppError::InvalidRequest(
+            "Path contains NUL byte".to_string(),
+        ));
     }
     Ok(())
 }
@@ -187,16 +189,14 @@ fn list_dir_entries(dir: &Path) -> AppResult<Vec<FsEntry>> {
         });
     }
 
-    entries.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a
-                .name
-                .to_lowercase()
-                .cmp(&b.name.to_lowercase())
-                .then_with(|| a.name.cmp(&b.name)),
-        }
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a
+            .name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.name.cmp(&b.name)),
     });
     Ok(entries)
 }

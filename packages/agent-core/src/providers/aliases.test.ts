@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AmbiguousAliasError,
   BUILTIN_MODEL_ALIASES,
+  canonicalAliasForm,
   loadDirectAliases,
   resolveAlias,
 } from "./aliases.js";
@@ -115,5 +117,41 @@ describe("alias resolution", () => {
       expect(BUILTIN_MODEL_ALIASES[key].provider).toBeTruthy();
       expect(BUILTIN_MODEL_ALIASES[key].model).toBeTruthy();
     }
+  });
+});
+
+describe("canonicalAliasForm", () => {
+  it("formats provider/model pairs", () => {
+    expect(canonicalAliasForm({ provider: "openai", model: "gpt-4o" })).toBe("openai/gpt-4o");
+  });
+
+  it("includes an empty provider when none is set", () => {
+    // `provider` is typed as required; when a caller omits it the template
+    // literal coerces undefined — assert the actual runtime behavior.
+    expect(
+      canonicalAliasForm({ model: "custom" } as unknown as Parameters<typeof canonicalAliasForm>[0]),
+    ).toBe("undefined/custom");
+    expect(canonicalAliasForm({ provider: "", model: "custom" })).toBe("/custom");
+  });
+});
+
+describe("AmbiguousAliasError", () => {
+  it("exposes alias, matches, and an informative message", () => {
+    const error = new AmbiguousAliasError("sonnet", [
+      "anthropic/claude-sonnet",
+      "openai/gpt-4o",
+    ]);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("AmbiguousAliasError");
+    expect(error.alias).toBe("sonnet");
+    expect(error.matches).toEqual(["anthropic/claude-sonnet", "openai/gpt-4o"]);
+    expect(error.message).toContain("sonnet");
+    expect(error.message).toContain("anthropic/claude-sonnet");
+  });
+
+  it("handles empty matches", () => {
+    const error = new AmbiguousAliasError("x", []);
+    expect(error.matches).toEqual([]);
+    expect(error.message).toBe('Alias "x" is ambiguous: ');
   });
 });

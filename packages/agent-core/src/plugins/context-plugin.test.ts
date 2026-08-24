@@ -6,9 +6,12 @@ import {
   getActiveContextEngine,
   getContextEngine,
   listContextEngines,
+  manifestToContextEngine,
   registerContextEngine,
   setActiveContextEngine,
+  unregisterContextEngine,
 } from "./context-plugin.js";
+import type { PluginManifest } from "./types.js";
 
 describe("context engine plugin registry", () => {
   beforeEach(() => {
@@ -71,6 +74,70 @@ describe("context engine plugin registry", () => {
       compress: async () => undefined,
     });
     clearContextEngines();
+    expect(getActiveContextEngine()).toBeUndefined();
+  });
+});
+
+describe("manifestToContextEngine", () => {
+  it("builds an engine from a manifest and compress implementation", async () => {
+    const manifest: PluginManifest = {
+      name: "rolling-summary",
+      title: "Rolling Summary",
+      description: "Summarizes context",
+      version: "1.0.0",
+      kind: "context-engine",
+    };
+    const compress = async (messages: Message[]) => ({
+      messages,
+      summary: "done",
+      tokensSaved: 7,
+    });
+    const engine = manifestToContextEngine(manifest, compress);
+    expect(engine.slug).toBe("rolling-summary");
+    expect(engine.name).toBe("Rolling Summary");
+    expect(engine.description).toBe("Summarizes context");
+    await expect(engine.compress([])).resolves.toEqual({
+      messages: [],
+      summary: "done",
+      tokensSaved: 7,
+    });
+  });
+
+  it("falls back to the manifest name as display name", () => {
+    const manifest: PluginManifest = { name: "plain", version: "1.0.0", kind: "context-engine" };
+    const engine = manifestToContextEngine(manifest, async () => undefined);
+    expect(engine.slug).toBe("plain");
+    expect(engine.name).toBe("plain");
+    expect(engine.description).toBeUndefined();
+  });
+});
+
+describe("unregisterContextEngine", () => {
+  afterEach(() => {
+    clearContextEngines();
+  });
+
+  it("returns false for unknown slugs", () => {
+    expect(unregisterContextEngine("missing")).toBe(false);
+  });
+
+  it("removes a registered engine", () => {
+    registerContextEngine({ slug: "tmp", name: "Tmp", compress: async () => undefined });
+    expect(unregisterContextEngine("tmp")).toBe(true);
+    expect(getContextEngine("tmp")).toBeUndefined();
+  });
+
+  it("reassigns the active engine when the active one is removed", () => {
+    registerContextEngine({ slug: "a", name: "A", compress: async () => undefined });
+    registerContextEngine({ slug: "b", name: "B", compress: async () => undefined });
+    expect(getActiveContextEngine()).toBe("a");
+    expect(unregisterContextEngine("a")).toBe(true);
+    expect(getActiveContextEngine()).toBe("b");
+  });
+
+  it("clears the active engine when the last one is removed", () => {
+    registerContextEngine({ slug: "only", name: "Only", compress: async () => undefined });
+    expect(unregisterContextEngine("only")).toBe(true);
     expect(getActiveContextEngine()).toBeUndefined();
   });
 });

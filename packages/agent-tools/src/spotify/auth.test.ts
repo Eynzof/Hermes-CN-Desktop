@@ -9,7 +9,11 @@ import {
   quarantineTokenState,
   SpotifyAuthManager,
   SpotifyAuthRequiredError,
+  DEFAULT_SPOTIFY_SCOPE,
+  getCredentialProvider,
+  setCredentialProvider,
 } from "./auth.js";
+import type { SpotifyCredentialProvider } from "./auth.js";
 import type { SpotifyTokenResponse, SpotifyTokenState } from "@hermes/protocol";
 
 // Type sanity check: ensure the protocol schema infers a usable type.
@@ -218,6 +222,43 @@ describe("SpotifyAuthManager", () => {
     );
     expect(state.access_token).toBe("at");
     expect(state.refresh_token).toBe("rt");
+  });
+});
+
+describe("credential provider registry", () => {
+  it("DEFAULT_SPOTIFY_SCOPE joins all required scopes", () => {
+    expect(DEFAULT_SPOTIFY_SCOPE.split(" ")).toHaveLength(10);
+    expect(DEFAULT_SPOTIFY_SCOPE).toContain("user-modify-playback-state");
+    expect(DEFAULT_SPOTIFY_SCOPE).toContain("user-read-playback-state");
+    expect(DEFAULT_SPOTIFY_SCOPE).toContain("user-read-currently-playing");
+    expect(DEFAULT_SPOTIFY_SCOPE).toContain("playlist-modify-private");
+  });
+
+  it("getCredentialProvider returns null before any provider is set", () => {
+    expect(getCredentialProvider()).toBeNull();
+  });
+
+  it("setCredentialProvider stores the provider and getCredentialProvider returns it", () => {
+    const provider: SpotifyCredentialProvider = {
+      getState: async () => null,
+      saveState: async () => {},
+    };
+    setCredentialProvider(provider);
+    expect(getCredentialProvider()).toBe(provider);
+  });
+
+  it("setCredentialProvider replaces an existing provider", () => {
+    const first: SpotifyCredentialProvider = {
+      getState: async () => null,
+      saveState: async () => {},
+    };
+    const second: SpotifyCredentialProvider = {
+      getState: async () => null,
+      saveState: async () => {},
+    };
+    setCredentialProvider(first);
+    setCredentialProvider(second);
+    expect(getCredentialProvider()).toBe(second);
   });
 });
 

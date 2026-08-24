@@ -1,0 +1,10 @@
+{
+  "sessionId": "s-1",
+  "cwd": "/workspace",
+  "model": "gpt-4o",
+  "mode": "default",
+  "history": [{ "type": "text" }],
+  "queuedPrompts": ["p1"],
+  "isRunning": true,
+  "currentPromptText": "hello"
+}

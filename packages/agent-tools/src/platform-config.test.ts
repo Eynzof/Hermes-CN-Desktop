@@ -6,6 +6,7 @@ import {
   disableToolset,
   upsertCustomToolset,
   deleteCustomToolset,
+  PLATFORMS,
 } from "./platform-config.js";
 import type { ToolConfigLike } from "./types.js";
 
@@ -95,5 +96,15 @@ describe("custom toolsets", () => {
     });
     const next = deleteCustomToolset(cfg, "ops");
     expect(next.custom_toolsets?.ops).toBeUndefined();
+  });
+});
+
+describe("PLATFORMS", () => {
+  it("lists the seven supported platforms in order", () => {
+    expect(PLATFORMS).toEqual(["cli", "cron", "api-server", "telegram", "discord", "desktop", "webhook"]);
+  });
+
+  it("contains no duplicate platforms", () => {
+    expect(new Set(PLATFORMS).size).toBe(PLATFORMS.length);
   });
 });

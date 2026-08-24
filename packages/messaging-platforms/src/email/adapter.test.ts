@@ -36,6 +36,18 @@ describe("EmailAdapter", () => {
     const adapter = new EmailAdapter(config);
     expect(adapter.verifyWebhookSecret("body", "shhh")).toBe(true);
     expect(adapter.verifyWebhookSecret("body", "wrong")).toBe(false);
+    // Same-length and length-mismatch rejections must all go through the
+    // constant-time compare (no early-exit on length differences).
+    expect(adapter.verifyWebhookSecret("body", "shhi")).toBe(false);
+    expect(adapter.verifyWebhookSecret("body", "wrong-secret-value")).toBe(false);
+    expect(adapter.verifyWebhookSecret("body", "sh")).toBe(false);
+  });
+
+  it("short-circuits when the webhook secret is unset", () => {
+    const noSecret = emailConfigSchema.parse({ enabled: true });
+    const adapter = new EmailAdapter(noSecret);
+    expect(adapter.verifyWebhookSecret("body", "anything")).toBe(true);
+    expect(adapter.verifyWebhookSecret("body", undefined)).toBe(true);
   });
 
   it("skips connect when disabled", async () => {

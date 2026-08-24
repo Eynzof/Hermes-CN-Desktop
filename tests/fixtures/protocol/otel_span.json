@@ -1,0 +1,11 @@
+{
+  "traceId": "t1",
+  "spanId": "s1",
+  "parentSpanId": "p1",
+  "name": "op",
+  "startTime": "2024-01-01T00:00:00Z",
+  "endTime": "2024-01-01T00:00:01Z",
+  "events": [
+    { "name": "e", "timestamp": "2024-01-01T00:00:00Z", "attributes": { "k": "v" } }
+  ]
+}

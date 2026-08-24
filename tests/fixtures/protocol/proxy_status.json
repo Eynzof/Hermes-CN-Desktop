@@ -1,0 +1,6 @@
+{
+  "running": true,
+  "port": 8645,
+  "provider": "nous",
+  "authenticated": true
+}

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 25,
+  "ftsStorageVersion": 1,
+  "ftsRebuildHighWater": 100,
+  "ftsRebuildProgress": 50,
+  "ftsStale": false,
+  "ftsCjkStale": true,
+  "rowCountMessages": 10,
+  "rowCountSessions": 2
+}

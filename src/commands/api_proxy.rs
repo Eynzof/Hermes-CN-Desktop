@@ -8,7 +8,6 @@
 // to the hermes dashboard with auth header injection.
 
 use std::collections::HashMap;
-use std::net::IpAddr;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -156,117 +155,8 @@ fn ensure_upload_decoded_size(decoded_len: usize) -> Result<(), AppError> {
     Ok(())
 }
 
-pub(crate) fn is_blocked_external_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            let octets = v4.octets();
-            v4.is_private()
-                || v4.is_loopback()
-                || v4.is_link_local()
-                || v4.is_broadcast()
-                || v4.is_unspecified()
-                || octets[0] == 0
-                || (octets[0] == 100 && (64..=127).contains(&octets[1]))
-        }
-        IpAddr::V6(v6) => {
-            let first = v6.segments()[0];
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || (first & 0xfe00) == 0xfc00
-                || (first & 0xffc0) == 0xfe80
-                || v6
-                    .to_ipv4_mapped()
-                    .is_some_and(|v4| is_blocked_external_ip(IpAddr::V4(v4)))
-        }
-    }
-}
-
-pub(crate) fn is_allowed_local_external_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => v4.is_loopback() || v4.is_unspecified(),
-        IpAddr::V6(v6) => {
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || v6
-                    .to_ipv4_mapped()
-                    .is_some_and(|v4| v4.is_loopback() || v4.is_unspecified())
-        }
-    }
-}
-
-pub(crate) fn is_allowed_local_external_domain(host: &str) -> bool {
-    let lower_host = host.trim_end_matches('.').to_ascii_lowercase();
-    lower_host == "localhost" || lower_host.ends_with(".localhost")
-}
-
-pub(crate) fn is_allowed_local_external_url(url: &url::Url) -> bool {
-    match url.host() {
-        Some(url::Host::Domain(host)) => is_allowed_local_external_domain(host),
-        Some(url::Host::Ipv4(ip)) => is_allowed_local_external_ip(IpAddr::V4(ip)),
-        Some(url::Host::Ipv6(ip)) => is_allowed_local_external_ip(IpAddr::V6(ip)),
-        None => false,
-    }
-}
-
-pub(crate) fn validate_external_url_shape(raw: &str) -> Result<url::Url, AppError> {
-    let url = url::Url::parse(raw)?;
-    let is_local_url = is_allowed_local_external_url(&url);
-    if url.scheme() != "https" && !(url.scheme() == "http" && is_local_url) {
-        return Err(AppError::InvalidRequest(
-            "external_request only allows https URLs; http is only allowed for local URLs"
-                .to_string(),
-        ));
-    }
-
-    match url.host().ok_or_else(|| {
-        AppError::InvalidRequest("external_request URL must include a host".to_string())
-    })? {
-        url::Host::Domain(_) => {}
-        url::Host::Ipv4(ip) => {
-            let ip = IpAddr::V4(ip);
-            if !is_allowed_local_external_ip(ip) && is_blocked_external_ip(ip) {
-                return Err(AppError::InvalidRequest(
-                    "external_request refuses private or local IP targets".to_string(),
-                ));
-            }
-        }
-        url::Host::Ipv6(ip) => {
-            let ip = IpAddr::V6(ip);
-            if !is_allowed_local_external_ip(ip) && is_blocked_external_ip(ip) {
-                return Err(AppError::InvalidRequest(
-                    "external_request refuses private or local IP targets".to_string(),
-                ));
-            }
-        }
-    }
-
-    Ok(url)
-}
-
-pub(crate) async fn validate_external_url(raw: &str) -> Result<url::Url, AppError> {
-    let url = validate_external_url_shape(raw)?;
-
-    if let Some(url::Host::Domain(host)) = url.host() {
-        if is_allowed_local_external_domain(host) {
-            return Ok(url);
-        }
-        let port = url.port_or_known_default().ok_or_else(|| {
-            AppError::InvalidRequest("external_request URL must include a port".to_string())
-        })?;
-        let resolved = tokio::net::lookup_host((host, port)).await.map_err(|e| {
-            AppError::InvalidRequest(format!("external_request DNS lookup failed: {}", e))
-        })?;
-        for addr in resolved {
-            if is_blocked_external_ip(addr.ip()) {
-                return Err(AppError::InvalidRequest(
-                    "external_request refuses hosts resolving to private or local IPs".to_string(),
-                ));
-            }
-        }
-    }
-
-    Ok(url)
-}
+#[allow(unused_imports)]
+pub(crate) use crate::security::url::{validate_external_url, validate_external_url_shape};
 
 #[cfg(test)]
 mod tests {

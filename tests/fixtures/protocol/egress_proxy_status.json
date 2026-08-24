@@ -1,0 +1,9 @@
+{
+  "running": true,
+  "port": 8650,
+  "rules": [
+    { "id": "r1", "pattern": "https://example.com/*", "action": "allow" },
+    { "id": "r2", "pattern": "https://blocked.com/*", "action": "deny" },
+    { "id": "r3", "pattern": "https://old.com/*", "action": "rewrite", "target": "https://new.com" }
+  ]
+}

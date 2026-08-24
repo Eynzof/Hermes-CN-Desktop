@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyCacheControl,
   buildCacheKey,
   buildPromptCachePlan,
   createStablePrefixRegistry,
@@ -8,7 +9,7 @@ import {
   planAndApplyCacheControl,
   stripCacheControl,
 } from "./prompt-cache.js";
-import type { CompactionMessage } from "./types.js";
+import type { CacheControlPlan, CompactionMessage } from "./types.js";
 
 function makeMessages(count: number): CompactionMessage[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -177,5 +178,82 @@ describe("createStablePrefixRegistry", () => {
     registry.register("X");
     registry.clear();
     expect(registry.find([{ role: "system", content: "X" }] as CompactionMessage[])).toBeUndefined();
+  });
+});
+
+describe("applyCacheControl", () => {
+  const plan: CacheControlPlan = {
+    messageBreakpoints: [0, 3],
+    toolBreakpoints: [1],
+    breakpointCount: 3,
+    ttlMs: 60 * 60 * 1000,
+  };
+
+  function makeTools() {
+    return [
+      {
+        name: "t1",
+        description: "Tool 1",
+        parameters: { type: "object", properties: {} },
+        execute: async () => ({ content: "" }),
+      },
+      {
+        name: "t2",
+        description: "Tool 2",
+        parameters: { type: "object", properties: {} },
+        execute: async () => ({ content: "" }),
+      },
+    ];
+  }
+
+  it("returns copies without markers for generic providers even with a plan", () => {
+    const messages = makeMessages(4);
+    const tools = makeTools();
+    const { messages: out, tools: outTools } = applyCacheControl(messages, tools, plan, {
+      provider: "generic",
+    });
+    expect(out).toEqual(messages);
+    expect(outTools).toEqual(tools);
+    expect(out).not.toBe(messages);
+    expect(outTools).not.toBe(tools);
+    expect((out[0] as CompactionMessage).cache_control).toBeUndefined();
+  });
+
+  it("applies message breakpoints for anthropic providers", () => {
+    const messages = makeMessages(4);
+    const { messages: out } = applyCacheControl(messages, [], plan, { provider: "anthropic" });
+    expect((out[0] as CompactionMessage).cache_control).toBeDefined();
+    expect((out[3] as CompactionMessage).cache_control).toBeDefined();
+    expect((out[1] as CompactionMessage).cache_control).toBeUndefined();
+    expect((out[2] as CompactionMessage).cache_control).toBeUndefined();
+  });
+
+  it("applies tool breakpoints and leaves other tools untouched", () => {
+    const tools = makeTools();
+    const { tools: out } = applyCacheControl([], tools, plan, { provider: "anthropic" });
+    expect((out[1] as unknown as { cache_control?: unknown }).cache_control).toBeDefined();
+    expect((out[0] as unknown as { cache_control?: unknown }).cache_control).toBeUndefined();
+  });
+
+  it("does not mutate the original messages", () => {
+    const messages = makeMessages(4);
+    const original = messages.map((m) => ({ ...m }));
+    applyCacheControl(messages, [], plan, { provider: "anthropic" });
+    expect(messages).toEqual(original);
+  });
+
+  it("returns copies for anthropic when the plan is empty", () => {
+    const emptyPlan: CacheControlPlan = {
+      messageBreakpoints: [],
+      toolBreakpoints: [],
+      breakpointCount: 0,
+      ttlMs: 1000,
+    };
+    const { messages: out, tools: outTools } = applyCacheControl(makeMessages(2), makeTools(), emptyPlan, {
+      provider: "anthropic",
+    });
+    expect(out).toHaveLength(2);
+    expect(outTools).toHaveLength(2);
+    expect((out[0] as CompactionMessage).cache_control).toBeUndefined();
   });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { LLM, LLMChatParams, Message, TokenUsage } from "../types.js";
-import { MoAOrchestrator } from "./orchestrator.js";
+import {
+  DEFAULT_AGGREGATOR_SYSTEM_PROMPT,
+  DEFAULT_COUNCIL_CHAIR_PROMPT,
+  DEFAULT_REFERENCE_SYSTEM_PROMPT,
+  MoAOrchestrator,
+} from "./orchestrator.js";
 import type { MoaConfig, MoaSlot } from "./types.js";
 
 const FAKE_USAGE: TokenUsage = { input: 10, output: 5, total: 15 };
@@ -212,5 +217,106 @@ describe("MoAOrchestrator", () => {
 
     expect(seenMessages.some((m) => m.role === "user" && m.content === "earlier")).toBe(true);
     expect(seenMessages.some((m) => m.role === "user" && m.content === "now?")).toBe(true);
+  });
+});
+
+describe("MoA default prompts", () => {
+  it("exposes non-empty default prompt constants", () => {
+    expect(DEFAULT_REFERENCE_SYSTEM_PROMPT.length).toBeGreaterThan(0);
+    expect(DEFAULT_AGGREGATOR_SYSTEM_PROMPT.length).toBeGreaterThan(0);
+    expect(DEFAULT_COUNCIL_CHAIR_PROMPT.length).toBeGreaterThan(0);
+    expect(DEFAULT_REFERENCE_SYSTEM_PROMPT).toContain("independent recommendation");
+    expect(DEFAULT_AGGREGATOR_SYSTEM_PROMPT).toContain("aggregator");
+    expect(DEFAULT_COUNCIL_CHAIR_PROMPT).toContain("council");
+  });
+
+  it("uses the default reference system prompt when no override is provided", async () => {
+    const config: MoaConfig = {
+      defaultPreset: "default",
+      presets: {
+        default: {
+          referenceModels: [slot("openai", "gpt-4o-mini")],
+          aggregator: slot("openai", "gpt-4o"),
+          enabled: true,
+        },
+      },
+    };
+    const seen: Message[] = [];
+    const orchestrator = new MoAOrchestrator({
+      config,
+      createReferenceLlm: () => ({
+        modelName: "fake",
+        async chat(params: LLMChatParams) {
+          seen.push(...params.messages);
+          return { text: "ref", toolCalls: [], usage: FAKE_USAGE };
+        },
+      }),
+      createAggregatorLlm: () => ({
+        modelName: "fake-agg",
+        async chat() {
+          return { text: "agg", toolCalls: [], usage: FAKE_USAGE };
+        },
+      }),
+    });
+
+    await orchestrator.run({ input: "hello" });
+    expect(seen[0]?.role).toBe("system");
+    expect(seen[0]?.content).toBe(DEFAULT_REFERENCE_SYSTEM_PROMPT);
+  });
+
+  it("honors custom prompt overrides including the default constants", async () => {
+    const config: MoaConfig = {
+      defaultPreset: "default",
+      presets: {
+        default: {
+          referenceModels: [slot("openai", "gpt-4o-mini")],
+          aggregator: slot("openai", "gpt-4o"),
+          enabled: true,
+        },
+      },
+    };
+    const seen: Message[] = [];
+    const orchestrator = new MoAOrchestrator({
+      config,
+      referenceSystemPrompt: DEFAULT_REFERENCE_SYSTEM_PROMPT,
+      aggregatorSystemPrompt: DEFAULT_AGGREGATOR_SYSTEM_PROMPT,
+      createReferenceLlm: () => ({
+        modelName: "fake",
+        async chat(params: LLMChatParams) {
+          seen.push(...params.messages);
+          return { text: "ref", toolCalls: [], usage: FAKE_USAGE };
+        },
+      }),
+      createAggregatorLlm: () => ({
+        modelName: "fake-agg",
+        async chat() {
+          return { text: "agg", toolCalls: [], usage: FAKE_USAGE };
+        },
+      }),
+    });
+
+    await orchestrator.run({ input: "hello" });
+    expect(seen[0]?.content).toBe(DEFAULT_REFERENCE_SYSTEM_PROMPT);
+  });
+
+  it("accepts the council chair prompt as the aggregator override", async () => {
+    const config: MoaConfig = {
+      defaultPreset: "default",
+      presets: {
+        default: {
+          referenceModels: [slot("openai", "gpt-4o-mini")],
+          aggregator: slot("openai", "gpt-4o"),
+          enabled: true,
+        },
+      },
+    };
+    const orchestrator = new MoAOrchestrator({
+      config,
+      aggregatorSystemPrompt: DEFAULT_COUNCIL_CHAIR_PROMPT,
+      createReferenceLlm: () => makeFakeLlm("ref"),
+      createAggregatorLlm: () => makeFakeLlm("agg"),
+    });
+    const result = await orchestrator.run({ input: "hello", style: "council" });
+    expect(result.text).toContain("agg");
   });
 });

@@ -271,24 +271,25 @@ fn empty_response(status: u16) -> tauri::http::Response<Vec<u8>> {
 
 /// Build the response for a `hermes-media:` custom-protocol request.
 /// Mirrors `GET /api/media/file` Range streaming with extension + mime allowlists.
-fn build_hermes_media_response(_app: &tauri::AppHandle, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+fn build_hermes_media_response(
+    _app: &tauri::AppHandle,
+    request: &tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
     let uri = request.uri();
     let query = uri.query().unwrap_or("");
     let path = urlencoding::decode(query)
         .ok()
         .and_then(|decoded| {
-            decoded
-                .split('&')
-                .find_map(|pair| {
-                    let mut parts = pair.splitn(2, '=');
-                    let key = parts.next()?;
-                    let value = parts.next()?;
-                    if key == "path" {
-                        Some(value.to_string())
-                    } else {
-                        None
-                    }
-                })
+            decoded.split('&').find_map(|pair| {
+                let mut parts = pair.splitn(2, '=');
+                let key = parts.next()?;
+                let value = parts.next()?;
+                if key == "path" {
+                    Some(value.to_string())
+                } else {
+                    None
+                }
+            })
         })
         .unwrap_or_default();
 
@@ -301,7 +302,8 @@ fn build_hermes_media_response(_app: &tauri::AppHandle, request: &tauri::http::R
         Err(_) => return empty_response(404),
     };
 
-    let mime = commands::media_file::mime_from_path(&resolved).unwrap_or("application/octet-stream");
+    let mime =
+        commands::media_file::mime_from_path(&resolved).unwrap_or("application/octet-stream");
     if !commands::media_file::allowed_mime(mime) {
         return empty_response(415);
     }
@@ -1042,8 +1044,35 @@ commands::memory_files::read_memory_files,
             commands::messaging::get_messaging_status,
             commands::messaging::set_messaging_platform_config,
             commands::messaging::start_messaging_platform,
-            commands::messaging::stop_messaging_platform,
-        ])
+              commands::messaging::stop_messaging_platform,
+              commands::agent_core::agent_core_tokenize,
+              commands::agent_core::agent_core_compaction_plan,
+              commands::agent_core::agent_core_cache_plan,
+              commands::agent_core::agent_core_skills_parse_frontmatter,
+              commands::agent_core::agent_core_cron_next,
+              commands::agent_core::agent_core_memory_graph_build,
+              commands::tokenize::tokenize_count,
+              commands::tokenize::tokenize_estimate_tool_set,
+              commands::toolkit::toolsets_resolve,
+              commands::toolkit::platform_tools_resolve,
+              commands::dashboard_auth::dashboard_session_create,
+              commands::dashboard_auth::dashboard_session_verify,
+              commands::dashboard_auth::dashboard_session_revoke,
+              commands::dashboard_auth::dashboard_token_verify,
+              commands::gateway_core::gateway_session_route,
+              commands::gateway_core::gateway_session_ensure,
+              commands::gateway_core::gateway_session_touch,
+              commands::gateway_core::gateway_session_evict_idle,
+              commands::gateway_core::gateway_session_mark_busy,
+              commands::gateway_core::gateway_delivery_begin,
+              commands::gateway_core::gateway_delivery_ack,
+              commands::gateway_core::gateway_delivery_fail,
+              commands::gateway_core::gateway_delivery_redeliver_on_boot,
+              commands::gateway_core::gateway_delivery_dedupe_media,
+              commands::gateway_core::gateway_delivery_list_for_session,
+              commands::skill_lint::lint_skill_content,
+              commands::browser::browser_url_safety_check,
+          ])
         .on_window_event(move |window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. }
                 if window.label() == tray::MAIN_WINDOW_LABEL

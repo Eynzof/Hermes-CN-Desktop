@@ -1,13 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CompositePolicy,
   DangerLevelPolicy,
+  SmartPolicy,
   ToolNamePolicy,
   ToolsetPolicy,
   YoloPolicy,
   buildDefaultApprovalPolicy,
+  dangerRank,
 } from "./policy.js";
-import type { ApprovalRequest, ApprovalMode } from "./types.js";
+import type { ApprovalDecision, ApprovalPolicyResult, ApprovalRequest, ApprovalMode, DangerLevel } from "./types.js";
 
 function req(partial: Partial<ApprovalRequest> = {}): ApprovalRequest {
   return {
@@ -114,5 +116,63 @@ describe("buildDefaultApprovalPolicy", () => {
   it("asks for high-danger operations in manual mode", () => {
     const policy = buildDefaultApprovalPolicy({ mode: "manual" });
     expect(policy.evaluate(req({ dangerLevel: "high" }))?.decision).toBe("ask");
+  });
+});
+
+describe("dangerRank", () => {
+  it("maps every danger level to an increasing rank", () => {
+    expect(dangerRank("none")).toBe(0);
+    expect(dangerRank("low")).toBe(1);
+    expect(dangerRank("medium")).toBe(2);
+    expect(dangerRank("high")).toBe(3);
+    expect(dangerRank("critical")).toBe(4);
+  });
+
+  it("returns 0 for unknown levels", () => {
+    expect(dangerRank("unknown" as DangerLevel)).toBe(0);
+  });
+});
+
+describe("SmartPolicy", () => {
+  it("falls through when inactive without calling smartApprove", () => {
+    const smartApprove = vi.fn(async () => "approve" as ApprovalDecision);
+    const policy = new SmartPolicy(() => false, smartApprove);
+    expect(policy.evaluate(req())).toBeUndefined();
+    expect(smartApprove).not.toHaveBeenCalled();
+  });
+
+  it("returns undefined immediately and memoizes the async result per request id", async () => {
+    const smartApprove = vi.fn(async () => "approve" as ApprovalDecision);
+    const policy = new SmartPolicy(() => true, smartApprove);
+    expect(policy.evaluate(req())).toBeUndefined();
+    expect(policy.evaluate(req())).toBeUndefined();
+    expect(smartApprove).toHaveBeenCalledTimes(1);
+    const pending = (
+      policy as unknown as { pending: Map<string, Promise<ApprovalPolicyResult>> }
+    ).pending;
+    await expect(pending.get("r-1")).resolves.toEqual({
+      decision: "approve",
+      reason: "Smart approval",
+    });
+  });
+
+  it("uses ask as the default decision", async () => {
+    const policy = new SmartPolicy(() => true);
+    expect(policy.evaluate(req())).toBeUndefined();
+    const pending = (
+      policy as unknown as { pending: Map<string, Promise<ApprovalPolicyResult>> }
+    ).pending;
+    await expect(pending.get("r-1")).resolves.toEqual({
+      decision: "ask",
+      reason: "Smart approval",
+    });
+  });
+
+  it("treats different request ids independently", async () => {
+    const smartApprove = vi.fn(async () => "approve" as ApprovalDecision);
+    const policy = new SmartPolicy(() => true, smartApprove);
+    policy.evaluate(req({ id: "a" }));
+    policy.evaluate(req({ id: "b" }));
+    expect(smartApprove).toHaveBeenCalledTimes(2);
   });
 });

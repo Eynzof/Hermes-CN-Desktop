@@ -1,0 +1,15 @@
+{
+  "surface": "gui",
+  "clientCapture": true,
+  "persist": false,
+  "config": {
+    "enabled": false,
+    "surface": "auto",
+    "capture": "auto",
+    "provider": "sherpa",
+    "phrase": "hey hermes",
+    "sensitivity": 0.6,
+    "confirmationFrames": 3,
+    "startNewSession": true
+  }
+}

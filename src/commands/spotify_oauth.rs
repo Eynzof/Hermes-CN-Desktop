@@ -98,7 +98,10 @@ fn default_callback_path() -> String {
 }
 
 fn auth_json_path(state: &AppState) -> AppResult<PathBuf> {
-    let inner = state.inner.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let inner = state
+        .inner
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(PathBuf::from(&inner.hermes_home).join("auth.json"))
 }
 
@@ -136,7 +139,9 @@ fn write_auth_json(
 
 /// Read the persisted Spotify provider blob from `~/.hermes/auth.json`.
 #[tauri::command]
-pub async fn spotify_oauth_read(state: tauri::State<'_, AppState>) -> AppResult<SpotifyAuthJsonResult> {
+pub async fn spotify_oauth_read(
+    state: tauri::State<'_, AppState>,
+) -> AppResult<SpotifyAuthJsonResult> {
     let path = auth_json_path(&state)?;
     let root = read_auth_json(&path)?;
     let provider = root
@@ -265,7 +270,11 @@ async fn serve_one_callback(
             }
             let (stream, _) = match listener.accept().await {
                 Ok(s) => s,
-                Err(e) => return Err(AppError::Internal(format!("Spotify OAuth 回调连接失败: {e}"))),
+                Err(e) => {
+                    return Err(AppError::Internal(format!(
+                        "Spotify OAuth 回调连接失败: {e}"
+                    )))
+                }
             };
             let io = TokioIo::new(stream);
             let path = expected_path.to_string();
@@ -307,7 +316,10 @@ async fn handle_callback(
         let _ = sender.send(Err(AppError::InvalidRequest(
             "Spotify OAuth callback expected GET".to_string(),
         )));
-        return Ok(callback_html_response(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"));
+        return Ok(callback_html_response(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "Method not allowed",
+        ));
     }
 
     let path = request.uri().path();
@@ -430,7 +442,10 @@ mod tests {
         let path = dir.path().join("auth.json");
 
         let mut root = serde_json::Map::new();
-        root.insert("version".to_string(), serde_json::Value::String("1".to_string()));
+        root.insert(
+            "version".to_string(),
+            serde_json::Value::String("1".to_string()),
+        );
 
         let provider = SpotifyProviderState {
             client_id: "client-1".to_string(),
@@ -454,7 +469,10 @@ mod tests {
             .entry("providers")
             .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
         if let serde_json::Value::Object(map) = providers {
-            map.insert("spotify".to_string(), serde_json::to_value(&provider).unwrap());
+            map.insert(
+                "spotify".to_string(),
+                serde_json::to_value(&provider).unwrap(),
+            );
         }
         write_auth_json(&path, &root).unwrap();
 

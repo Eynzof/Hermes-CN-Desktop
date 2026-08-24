@@ -15,7 +15,6 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
-use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use tokio::net::TcpListener;
 use tokio::sync::Notify;
@@ -28,14 +27,7 @@ const MAX_REQUEST_BYTES: u64 = 10 * 1024 * 1024;
 
 type ProxyBody = Full<Bytes>;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpstreamCredential {
-    pub bearer: String,
-    pub base_url: String,
-    pub token_type: String,
-    pub expires_at: Option<String>,
-}
+pub use crate::schema::subscription::{ProxyProvider, ProxyStatus, UpstreamCredential};
 
 #[async_trait]
 pub trait UpstreamAdapter: Send + Sync {
@@ -50,14 +42,23 @@ struct NousAdapter;
 
 #[async_trait]
 impl UpstreamAdapter for NousAdapter {
-    fn name(&self) -> &'static str { "nous" }
-    fn allowed_paths(&self) -> HashSet<String> {
-        ["/v1/chat/completions", "/v1/completions", "/v1/embeddings", "/v1/models"]
-            .into_iter()
-            .map(String::from)
-            .collect()
+    fn name(&self) -> &'static str {
+        "nous"
     }
-    fn is_authenticated(&self) -> bool { true }
+    fn allowed_paths(&self) -> HashSet<String> {
+        [
+            "/v1/chat/completions",
+            "/v1/completions",
+            "/v1/embeddings",
+            "/v1/models",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect()
+    }
+    fn is_authenticated(&self) -> bool {
+        true
+    }
     async fn get_credential(&self) -> Result<UpstreamCredential, String> {
         Ok(UpstreamCredential {
             bearer: "nous-stub".into(),
@@ -73,11 +74,18 @@ struct XaiAdapter;
 
 #[async_trait]
 impl UpstreamAdapter for XaiAdapter {
-    fn name(&self) -> &'static str { "xai" }
-    fn allowed_paths(&self) -> HashSet<String> {
-        ["/v1/chat/completions", "/v1/responses"].into_iter().map(String::from).collect()
+    fn name(&self) -> &'static str {
+        "xai"
     }
-    fn is_authenticated(&self) -> bool { true }
+    fn allowed_paths(&self) -> HashSet<String> {
+        ["/v1/chat/completions", "/v1/responses"]
+            .into_iter()
+            .map(String::from)
+            .collect()
+    }
+    fn is_authenticated(&self) -> bool {
+        true
+    }
     async fn get_credential(&self) -> Result<UpstreamCredential, String> {
         Ok(UpstreamCredential {
             bearer: "xai-stub".into(),
@@ -100,7 +108,8 @@ pub async fn start_subscription_proxy(
     app: tauri::AppHandle,
     provider: String,
 ) -> Result<SubscriptionProxyHandle, AppError> {
-    let adapter = build_adapter(&provider).ok_or_else(|| AppError::Internal("unknown provider".into()))?;
+    let adapter =
+        build_adapter(&provider).ok_or_else(|| AppError::Internal("unknown provider".into()))?;
     let listener = match TcpListener::bind((Ipv4Addr::LOCALHOST, PREFERRED_PORT)).await {
         Ok(l) => l,
         Err(_) => TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
@@ -112,11 +121,19 @@ pub async fn start_subscription_proxy(
         .map_err(|e| AppError::Internal(format!("proxy port: {e}")))?
         .port();
     let cancel = Arc::new(Notify::new());
-    let handle = SubscriptionProxyHandle { port, provider, cancel: cancel.clone() };
+    let handle = SubscriptionProxyHandle {
+        port,
+        provider,
+        cancel: cancel.clone(),
+    };
 
     {
         let state = app.state::<AppState>();
-        state.inner.lock().map_err(|e| AppError::Internal(e.to_string()))?.subscription_proxy = Some(handle.clone());
+        state
+            .inner
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .subscription_proxy = Some(handle.clone());
     }
 
     let server_app = app.clone();
@@ -157,7 +174,11 @@ async fn proxy_serve(
     }
     {
         let state = app.state::<AppState>();
-        state.inner.lock().map_err(|e| AppError::Internal(e.to_string()))?.subscription_proxy = None;
+        state
+            .inner
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .subscription_proxy = None;
     }
     Ok(())
 }
@@ -171,35 +192,54 @@ async fn handle_proxy_request(
     let method = req.method().clone();
 
     if method == Method::GET && path == "/health" {
-        return Ok(json_response(StatusCode::OK, serde_json::json!({
-            "status": "ok",
-            "upstream": adapter.name(),
-            "authenticated": adapter.is_authenticated(),
-        })));
+        return Ok(json_response(
+            StatusCode::OK,
+            serde_json::json!({
+                "status": "ok",
+                "upstream": adapter.name(),
+                "authenticated": adapter.is_authenticated(),
+            }),
+        ));
     }
 
     if !adapter.allowed_paths().contains(&path) {
-        return Ok(json_response(StatusCode::NOT_FOUND, serde_json::json!({"error": "path_not_allowed"})));
+        return Ok(json_response(
+            StatusCode::NOT_FOUND,
+            serde_json::json!({"error": "path_not_allowed"}),
+        ));
     }
 
     let credential = match adapter.get_credential().await {
         Ok(c) => c,
-        Err(_) => return Ok(json_response(StatusCode::UNAUTHORIZED, serde_json::json!({"error": "upstream_auth_failed"}))),
+        Err(_) => {
+            return Ok(json_response(
+                StatusCode::UNAUTHORIZED,
+                serde_json::json!({"error": "upstream_auth_failed"}),
+            ))
+        }
     };
 
     let bytes = match read_body(req).await {
         Ok(b) => b,
-        Err(e) => return Ok(json_response(StatusCode::PAYLOAD_TOO_LARGE, serde_json::json!({"error": e}))),
+        Err(e) => {
+            return Ok(json_response(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                serde_json::json!({"error": e}),
+            ))
+        }
     };
 
     // v1: echo the request metadata rather than making a real upstream call.
-    Ok(json_response(StatusCode::OK, serde_json::json!({
-        "proxy": true,
-        "provider": adapter.name(),
-        "base_url": credential.base_url,
-        "path": path,
-        "body_length": bytes.len(),
-    })))
+    Ok(json_response(
+        StatusCode::OK,
+        serde_json::json!({
+            "proxy": true,
+            "provider": adapter.name(),
+            "base_url": credential.base_url,
+            "path": path,
+            "body_length": bytes.len(),
+        }),
+    ))
 }
 
 async fn read_body(req: Request<Incoming>) -> Result<Vec<u8>, String> {

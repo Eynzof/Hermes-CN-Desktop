@@ -1,0 +1,5 @@
+{
+  "type": "brand.new.event",
+  "session_id": "s-1",
+  "payload": { "foo": 1 }
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { runTurn } from "./run-turn.js";
-import type { LLM, LLMChatParams, LLMChatResponse, Message, Tool, TokenUsage } from "./types.js";
+import { mergeContextFiles, runTurn } from "./run-turn.js";
+import type { ContextFile, LLM, LLMChatParams, LLMChatResponse, Message, Tool, TokenUsage } from "./types.js";
 
 const EMPTY_USAGE: TokenUsage = { input: 0, output: 0, total: 0 };
 
@@ -189,5 +189,44 @@ describe("runTurn", () => {
         { path: "/ws/USER.md", source: "hermes", content: "uses vim", provenance: "USER.md" },
       ],
     });
+  });
+});
+
+describe("mergeContextFiles", () => {
+  it("returns empty strings for no files", () => {
+    expect(mergeContextFiles([])).toEqual({ systemPrompt: "", userContext: "" });
+  });
+
+  it("places SOUL.md files in the system prompt", () => {
+    const files: ContextFile[] = [
+      { path: "/p/SOUL.md", source: "soul", content: "I am the soul." },
+    ];
+    const result = mergeContextFiles(files);
+    expect(result.systemPrompt).toContain("# Project Context");
+    expect(result.systemPrompt).toContain("I am the soul.");
+    expect(result.userContext).toBe("");
+  });
+
+  it("places non-soul context files in the user context", () => {
+    const files: ContextFile[] = [
+      { path: "/p/.hermes.md", source: "hermes", content: "rules" },
+    ];
+    const result = mergeContextFiles(files);
+    expect(result.userContext).toContain("rules");
+    expect(result.systemPrompt).toBe("");
+  });
+
+  it("splits mixed files between system and user blocks", () => {
+    const files: ContextFile[] = [
+      { path: "/p/SOUL.md", source: "soul", content: "soul" },
+      { path: "/p/CLAUDE.md", source: "claude", content: "claude" },
+      { path: "/p/.hermes.md", source: "hermes", content: "hermes" },
+    ];
+    const result = mergeContextFiles(files);
+    expect(result.systemPrompt).toContain("soul");
+    expect(result.systemPrompt).not.toContain("claude");
+    expect(result.userContext).toContain("claude");
+    expect(result.userContext).toContain("hermes");
+    expect(result.userContext).not.toContain("soul");
   });
 });

@@ -7,6 +7,7 @@ import {
   builtinPersonalityCount,
   describePersonality,
   normalizePersonalityName,
+  promptText,
   renderPersonalityPrompt,
   resolveEphemeralSystemPrompt,
   resolvePersonality,
@@ -112,5 +113,29 @@ describe("personality catalog", () => {
   it("ephemeral system prompt falls back to agent.system_prompt", () => {
     const cfg = { agent: { system_prompt: "Manual override." } };
     expect(resolveEphemeralSystemPrompt(cfg)).toBe("Manual override.");
+  });
+});
+
+describe("promptText", () => {
+  it("returns empty string for null and undefined", () => {
+    expect(promptText(null)).toBe("");
+    expect(promptText(undefined)).toBe("");
+  });
+
+  it("returns strings unchanged", () => {
+    expect(promptText("hello")).toBe("hello");
+    expect(promptText("  spaced  ")).toBe("  spaced  ");
+  });
+
+  it("joins arrays with newlines recursively", () => {
+    expect(promptText(["a", "b"])).toBe("a\nb");
+    expect(promptText(["a", ["b", ["c"]]])).toBe("a\nb\nc");
+    expect(promptText([])).toBe("");
+  });
+
+  it("coerces non-string scalars via String()", () => {
+    expect(promptText(42)).toBe("42");
+    expect(promptText(true)).toBe("true");
+    expect(promptText({ toString: () => "obj" })).toBe("obj");
   });
 });

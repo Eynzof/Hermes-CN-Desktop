@@ -1,0 +1,6 @@
+{
+  "serverId": "rust",
+  "command": "rust-analyzer",
+  "args": ["--stdin"],
+  "cwd": "/workspace"
+}

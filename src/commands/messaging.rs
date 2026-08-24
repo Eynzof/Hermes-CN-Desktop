@@ -40,7 +40,8 @@ pub struct MessagingStatus {
     pub platforms: Vec<MessagingPlatformEntry>,
 }
 
-static MESSAGING_STATE: LazyLock<Mutex<MessagingState>> = LazyLock::new(|| Mutex::new(MessagingState::new()));
+static MESSAGING_STATE: LazyLock<Mutex<MessagingState>> =
+    LazyLock::new(|| Mutex::new(MessagingState::new()));
 
 struct MessagingState {
     configs: HashMap<String, MessagingPlatformConfig>,
@@ -63,14 +64,26 @@ fn platform_definitions() -> Vec<MessagingPlatformEntry> {
         ("slack", "Slack", vec!["SLACK_BOT_TOKEN"]),
         ("whatsapp", "WhatsApp", vec!["WHATSAPP_API_TOKEN"]),
         ("signal", "Signal", vec!["SIGNAL_ACCOUNT"]),
-        ("sms", "SMS (Twilio)", vec!["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]),
+        (
+            "sms",
+            "SMS (Twilio)",
+            vec!["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"],
+        ),
         ("email", "Email", vec!["EMAIL_SMTP_HOST"]),
         ("matrix", "Matrix", vec!["MATRIX_ACCESS_TOKEN"]),
         ("mattermost", "Mattermost", vec!["MATTERMOST_TOKEN"]),
         ("irc", "IRC", vec!["IRC_SERVER"]),
         ("line", "LINE", vec!["LINE_CHANNEL_ACCESS_TOKEN"]),
-        ("dingtalk", "DingTalk", vec!["DINGTALK_APP_KEY", "DINGTALK_APP_SECRET"]),
-        ("feishu", "Feishu / Lark", vec!["FEISHU_APP_ID", "FEISHU_APP_SECRET"]),
+        (
+            "dingtalk",
+            "DingTalk",
+            vec!["DINGTALK_APP_KEY", "DINGTALK_APP_SECRET"],
+        ),
+        (
+            "feishu",
+            "Feishu / Lark",
+            vec!["FEISHU_APP_ID", "FEISHU_APP_SECRET"],
+        ),
         ("wecom", "WeCom", vec!["WECOM_CORP_ID", "WECOM_SECRET"]),
     ]
     .into_iter()
@@ -94,7 +107,9 @@ fn platform_definitions() -> Vec<MessagingPlatformEntry> {
 }
 
 #[tauri::command]
-pub fn get_messaging_platforms(_state: State<'_, AppState>) -> Result<Vec<MessagingPlatformEntry>, AppError> {
+pub fn get_messaging_platforms(
+    _state: State<'_, AppState>,
+) -> Result<Vec<MessagingPlatformEntry>, AppError> {
     Ok(platform_definitions())
 }
 
@@ -114,15 +129,21 @@ pub fn get_messaging_status(_state: State<'_, AppState>) -> Result<MessagingStat
 pub fn set_messaging_platform_config(
     config: MessagingPlatformConfig,
 ) -> Result<MessagingPlatformConfig, AppError> {
-    let mut state = MESSAGING_STATE.lock().map_err(|_| AppError::StateLockPoisoned)?;
-    state.configs.insert(config.platform.clone(), config.clone());
+    let mut state = MESSAGING_STATE
+        .lock()
+        .map_err(|_| AppError::StateLockPoisoned)?;
+    state
+        .configs
+        .insert(config.platform.clone(), config.clone());
     Ok(config)
 }
 
 #[tauri::command]
 pub fn start_messaging_platform(platform: Option<String>) -> Result<MessagingStatus, AppError> {
     let running = {
-        let mut state = MESSAGING_STATE.lock().map_err(|_| AppError::StateLockPoisoned)?;
+        let mut state = MESSAGING_STATE
+            .lock()
+            .map_err(|_| AppError::StateLockPoisoned)?;
         if let Some(p) = platform {
             if let Some(cfg) = state.configs.get_mut(&p) {
                 cfg.enabled = true;
@@ -141,7 +162,9 @@ pub fn start_messaging_platform(platform: Option<String>) -> Result<MessagingSta
 #[tauri::command]
 pub fn stop_messaging_platform(platform: Option<String>) -> Result<MessagingStatus, AppError> {
     let running = {
-        let mut state = MESSAGING_STATE.lock().map_err(|_| AppError::StateLockPoisoned)?;
+        let mut state = MESSAGING_STATE
+            .lock()
+            .map_err(|_| AppError::StateLockPoisoned)?;
         if let Some(p) = platform {
             if let Some(cfg) = state.configs.get_mut(&p) {
                 cfg.enabled = false;
@@ -183,7 +206,9 @@ mod tests {
         let cfg = MessagingPlatformConfig {
             platform: "telegram".to_string(),
             enabled: true,
-            credentials: [("token".to_string(), "secret".to_string())].into_iter().collect(),
+            credentials: [("token".to_string(), "secret".to_string())]
+                .into_iter()
+                .collect(),
             ..Default::default()
         };
         let returned = set_messaging_platform_config(cfg.clone()).unwrap();

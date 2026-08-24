@@ -228,8 +228,13 @@ pub struct MeetSetupResult {
 // -----------------------------------------------------------------------------
 
 fn meetings_root(state: &AppState) -> AppResult<PathBuf> {
-    let inner = state.inner.lock().map_err(|e| AppError::Internal(e.to_string()))?;
-    Ok(PathBuf::from(&inner.hermes_home).join("workspace").join("meetings"))
+    let inner = state
+        .inner
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    Ok(PathBuf::from(&inner.hermes_home)
+        .join("workspace")
+        .join("meetings"))
 }
 
 fn active_pointer_path(root: &Path) -> PathBuf {
@@ -258,8 +263,14 @@ fn write_json_atomically(path: &Path, value: &impl Serialize) -> AppResult<()> {
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, format!("{}\n", json))
         .map_err(|e| AppError::Internal(format!("无法写入临时文件 {}: {}", tmp.display(), e)))?;
-    std::fs::rename(&tmp, path)
-        .map_err(|e| AppError::Internal(format!("无法重命名 {} -> {}: {}", tmp.display(), path.display(), e)))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        AppError::Internal(format!(
+            "无法重命名 {} -> {}: {}",
+            tmp.display(),
+            path.display(),
+            e
+        ))
+    })?;
     Ok(())
 }
 
@@ -313,7 +324,10 @@ fn validate_meet_url(url: &str) -> AppResult<()> {
     let re = regex::Regex::new(MEET_URL_RE)
         .map_err(|e| AppError::Internal(format!("Meet URL regex 无效: {}", e)))?;
     if !re.is_match(url.trim()) {
-        return Err(AppError::InvalidRequest(format!("Invalid Google Meet URL: {}", url)));
+        return Err(AppError::InvalidRequest(format!(
+            "Invalid Google Meet URL: {}",
+            url
+        )));
     }
     Ok(())
 }
@@ -327,7 +341,10 @@ fn now_iso() -> String {
 // -----------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn meet_join(state: tauri::State<'_, AppState>, input: MeetJoinInput) -> AppResult<MeetJoinResult> {
+pub async fn meet_join(
+    state: tauri::State<'_, AppState>,
+    input: MeetJoinInput,
+) -> AppResult<MeetJoinResult> {
     validate_meet_url(&input.url)?;
 
     let root = meetings_root(&state)?;
@@ -394,13 +411,17 @@ fn resolve_meeting_dir(root: &Path, meeting_id: Option<&String>) -> AppResult<Pa
 }
 
 #[tauri::command]
-pub async fn meet_status(state: tauri::State<'_, AppState>, input: MeetStatusInput) -> AppResult<MeetStatusResult> {
+pub async fn meet_status(
+    state: tauri::State<'_, AppState>,
+    input: MeetStatusInput,
+) -> AppResult<MeetStatusResult> {
     let root = meetings_root(&state)?;
     let pointer: Option<MeetActivePointer> = read_json(&active_pointer_path(&root))?;
 
     let dir = resolve_meeting_dir(&root, input.meeting_id.as_ref())?;
     let active = pointer.as_ref().is_some_and(|p| {
-        p.out_dir == dir.to_string_lossy() && p.meeting_id == input.meeting_id.as_deref().unwrap_or(&p.meeting_id)
+        p.out_dir == dir.to_string_lossy()
+            && p.meeting_id == input.meeting_id.as_deref().unwrap_or(&p.meeting_id)
     });
 
     let status: Option<MeetBotStatus> = read_json(&status_path(&dir))?;
@@ -435,7 +456,10 @@ pub async fn meet_transcript(
 }
 
 #[tauri::command]
-pub async fn meet_leave(state: tauri::State<'_, AppState>, input: MeetLeaveInput) -> AppResult<MeetLeaveResult> {
+pub async fn meet_leave(
+    state: tauri::State<'_, AppState>,
+    input: MeetLeaveInput,
+) -> AppResult<MeetLeaveResult> {
     let root = meetings_root(&state)?;
     let dir = resolve_meeting_dir(&root, input.meeting_id.as_ref())?;
     let meeting_id = input.meeting_id.clone().or_else(|| {
@@ -463,7 +487,10 @@ pub async fn meet_leave(state: tauri::State<'_, AppState>, input: MeetLeaveInput
 }
 
 #[tauri::command]
-pub async fn meet_say(_state: tauri::State<'_, AppState>, input: MeetSayInput) -> AppResult<MeetSayResult> {
+pub async fn meet_say(
+    _state: tauri::State<'_, AppState>,
+    input: MeetSayInput,
+) -> AppResult<MeetSayResult> {
     Ok(MeetSayResult {
         ok: false,
         queued: Some(false),
@@ -479,7 +506,10 @@ pub async fn meet_setup(_state: tauri::State<'_, AppState>) -> AppResult<MeetSet
     Ok(MeetSetupResult {
         ok: true,
         chromium_available: Some(false),
-        message: Some("Google Meet v1 preflight: Chromium sidecar is not spawned in this version.".to_string()),
+        message: Some(
+            "Google Meet v1 preflight: Chromium sidecar is not spawned in this version."
+                .to_string(),
+        ),
         error: None,
     })
 }
@@ -567,7 +597,9 @@ pub async fn meet_oauth_write(
 }
 
 #[tauri::command]
-pub async fn meet_oauth_disconnect(state: tauri::State<'_, AppState>) -> AppResult<MeetOauthReadResult> {
+pub async fn meet_oauth_disconnect(
+    state: tauri::State<'_, AppState>,
+) -> AppResult<MeetOauthReadResult> {
     let path = auth_json_path(&state)?;
     let mut root = read_auth_json(&path)?;
     if let Some(serde_json::Value::Object(map)) = root.get_mut("providers") {
@@ -582,7 +614,10 @@ pub async fn meet_oauth_disconnect(state: tauri::State<'_, AppState>) -> AppResu
 }
 
 fn auth_json_path(state: &AppState) -> AppResult<PathBuf> {
-    let inner = state.inner.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let inner = state
+        .inner
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(PathBuf::from(&inner.hermes_home).join("auth.json"))
 }
 
@@ -600,7 +635,10 @@ fn read_auth_json(path: &Path) -> AppResult<serde_json::Map<String, serde_json::
     }
 }
 
-fn write_auth_json(path: &Path, root: &serde_json::Map<String, serde_json::Value>) -> AppResult<()> {
+fn write_auth_json(
+    path: &Path,
+    root: &serde_json::Map<String, serde_json::Value>,
+) -> AppResult<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| AppError::Internal(format!("无法创建 auth.json 目录: {}", e)))?;
@@ -653,9 +691,13 @@ pub async fn meet_oauth_start(input: MeetOauthStartInput) -> AppResult<MeetOauth
     let abort = Arc::new(AtomicBool::new(false));
 
     {
-        let mut pending = PENDING_CALLBACK.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+        let mut pending = PENDING_CALLBACK
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
         if pending.is_some() {
-            return Err(AppError::InvalidRequest("Another Google OAuth callback listener is already running.".to_string()));
+            return Err(AppError::InvalidRequest(
+                "Another Google OAuth callback listener is already running.".to_string(),
+            ));
         }
         *pending = Some(PendingCallback {
             result_rx: Some(result_rx),
@@ -669,7 +711,9 @@ pub async fn meet_oauth_start(input: MeetOauthStartInput) -> AppResult<MeetOauth
         let listener = match TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await {
             Ok(l) => l,
             Err(e) => {
-                let _ = result_tx.send(Err(AppError::Internal(format!("绑定回调端口失败: {}", e)))).await;
+                let _ = result_tx
+                    .send(Err(AppError::Internal(format!("绑定回调端口失败: {}", e))))
+                    .await;
                 let _ = PENDING_CALLBACK.lock().map(|mut p| *p = None);
                 return;
             }
@@ -697,10 +741,12 @@ pub async fn meet_oauth_start(input: MeetOauthStartInput) -> AppResult<MeetOauth
                     let abort = abort_inner.clone();
                     async move {
                         if req.method() != Method::GET {
-                            return Ok::<_, Infallible>(Response::builder()
-                                .status(StatusCode::METHOD_NOT_ALLOWED)
-                                .body(Full::new(Bytes::from("Method Not Allowed")))
-                                .unwrap());
+                            return Ok::<_, Infallible>(
+                                Response::builder()
+                                    .status(StatusCode::METHOD_NOT_ALLOWED)
+                                    .body(Full::new(Bytes::from("Method Not Allowed")))
+                                    .unwrap(),
+                            );
                         }
                         let uri = req.uri().path().to_string();
                         if !uri.starts_with(&path) {
@@ -711,9 +757,10 @@ pub async fn meet_oauth_start(input: MeetOauthStartInput) -> AppResult<MeetOauth
                         }
 
                         let query = req.uri().query().unwrap_or("");
-                        let params: HashMap<String, String> = url::form_urlencoded::parse(query.as_bytes())
-                            .map(|(k, v)| (k.to_string(), v.to_string()))
-                            .collect();
+                        let params: HashMap<String, String> =
+                            url::form_urlencoded::parse(query.as_bytes())
+                                .map(|(k, v)| (k.to_string(), v.to_string()))
+                                .collect();
 
                         match (params.get("code"), params.get("state")) {
                             (Some(code), Some(state)) => {
@@ -726,11 +773,16 @@ pub async fn meet_oauth_start(input: MeetOauthStartInput) -> AppResult<MeetOauth
                                 Ok(Response::builder()
                                     .status(StatusCode::OK)
                                     .header(CONTENT_TYPE, "text/html; charset=utf-8")
-                                    .body(Full::new(Bytes::from(include_str!("meet_oauth_callback.html"))))
+                                    .body(Full::new(Bytes::from(include_str!(
+                                        "meet_oauth_callback.html"
+                                    ))))
                                     .unwrap())
                             }
                             _ => {
-                                let error = params.get("error").cloned().unwrap_or_else(|| "invalid_request".to_string());
+                                let error = params
+                                    .get("error")
+                                    .cloned()
+                                    .unwrap_or_else(|| "invalid_request".to_string());
                                 let _ = tx
                                     .send(Err(AppError::InvalidRequest(format!(
                                         "OAuth callback error: {}",
@@ -760,11 +812,17 @@ pub async fn meet_oauth_start(input: MeetOauthStartInput) -> AppResult<MeetOauth
 #[tauri::command]
 pub async fn meet_oauth_wait() -> AppResult<MeetOauthCallbackResult> {
     let mut rx = {
-        let mut pending = PENDING_CALLBACK.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+        let mut pending = PENDING_CALLBACK
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
         pending
             .as_mut()
             .and_then(|p| p.result_rx.take())
-            .ok_or_else(|| AppError::InvalidRequest("No Google OAuth callback listener is running.".to_string()))?
+            .ok_or_else(|| {
+                AppError::InvalidRequest(
+                    "No Google OAuth callback listener is running.".to_string(),
+                )
+            })?
     };
 
     let result = tokio::time::timeout(LISTEN_TIMEOUT, rx.recv())
@@ -773,7 +831,9 @@ pub async fn meet_oauth_wait() -> AppResult<MeetOauthCallbackResult> {
         .ok_or_else(|| AppError::InvalidRequest("Google OAuth 回调通道已关闭.".to_string()))?;
 
     {
-        let mut pending = PENDING_CALLBACK.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+        let mut pending = PENDING_CALLBACK
+            .lock()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
         *pending = None;
     }
 
@@ -782,7 +842,9 @@ pub async fn meet_oauth_wait() -> AppResult<MeetOauthCallbackResult> {
 
 #[tauri::command]
 pub async fn meet_oauth_cancel() -> AppResult<bool> {
-    let mut pending = PENDING_CALLBACK.lock().map_err(|e| AppError::Internal(e.to_string()))?;
+    let mut pending = PENDING_CALLBACK
+        .lock()
+        .map_err(|e| AppError::Internal(e.to_string()))?;
     if let Some(p) = pending.take() {
         p.abort.store(true, Ordering::Relaxed);
     }

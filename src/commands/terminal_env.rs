@@ -25,7 +25,9 @@ pub struct TerminalEnvExecResult {
 }
 
 #[command]
-pub async fn terminal_env_exec(options: TerminalEnvExecOptions) -> Result<TerminalEnvExecResult, String> {
+pub async fn terminal_env_exec(
+    options: TerminalEnvExecOptions,
+) -> Result<TerminalEnvExecResult, String> {
     Ok(TerminalEnvExecResult {
         output: format!("[{}] would execute: {}", options.kind, options.command),
         exit_code: 0,
@@ -54,10 +56,14 @@ pub async fn terminal_env_create_session(
     options: TerminalEnvSessionOptions,
 ) -> Result<TerminalEnvSessionResult, String> {
     Ok(TerminalEnvSessionResult {
-        session_id: format!("{}-{}", options.kind, std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0)),
+        session_id: format!(
+            "{}-{}",
+            options.kind,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        ),
         kind: options.kind,
     })
 }

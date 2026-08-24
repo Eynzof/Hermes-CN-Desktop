@@ -130,7 +130,9 @@ fn unique_slug(name: &str, existing: &[Project]) -> String {
 
 #[tauri::command]
 pub async fn projects_list() -> Result<ProjectsList, AppError> {
-    let store = STORE.lock().map_err(|_| AppError::Internal("store lock".to_string()))?;
+    let store = STORE
+        .lock()
+        .map_err(|_| AppError::Internal("store lock".to_string()))?;
     Ok(ProjectsList {
         projects: store.projects.clone(),
         active_id: store.active_id.clone(),
@@ -139,7 +141,9 @@ pub async fn projects_list() -> Result<ProjectsList, AppError> {
 
 #[tauri::command]
 pub async fn projects_create(input: ProjectCreateInput) -> Result<Project, AppError> {
-    let mut store = STORE.lock().map_err(|_| AppError::Internal("store lock".to_string()))?;
+    let mut store = STORE
+        .lock()
+        .map_err(|_| AppError::Internal("store lock".to_string()))?;
     let id = format!("p_{:08x}", store.projects.len() + 1);
     let slug = unique_slug(&input.name, &store.projects);
     let folders: Vec<ProjectFolder> = input
@@ -154,7 +158,9 @@ pub async fn projects_create(input: ProjectCreateInput) -> Result<Project, AppEr
             added_at: Some(chrono::Utc::now().to_rfc3339()),
         })
         .collect();
-    let primary_path = input.primary_path.or_else(|| folders.first().map(|f| f.path.clone()));
+    let primary_path = input
+        .primary_path
+        .or_else(|| folders.first().map(|f| f.path.clone()));
     let project = Project {
         id: id.clone(),
         slug,
@@ -177,7 +183,9 @@ pub async fn projects_create(input: ProjectCreateInput) -> Result<Project, AppEr
 
 #[tauri::command]
 pub async fn projects_update(id: String, patch: ProjectUpdateInput) -> Result<Project, AppError> {
-    let mut store = STORE.lock().map_err(|_| AppError::Internal("store lock".to_string()))?;
+    let mut store = STORE
+        .lock()
+        .map_err(|_| AppError::Internal("store lock".to_string()))?;
     let project = store
         .projects
         .iter_mut()
@@ -200,7 +208,9 @@ pub async fn projects_update(id: String, patch: ProjectUpdateInput) -> Result<Pr
 
 #[tauri::command]
 pub async fn projects_set_active(id: Option<String>) -> Result<ActiveProjectResult, AppError> {
-    let mut store = STORE.lock().map_err(|_| AppError::Internal("store lock".to_string()))?;
+    let mut store = STORE
+        .lock()
+        .map_err(|_| AppError::Internal("store lock".to_string()))?;
     if let Some(ref project_id) = id {
         if !store.projects.iter().any(|p| &p.id == project_id) {
             return Err(AppError::Internal("project not found".to_string()));
@@ -212,7 +222,9 @@ pub async fn projects_set_active(id: Option<String>) -> Result<ActiveProjectResu
 
 #[tauri::command]
 pub async fn projects_delete(id: String) -> Result<ProjectsList, AppError> {
-    let mut store = STORE.lock().map_err(|_| AppError::Internal("store lock".to_string()))?;
+    let mut store = STORE
+        .lock()
+        .map_err(|_| AppError::Internal("store lock".to_string()))?;
     store.projects.retain(|p| p.id != id);
     if store.active_id.as_deref() == Some(&id) {
         store.active_id = None;
@@ -226,7 +238,9 @@ pub async fn projects_delete(id: String) -> Result<ProjectsList, AppError> {
 #[tauri::command]
 pub async fn projects_tree() -> Result<serde_json::Value, AppError> {
     // Placeholder: returns the same list shape as the Python `projects.tree` RPC.
-    let store = STORE.lock().map_err(|_| AppError::Internal("store lock".to_string()))?;
+    let store = STORE
+        .lock()
+        .map_err(|_| AppError::Internal("store lock".to_string()))?;
     let tree: Vec<serde_json::Value> = store
         .projects
         .iter()
@@ -266,10 +280,16 @@ mod tests {
         let _guard = SERIAL.lock().await;
         reset_store();
 
-        let project = projects_create(make_input("Alpha Project", vec!["/home/alpha"])).await.unwrap();
+        let project = projects_create(make_input("Alpha Project", vec!["/home/alpha"]))
+            .await
+            .unwrap();
         assert_eq!(project.name, "Alpha Project");
         assert_eq!(project.slug, "alpha-project");
-        assert!(project.primary_path.as_deref().unwrap_or("").ends_with("/home/alpha"));
+        assert!(project
+            .primary_path
+            .as_deref()
+            .unwrap_or("")
+            .ends_with("/home/alpha"));
 
         let list = projects_list().await.unwrap();
         assert_eq!(list.projects.len(), 1);
@@ -281,8 +301,12 @@ mod tests {
         let _guard = SERIAL.lock().await;
         reset_store();
 
-        let first = projects_create(make_input("My Project", vec!["/a"])).await.unwrap();
-        let second = projects_create(make_input("My Project", vec!["/b"])).await.unwrap();
+        let first = projects_create(make_input("My Project", vec!["/a"]))
+            .await
+            .unwrap();
+        let second = projects_create(make_input("My Project", vec!["/b"]))
+            .await
+            .unwrap();
         assert_eq!(first.slug, "my-project");
         assert_eq!(second.slug, "my-project-2");
     }
@@ -292,7 +316,9 @@ mod tests {
         let _guard = SERIAL.lock().await;
         reset_store();
 
-        let project = projects_create(make_input("Old", vec!["/x"])).await.unwrap();
+        let project = projects_create(make_input("Old", vec!["/x"]))
+            .await
+            .unwrap();
         let updated = projects_update(
             project.id.clone(),
             ProjectUpdateInput {
@@ -312,7 +338,9 @@ mod tests {
         let _guard = SERIAL.lock().await;
         reset_store();
 
-        let err = projects_set_active(Some("missing".to_string())).await.unwrap_err();
+        let err = projects_set_active(Some("missing".to_string()))
+            .await
+            .unwrap_err();
         assert!(matches!(err, AppError::Internal(_)));
     }
 
@@ -321,8 +349,13 @@ mod tests {
         let _guard = SERIAL.lock().await;
         reset_store();
 
-        let p1 = projects_create(make_input("One", vec!["/one"])).await.unwrap();
-        assert_eq!(projects_list().await.unwrap().active_id, Some(p1.id.clone()));
+        let p1 = projects_create(make_input("One", vec!["/one"]))
+            .await
+            .unwrap();
+        assert_eq!(
+            projects_list().await.unwrap().active_id,
+            Some(p1.id.clone())
+        );
         let list = projects_delete(p1.id).await.unwrap();
         assert_eq!(list.projects.len(), 0);
         assert!(list.active_id.is_none());
@@ -333,9 +366,14 @@ mod tests {
         let _guard = SERIAL.lock().await;
         reset_store();
 
-        let project = projects_create(make_input("Tree", vec!["/tree"])).await.unwrap();
+        let project = projects_create(make_input("Tree", vec!["/tree"]))
+            .await
+            .unwrap();
         let tree = projects_tree().await.unwrap();
-        let nodes = tree.get("tree").and_then(|v| v.as_array()).expect("tree array");
+        let nodes = tree
+            .get("tree")
+            .and_then(|v| v.as_array())
+            .expect("tree array");
         assert_eq!(nodes.len(), 1);
         let slug = nodes[0]
             .get("project")

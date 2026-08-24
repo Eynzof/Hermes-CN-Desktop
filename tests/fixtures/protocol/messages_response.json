@@ -1,0 +1,21 @@
+{
+  "session_id": "s-1",
+  "messages": [
+    {
+      "id": 1,
+      "session_id": "s-1",
+      "role": "user",
+      "content": "hi",
+      "tool_call_id": null,
+      "tool_calls": null,
+      "tool_name": null,
+      "timestamp": 1704067200.0,
+      "token_count": null,
+      "finish_reason": null,
+      "reasoning": null,
+      "reasoning_details": null,
+      "codex_reasoning_items": null,
+      "reasoning_content": null
+    }
+  ]
+}

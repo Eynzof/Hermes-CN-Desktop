@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import "./catalog.js";
+import { registerSpotifyTools } from "./catalog.js";
 import { registry } from "../registry.js";
 
 const TOOL_NAMES = [
@@ -198,5 +198,15 @@ describe("spotify happy paths with mocked HTTP", () => {
     expect(res.isError).toBe(true);
     // The client attempts a token refresh before surfacing the auth error.
     expect(res.content).toMatch(/refresh token|authentication/i);
+  });
+});
+
+describe("registerSpotifyTools", () => {
+  it("is exported and re-registers the seven Spotify tools", () => {
+    expect(registerSpotifyTools).toBeTypeOf("function");
+    registerSpotifyTools();
+    for (const name of TOOL_NAMES) {
+      expect(registry.get(name)).toBeDefined();
+    }
   });
 });

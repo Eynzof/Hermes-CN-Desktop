@@ -1,0 +1,53 @@
+{
+  "session_id": "s-1",
+  "messages": [
+    {
+      "id": 1,
+      "session_id": "s-1",
+      "role": "user",
+      "content": "hi",
+      "tool_call_id": null,
+      "tool_calls": null,
+      "tool_name": null,
+      "timestamp": 1704067200.0,
+      "token_count": null,
+      "finish_reason": null,
+      "reasoning": null,
+      "reasoning_details": null,
+      "codex_reasoning_items": null,
+      "reasoning_content": null
+    },
+    {
+      "id": 2,
+      "session_id": "s-1",
+      "role": "assistant",
+      "content": "hello",
+      "tool_call_id": "tc1",
+      "tool_calls": { "id": "t1" },
+      "tool_name": null,
+      "timestamp": 1704067201.0,
+      "token_count": null,
+      "finish_reason": null,
+      "reasoning": "think",
+      "reasoning_details": null,
+      "codex_reasoning_items": null,
+      "reasoning_content": null
+    },
+    {
+      "id": 4,
+      "session_id": "s-1",
+      "role": "tool",
+      "content": "{\"result\":\"ok\"}",
+      "tool_call_id": null,
+      "tool_calls": null,
+      "tool_name": null,
+      "timestamp": 1704067203.0,
+      "token_count": null,
+      "finish_reason": null,
+      "reasoning": null,
+      "reasoning_details": null,
+      "codex_reasoning_items": null,
+      "reasoning_content": null
+    }
+  ]
+}

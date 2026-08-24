@@ -15,7 +15,9 @@ pub struct ExportProfileResponse {
 }
 
 #[command]
-pub async fn export_profile(request: ExportProfileRequest) -> Result<ExportProfileResponse, String> {
+pub async fn export_profile(
+    request: ExportProfileRequest,
+) -> Result<ExportProfileResponse, String> {
     Ok(ExportProfileResponse {
         path: format!("{}\\{}.tar.gz", request.dest, request.name),
     })
@@ -34,7 +36,9 @@ pub struct ImportProfileResponse {
 }
 
 #[command]
-pub async fn import_profile(request: ImportProfileRequest) -> Result<ImportProfileResponse, String> {
+pub async fn import_profile(
+    request: ImportProfileRequest,
+) -> Result<ImportProfileResponse, String> {
     Ok(ImportProfileResponse {
         name: request.name.clone(),
         root: format!("~/.hermes/profiles/{}", request.name),
@@ -54,7 +58,9 @@ pub struct DistributionInfoResponse {
 }
 
 #[command]
-pub async fn distribution_info(request: DistributionRequest) -> Result<DistributionInfoResponse, String> {
+pub async fn distribution_info(
+    request: DistributionRequest,
+) -> Result<DistributionInfoResponse, String> {
     Ok(DistributionInfoResponse {
         name: request.source.clone(),
         version: "0.0.0".to_string(),

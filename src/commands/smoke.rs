@@ -7,9 +7,9 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::connection::ConnectionMode;
 use crate::error::AppError;
 use crate::state::AppState;
-use crate::connection::ConnectionMode;
 use reqwest::Client;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,7 +75,10 @@ async fn http_status_ok(api_base_url: &str) -> Result<(bool, Option<String>), St
         Ok(r) => {
             let status = r.status();
             let _text = r.text().await.unwrap_or_default();
-            Ok((status.is_success() || status.as_u16() == 401, Some(format!("HTTP {}", status.as_u16()))))
+            Ok((
+                status.is_success() || status.as_u16() == 401,
+                Some(format!("HTTP {}", status.as_u16())),
+            ))
         }
         Err(e) => Err(e.to_string()),
     }
@@ -90,13 +93,18 @@ async fn openapi_ok(api_base_url: &str) -> Result<(bool, Option<String>), String
         .send()
         .await
     {
-        Ok(r) => Ok((r.status().is_success(), Some(format!("HTTP {}", r.status().as_u16())))),
+        Ok(r) => Ok((
+            r.status().is_success(),
+            Some(format!("HTTP {}", r.status().as_u16())),
+        )),
         Err(e) => Err(e.to_string()),
     }
 }
 
 #[tauri::command]
-pub async fn run_dashboard_smoke(state: State<'_, AppState>) -> Result<DashboardSmokeResult, AppError> {
+pub async fn run_dashboard_smoke(
+    state: State<'_, AppState>,
+) -> Result<DashboardSmokeResult, AppError> {
     let (api_base_url, session_token, connection_mode) = {
         let inner = state.inner.lock()?;
         (
@@ -117,7 +125,11 @@ pub async fn run_dashboard_smoke(state: State<'_, AppState>) -> Result<Dashboard
                 id: "status".to_string(),
                 label: "/api/status responds".to_string(),
                 ok,
-                status: Some(if ok { "ok".to_string() } else { "failing".to_string() }),
+                status: Some(if ok {
+                    "ok".to_string()
+                } else {
+                    "failing".to_string()
+                }),
                 latency_ms: Some(status_start.elapsed().as_millis() as u64),
                 detail,
             });
@@ -139,7 +151,11 @@ pub async fn run_dashboard_smoke(state: State<'_, AppState>) -> Result<Dashboard
             id: "openapi".to_string(),
             label: "/openapi.json reachable".to_string(),
             ok,
-            status: Some(if ok { "ok".to_string() } else { "failing".to_string() }),
+            status: Some(if ok {
+                "ok".to_string()
+            } else {
+                "failing".to_string()
+            }),
             latency_ms: Some(openapi_start.elapsed().as_millis() as u64),
             detail,
         }),
@@ -161,7 +177,11 @@ pub async fn run_dashboard_smoke(state: State<'_, AppState>) -> Result<Dashboard
         id: "port".to_string(),
         label: "Dashboard TCP port reachable".to_string(),
         ok: port_ok,
-        status: Some(if port_ok { "ok".to_string() } else { "failing".to_string() }),
+        status: Some(if port_ok {
+            "ok".to_string()
+        } else {
+            "failing".to_string()
+        }),
         latency_ms: None,
         detail: Some(api_base_url.clone()),
     });
@@ -184,7 +204,11 @@ pub async fn run_dashboard_smoke(state: State<'_, AppState>) -> Result<Dashboard
                     id: "sessions".to_string(),
                     label: "/api/sessions authenticated self-test".to_string(),
                     ok,
-                    status: Some(if ok { "ok".to_string() } else { "degraded".to_string() }),
+                    status: Some(if ok {
+                        "ok".to_string()
+                    } else {
+                        "degraded".to_string()
+                    }),
                     latency_ms: Some(sessions_start.elapsed().as_millis() as u64),
                     detail: Some(format!("HTTP {}", r.status().as_u16())),
                 });
@@ -209,8 +233,14 @@ pub async fn run_dashboard_smoke(state: State<'_, AppState>) -> Result<Dashboard
         });
     }
 
-    let failing = checks.iter().filter(|c| c.status.as_deref() == Some("failing")).count();
-    let degraded = checks.iter().filter(|c| c.status.as_deref() == Some("degraded")).count();
+    let failing = checks
+        .iter()
+        .filter(|c| c.status.as_deref() == Some("failing"))
+        .count();
+    let degraded = checks
+        .iter()
+        .filter(|c| c.status.as_deref() == Some("degraded"))
+        .count();
     let overall = if failing > 0 {
         "failing"
     } else if degraded > 0 {
@@ -235,7 +265,9 @@ pub async fn run_dashboard_smoke(state: State<'_, AppState>) -> Result<Dashboard
         detail: None,
     });
     components.platforms = Some(SmokeComponent {
-        ok: !checks.iter().any(|c| c.id == "sessions" && c.status.as_deref() == Some("failing")),
+        ok: !checks
+            .iter()
+            .any(|c| c.id == "sessions" && c.status.as_deref() == Some("failing")),
         state: None,
         detail: None,
     });

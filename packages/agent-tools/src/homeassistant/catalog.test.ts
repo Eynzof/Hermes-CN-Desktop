@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import "./catalog.js";
+import { registerHomeAssistantTools } from "./catalog.js";
 import { registry } from "../registry.js";
 import type { HaRequestInput } from "@hermes/protocol";
 
@@ -124,5 +124,15 @@ describe("homeassistant tool dispatch", () => {
     const res = await registry.dispatch("ha_get_state", { entity_id: "light.a" }, { ...baseCtx, haRequest });
     expect(res.isError).toBe(true);
     expect(res.content).toContain("401");
+  });
+});
+
+describe("registerHomeAssistantTools", () => {
+  it("is exported and re-registers the four HA tools", () => {
+    expect(registerHomeAssistantTools).toBeTypeOf("function");
+    registerHomeAssistantTools();
+    for (const name of TOOL_NAMES) {
+      expect(registry.get(name)).toBeDefined();
+    }
   });
 });

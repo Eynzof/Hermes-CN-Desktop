@@ -29,17 +29,63 @@ pub struct HaRequestInput {
     pub body: Option<String>,
 }
 
+/// Defense-in-depth HA path validation: reject blocked service domains and
+/// malformed entity ids / service names (mirror of `homeassistant/security.ts`).
+fn validate_ha_path(path: &str) -> Result<(), AppError> {
+    use crate::toolkit::ha_security::{
+        is_blocked_domain, is_valid_entity_id, is_valid_service_name,
+    };
+
+    let trimmed = path.trim_start_matches('/');
+
+    // Service call: `/api/services/<domain>/<service>`
+    if let Some(rest) = trimmed.strip_prefix("api/services/") {
+        let parts: Vec<&str> = rest.split('/').collect();
+        if parts.len() >= 2 {
+            let domain = parts[0];
+            let service = parts[1];
+            if is_blocked_domain(domain) {
+                return Err(AppError::InvalidRequest(format!(
+                    "blocked Home Assistant domain '{}'",
+                    domain
+                )));
+            }
+            if !is_valid_service_name(service) {
+                return Err(AppError::InvalidRequest(format!(
+                    "invalid Home Assistant service name '{}'",
+                    service
+                )));
+            }
+        }
+    }
+
+    // Entity state: `/api/states/<entity_id>`
+    if let Some(rest) = trimmed.strip_prefix("api/states/") {
+        let entity_id = rest.split('/').next().unwrap_or("");
+        if !entity_id.is_empty() && !is_valid_entity_id(entity_id) {
+            return Err(AppError::InvalidRequest(format!(
+                "invalid Home Assistant entity id '{}'",
+                entity_id
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 /// Validate that `target` stays within the configured HASS_URL origin.
 fn validate_hass_url(base: &str, target: &str) -> Result<url::Url, AppError> {
-    let base_url = url::Url::parse(base).map_err(|e| {
-        AppError::InvalidRequest(format!("Invalid HASS_URL '{}': {}", base, e))
-    })?;
+    let base_url = url::Url::parse(base)
+        .map_err(|e| AppError::InvalidRequest(format!("Invalid HASS_URL '{}': {}", base, e)))?;
 
     // Build the full target URL. If path is already absolute, require it to share
     // the same origin as the configured base URL.
     let target_url = if target.starts_with("http://") || target.starts_with("https://") {
         url::Url::parse(target).map_err(|e| {
-            AppError::InvalidRequest(format!("Invalid Home Assistant request URL '{}': {}", target, e))
+            AppError::InvalidRequest(format!(
+                "Invalid Home Assistant request URL '{}': {}",
+                target, e
+            ))
         })?
     } else {
         base_url.join(target).map_err(|e| {
@@ -80,12 +126,13 @@ fn validate_hass_url(base: &str, target: &str) -> Result<url::Url, AppError> {
 
 #[tauri::command]
 pub async fn ha_request(input: HaRequestInput) -> Result<ApiRequestResult, AppError> {
+    validate_ha_path(&input.path)?;
     let target_url = validate_hass_url(&input.url, &input.path)?;
     let method = input.method.as_deref().unwrap_or("GET");
     let display_url = target_url.as_str().to_string();
 
-    let mut req = EXTERNAL_HTTP_CLIENT
-        .request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
+    let mut req =
+        EXTERNAL_HTTP_CLIENT.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
 
     if let Some(headers) = input.headers {
         for (key, value) in headers {
@@ -133,7 +180,10 @@ pub async fn ha_request(input: HaRequestInput) -> Result<ApiRequestResult, AppEr
                 },
                 headers: HashMap::new(),
                 body: if is_timeout {
-                    format!("Home Assistant request to {} timed out after 15s", display_url)
+                    format!(
+                        "Home Assistant request to {} timed out after 15s",
+                        display_url
+                    )
                 } else {
                     e.to_string()
                 },
@@ -150,7 +200,10 @@ mod tests {
     #[test]
     fn validates_same_origin_request() {
         let target = validate_hass_url("http://homeassistant.local:8123", "/api/states").unwrap();
-        assert_eq!(target.as_str(), "http://homeassistant.local:8123/api/states");
+        assert_eq!(
+            target.as_str(),
+            "http://homeassistant.local:8123/api/states"
+        );
     }
 
     #[test]
@@ -165,29 +218,41 @@ mod tests {
 
     #[test]
     fn rejects_wrong_host() {
-        let err = validate_hass_url("http://homeassistant.local:8123", "http://evil.local:8123/api/states")
-            .unwrap_err();
+        let err = validate_hass_url(
+            "http://homeassistant.local:8123",
+            "http://evil.local:8123/api/states",
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("Request outside allowed origin"));
     }
 
     #[test]
     fn rejects_wrong_port() {
-        let err = validate_hass_url("http://homeassistant.local:8123", "http://homeassistant.local:8124/api/states")
-            .unwrap_err();
+        let err = validate_hass_url(
+            "http://homeassistant.local:8123",
+            "http://homeassistant.local:8124/api/states",
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("Request outside allowed origin"));
     }
 
     #[test]
     fn rejects_non_http_scheme() {
-        let err = validate_hass_url("http://homeassistant.local:8123", "ftp://homeassistant.local:8123/file")
-            .unwrap_err();
+        let err = validate_hass_url(
+            "http://homeassistant.local:8123",
+            "ftp://homeassistant.local:8123/file",
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("http or https"));
     }
 
     #[test]
     fn rejects_path_traversal() {
-        let err = validate_hass_url("http://homeassistant.local:8123", "http://other.host/api/../etc")
-            .unwrap_err();
+        let err = validate_hass_url(
+            "http://homeassistant.local:8123",
+            "http://other.host/api/../etc",
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("Request outside allowed origin"));
     }
 }

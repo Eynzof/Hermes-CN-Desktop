@@ -265,6 +265,16 @@ pub async fn gateway_ws_open(
                     _ = notify_r.notified() => break,
                     item = read.next() => match item {
                         Some(Ok(Message::Text(t))) => {
+                            // Validate/log the inbound gateway frame against the
+                            // shared schema (no wire change): known events are
+                            // logged by type, raw/unknown ones fall back to the
+                            // passthrough representation.
+                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) {
+                                match crate::schema::gateway::parse_gateway_event(&v) {
+                                    Ok(ev) => log::debug!("gateway ws event parsed: {:?}", ev),
+                                    Err(e) => log::debug!("gateway ws event parse failed: {}", e),
+                                }
+                            }
                             let _ = app_r.emit(
                                 "gateway-ws-message",
                                 WsMessagePayload { connection_id: cid.clone(), data: t.to_string() },

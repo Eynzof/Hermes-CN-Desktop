@@ -1,0 +1,9 @@
+{
+  "session_start": "2024-01-01T00:00:00Z",
+  "messages": [
+    { "role": "user", "content": "hi" },
+    { "role": "assistant", "content": "hello", "tool_call_id": "tc1", "tool_calls": { "id": "t1" }, "reasoning": "think" },
+    { "role": "session_meta", "content": "skip-me" },
+    { "role": "tool", "content": { "result": "ok" } }
+  ]
+}

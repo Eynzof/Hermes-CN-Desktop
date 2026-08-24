@@ -120,10 +120,7 @@ fn parse_host_port(host_port: &str) -> Result<(String, u16), AppError> {
 }
 
 fn is_loopback(host: &str) -> bool {
-    host.to_lowercase() == "localhost"
-        || host == "127.0.0.1"
-        || host == "::1"
-        || host == "[::1]"
+    host.to_lowercase() == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
 }
 
 /// Probe a host:port for a Chrome DevTools Protocol endpoint.
@@ -242,8 +239,18 @@ pub async fn browser_launch_chrome_debug(
 
     let user_data_dir = input.user_data_dir.unwrap_or_else(|| {
         dirs::cache_dir()
-            .map(|p| p.join("hermes").join("chrome-debug").to_string_lossy().to_string())
-            .unwrap_or_else(|| std::env::temp_dir().join("hermes-chrome-debug").to_string_lossy().to_string())
+            .map(|p| {
+                p.join("hermes")
+                    .join("chrome-debug")
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .unwrap_or_else(|| {
+                std::env::temp_dir()
+                    .join("hermes-chrome-debug")
+                    .to_string_lossy()
+                    .to_string()
+            })
     });
 
     let mut args = vec![
@@ -346,8 +353,36 @@ pub async fn browser_navigate(
     url: String,
     timeout: Option<u64>,
 ) -> Result<BrowserToolResult, AppError> {
-    let _ = (task_id, url, timeout);
+    let _ = task_id;
+    // SSRF guard at the IPC boundary. `assert_safe_url` performs the TS-compatible
+    // sync shape check (http/https, private/loopback blocked by default) and
+    // `validate_navigate_url` closes the DNS-rebinding gap by resolving domain
+    // hosts and rejecting any that resolve to blocked (private/link-local) IPs.
+    let empty_hosts: &[String] = &[];
+    let opts = crate::security::url::SsrfOptions {
+        allow_private_urls: false,
+        allowed_hosts: empty_hosts,
+    };
+    let safe_url = crate::security::url::assert_safe_url(&url, &opts)?;
+    crate::security::url::validate_navigate_url(&safe_url).await?;
+    let _ = (timeout, safe_url);
     Ok(not_implemented("browser_navigate"))
+}
+
+/// Thin wrapper for TS parity tooling / tests: returns the SSRF evaluation
+/// result without rejecting. Not required for the production flow.
+#[tauri::command]
+pub async fn browser_url_safety_check(
+    url: String,
+    allow_private_urls: Option<bool>,
+    allowed_hosts: Option<Vec<String>>,
+) -> Result<crate::security::url::UrlSafetyResult, AppError> {
+    let allowed_hosts: &[String] = allowed_hosts.as_deref().unwrap_or(&[]);
+    let opts = crate::security::url::SsrfOptions {
+        allow_private_urls: allow_private_urls.unwrap_or(false),
+        allowed_hosts,
+    };
+    Ok(crate::security::url::evaluate_url_safety(&url, &opts))
 }
 
 #[tauri::command]
@@ -394,7 +429,10 @@ pub async fn browser_scroll(
 }
 
 #[tauri::command]
-pub async fn browser_back(_state: tauri::State<'_, AppState>, task_id: String) -> Result<BrowserToolResult, AppError> {
+pub async fn browser_back(
+    _state: tauri::State<'_, AppState>,
+    task_id: String,
+) -> Result<BrowserToolResult, AppError> {
     let _ = task_id;
     Ok(not_implemented("browser_back"))
 }
@@ -524,14 +562,18 @@ mod tests {
     #[tokio::test]
     async fn browser_cdp_probe_handles_missing_listener() {
         let port = free_port();
-        let result = browser_cdp_probe(format!("127.0.0.1:{port}")).await.unwrap();
+        let result = browser_cdp_probe(format!("127.0.0.1:{port}"))
+            .await
+            .unwrap();
         assert!(!result.ok);
         assert!(result.error.is_some());
     }
 
     #[tokio::test]
     async fn browser_cdp_probe_reads_json_version() {
-        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .unwrap();
         let port = listener.local_addr().unwrap().port();
 
         tokio::spawn(async move {
@@ -545,7 +587,9 @@ mod tests {
         // Give the tiny server a moment to accept.
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let result = browser_cdp_probe(format!("127.0.0.1:{port}")).await.unwrap();
+        let result = browser_cdp_probe(format!("127.0.0.1:{port}"))
+            .await
+            .unwrap();
         assert!(result.ok);
         assert_eq!(result.version.as_deref(), Some("Chrome/123.0.0.0"));
         assert_eq!(result.browser.as_deref(), Some("1.3"));

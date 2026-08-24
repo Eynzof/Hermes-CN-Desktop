@@ -100,9 +100,7 @@ async fn next_redirect_url(
         .headers()
         .get(reqwest::header::LOCATION)
         .and_then(|value| value.to_str().ok())
-        .ok_or_else(|| {
-            AppError::InvalidRequest("Redirect missing Location header".to_string())
-        })?;
+        .ok_or_else(|| AppError::InvalidRequest("Redirect missing Location header".to_string()))?;
     let next = current.join(location)?;
     validate_external_url(next.as_str()).await
 }
@@ -122,11 +120,21 @@ pub async fn web_provider_request_impl(
     let method = input.method.as_deref().unwrap_or("GET");
 
     for redirect_count in 0..=MAX_WEB_REDIRECTS {
-        let req = build_request(&client, method, target_url.clone(), &input.headers, &input.body);
+        let req = build_request(
+            &client,
+            method,
+            target_url.clone(),
+            &input.headers,
+            &input.body,
+        );
         let response = req.send().await.map_err(|e| {
             let is_timeout = e.is_timeout();
             return AppError::ProxyError(if is_timeout {
-                format!("Request to {} timed out after {}s", input.path, timeout.as_secs())
+                format!(
+                    "Request to {} timed out after {}s",
+                    input.path,
+                    timeout.as_secs()
+                )
             } else {
                 e.to_string()
             });
@@ -134,9 +142,7 @@ pub async fn web_provider_request_impl(
 
         if follow_redirects && response.status().is_redirection() {
             if redirect_count >= MAX_WEB_REDIRECTS {
-                return Err(AppError::InvalidRequest(
-                    "Too many redirects".to_string(),
-                ));
+                return Err(AppError::InvalidRequest("Too many redirects".to_string()));
             }
             target_url = next_redirect_url(&target_url, &response).await?;
             continue;
@@ -230,7 +236,10 @@ pub async fn web_store_full_text(
     let path = dir.join(&safe_name);
     let original_len = input.content.len();
     let content = if original_len > MAX_STORE_BYTES {
-        let marker = format!("\n\n[... stored copy truncated at {} chars]", MAX_STORE_BYTES);
+        let marker = format!(
+            "\n\n[... stored copy truncated at {} chars]",
+            MAX_STORE_BYTES
+        );
         let take = MAX_STORE_BYTES.saturating_sub(marker.len());
         format!("{}{}", &input.content[..take], marker)
     } else {
@@ -341,7 +350,8 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/redirect"))
             .respond_with(
-                ResponseTemplate::new(302).insert_header("Location", format!("{}/final", server.uri())),
+                ResponseTemplate::new(302)
+                    .insert_header("Location", format!("{}/final", server.uri())),
             )
             .expect(1)
             .mount(&server)

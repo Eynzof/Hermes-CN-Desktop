@@ -107,10 +107,7 @@ struct PathSignature {
 
 #[cfg(target_os = "windows")]
 impl PathSignature {
-    fn from_registry_keys(
-        machine: Option<&winreg::RegKey>,
-        user: Option<&winreg::RegKey>,
-    ) -> Self {
+    fn from_registry_keys(machine: Option<&winreg::RegKey>, user: Option<&winreg::RegKey>) -> Self {
         fn key_signature(key: &winreg::RegKey) -> (u32, u32) {
             match key.query_info() {
                 Ok(info) => (
@@ -190,15 +187,13 @@ pub fn refresh_windows_path(force: bool) -> (Arc<EffectivePath>, bool) {
     let user_key = RegKey::predef(HKEY_CURRENT_USER)
         .open_subkey("Environment")
         .ok();
-    let signature = PathSignature::from_registry_keys(
-        machine_key.as_ref(),
-        user_key.as_ref(),
-    );
+    let signature = PathSignature::from_registry_keys(machine_key.as_ref(), user_key.as_ref());
 
     if !force {
         let cache = signature_cache().read().expect("signature cache poisoned");
         if let Some(state) = cache.as_ref() {
-            if state.signature == signature && state.resolved_at.elapsed() < PATH_SIGNATURE_MAX_AGE {
+            if state.signature == signature && state.resolved_at.elapsed() < PATH_SIGNATURE_MAX_AGE
+            {
                 return (state.value.clone(), false);
             }
         }
@@ -905,12 +900,15 @@ mod tests {
     #[serial_test::serial]
     fn path_signature_from_missing_keys_is_zero() {
         let sig = PathSignature::from_registry_keys(None, None);
-        assert_eq!(sig, PathSignature {
-            machine_low: 0,
-            machine_high: 0,
-            user_low: 0,
-            user_high: 0,
-        });
+        assert_eq!(
+            sig,
+            PathSignature {
+                machine_low: 0,
+                machine_high: 0,
+                user_low: 0,
+                user_high: 0,
+            }
+        );
     }
 
     #[cfg(target_os = "windows")]

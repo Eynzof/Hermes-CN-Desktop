@@ -1,0 +1,7 @@
+{
+  "name": "filesystem",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+  "env": { "NODE_ENV": "production" },
+  "cwd": "/workspace"
+}

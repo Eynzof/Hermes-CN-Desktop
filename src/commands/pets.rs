@@ -12,13 +12,11 @@ pub struct PetInfo {
 
 #[command]
 pub async fn pets_list() -> Result<Vec<PetInfo>, String> {
-    Ok(vec![
-        PetInfo {
-            enabled: true,
-            slug: "boba".to_string(),
-            display_name: "Boba".to_string(),
-        },
-    ])
+    Ok(vec![PetInfo {
+        enabled: true,
+        slug: "boba".to_string(),
+        display_name: "Boba".to_string(),
+    }])
 }
 
 #[derive(Debug, Clone, Deserialize)]

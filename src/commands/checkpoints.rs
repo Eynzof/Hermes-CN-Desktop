@@ -204,7 +204,9 @@ fn run_git_capture(cwd: &Path, args: &[&str]) -> String {
 fn resolve_dir(cwd: &str) -> AppResult<PathBuf> {
     let raw = cwd.trim();
     if raw.is_empty() {
-        return Err(AppError::InvalidRequest("Empty working directory".to_string()));
+        return Err(AppError::InvalidRequest(
+            "Empty working directory".to_string(),
+        ));
     }
     let real = PathBuf::from(raw)
         .canonicalize()
@@ -402,7 +404,9 @@ pub async fn checkpoint_diff(input: CheckpointDiffInput) -> AppResult<Checkpoint
 }
 
 #[tauri::command]
-pub async fn checkpoint_snapshot(input: CheckpointSnapshotInput) -> AppResult<CheckpointSnapshotResult> {
+pub async fn checkpoint_snapshot(
+    input: CheckpointSnapshotInput,
+) -> AppResult<CheckpointSnapshotResult> {
     let cwd = resolve_dir(&input.cwd)?;
     if !is_inside_worktree(&cwd) {
         return Ok(CheckpointSnapshotResult {
@@ -412,9 +416,7 @@ pub async fn checkpoint_snapshot(input: CheckpointSnapshotInput) -> AppResult<Ch
         });
     }
 
-    let head = run_git_ok(&cwd, &["rev-parse", "HEAD"])
-        .trim()
-        .to_string();
+    let head = run_git_ok(&cwd, &["rev-parse", "HEAD"]).trim().to_string();
     let head = if head.is_empty() { None } else { Some(head) };
     let clean = status_entries(&cwd).is_empty();
     let message = if clean {

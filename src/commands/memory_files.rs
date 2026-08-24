@@ -120,9 +120,17 @@ mod tests {
 
     #[test]
     fn falls_back_to_current_directory_when_workspace_root_is_omitted() {
-        let result = read_memory_files(ReadMemoryFilesInput { workspace_root: None });
+        let result = read_memory_files(ReadMemoryFilesInput {
+            workspace_root: None,
+        });
         let result = tauri::async_runtime::block_on(result).expect("command ok");
-        assert_eq!(result.workspace_root, std::env::current_dir().unwrap().to_string_lossy().to_string());
+        assert_eq!(
+            result.workspace_root,
+            std::env::current_dir()
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+        );
         assert_eq!(result.files.len(), 2);
     }
 

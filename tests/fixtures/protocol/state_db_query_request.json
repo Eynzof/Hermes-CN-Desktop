@@ -1,0 +1,5 @@
+{
+  "sql": "SELECT * FROM messages LIMIT 1",
+  "params": ["a", 1, null],
+  "readonly": true
+}

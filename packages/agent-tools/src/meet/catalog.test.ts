@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import "./catalog.js";
+import { registerMeetTools } from "./catalog.js";
 import { registry } from "../registry.js";
 
 const TOOL_NAMES = ["meet_join", "meet_status", "meet_transcript", "meet_leave", "meet_say", "meet_setup"];
@@ -109,5 +109,15 @@ describe("meet tool dispatch", () => {
     const res = await registry.dispatch("meet_leave", { reason: "done" }, { invoke });
     expect(res.isError).toBeFalsy();
     expect(invoke.mock.calls[0][1]!.reason).toBe("done");
+  });
+});
+
+describe("registerMeetTools", () => {
+  it("is exported and re-registers the six Meet tools", () => {
+    expect(registerMeetTools).toBeTypeOf("function");
+    registerMeetTools();
+    for (const name of TOOL_NAMES) {
+      expect(registry.get(name)).toBeDefined();
+    }
   });
 });

@@ -120,7 +120,9 @@ pub fn active_profile_set(
     let base = hermes_home_base(&state)?;
     let name = input.name.trim();
     if name.is_empty() {
-        return Err(AppError::InvalidRequest("Profile name cannot be empty".to_string()));
+        return Err(AppError::InvalidRequest(
+            "Profile name cannot be empty".to_string(),
+        ));
     }
     write_active_profile_sticky(&base, name);
     let inner = state.inner.lock()?;
@@ -238,7 +240,14 @@ pub fn oauth_providers_status(
     let config = read_config_yaml(&state)?;
     let env = config.get("env").and_then(|v| v.as_mapping());
 
-    let known = ["anthropic", "openai", "google", "alibaba", "deepseek", "kimi"];
+    let known = [
+        "anthropic",
+        "openai",
+        "google",
+        "alibaba",
+        "deepseek",
+        "kimi",
+    ];
     let providers: Vec<OAuthProviderSummary> = known
         .iter()
         .map(|id| {
@@ -248,7 +257,11 @@ pub fn oauth_providers_status(
                 .and_then(|v| v.as_str())
                 .map(|s| !s.is_empty())
                 .unwrap_or(false);
-            let source = if configured { Some("env".to_string()) } else { None };
+            let source = if configured {
+                Some("env".to_string())
+            } else {
+                None
+            };
             OAuthProviderSummary {
                 id: id.to_string(),
                 name: display_name_for_provider(id),

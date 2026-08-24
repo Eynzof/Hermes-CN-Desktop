@@ -65,8 +65,15 @@ libc = "0.2"
 getrandom = "0.3"
 # Parse $HERMES_HOME/.env for per-spawn child env injection (src/env_file.rs).
 # Only from_path_iter is used — the desktop process env is never mutated.
-dotenvy = "0.15"
-tauri-plugin-clipboard-manager = "2.3.2"
+  dotenvy = "0.15"
+  tauri-plugin-clipboard-manager = "2.3.2"
+  # Native token counting (cl100k_base BPE) for the tokenize module.
+  tiktoken-rs = "0.6"
+  # HMAC-SHA256 for the in-process dashboard auth session store.
+  hmac = "0.12"
+  subtle = "2"
+  # Recursive SKILL.md discovery for the skills-lint CLI binary.
+  walkdir = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [

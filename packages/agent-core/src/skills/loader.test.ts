@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { loadBundledSkills, loadSkillFromContent, loadSkillPack, loadSkillReference, parseFrontmatter } from "./loader.js";
+import {
+  loadBundledSkills,
+  loadSkillFromContent,
+  loadSkillPack,
+  loadSkillReference,
+  parseFrontmatter,
+  skillLevelGte,
+  validateSkillMetadata,
+} from "./loader.js";
 import type { SkillBundle } from "./types.js";
 import type { SkillFs } from "./loader.js";
 
@@ -159,5 +167,67 @@ describe("loadSkillReference", () => {
     expect(ref).toBeDefined();
     expect(ref!.content).toBe("API details");
     expect(ref!.name).toBe("api.md");
+  });
+});
+
+describe("skillLevelGte", () => {
+  it("returns true when levels are equal", () => {
+    expect(skillLevelGte("L0", "L0")).toBe(true);
+    expect(skillLevelGte("L1", "L1")).toBe(true);
+    expect(skillLevelGte("L2", "L2")).toBe(true);
+  });
+
+  it("returns true when the level is more detailed", () => {
+    expect(skillLevelGte("L1", "L0")).toBe(true);
+    expect(skillLevelGte("L2", "L0")).toBe(true);
+    expect(skillLevelGte("L2", "L1")).toBe(true);
+  });
+
+  it("returns false when the level is less detailed", () => {
+    expect(skillLevelGte("L0", "L1")).toBe(false);
+    expect(skillLevelGte("L1", "L2")).toBe(false);
+    expect(skillLevelGte("L0", "L2")).toBe(false);
+  });
+});
+
+describe("validateSkillMetadata", () => {
+  it("passes valid metadata through without warnings", () => {
+    const metadata = { name: "ok", description: "desc", platforms: ["linux"] };
+    const result = validateSkillMetadata(metadata);
+    expect(result.warnings).toEqual([]);
+    expect(result.metadata).toEqual(metadata);
+  });
+
+  it("warns when the name is missing", () => {
+    const result = validateSkillMetadata({ name: "", description: "d" });
+    expect(result.warnings).toContain("Skill metadata is missing 'name'.");
+  });
+
+  it("warns when the description is missing", () => {
+    const result = validateSkillMetadata({ name: "n", description: "" });
+    expect(result.warnings).toContain("Skill metadata is missing 'description'.");
+  });
+
+  it("truncates overlong names to 64 characters", () => {
+    const result = validateSkillMetadata({ name: "x".repeat(100), description: "d" });
+    expect(result.metadata.name).toHaveLength(64);
+    expect(result.warnings.some((w) => w.includes("name exceeds 64"))).toBe(true);
+  });
+
+  it("truncates overlong descriptions to 1024 characters", () => {
+    const result = validateSkillMetadata({ name: "n", description: "x".repeat(2000) });
+    expect(result.metadata.description).toHaveLength(1024);
+    expect(result.warnings.some((w) => w.includes("description exceeds 1024"))).toBe(true);
+  });
+
+  it("preserves other metadata fields", () => {
+    const result = validateSkillMetadata({
+      name: "n",
+      description: "d",
+      category: "c",
+      tags: ["a"],
+    });
+    expect(result.metadata.category).toBe("c");
+    expect(result.metadata.tags).toEqual(["a"]);
   });
 });

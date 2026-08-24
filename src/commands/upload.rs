@@ -37,7 +37,11 @@ pub struct UploadFileLocalResult {
 }
 
 fn is_valid_session_id(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 160 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    !id.is_empty()
+        && id.len() <= 160
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 fn sanitize_filename(name: &str) -> String {
@@ -133,7 +137,10 @@ pub fn upload_file_local(
 
     Ok(UploadFileLocalResult {
         ok: true,
-        filename: target.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or(filename),
+        filename: target
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or(filename),
         path: target.to_string_lossy().to_string(),
         size: bytes.len(),
         mime_type: input.mime_type,
@@ -143,7 +150,6 @@ pub fn upload_file_local(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn sanitize_filename_strips_path_separators() {
@@ -192,7 +198,9 @@ mod tests {
     fn base64_decoding_roundtrip() {
         let text = "hello world";
         let encoded = base64::engine::general_purpose::STANDARD.encode(text.as_bytes());
-        let decoded = base64::engine::general_purpose::STANDARD.decode(&encoded).unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&encoded)
+            .unwrap();
         assert_eq!(String::from_utf8(decoded).unwrap(), text);
     }
 }

@@ -1,0 +1,5 @@
+{
+  "type": "message.delta",
+  "session_id": "s-1",
+  "payload": { "text": "hello" }
+}

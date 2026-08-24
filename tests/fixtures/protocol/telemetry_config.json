@@ -1,0 +1,5 @@
+{
+  "enabled": true,
+  "endpoint": "http://localhost:4318",
+  "sampleRate": 0.5
+}

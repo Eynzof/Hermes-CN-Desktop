@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import "./catalog.js";
+import { registerMessagingTools } from "./catalog.js";
 import { registry } from "../registry.js";
 
 const TOOL_NAMES = ["messaging_configure", "messaging_status", "messaging_start", "messaging_stop", "messaging_send"];
@@ -52,5 +52,15 @@ describe("messaging tool dispatch through the registry", () => {
     const res = await registry.dispatch("messaging_status", { platform: "feishu" }, {});
     expect(res.isError).toBeFalsy();
     expect(JSON.parse(res.content).gateway).toBe("idle");
+  });
+});
+
+describe("registerMessagingTools", () => {
+  it("is exported and re-registers the five messaging tools", () => {
+    expect(registerMessagingTools).toBeTypeOf("function");
+    registerMessagingTools();
+    for (const name of TOOL_NAMES) {
+      expect(registry.get(name)).toBeDefined();
+    }
   });
 });

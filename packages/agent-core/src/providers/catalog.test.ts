@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { clearProviders, registerProvider } from "./registry.js";
-import { createModelCatalogService } from "./catalog.js";
+import {
+  createModelCatalogService,
+  getDefaultModelOverride,
+  setInMemoryDefaultModel,
+} from "./catalog.js";
 import type { ProviderProfile } from "./profile.js";
 
 function fakeProvider(overrides: Partial<ProviderProfile> = {}): ProviderProfile {
@@ -93,5 +97,29 @@ describe("model catalog service", () => {
     );
     const svc = createModelCatalogService();
     expect(await svc.refreshProviderModels("openai")).toEqual(["gpt-4o"]);
+  });
+});
+
+describe("in-memory default model override", () => {
+  it("setInMemoryDefaultModel stores model and provider", () => {
+    setInMemoryDefaultModel("gpt-4o", "openai");
+    expect(getDefaultModelOverride()).toEqual({ model: "gpt-4o", provider: "openai" });
+  });
+
+  it("stores the model without a provider", () => {
+    setInMemoryDefaultModel("claude-opus");
+    expect(getDefaultModelOverride()).toEqual({ model: "claude-opus", provider: undefined });
+  });
+
+  it("setInMemoryDefaultModel replaces the previous override", () => {
+    setInMemoryDefaultModel("first", "p1");
+    setInMemoryDefaultModel("second", "p2");
+    expect(getDefaultModelOverride()).toEqual({ model: "second", provider: "p2" });
+  });
+
+  it("service setDefaultModel updates the same in-memory override", async () => {
+    const svc = createModelCatalogService();
+    await svc.setDefaultModel("gpt-4o-mini", "openai");
+    expect(getDefaultModelOverride()).toEqual({ model: "gpt-4o-mini", provider: "openai" });
   });
 });
