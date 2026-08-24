@@ -48,7 +48,8 @@ export function resolveSessionRuntime(
       ? mappedGatewaySessionId
       : undefined;
   const runtimeSessionId =
-    taskId && runtimeBySession[taskId] ? taskId : activeMappedGatewaySessionId;
+    activeMappedGatewaySessionId ??
+    (taskId && runtimeBySession[taskId] ? taskId : undefined);
   const runtime = taskId
     ? runtimeBySession[runtimeSessionId ?? taskId] ?? createEmptyChatRuntime()
     : createEmptyChatRuntime();

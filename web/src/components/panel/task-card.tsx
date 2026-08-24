@@ -1,5 +1,6 @@
 import { useAtomValue } from "jotai";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
+import { findRuntimeForSession } from "@/lib/session-activity";
 import { sessionDisplayTitle } from "@/lib/session-title";
 import { formatTokens, relativeTime } from "@/lib/format";
 import { Dot, Pill } from "@/components/ui/pill";
@@ -17,7 +18,10 @@ interface TaskCardProps {
 
 export function TaskCard({ session, onClick }: TaskCardProps) {
   const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
-  const runtime = runtimeBySession[session.id];
+  // 运行时会话可能用 gateway id 做 key，而列表里的 session.id 是 persistent
+  // id（见 mergeLiveRuntimeSessions）。直接按下标取会漏掉待审批数，必须走
+  // 与 isSessionRunning 一致的别名解析。
+  const runtime = findRuntimeForSession(session.id, runtimeBySession);
   const pendingCount = runtime?.pendingApprovals.length ?? 0;
 
   const toolCount = session.tool_call_count ?? 0;

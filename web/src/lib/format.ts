@@ -4,10 +4,18 @@ export function formatTokens(value: number | undefined | null): string {
   if (n < 1_000) return String(Math.round(n));
   if (n < 1_000_000) {
     const k = n / 1_000;
+    // 进位到 M，避免四舍五入后出现 "1000k"。
+    if (k >= 999.5) return "1.0M";
     return k >= 100 ? `${Math.round(k)}k` : `${k.toFixed(1)}k`;
   }
-  const m = n / 1_000_000;
-  return m >= 100 ? `${Math.round(m)}M` : `${m.toFixed(1)}M`;
+  if (n < 1_000_000_000) {
+    const m = n / 1_000_000;
+    // 进位到 B，避免四舍五入后出现 "1000M"。
+    if (m >= 999.5) return "1.0B";
+    return m >= 100 ? `${Math.round(m)}M` : `${m.toFixed(1)}M`;
+  }
+  const b = n / 1_000_000_000;
+  return b >= 100 ? `${Math.round(b)}B` : `${b.toFixed(1)}B`;
 }
 
 export function formatDurationMs(ms: number | undefined | null): string {

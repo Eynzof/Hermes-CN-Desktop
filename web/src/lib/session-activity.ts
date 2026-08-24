@@ -72,7 +72,7 @@ export function streamSilenceMs(
   return Math.max(0, now - last);
 }
 
-function findRuntimeForSession(
+export function findRuntimeForSession(
   sessionId: string,
   runtimeBySession: ChatRuntimeBySession,
 ): ChatSessionRuntime | undefined {

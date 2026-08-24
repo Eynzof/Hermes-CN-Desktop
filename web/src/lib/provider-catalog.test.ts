@@ -22,6 +22,7 @@ import {
   parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
+  providersWithSavedCredentials,
   resolveSelectedProvider,
   sortProvidersForCnEdition,
   sortProvidersForModelsPage,
@@ -815,6 +816,77 @@ describe("provider catalog config updates", () => {
       undefined,
       provider,
     )).toBe(true);
+  });
+
+  describe("providersWithSavedCredentials", () => {
+    it("collects a DS provider whose api_key is embedded in config.providers (no env var)", () => {
+      const config = {
+        model: {
+          provider: "ds",
+          default: "deepseek-v4-flash-official",
+          api_key: "sk-test-ds-key",
+        },
+        providers: {
+          ds: {
+            name: "DS",
+            base_url: "https://api.deepseek.com/v1",
+            model: "deepseek-v4-flash-official",
+            api_key: "sk-test-ds-key",
+          },
+        },
+      };
+
+      expect(providersWithSavedCredentials(config, {})).toEqual(["ds"]);
+    });
+
+    it("collects builtin providers that only have their env label set (e.g. DASHSCOPE_API_KEY)", () => {
+      const envVars = {
+        DASHSCOPE_API_KEY: {
+          is_set: true,
+          redacted_value: "sk-...tail",
+        },
+      };
+
+      expect(providersWithSavedCredentials({}, envVars)).toContain("alibaba");
+    });
+
+    it("treats key_env referencing a set env var as saved credentials", () => {
+      const config = {
+        providers: {
+          ds: {
+            name: "DS",
+            base_url: "https://api.deepseek.com/v1",
+            model: "deepseek-v4-flash-official",
+            key_env: "MY_DS_KEY",
+          },
+        },
+      };
+
+      // 与 providerHasSavedCredentials 语义一致：声明了 key_env 即视为已配置；
+      // 环境变量真正填上后同样命中。
+      expect(providersWithSavedCredentials(config, {})).toEqual(["ds"]);
+      expect(providersWithSavedCredentials(config, {
+        MY_DS_KEY: { is_set: true },
+      })).toEqual(["ds"]);
+    });
+
+    it("falls back to the top-level model.api_key mirror mapped to its provider id", () => {
+      const config = {
+        model: {
+          provider: "ds",
+          default: "deepseek-v4-flash-official",
+          api_key: "sk-top-level",
+        },
+      };
+
+      expect(providersWithSavedCredentials(config, {})).toEqual(["ds"]);
+    });
+
+    it("returns an empty list when nothing is configured", () => {
+      expect(providersWithSavedCredentials(undefined, {})).toEqual([]);
+      expect(providersWithSavedCredentials({}, {})).toEqual([]);
+      expect(providersWithSavedCredentials({ providers: { ds: { model: "x" } } }, {})).toEqual([]);
+    });
   });
 
   it("uses XIAOMI_API_KEY as the canonical Xiaomi key while keeping MIMO_API_KEY as a legacy alias", () => {

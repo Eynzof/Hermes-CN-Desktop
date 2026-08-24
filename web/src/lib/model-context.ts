@@ -24,7 +24,8 @@ function normalizeProviderId(value: unknown): string {
   return String(value ?? "")
     .trim()
     .replace(/^custom:/i, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\s+/g, "-");
 }
 
 function providerMatches(

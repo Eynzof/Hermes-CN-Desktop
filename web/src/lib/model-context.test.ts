@@ -47,6 +47,26 @@ describe("resolveModelContextWindow", () => {
     })).toBe(128_000);
   });
 
+  it("matches custom providers whose display name contains spaces (normalized id uses hyphens)", () => {
+    const config = {
+      custom_providers: [
+        {
+          name: "My Provider",
+          models: {
+            "my-model": { context_length: 64_000 },
+          },
+        },
+      ],
+    };
+
+    // customProviderPresetsFromConfig 会把 "My Provider" 规范成
+    // "custom:my-provider"；selection.provider 用的是这个 id，必须能对上。
+    expect(resolveModelContextWindow(config, {
+      provider: "custom:my-provider",
+      model: "my-model",
+    })).toBe(64_000);
+  });
+
   it("falls back to the built-in MiniMax-M3 catalog context", () => {
     expect(resolveModelContextWindow(undefined, {
       provider: "minimax-cn",

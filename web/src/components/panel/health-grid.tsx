@@ -22,6 +22,7 @@ import { useSkills } from "@/hooks/use-skills";
 import { useMcpServers } from "@/hooks/use-mcp-servers";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { useLastUsedModel } from "@/lib/last-used-model";
+import { providersWithSavedCredentials } from "@/lib/provider-catalog";
 import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import { Dot } from "@/components/ui/pill";
 import s from "./health-grid.module.css";
@@ -295,7 +296,16 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
     const currentProviderId = modelInfo?.provider || lastUsedModel?.provider || "";
     const currentOAuthProvider = oauthProviders?.find((provider) => provider.id === currentProviderId);
     const currentOAuthLoggedIn = currentOAuthProvider?.status.logged_in === true;
-    const anyModelCredential = anyTokenSet || currentOAuthLoggedIn;
+    // 模型凭证不只来自 *_API_KEY 环境变量：模型设置页保存的 provider 会把
+    // api_key 直接落盘到 config.providers.<id>（自定义 key_env、顶层
+    // model.api_key 也算）。只认环境变量会让已配置好 DS/DeepSeek 等密钥的
+    // 用户在工作台看到「模型凭证 未配置」—— 与模型设置页的
+    // providerHasSavedCredentials 判定保持一致。
+    const configuredProviderSources = providersWithSavedCredentials(config, env);
+    const anyModelCredential = anyTokenSet
+      || currentOAuthLoggedIn
+      || configuredProviderSources.length > 0;
+    const configuredProviderLabels = configuredProviderSources;
     const ctxLabel = formatContextLength(
       lastUsedModel?.contextWindow
         ?? modelInfo?.effective_context_length
@@ -368,12 +378,18 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
           ? `${currentOAuthProvider?.name ?? currentProviderId} OAuth 已连接`
           : anyTokenSet
             ? formatTokenNames(setTokens)
-            : "模型调用需要 API Key 或 OAuth 凭证",
+            : configuredProviderLabels.length > 0
+              ? `已保存于 ${configuredProviderLabels.join(" · ")}`
+              : anyModelCredential
+                ? "已保存于 provider 配置"
+                : "模型调用需要 API Key 或 OAuth 凭证",
         detail: currentOAuthLoggedIn
           ? "当前主模型使用 OAuth 登录凭证，无需额外 API Token。"
           : anyTokenSet
             ? "仅展示已设置的变量名称，不会暴露密钥内容。"
-            : "可在模型设置里补齐 API Key，或完成支持 OAuth 的模型登录。",
+            : configuredProviderLabels.length > 0
+              ? "已保存于 provider 配置，不会暴露密钥内容。"
+              : "可在模型设置里补齐 API Key，或完成支持 OAuth 的模型登录。",
         actionTo: anyModelCredential ? undefined : "/models",
         actionLabel: "配置凭证",
       },

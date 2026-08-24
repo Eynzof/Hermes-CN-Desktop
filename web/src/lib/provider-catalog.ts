@@ -1426,6 +1426,72 @@ export function providerHasSavedCredentials(
   return Boolean(entry.api_key || entry.key_env);
 }
 
+function entryHasInlineCredential(entry: Record<string, any>, envVars?: EnvVarPreviewMap): boolean {
+  const apiKey = typeof entry.api_key === "string" ? entry.api_key.trim() : "";
+  if (apiKey) return true;
+  const keyEnv = typeof entry.key_env === "string" ? entry.key_env.trim() : "";
+  return Boolean(keyEnv && envVars?.[keyEnv]?.is_set);
+}
+
+/**
+ * 收集所有已保存模型凭证的 provider id，判定语义与模型设置页的
+ * `providerHasSavedCredentials` 完全一致。覆盖四类来源：
+ *
+ * 1. `config.providers.<id>`（内置 + 自定义，内联 api_key / key_env 指向的
+ *    环境变量也算）；
+ * 2. legacy `config.custom_providers[]`（可能没有 base_url，preset builder
+ *    会漏掉，这里直接按条目判定）；
+ * 3. 内置目录里只靠环境变量（apiKeyLabel / apiKeyAliases / key_env）就有
+ *    凭证的 provider；
+ * 4. 顶层 `config.model.api_key`（「设为当前模型」保存路径会镜像写一份）。
+ *
+ * 健康检查（工作台「模型凭证」）用它判断是否还需要引导用户配置凭证，
+ * 避免只认 *_API_KEY 环境变量而漏掉已经落盘在 provider 配置里的密钥。
+ */
+export function providersWithSavedCredentials(
+  config: Record<string, any> | undefined,
+  envVars?: EnvVarPreviewMap,
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const add = (id: string) => {
+    const normalized = id.trim();
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      ids.push(normalized);
+    }
+  };
+
+  if (!config) return ids;
+
+  for (const key of Object.keys(asRecord(config.providers))) {
+    if (providerHasSavedCredentials(config, key, envVars)) add(key);
+  }
+
+  if (Array.isArray(config.custom_providers)) {
+    for (const raw of config.custom_providers) {
+      const entry = asRecord(raw);
+      const id = normalizeCustomProviderId(entry.provider_key ?? entry.name);
+      if (id && providerHasSavedCredentials(config, id, envVars)) add(id);
+    }
+  }
+
+  for (const preset of BUILTIN_PROVIDER_CATALOG.providers) {
+    if (providerHasSavedCredentials(config, preset.id, envVars, preset)) add(preset.id);
+  }
+
+  const model = asRecord(config.model);
+  if (entryHasInlineCredential(model, envVars)) {
+    // 顶层 model.api_key（「设为当前模型」保存路径镜像）。映射回真实
+    // provider id（与 providers.<id> 的键一致），避免在列表里出现假的
+    // "model" 条目；providers.<id> 已存在时会被上面的循环去重。
+    const modelProviderId = String(model.provider ?? "").trim();
+    if (modelProviderId) add(modelProviderId);
+  }
+
+  return ids;
+}
+
 export function buildProviderConfigUpdate(
   config: Record<string, any>,
   preset: ProviderPreset,

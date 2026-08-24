@@ -31,6 +31,14 @@ describe("formatTokens", () => {
   it("renders millions", () => {
     expect(formatTokens(1_500_000)).toBe("1.5M");
   });
+  it("escalates k→M instead of showing 1000k", () => {
+    expect(formatTokens(999_500)).toBe("1.0M");
+    expect(formatTokens(999_999)).toBe("1.0M");
+  });
+  it("escalates M→B instead of showing 1000.0M", () => {
+    expect(formatTokens(999_500_000)).toBe("1.0B");
+    expect(formatTokens(1_500_000_000)).toBe("1.5B");
+  });
   it("returns dash for null/NaN", () => {
     expect(formatTokens(null)).toBe("—");
     expect(formatTokens(Number.NaN)).toBe("—");

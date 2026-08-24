@@ -76,6 +76,66 @@ describe("resolveSessionRuntime", () => {
     expect(firstText(resolved.runtime)).toBe("from A");
   });
 
+  it("prefers the live gateway bucket over a stale persistent-id bucket (stuck 正在唤醒Hermes regression)", () => {
+    // Regression for the reported symptom: after sending in an existing session
+    // the UI stays on "正在唤醒Hermes..." instead of showing reasoning + tool
+    // calls. The optimistic send and the streaming events both live in the live
+    // gateway bucket, but the detail route rendered a STALE bucket keyed by the
+    // persistent id (which only holds the optimistic progress message from an
+    // earlier visit). Resolution must prefer the live gateway bucket, otherwise
+    // reasoning/tool parts stream into a bucket the UI never reads.
+    rememberSessionMapping("gw-live", "sess-1");
+    const staleProgressMessage: HermesUIMessage = {
+      id: "live-assistant-stale",
+      sessionId: "sess-1",
+      role: "assistant",
+      createdAt: 1,
+      status: "streaming",
+      parts: [{ type: "progress", text: "正在唤醒Hermes..." }],
+    };
+    const runtimeBySession: ChatRuntimeBySession = {
+      // Stale persistent bucket: only the optimistic progress remains.
+      "sess-1": {
+        ...createEmptyChatRuntime(1),
+        streamStatus: "streaming",
+        messages: [staleProgressMessage],
+      },
+      // Live gateway bucket: reasoning + tool calls streamed in correctly.
+      "gw-live": {
+        ...createEmptyChatRuntime(1),
+        streamStatus: "streaming",
+        activeAssistantId: "live-assistant-2",
+        messages: [
+          {
+            id: "live-assistant-2",
+            sessionId: "gw-live",
+            role: "assistant",
+            createdAt: 2,
+            status: "streaming",
+            parts: [
+              { type: "reasoning", text: "让我先思考。" },
+              {
+                type: "tool",
+                toolCallId: "t1",
+                name: "read",
+                state: "running",
+                startedAt: 3,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const resolved = resolveSessionRuntime("sess-1", "gw-live", runtimeBySession);
+
+    expect(resolved.runtimeSessionId).toBe("gw-live");
+    expect(resolved.runtime).toBe(runtimeBySession["gw-live"]);
+    expect(resolved.runtime.messages[0]?.parts.some((part) => part.type === "reasoning")).toBe(true);
+    expect(resolved.runtime.messages[0]?.parts.some((part) => part.type === "tool")).toBe(true);
+    expect(resolved.isLiveSession).toBe(true);
+  });
+
   it("resolves a fresh new-task session keyed directly by its gateway id", () => {
     const runtimeBySession: ChatRuntimeBySession = {
       "gw-new": runtimeWith("gw-new", "hi"),
