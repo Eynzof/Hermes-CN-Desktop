@@ -15,6 +15,17 @@
   --h-bg-code: #f7f6f1;
 }
 
+/* The default skin layers on top of any structural UI theme. When the active
+   theme is dark, the warm paper code background above becomes nearly the same
+   colour as the text, so inline `code` (and code blocks) become invisible.
+   Use a dark grey code background for dark themes so the code stays readable. */
+[data-theme="dark"][data-skin="default"],
+[data-theme="dark-modern"][data-skin="default"],
+[data-theme="dracula"][data-skin="default"],
+[data-theme="catppuccin-mocha"][data-skin="default"] {
+  --h-bg-code: #1a1a1a;
+}
+
 [data-skin="dark"] {
   --h-accent: #ff8c42;
   --h-accent-soft: rgba(255, 140, 66, 0.14);
