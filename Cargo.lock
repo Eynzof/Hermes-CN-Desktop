@@ -346,12 +346,27 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bit-set"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0700ddab506f33b20a03b13996eccd309a48e5ff77d0d95926aa0210fb4e95f1"
+dependencies = [
+ "bit-vec 0.6.3",
+]
+
+[[package]]
+name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3"
 dependencies = [
- "bit-vec",
+ "bit-vec 0.8.0",
 ]
+
+[[package]]
+name = "bit-vec"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bit-vec"
@@ -433,6 +448,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
 dependencies = [
  "tinyvec",
+]
+
+[[package]]
+name = "bstr"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
+dependencies = [
+ "memchr",
+ "regex-automata",
+ "serde_core",
 ]
 
 [[package]]
@@ -1107,7 +1133,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "521e380c0c8afb8d9a1e83a1822ee03556fc3e3e7dbc1fd30be14e37f9cb3f89"
 dependencies = [
- "bit-set",
+ "bit-set 0.8.0",
  "cssparser",
  "foldhash 0.2.0",
  "html5ever",
@@ -1338,6 +1364,17 @@ name = "fallible-streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
+
+[[package]]
+name = "fancy-regex"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "531e46835a22af56d1e3b66f04844bed63158bc094a628bec1d321d9b4c44bf2"
+dependencies = [
+ "bit-set 0.5.3",
+ "regex-automata",
+ "regex-syntax",
+]
 
 [[package]]
 name = "fastrand"
@@ -1997,6 +2034,7 @@ dependencies = [
  "fs2",
  "futures-util",
  "getrandom 0.3.4",
+ "hmac",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -2016,6 +2054,7 @@ dependencies = [
  "serde_yaml",
  "serial_test",
  "sha2",
+ "subtle",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",
@@ -2023,10 +2062,12 @@ dependencies = [
  "tauri-plugin-notification",
  "tempfile",
  "thiserror 2.0.18",
+ "tiktoken-rs",
  "tokio",
  "tokio-tungstenite",
  "url",
  "urlencoding",
+ "walkdir",
  "windows-sys 0.61.2",
  "winreg 0.55.0",
  "wiremock",
@@ -3673,7 +3714,7 @@ dependencies = [
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "rustls",
  "socket2",
  "thiserror 2.0.18",
@@ -3693,7 +3734,7 @@ dependencies = [
  "lru-slab",
  "rand",
  "ring",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "rustls",
  "rustls-pki-types",
  "slab",
@@ -3983,6 +4024,12 @@ dependencies = [
 
 [[package]]
 name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94300abf3f1ae2e2b8ffb7b58043de3d399c73fa6f4b73826402a5c457614dbe"
@@ -4151,7 +4198,7 @@ dependencies = [
  "phf",
  "phf_codegen",
  "precomputed-hash",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "servo_arc",
  "smallvec",
 ]
@@ -5097,6 +5144,22 @@ dependencies = [
  "quick-error",
  "weezl",
  "zune-jpeg",
+]
+
+[[package]]
+name = "tiktoken-rs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44075987ee2486402f0808505dd65692163d243a337fc54363d49afac41087f6"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "bstr",
+ "fancy-regex",
+ "lazy_static",
+ "parking_lot",
+ "regex",
+ "rustc-hash 1.1.0",
 ]
 
 [[package]]
