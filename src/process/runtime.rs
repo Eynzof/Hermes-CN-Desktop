@@ -1082,17 +1082,33 @@ fn tui_dir_if_present(runtime_dir: &Path) -> Option<PathBuf> {
     tui.join("dist").join("entry.js").is_file().then_some(tui)
 }
 
+fn node_override_if_present(raw: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let node = PathBuf::from(raw?);
+    node.is_file().then_some(node)
+}
+
+fn tui_override_if_present(raw: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let tui = PathBuf::from(raw?);
+    tui.join("dist").join("entry.js").is_file().then_some(tui)
+}
+
 /// Directory holding the bundled `node`/`npm`/`npx`, when the current managed
 /// runtime ships one. Prepend to a spawned child's PATH so `shutil.which`
 /// (TUI launch, node-based MCP servers, playwright, `npx tsc`) resolves them
 /// without a host Node install. See FORK_NOTES P-032.
 pub fn current_node_bin_dir() -> Option<PathBuf> {
+    if let Some(node) = node_override_if_present(std::env::var_os("HERMES_DESKTOP_NODE_BINARY")) {
+        return node.parent().map(Path::to_path_buf);
+    }
     node_bin_dir_if_present(Path::new(&read_current_record()?.path))
 }
 
 /// Absolute path to the bundled `node` executable, for the `HERMES_NODE` env
 /// var the frozen runtime prefers when launching the Ink TUI (P-032).
 pub fn current_node_binary() -> Option<PathBuf> {
+    if let Some(node) = node_override_if_present(std::env::var_os("HERMES_DESKTOP_NODE_BINARY")) {
+        return Some(node);
+    }
     node_binary_if_present(Path::new(&read_current_record()?.path))
 }
 
@@ -1100,6 +1116,9 @@ pub fn current_node_binary() -> Option<PathBuf> {
 /// `HERMES_TUI_DIR` so the frozen runtime launches /chat without a ui-tui/
 /// source checkout (P-032).
 pub fn current_tui_dir() -> Option<PathBuf> {
+    if let Some(tui) = tui_override_if_present(std::env::var_os("HERMES_DESKTOP_TUI_DIR")) {
+        return Some(tui);
+    }
     tui_dir_if_present(Path::new(&read_current_record()?.path))
 }
 
@@ -2855,6 +2874,33 @@ mod tests {
 
         std::fs::write(dist.join("entry.js"), b"//tui").unwrap();
         assert_eq!(tui_dir_if_present(root), Some(root.join("tui")));
+    }
+
+    #[test]
+    fn local_dev_resource_overrides_require_usable_paths() {
+        let dir = TempDir::new().unwrap();
+        let node = dir.path().join(if cfg!(target_os = "windows") {
+            "node.exe"
+        } else {
+            "node"
+        });
+        let tui = dir.path().join("ui-tui");
+
+        assert!(node_override_if_present(Some(node.clone().into_os_string())).is_none());
+        assert!(tui_override_if_present(Some(tui.clone().into_os_string())).is_none());
+
+        std::fs::write(&node, b"node").unwrap();
+        std::fs::create_dir_all(tui.join("dist")).unwrap();
+        std::fs::write(tui.join("dist").join("entry.js"), b"// tui").unwrap();
+
+        assert_eq!(
+            node_override_if_present(Some(node.clone().into_os_string())),
+            Some(node)
+        );
+        assert_eq!(
+            tui_override_if_present(Some(tui.clone().into_os_string())),
+            Some(tui)
+        );
     }
 
     #[test]

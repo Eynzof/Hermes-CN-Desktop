@@ -87,7 +87,7 @@ export function AppStatusBar() {
     : "当前连接状态未知，仍会尝试重启网关";
 
   return (
-    <footer className={s.statusbar} role="status" aria-label="运行状态">
+    <footer className={s.statusbar} aria-label="运行状态">
       <span className={s.gatewayGroup}>
         <button
           type="button"

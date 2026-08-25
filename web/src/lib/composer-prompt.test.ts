@@ -62,6 +62,47 @@ describe("composer prompt preparation", () => {
     expect(result.displayText).toBe("看看这张图\n\n附件：pasted.png");
   });
 
+  it("keeps the browser image's original display name when Core renames the stored file", async () => {
+    vi.stubGlobal("FileReader", FakeFileReader);
+    const file = {
+      name: "e2e-red-dot.png",
+      type: "image/png",
+      arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+    } as unknown as File;
+    const attachImageBytes = vi.fn(async () => ({
+      attached: true,
+      text: "[User attached image: upload_20260824_120000_1.png]",
+      name: "upload_20260824_120000_1.png",
+      path: "/img/upload_20260824_120000_1.png",
+    }));
+
+    const result = await prepareComposerPrompt(
+      "s1",
+      {
+        text: "看看这张图",
+        attachments: [{
+          id: "a1",
+          source: "browser",
+          file,
+          name: "e2e-red-dot.png",
+          kind: "image",
+          status: "ready",
+          mimeType: "image/png",
+        }],
+      },
+      { attachImage: vi.fn(), attachImageBytes, detectDroppedPath: vi.fn() },
+    );
+
+    expect(result.promptText).toContain("name=e2e-red-dot.png");
+    expect(result.displayImages).toEqual([
+      expect.objectContaining({
+        name: "e2e-red-dot.png",
+        alt: "e2e-red-dot.png",
+        title: "e2e-red-dot.png",
+      }),
+    ]);
+  });
+
   it("in remote mode, a path-only image uploads its bytes (image.attach_bytes), not the path", async () => {
     const readImageBytes = vi.fn(async () => ({
       contentBase64: "QUJD",

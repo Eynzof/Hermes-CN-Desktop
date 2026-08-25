@@ -374,7 +374,10 @@ export async function prepareComposerPrompt(
         }
 
         if (attached.text?.trim()) {
-          const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
+          // Core deliberately renames byte uploads to a collision-safe storage
+          // filename. Keep the user-facing source name in the persisted UI
+          // marker so a history reload can pair that label with the safe path.
+          const label = attachment.name || uploadedName || attached.name || fileNameFromPath(path);
           parts.push([
             IMAGE_BLOCK_START,
             `name=${sanitizeContextValue(label)}`,
@@ -383,7 +386,7 @@ export async function prepareComposerPrompt(
             IMAGE_BLOCK_END,
           ].join("\n"));
         }
-        const label = attached.name || uploadedName || attachment.name || fileNameFromPath(path);
+        const label = attachment.name || uploadedName || attached.name || fileNameFromPath(path);
         displayImages.push({
           url: await imageDisplayUrl(attachment, attached.path || path),
           alt: label,

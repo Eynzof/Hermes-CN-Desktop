@@ -51,6 +51,7 @@ const MODEL_COLORS = [
   "var(--h-err)",
   "var(--h-text-3)",
 ];
+const POSITIVE_CHART_INITIAL_DIMENSION = { width: 1, height: 1 };
 
 const TOP_SESSIONS_PAGE_SIZE = 8;
 const DAILY_PAGE_SIZE = 10;
@@ -325,7 +326,7 @@ function TokenTrendChart({ daily }: { daily: AnalyticsDailyPoint[] }) {
         </div>
       </div>
       <div className={s.chartBox}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={POSITIVE_CHART_INITIAL_DIMENSION}>
           <ComposedChart data={daily} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--h-line-soft)" vertical={false} />
             <XAxis dataKey="label" stroke="var(--h-text-3)" tickLine={false} axisLine={false} minTickGap={18} />
@@ -345,6 +346,7 @@ function TokenTrendChart({ daily }: { daily: AnalyticsDailyPoint[] }) {
 
 function ModelTokenChart({ models }: { models: AnalyticsModelView[] }) {
   const data = models.slice(0, 7).map((model, index) => ({
+    id: model.id,
     name: model.model,
     provider: model.provider,
     value: model.totalTokens,
@@ -367,10 +369,10 @@ function ModelTokenChart({ models }: { models: AnalyticsModelView[] }) {
       ) : (
         <div className={s.modelChartLayout}>
           <div className={s.pieBox}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" initialDimension={POSITIVE_CHART_INITIAL_DIMENSION}>
               <PieChart>
                 <Pie data={data} dataKey="value" nameKey="name" innerRadius={54} outerRadius={82} paddingAngle={2}>
-                  {data.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                  {data.map((entry) => <Cell key={entry.id} fill={entry.color} />)}
                 </Pie>
                 <Tooltip content={<ModelTooltip />} />
               </PieChart>
@@ -378,7 +380,7 @@ function ModelTokenChart({ models }: { models: AnalyticsModelView[] }) {
           </div>
           <div className={s.modelLegend}>
             {data.map((item) => (
-              <div key={`${item.provider}:${item.name}`} className={s.modelLegendRow}>
+              <div key={item.id} className={s.modelLegendRow}>
                 <span className={s.legendDot} style={{ background: item.color }} />
                 <span className={s.legendName} title={`${item.provider} · ${item.name}`}>{item.name}</span>
                 <span className={s.legendValue}>{(item.share * 100).toFixed(1)}%</span>
@@ -405,7 +407,7 @@ function CachePerformanceChart({ daily }: { daily: AnalyticsPerformanceDailyPoin
         </div>
       </div>
       <div className={s.chartBox}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={POSITIVE_CHART_INITIAL_DIMENSION}>
           <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke="var(--h-line-soft)" vertical={false} />
             <XAxis dataKey="label" stroke="var(--h-text-3)" tickLine={false} axisLine={false} minTickGap={18} />

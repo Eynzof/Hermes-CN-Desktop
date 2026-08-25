@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { resolveBootstrapProfile } from "./use-profiles";
+import { managementProfileAfterDelete, resolveBootstrapProfile } from "./use-profiles";
+
+describe("managementProfileAfterDelete", () => {
+  it("clears the management scope when that Profile was deleted", () => {
+    expect(managementProfileAfterDelete("reviewer", "reviewer")).toBeNull();
+  });
+
+  it("preserves an unrelated management scope", () => {
+    expect(managementProfileAfterDelete("reviewer", "writer")).toBe("reviewer");
+  });
+});
 
 describe("resolveBootstrapProfile", () => {
   // 核心回归测试（#189/#195）：首次同步完成后，过期的 /api/profiles/active 值

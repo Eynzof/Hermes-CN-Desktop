@@ -97,6 +97,47 @@ describe("Memory provider schemas", () => {
     expect(parsed.fields[1].is_set).toBe(true);
   });
 
+  it("accepts numeric provider fields and normalizes nullable constraints", () => {
+    const parsed = MemoryProviderConfigResponse.parse({
+      name: "openviking",
+      label: "OpenViking",
+      fields: [
+        {
+          key: "recall_limit",
+          label: "Recall Limit",
+          kind: "integer",
+          value: "12",
+          minimum: 1,
+          maximum: 100,
+          step: null,
+        },
+        {
+          key: "recall_score_threshold",
+          label: "Recall Score Threshold",
+          kind: "number",
+          value: "0.42",
+          minimum: 0,
+          maximum: 1,
+          step: 0.01,
+        },
+      ],
+    });
+
+    expect(parsed.fields[0]).toMatchObject({
+      kind: "integer",
+      value: "12",
+      minimum: 1,
+      maximum: 100,
+      step: undefined,
+    });
+    expect(parsed.fields[1]).toMatchObject({
+      kind: "number",
+      minimum: 0,
+      maximum: 1,
+      step: 0.01,
+    });
+  });
+
   it("discriminates OpenViking runtime details", () => {
     const parsed = MemoryProviderRuntimeStatusResponse.parse({
       provider: "openviking",

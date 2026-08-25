@@ -15,7 +15,7 @@ export function TopBar({ title, sub, right }: TopBarProps) {
     <div className={s.topBar} data-window-drag data-tauri-drag-region="deep">
       <div className={s.inner}>
         <div className={s.titleGroup}>
-          {title && <span className={s.title}>{title}</span>}
+          {title && <h1 className={s.title}>{title}</h1>}
           {sub && <span className={s.sub}>{sub}</span>}
         </div>
         <span className={s.spacer} />

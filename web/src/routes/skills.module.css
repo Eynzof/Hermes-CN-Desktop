@@ -812,6 +812,68 @@
   justify-content: center;
 }
 
+.emptyStateMessage {
+  margin-top: 12px;
+  max-width: 560px;
+  color: var(--h-text-muted);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.copyDialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.copyDialogHeader {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--h-line);
+}
+
+.copyDialogTitle {
+  color: var(--h-text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.copyDialogDescription {
+  margin-top: 8px;
+  color: var(--h-text-muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.copyDialogBody {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.copyField {
+  display: grid;
+  gap: 8px;
+  color: var(--h-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.copyDialogError {
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--h-err) 40%, var(--h-line));
+  background: color-mix(in srgb, var(--h-err) 8%, transparent);
+  color: var(--h-err);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.copyDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--h-line);
+}
+
 /* loading / error 占位 */
 .statePane {
   width: 100%;

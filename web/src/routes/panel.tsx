@@ -104,7 +104,7 @@ export function PanelRoute() {
   };
 
   return (
-    <div className={s.pageWrap} data-page-texture="pinhole">
+    <main className={s.pageWrap} data-page-texture="pinhole">
       <div className={s.pageContent}>
         <PanelHero
           activeCount={active.length}
@@ -160,6 +160,6 @@ export function PanelRoute() {
           <QuickStart />
         </Section>
       </div>
-    </div>
+    </main>
   );
 }

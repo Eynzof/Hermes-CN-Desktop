@@ -68,6 +68,7 @@ export {
   getWanderMemoryClient,
   getWanderMemoryClientAsync,
   resetWanderMemoryClient,
+  disposeWanderMemoryClient,
 } from './client';
 export type { WanderMemoryClient } from './client';
 

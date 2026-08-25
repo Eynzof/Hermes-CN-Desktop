@@ -63,6 +63,9 @@ export function ProfilesRoute() {
       onSuccess: (result) => {
         if (result.mode === "web-sticky") setRestartHint(name);
       },
+      onError: (error) => {
+        setSwitchError(error.message || "切换档案失败，请重试。");
+      },
     });
   };
 

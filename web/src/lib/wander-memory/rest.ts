@@ -36,6 +36,7 @@ import type {
 
 export const DEFAULT_API_ORIGIN = 'http://127.0.0.1:18400';
 const NO_LLM_TIMEOUT_MS = 10_000;
+const INTROSPECTION_TIMEOUT_MS = 3_000;
 
 /**
  * Join an origin ("" | "/v1" | "http://host:port" | "http://host:port/v1") with
@@ -75,6 +76,13 @@ export function adaptTransportError(err: unknown, hint?: string): ApiError {
     if (m) {
       const status = Number(m[1]);
       const body = m[2];
+      if (status === 0 || status === 408) {
+        return new ApiError(
+          'network_failure',
+          'MemOS service is offline — start MemOS or update endpoint settings below',
+          null,
+        );
+      }
       try {
         const parsed = JSON.parse(body) as { error?: { code?: unknown; message?: unknown } } | null;
         if (parsed && typeof parsed === 'object' && parsed.error && typeof parsed.error.code === 'string') {
@@ -138,15 +146,15 @@ export class MemOsRestClient {
 
   // ── §4.1 endpoints ────────────────────────────────────────────────────────
   health(): Promise<HealthResponse> {
-    return this.request('GET', '/health');
+    return this.request('GET', '/health', undefined, INTROSPECTION_TIMEOUT_MS);
   }
 
   backends(): Promise<BackendsResponse> {
-    return this.request('GET', '/backends');
+    return this.request('GET', '/backends', undefined, INTROSPECTION_TIMEOUT_MS);
   }
 
   models(): Promise<ModelsResponse> {
-    return this.request('GET', '/models');
+    return this.request('GET', '/models', undefined, INTROSPECTION_TIMEOUT_MS);
   }
 
   /** LLM path: extraction + N collision calls — no client timeout (§5.2). */

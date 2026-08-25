@@ -23,12 +23,11 @@ Always sync **both** repos to the intended branch before testing. Never assume a
   - Dev (`pnpm tauri:dev`): `…/cn.org.hermesagent.desktop/dev-runtime/`
   - Packaged app: `…/cn.org.hermesagent.desktop/runtime/`
 - If packaged tests show kernel `dev-local` / commit `de3b` while UI is current, the production `current.json` was polluted by an old dev session — run migration (below), not a rebuild.
-- **Git 写操作（fetch / pull / checkout / worktree / branch / commit / push / PR / tag）一律由人执行**，代理绝不自动执行。代理只允许只读 git（`git status` / `git rev-parse` / `git log` / `git diff`）用于核对与报告；若仓库不在目标分支或落后远端，停下来报告给人处理。
 - macOS: detach all stale `Hermes Agent CN Desktop*` DMG volumes before reading or installing a release DMG. Never trust a mounted volume unless `hdiutil info` shows it came from the DMG you just downloaded.
 
-## Step 0 — Sync both repositories (由人执行)
+## Step 0 — Sync both repositories
 
-> 编码代理**不执行** git 同步 / 切分支 / worktree 等写操作（完整同步命令见 `docs/agents/git-workflow.md` §4）。开始测试前确认两个仓库已由**人**同步到目标分支；若仓库不在目标分支或落后远端，**停下来报告给人处理**。
+开始测试前确认两个仓库已同步到目标分支，并在任务专用 worktree 中工作。若状态异常，先核对差异与归属，禁止破坏性重置或覆盖其它工作区。
 
 记录 SHA 用于报告（只读，代理可执行）：
 
