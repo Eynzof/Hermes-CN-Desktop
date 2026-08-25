@@ -332,6 +332,7 @@ pub fn set_update_config(input: SetUpdateConfigInput) -> Result<UpdateConfigSnap
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use serial_test::serial;
     use tempfile::TempDir;
 
     fn write_config(dir: &TempDir, json: &str) -> PathBuf {
@@ -341,6 +342,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn defaults_are_cn_server_urls_and_stable_channel() {
         let cfg = UpdateConfig::default();
         assert_eq!(cfg.schema_version, 1);
@@ -353,6 +355,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn missing_file_falls_back_to_defaults_without_error() {
         let dir = TempDir::new().unwrap();
         let load = load_from(&dir.path().join("nope.json"));
@@ -361,6 +364,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn corrupt_file_falls_back_with_config_error() {
         let dir = TempDir::new().unwrap();
         let path = write_config(&dir, "{ not json");
@@ -371,6 +375,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn parses_user_config_values() {
         let dir = TempDir::new().unwrap();
         let path = write_config(
@@ -401,6 +406,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn env_overrides_file_values() {
         let dir = TempDir::new().unwrap();
         let path = write_config(
@@ -422,6 +428,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn validation_rejects_http_urls() {
         let cfg = UpdateConfig {
             release_manifest_url: "http://insecure.example/latest.json".to_string(),
@@ -432,6 +439,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn validation_rejects_unknown_channel() {
         let cfg = UpdateConfig {
             channel: "nightly".to_string(),
@@ -442,6 +450,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn validation_rejects_out_of_bounds_timeout() {
         let cfg = UpdateConfig {
             timeout_seconds: 9999,
@@ -457,6 +466,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn save_writes_atomically_and_loads_back() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("sub").join(UPDATE_CONFIG_FILE);
@@ -474,6 +484,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn save_rejects_invalid_config_before_writing() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join(UPDATE_CONFIG_FILE);

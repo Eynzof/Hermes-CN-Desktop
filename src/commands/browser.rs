@@ -1,16 +1,21 @@
 //! Browser automation commands.
 //!
-//! Minimal first cut: CDP port probing, Chrome debug launch, and stubbed
-//! sidecar commands that the TS `@hermes/browser` handlers invoke. The sidecar
-//! lifecycle and Playwright/CDP I/O will be fleshed out in follow-up milestones.
+//! CDP port probing, Chrome debug launch, a real CDP accessibility-tree
+//! snapshot pipeline (`browser_snapshot`), and the remaining sidecar tool
+//! surface that is still stubbed and routed through the Node sidecar in
+//! follow-up milestones.
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, TcpListener};
 use std::process::Stdio;
 use std::time::Duration;
 
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
 
+use crate::browser::snapshot::{prepare_snapshot, AccessibilityNode};
 use crate::error::AppError;
 use crate::state::AppState;
 
@@ -223,6 +228,7 @@ fn find_chrome_executable() -> Option<String> {
 /// Launch a Chrome-family browser with a remote debugging port.
 #[tauri::command]
 pub async fn browser_launch_chrome_debug(
+    state: tauri::State<'_, AppState>,
     input: ChromeLaunchInput,
 ) -> Result<ChromeLaunchResult, AppError> {
     let executable = input
@@ -275,6 +281,15 @@ pub async fn browser_launch_chrome_debug(
     let pid = child.id();
     let cdp_url = format!("http://127.0.0.1:{port}");
 
+    // Record the default browser session so `browser_snapshot` can find the
+    // CDP endpoint. The lock is dropped before spawning the detach thread.
+    state
+        .inner
+        .lock()
+        .unwrap()
+        .browser_sessions
+        .insert("default".to_string(), cdp_url.clone());
+
     // Detach child so it keeps running after command returns.
     std::thread::spawn(move || {
         let _ = child.wait();
@@ -294,15 +309,25 @@ pub async fn browser_launch_chrome_debug(
 
 #[tauri::command]
 pub async fn browser_sidecar_start(
-    _state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, AppState>,
     input: BrowserSidecarStartInput,
 ) -> Result<BrowserSidecarStartResult, AppError> {
     // M0 stub: report a synthetic loopback CDP endpoint until the Node sidecar
-    // is bundled and spawned by Rust.
+    // is bundled and spawned by Rust. The synthetic URL is still recorded so
+    // `browser_snapshot` exercises the real CDP path when a page target exists.
     let port = browser_find_free_port()?;
+    let cdp_url = format!("http://127.0.0.1:{port}");
+    if !input.task_id.is_empty() {
+        state
+            .inner
+            .lock()
+            .unwrap()
+            .browser_sessions
+            .insert(input.task_id.clone(), cdp_url.clone());
+    }
     Ok(BrowserSidecarStartResult {
         ok: true,
-        cdp_url: Some(format!("http://127.0.0.1:{port}")),
+        cdp_url: Some(cdp_url),
         session_name: format!("sidecar-{}", input.task_id),
         error: None,
     })
@@ -310,9 +335,15 @@ pub async fn browser_sidecar_start(
 
 #[tauri::command]
 pub async fn browser_sidecar_stop(
-    _state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, AppState>,
     input: BrowserSidecarStopInput,
 ) -> Result<BrowserSidecarStopResult, AppError> {
+    state
+        .inner
+        .lock()
+        .unwrap()
+        .browser_sessions
+        .remove(&input.task_id);
     Ok(BrowserSidecarStopResult {
         ok: true,
         stopped: input.emergency.unwrap_or(false) || !input.task_id.is_empty(),
@@ -385,14 +416,233 @@ pub async fn browser_url_safety_check(
     Ok(crate::security::url::evaluate_url_safety(&url, &opts))
 }
 
+/// Default snapshot character budget before truncation.
+const SNAPSHOT_DEFAULT_MAX_CHARS: usize = 15_000;
+/// Snapshot budget used when the caller requests a full (`full: true`) snapshot.
+const SNAPSHOT_FULL_MAX_CHARS: usize = 1_000_000;
+/// Upper bound for a single CDP snapshot round-trip.
+const CDP_SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Extract `{key: {value: "..."}}` from a CDP AX node.
+fn cdp_ax_value(node: &serde_json::Value, key: &str) -> Option<String> {
+    node.get(key)
+        .and_then(|v| v.get("value"))
+        .and_then(|v| v.as_str())
+        .map(String::from)
+}
+
+/// Build an [`AccessibilityNode`] tree from a raw CDP `Accessibility.getFullAXTree`
+/// `nodes` payload.
+///
+/// Semantics:
+/// - every node must carry a numeric `nodeId`; others are skipped;
+/// - `ignored: true` nodes are dropped together with their subtree;
+/// - `role` / `name` / `value` come from the `{value: string}` wrappers;
+/// - children are attached through `childIds`;
+/// - the root is the node whose id is never referenced by any `childIds`; when
+///   several roots exist they are wrapped in a synthetic `WebArea` node.
+pub fn build_ax_tree(nodes: &[serde_json::Value]) -> AccessibilityNode {
+    struct RawNode {
+        node_id: i64,
+        ignored: bool,
+        role: Option<String>,
+        name: Option<String>,
+        value: Option<String>,
+        child_ids: Vec<i64>,
+    }
+
+    let mut raw: Vec<RawNode> = Vec::new();
+    let mut parent_of: HashMap<i64, i64> = HashMap::new();
+    let mut id_to_index: HashMap<i64, usize> = HashMap::new();
+
+    for (idx, node) in nodes.iter().enumerate() {
+        let Some(node_id) = node.get("nodeId").and_then(|v| v.as_i64()) else {
+            continue;
+        };
+        let child_ids: Vec<i64> = node
+            .get("childIds")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|c| c.as_i64()).collect())
+            .unwrap_or_default();
+        for child in &child_ids {
+            parent_of.insert(*child, node_id);
+        }
+        id_to_index.insert(node_id, idx);
+        raw.push(RawNode {
+            node_id,
+            ignored: node
+                .get("ignored")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            role: cdp_ax_value(node, "role"),
+            name: cdp_ax_value(node, "name"),
+            value: cdp_ax_value(node, "value"),
+            child_ids,
+        });
+    }
+
+    fn assemble(
+        raw: &[RawNode],
+        id_to_index: &HashMap<i64, usize>,
+        node_id: i64,
+    ) -> Option<AccessibilityNode> {
+        let idx = *id_to_index.get(&node_id)?;
+        let node = &raw[idx];
+        if node.ignored {
+            return None;
+        }
+        let children = node
+            .child_ids
+            .iter()
+            .filter_map(|child| assemble(raw, id_to_index, *child))
+            .collect();
+        Some(AccessibilityNode {
+            role: node.role.clone(),
+            name: node.name.clone(),
+            value: node.value.clone(),
+            children,
+            r#ref: None,
+        })
+    }
+
+    let roots: Vec<i64> = raw
+        .iter()
+        .filter(|n| !n.ignored && !parent_of.contains_key(&n.node_id))
+        .map(|n| n.node_id)
+        .collect();
+
+    let mut assembled: Vec<AccessibilityNode> = roots
+        .iter()
+        .filter_map(|id| assemble(&raw, &id_to_index, *id))
+        .collect();
+
+    if assembled.len() == 1 {
+        assembled.remove(0)
+    } else {
+        AccessibilityNode {
+            role: Some("WebArea".to_string()),
+            name: None,
+            value: None,
+            children: assembled,
+            r#ref: None,
+        }
+    }
+}
+
+/// Discover the first page target's WebSocket debugger URL from `{cdp}/json`.
+async fn fetch_page_ws_url(cdp_url: &str) -> Result<String, AppError> {
+    let client = http_client()?;
+    let url = format!("{cdp_url}/json");
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("CDP /json request failed: {e}")))?;
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("CDP /json parse failed: {e}")))?;
+    let targets = body
+        .as_array()
+        .ok_or_else(|| AppError::Internal("CDP /json did not return an array".to_string()))?;
+    for target in targets {
+        if target.get("type").and_then(|v| v.as_str()) == Some("page") {
+            if let Some(ws) = target.get("webSocketDebuggerUrl").and_then(|v| v.as_str()) {
+                return Ok(ws.to_string());
+            }
+        }
+    }
+    Err(AppError::Internal(
+        "no page target with webSocketDebuggerUrl found".to_string(),
+    ))
+}
+
+/// Fetch and format an accessibility-tree snapshot over CDP.
+async fn cdp_snapshot(cdp_url: &str, full: bool) -> Result<BrowserToolResult, AppError> {
+    let ws_url = fetch_page_ws_url(cdp_url).await?;
+    tokio::time::timeout(CDP_SNAPSHOT_TIMEOUT, cdp_fetch_snapshot(&ws_url, full))
+        .await
+        .map_err(|_| AppError::Internal("CDP snapshot timed out after 15s".to_string()))?
+}
+
+async fn cdp_fetch_snapshot(ws_url: &str, full: bool) -> Result<BrowserToolResult, AppError> {
+    let (mut ws, _) = connect_async(ws_url)
+        .await
+        .map_err(|e| AppError::Internal(format!("CDP websocket connect failed: {e}")))?;
+    ws.send(Message::Text(
+        r#"{"id":1,"method":"Accessibility.getFullAXTree","params":{}}"#.into(),
+    ))
+    .await
+    .map_err(|e| AppError::Internal(format!("CDP send failed: {e}")))?;
+
+    let mut nodes: Option<Vec<serde_json::Value>> = None;
+    while let Some(msg) = ws.next().await {
+        let msg = msg.map_err(|e| AppError::Internal(format!("CDP recv failed: {e}")))?;
+        if let Message::Text(text) = msg {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                if v.get("id").and_then(|i| i.as_i64()) == Some(1) {
+                    if let Some(err) = v.get("error") {
+                        return Err(AppError::Internal(format!(
+                            "CDP getFullAXTree error: {err}"
+                        )));
+                    }
+                    nodes = v
+                        .get("result")
+                        .and_then(|r| r.get("nodes"))
+                        .and_then(|n| n.as_array())
+                        .cloned();
+                    break;
+                }
+            }
+        }
+    }
+    let nodes = nodes
+        .ok_or_else(|| AppError::Internal("CDP getFullAXTree returned no nodes".to_string()))?;
+
+    let root = build_ax_tree(&nodes);
+    let max_chars = if full {
+        SNAPSHOT_FULL_MAX_CHARS
+    } else {
+        SNAPSHOT_DEFAULT_MAX_CHARS
+    };
+    let formatted = prepare_snapshot(&root, Some(max_chars), None)
+        .map_err(|e| AppError::Internal(format!("snapshot formatting failed: {e}")))?;
+
+    Ok(BrowserToolResult {
+        success: true,
+        error: None,
+        snapshot: Some(formatted.text),
+        url: None,
+        title: None,
+        console: None,
+        pending_dialogs: None,
+    })
+}
+
 #[tauri::command]
 pub async fn browser_snapshot(
-    _state: tauri::State<'_, AppState>,
+    state: tauri::State<'_, AppState>,
     task_id: String,
     full: Option<bool>,
 ) -> Result<BrowserToolResult, AppError> {
-    let _ = (task_id, full);
-    Ok(not_implemented("browser_snapshot"))
+    let key = if task_id.is_empty() {
+        "default"
+    } else {
+        task_id.as_str()
+    };
+    let cdp_url = state
+        .inner
+        .lock()
+        .unwrap()
+        .browser_sessions
+        .get(key)
+        .cloned()
+        .ok_or_else(|| {
+            AppError::Internal(format!(
+                "no browser session for task '{key}' — call browser_sidecar_start or browser_launch_chrome_debug first"
+            ))
+        })?;
+    cdp_snapshot(&cdp_url, full.unwrap_or(false)).await
 }
 
 #[tauri::command]
@@ -599,5 +849,52 @@ mod tests {
     fn browser_find_free_port_returns_non_zero() {
         let port = browser_find_free_port().unwrap();
         assert!(port > 0);
+    }
+
+    #[test]
+    fn build_ax_tree_nested_tree_with_ignored_node() {
+        let nodes = serde_json::json!([
+            { "nodeId": 1, "ignored": false, "role": { "value": "rootWebArea" }, "name": { "value": "Example" }, "childIds": [2, 3] },
+            { "nodeId": 2, "ignored": false, "role": { "value": "link" }, "name": { "value": "Home" } },
+            { "nodeId": 3, "ignored": true, "role": { "value": "generic" }, "childIds": [4] },
+            { "nodeId": 4, "ignored": false, "role": { "value": "button" }, "name": { "value": "Hidden" } }
+        ]);
+        let tree = build_ax_tree(nodes.as_array().unwrap());
+        assert_eq!(tree.role.as_deref(), Some("rootWebArea"));
+        assert_eq!(tree.name.as_deref(), Some("Example"));
+        // Ignored node 3 and its child 4 are dropped entirely.
+        assert_eq!(tree.children.len(), 1);
+        assert_eq!(tree.children[0].role.as_deref(), Some("link"));
+        assert_eq!(tree.children[0].name.as_deref(), Some("Home"));
+    }
+
+    #[test]
+    fn build_ax_tree_wraps_multiple_roots_in_web_area() {
+        let nodes = serde_json::json!([
+            { "nodeId": 1, "role": { "value": "button" }, "name": { "value": "A" } },
+            { "nodeId": 2, "role": { "value": "button" }, "name": { "value": "B" } }
+        ]);
+        let tree = build_ax_tree(nodes.as_array().unwrap());
+        assert_eq!(tree.role.as_deref(), Some("WebArea"));
+        assert_eq!(tree.children.len(), 2);
+    }
+
+    #[test]
+    fn build_ax_tree_skips_missing_node_ids() {
+        let nodes = serde_json::json!([
+            { "role": { "value": "button" } },
+            { "nodeId": "not-a-number", "role": { "value": "link" } }
+        ]);
+        let tree = build_ax_tree(nodes.as_array().unwrap());
+        assert_eq!(tree.role.as_deref(), Some("WebArea"));
+        assert!(tree.children.is_empty());
+    }
+
+    #[test]
+    fn cdp_ax_value_reads_wrapper_shape() {
+        let node = serde_json::json!({ "role": { "value": "link" }, "name": { "value": "Go" } });
+        assert_eq!(cdp_ax_value(&node, "role").as_deref(), Some("link"));
+        assert_eq!(cdp_ax_value(&node, "name").as_deref(), Some("Go"));
+        assert_eq!(cdp_ax_value(&node, "missing"), None);
     }
 }

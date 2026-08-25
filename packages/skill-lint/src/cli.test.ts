@@ -6,8 +6,11 @@ const lintTreeMock = vi.hoisted(() => vi.fn());
 const hasErrorsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./lint.js", () => ({
-  lintTree: lintTreeMock,
   hasErrors: hasErrorsMock,
+}));
+
+vi.mock("./lint-tree.js", () => ({
+  lintTree: lintTreeMock,
 }));
 
 const emptyResult: LintResult = {

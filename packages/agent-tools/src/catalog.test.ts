@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   objectSchema,
   registerBuiltinCatalog,
@@ -122,9 +122,49 @@ describe("catalog handlers", () => {
     expect(res.content).toContain("timeout 5s");
   });
 
-  it("web_search applies the default limit", async () => {
-    const res = await registry.dispatch("web_search", { query: "hermes" }, {});
-    expect(res.content).toBe("Web search: hermes (limit 5)");
+  it("web_search routes through ctx.invoke when a Rust invoker is present", async () => {
+    const invoke = vi.fn().mockResolvedValue({ ok: true });
+    const res = await registry.dispatch(
+      "web_search",
+      { query: "hermes agent", limit: 3 },
+      { sessionId: "s1", invoke },
+    );
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke.mock.calls[0][0]).toBe("web_provider_request");
+    expect(res.isError).not.toBe(true);
+    expect(res.content).toContain('"ok":true');
+  });
+
+  it("web_search parses DuckDuckGo lite results without an invoker", async () => {
+    const html =
+      '<a class="result__a" href="https://example.com/a">First <b>Result</b></a>' +
+      '<a class="result__a" href="https://example.com/b">Second Result</a>';
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => html }));
+    try {
+      const res = await registry.dispatch("web_search", { query: "hermes", limit: 2 }, {});
+      expect(res.isError).not.toBe(true);
+      expect(res.content).toContain("First Result");
+      expect(res.content).toContain("https://example.com/b");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("memory_write fallback stores in-memory and memory_read retrieves it", async () => {
+    const write = await registry.dispatch("memory_write", { key: "k1", value: "v1" }, {});
+    expect(write.isError).not.toBe(true);
+    expect(write.content).toContain("stored");
+    const read = await registry.dispatch("memory_read", { key: "k1" }, {});
+    expect(read.isError).not.toBe(true);
+    expect(read.content).toBe("v1");
+    const missing = await registry.dispatch("memory_read", { key: "nope" }, {});
+    expect(missing.isError).toBe(true);
+  });
+
+  it("image_generate without a provider returns an actionable error", async () => {
+    const res = await registry.dispatch("image_generate", { prompt: "cat" }, { env: {} });
+    expect(res.isError).toBe(true);
+    expect(res.content).toContain("OPENAI_API_KEY");
   });
 
   it("returns an error result for unknown tools", async () => {

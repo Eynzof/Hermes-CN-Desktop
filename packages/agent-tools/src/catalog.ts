@@ -27,7 +27,7 @@ import {
 } from "@hermes/browser";
 import { register, registry } from "./registry.js";
 import { credentialGates, requireEnv } from "./gates.js";
-import type { ToolEntry, ToolHandler } from "./types.js";
+import type { ToolEntry, ToolHandler, ToolResult } from "./types.js";
 import "./spotify/catalog.js";
 import "./meet/catalog.js";
 import "./homeassistant/catalog.js";
@@ -141,24 +141,97 @@ const processStartHandler: ToolHandler = async (args) => {
   return { content: `Would start process: ${command}` };
 };
 
-const webSearchHandler: ToolHandler = async (args) => {
+const webSearchHandler: ToolHandler = async (args, ctx) => {
   const { query, limit = 5 } = args as { query: string; limit?: number };
-  return { content: `Web search: ${query} (limit ${limit})` };
+  if (!query?.trim()) {
+    return { content: "web_search: missing query", isError: true };
+  }
+  // Desktop mode: route through the Rust web-provider transport (SSRF-guarded).
+  if (ctx.invoke) {
+    try {
+      const raw = await ctx.invoke("web_provider_request", {
+        path: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+        method: "GET",
+        timeoutSeconds: 15,
+        maxBytes: 512_000,
+        followRedirects: true,
+      });
+      return { content: JSON.stringify(raw) };
+    } catch (error) {
+      return {
+        content: `web_search: Rust IPC failed: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
+  }
+  // Browser-only dev fallback: real DuckDuckGo lite HTML search (no API key).
+  return duckDuckGoSearch(query, limit);
 };
 
-const webExtractHandler: ToolHandler = async (args) => {
+const webExtractHandler: ToolHandler = async (args, ctx) => {
   const { url } = args as { url: string };
-  return { content: `Extract content from ${url}` };
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return { content: "web_extract: url must be http(s)", isError: true };
+  }
+  if (ctx.invoke) {
+    try {
+      const raw = await ctx.invoke("web_provider_request", {
+        path: url,
+        method: "GET",
+        timeoutSeconds: 15,
+        maxBytes: 512_000,
+        followRedirects: true,
+      });
+      return { content: JSON.stringify(raw) };
+    } catch (error) {
+      return {
+        content: `web_extract: Rust IPC failed: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
+  }
+  return fetchTextFallback(url);
 };
 
-const memoryReadHandler: ToolHandler = async (args) => {
+// Session-scoped in-memory store for the memory_read / memory_write fallback.
+const memoryStore = new Map<string, string>();
+
+const memoryReadHandler: ToolHandler = async (args, ctx) => {
   const { key } = args as { key: string };
-  return { content: `Memory read: ${key}` };
+  if (!key) return { content: "memory_read: missing key", isError: true };
+  if (ctx.invoke) {
+    try {
+      const raw = await ctx.invoke("read_memory", { key });
+      return { content: typeof raw === "string" ? raw : JSON.stringify(raw) };
+    } catch (error) {
+      return {
+        content: `memory_read: Rust IPC failed: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
+  }
+  const value = memoryStore.get(key);
+  return value === undefined
+    ? { content: `memory_read: no value for '${key}'`, isError: true }
+    : { content: value };
 };
 
-const memoryWriteHandler: ToolHandler = async (args) => {
+const memoryWriteHandler: ToolHandler = async (args, ctx) => {
   const { key, value } = args as { key: string; value: string };
-  return { content: `Memory write: ${key} = ${value}` };
+  if (!key) return { content: "memory_write: missing key", isError: true };
+  if (ctx.invoke) {
+    try {
+      const raw = await ctx.invoke("add_memory_entry", { key, content: value });
+      return { content: typeof raw === "string" ? raw : JSON.stringify(raw) };
+    } catch (error) {
+      return {
+        content: `memory_write: Rust IPC failed: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
+  }
+  memoryStore.set(key, value);
+  return { content: `memory_write: stored '${key}'` };
 };
 
 const skillInvokeHandler: ToolHandler = async (args) => {
@@ -210,19 +283,74 @@ const spotifyPlayHandler: ToolHandler = async (args) => {
   return { content: `Spotify play ${uri}` };
 };
 
-const imageGenerateHandler: ToolHandler = async (args) => {
+const imageGenerateHandler: ToolHandler = async (args, ctx) => {
   const { prompt } = args as { prompt: string };
-  return { content: `Generate image: ${prompt}` };
+  if (!prompt?.trim()) return { content: "image_generate: missing prompt", isError: true };
+  const openaiKey = ctx.env?.OPENAI_API_KEY;
+  const falKey = ctx.env?.FAL_KEY;
+  if (openaiKey) {
+    try {
+      const res = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiKey}` },
+        body: JSON.stringify({ model: "gpt-image-1", prompt, n: 1, size: "1024x1024" }),
+      });
+      if (!res.ok) {
+        return { content: `image_generate: OpenAI HTTP ${res.status}: ${await res.text()}`, isError: true };
+      }
+      const data = (await res.json()) as { data?: { url?: string; b64_json?: string }[] };
+      const item = data.data?.[0];
+      return { content: item?.url ? item.url : `image_generate: generated ${item?.b64_json?.length ?? 0} b64 chars` };
+    } catch (error) {
+      return {
+        content: `image_generate: OpenAI request failed: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
+  }
+  if (falKey) {
+    try {
+      const res = await fetch("https://queue.fal.run/fal-ai/flux/dev", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Key ${falKey}` },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) {
+        return { content: `image_generate: FAL HTTP ${res.status}: ${await res.text()}`, isError: true };
+      }
+      const data = (await res.json()) as { images?: { url?: string }[] };
+      return { content: data.images?.[0]?.url ?? JSON.stringify(data) };
+    } catch (error) {
+      return {
+        content: `image_generate: FAL request failed: ${error instanceof Error ? error.message : String(error)}`,
+        isError: true,
+      };
+    }
+  }
+  return {
+    content:
+      "image_generate: no image provider configured (set OPENAI_API_KEY or FAL_KEY in the runtime env); the managed Python runtime also serves image generation in production",
+    isError: true,
+  };
 };
 
 const kanbanCreateBoardHandler: ToolHandler = async (args) => {
   const { name } = args as { name: string };
-  return { content: `Created kanban board: ${name}` };
+  // Kanban state + dispatcher live in the agent runtime (`@hermes/agent-core`
+  // kanban module / managed Python runtime), not in the tool catalog. Return an
+  // actionable error instead of a fake success so callers surface the gap.
+  return {
+    content: `kanban_create_board: board '${name}' requires the agent runtime kanban dispatcher (agent-core kanban module or managed runtime); not available in the isolated tool catalog`,
+    isError: true,
+  };
 };
 
 const batchRunHandler: ToolHandler = async (args) => {
   const { items, concurrency = 4 } = args as { items: string[]; concurrency?: number };
-  return { content: `Batch run queued: ${items.length} items (concurrency ${concurrency})` };
+  return {
+    content: `batch_run: ${items.length} items (concurrency ${concurrency}) requires the agent runtime batch runner (agent-core batch module or managed runtime); not available in the isolated tool catalog`,
+    isError: true,
+  };
 };
 
 const eventHookRegisterHandler: ToolHandler = async (args) => {
@@ -259,6 +387,81 @@ const blueprintMatchHandler: ToolHandler = async (args) => {
   const { query } = args as { query: string };
   return { content: `Blueprints matching ${query}: (stub)` };
 };
+
+// ---------------------------------------------------------------------------
+// Browser-only fallback helpers (real, no API key required)
+// ---------------------------------------------------------------------------
+
+const MAX_FALLBACK_BYTES = 512_000;
+
+async function duckDuckGoSearch(query: string, limit: number): Promise<ToolResult> {
+  try {
+    const res = await fetch(
+      `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
+      { headers: { "User-Agent": "HermesAgentCN/0.8" } },
+    );
+    if (!res.ok) {
+      return { content: `web_search: DuckDuckGo HTTP ${res.status}`, isError: true };
+    }
+    const html = await res.text();
+    const results: string[] = [];
+    const itemRe = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+    let m: RegExpExecArray | null;
+    while ((m = itemRe.exec(html)) !== null && results.length < limit) {
+      const href = decodeHtml(m[1]);
+      const title = decodeHtml(m[2].replace(/<[^>]+>/g, ""));
+      results.push(`${title}\n${href}`);
+    }
+    if (results.length === 0) {
+      return { content: "web_search: no results", isError: true };
+    }
+    return { content: results.join("\n\n") };
+  } catch (error) {
+    return {
+      content: `web_search: ${error instanceof Error ? error.message : String(error)}`,
+      isError: true,
+    };
+  }
+}
+
+async function fetchTextFallback(url: string): Promise<ToolResult> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "HermesAgentCN/0.8" },
+      redirect: "follow",
+    });
+    if (!res.ok) {
+      return { content: `web_extract: HTTP ${res.status}`, isError: true };
+    }
+    const text = await res.text();
+    const capped = text.length > MAX_FALLBACK_BYTES ? `${text.slice(0, MAX_FALLBACK_BYTES)}\n… truncated` : text;
+    return { content: stripHtml(capped) };
+  } catch (error) {
+    return {
+      content: `web_extract: ${error instanceof Error ? error.message : String(error)}`,
+      isError: true,
+    };
+  }
+}
+
+function stripHtml(input: string): string {
+  return input
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function decodeHtml(input: string): string {
+  return stripHtml(input);
+}
 
 // ---------------------------------------------------------------------------
 // Catalog registration

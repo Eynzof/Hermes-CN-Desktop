@@ -1,4 +1,5 @@
-import { lintTree, hasErrors } from "./lint.js";
+import { hasErrors } from "./lint.js";
+import { lintTree } from "./lint-tree.js";
 
 export async function runCli(argv: string[]): Promise<number> {
   const json = argv.includes("--json");

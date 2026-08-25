@@ -23,8 +23,16 @@ export * from "./providers/gemini.js";
 export * from "./providers/bedrock.js";
 export * from "./providers/vertex.js";
 export * from "./providers/azure.js";
+export * from "./providers/codex-responses.js";
+export * from "./providers/minimax.js";
+export * from "./providers/moonshot.js";
+export * from "./providers/lmstudio.js";
+export * from "./providers/nous-relay.js";
+export * from "./providers/plugin-llm.js";
+export * from "./providers/builtin-profiles.js";
 export * from "./providers/aliases.js";
 export * from "./providers/catalog.js";
+export * from "./providers/routing.js";
 export * from "./providers/switch.js";
 
 // Sessions
@@ -42,9 +50,15 @@ export * from "./approval/gate.js";
 
 // Compression
 export * from "./compaction/index.js";
+// Auxiliary fallback chains (vision/web-extract/compression/skills-hub/mcp/approval/title/goal-judge)
+export * from "./fallback/types.js";
+export * from "./fallback/registry.js";
+export * from "./fallback/resolve.js";
 
 // Bounded memory
 export * from "./memory/index.js";
+// Media generation (image/video providers + analyze)
+export * from "./media/index.js";
 
 // Learning journey & memory graph
 export * from "./learning/index.js";
@@ -85,6 +99,9 @@ export * from "./plugins/context-plugin.js";
 
 // Automation features
 export * from "./cron/index.js";
+// Curator
+export * from "./curator/index.js";
+// Event hooks
 export * from "./subagent/index.js";
 export * from "./code-execution/index.js";
 export * from "./event-hooks/index.js";
@@ -93,5 +110,4 @@ export * from "./kanban/index.js";
 export * from "./heartbeat/index.js";
 export * from "./goals/index.js";
 export * from "./deliverable/index.js";
-export * from "./curator/index.js";
 export * from "./automation/index.js";

@@ -272,6 +272,11 @@ pub struct AppStateInner {
     pub wake_word: WakeWordService,
     /// Active MCP stdio child processes keyed by child id.
     pub mcp_stdio_children: std::collections::HashMap<String, McpStdioProcess>,
+    /// Browser automation sessions keyed by task id -> CDP base URL
+    /// (e.g. "http://127.0.0.1:{port}"). Populated by
+    /// `browser_launch_chrome_debug` / `browser_sidecar_start` and consumed by
+    /// `browser_snapshot` and future CDP tool commands.
+    pub browser_sessions: std::collections::HashMap<String, String>,
     /// In-process OpenAI-compatible API server handle.
     pub api_server: Option<ApiServerHandle>,
     /// Subscription proxy handle.
@@ -326,6 +331,7 @@ impl AppState {
                 ui_update_in_flight: false,
                 wake_word: WakeWordService::new(),
                 mcp_stdio_children: std::collections::HashMap::new(),
+                browser_sessions: std::collections::HashMap::new(),
                 api_server: None,
                 subscription_proxy: None,
             }),

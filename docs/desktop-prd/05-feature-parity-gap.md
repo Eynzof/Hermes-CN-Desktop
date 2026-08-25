@@ -123,3 +123,24 @@
 - 官方富 Composer / 右栏预览：`ls Hermes-CN-Core/apps/desktop/src/app/chat/{composer,right-rail}/`
 - 我们缺失路由：`ls Hermes-CN-Desktop/web/src/routes/ | grep -iE 'artifact|agents|command-palette|command-center|messaging'`（应为空）
 - v0.16.0 commit：`git -C Hermes-CN-Core show --stat <hash>`（如 `02d6bf1c3`、`9dbd3c57d`）确认改动落在 `apps/desktop`
+
+---
+
+## 附录 B：后端/运行时功能差距（Python Hermes-CN-Core → Desktop）
+
+本文档主体是「官方 Electron 桌面端 vs 我们」的前端差距。后端/运行时（Rust
+`src/` + TS `packages/` + web UI 三层）与 Python Hermes-CN-Core 的功能差距单独
+维护在 [`plans/feature-parity-with-core.md`](../../plans/feature-parity-with-core.md)
+（域矩阵 + 分阶段实施）。
+
+当前分支（v0.8.0-rc4）P0 正确性/安全项状态（详情与证据见
+`docs/typescript-runtime.md` §Feature parity status）：
+
+| P0 项 | 状态 |
+|---|---|
+| browser_snapshot 真实 CDP 快照 | ✅ 已实现（src/commands/browser.rs CDP 管线） |
+| tools_dispatch Rust 命令（agent-tools 引用但缺失） | ✅ 已实现（src/commands/toolkit.rs） |
+| Session-log 契约漂移（rawlog vs MessagesResponse） | ✅ 已收敛（Rust 输出 MessagesResponse + 共享 golden fixtures） |
+| skill-lint lintTree 真实树遍历 | ✅ 已实现（Rust lint_tree + pnpm skills:lint 走 Rust bin） |
+| 消息适配器 webhook 非常量时间比较 | ✅ 已修复（webhook-secret.ts timingSafeEqual） |
+| TS catalog 桩 handler | ✅ 已接入真实分发（webSearch/webExtract/imagegen/kanban/batch/memory） |

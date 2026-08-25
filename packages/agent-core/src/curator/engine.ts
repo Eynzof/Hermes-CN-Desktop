@@ -6,11 +6,15 @@ export interface CuratorCollector {
 
 export interface CuratorBackupBackend {
   backup(snapshot: CuratorSnapshot): Promise<{ ok: boolean; path: string }>;
+  list?(): Promise<Array<{ snapshotId: string; path: string }>>;
+  restore?(snapshotId: string): Promise<{ ok: boolean; paths: string[] }>;
 }
 
 export class CuratorEngine {
   private collector: CuratorCollector;
   private backup: CuratorBackupBackend;
+  private pinned = new Set<string>();
+  private snapshots = new Map<string, CuratorSnapshot>();
 
   constructor(collector: CuratorCollector, backup: CuratorBackupBackend) {
     this.collector = collector;
@@ -27,7 +31,49 @@ export class CuratorEngine {
       artifactPaths: data.artifactPaths,
     };
     await this.backup.backup(snapshot);
+    this.snapshots.set(snapshot.id, snapshot);
     return snapshot;
+  }
+
+  getSnapshot(id: string): CuratorSnapshot | undefined {
+    return this.snapshots.get(id);
+  }
+
+  /** Pin a snapshot so it is never pruned (P1-24). */
+  pin(snapshotId: string): boolean {
+    if (!this.snapshots.has(snapshotId)) return false;
+    this.pinned.add(snapshotId);
+    return true;
+  }
+
+  unpin(snapshotId: string): boolean {
+    return this.pinned.delete(snapshotId);
+  }
+
+  isPinned(snapshotId: string): boolean {
+    return this.pinned.has(snapshotId);
+  }
+
+  pinnedSnapshots(): CuratorSnapshot[] {
+    return [...this.pinned]
+      .map((id) => this.snapshots.get(id))
+      .filter((s): s is CuratorSnapshot => s !== undefined);
+  }
+
+  /** Rollback to a snapshot: delegate artifact restore to the backup backend (P1-24). */
+  async rollback(snapshotId: string): Promise<{ ok: boolean; paths: string[]; error?: string }> {
+    const snapshot = this.snapshots.get(snapshotId);
+    if (!snapshot) return { ok: false, paths: [], error: `unknown snapshot ${snapshotId}` };
+    if (!this.backup.restore) {
+      return { ok: false, paths: [], error: "backup backend does not support restore" };
+    }
+    return this.backup.restore(snapshotId);
+  }
+
+  /** List backups from the backend when supported (P1-24). */
+  async listBackups(): Promise<Array<{ snapshotId: string; path: string }>> {
+    if (!this.backup.list) return [];
+    return this.backup.list();
   }
 
   async run(sessionId: string): Promise<CuratorRun> {

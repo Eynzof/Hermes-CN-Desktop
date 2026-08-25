@@ -422,6 +422,7 @@ mod tests {
             ui_update_in_flight: false,
             wake_word: crate::wake_word::WakeWordService::new(),
             mcp_stdio_children: std::collections::HashMap::new(),
+            browser_sessions: std::collections::HashMap::new(),
             api_server: None,
             subscription_proxy: None,
         }

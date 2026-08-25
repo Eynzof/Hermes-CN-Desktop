@@ -6,6 +6,88 @@ use crate::schema::egress::{
 static EGRESS_PORT: std::sync::Mutex<Option<u16>> = std::sync::Mutex::new(None);
 static SECRETS: std::sync::Mutex<Option<serde_json::Value>> = std::sync::Mutex::new(None);
 
+// ---------------------------------------------------------------------------
+// Secrets sources (P1-20): env / Bitwarden Secrets Manager / 1Password CLI /
+// command. Real resolution delegates to the installed CLI; the resolver is a
+// pure function so tests can exercise the env + unknown-source paths without
+// a password manager installed.
+// ---------------------------------------------------------------------------
+
+/// Run a CLI and return trimmed stdout.
+fn run_cli(args: &[&str]) -> Result<String, String> {
+    let (program, rest) = args
+        .split_first()
+        .ok_or_else(|| "empty CLI command".to_string())?;
+    let output = std::process::Command::new(program)
+        .args(rest)
+        .output()
+        .map_err(|e| format!("failed to run {program}: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "{program} exited with {:?}: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Resolve a secret from a configured source.
+///
+/// - `env`: `key` is read from the process environment.
+/// - `bitwarden`: `key` is the Bitwarden Secrets Manager secret id/name;
+///   resolved via `bw get secret <key>`.
+/// - `onepassword`: `value` is a 1Password CLI reference (`op://vault/item/field`);
+///   resolved via `op read <value>`.
+/// - `command`: `value` is a shell command whose trimmed stdout is the secret.
+pub fn resolve_secret_source(source: &str, key: &str, value: &str) -> Result<String, String> {
+    match source {
+        "env" => std::env::var(key).map_err(|_| format!("env var {key} is not set")),
+        "bitwarden" => run_cli(&["bw", "get", "secret", key]),
+        "onepassword" => run_cli(&["op", "read", value]),
+        "command" => run_cli(&["sh", "-c", value]),
+        other => Err(format!(
+            "unknown secret source '{other}' (expected env|bitwarden|onepassword|command)"
+        )),
+    }
+}
+
+/// `egress_proxy_resolve_secret` — resolve a single secret from a source
+/// without storing it (the proxy stores resolved secrets only after import).
+#[tauri::command]
+pub fn egress_proxy_resolve_secret(
+    source: String,
+    key: String,
+    value: String,
+) -> Result<String, String> {
+    resolve_secret_source(&source, &key, &value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_source_reads_process_environment() {
+        std::env::set_var("EGRESS_PROXY_TEST_SECRET", "top-secret");
+        let resolved = resolve_secret_source("env", "EGRESS_PROXY_TEST_SECRET", "");
+        std::env::remove_var("EGRESS_PROXY_TEST_SECRET");
+        assert_eq!(resolved.as_deref(), Ok("top-secret"));
+    }
+
+    #[test]
+    fn env_source_missing_var_is_an_error() {
+        let err = resolve_secret_source("env", "DEFINITELY_NOT_SET_12345", "").unwrap_err();
+        assert!(err.contains("is not set"));
+    }
+
+    #[test]
+    fn unknown_source_is_rejected() {
+        let err = resolve_secret_source("vault", "k", "v").unwrap_err();
+        assert!(err.contains("unknown secret source"));
+    }
+}
+
 #[tauri::command]
 pub async fn egress_proxy_start(args: EgressProxyStartArgs) -> Result<EgressProxyStatus, String> {
     let port = args.port.unwrap_or(8650);

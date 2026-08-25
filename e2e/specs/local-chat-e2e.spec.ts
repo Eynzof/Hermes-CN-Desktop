@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
 
 // ── Local-first E2E: no backend, real LLM ─────────────────────────────
@@ -45,7 +46,36 @@ const PROVIDERS: ProviderSpec[] = [
   },
 ];
 
-function resolveProvider(): { spec: ProviderSpec; apiKey: string } | null {
+function resolveProvider(): { spec: ProviderSpec; apiKey: string; contextLength?: number } | null {
+  // Command-argument model config: a JSON file with the desktop model-config
+  // shape ({ model, url, api_key, type, max_context_size }). Nothing about the
+  // endpoint / key is hard-coded here — the path comes from E2E_MODEL_CONFIG:
+  //
+  //   E2E_MODEL_CONFIG=C:/dev/ds_flash.json pnpm --filter @hermes/e2e exec playwright test --config=playwright.local.config.ts
+  const configPath = (process.env.E2E_MODEL_CONFIG ?? "").trim();
+  if (configPath) {
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, "utf8"));
+      if (cfg.model && cfg.url && cfg.api_key) {
+        return {
+          spec: {
+            envVar: "E2E_MODEL_CONFIG",
+            providerId: "custom",
+            baseUrl: cfg.url,
+            model: cfg.model,
+          },
+          apiKey: cfg.api_key,
+          contextLength: Number(cfg.max_context_size) || 64000,
+        };
+      }
+      throw new Error(`E2E_MODEL_CONFIG missing model/url/api_key in ${configPath}`);
+    } catch (err) {
+      // Surface the bad config instead of silently falling back to echo mode.
+      throw new Error(
+        `Failed to load E2E_MODEL_CONFIG=${configPath}: ${(err as Error).message}`,
+      );
+    }
+  }
   for (const spec of PROVIDERS) {
     const key = process.env[spec.envVar] ?? "";
     if (key.trim()) return { spec, apiKey: key.trim() };
@@ -58,10 +88,10 @@ const sendButton = (page: Page) => page.getByRole("button", { name: "发送消�
 
 test.describe("Local-first chat (no backend, real LLM API)", () => {
   const resolved = resolveProvider();
-  test.skip(!resolved, "No LLM API key found (set DEEPSEEK_API_KEY or KIMI_API_KEY)");
+  test.skip(!resolved, "No LLM config found (set E2E_MODEL_CONFIG=/path/model.json, or DEEPSEEK_API_KEY / KIMI_API_KEY)");
 
   test("seed config → new session → send hello → receive real reply", async ({ page }) => {
-    const { spec, apiKey } = resolved!;
+    const { spec, apiKey, contextLength } = resolved!;
 
     // 1. Navigate to the app. On first run (empty localStorage), a model
     //    onboarding dialog appears. Click "先看看界面" to dismiss it so we
@@ -81,7 +111,7 @@ test.describe("Local-first chat (no backend, real LLM API)", () => {
     //    any fetch bypasses the Vite proxy entirely — the local dashboard
     //    handlers read from the in-memory cache that initUiStore populates
     //    from this same localStorage key on next page load.
-    await page.evaluate(({ spec, apiKey }) => {
+    await page.evaluate(({ spec, apiKey, contextLength }) => {
       const STORE_KEY = "hermes_ui_backup";
       const backup = localStorage.getItem(STORE_KEY);
       const store = backup ? JSON.parse(backup) : {};
@@ -98,8 +128,8 @@ test.describe("Local-first chat (no backend, real LLM API)", () => {
           api_mode: "chat_completions",
           api_key: apiKey,
         },
-        model_context_length: 64000,
-      };
+    model_context_length: contextLength,
+  };
 
       // Seed the env vars store (matches the shape localEnvPutHandler writes)
       const envVars =
@@ -110,7 +140,7 @@ test.describe("Local-first chat (no backend, real LLM API)", () => {
       store["hermes.env-vars"] = envVars;
 
       localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    }, { spec, apiKey });
+    }, { spec, apiKey, contextLength });
 
     // 3. Reload so that React hooks (useModelInfo, useConfig, useEnvVars)
     //    re-fetch from the local store and the UI reflects the seeded config.

@@ -20,3 +20,14 @@ export interface BatchJob {
   progress: number;
   results: BatchResult[];
 }
+
+/** Serializable checkpoint for pause/resume (P1-23). */
+export interface BatchCheckpoint {
+  jobId: string;
+  remainingItems: BatchItem[];
+  results: BatchResult[];
+  concurrency: number;
+  progress: number;
+  /** Inputs already completed successfully (content-based resume). */
+  completedInputs: string[];
+}
