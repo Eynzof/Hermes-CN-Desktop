@@ -4,7 +4,7 @@
 //! In embedded mode the gateway has **no WebSocket at all**. The webview keeps
 //! its exact relay contract (`gateway_ws_open/send/close` +
 //! `gateway-ws-message` events, consumed by `gateway-relay-socket.ts`), but the
-//! Rust side replaces the tokio-tungstenite TCP session with an in-memory
+//! Rust side replaces the TCP WebSocket session with an in-memory
 //! session:
 //!
 //! ```text

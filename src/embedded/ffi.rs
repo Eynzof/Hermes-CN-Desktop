@@ -109,6 +109,75 @@ pub static REST_FFI_SURFACE: &[FfiRouteEntry] = &[
         python_func: "handle_analytics",
         description: "/api/analytics/*",
     },
+    // ── Real frontend surface (refactor_plan.md Phase A) ──────────────────
+    // Longer exact patterns so longest-match beats the short prefixes above
+    // (/api/mcp-servers wins over /api/mcp, /api/config/schema over /api/config,
+    // /api/gateway/restart over /api/gateway).
+    FfiRouteEntry {
+        pattern: "/api/sessions",
+        python_func: "handle_sessions",
+        description: "/api/sessions* — plural session family (list/detail/messages/search/delete)",
+    },
+    FfiRouteEntry {
+        pattern: "/api/profiles",
+        python_func: "handle_profiles_exact",
+        description: "GET/POST /api/profiles — exact list/create (not /api/profiles/ subroutes)",
+    },
+    FfiRouteEntry {
+        pattern: "/api/env",
+        python_func: "handle_env",
+        description: "/api/env* — env vars (list/set/remove/reveal)",
+    },
+    FfiRouteEntry {
+        pattern: "/api/fs/list",
+        python_func: "handle_fs",
+        description: "/api/fs/list — directory listing",
+    },
+    FfiRouteEntry {
+        pattern: "/api/logs",
+        python_func: "handle_logs",
+        description: "/api/logs — log tail",
+    },
+    FfiRouteEntry {
+        pattern: "/api/media",
+        python_func: "handle_media",
+        description: "/api/media* — media data-url fetch",
+    },
+    FfiRouteEntry {
+        pattern: "/api/memory",
+        python_func: "handle_memory",
+        description: "/api/memory* — memory providers/status/reset",
+    },
+    FfiRouteEntry {
+        pattern: "/api/mcp-servers",
+        python_func: "handle_mcp_servers",
+        description: "/api/mcp-servers — MCP health summary (longer than /api/mcp)",
+    },
+    FfiRouteEntry {
+        pattern: "/api/providers/oauth",
+        python_func: "handle_oauth_providers",
+        description: "/api/providers/oauth* — OAuth providers",
+    },
+    FfiRouteEntry {
+        pattern: "/api/audio",
+        python_func: "handle_audio",
+        description: "/api/audio/* — transcribe/speak/voices",
+    },
+    FfiRouteEntry {
+        pattern: "/api/upload",
+        python_func: "handle_upload",
+        description: "POST /api/upload — attachment store (FFI branch of upload_file)",
+    },
+    FfiRouteEntry {
+        pattern: "/api/config/schema",
+        python_func: "handle_config_schema",
+        description: "GET /api/config/schema — config schema (longer than /api/config)",
+    },
+    FfiRouteEntry {
+        pattern: "/api/gateway/restart",
+        python_func: "handle_gateway_restart",
+        description: "POST /api/gateway/restart — gateway restart action (longer than /api/gateway)",
+    },
 ];
 
 /// JSON-RPC methods handled directly by `hermes_embedded.api.handle_rpc`
@@ -186,6 +255,37 @@ pub static PROXY_PASS_ROUTES: &[&str] = &[
     "/api/git/status",
     "/api/profiles/active",
     "/api/analytics/summary",
+    // Real frontend surface (refactor_plan.md Phase A). The coverage gate input
+    // is now the routes the frontend actually calls, not a self-referential
+    // subset — these must each resolve to an FFI entry.
+    "/api/sessions",
+    "/api/sessions/abc123",
+    "/api/sessions/abc123/messages",
+    "/api/sessions/search",
+    "/api/profiles",
+    "/api/env",
+    "/api/env/reveal",
+    "/api/fs/list",
+    "/api/logs",
+    "/api/media",
+    "/api/media/file",
+    "/api/memory",
+    "/api/memory/provider",
+    "/api/memory/providers/openviking/config",
+    "/api/memory/providers/openviking/status",
+    "/api/memory/providers/openviking/setup",
+    "/api/memory/reset",
+    "/api/mcp-servers",
+    "/api/providers/oauth",
+    "/api/providers/oauth/feishu/start",
+    "/api/providers/oauth/feishu/submit",
+    "/api/providers/oauth/sessions/sess1",
+    "/api/audio/transcribe",
+    "/api/audio/speak",
+    "/api/audio/elevenlabs/voices",
+    "/api/upload",
+    "/api/config/schema",
+    "/api/gateway/restart",
     // Local desktop routes (never forwarded, never FFI).
     "/__hermes_session_log/abc123",
     "/__hermes_cron_runs/default/job1",

@@ -4,7 +4,7 @@
 //! loopback HTTP/WebSocket. Instead the Python runtime is embedded into the
 //! Tauri process and Rust calls Core functions directly through the CPython C
 //! ABI (pyo3). Transport between Rust and Python is therefore **zero HTTP**:
-//! no 9120/8644/8645 listeners, no reqwest proxy pass, no tokio-tungstenite
+//! no 9120/8644/8645 listeners, no HTTP proxy pass, no TCP WebSocket
 //! relay. REST routes are mapped to FFI entry points (`ffi.rs`), Gateway
 //! JSON-RPC frames flow through an in-memory Rust-backed Transport
 //! (`transport.rs`), and Python → Rust events ride a structured channel
@@ -48,7 +48,7 @@ pub mod transport;
 /// desktop checks it at startup alongside `EXPECTED_BACKEND_VERSION` so Rust
 /// bridge and Python function signatures cannot silently drift
 /// (report §3.7 / §8 success criteria 11).
-pub const FFI_SURFACE_VERSION: &str = "0.1.0";
+pub const FFI_SURFACE_VERSION: &str = "0.2.0";
 
 /// Env var that disables the embedded runtime entirely (subprocess fallback).
 pub const EMBEDDED_DISABLE_ENV: &str = "HERMES_DESKTOP_EMBEDDED_PYTHON";
@@ -425,6 +425,6 @@ mod tests {
 
     #[test]
     fn ffi_surface_version_is_pinned() {
-        assert_eq!(FFI_SURFACE_VERSION, "0.1.0");
+        assert_eq!(FFI_SURFACE_VERSION, "0.2.0");
     }
 }

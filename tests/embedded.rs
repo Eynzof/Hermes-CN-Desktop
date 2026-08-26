@@ -70,7 +70,7 @@ fn write_dev_package(dir: &std::path::Path, version: &str) {
 
 #[test]
 fn ffi_surface_version_contract_is_stable() {
-    assert_eq!(FFI_SURFACE_VERSION, "0.1.0");
+    assert_eq!(FFI_SURFACE_VERSION, "0.2.0");
 }
 
 #[test]
@@ -154,69 +154,47 @@ fn embedded_status_is_not_ready_without_interpreter() {
     std::env::remove_var("HERMES_DESKTOP_EMBEDDED_PAYLOAD");
 }
 
-/// The current FFI coverage gate only checks its own `PROXY_PASS_ROUTES` subset,
-/// so it passes while the REAL frontend API surface still has routes with no FFI
-/// entry. This test triggers that gap: `uncovered_routes` over the routes the
-/// frontend actually calls must return exactly the known-missing set.
-///
-/// refactor_plan.md Phase D: as each route gets an FFI entry, remove it from the
-/// expected list; when every route is covered, this test asserts `Vec::new()`.
+/// The FFI coverage gate now takes the REAL frontend API surface as its input:
+/// every route the frontend actually calls must have a direct FFI entry
+/// (refactor_plan.md Phase A). This is the flipped assertion — previously it
+/// documented the 20-path missing list.
 #[test]
-fn real_frontend_routes_missing_ffi_entries_are_documented() {
-    let expected_missing: Vec<&str> = vec![
-        "/api/sessions",
-        "/api/sessions/abc123",
-        "/api/sessions/abc123/messages",
-        "/api/sessions/search",
-        "/api/profiles",
-        "/api/env",
-        "/api/env/reveal",
-        "/api/fs/list",
-        "/api/logs",
-        "/api/media",
-        "/api/memory",
-        "/api/memory/provider",
-        "/api/memory/providers/openviking/config",
-        "/api/memory/providers/openviking/status",
-        "/api/providers/oauth",
-        "/api/providers/oauth/feishu/start",
-        "/api/audio/transcribe",
-        "/api/audio/speak",
-        "/api/audio/elevenlabs/voices",
-        "/api/upload",
-    ];
-    assert_eq!(ffi::uncovered_routes(REAL_FRONTEND_API_ROUTES), expected_missing);
-    assert_eq!(ffi::uncovered_routes(&["/api/mcp-servers"]), Vec::<&str>::new());
+fn real_frontend_routes_all_have_ffi_entries() {
+    assert_eq!(
+        ffi::uncovered_routes(REAL_FRONTEND_API_ROUTES),
+        Vec::<&str>::new(),
+        "every real frontend route must resolve to an FFI entry"
+    );
 }
 
-/// Prefix "coverage" blind spots: these routes pass `covered_route` because a
-/// shorter pattern is a prefix, but they dispatch to the WRONG FFI function.
-/// The registry needs exact (longest-match) entries so e.g. `/api/mcp-servers`
-/// no longer routes into `handle_mcp`. Document the current wrong mapping;
-/// refactor_plan.md Phase B changes the `python_func` values below.
+/// The exact (longest-match) entries fixed the wrong-handler prefix blind
+/// spots: /api/mcp-servers, /api/config/schema and /api/gateway/restart now
+/// dispatch to their own handlers instead of the short-prefix defaults.
 #[test]
-fn wrong_handler_prefix_routes_are_coverage_blind_spots() {
+fn wrong_handler_prefix_routes_now_dispatch_to_exact_handlers() {
     assert_eq!(
         ffi::entry_for_route("/api/mcp-servers").map(|e| e.python_func),
-        Some("handle_mcp"),
+        Some("handle_mcp_servers"),
     );
     assert_eq!(
         ffi::entry_for_route("/api/config/schema").map(|e| e.python_func),
-        Some("get_config"),
+        Some("handle_config_schema"),
     );
     assert_eq!(
         ffi::entry_for_route("/api/gateway/restart").map(|e| e.python_func),
-        Some("get_gateway_config"),
+        Some("handle_gateway_restart"),
     );
 }
 
-/// The `upload_file` command is the one REST path with NO embedded branch at all:
-/// `upload_file_impl` still builds a `reqwest` multipart POST against
-/// `{api_base_url}/api/upload` — in embedded mode that URL is
-/// `embedded://local/api/upload`, which reqwest rejects. This test triggers that
-/// failure (refactor_plan.md Phase C adds the embedded FFI branch).
+/// The `upload_file` command now has an embedded FFI branch (refactor_plan.md
+/// Phase C): with EMBEDDED_API_BASE_URL it dispatches through
+/// embedded_rest_request instead of building a reqwest multipart POST. This
+/// pure-Rust test proves the branch is taken (the old reqwest scheme error is
+/// gone; the failure is now "runtime not initialized" because the interpreter
+/// feature is off). The real-interpreter success case lives in
+/// tests/embedded_python.rs.
 #[test]
-fn upload_file_embedded_mode_has_no_ffi_branch() {
+fn upload_file_embedded_mode_dispatches_through_ffi_without_reqwest() {
     use base64::Engine;
     use hermes_agent_cn::commands::api_proxy::{upload_file_impl, UploadFileInput};
     use hermes_agent_cn::embedded::EMBEDDED_API_BASE_URL;
@@ -229,14 +207,19 @@ fn upload_file_embedded_mode_has_no_ffi_branch() {
     };
     let rt = tokio::runtime::Runtime::new().unwrap();
     let err = rt
-        .block_on(upload_file_impl(input, EMBEDDED_API_BASE_URL, None))
-        .expect_err("upload_file must fail in embedded mode (no FFI branch yet)");
-    // The failure is the reqwest scheme rejection of `embedded://…`; once the
-    // embedded branch lands this test flips to expect Ok(…).
+        .block_on(upload_file_impl(
+            input,
+            EMBEDDED_API_BASE_URL,
+            None,
+            "C:/Users/test/.hermes",
+        ))
+        .expect_err("embedded upload must not fall back to reqwest");
+    // The embedded branch never builds a multipart POST, so the previous
+    // failure (reqwest rejecting the embedded:// scheme) must be gone.
     assert!(
-        err.to_string().contains("http")
-            || err.to_string().contains("scheme")
-            || err.to_string().contains("builder"),
-        "unexpected upload_file error: {err}"
+        !err.to_string().contains("scheme")
+            && !err.to_string().contains("builder")
+            && !err.to_string().contains("http"),
+        "embedded upload must dispatch through FFI, got: {err}"
     );
 }

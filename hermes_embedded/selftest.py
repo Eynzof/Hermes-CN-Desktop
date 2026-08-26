@@ -15,7 +15,7 @@ import sys
 from .api import FFI_SURFACE_VERSION, get_version, handle_rpc
 from .rust_transport import RustBridgeTransport
 
-EXPECTED_RUST_FFI_SURFACE_VERSION = "0.1.0"  # src/embedded/mod.rs::FFI_SURFACE_VERSION
+EXPECTED_RUST_FFI_SURFACE_VERSION = "0.2.0"  # src/embedded/mod.rs::FFI_SURFACE_VERSION
 
 
 def main() -> int:

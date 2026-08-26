@@ -118,13 +118,13 @@ fn embedded_runtime_serves_api_request_through_ffi() {
     assert!(err.to_string().contains("no FFI entry"));
 }
 
-/// Embedded-mode failure trigger for the REAL frontend routes that still have no
-/// FFI entry (refactor_plan.md). With a live interpreter, embedded REST dispatch
-/// must hard-fail with "no FFI entry" instead of falling back to HTTP. As each
-/// route lands in src/embedded/ffi.rs + hermes_embedded/api.py, remove it from
-/// the list (and eventually flip this test to expect Ok).
+/// Embedded-mode success for the REAL frontend routes (refactor_plan.md Phase D):
+/// every route now has an FFI entry and the live interpreter serves it — no
+/// more "no FFI entry" hard failures. Asserts the correct response SHAPE per
+/// route (packages/protocol/src/hermes-api.ts), not just a 200 envelope.
+/// Flipped from `embedded_mode_rejects_uncovered_frontend_routes`.
 #[test]
-fn embedded_mode_rejects_uncovered_frontend_routes() {
+fn embedded_mode_serves_all_frontend_routes_through_ffi() {
     use hermes_agent_cn::commands::api_proxy::ApiRequestInput;
     use hermes_agent_cn::embedded::EmbeddedPython;
 
@@ -133,49 +133,255 @@ fn embedded_mode_rejects_uncovered_frontend_routes() {
         "embedded runtime should start with the repo hermes_embedded payload"
     );
 
-    // Mirrors REAL_FRONTEND_API_ROUTES in tests/embedded.rs (minus the
-    // wrong-handler prefix cases, which dispatch but return the wrong shape).
-    let uncovered = [
-        "/api/sessions",
-        "/api/sessions/abc123",
-        "/api/sessions/abc123/messages",
-        "/api/sessions/search",
-        "/api/profiles",
-        "/api/env",
-        "/api/env/reveal",
-        "/api/fs/list",
-        "/api/logs",
-        "/api/media",
-        "/api/memory",
-        "/api/memory/provider",
-        "/api/memory/providers/openviking/config",
-        "/api/memory/providers/openviking/status",
-        "/api/providers/oauth",
-        "/api/providers/oauth/feishu/start",
-        "/api/audio/transcribe",
-        "/api/audio/speak",
-        "/api/audio/elevenlabs/voices",
-        "/api/upload",
-    ];
     let rt = tokio::runtime::Runtime::new().unwrap();
-    for path in uncovered {
+    let get = |path: &str| -> serde_json::Value {
         let input = ApiRequestInput {
             path: path.to_string(),
             method: Some("GET".to_string()),
             headers: None,
             body: None,
         };
-        let err = rt
+        let result = rt
             .block_on(hermes_agent_cn::embedded::api::embedded_rest_request(
                 "C:/Users/test/.hermes",
                 None,
                 "default",
                 &input,
             ))
-            .unwrap_err();
-        assert!(
-            err.to_string().contains("no FFI entry"),
-            "route {path} must hard-fail without an FFI entry, got: {err}"
-        );
+            .unwrap_or_else(|err| panic!("route {path} must be served through FFI, got: {err}"));
+        assert_eq!(result.status, 200, "route {path} should return a 200 envelope");
+        serde_json::from_str(&result.body).expect("valid JSON body")
+    };
+
+    // Sessions family (use-sessions.ts).
+    let body = get("/api/sessions");
+    assert!(body["sessions"].is_array());
+    assert!(body["total"].is_number() && body["limit"].is_number() && body["offset"].is_number());
+    let body = get("/api/sessions/abc123");
+    assert_eq!(body["session"]["id"], "abc123");
+    let body = get("/api/sessions/abc123/messages");
+    assert_eq!(body["session_id"], "abc123");
+    assert!(body["messages"].is_array());
+    assert!(get("/api/sessions/search")["results"].is_array());
+
+    // Profiles (use-profiles.ts).
+    let body = get("/api/profiles");
+    assert!(body["profiles"].is_array());
+    assert_eq!(body["profiles"][0]["name"], "default");
+    assert_eq!(get("/api/profiles/active")["active"], "default");
+
+    // Env (use-env.ts).
+    assert!(get("/api/env").is_object());
+    assert!(get("/api/env/reveal")["value"].is_string());
+
+    // FS / logs / media.
+    let body = get("/api/fs/list");
+    assert!(body["entries"].is_array(), "fs/list entries: {body}");
+    let body = get("/api/logs");
+    assert_eq!(body["file"], "agent");
+    assert!(body["lines"].is_array());
+    assert!(get("/api/media")["data_url"].is_string());
+
+    // Memory (use-memory.ts).
+    let body = get("/api/memory");
+    assert!(body["providers"].is_array());
+    assert!(get("/api/memory/provider")["ok"] == true);
+    let body = get("/api/memory/providers/openviking/config");
+    assert_eq!(body["name"], "openviking");
+    assert!(body["fields"].is_array());
+    let body = get("/api/memory/providers/openviking/status");
+    assert_eq!(body["provider"], "openviking");
+    assert!(body["details"].is_null());
+
+    // MCP health summary (use-mcp-servers.ts) — wrong-handler fix verified.
+    let body = get("/api/mcp-servers");
+    assert!(body["summary"]["total"].is_number());
+    assert!(body["servers"].is_array());
+
+    // OAuth providers (use-oauth-providers.ts).
+    assert!(get("/api/providers/oauth")["providers"].is_array());
+    let body = get("/api/providers/oauth/feishu/start");
+    assert_eq!(body["flow"], "device_code", "OAuthStartResponse discriminated union");
+
+    // Audio (lib/voice.ts) — setup-state responses with the exact error strings
+    // the frontend maps to friendly setup messages.
+    let body = get("/api/audio/transcribe");
+    assert_eq!(body["ok"], false);
+    assert!(body["transcript"].is_string());
+    let body = get("/api/audio/speak");
+    assert_eq!(body["ok"], false);
+    assert!(body["data_url"].is_string());
+    let body = get("/api/audio/elevenlabs/voices");
+    assert_eq!(body["available"], false);
+    assert!(body["voices"].is_array());
+
+    // Config schema + gateway restart (wrong-handler fixes verified).
+    let body = get("/api/config/schema");
+    assert!(body["fields"].is_object());
+    assert!(body["category_order"].is_array());
+    assert_eq!(get("/api/gateway/restart")["ok"], true);
+}
+
+/// Real-logic semantics through the embedded transport (refactor_plan.md
+/// acceptance 5): with a seeded temp hermes home, env/fs/logs/mcp/profiles
+/// actually read and mutate real files — not just shape stubs.
+#[test]
+fn embedded_mode_real_logic_with_temp_hermes_home() {
+    use hermes_agent_cn::commands::api_proxy::ApiRequestInput;
+    use hermes_agent_cn::embedded::EmbeddedPython;
+
+    assert!(
+        EmbeddedPython::ensure_started(None),
+        "embedded runtime should start with the repo hermes_embedded payload"
+    );
+
+    let home = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(home.path().join("logs")).unwrap();
+    std::fs::create_dir_all(home.path().join("profiles")).unwrap();
+    std::fs::write(home.path().join(".env"), "MY_KEY=secret123\nFOO=bar\n").unwrap();
+    std::fs::write(
+        home.path().join("config.yaml"),
+        "mcp_servers:\n  github:\n    command: npx\n    enabled: true\n  slack:\n    command: x\n    enabled: false\n",
+    )
+    .unwrap();
+    std::fs::write(home.path().join("logs").join("agent.log"), "line1\nline2\nline3\n").unwrap();
+    std::fs::create_dir_all(home.path().join("profiles").join("work")).unwrap();
+    std::fs::write(home.path().join("profiles").join("work").join(".env"), "WORK=1\n").unwrap();
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let home_str = home.path().to_str().unwrap().to_string();
+    let request = |path: &str, method: &str, body: Option<&str>| -> serde_json::Value {
+        let input = ApiRequestInput {
+            path: path.to_string(),
+            method: Some(method.to_string()),
+            headers: None,
+            body: body.map(|s| s.to_string()),
+        };
+        let result = rt
+            .block_on(hermes_agent_cn::embedded::api::embedded_rest_request(
+                &home_str,
+                None,
+                "default",
+                &input,
+            ))
+            .unwrap_or_else(|err| panic!("embedded {method} {path} failed: {err}"));
+        assert_eq!(result.status, 200, "{method} {path}");
+        serde_json::from_str(&result.body).expect("valid JSON body")
+    };
+
+    // env: real .env read → PUT → reveal → DELETE.
+    let body = request("/api/env", "GET", None);
+    assert_eq!(body["MY_KEY"]["is_set"], true);
+    assert_eq!(body["MY_KEY"]["custom"], true);
+    let body = request("/api/env", "PUT", Some(r#"{"key":"NEW_KEY","value":"v1"}"#));
+    assert_eq!(body["ok"], true);
+    let body = request("/api/env/reveal", "POST", Some(r#"{"key":"FOO"}"#));
+    assert_eq!(body["value"], "bar");
+    let body = request("/api/env/reveal", "POST", Some(r#"{"key":"NEW_KEY"}"#));
+    assert_eq!(body["value"], "v1");
+    let body = request("/api/env", "DELETE", Some(r#"{"key":"NEW_KEY"}"#));
+    assert_eq!(body["ok"], true);
+    let body = request("/api/env", "GET", None);
+    assert!(body.get("NEW_KEY").is_none(), "deleted key must be gone: {body}");
+
+    // fs/list: real directory scan (hidden entries skipped, dirs sorted first).
+    let path_q = format!("/api/fs/list?path={}", urlencoding(&home_str));
+    let body = request(&path_q, "GET", None);
+    let names: Vec<&str> = body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["name"].as_str())
+        .collect();
+    assert!(names.contains(&"config.yaml") && names.contains(&"logs") && names.contains(&"profiles"));
+    assert!(!names.contains(&".env"), "hidden .env must be filtered: {names:?}");
+
+    // logs: real tail.
+    let body = request("/api/logs?file=agent&lines=2", "GET", None);
+    assert_eq!(body["lines"], serde_json::json!(["line2", "line3"]));
+
+    // mcp-servers: real config.yaml summary.
+    let body = request("/api/mcp-servers", "GET", None);
+    assert_eq!(body["summary"], serde_json::json!({"total": 2, "enabled": 1}));
+
+    // profiles: real directory scan + POST create.
+    let body = request("/api/profiles", "GET", None);
+    let names: Vec<&str> = body["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|p| p["name"].as_str())
+        .collect();
+    assert!(names.contains(&"default") && names.contains(&"work"), "profiles: {names:?}");
+    let body = request("/api/profiles", "POST", Some(r#"{"name":"Team"}"#));
+    assert_eq!(body["ok"], true);
+    assert!(home.path().join("profiles").join("team").is_dir());
+    let body = request("/api/profiles", "GET", None);
+    let names: Vec<&str> = body["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|p| p["name"].as_str())
+        .collect();
+    assert!(names.contains(&"team"), "created profile must be listed: {names:?}");
+
+    // active profile getter reflects ctx.
+    let body = request("/api/profiles/active", "GET", None);
+    assert_eq!(body["active"], "default");
+}
+
+fn urlencoding(value: &str) -> String {
+    // Minimal percent-encoding for test query strings (spaces/backslashes).
+    let mut out = String::new();
+    for b in value.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b':' | b'/' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
     }
+    out
+}
+
+/// Embedded upload success (refactor_plan.md Phase C / acceptance 3): the
+/// `upload_file` command dispatches through the FFI branch and the attachment
+/// lands under `<hermesHome>/uploads/<session_id>/`.
+#[test]
+fn embedded_upload_file_writes_attachment_via_ffi() {
+    use base64::Engine;
+    use hermes_agent_cn::commands::api_proxy::{upload_file_impl, UploadFileInput};
+    use hermes_agent_cn::embedded::{EmbeddedPython, EMBEDDED_API_BASE_URL};
+
+    assert!(
+        EmbeddedPython::ensure_started(None),
+        "embedded runtime should start with the repo hermes_embedded payload"
+    );
+
+    let home = tempfile::TempDir::new().unwrap();
+    let input = UploadFileInput {
+        session_id: "sess-1".to_string(),
+        name: "note.txt".to_string(),
+        r#type: Some("text/plain".to_string()),
+        data: base64::engine::general_purpose::STANDARD.encode("hello embedded"),
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt
+        .block_on(upload_file_impl(
+            input,
+            EMBEDDED_API_BASE_URL,
+            None,
+            home.path().to_str().unwrap(),
+        ))
+        .expect("embedded upload should succeed through FFI");
+    assert_eq!(result.status, 200);
+    let body: serde_json::Value = serde_json::from_str(&result.body).expect("valid JSON body");
+    assert_eq!(body["ok"], true, "body: {body}");
+    let target = std::path::Path::new(body["path"].as_str().expect("path in body"));
+    let expected_root = home.path().join("uploads").join("sess-1");
+    assert!(
+        target.starts_with(&expected_root),
+        "upload must land under {expected_root:?}, got {target:?}"
+    );
+    assert_eq!(std::fs::read_to_string(target).unwrap(), "hello embedded");
 }

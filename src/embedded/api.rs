@@ -1,6 +1,7 @@
 //! Embedded-mode REST dispatch (report Phase 4 延伸 / §3.7 Hard FFI).
 //!
-//! `api_request` in embedded mode never touches reqwest or an ASGI bridge.
+//! `api_request` in embedded mode never touches an HTTP client or an
+//! in-process bridge.
 //! Every proxy-pass route is looked up in the FFI registry (`ffi.rs`) and
 //! dispatched directly to `hermes_embedded.api.handle_rpc(method, params, ctx)`
 //! through the unified pyo3 call wrapper (`call.rs`). Routes without an FFI
@@ -73,31 +74,42 @@ fn url_path(path: &str) -> String {
 }
 
 /// Build the `params` argument: parsed JSON body (if any) merged with the
-/// normalized path and HTTP method so Python handlers can route precisely.
+/// normalized path, HTTP method, and parsed query string so Python handlers
+/// can route precisely (refactor_plan.md Phase B — fs/logs/sessions need
+/// query params like `path`, `lines`, `limit`, `offset`, `q`).
 fn request_params(input: &ApiRequestInput, path: &str) -> String {
-    let mut params = match input.body.as_deref() {
+    let params = match input.body.as_deref() {
         Some(body) if !body.trim().is_empty() => {
             serde_json::from_str::<serde_json::Value>(body).unwrap_or(serde_json::Value::Null)
         }
         _ => serde_json::Value::Null,
     };
-    if let serde_json::Value::Object(map) = &mut params {
-        map.insert(
-            "path".to_string(),
-            serde_json::Value::String(path.to_string()),
-        );
-        map.insert(
-            "method".to_string(),
-            serde_json::Value::String(input.method.clone().unwrap_or_else(|| "GET".to_string())),
-        );
-    } else {
-        params = serde_json::json!({
-            "path": path,
-            "method": input.method.clone().unwrap_or_else(|| "GET".to_string()),
-            "body": params,
-        });
+    let mut query = serde_json::Map::new();
+    if let Ok(url) = url::Url::parse(&format!("http://x{}", input.path)) {
+        for (k, v) in url.query_pairs() {
+            query.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+        }
     }
-    params.to_string()
+    let mut map = match params {
+        serde_json::Value::Object(map) => map,
+        other => {
+            let mut m = serde_json::Map::new();
+            if !other.is_null() {
+                m.insert("body".to_string(), other);
+            }
+            m
+        }
+    };
+    map.insert(
+        "path".to_string(),
+        serde_json::Value::String(path.to_string()),
+    );
+    map.insert(
+        "method".to_string(),
+        serde_json::Value::String(input.method.clone().unwrap_or_else(|| "GET".to_string())),
+    );
+    map.insert("query".to_string(), serde_json::Value::Object(query));
+    serde_json::Value::Object(map).to_string()
 }
 
 /// Build the `ctx` argument: hermes home + session token + profile substitute
@@ -140,6 +152,23 @@ mod tests {
         assert_eq!(params["mode"], "resume");
         assert_eq!(params["path"], "/api/session/abc");
         assert_eq!(params["method"], "GET");
+        assert_eq!(params["query"], serde_json::json!({}));
+    }
+
+    #[test]
+    fn request_params_parses_query_string() {
+        let input = ApiRequestInput {
+            path: "/api/sessions?limit=50&offset=10&q=hello%20world".into(),
+            method: Some("GET".into()),
+            headers: None,
+            body: None,
+        };
+        let params: serde_json::Value =
+            serde_json::from_str(&request_params(&input, "/api/sessions")).unwrap();
+        assert_eq!(params["path"], "/api/sessions");
+        assert_eq!(params["query"]["limit"], "50");
+        assert_eq!(params["query"]["offset"], "10");
+        assert_eq!(params["query"]["q"], "hello world");
     }
 
     #[test]
@@ -154,6 +183,7 @@ mod tests {
             serde_json::from_str(&request_params(&input, "/api/prompt")).unwrap();
         assert_eq!(params["body"], 42);
         assert_eq!(params["method"], "POST");
+        assert_eq!(params["query"], serde_json::json!({}));
     }
 
     #[test]

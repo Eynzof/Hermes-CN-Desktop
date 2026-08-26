@@ -1082,6 +1082,7 @@ pub async fn upload_file_impl(
     input: UploadFileInput,
     api_base_url: &str,
     session_token: Option<&str>,
+    hermes_home: &str,
 ) -> Result<ApiRequestResult, AppError> {
     use base64::Engine;
 
@@ -1090,6 +1091,33 @@ pub async fn upload_file_impl(
         .decode(&input.data)
         .map_err(|e| AppError::InvalidRequest(format!("Invalid base64: {}", e)))?;
     ensure_upload_decoded_size(file_bytes.len())?;
+
+    // Embedded Hard FFI — zero HTTP (refactor_plan.md Phase C): dispatch
+    // straight into the embedded interpreter's handle_upload (writes
+    // ~/.hermes/uploads/<session_id>/), never reqwest. Keeps src/embedded/
+    // free of reqwest so the no-http deny gate stays green.
+    if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
+        let body = serde_json::json!({
+            "session_id": input.session_id.clone(),
+            "name": input.name.clone(),
+            "type": input.r#type.clone().unwrap_or_else(|| "application/octet-stream".to_string()),
+            "data": input.data.clone(),
+        })
+        .to_string();
+        let embedded_input = ApiRequestInput {
+            path: "/api/upload".to_string(),
+            method: Some("POST".to_string()),
+            headers: None,
+            body: Some(body),
+        };
+        return crate::embedded::api::embedded_rest_request(
+            hermes_home,
+            session_token,
+            "default",
+            &embedded_input,
+        )
+        .await;
+    }
 
     let mime_type = input
         .r#type
@@ -1139,11 +1167,15 @@ pub async fn upload_file(
     input: UploadFileInput,
     state: State<'_, AppState>,
 ) -> Result<ApiRequestResult, AppError> {
-    let (api_base_url, session_token) = {
+    let (api_base_url, session_token, hermes_home) = {
         let inner = state.inner.lock()?;
-        (inner.api_base_url.clone(), inner.session_token.clone())
+        (
+            inner.api_base_url.clone(),
+            inner.session_token.clone(),
+            inner.hermes_home.clone(),
+        )
     };
-    upload_file_impl(input, &api_base_url, session_token.as_deref()).await
+    upload_file_impl(input, &api_base_url, session_token.as_deref(), &hermes_home).await
 }
 
 #[derive(Debug, Deserialize)]
