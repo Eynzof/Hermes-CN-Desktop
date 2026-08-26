@@ -44,13 +44,15 @@ const ProfilesRoute = lazy(() => import("@/routes/profiles").then((m) => ({ defa
 const ProfileBuilderRoute = lazy(() => import("@/routes/profile-builder").then((m) => ({ default: m.ProfileBuilderRoute })));
 const MemoryRoute = lazy(() => import("@/routes/memory").then((m) => ({ default: m.MemoryRoute })));
 const ExternalMemoryRoute = lazy(() => import("@/routes/external-memory").then((m) => ({ default: m.ExternalMemoryRoute })));
-const WanderMemoryMemoriesRoute = lazy(() => import("@/routes/wander-memory/memories").then((m) => ({ default: m.WanderMemoryMemoriesRoute })));
-const WanderMemoryFilesRoute = lazy(() => import("@/routes/wander-memory/files").then((m) => ({ default: m.WanderMemoryFilesRoute })));
-const WanderMemoryDialogueRoute = lazy(() => import("@/routes/wander-memory/dialogue").then((m) => ({ default: m.WanderMemoryDialogueRoute })));
-const WanderMemoryChatRoute = lazy(() => import("@/routes/wander-memory/chat").then((m) => ({ default: m.WanderMemoryChatRoute })));
-const WanderMemoryContextRoute = lazy(() => import("@/routes/wander-memory/context").then((m) => ({ default: m.WanderMemoryContextRoute })));
-const WanderMemoryStatusRoute = lazy(() => import("@/routes/wander-memory/status").then((m) => ({ default: m.WanderMemoryStatusRoute })));
-const WanderMemoryApiDocsRoute = lazy(() => import("@/routes/wander-memory/api-docs").then((m) => ({ default: m.WanderMemoryApiDocsRoute })));
+// Wander 记忆窗口暂不可用（MemOS/WanderMemory 服务未接入），注释掉懒加载路由。
+// TODO(embedded): 服务可用后恢复这些 import 与下方 /wander-memory/* 路由。
+// const WanderMemoryMemoriesRoute = lazy(() => import("@/routes/wander-memory/memories").then((m) => ({ default: m.WanderMemoryMemoriesRoute })));
+// const WanderMemoryFilesRoute = lazy(() => import("@/routes/wander-memory/files").then((m) => ({ default: m.WanderMemoryFilesRoute })));
+// const WanderMemoryDialogueRoute = lazy(() => import("@/routes/wander-memory/dialogue").then((m) => ({ default: m.WanderMemoryDialogueRoute })));
+// const WanderMemoryChatRoute = lazy(() => import("@/routes/wander-memory/chat").then((m) => ({ default: m.WanderMemoryChatRoute })));
+// const WanderMemoryContextRoute = lazy(() => import("@/routes/wander-memory/context").then((m) => ({ default: m.WanderMemoryContextRoute })));
+// const WanderMemoryStatusRoute = lazy(() => import("@/routes/wander-memory/status").then((m) => ({ default: m.WanderMemoryStatusRoute })));
+// const WanderMemoryApiDocsRoute = lazy(() => import("@/routes/wander-memory/api-docs").then((m) => ({ default: m.WanderMemoryApiDocsRoute })));
 const SoulRoute = lazy(() => import("@/routes/soul").then((m) => ({ default: m.SoulRoute })));
 const CronRoute = lazy(() => import("@/routes/cron").then((m) => ({ default: m.CronRoute })));
 const ImOnboardingRoute = lazy(() => import("@/routes/im-onboarding").then((m) => ({ default: m.ImOnboardingRoute })));
@@ -115,7 +117,8 @@ function BackendApp() {
             <Route path="/memconfig" element={withBoundary(<ExternalMemoryRoute page="config" />)} />
             <Route path="/openviking" element={withBoundary(<ExternalMemoryRoute page="openviking" />)} />
             <Route path="/hindsight" element={withBoundary(<ExternalMemoryRoute page="hindsight" />)} />
-            <Route path="/wander-memory" element={<Navigate to="/wander-memory/memories" replace />} />
+            {/* Wander 记忆窗口暂不可用（MemOS/WanderMemory 服务未接入），注释掉路由。 */}
+            {/* <Route path="/wander-memory" element={<Navigate to="/wander-memory/memories" replace />} />
             <Route path="/wander-memory/memories" element={withBoundary(<WanderMemoryMemoriesRoute />)} />
             <Route path="/wander-memory/files" element={withBoundary(<WanderMemoryFilesRoute />)} />
             <Route path="/wander-memory/dialogue" element={withBoundary(<WanderMemoryDialogueRoute />)} />
@@ -123,7 +126,7 @@ function BackendApp() {
             <Route path="/wander-memory/context" element={withBoundary(<WanderMemoryContextRoute />)} />
             <Route path="/wander-memory/status" element={withBoundary(<WanderMemoryStatusRoute />)} />
             <Route path="/wander-memory/api" element={withBoundary(<WanderMemoryApiDocsRoute />)} />
-            <Route path="/wander-memory/*" element={<Navigate to="/wander-memory/memories" replace />} />
+            <Route path="/wander-memory/*" element={<Navigate to="/wander-memory/memories" replace />} /> */}
             <Route path="/soul" element={withBoundary(<SoulRoute />)} />
             <Route path="/cron" element={withBoundary(<CronRoute />)} />
             <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />

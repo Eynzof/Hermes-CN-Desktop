@@ -285,3 +285,24 @@ writeFileSync(join(target, "manifest.json"), `${JSON.stringify({
 
 console.log(`wrote ${currentPath}`);
 console.log(`managed runtime executable: ${installedExecutable}`);
+
+// Embedded runtime dev support (refactor_report.md Phase 1): in embedded mode
+// the interpreter must be able to import `hermes_embedded`. Prefer the Core
+// checkout's package; fall back to the desktop repo's reference package, and
+// surface HERMES_DESKTOP_EMBEDDED_PAYLOAD so resolve_payload_root finds it.
+if (process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1") {
+  const embeddedSource = [
+    resolve(sourceRoot, "hermes_embedded"),
+    resolve(repoRoot, "hermes_embedded"),
+  ].find((candidate) => existsSync(join(candidate, "api.py")));
+  if (!embeddedSource) {
+    console.warn(
+      "[install-local-runtime] embedded mode requested but no hermes_embedded package found; " +
+        "the embedded runtime will fall back to the subprocess managed runtime",
+    );
+  } else {
+    // Note: the env var is informational here — the actual dev payload env is
+    // set by tauri-dev-managed.mjs (child env mutations do not propagate back).
+    console.log(`[install-local-runtime] embedded payload: ${embeddedSource}`);
+  }
+}

@@ -83,6 +83,46 @@ describe("version-check", () => {
       expect(getVersionCheckState()).toMatchObject({ kind: "unavailable" });
     });
 
+    it("reads the version from Python via IPC in embedded mode (no HTTP)", async () => {
+      const getBackendVersion = vi.fn(async () => ({ version: EXPECTED_BACKEND_VERSION }));
+      vi.stubGlobal("window", {
+        __TAURI_INTERNALS__: {},
+        __HERMES_RUNTIME__: {
+          platform: "tauri",
+          embedded: true,
+          apiBaseUrl: "embedded://local",
+        },
+        hermesDesktop: { getBackendVersion },
+        location: { href: "http://localhost:9545/", protocol: "http:" },
+      });
+
+      const state = await verifyBackendVersion("embedded://local");
+
+      expect(state.kind).toBe("ok");
+      expect(state).toMatchObject({ backendVersion: EXPECTED_BACKEND_VERSION });
+      expect(getBackendVersion).toHaveBeenCalled();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it("reports mismatch when the embedded backend version differs", async () => {
+      vi.stubGlobal("window", {
+        __TAURI_INTERNALS__: {},
+        __HERMES_RUNTIME__: {
+          platform: "tauri",
+          embedded: true,
+          apiBaseUrl: "embedded://local",
+        },
+        hermesDesktop: { getBackendVersion: vi.fn(async () => ({ version: "0.18.0" })) },
+        location: { href: "http://localhost:9545/", protocol: "http:" },
+      });
+
+      const state = await verifyBackendVersion("embedded://local");
+
+      expect(state.kind).toBe("mismatch");
+      expect(state).toMatchObject({ backendVersion: "0.18.0" });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
     it("assertCompatible throws on mismatch and invokes fatal dialog", async () => {
       const fatalErrorAndExit = vi.fn(() => new Promise<never>(() => {}));
       vi.stubGlobal("window", {

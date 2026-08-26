@@ -188,6 +188,14 @@ pub async fn gateway_ws_open(
 ) -> Result<(), AppError> {
     let connection_id = input.connection_id;
     shutdown_active(&state)?;
+
+    // Embedded mode: no WebSocket — open the in-memory RustBridgeTransport
+    // session instead (report Phase 3). The webview relay contract is
+    // unchanged; only the byte carrier disappears.
+    if state.inner.lock()?.embedded {
+        return crate::embedded::transport::open_embedded_gateway(&state, connection_id);
+    }
+
     let stream = connect_gateway_stream(&app, &state).await?;
 
     let (mut sink, mut read) = stream.split();
@@ -359,7 +367,20 @@ fn emit_ws_auth_expired(app: &tauri::AppHandle, base_url: &str) {
 pub async fn gateway_ws_send(
     input: GatewayWsSendInput,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    // Embedded mode: dispatch the frame into the Python interpreter directly
+    // (responses are emitted as gateway-ws-message events).
+    if state.inner.lock()?.embedded {
+        return crate::embedded::transport::dispatch_frame(
+            &app,
+            &state,
+            &input.connection_id,
+            input.data,
+        )
+        .await;
+    }
+
     let inner = state.inner.lock()?;
     match &inner.gateway_ws {
         Some(handle) if handle.connection_id == input.connection_id => handle
@@ -377,6 +398,11 @@ pub async fn gateway_ws_close(
     input: GatewayWsCloseInput,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
+    // Embedded mode: tear down the in-memory session.
+    if state.inner.lock()?.embedded {
+        return crate::embedded::transport::close_embedded_gateway(&state, &input.connection_id);
+    }
+
     let mut inner = state.inner.lock()?;
     if let Some(handle) = inner.gateway_ws.as_ref() {
         if handle.connection_id == input.connection_id {

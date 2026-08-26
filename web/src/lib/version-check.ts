@@ -50,11 +50,27 @@ function isDevBypassEnabled(): boolean {
 }
 
 /**
- * Fetch /api/version directly, bypassing the transport layer so the version
- * check itself does not recurse into assertCompatible(). The endpoint is
- * public and requires no auth header.
+ * Fetch the backend version. In embedded mode the backend lives inside the
+ * Rust process: `apiBaseUrl` is the `embedded://local` placeholder and there is
+ * no HTTP endpoint — the version is read from Python via IPC
+ * (`get_backend_version`). Non-embedded mode fetches /api/version directly,
+ * bypassing the transport layer so the version check itself does not recurse
+ * into assertCompatible(). The endpoint is public and requires no auth header.
  */
 async function fetchBackendVersion(apiBaseUrl?: string): Promise<BackendVersionInfo> {
+  const embedded =
+    runtime.isEmbedded() || (typeof apiBaseUrl === "string" && apiBaseUrl === "embedded://local");
+  if (embedded) {
+    if (window.hermesDesktop?.getBackendVersion) {
+      const info = await window.hermesDesktop.getBackendVersion();
+      if (typeof info?.version !== "string") {
+        throw new Error("embedded backend version response missing version string");
+      }
+      return info as BackendVersionInfo;
+    }
+    throw new Error("embedded backend version unavailable (no IPC bridge)");
+  }
+
   const url = apiBaseUrl
     ? `${apiBaseUrl.replace(/\/$/, "")}/api/version`
     : runtime.getApiUrl("/api/version");

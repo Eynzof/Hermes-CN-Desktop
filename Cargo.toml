@@ -65,6 +65,20 @@ getrandom = "0.3"
 # Only from_path_iter is used — the desktop process env is never mutated.
 dotenvy = "0.15"
 tauri-plugin-clipboard-manager = "2.3.2"
+# In-process CPython embedding (refactor_report.md). Optional and NOT in the
+# default feature set: the full pyo3 backend needs a real Python 3.14 install
+# (PYO3_PYTHON / python3 on PATH) to link libpython. The crate always compiles
+# the embedded architecture (src/embedded/) with a stub backend when the
+# feature is off, so default builds/tests never depend on a Python runtime.
+pyo3 = { version = "0.29", features = ["auto-initialize"], optional = true }
+
+[features]
+default = []
+# Enables the real pyo3 CPython embedding backend (Phase 0/1 spike + Phase 4
+# Hard FFI). Off by default: the crate still ships the embedded architecture
+# with a stub backend, so `cargo test --all-features` remains green on CI
+# runners that do not provide a linkable libpython.
+embedded-python = ["dep:pyo3"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [

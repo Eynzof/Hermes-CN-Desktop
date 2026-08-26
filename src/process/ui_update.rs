@@ -1027,7 +1027,8 @@ mod tests {
 
     #[test]
     fn floor_gate_accepts_packages_below_or_equal_desktop() {
-        // CARGO_PKG_VERSION is 0.7.0; floors at/below it are servable.
+        // CARGO_PKG_VERSION is 0.8.0-rc4 (semver_parts → 0.8.0); floors at/below
+        // it are servable.
         assert!(desktop_ge("0.7.0"));
         assert!(desktop_ge("0.6.3"));
         assert!(desktop_ge("0.0.1"));
@@ -1036,7 +1037,7 @@ mod tests {
 
     #[test]
     fn floor_gate_rejects_packages_above_desktop() {
-        assert!(!desktop_ge("0.7.1"));
+        assert!(!desktop_ge("0.8.1"));
         assert!(!desktop_ge("1.0.0"));
         assert!(!desktop_ge("99.0.0"));
     }

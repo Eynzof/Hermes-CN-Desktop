@@ -78,6 +78,11 @@ fn shutdown_owned_runtime(app: &tauri::AppHandle, reason: &str) {
         );
         handle.stop_with_token(session_token.as_deref());
     }
+
+    // Embedded runtime: finalize the interpreter AFTER agent loops are stopped
+    // (the dashboard handle above owns no process in embedded mode, so nothing
+    // to kill — the interpreter teardown is the only stop action).
+    hermes_agent_cn::embedded::shutdown();
 }
 
 fn create_and_return(path: PathBuf) -> PathBuf {
@@ -643,8 +648,9 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::gateway::get_runtime_config,
-            commands::gateway::refresh_gateway_url,
+  commands::gateway::get_runtime_config,
+  commands::gateway::refresh_gateway_url,
+  commands::gateway::get_backend_version,
             commands::fatal_error::fatal_error_and_exit,
             commands::connection::get_connection_config,
             commands::connection::save_connection_config,

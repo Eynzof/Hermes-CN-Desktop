@@ -22,6 +22,10 @@ pub struct RuntimeConfig {
     /// Running as the portable (unzip-and-run) distribution — the desktop
     /// update dialog switches to "download the zip and re-extract" guidance.
     pub portable: bool,
+    /// True when the managed runtime is running in-process (embedded CPython).
+    /// apiBaseUrl is then the `embedded://local` placeholder; REST goes through
+    /// native IPC and the gateway rides the in-memory transport (no HTTP/WS).
+    pub embedded: bool,
 }
 
 #[tauri::command]
@@ -30,10 +34,11 @@ pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, A
     let control = crate::desktop_control::read();
     let installed = crate::process::runtime::read_current_record().is_some();
     let managed_running = inner.connection_mode == crate::connection::ConnectionMode::Managed
-        && inner
-            .dashboard_handle
-            .as_ref()
-            .is_some_and(|handle| handle.owns_process);
+        && (inner.embedded
+            || inner
+                .dashboard_handle
+                .as_ref()
+                .is_some_and(|handle| handle.owns_process));
     let lifecycle =
         crate::desktop_control::managed_runtime_lifecycle_state(installed, managed_running);
     Ok(RuntimeConfig {
@@ -47,6 +52,7 @@ pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, A
         managed_runtime_desired_state: control.managed_runtime_desired_state.as_str().to_string(),
         managed_runtime_lifecycle_state: lifecycle.to_string(),
         portable: crate::process::runtime::portable_mode_active(),
+        embedded: inner.embedded,
     })
 }
 
@@ -69,6 +75,16 @@ pub async fn refresh_gateway_url(
             inner.connection_mode,
         )
     };
+
+    // Embedded mode has no HTTP/WS URL and no token rotation — return the
+    // placeholder unchanged (the frontend forces the in-memory relay).
+    if state.inner.lock()?.embedded {
+        let inner = state.inner.lock()?;
+        return Ok(RefreshGatewayResult {
+            gateway_url: inner.gateway_url.clone(),
+            session_token: inner.session_token.clone(),
+        });
+    }
 
     // Remote tokens are static (Settings or env), never rotated by a local
     // dashboard restart — return the current connection unchanged instead of
@@ -107,4 +123,17 @@ pub async fn refresh_gateway_url(
         gateway_url: fresh_url,
         session_token: fresh_token,
     })
+}
+
+/// Return the Core backend version from the embedded interpreter (embedded
+/// mode only). The frontend version gate uses this instead of an HTTP
+/// `/api/version` fetch, which does not exist in embedded mode
+/// (refactor_report.md §8 success criteria 3). Non-embedded mode returns
+/// `None` so the frontend keeps using the HTTP path unchanged.
+#[tauri::command]
+pub fn get_backend_version(state: State<'_, AppState>) -> Result<Option<String>, AppError> {
+    if !state.inner.lock()?.embedded {
+        return Ok(None);
+    }
+    crate::embedded::get_backend_version().map(Some)
 }

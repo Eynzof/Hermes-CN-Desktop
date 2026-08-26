@@ -509,7 +509,19 @@ async fn api_request_impl_inner(
         return Ok(json_result(status, status_text, body));
     }
 
-    // 5. Proxy to dashboard
+    // 5. Embedded Hard FFI — zero HTTP (refactor_report.md §3.7). The
+    // api_proxy never forwards to reqwest here: routes are dispatched directly
+    // into the embedded interpreter via the FFI registry.
+    if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
+        let token = match &auth {
+            ProxyAuth::Token(t) => *t,
+            ProxyAuth::Oauth(_) => None,
+        };
+        return crate::embedded::api::embedded_rest_request(hermes_home, token, "default", &input)
+            .await;
+    }
+
+    // 6. Proxy to dashboard
     let full_url = if path.starts_with("http://") || path.starts_with("https://") {
         // Validate same origin
         let base = url::Url::parse(api_base_url)?;

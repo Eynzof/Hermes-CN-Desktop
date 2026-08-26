@@ -223,6 +223,36 @@ describe("transport · debug-bus integration", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
+  it("fetchJSON forces native IPC in embedded mode even without apiBaseUrl/backendReady", async () => {
+    const request = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      body: JSON.stringify({ version: "0.20.0", embedded: true }),
+    }));
+    globalThis.fetch = vi.fn(async () => makeResponse(500, "should not fetch")) as unknown as typeof globalThis.fetch;
+    // Embedded mode: backend lives inside the Rust process, apiBaseUrl is the
+    // embedded://local placeholder and there is no loopback HTTP — every
+    // request must go through hermesDesktop.request.
+    window.__HERMES_RUNTIME__ = { platform: "tauri", embedded: true };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request,
+    };
+
+    const out = await fetchJSON<{ embedded: boolean }>("/api/status");
+
+    expect(out).toEqual({ version: "0.20.0", embedded: true });
+    expect(request).toHaveBeenCalledWith({
+      path: "/api/status",
+      method: undefined,
+      headers: { "Content-Type": "application/json" },
+      body: null,
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("fetchExternalJSON uses desktop externalRequest capability on Tauri", async () => {
     const externalRequest = vi.fn(async () => ({
       ok: true,

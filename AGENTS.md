@@ -158,10 +158,18 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - CSS Modules，不用 Tailwind / styled-components
 - 视觉变量在 `packages/shared-ui/src/tokens/*.css`，不要硬编码颜色/圆角/字号
 
-### Gateway transport
+Gateway transport
 
-唯一传输是 **JSON-RPC over WebSocket（官方 `/api/ws`）**，与 Core 官方桌面端架构一致；SSE+POST 旧路径（P-009）已删。
-`gateway-client.ts` 负责协议层与重连编排：1→15s 指数退避、唤醒/online/visibility 触发、重连后 `session.resume`；**对齐官方桌面端不主动发 synthetic ping**，半开连接靠 close/error + RPC 超时 + OS 唤醒兜底。`gateway-socket-path.ts` 在原生 WebSocket 和 Rust 中继之间选择（`?wspath=` query > `HERMES_WS_PATH_LEARNED` 学习值 > 默认 native 自动回退 relay）；打包态 webview 拦 `ws://` 时回退到 `ws_proxy.rs`，线协议仍是 `/api/ws` 不变。详见 `docs/gateway-connection-overhaul.md`。
+唯一传输是 JSON-RPC over WebSocket（官方 /api/ws），与 Core 官方桌面端架构一致；SSE+POST 旧路径（P-009）已删。
+gateway-client.ts 负责协议层与重连编排：1→15s 指数退避、唤醒/online/visibility 触发、重连后 session.resume；对齐官方桌面端不主动发 synthetic ping，半开连接靠 close/error + RPC 超时 + OS 唤醒兜底。gateway-socket-path.ts 在原生 WebSocket 和 Rust 中继之间选择（?wspath= query > HERMES_WS_PATH_LEARNED 学习值 > 默认 native 自动回退 relay）；打包态 webview 拦 ws:// 时回退到 ws_proxy.rs，线协议仍是 /api/ws 不变。详见 docs/gateway-connection-overhaul.md。
+
+Embedded Python 运行时（refactor_report.md）
+
+桌面端支持"进程内嵌入 CPython + Hard FFI"替代 hermes 子进程 + HTTP/WS 传输（零本地 HTTP：无 9120/8644/8645 监听、无 reqwest 转发、无 tokio-tungstenite 中继）。代码在 src/embedded/（lifecycle/call/ffi/events/transport/api）+ hermes_embedded/（Python FFI 面参考包），详见 docs/embedded-python.md。
+- 特性开关：pyo3 后端在 `embedded-python` cargo feature 后面（默认关，避免 CI 强制链接 libpython）；`HERMES_DESKTOP_EMBEDDED_PYTHON=0` 关闭嵌入、回退子进程 managed runtime。
+- 前端契约：`get_runtime_config` 返回 `embedded: true`、`apiBaseUrl: "embedded://local"`（占位，不绑定端口）；embedded 模式 transport.ts 强制 native IPC、gateway-socket-path.ts 强制 relay。
+- 门禁：`cargo test` 默认跑嵌入式架构的 mock/纯 Rust 测试（tests/embedded.rs）；真实解释器测试在 `--features embedded-python`（tests/embedded_python.rs）；CI 有 src/embedded/ 的 no-http deny grep 与 FFI 覆盖率门禁。
+- 例外：remote（远程 Hermes Agent）与 local（attach 外部 CLI dashboard）仍走 HTTP/WS——外部进程无法嵌入。
 
 ## 不要做的事
 

@@ -68,7 +68,10 @@ class MockNativeSocket {
 interface FakeWindow {
   location: { search: string; href: string };
   __TAURI_INTERNALS__?: unknown;
-  __HERMES_RUNTIME__?: { connectionMode?: "managed" | "local" | "remote" };
+  __HERMES_RUNTIME__?: {
+    connectionMode?: "managed" | "local" | "remote";
+    embedded?: boolean;
+  };
 }
 
 let fakeWindow: FakeWindow;
@@ -209,6 +212,21 @@ describe("createGatewaySocket path selection", () => {
     const { mod } = await loadModule();
     const socket = mod.createGatewaySocket(URL);
     expect(socket).toBeInstanceOf(MockNativeSocket);
+  });
+
+  it("embedded mode always rides the relay (no ws:// socket exists)", async () => {
+    fakeWindow.__HERMES_RUNTIME__ = { connectionMode: "managed", embedded: true };
+    const { mod } = await loadModule({ HERMES_WS_PATH_LEARNED: "native" });
+    const socket = mod.createGatewaySocket(URL);
+    expect(socket).toBeInstanceOf(FakeRelaySocket);
+    expect(MockNativeSocket.instances).toHaveLength(0);
+  });
+
+  it("embedded mode wins over the remote override path", async () => {
+    fakeWindow.__HERMES_RUNTIME__ = { connectionMode: "remote", embedded: true };
+    const { mod } = await loadModule();
+    const socket = mod.createGatewaySocket(URL);
+    expect(socket).toBeInstanceOf(FakeRelaySocket);
   });
 
   it("clears the learned value and reverts to native when the relay keeps failing", async () => {

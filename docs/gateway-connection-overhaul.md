@@ -180,3 +180,16 @@
 - 2026-06-09 — **决策 WS-only**:保留 Tauri 壳,连接层照搬官方;SSE 全删;兜底 Rust WS 中继。
   新开 `claude/gateway-ws-only`(基线 origin/main 6eda0c1)+ Core 侧 `claude/p009-sse-deprecation`。
   本文档重写(C1)。
+
+---
+
+## 9. 嵌入式网关(Embedded mode,refactor_report.md)
+
+嵌入模式下 **Gateway 不走 WebSocket**:Rust 侧不再连 tokio-tungstenite,而是建 `EmbeddedGatewaySession`
+(`src/embedded/transport.rs`)——JSON-RPC 帧经 `hermes_embedded.api.handle_rpc` 直接分发到 Python,事件经
+`src/embedded/events.rs` 结构化回推 WebView。前端 `gateway-relay-socket.ts` **契约不变**
+(`gateway-ws-open/send/close` + `gateway-ws-message`),`gateway-socket-path.ts` 在 `runtime.isEmbedded()` 时
+强制走 relay;无 10s 保活 ping、无 token 抓取。`session.resume` 语义天然保留(协议层未变)。
+
+- remote(远程 Hermes Agent)与 local(attach 外部 CLI dashboard)模式仍走本文档描述的 HTTP/WS 路径。
+- 详见 `docs/embedded-python.md`。

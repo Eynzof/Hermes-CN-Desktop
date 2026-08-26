@@ -141,6 +141,13 @@ export function createGatewaySocket(url: string): WebSocket {
     return new WebSocket(url);
   }
 
+  // Embedded mode: the gateway runs inside the Rust process — there is no
+  // ws:// socket at all, so the webview always rides the Rust relay, which
+  // dispatches frames into the in-memory transport.
+  if (runtime.isEmbedded()) {
+    return new GatewayRelaySocket(url) as unknown as WebSocket;
+  }
+
   // Remote mode (attached to a remote Hermes Agent) always rides the Rust
   // relay: the webview CSP only allows connect-src 127.0.0.1, so a native
   // ws(s):// to a remote host is blocked — and the relay keeps the session

@@ -4,6 +4,7 @@ pub mod commands;
 pub mod connection;
 pub mod cron_runs;
 pub mod desktop_control;
+pub mod embedded;
 pub mod env_file;
 pub mod environment;
 pub mod error;

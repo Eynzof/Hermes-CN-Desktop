@@ -455,6 +455,10 @@ const tauriBridge = {
     return invokeCommand("refresh_gateway_url");
   },
 
+  async getBackendVersion(): Promise<{ version: string }> {
+    return invokeCommand("get_backend_version");
+  },
+
   async getRuntimeInfo(): Promise<RuntimeInfo> {
     return invokeCommand("runtime_info");
   },
@@ -1111,6 +1115,7 @@ export async function installTauriBridge(): Promise<void> {
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
     portable?: boolean;
+    embedded?: boolean;
     backendReady?: boolean;
     guideState?: GuideState;
     managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
@@ -1185,6 +1190,7 @@ export async function installTauriBridge(): Promise<void> {
     currentProfile: config.currentProfile,
     connectionMode,
     portable: config.portable ?? false,
+    embedded: config.embedded ?? false,
     backendReady: config.backendReady ?? Boolean(config.apiBaseUrl),
     guideState: config.guideState ?? "completed",
     managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",

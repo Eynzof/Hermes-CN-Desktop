@@ -64,6 +64,8 @@ pub fn finalize_offline_bootstrap(app: &tauri::AppHandle) {
         inner.session_token = None;
         inner.oauth_session = None;
         inner.dashboard_handle = None;
+        inner.embedded = false;
+        inner.embedded_payload = None;
         inner.last_runtime_error = None;
     }
     emit_runtime_status(app, "ready-offline", "内核未启动，已进入桌面引导");
@@ -166,6 +168,25 @@ pub async fn acquire_managed_dashboard(
 
     if let Err(err) = runtime::sync_runtime_resources_if_available(resource_dir.as_deref()) {
         log::warn!("Failed to sync bundled runtime resources: {}", err);
+    }
+
+    // Embedded runtime path (refactor_report.md Phase 1): initialize CPython
+    // inside this process instead of spawning a `hermes` subprocess. Falls back
+    // to the subprocess path below when the payload is absent or the interpreter
+    // fails to start (HERMES_DESKTOP_EMBEDDED_PYTHON=0 disables it entirely).
+    if crate::embedded::EmbeddedPython::ensure_started(resource_dir.as_deref()) {
+        emit_runtime_status(
+            app,
+            "starting-dashboard",
+            "正在启动嵌入式 Python runtime...",
+        );
+        log::info!(
+            "Bootstrap: embedded Python runtime active (payload: {})",
+            crate::embedded::EmbeddedPython::get()
+                .and_then(|r| r.payload_root().map(|p| p.display().to_string()))
+                .unwrap_or_else(|| "<none>".into())
+        );
+        return Ok(DashboardHandle::embedded());
     }
 
     emit_runtime_status(app, "starting-dashboard", "正在启动 dashboard...");
@@ -289,8 +310,17 @@ pub async fn finalize_bootstrap(
         None
     };
 
+    let is_embedded = handle.api_base_url == crate::embedded::EMBEDDED_API_BASE_URL
+        || handle.ownership_state.as_deref() == Some("embedded");
     let session_token = if oauth_session.is_some() {
         None
+    } else if is_embedded {
+        // The embedded runtime never scrapes HTML — the synthetic token is
+        // already on the handle (frontend contract only; zero HTTP is sent).
+        handle
+            .session_token
+            .clone()
+            .or_else(|| Some(crate::embedded::embedded_session_token()))
     } else {
         match handle.session_token.clone() {
             Some(token) => Some(token),
@@ -306,7 +336,13 @@ pub async fn finalize_bootstrap(
         }
     };
     // OAuth gateway URL carries no token; the relay mints a ticket per connect.
-    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref());
+    // Embedded mode has no WS URL at all — the gateway rides the in-memory
+    // transport, so the placeholder is only a frontend-contract value.
+    let gateway_url = if is_embedded {
+        crate::embedded::EMBEDDED_GATEWAY_URL.to_string()
+    } else {
+        dashboard::build_gateway_url(&handle.api_base_url, session_token.as_deref())
+    };
     let (effective_home, effective_home_base, effective_profile) = if mode == ConnectionMode::Local
     {
         match dashboard::fetch_attached_dashboard_hermes_home(&handle.api_base_url)
@@ -343,11 +379,16 @@ pub async fn finalize_bootstrap(
         };
         inner.connection_mode = mode;
         inner.oauth_session = oauth_session;
+        inner.embedded = is_embedded;
+        inner.embedded_payload = if is_embedded {
+            crate::embedded::EmbeddedPython::get()
+                .and_then(|r| r.payload_root().map(|p| p.display().to_string()))
+        } else {
+            None
+        };
         inner.dashboard_handle = Some(handle);
     }
 
     emit_runtime_status(app, "ready", "");
     log::info!("Hermes Agent 中文社区桌面版 ready");
 }
-
-
