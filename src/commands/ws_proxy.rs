@@ -192,8 +192,27 @@ pub async fn gateway_ws_open(
     // Embedded mode: no WebSocket — open the in-memory RustBridgeTransport
     // session instead (report Phase 3). The webview relay contract is
     // unchanged; only the byte carrier disappears.
-    if state.inner.lock()?.embedded {
-        return crate::embedded::transport::open_embedded_gateway(&state, connection_id);
+    {
+        let inner = state.inner.lock()?;
+        if inner.embedded {
+            // Consistency assertion (GAP 4 flag hygiene): an embedded flag must
+            // always point at the embedded://local placeholder. REST routing is
+            // keyed on api_base_url while the gateway is keyed on the flag, so
+            // a mismatch would split traffic between the interpreter and a
+            // subprocess/remote — fail loudly instead of silently misrouting.
+            if inner.api_base_url != crate::embedded::EMBEDDED_API_BASE_URL {
+                log::error!(
+                    "embedded flag inconsistent with api_base_url: embedded=true but api_base_url={}",
+                    inner.api_base_url
+                );
+                return Err(AppError::Internal(format!(
+                    "嵌入式标志与 api_base_url 不一致（embedded=true 但 api_base_url={}）；请重启桌面端",
+                    inner.api_base_url
+                )));
+            }
+            drop(inner);
+            return crate::embedded::transport::open_embedded_gateway(&state, connection_id);
+        }
     }
 
     let stream = connect_gateway_stream(&app, &state).await?;

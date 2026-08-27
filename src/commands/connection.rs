@@ -588,6 +588,14 @@ pub async fn apply_connection_config(
     result
 }
 
+/// Whether an adopted connection is the in-process embedded runtime: true only
+/// for the `embedded://local` placeholder URL (remote and local-attach are
+/// always external processes). Pure so the flag derivation is unit-testable
+/// without constructing a real `DashboardHandle`.
+fn embedded_flag_for(api_base_url: &str) -> bool {
+    api_base_url == crate::embedded::EMBEDDED_API_BASE_URL
+}
+
 fn detach_current_backend(state: &State<'_, AppState>) -> Result<(), AppError> {
     let mut inner = state.inner.lock()?;
     if let Some(relay) = inner.gateway_ws.take() {
@@ -605,6 +613,10 @@ fn detach_current_backend(state: &State<'_, AppState>) -> Result<(), AppError> {
         }
     }
     inner.dashboard_handle = None;
+    // The detached connection is never the in-process embedded runtime; clear
+    // the flag so gateway traffic is not misrouted into a stale interpreter
+    // while REST points at the external backend being adopted.
+    inner.embedded = false;
     Ok(())
 }
 
@@ -656,6 +668,9 @@ async fn apply_remote(
         inner.connection_mode = ConnectionMode::Remote;
         inner.yolo_mode = false;
         inner.last_runtime_error = None;
+        // A remote Hermes Agent is an external process — never the in-process
+        // embedded runtime, so clear the flag (embedded→remote hygiene).
+        inner.embedded = false;
         inner.dashboard_handle = Some(DashboardHandle::remote(base_url.clone(), token.clone()));
     }
 
@@ -726,6 +741,9 @@ async fn apply_remote_oauth(
         inner.connection_mode = ConnectionMode::Remote;
         inner.yolo_mode = false;
         inner.last_runtime_error = None;
+        // An OAuth remote is an external process — never the in-process
+        // embedded runtime, so clear the flag (embedded→remote hygiene).
+        inner.embedded = false;
         inner.dashboard_handle = Some(DashboardHandle::remote_oauth(base_url.to_string()));
     }
     let mut persisted = config.clone();
@@ -827,6 +845,10 @@ async fn apply_local_connection(
         inner.connection_mode = ConnectionMode::Local;
         inner.yolo_mode = false;
         inner.last_runtime_error = None;
+        // A loopback CLI dashboard is an external process — never the
+        // in-process embedded runtime, so clear the flag (embedded→local
+        // hygiene).
+        inner.embedded = false;
         inner.dashboard_handle = Some(DashboardHandle::local(
             base_url.clone(),
             Some(token.clone()),
@@ -951,6 +973,10 @@ pub(crate) async fn apply_managed(
         inner.connection_mode = ConnectionMode::Managed;
         inner.yolo_mode = dashboard::yolo_mode_effective(&hermes_home);
         inner.last_runtime_error = None;
+        // Derive the embedded flag from the adopted URL: a remote→managed
+        // switch in embedded mode yields the embedded://local handle, so the
+        // flag must be set here (bootstrap is not the only writer).
+        inner.embedded = embedded_flag_for(&api_base_url);
         inner.dashboard_handle = Some(handle);
     }
 
@@ -1082,5 +1108,17 @@ mod tests {
         let coerced = coerce_config(&remote_config(), &input).unwrap();
         assert_eq!(coerced.remote_url, None);
         assert_eq!(coerced.remote_token.as_deref(), Some("saved-token"));
+    }
+
+    #[test]
+    fn embedded_flag_is_true_only_for_placeholder_url() {
+        assert!(embedded_flag_for(crate::embedded::EMBEDDED_API_BASE_URL));
+        // Any real HTTP endpoint (managed subprocess, local CLI, remote agent)
+        // is external — never the in-process embedded runtime.
+        assert!(!embedded_flag_for("http://127.0.0.1:9120"));
+        assert!(!embedded_flag_for("http://127.0.0.1:9119"));
+        assert!(!embedded_flag_for("http://host:9221"));
+        assert!(!embedded_flag_for(""));
+        assert!(!embedded_flag_for("embedded://other"));
     }
 }

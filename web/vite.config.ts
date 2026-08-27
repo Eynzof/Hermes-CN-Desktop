@@ -87,8 +87,8 @@ const API_PROXY_TARGET = process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.
  * bind for `localhost` and, if the preferred port is blocked, fall back to a
  * free port (strictPort then applies to the chosen port).
  *
- * The probe is skipped when E2E_VITE_PORT is explicitly set (run.py / the e2e
- * harness have already verified the port) and under `tauri dev`, whose devUrl
+ * The probe is skipped when E2E_VITE_PORT is explicitly set (the e2e harness
+ * has already verified the port) and under `tauri dev`, whose devUrl
  * is a static http://localhost:9545 — silently moving ports there would just
  * leave the WebView pointing at a dead URL, so it fails loudly instead.
  */

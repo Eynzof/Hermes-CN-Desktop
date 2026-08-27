@@ -181,8 +181,8 @@ Embedded Python 运行时（refactor_report.md）
 
 ## 端口
 
-- **9120**：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）
-- **9545**：Vite dev server（`web/vite.config.ts` 默认值，strictPort；Windows 可能因 Hyper-V/WSL2 的“排除端口范围”屏蔽 9545 —— `run.py` 与 vite config 都会在启动时探测并自动回退到空闲端口，见 `docs/run-py-usage.md` 的 EACCES FAQ）
+- 9120：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）。`run.py` 已改为嵌入式 Python 模式（零 HTTP），不再使用 9120；9120 只属于未嵌入的子进程 managed runtime 路径（`pnpm tauri:dev` 不带 `HERMES_DESKTOP_EMBEDDED_PYTHON=1` 时）与 Core Dashboard 本身。
+- 9545：Vite dev server（`web/vite.config.ts` 默认值，strictPort；Windows 可能因 Hyper-V/WSL2 的“排除端口范围”屏蔽 9545 —— vite config 与 `tauri-dev-managed.mjs` 会探测并自动回退到空闲端口；`run.py` 不管理端口，见 `docs/run-py-usage.md`）
 
 ## Rust 测试约定
 

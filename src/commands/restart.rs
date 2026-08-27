@@ -71,6 +71,32 @@ pub struct RespawnResult {
     pub session_token: Option<String>,
 }
 
+/// Error returned when a managed-dashboard respawn is attempted while the
+/// desktop is running the in-process embedded runtime. The interpreter is a
+/// process-lifetime `OnceLock` and cannot be restarted in place; the caller
+/// must surface this and ask the user to restart the desktop (for app updates
+/// the payload swap has already happened in step [1], and the flow ends with
+/// `app.exit(0)` + relaunch, so a clear error here is the honest outcome).
+pub(crate) fn embedded_respawn_error() -> AppError {
+    AppError::EmbeddedPython {
+        msg: "嵌入式内核无法在进程内重启；请重启桌面端以应用变更".to_string(),
+        traceback: None,
+    }
+}
+
+/// Reject a subprocess respawn while the current AppState is running the
+/// in-process embedded runtime. Checks both the `embedded` flag and the
+/// `embedded://local` placeholder URL so a stale flag can never be the only
+/// thing standing between us and a two-runtime state (a live in-process
+/// interpreter PLUS a spawned hermes subprocess with HTTP/WS transport).
+/// Pure so it is unit-testable without a Tauri `State`.
+fn embedded_respawn_guard(embedded: bool, api_base_url: &str) -> Result<(), AppError> {
+    if embedded || api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
+        return Err(embedded_respawn_error());
+    }
+    Ok(())
+}
+
 /// Stop the desktop-owned dashboard and respawn it.
 ///
 /// Tries `target_home` first; if that fails to boot, falls back to
@@ -80,6 +106,9 @@ pub struct RespawnResult {
 /// `dashboard_handle` — for whichever home came up. The caller owns any
 /// command-specific state (`current_profile`, `yolo_mode`, sticky file) and
 /// must hold the [`try_begin_restart`] guard for the duration.
+///
+/// Embedded mode (in-process interpreter) cannot respawn: this returns a hard
+/// error instead of spawning a subprocess / fetching a token over HTTP.
 pub async fn respawn_managed_dashboard(
     state: &State<'_, AppState>,
     host: &str,
@@ -87,6 +116,15 @@ pub async fn respawn_managed_dashboard(
     target_home: &str,
     recovery_home: &str,
 ) -> Result<RespawnResult, AppError> {
+    // Embedded mode: do NOT spawn a subprocess, do NOT fetch a session token
+    // over HTTP, do NOT build a ws:// URL. The interpreter is OnceLock and
+    // cannot be restarted in place — fail loudly (callers like
+    // app_update_install already handle errors with rollback).
+    {
+        let inner = state.inner.lock()?;
+        embedded_respawn_guard(inner.embedded, &inner.api_base_url)?;
+    }
+
     // 1. Stop the running dashboard.
     {
         let mut inner = state.inner.lock()?;
@@ -157,6 +195,14 @@ async fn spawn_and_adopt(
     port: u16,
     hermes_home: &str,
 ) -> Result<(String, String, Option<String>), AppError> {
+    // Defense in depth: even if a caller skipped the top-level guard, never
+    // reach `ensure_hermes_dashboard` / the HTTP token fetch from an embedded
+    // state (it would spawn a second runtime next to the live interpreter).
+    {
+        let inner = state.inner.lock()?;
+        embedded_respawn_guard(inner.embedded, &inner.api_base_url)?;
+    }
+
     let handle = dashboard::ensure_hermes_dashboard(dashboard::EnsureDashboardOptions {
         host: host.to_string(),
         port,
@@ -188,7 +234,48 @@ async fn spawn_and_adopt(
         inner.session_token = token.clone();
         inner.hermes_home = hermes_home.to_string();
         inner.dashboard_handle = Some(handle);
+        // A freshly spawned dashboard subprocess is never the in-process
+        // embedded runtime — clear the flag so gateway/REST routing stay on the
+        // HTTP/WS transport of the subprocess.
+        inner.embedded = false;
     }
 
     Ok((api_base_url, gateway_url, token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::embedded::EMBEDDED_API_BASE_URL;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn embedded_respawn_error_is_loud_and_actionable() {
+        let err = embedded_respawn_error();
+        let msg = err.to_string();
+        assert!(msg.contains("嵌入式内核无法在进程内重启"), "{}", msg);
+        assert!(msg.contains("请重启桌面端"), "{}", msg);
+        // Keep the stable IPC code so the frontend can branch on it.
+        assert_eq!(err.code(), "embedded_python");
+    }
+
+    #[test]
+    fn embedded_respawn_guard_rejects_flag_set() {
+        let err = embedded_respawn_guard(true, "http://127.0.0.1:9120").unwrap_err();
+        assert!(err.to_string().contains("嵌入式内核无法在进程内重启"));
+    }
+
+    #[test]
+    fn embedded_respawn_guard_rejects_placeholder_url_even_with_stale_flag() {
+        // A stale `embedded=false` must not be enough to spawn a second runtime:
+        // the embedded://local URL alone is grounds for rejection.
+        let err = embedded_respawn_guard(false, EMBEDDED_API_BASE_URL).unwrap_err();
+        assert!(err.to_string().contains("嵌入式内核无法在进程内重启"));
+    }
+
+    #[test]
+    fn embedded_respawn_guard_allows_non_embedded() {
+        assert!(embedded_respawn_guard(false, "http://127.0.0.1:9120").is_ok());
+        assert!(embedded_respawn_guard(false, "").is_ok());
+    }
 }

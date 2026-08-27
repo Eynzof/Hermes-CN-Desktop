@@ -130,10 +130,25 @@ pub async fn refresh_gateway_url(
 /// `/api/version` fetch, which does not exist in embedded mode
 /// (refactor_report.md §8 success criteria 3). Non-embedded mode returns
 /// `None` so the frontend keeps using the HTTP path unchanged.
+///
+/// The shape mirrors the HTTP `/api/version` response (`{ version: string }`)
+/// and the frontend `getBackendVersion(): Promise<{ version: string }>`
+/// contract in web/src/lib/tauri-bridge.ts — a bare string would make the
+/// gate report "unavailable" and force-quit the app.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackendVersionInfo {
+    pub version: String,
+}
+
 #[tauri::command]
-pub fn get_backend_version(state: State<'_, AppState>) -> Result<Option<String>, AppError> {
+pub fn get_backend_version(
+    state: State<'_, AppState>,
+) -> Result<Option<BackendVersionInfo>, AppError> {
     if !state.inner.lock()?.embedded {
         return Ok(None);
     }
-    crate::embedded::get_backend_version().map(Some)
+    Ok(Some(BackendVersionInfo {
+        version: crate::embedded::get_backend_version()?,
+    }))
 }

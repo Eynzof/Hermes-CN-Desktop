@@ -43,9 +43,19 @@ if (!skipInstall) {
 }
 
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const child = spawn(pnpm, ["exec", "tauri", "dev"], {
+// Embedded Python mode needs the real pyo3 backend, which lives behind the
+// (non-default) `embedded-python` cargo feature. Without it the crate compiles
+// the stub backend and bootstrap falls back to the subprocess dashboard.
+const devArgs = ["exec", "tauri", "dev"];
+if (process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1") {
+  devArgs.push("--features", "embedded-python");
+}
+const child = spawn(pnpm, devArgs, {
   cwd: repoRoot,
   stdio: "inherit",
+  // Windows: pnpm resolves to pnpm.cmd, and Node cannot spawn .cmd files
+  // directly without a shell (spawn EINVAL otherwise).
+  shell: process.platform === "win32",
   env: {
     ...process.env,
     // Dev kernels live under dev-runtime/ so they never overwrite the packaged
