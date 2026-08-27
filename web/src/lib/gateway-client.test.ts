@@ -162,6 +162,7 @@ describe("GatewayClient", () => {
 
     MockWebSocket.instances[0].onmessage?.({
       data: JSON.stringify({
+        jsonrpc: "2.0",
         method: "event",
         params: {
           type: "message.complete",
@@ -178,6 +179,71 @@ describe("GatewayClient", () => {
         payload: { text: "done" },
       }),
     ]);
+    client.close();
+  });
+
+  it("resolves a pending RPC when the relay delivers a raw response frame", async () => {
+    // Wire contract shared by the TCP relay (ws_proxy.rs) and the embedded
+    // transport: an RPC response must arrive as a raw `{jsonrpc,id,result}`
+    // frame so handleFrame can match the pending request by id.
+    const client = new GatewayClient();
+    const connected = client.connect();
+    MockWebSocket.instances[0].open();
+    await connected;
+
+    const request = client.request("session.create", { cwd: "C:/dev" });
+    await Promise.resolve();
+    const sent = JSON.parse(MockWebSocket.instances[0].sent[0]);
+
+    MockWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({
+        jsonrpc: "2.0",
+        id: sent.id,
+        result: { session_id: "s1" },
+      }),
+    });
+
+    await expect(request).resolves.toEqual({ session_id: "s1" });
+    expect(client.state).toBe("open");
+    client.close();
+  });
+
+  it("keeps a pending RPC pending when the relay delivers an event-wrapped response", async () => {
+    // Bug reproduction (embedded transport, pre-fix): responses were emitted
+    // as `{method:"event",params:{type:"response",payload:{frame:...}}}`
+    // instead of a raw frame, so handleFrame never matched the pending id and
+    // 工作台 发送 (session.create) hung until the 120s RPC timeout. The wrapped
+    // frame must NOT settle the request — only the raw frame does.
+    vi.useFakeTimers();
+    const client = new GatewayClient();
+    const connected = client.connect();
+    MockWebSocket.instances[0].open();
+    await connected;
+
+    const request = client.request("session.create", {}, { timeoutMs: 1_000 });
+    await Promise.resolve();
+    const sent = JSON.parse(MockWebSocket.instances[0].sent[0]);
+
+    MockWebSocket.instances[0].onmessage?.({
+      data: JSON.stringify({
+        method: "event",
+        params: {
+          type: "response",
+          payload: { frame: { jsonrpc: "2.0", id: sent.id, result: { session_id: "s1" } } },
+        },
+      }),
+    });
+
+    // The wrapped response is routed to the event listeners, not to the
+    // pending map — the request is still unsettled and only the RPC timeout
+    // releases it (the "stuck" symptom on the workbench).
+    let settled = false;
+    void request.finally(() => { settled = true; }).catch(() => {});
+    await vi.advanceTimersByTimeAsync(500);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(request).rejects.toThrow("RPC timeout: session.create");
     client.close();
   });
 

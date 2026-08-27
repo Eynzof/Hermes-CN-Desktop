@@ -7,7 +7,10 @@
 //! behind the `embedded-python` feature.
 
 use hermes_agent_cn::embedded::ffi;
-use hermes_agent_cn::embedded::transport::{build_response_frame, parse_frame};
+use hermes_agent_cn::embedded::transport::{
+    build_error_frame, build_response_frame, parse_frame, prompt_submit_error,
+    prompt_submit_needs_synthetic_turn, synthetic_turn_events,
+};
 use hermes_agent_cn::embedded::{
     resolve_payload_root, EmbeddedPython, EmbeddedStatus, FFI_SURFACE_VERSION,
 };
@@ -134,6 +137,120 @@ fn gateway_frame_roundtrip_preserves_id() {
     assert_eq!(response["result"]["ok"], true);
 }
 
+/// Regression for the workbench (工作台) 发送 hang in embedded mode.
+///
+/// The embedded transport used to emit RPC responses as `{method:"event",
+/// params:{type:"response",payload:{frame:...}}}` wrappers. The frontend's
+/// GatewayClient (`handleFrame`) resolves a pending request ONLY when the relay
+/// data is a raw `{jsonrpc,id,result}` frame with a top-level `id` — the
+/// wrapped shape was routed to the event listeners instead, so pressing 发送
+/// (which sends `session.create` through the gateway) left the request pending
+/// until the 120s RPC timeout: the UI appeared frozen until then.
+///
+/// This test pins the production path (`dispatch_frame` calls
+/// `response_event` for id-bearing requests) to the same raw-frame wire shape
+/// the TCP relay (`ws_proxy.rs`) forwards, end to end: id present at the top
+/// level, no `method:"event"` wrapper, and the exact result echoed back.
+#[test]
+fn embedded_rpc_response_wire_is_raw_frame_for_gateway_client() {
+    use hermes_agent_cn::embedded::events::EmbeddedEvent;
+    use hermes_agent_cn::embedded::transport::response_event;
+
+    let id = serde_json::Value::String("w1".into());
+    let result = serde_json::json!({ "session_id": "s1" });
+    let event: EmbeddedEvent = response_event("conn-1", Some(id), result.clone())
+        .expect("an id-bearing request must produce a response event");
+
+    // The relay `data` payload must be the raw frame — exactly what
+    // GatewayClient.handleFrame parses to match `frame.id` against the pending
+    // map (`gateway-client.ts`).
+    let wire: serde_json::Value = serde_json::from_str(&event.wire_data()).unwrap();
+    assert_eq!(wire["id"], "w1");
+    assert_eq!(wire["result"], result);
+    assert_eq!(wire["jsonrpc"], "2.0");
+    assert!(
+        wire.get("method").is_none(),
+        "response must not be wrapped as an event: {wire}"
+    );
+    assert_eq!(event.connection_id, "conn-1");
+
+    // Notifications (no id) must NOT produce a response event.
+    assert!(response_event("conn-1", None, serde_json::json!({ "ok": true })).is_none());
+}
+
+/// Regression for the GUI being stuck at the optimistic "正在唤醒Hermes..."
+/// progress in embedded mode (python run.py).
+///
+/// The real Core `prompt.submit` returns `{"status":"streaming"}` and then
+/// emits `message.start` / `message.complete` events through the transport, so
+/// the desktop's optimistic progress is replaced by a real turn. The reference
+/// hermes_embedded package is a synchronous stub: it accepts the prompt but
+/// never streams, so the desktop must synthesize a complete turn itself.
+/// Without this, `sendPrompt` resolves while the chat store keeps the
+/// optimistic assistant message in `streaming` with the progress part forever.
+///
+/// Additionally every synthesized/relayed event must carry `session_id` in the
+/// wire frame (`{method:"event",params:{type,session_id,payload}}`, the exact
+/// shape Core's `tui_gateway.server._event_frame` produces): the frontend
+/// `applyGatewayEventAtom` drops events without a session id, so a missing
+/// session_id alone would leave the GUI stuck on the same progress.
+#[test]
+fn embedded_prompt_submit_synthesizes_complete_turn_with_session_id() {
+    use hermes_agent_cn::embedded::events::EmbeddedEvent;
+    use serde_json::json;
+
+    // The reference package returns a synchronous accept with no
+    // `status: "streaming"` promise — the desktop must synthesize the turn.
+    let stub_result = json!({
+        "ok": true,
+        "accepted": true,
+        "embedded": true,
+        "status": "complete",
+        "reply": "（嵌入式演示模式）已收到：你好",
+    });
+    assert!(
+        prompt_submit_needs_synthetic_turn(&stub_result),
+        "reference stub prompt.submit result must be treated as needing a synthetic turn"
+    );
+
+    // The real Core result promises streaming and emits its own events; the
+    // desktop must NOT synthesize a second turn on top of them.
+    let core_result = json!({"ok": true, "status": "streaming"});
+    assert!(
+        !prompt_submit_needs_synthetic_turn(&core_result),
+        "real Core streaming result must not trigger a synthetic turn"
+    );
+
+    // Build the events the way dispatch_frame would for session "embedded-session".
+    let events: Vec<EmbeddedEvent> =
+        synthetic_turn_events("conn-1", "embedded-session", &stub_result);
+    assert_eq!(events.len(), 2, "expected message.start + message.complete");
+    assert_eq!(events[0].event_type, "message.start");
+    assert_eq!(events[1].event_type, "message.complete");
+
+    // The wire shape must match Core's _event_frame: jsonrpc + method + params
+    // with type/session_id/payload — the frontend GatewayClient parses
+    // session_id from params and applyGatewayEventAtom drops events without it.
+    let start_wire: serde_json::Value = serde_json::from_str(&events[0].wire_data()).unwrap();
+    assert_eq!(start_wire["jsonrpc"], "2.0");
+    assert_eq!(start_wire["method"], "event");
+    assert_eq!(start_wire["params"]["type"], "message.start");
+    assert_eq!(start_wire["params"]["session_id"], "embedded-session");
+
+    let complete_wire: serde_json::Value = serde_json::from_str(&events[1].wire_data()).unwrap();
+    assert_eq!(complete_wire["params"]["type"], "message.complete");
+    assert_eq!(complete_wire["params"]["session_id"], "embedded-session");
+    assert_eq!(
+        complete_wire["params"]["payload"]["text"],
+        "（嵌入式演示模式）已收到：你好"
+    );
+
+    // Events must be tagged with the relay connection so the webview/browser
+    // relay shim accepts them.
+    assert_eq!(events[0].connection_id, "conn-1");
+    assert_eq!(events[1].connection_id, "conn-1");
+}
+
 #[cfg(not(feature = "embedded-python"))]
 #[test]
 #[serial_test::serial]
@@ -222,4 +339,105 @@ fn upload_file_embedded_mode_dispatches_through_ffi_without_reqwest() {
             && !err.to_string().contains("http"),
         "embedded upload must dispatch through FFI, got: {err}"
     );
+}
+
+/// Regression for the *second* class of embedded gateway hang: RPC failures
+/// must be answered as raw JSON-RPC error frames so the pending request
+/// rejects promptly and the connection STAYS ALIVE.
+///
+/// Before the fix, `dispatch_frame` propagated the error out of
+/// `gateway_ws_send`; `GatewayRelaySocket.send` treated any invoke rejection as
+/// a dead relay, closed the socket locally and triggered a full reconnect —
+/// every pending request died with "WebSocket closed" and the browser
+/// companion relay loop broke on the first error. Core answers failures
+/// in-band with `_err(rid, ...)`, so embedded mode must too.
+#[test]
+fn embedded_rpc_errors_are_delivered_as_raw_error_frames() {
+    use hermes_agent_cn::embedded::events::EmbeddedEvent;
+    use hermes_agent_cn::embedded::transport::error_response_event;
+
+    // A registry miss / Python exception path builds an error frame echoing id.
+    let error = build_error_frame(serde_json::Value::String("w2".into()), -32601, "no FFI entry");
+    assert_eq!(error["id"], "w2");
+    assert_eq!(error["error"]["code"], -32601);
+    assert!(error.get("result").is_none());
+
+    // Delivered via the error response channel (NOT response_event, which would
+    // wrap the frame as a successful `result`), so GatewayClient.handleFrame
+    // resolves the pending map with a rejection.
+    let event: EmbeddedEvent = error_response_event(
+        "conn-1",
+        Some(serde_json::Value::String("w2".into())),
+        -32601,
+        "no FFI entry",
+    )
+    .expect("id-bearing request must produce a response event");
+    let wire: serde_json::Value = serde_json::from_str(&event.wire_data()).unwrap();
+    assert_eq!(wire["id"], "w2");
+    assert_eq!(wire["error"]["code"], -32601);
+    assert!(wire.get("result").is_none(), "error frame must not carry result: {wire}");
+    assert!(wire.get("method").is_none(), "error frame must be raw: {wire}");
+
+    // Notifications (no id) get no error response — the failure is logged.
+    assert!(error_response_event("conn-1", None, -32601, "x").is_none());
+}
+
+/// An in-band `prompt.submit` failure (`ok:false` / `status:"error"`) must be
+/// answered as a JSON-RPC error, NOT a successful result with no events —
+/// otherwise `sendPrompt` resolves while the optimistic "正在唤醒Hermes..."
+/// progress stays forever (the exact original symptom, just via the error
+/// path). Core signals prompt failures via `_err(rid, ...)`; this pins the
+/// embedded transport to the same contract, including the "session busy"
+/// retry branch which matches on the RPC error message.
+#[test]
+fn embedded_prompt_submit_failure_is_jsonrpc_error_not_silent_success() {
+    use serde_json::json;
+
+    let (code, message) = prompt_submit_error(&json!({ "ok": false, "error": "session busy" }))
+        .expect("ok:false must be an error");
+    assert_eq!(code, -32000);
+    assert_eq!(message, "session busy");
+
+    let (_, message) = prompt_submit_error(&json!({ "ok": true, "status": "error", "message": "boom" }))
+        .expect("status:error must be an error");
+    assert_eq!(message, "boom");
+
+    // Streaming / complete results are not errors.
+    assert!(prompt_submit_error(&json!({ "ok": true, "status": "streaming" })).is_none());
+    assert!(prompt_submit_error(&json!({ "ok": true, "status": "complete", "reply": "hi" })).is_none());
+}
+
+/// The FFI gateway registry must cover every JSON-RPC method the current
+/// frontend actually sends (web/src hooks/use-gateway.ts + routes/detail.tsx):
+/// `approval.respond`, `image.attach_bytes` and `input.detect_drop` were
+/// missing, so embedded mode hard-failed those flows with "no FFI entry" (and,
+/// before the error-frame fix, tore the gateway session down).
+#[test]
+fn gateway_registry_covers_frontend_request_methods() {
+    for method in [
+        "approval.respond",
+        "image.attach",
+        "image.attach_bytes",
+        "input.detect_drop",
+        "file.attach",
+        "prompt.submit",
+        "session.create",
+        "session.resume",
+        "session.close",
+        "session.interrupt",
+        "session.compress",
+        "session.title",
+        "session.usage",
+        "complete.path",
+        "complete.slash",
+        "config.set",
+        "command.dispatch",
+        "provider.models",
+        "provider.probe",
+    ] {
+        assert!(
+            ffi::covered_gateway_method(method),
+            "frontend gateway method {method} must have an FFI entry"
+        );
+    }
 }

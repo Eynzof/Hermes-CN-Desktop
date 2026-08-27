@@ -211,7 +211,7 @@ pub async fn gateway_ws_open(
                 )));
             }
             drop(inner);
-            return crate::embedded::transport::open_embedded_gateway(&state, connection_id);
+            return crate::embedded::transport::open_embedded_gateway(&app, &state, connection_id);
         }
     }
 
@@ -416,10 +416,11 @@ pub async fn gateway_ws_send(
 pub async fn gateway_ws_close(
     input: GatewayWsCloseInput,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     // Embedded mode: tear down the in-memory session.
     if state.inner.lock()?.embedded {
-        return crate::embedded::transport::close_embedded_gateway(&state, &input.connection_id);
+        return crate::embedded::transport::close_embedded_gateway(&app, &state, &input.connection_id);
     }
 
     let mut inner = state.inner.lock()?;

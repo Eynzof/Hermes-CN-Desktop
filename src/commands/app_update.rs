@@ -282,7 +282,8 @@ async fn verify_backend_version(api_base_url: &str, expected: &str) -> Result<bo
     // read straight from Python `get_version` through pyo3, never from a
     // `GET /api/version` HTTP call (there is no HTTP endpoint to fetch).
     if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
-        let actual = crate::embedded::get_backend_version()
+        let actual = crate::embedded::get_backend_version_async()
+            .await
             .map_err(|e| format!("后端版本读取失败：{}", e))?;
         return Ok(actual.trim().trim_start_matches('v') == expected.trim().trim_start_matches('v'));
     }

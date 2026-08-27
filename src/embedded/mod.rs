@@ -33,6 +33,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
 
@@ -323,9 +324,31 @@ pub fn ready_runtime() -> AppResult<&'static EmbeddedPython> {
 /// Read the Core backend version directly from Python (`get_version`), used by
 /// the frontend version gate (`EXPECTED_BACKEND_VERSION`) in embedded mode —
 /// there is no `/api/version` HTTP endpoint to fetch (report §8 criterion 3).
+/// Synchronous variant for sync Tauri commands; async callers must use
+/// `get_backend_version_async` so Python never runs on the tokio worker.
 pub fn get_backend_version() -> AppResult<String> {
     let _runtime = ready_runtime()?;
     let value = crate::embedded::call::call_handle_rpc("get_version", "{}", "{}")?;
+    backend_version_from_value(value)
+}
+
+/// Async variant of `get_backend_version`: the Python `get_version` call runs
+/// on the blocking pool (GIL held only for the call), so a slow interpreter
+/// cannot stall other Tauri commands.
+pub async fn get_backend_version_async() -> AppResult<String> {
+    let _runtime = ready_runtime()?;
+    let value = tokio::task::spawn_blocking(|| {
+        crate::embedded::call::call_handle_rpc("get_version", "{}", "{}")
+    })
+    .await
+    .map_err(|e| AppError::EmbeddedPython {
+        msg: format!("embedded version dispatch task panicked: {e}"),
+        traceback: None,
+    })??;
+    backend_version_from_value(value)
+}
+
+fn backend_version_from_value(value: Value) -> AppResult<String> {
     value
         .as_str()
         .map(String::from)

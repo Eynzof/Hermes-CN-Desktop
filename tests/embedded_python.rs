@@ -63,6 +63,47 @@ fn call_handle_rpc_drives_the_reference_package() {
     let status = hermes_agent_cn::embedded::call::call_handle_rpc("get_status", "{}", "{}")
         .expect("get_status should dispatch through handle_rpc");
     assert_eq!(status["mode"], "embedded");
+
+    // Workbench 发送 flow: session.create must resolve to the Core
+
+    // tui_gateway shape ({session_id, stored_session_id, message_count}) that
+
+    // the frontend SessionCreateResult zod schema parses; session.resume must
+
+    // return session_id as well (SessionResumeResult).
+
+    let created = hermes_agent_cn::embedded::call::call_handle_rpc(
+
+        "session.create",
+
+        r#"{"cwd":"C:/dev","reasoning_effort":"medium"}"#,
+
+        "{}",
+
+    )
+
+    .expect("session.create should dispatch through handle_rpc");
+
+    assert_eq!(created["session_id"], "embedded-session");
+
+    assert_eq!(created["stored_session_id"], "embedded-session");
+
+    assert!(created["message_count"].is_number());
+
+    let resumed = hermes_agent_cn::embedded::call::call_handle_rpc(
+
+        "session.resume",
+
+        r#"{"session_id":"s1"}"#,
+
+        "{}",
+
+    )
+
+    .expect("session.resume should dispatch through handle_rpc");
+
+    assert_eq!(resumed["session_id"], "s1");
+
     interp.shutdown();
 }
 
@@ -384,4 +425,56 @@ fn embedded_upload_file_writes_attachment_via_ffi() {
         "upload must land under {expected_root:?}, got {target:?}"
     );
     assert_eq!(std::fs::read_to_string(target).unwrap(), "hello embedded");
+}
+
+/// Real-interpreter regression for the embedded gateway surface the frontend
+/// calls (refactor bugs): prompt.abort must abort (never fabricate a turn),
+/// input.detect_drop must satisfy InputDetectDropResult (matched required),
+/// frames without `params` must not crash the interpreter, and every
+/// frontend-called RPC method must resolve through the unified dispatch.
+#[test]
+fn embedded_gateway_frontend_methods_resolve_through_real_interpreter() {
+    use hermes_agent_cn::embedded::EmbeddedPython;
+
+    assert!(
+        EmbeddedPython::ensure_started(None),
+        "embedded runtime should start with the repo hermes_embedded payload"
+    );
+
+    let call = |method: &str, params: &str| -> serde_json::Value {
+        hermes_agent_cn::embedded::call::call_handle_rpc(method, params, r#"{"hermesHome":"/x"}"#)
+            .unwrap_or_else(|err| panic!("handle_rpc({method}) failed: {err}"))
+    };
+
+    // prompt.abort: dedicated handler — aborted, never a complete turn.
+    let aborted = call("prompt.abort", r#"{"session_id":"s1"}"#);
+    assert_eq!(aborted["aborted"], true);
+    assert_ne!(aborted["status"], "complete", "abort must not fabricate a turn");
+
+    // input.detect_drop: zod requires `matched`.
+    let drop = call("input.detect_drop", r#"{"session_id":"s1","text":"C:/dev/x"}"#);
+    assert_eq!(drop["matched"], false);
+
+    // approval / image.attach_bytes / image.attach / file.attach resolve.
+    let approval = call(
+        "approval.respond",
+        r#"{"session_id":"s1","request_id":"r1","choice":"approve"}"#,
+    );
+    assert!(approval["ok"] == true);
+    let attach = call(
+        "image.attach_bytes",
+        r#"{"session_id":"s1","content_base64":"AAAA","filename":"p.png"}"#,
+    );
+    assert!(attach.is_object(), "image.attach_bytes result: {attach}");
+
+    // A frame without params (Rust serializes Value::Null as "null") must not
+    // crash the interpreter — handlers coerce non-dict params to {}.
+    for method in ["session.list", "model.list", "setup.status"] {
+        let value = call(method, "null");
+        assert!(value.is_object(), "{method} with null params: {value}");
+    }
+
+    // The session-interrupt flow the composer Stop uses.
+    let interrupt = call("session.interrupt", r#"{"session_id":"s1"}"#);
+    assert!(interrupt["ok"] == true);
 }

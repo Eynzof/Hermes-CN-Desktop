@@ -199,6 +199,7 @@ pub static GATEWAY_FFI_METHODS: &[&str] = &[
     "session.usage",
     "prompt.submit",
     "prompt.abort",
+    "approval.respond",
     "setup.status",
     "model.info",
     "model.list",
@@ -211,6 +212,8 @@ pub static GATEWAY_FFI_METHODS: &[&str] = &[
     "config.set",
     "file.attach",
     "image.attach",
+    "image.attach_bytes",
+    "input.detect_drop",
     "gateway.disconnected",
 ];
 

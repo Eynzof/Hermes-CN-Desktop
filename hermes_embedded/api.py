@@ -1197,22 +1197,84 @@ def handle_skills(params: dict[str, Any], ctx: dict[str, Any]) -> Any:
 
 
 def handle_session(params: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
-    """/api/session/* — list/get/create/resume."""
-    path = params.get("path", "")
-    if path.endswith("/list") or params.get("action") == "list":
+    """session.create / session.resume / session.list — gateway JSON-RPC surface.
+
+    Mirrors Core tui_gateway/methods_session.py response shapes so the desktop
+    frontend zod schemas parse (packages/protocol hermes-api.ts):
+      session.create -> {"session_id", "stored_session_id", "message_count"}
+      session.resume -> {"session_id", "message_count"}
+    The old {"session": {"id": ...}} shape left SessionCreateResult without its
+    required `session_id` and made the workbench 发送 flow fail even after the
+    RPC transport delivers the response.
+    """
+    path = str(params.get("path") or "")
+    action = params.get("action")
+    if path.endswith("/list") or action == "list":
         return {"sessions": []}
     session_id = params.get("session_id") or params.get("id")
-    if session_id is not None:
-        return {"session": {"id": session_id, "embedded": True}}
-    return {"session": {"id": "embedded-session", "embedded": True}}
+    if session_id is None:
+        session_id = "embedded-session"
+    if action == "resume" or path.endswith("/resume"):
+        return {"session_id": session_id, "message_count": 0}
+    # session.create (also covers /api/session/* REST leftovers).
+    return {
+        "session_id": session_id,
+        "stored_session_id": session_id,
+        "message_count": 0,
+    }
 
 
 def handle_prompt(params: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
-    """/api/prompt — submit/abort."""
+    """/api/prompt — submit/abort.
+
+    The reference package is a synchronous stub: it accepts the prompt but has
+    no agent loop, so it returns a *completed* turn payload
+    (``status: "complete"`` + ``reply``) instead of Core's
+    ``{"status": "streaming"}`` promise. The Rust transport
+    (``src/embedded/transport.rs``) detects the missing ``status: "streaming"``
+    and fans ``message.start`` + ``message.complete`` out to the webview —
+    without this the GUI would stay stuck on the optimistic
+    "正在唤醒Hermes..." progress forever (python run.py).
+    """
     action = params.get("action") or (params.get("method") or "submit")
     if action == "abort":
         return {"ok": True, "aborted": True}
-    return {"ok": True, "accepted": True, "embedded": True}
+    text = str(params.get("text") or "").strip()
+    reply = (
+        f"（嵌入式演示模式）已收到：{text[:200]}"
+        if text
+        else "（嵌入式演示模式）已收到你的消息。"
+    )
+    return {
+        "ok": True,
+        "accepted": True,
+        "embedded": True,
+        "status": "complete",
+        "reply": reply,
+    }
+
+
+def _prompt_abort(params: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    """Gateway ``prompt.abort`` — an explicit abort, never a submit.
+
+    ``handle_prompt`` cannot be reused for the gateway method: the JSON-RPC
+    params carry only ``session_id`` (no ``action``/``method`` field), so the
+    action detection above would treat an abort as a submit and return a
+    complete-turn payload. Route the gateway method to this dedicated handler.
+    """
+    return {"ok": True, "aborted": True, "embedded": True}
+
+
+def _input_detect_drop(params: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
+    """Gateway ``input.detect_drop`` — reference stub.
+
+    The frontend ``InputDetectDropResult`` zod schema REQUIRES ``matched``;
+    the old ``_noop`` response (``{ok, embedded, stub}``) made
+    ``parseGatewayResult`` throw and (before the error-frame fix) tore the
+    gateway session down. Report no match — shape-correct, real drop detection
+    is Core work outside the reference package.
+    """
+    return {"matched": False, "is_image": False, "embedded": True, "stub": True}
 
 
 def handle_model(params: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
@@ -1287,7 +1349,8 @@ _RPC_METHODS: dict[str, Any] = {
     "session.title": _session_action,
     "session.usage": _session_action,
     "prompt.submit": handle_prompt,
-    "prompt.abort": handle_prompt,
+    "prompt.abort": _prompt_abort,
+    "approval.respond": _noop,
     "setup.status": get_status,
     "model.info": handle_model,
     "model.list": handle_model,
@@ -1300,6 +1363,8 @@ _RPC_METHODS: dict[str, Any] = {
     "config.set": _noop,
     "file.attach": _noop,
     "image.attach": _noop,
+    "image.attach_bytes": _noop,
+    "input.detect_drop": _input_detect_drop,
     "gateway.disconnected": _noop,
 }
 
@@ -1325,6 +1390,14 @@ def handle_rpc(method: str, params_json: str | dict[str, Any], ctx_json: str | d
         ctx = json.loads(ctx_json) if ctx_json else {}
     else:
         ctx = ctx_json
+    # Defensive: a frame without `params` arrives as the JSON string "null"
+    # (Rust `Value::Null.to_string()`), and handlers call `.get()` on params —
+    # coerce non-dict values to {} so a bare `{"method":"session.list"}` frame
+    # cannot crash the interpreter (which would tear the gateway down).
+    if not isinstance(params, dict):
+        params = {}
+    if not isinstance(ctx, dict):
+        ctx = {}
 
     # REST router names from src/embedded/ffi.rs.
     router = _ROUTERS.get(method)

@@ -273,18 +273,6 @@ pub fn call_handle_rpc(method: &str, params_json: &str, ctx_json: &str) -> AppRe
     }
 }
 
-/// Long-running FFI calls (agent turns, regex/scrub) must not hold the tokio
-/// worker. Callers run this through `spawn_blocking` so the async runtime is
-/// free while the interpreter works; the GIL is held only for the duration of
-/// the Python call itself (report §10.5).
-pub fn call_handle_rpc_blocking(
-    method: &str,
-    params_json: &str,
-    ctx_json: &str,
-) -> AppResult<Value> {
-    call_handle_rpc(method, params_json, ctx_json)
-}
-
 /// Normalize a Python result to `serde_json::Value` by round-tripping through
 /// `json.dumps` (contract: FFI surfaces return JSON-serializable objects).
 #[cfg(feature = "embedded-python")]

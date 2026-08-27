@@ -51,7 +51,19 @@ pub async fn embedded_rest_request(
 
     let params = request_params(input, &path);
     let ctx = request_ctx(hermes_home, session_token, profile, &path);
-    let result = crate::embedded::call::call_handle_rpc_blocking(entry.python_func, &params, &ctx)?;
+    // Python work must not hold the tokio worker (it can be long-running for
+    // e.g. logs/fs/agent handlers and would stall every other Tauri command,
+    // including gateway sends). Run the FFI call on the blocking pool — the
+    // GIL is held only for the duration of the Python call itself (§10.5).
+    let python_func = entry.python_func;
+    let result = tokio::task::spawn_blocking(move || {
+        crate::embedded::call::call_handle_rpc(python_func, &params, &ctx)
+    })
+    .await
+    .map_err(|e| AppError::EmbeddedPython {
+        msg: format!("embedded REST dispatch task panicked: {e}"),
+        traceback: None,
+    })??;
 
     let mut headers = HashMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());

@@ -1002,7 +1002,7 @@ where
     let mut events = crate::embedded::events::subscribe();
 
     if let Err(error) =
-        crate::embedded::transport::open_embedded_gateway(&state, connection_id.clone())
+        crate::embedded::transport::open_embedded_gateway(&app, &state, connection_id.clone())
     {
         let reason = Utf8Bytes::from(error.to_string().chars().take(100).collect::<String>());
         let _ = client
@@ -1048,7 +1048,10 @@ where
             },
             event = events.recv() => match event {
                 Ok(event) if event.connection_id == connection_id => {
-                    let frame = event.as_gateway_ws_message().to_string();
+                    // wire_data() delivers RPC responses as raw JSON-RPC frames
+                    // and everything else as {method:"event"} — same contract as
+                    // the webview relay shim.
+                    let frame = event.wire_data();
                     if client.send(Message::Text(Utf8Bytes::from(frame))).await.is_err() {
                         break;
                     }
@@ -1062,7 +1065,7 @@ where
         }
     }
 
-    let _ = crate::embedded::transport::close_embedded_gateway(&state, &connection_id);
+    let _ = crate::embedded::transport::close_embedded_gateway(&app, &state, &connection_id);
     let _ = client.close(None).await;
     Ok(())
 }
