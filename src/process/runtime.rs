@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 use std::process::Stdio;
 use std::sync::LazyLock;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -75,6 +75,8 @@ fn smoke_timeout() -> Duration {
 // exits). This hardens both the real post-install path and the smoke-check test
 // under cargo's multi-threaded runner.
 const SMOKE_SPAWN_RETRIES: u32 = 5;
+const RUNTIME_REMOVE_RETRIES: u32 = 5;
+const RUNTIME_REMOVE_RETRY_DELAY: Duration = Duration::from_millis(150);
 static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .connect_timeout(RUNTIME_HTTP_CONNECT_TIMEOUT)
@@ -1583,10 +1585,10 @@ fn prepare_runtime_cache_target(target: &Path) -> Result<(), String> {
     }
 }
 
-fn remove_existing_runtime_target(target: &Path) -> Result<(), String> {
+fn validate_existing_runtime_target(target: &Path) -> Result<bool, String> {
     let metadata = match fs::symlink_metadata(target) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
         Err(error) => {
             return Err(format!(
                 "Failed to inspect existing runtime target {}: {}",
@@ -1622,14 +1624,189 @@ fn remove_existing_runtime_target(target: &Path) -> Result<(), String> {
             canonical_target.display()
         ));
     }
+    Ok(true)
+}
 
-    fs::remove_dir_all(target).map_err(|error| {
-        format!(
-            "Failed to remove existing runtime target {}: {}",
-            target.display(),
-            error
-        )
-    })
+fn remove_existing_runtime_target_with(
+    target: &Path,
+    mut remove: impl FnMut(&Path) -> std::io::Result<()>,
+    mut wait: impl FnMut(Duration),
+) -> Result<(), String> {
+    if !validate_existing_runtime_target(target)? {
+        return Ok(());
+    }
+
+    for attempt in 0..=RUNTIME_REMOVE_RETRIES {
+        match remove(target) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error)
+                if runtime_remove_error_is_retryable(&error)
+                    && attempt < RUNTIME_REMOVE_RETRIES =>
+            {
+                let delay = RUNTIME_REMOVE_RETRY_DELAY * (attempt + 1);
+                log::warn!(
+                    "Runtime target {} is still busy (attempt {}/{}): {}; retrying in {}ms",
+                    target.display(),
+                    attempt + 1,
+                    RUNTIME_REMOVE_RETRIES + 1,
+                    error,
+                    delay.as_millis()
+                );
+                wait(delay);
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Failed to remove existing runtime target {} after {} attempt(s): {}. A Runtime or Gateway process may still hold files in this directory.",
+                    target.display(),
+                    attempt + 1,
+                    error
+                ));
+            }
+        }
+    }
+    unreachable!("runtime removal loop always returns")
+}
+
+fn runtime_remove_error_is_retryable(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        // ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION and ERROR_DIR_NOT_EMPTY.
+        matches!(error.raw_os_error(), Some(5 | 32 | 145))
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+fn remove_existing_runtime_target(target: &Path) -> Result<(), String> {
+    remove_existing_runtime_target_with(target, |path| fs::remove_dir_all(path), std::thread::sleep)
+}
+
+struct RuntimeTargetReplacement {
+    target: PathBuf,
+    backup: Option<PathBuf>,
+    committed: bool,
+}
+
+impl RuntimeTargetReplacement {
+    fn commit(mut self) {
+        self.committed = true;
+        if let Some(backup) = &self.backup {
+            if let Err(error) = remove_existing_runtime_target(backup) {
+                log::warn!(
+                    "Runtime replacement committed, but old target cleanup failed: {}",
+                    error
+                );
+            }
+        }
+    }
+}
+
+impl Drop for RuntimeTargetReplacement {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        if self.target.exists() {
+            if let Err(error) = fs::remove_dir_all(&self.target) {
+                log::error!(
+                    "Failed to remove incomplete Runtime target {} during rollback: {}",
+                    self.target.display(),
+                    error
+                );
+                return;
+            }
+        }
+        if let Some(backup) = &self.backup {
+            if let Err(error) = fs::rename(backup, &self.target) {
+                log::error!(
+                    "Failed to restore Runtime target {} from {}: {}",
+                    self.target.display(),
+                    backup.display(),
+                    error
+                );
+            }
+        }
+    }
+}
+
+fn prepare_runtime_target_replacement(
+    target: &Path,
+    runtime_version: &str,
+) -> Result<RuntimeTargetReplacement, String> {
+    if target.exists() {
+        crate::process::dashboard::stop_stale_owned_runtime_before_replacement(runtime_version)?;
+    }
+    if !validate_existing_runtime_target(target)? {
+        return Ok(RuntimeTargetReplacement {
+            target: target.to_path_buf(),
+            backup: None,
+            committed: false,
+        });
+    }
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let file_name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid Runtime target path: {}", target.display()))?;
+    let backup = target.with_file_name(format!(
+        ".{file_name}.replacing-{}-{stamp}",
+        std::process::id()
+    ));
+
+    for attempt in 0..=RUNTIME_REMOVE_RETRIES {
+        match fs::rename(target, &backup) {
+            Ok(()) => {
+                return Ok(RuntimeTargetReplacement {
+                    target: target.to_path_buf(),
+                    backup: Some(backup),
+                    committed: false,
+                })
+            }
+            Err(error)
+                if runtime_remove_error_is_retryable(&error)
+                    && attempt < RUNTIME_REMOVE_RETRIES =>
+            {
+                std::thread::sleep(RUNTIME_REMOVE_RETRY_DELAY * (attempt + 1));
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Failed to prepare Runtime target {} for replacement after {} attempt(s): {}. A Runtime or Gateway process may still hold files in this directory.",
+                    target.display(),
+                    attempt + 1,
+                    error
+                ));
+            }
+        }
+    }
+    unreachable!("runtime replacement preparation loop always returns")
+}
+
+fn restore_current_record(previous: Option<&RuntimeInstallRecord>) {
+    let path = current_record_path();
+    match previous {
+        Some(previous) => {
+            if let Err(error) = write_json_file(&path, previous) {
+                log::error!("Failed to restore previous Runtime record: {}", error);
+            }
+        }
+        None => {
+            if let Err(error) = fs::remove_file(&path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    log::error!("Failed to remove incomplete Runtime record: {}", error);
+                }
+            }
+        }
+    }
 }
 
 async fn wait_for_smoke_child(
@@ -1740,6 +1917,7 @@ async fn install_runtime_zip(
     resolved: RuntimeUpdateManifest,
     zip_path: &Path,
     source: &str,
+    before_target_replace: impl FnOnce() -> Result<(), String> + Send,
 ) -> RuntimeInstallUpdateResult {
     let version_segment = match validate_manifest_for_current_platform(&resolved) {
         Ok(version_segment) => version_segment,
@@ -1848,14 +2026,25 @@ async fn install_runtime_zip(
     }
 
     let target = versions_root().join(&version_segment);
-    if let Err(e) = remove_existing_runtime_target(&target) {
+    if let Err(e) = before_target_replace() {
         return RuntimeInstallUpdateResult {
             ok: false,
             installed: None,
-            previous: None,
+            previous: read_current_record(),
             error: Some(e),
         };
     }
+    let replacement = match prepare_runtime_target_replacement(&target, &resolved.runtime_version) {
+        Ok(replacement) => replacement,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            }
+        }
+    };
     if let Err(e) = fs::rename(staging.path(), &target) {
         if let Err(e2) = copy_dir_all(staging.path(), &target) {
             return RuntimeInstallUpdateResult {
@@ -1888,8 +2077,24 @@ async fn install_runtime_zip(
         previous.as_ref(),
     );
 
-    let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
-    let _ = write_json_file(&current_record_path(), &installed);
+    if let Err(error) = write_json_file(&target.join(MANIFEST_FILE), &resolved) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous,
+            error: Some(format!("Failed to write Runtime manifest: {error}")),
+        };
+    }
+    if let Err(error) = write_json_file(&current_record_path(), &installed) {
+        restore_current_record(previous.as_ref());
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous,
+            error: Some(format!("Failed to write current Runtime record: {error}")),
+        };
+    }
+    replacement.commit();
 
     RuntimeInstallUpdateResult {
         ok: true,
@@ -1976,14 +2181,17 @@ async fn install_runtime_tree(
     }
 
     let target = versions_root().join(&version_segment);
-    if let Err(e) = remove_existing_runtime_target(&target) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
+    let replacement = match prepare_runtime_target_replacement(&target, &resolved.runtime_version) {
+        Ok(replacement) => replacement,
+        Err(e) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(e),
+            }
+        }
+    };
     if let Err(e) = fs::rename(staging.path(), &target) {
         if let Err(e2) = copy_dir_all(staging.path(), &target) {
             return RuntimeInstallUpdateResult {
@@ -2016,8 +2224,24 @@ async fn install_runtime_tree(
         previous.as_ref(),
     );
 
-    let _ = write_json_file(&target.join(MANIFEST_FILE), &resolved);
-    let _ = write_json_file(&current_record_path(), &installed);
+    if let Err(error) = write_json_file(&target.join(MANIFEST_FILE), &resolved) {
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous,
+            error: Some(format!("Failed to write Runtime manifest: {error}")),
+        };
+    }
+    if let Err(error) = write_json_file(&current_record_path(), &installed) {
+        restore_current_record(previous.as_ref());
+        return RuntimeInstallUpdateResult {
+            ok: false,
+            installed: None,
+            previous,
+            error: Some(format!("Failed to write current Runtime record: {error}")),
+        };
+    }
+    replacement.commit();
 
     RuntimeInstallUpdateResult {
         ok: true,
@@ -2162,7 +2386,7 @@ pub async fn install_bundled_runtime_if_needed(
     let mut result = if has_expanded_runtime {
         install_runtime_tree(manifest, &expanded_runtime_dir, "bundled").await
     } else {
-        install_runtime_zip(manifest, &artifact_path, "bundled").await
+        install_runtime_zip(manifest, &artifact_path, "bundled", || Ok(())).await
     };
     if result.ok {
         if let Some(installed) = &result.installed {
@@ -2180,6 +2404,13 @@ pub async fn install_bundled_runtime_if_needed(
 /// Download, verify, and install a runtime update.
 pub async fn install_runtime_update(
     manifest: Option<RuntimeUpdateManifest>,
+) -> RuntimeInstallUpdateResult {
+    install_runtime_update_with_pre_replace(manifest, || Ok(())).await
+}
+
+pub async fn install_runtime_update_with_pre_replace(
+    manifest: Option<RuntimeUpdateManifest>,
+    before_target_replace: impl FnOnce() -> Result<(), String> + Send,
 ) -> RuntimeInstallUpdateResult {
     let resolved = match manifest {
         Some(m) => m,
@@ -2301,7 +2532,7 @@ pub async fn install_runtime_update(
         };
     }
 
-    install_runtime_zip(resolved, &zip_path, "update").await
+    install_runtime_zip(resolved, &zip_path, "update", before_target_replace).await
 }
 
 /// Rollback to the previous runtime version.
@@ -3273,6 +3504,96 @@ mod tests {
         std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
         assert!(error.contains("outside versions root"));
         assert!(versions.exists());
+    }
+
+    #[test]
+    #[serial]
+    fn existing_runtime_target_retries_transient_access_denied() {
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let target = runtime_root.join("versions").join("1.0.0-cn.1");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("hermes.exe"), b"runtime").unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let mut attempts = 0;
+        let mut delays = Vec::new();
+        remove_existing_runtime_target_with(
+            &target,
+            |path| {
+                attempts += 1;
+                if attempts < 3 {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "runtime file is busy",
+                    ))
+                } else {
+                    std::fs::remove_dir_all(path)
+                }
+            },
+            |delay| delays.push(delay),
+        )
+        .unwrap();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert_eq!(attempts, 3);
+        assert_eq!(
+            delays,
+            vec![Duration::from_millis(150), Duration::from_millis(300)]
+        );
+        assert!(!target.exists());
+    }
+
+    #[test]
+    #[serial]
+    fn existing_runtime_target_reports_persistent_file_occupancy() {
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let target = runtime_root.join("versions").join("1.0.0-cn.1");
+        std::fs::create_dir_all(&target).unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let mut attempts = 0;
+        let error = remove_existing_runtime_target_with(
+            &target,
+            |_| {
+                attempts += 1;
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "runtime file is busy",
+                ))
+            },
+            |_| {},
+        )
+        .unwrap_err();
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert_eq!(attempts, 6);
+        assert!(error.contains("after 6 attempt(s)"));
+        assert!(error.contains("Runtime or Gateway process"));
+        assert!(target.exists());
+    }
+
+    #[test]
+    #[serial]
+    fn runtime_target_replacement_restores_previous_tree_on_failure() {
+        let temp = TempDir::new().unwrap();
+        let runtime_root = temp.path().join("runtime-root");
+        let target = runtime_root.join("versions").join("1.0.0-cn.1");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("hermes.exe"), b"previous").unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+
+        let replacement = prepare_runtime_target_replacement(&target, "1.0.0-cn.1").unwrap();
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("hermes.exe"), b"incomplete").unwrap();
+        drop(replacement);
+
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+        assert_eq!(
+            std::fs::read(target.join("hermes.exe")).unwrap(),
+            b"previous"
+        );
     }
 
     #[cfg(unix)]

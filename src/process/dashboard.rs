@@ -79,6 +79,8 @@ pub struct DashboardOwnershipMarker {
     pub runtime_root: String,
     pub gateway_runtime_dir: String,
     pub started_at_ms: u128,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dashboard_started_at_ms: Option<u128>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_version: Option<String>,
     /// Ports this desktop instance has claimed via the shared lock file.
@@ -170,6 +172,223 @@ fn read_ownership_marker() -> Option<DashboardOwnershipMarker> {
     serde_json::from_str(&content).ok()
 }
 
+fn marker_matches_runtime_target(
+    marker: &DashboardOwnershipMarker,
+    runtime_root: &Path,
+    runtime_version: &str,
+) -> bool {
+    marker.schema_version == OWNERSHIP_MARKER_SCHEMA_VERSION
+        && same_path(&marker.runtime_root, &runtime_root.to_string_lossy())
+        && marker.runtime_version.as_deref() == Some(runtime_version)
+}
+
+#[cfg(windows)]
+fn process_executable_path(pid: u32) -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return None;
+    }
+    let mut buffer = vec![0_u16; 32_768];
+    let mut size = buffer.len() as u32;
+    let ok = unsafe { QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut size) };
+    unsafe { CloseHandle(process) };
+    if ok == 0 {
+        return None;
+    }
+    buffer.truncate(size as usize);
+    Some(PathBuf::from(std::ffi::OsString::from_wide(&buffer)))
+}
+
+#[cfg(target_os = "linux")]
+fn process_executable_path(pid: u32) -> Option<PathBuf> {
+    fs::read_link(format!("/proc/{pid}/exe")).ok()
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn process_executable_path(pid: u32) -> Option<PathBuf> {
+    let output = Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "comm="])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!path.is_empty()).then(|| PathBuf::from(path))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn process_executable_path(_pid: u32) -> Option<PathBuf> {
+    None
+}
+
+fn process_matches_runtime_executable(pid: u32, executable_path: &Path) -> bool {
+    let Some(process_path) = process_executable_path(pid) else {
+        return false;
+    };
+    same_path(
+        &process_path.to_string_lossy(),
+        &executable_path.to_string_lossy(),
+    )
+}
+
+#[cfg(windows)]
+fn process_command_line(pid: u32) -> Option<String> {
+    let script = format!(
+        "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = {}\"; if ($p) {{ $p.CommandLine }}",
+        pid
+    );
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let command_line = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!command_line.is_empty()).then_some(command_line)
+}
+
+#[cfg(windows)]
+fn process_started_at_ms(pid: u32) -> Option<u128> {
+    let script = format!(
+        "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = {}\"; if ($p) {{ ([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds() }}",
+        pid
+    );
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &script])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout).trim().parse().ok()
+}
+
+#[cfg(any(windows, test))]
+fn command_line_runs_dashboard(command_line: &str) -> bool {
+    command_line
+        .split_whitespace()
+        .any(|argument| argument.trim_matches('"').eq_ignore_ascii_case("dashboard"))
+}
+
+#[cfg(windows)]
+fn process_matches_stale_dashboard(
+    pid: u32,
+    executable_path: &Path,
+    marker_started_at_ms: u128,
+) -> bool {
+    process_matches_runtime_executable(pid, executable_path)
+        && process_command_line(pid).is_some_and(|line| command_line_runs_dashboard(&line))
+        && process_started_at_ms(pid) == Some(marker_started_at_ms)
+}
+
+#[cfg(not(windows))]
+fn process_matches_stale_dashboard(
+    pid: u32,
+    executable_path: &Path,
+    _marker_started_at_ms: u128,
+) -> bool {
+    process_matches_runtime_executable(pid, executable_path)
+}
+
+/// Stop a dashboard tree left by a crashed desktop before replacing the
+/// runtime version that owns its executable. Live desktop owners are preserved.
+pub fn stop_stale_owned_runtime_before_replacement(runtime_version: &str) -> Result<bool, String> {
+    let Some(marker) = read_ownership_marker() else {
+        return Ok(false);
+    };
+    if !marker_matches_runtime_target(
+        &marker,
+        &crate::process::runtime::runtime_root(),
+        runtime_version,
+    ) {
+        return Ok(false);
+    }
+    if pid_is_running(marker.desktop_pid) {
+        return Err(format!(
+            "Runtime {} is owned by a live desktop process (pid {}); refusing to replace its files",
+            runtime_version, marker.desktop_pid
+        ));
+    }
+
+    let current_record = crate::process::runtime::read_current_record()
+        .filter(|record| record.runtime_version == runtime_version);
+    let dashboard_pid_running = pid_is_running(marker.dashboard_pid);
+    if dashboard_pid_running {
+        let Some(record) = current_record.as_ref() else {
+            return Err(format!(
+                "Runtime {} dashboard pid {} is still running, but current.json cannot verify its executable",
+                runtime_version, marker.dashboard_pid
+            ));
+        };
+        if !process_matches_stale_dashboard(
+            marker.dashboard_pid,
+            Path::new(&record.executable_path),
+            marker.dashboard_started_at_ms.ok_or_else(|| {
+                format!(
+                    "Runtime {} dashboard pid {} is still running, but its legacy ownership marker cannot verify process creation time",
+                    runtime_version, marker.dashboard_pid
+                )
+            })?,
+        ) {
+            return Err(format!(
+                "Refusing to stop dashboard pid {} because its process identity does not match Runtime {}",
+                marker.dashboard_pid, runtime_version
+            ));
+        }
+    }
+
+    log::warn!(
+        "Stopping stale desktop-owned Runtime {} before replacement (dashboard pid {})",
+        runtime_version,
+        marker.dashboard_pid
+    );
+    if dashboard_pid_running && !terminate_dashboard_pid_tree(marker.dashboard_pid) {
+        return Err(format!(
+            "Failed to confirm stale Runtime {} dashboard process {} exited",
+            runtime_version, marker.dashboard_pid
+        ));
+    }
+
+    let gateway_runtime_dir = PathBuf::from(&marker.gateway_runtime_dir);
+    if let Some(record) = current_record {
+        let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
+        let report = crate::process::gateway::preflight_managed_gateway_restart(
+            &record,
+            &marker.hermes_home,
+            &gateway_runtime_dir,
+            &gateway_lock_dir,
+        )?;
+        if !report.remaining_pids.is_empty() || report.lock_active {
+            return Err(format!(
+                "Runtime {} Gateway did not release its files after shutdown: {}",
+                runtime_version,
+                report.summary()
+            ));
+        }
+    } else {
+        let (remaining_pids, lock_active) =
+            crate::process::gateway::managed_gateway_runtime_occupancy(&gateway_runtime_dir);
+        if !remaining_pids.is_empty() || lock_active {
+            return Err(format!(
+                "Runtime {} Gateway still owns files, but current.json cannot identify a safe stop helper (remaining_pids={:?}, lock_active={})",
+                runtime_version, remaining_pids, lock_active
+            ));
+        }
+    }
+
+    release_orphaned_port_locks(&marker.claimed_ports, Path::new(&marker.hermes_home));
+    remove_ownership_marker_path(None);
+    Ok(true)
+}
+
 fn write_ownership_marker(marker: &DashboardOwnershipMarker) -> Result<(), String> {
     let path = ownership_marker_path();
     if let Some(parent) = path.parent() {
@@ -192,6 +411,7 @@ fn rewrite_ownership_marker_for_current_desktop(
         runtime_root: marker.runtime_root.clone(),
         gateway_runtime_dir: marker.gateway_runtime_dir.clone(),
         started_at_ms: now_millis(),
+        dashboard_started_at_ms: marker.dashboard_started_at_ms,
         runtime_version: marker.runtime_version.clone(),
         claimed_ports: marker.claimed_ports.clone(),
     };
@@ -452,22 +672,26 @@ pub fn terminate_owned_dashboard_tree(
     }
 
     if let Some(pid) = fallback_pid {
-        #[cfg(unix)]
-        {
-            signal_process_group(pid, libc::SIGTERM);
-            thread::sleep(GRACEFUL_SHUTDOWN_TIMEOUT);
-            if pid_is_running(pid) {
-                signal_process_group(pid, libc::SIGKILL);
-            }
-        }
-        #[cfg(windows)]
-        {
-            force_kill_process_tree(pid);
-        }
-        return wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT);
+        return terminate_dashboard_pid_tree(pid);
     }
 
     true
+}
+
+fn terminate_dashboard_pid_tree(pid: u32) -> bool {
+    #[cfg(unix)]
+    {
+        signal_process_group(pid, libc::SIGTERM);
+        thread::sleep(GRACEFUL_SHUTDOWN_TIMEOUT);
+        if pid_is_running(pid) {
+            signal_process_group(pid, libc::SIGKILL);
+        }
+    }
+    #[cfg(windows)]
+    {
+        force_kill_process_tree(pid);
+    }
+    wait_for_pid_exit(pid, FORCE_SHUTDOWN_TIMEOUT)
 }
 
 fn probe_dashboard_port(api_base_url: &str) -> bool {
@@ -1181,6 +1405,16 @@ fn spawn_dashboard(
             .to_string(),
         gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
         started_at_ms: now_millis(),
+        dashboard_started_at_ms: {
+            #[cfg(windows)]
+            {
+                process_started_at_ms(child.id())
+            }
+            #[cfg(not(windows))]
+            {
+                None
+            }
+        },
         runtime_version,
         claimed_ports: claimed_ports.clone(),
     };
@@ -1807,6 +2041,25 @@ mod tests {
     }
 
     #[test]
+    fn current_process_executable_identity_is_verified() {
+        let executable = std::env::current_exe().expect("current executable");
+        assert!(process_matches_runtime_executable(
+            std::process::id(),
+            &executable
+        ));
+    }
+
+    #[test]
+    fn dashboard_command_line_requires_dashboard_subcommand() {
+        assert!(command_line_runs_dashboard(
+            r#"C:\Hermes\hermes.exe dashboard --port 9120"#
+        ));
+        assert!(!command_line_runs_dashboard(
+            r#"C:\Hermes\hermes.exe gateway run"#
+        ));
+    }
+
+    #[test]
     fn gateway_url_without_token() {
         assert_eq!(
             build_gateway_url("http://127.0.0.1:9119", None),
@@ -1860,6 +2113,7 @@ mod tests {
             runtime_root: "/tmp/hermes-runtime-test".to_string(),
             gateway_runtime_dir: "/tmp/hermes-runtime-test/gateway".to_string(),
             started_at_ms: 1,
+            dashboard_started_at_ms: None,
             runtime_version: Some("test".to_string()),
             claimed_ports: vec![],
         }
@@ -1957,6 +2211,53 @@ mod tests {
             marker_owner_state(Some(&marker), "http://127.0.0.1:9120", &other_home),
             MarkerOwnerState::NotThisDashboard
         );
+    }
+
+    #[test]
+    #[serial]
+    fn runtime_replacement_cleans_matching_stale_desktop_owner() {
+        let runtime = tempfile::tempdir().expect("runtime root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", runtime.path());
+        let home = runtime.path().join("hermes-home");
+        std::fs::create_dir_all(&home).expect("home");
+        let mut marker = test_marker(0, "http://127.0.0.1:0", &home.to_string_lossy());
+        marker.runtime_root = runtime.path().to_string_lossy().to_string();
+        marker.gateway_runtime_dir = runtime
+            .path()
+            .join("gateway-runtime")
+            .to_string_lossy()
+            .to_string();
+        marker.runtime_version = Some("1.0.0-cn.1".to_string());
+        write_ownership_marker(&marker).expect("marker");
+
+        let stopped = stop_stale_owned_runtime_before_replacement("1.0.0-cn.1").unwrap();
+
+        assert!(stopped);
+        assert!(!ownership_marker_path().exists());
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+    }
+
+    #[test]
+    #[serial]
+    fn runtime_replacement_preserves_live_desktop_owner() {
+        let runtime = tempfile::tempdir().expect("runtime root");
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", runtime.path());
+        let home = runtime.path().join("hermes-home");
+        std::fs::create_dir_all(&home).expect("home");
+        let mut marker = test_marker(
+            std::process::id(),
+            "http://127.0.0.1:0",
+            &home.to_string_lossy(),
+        );
+        marker.runtime_root = runtime.path().to_string_lossy().to_string();
+        marker.runtime_version = Some("1.0.0-cn.1".to_string());
+        write_ownership_marker(&marker).expect("marker");
+
+        let error = stop_stale_owned_runtime_before_replacement("1.0.0-cn.1").unwrap_err();
+
+        assert!(error.contains("live desktop process"));
+        assert!(ownership_marker_path().exists());
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
     }
 
     #[tokio::test]

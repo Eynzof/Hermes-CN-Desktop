@@ -224,40 +224,60 @@ fn process_command_line(_pid: u32) -> Option<String> {
     None
 }
 
-fn live_record_pid_is_gateway(
+fn live_record_pid(record: &GatewayRuntimeRecord) -> Option<u32> {
+    let pid = record.pid?;
+    pid_is_running(pid).then_some(pid)
+}
+
+fn command_line_verifies_gateway(command_line: Option<&str>) -> bool {
+    command_line.is_some_and(command_line_looks_like_gateway)
+}
+
+fn live_record_pid_is_verified_gateway(
     record: &GatewayRuntimeRecord,
     source: GatewayRecordSource,
 ) -> Option<u32> {
-    let pid = record.pid?;
-    if !pid_is_running(pid) {
-        return None;
-    }
-
-    if let Some(command_line) = process_command_line(pid) {
-        if command_line_looks_like_gateway(&command_line) || record_looks_like_gateway(record) {
-            return Some(pid);
-        }
-        return None;
-    }
-
-    if source == GatewayRecordSource::PidFile || record_looks_like_gateway(record) {
+    let pid = live_record_pid(record)?;
+    if command_line_verifies_gateway(process_command_line(pid).as_deref()) {
         Some(pid)
     } else {
+        log::warn!(
+            "Skipping unverified Gateway pid {} from {:?}; record_claims_gateway={}",
+            pid,
+            source,
+            record_looks_like_gateway(record)
+        );
         None
     }
 }
 
-fn gateway_pid_candidates(runtime_dir: &Path) -> Vec<u32> {
-    let mut pids = BTreeSet::new();
-    for (path, source) in [
+fn gateway_record_paths(runtime_dir: &Path) -> [(PathBuf, GatewayRecordSource); 2] {
+    [
         (gateway_pid_path(runtime_dir), GatewayRecordSource::PidFile),
         (
             gateway_lock_path(runtime_dir),
             GatewayRecordSource::LockFile,
         ),
-    ] {
+    ]
+}
+
+fn gateway_pid_candidates(runtime_dir: &Path) -> Vec<u32> {
+    let mut pids = BTreeSet::new();
+    for (path, _) in gateway_record_paths(runtime_dir) {
         if let Some(record) = read_gateway_runtime_record(&path) {
-            if let Some(pid) = live_record_pid_is_gateway(&record, source) {
+            if let Some(pid) = live_record_pid(&record) {
+                pids.insert(pid);
+            }
+        }
+    }
+    pids.into_iter().collect()
+}
+
+fn verified_gateway_pid_candidates(runtime_dir: &Path) -> Vec<u32> {
+    let mut pids = BTreeSet::new();
+    for (path, source) in gateway_record_paths(runtime_dir) {
+        if let Some(record) = read_gateway_runtime_record(&path) {
+            if let Some(pid) = live_record_pid_is_verified_gateway(&record, source) {
                 pids.insert(pid);
             }
         }
@@ -331,6 +351,20 @@ fn managed_gateway_pid_candidates(
     pids.into_iter().collect()
 }
 
+fn verified_managed_gateway_pid_candidates(
+    runtime_dir: &Path,
+    gateway_lock_dir: &Path,
+    runtime_root: &Path,
+) -> Vec<u32> {
+    let mut pids = BTreeSet::new();
+    pids.extend(verified_gateway_pid_candidates(runtime_dir));
+    pids.extend(gateway_token_lock_pid_candidates(
+        gateway_lock_dir,
+        runtime_root,
+    ));
+    pids.into_iter().collect()
+}
+
 fn cleanup_stale_gateway_token_lock_files(gateway_lock_dir: &Path, _runtime_root: &Path) -> usize {
     let mut removed = 0;
     for path in token_lock_paths(gateway_lock_dir) {
@@ -391,6 +425,14 @@ pub fn cleanup_stale_gateway_runtime_files(runtime_dir: &Path) -> usize {
         }
     }
     removed
+}
+
+pub fn managed_gateway_runtime_occupancy(runtime_dir: &Path) -> (Vec<u32>, bool) {
+    let _ = cleanup_stale_gateway_runtime_files(runtime_dir);
+    (
+        gateway_pid_candidates(runtime_dir),
+        gateway_runtime_lock_active(runtime_dir),
+    )
 }
 
 fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> Option<Option<i32>> {
@@ -523,45 +565,59 @@ pub fn preflight_managed_gateway_restart(
     let runtime_root = crate::process::runtime::runtime_root();
     report.stale_files_removed +=
         cleanup_stale_gateway_token_lock_files(gateway_lock_dir, &runtime_root);
-    let runtime_files_exist = gateway_pid_path(gateway_runtime_dir).exists()
-        || gateway_lock_path(gateway_runtime_dir).exists();
-
-    if runtime_files_exist
-        || !managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root)
-            .is_empty()
-        || gateway_runtime_lock_active(gateway_runtime_dir)
-    {
-        report.stop_attempted = true;
-        match spawn_gateway_stop_helper(record, hermes_home, gateway_runtime_dir, gateway_lock_dir)
-        {
-            Ok(mut child) => match wait_for_child_exit(&mut child, GATEWAY_STOP_HELPER_TIMEOUT) {
-                Some(code) => report.stop_exit_code = code,
-                None => {
-                    report.stop_timed_out = true;
-                    let _ = child.kill();
-                    let _ = child.wait();
-                }
-            },
-            Err(err) => {
-                log::warn!("{}", err);
-            }
-        }
-        let _ = wait_for_gateway_runtime_to_settle(
-            gateway_runtime_dir,
-            gateway_lock_dir,
-            &runtime_root,
-            GATEWAY_SETTLE_TIMEOUT,
-        );
+    let live_pids =
+        managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root);
+    let verified_pids = verified_managed_gateway_pid_candidates(
+        gateway_runtime_dir,
+        gateway_lock_dir,
+        &runtime_root,
+    );
+    let lock_active = gateway_runtime_lock_active(gateway_runtime_dir);
+    if live_pids.iter().any(|pid| !verified_pids.contains(pid)) {
+        report.remaining_pids = live_pids;
+        report.lock_active = lock_active;
+        return Ok(report);
     }
+    if live_pids.is_empty() {
+        if lock_active {
+            report.lock_active = true;
+        } else {
+            report.stale_files_removed += cleanup_stale_gateway_runtime_files(gateway_runtime_dir);
+        }
+        return Ok(report);
+    }
+    report.stop_attempted = true;
+    match spawn_gateway_stop_helper(record, hermes_home, gateway_runtime_dir, gateway_lock_dir) {
+        Ok(mut child) => match wait_for_child_exit(&mut child, GATEWAY_STOP_HELPER_TIMEOUT) {
+            Some(code) => report.stop_exit_code = code,
+            None => {
+                report.stop_timed_out = true;
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        },
+        Err(err) => {
+            log::warn!("{}", err);
+        }
+    }
+    let _ = wait_for_gateway_runtime_to_settle(
+        gateway_runtime_dir,
+        gateway_lock_dir,
+        &runtime_root,
+        GATEWAY_SETTLE_TIMEOUT,
+    );
 
     report.stale_files_removed += cleanup_stale_gateway_runtime_files(gateway_runtime_dir);
     report.stale_files_removed +=
         cleanup_stale_gateway_token_lock_files(gateway_lock_dir, &runtime_root);
 
-    let remaining =
-        managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root);
-    if !remaining.is_empty() {
-        for pid in &remaining {
+    let verified = verified_managed_gateway_pid_candidates(
+        gateway_runtime_dir,
+        gateway_lock_dir,
+        &runtime_root,
+    );
+    if !verified.is_empty() {
+        for pid in &verified {
             terminate_pid(*pid, false);
         }
         if !wait_for_gateway_runtime_to_settle(
@@ -570,9 +626,11 @@ pub fn preflight_managed_gateway_restart(
             &runtime_root,
             GATEWAY_FORCE_SETTLE_TIMEOUT,
         ) {
-            for pid in
-                managed_gateway_pid_candidates(gateway_runtime_dir, gateway_lock_dir, &runtime_root)
-            {
+            for pid in verified_managed_gateway_pid_candidates(
+                gateway_runtime_dir,
+                gateway_lock_dir,
+                &runtime_root,
+            ) {
                 terminate_pid(pid, true);
                 report.force_killed_pids.push(pid);
             }
@@ -630,6 +688,17 @@ mod tests {
             ],
         };
         assert!(record_looks_like_gateway(&record));
+    }
+
+    #[test]
+    fn gateway_process_identity_requires_live_command_line_match() {
+        assert!(command_line_verifies_gateway(Some(
+            r#"C:\Hermes\hermes.exe gateway run"#
+        )));
+        assert!(!command_line_verifies_gateway(Some(
+            r#"C:\Windows\System32\notepad.exe"#
+        )));
+        assert!(!command_line_verifies_gateway(None));
     }
 
     #[test]
