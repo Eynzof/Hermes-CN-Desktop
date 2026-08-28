@@ -74,37 +74,72 @@ pub fn open_embedded_gateway(
     connection_id: String,
 ) -> AppResult<()> {
     let _runtime = crate::embedded::ready_runtime()?;
+    crate::embedded::bridge::set_app_handle(app.clone());
     let handle = EmbeddedGatewayHandle::new(connection_id.clone());
-    let mut inner = state.inner.lock()?;
-    if let Some(prev) = inner.embedded_gateway.take() {
-        prev.abort.store(true, Ordering::Relaxed);
-        prev.notify.notify_waiters();
-        emit_gateway_ws_closed(
-            app,
-            &prev.connection_id,
-            "replaced by a new embedded gateway session",
-        );
+    let mut replaced: Option<String> = None;
+    {
+        let mut inner = state.inner.lock()?;
+        if let Some(prev) = inner.embedded_gateway.take() {
+            prev.abort.store(true, Ordering::Relaxed);
+            prev.notify.notify_waiters();
+            emit_gateway_ws_closed(
+                app,
+                &prev.connection_id,
+                "replaced by a new embedded gateway session",
+            );
+            replaced = Some(prev.connection_id);
+        }
+        inner.embedded_gateway = Some(handle);
     }
-    inner.embedded_gateway = Some(handle);
+    // Tear down the replaced Python-side connection (live transport
+    // unregister + session reap) exactly like handle_ws' finally block.
+    if let Some(prev_id) = replaced {
+        std::thread::spawn(move || {
+            let payload = serde_json::json!({ "connectionId": prev_id }).to_string();
+            let _ =
+                crate::embedded::call::call_handle_rpc("gateway.disconnect", &payload, &payload);
+        });
+    }
     log::info!("Embedded gateway session open ({connection_id})");
+
+    // Mirror tui_gateway.ws.handle_ws accept: bind the per-connection
+    // transport, register it for global broadcasts and emit gateway.ready.
+    let connect_id = connection_id.clone();
+    std::thread::spawn(move || {
+        let payload = serde_json::json!({ "connectionId": connect_id }).to_string();
+        let _ = crate::embedded::call::call_handle_rpc("gateway.connect", &payload, &payload);
+    });
     Ok(())
 }
 
 /// Close the embedded gateway session for `connection_id`. Emits
-/// `gateway-ws-closed` (same parity argument as `open_embedded_gateway`).
+/// `gateway-ws-closed` (same parity argument as `open_embedded_gateway`) and
+/// runs the Python-side teardown for the connection's transport.
 pub fn close_embedded_gateway(
     app: &tauri::AppHandle,
     state: &State<'_, AppState>,
     connection_id: &str,
 ) -> AppResult<()> {
-    let mut inner = state.inner.lock()?;
-    if let Some(handle) = inner.embedded_gateway.as_ref() {
-        if handle.connection_id == connection_id {
-            handle.abort.store(true, Ordering::Relaxed);
-            handle.notify.notify_waiters();
-            inner.embedded_gateway = None;
-            emit_gateway_ws_closed(app, connection_id, "closed");
+    let mut torn_down = false;
+    {
+        let mut inner = state.inner.lock()?;
+        if let Some(handle) = inner.embedded_gateway.as_ref() {
+            if handle.connection_id == connection_id {
+                handle.abort.store(true, Ordering::Relaxed);
+                handle.notify.notify_waiters();
+                inner.embedded_gateway = None;
+                torn_down = true;
+            }
         }
+    }
+    if torn_down {
+        emit_gateway_ws_closed(app, connection_id, "closed");
+        let closed_id = connection_id.to_string();
+        std::thread::spawn(move || {
+            let payload = serde_json::json!({ "connectionId": closed_id }).to_string();
+            let _ =
+                crate::embedded::call::call_handle_rpc("gateway.disconnect", &payload, &payload);
+        });
     }
     Ok(())
 }
@@ -119,6 +154,7 @@ pub async fn dispatch_frame(
     data: String,
 ) -> AppResult<()> {
     let _runtime = crate::embedded::ready_runtime()?;
+    crate::embedded::bridge::set_app_handle(app.clone());
     {
         let inner = state.inner.lock()?;
         let active = inner
@@ -212,12 +248,11 @@ pub async fn dispatch_frame(
         }
     };
 
-    // The reference hermes_embedded package accepts a prompt synchronously but
-    // never streams events. Synthesize a complete turn (message.start +
-    // message.complete) so the GUI's optimistic "正在唤醒Hermes..." progress is
-    // replaced by a real (stub) reply. The real Core handler returns
-    // `{"status":"streaming"}` and emits its own message.* events through the
-    // transport — for that path nothing is synthesized (no double turn).
+    // A synchronous prompt handler (no `status:"streaming"` promise and no
+    // self-emitted turn events — only possible with a stub payload, the real
+    // Core dispatcher streams) needs the desktop to synthesize a complete
+    // turn (message.start + message.complete) so the GUI's optimistic
+    // "正在唤醒Hermes..." progress resolves instead of hanging forever.
     //
     // An error-ish result (`ok:false` / `status:"error"`) is answered as a
     // JSON-RPC *error* frame (below) so the frontend request rejects and
@@ -226,7 +261,8 @@ pub async fn dispatch_frame(
     // retry branch.
     if method == "prompt.submit" {
         if let Some((code, message)) = prompt_submit_error(&result) {
-            if let Some(event) = error_response_event(connection_id, parsed.id.clone(), code, &message)
+            if let Some(event) =
+                error_response_event(connection_id, parsed.id.clone(), code, &message)
             {
                 crate::embedded::events::publish_and_emit_raw(app, connection_id, event.payload);
             }
@@ -304,10 +340,10 @@ fn dispatch_error_message(err: &AppError) -> String {
 ///
 /// The real Core handler (`tui_gateway/methods_prompt.py`) returns
 /// `{"status":"streaming"}` and emits `message.start` / `message.delta` /
-/// `message.complete` events through the transport asynchronously. The
-/// reference `hermes_embedded` package is a synchronous stub: it accepts
-/// (`ok`/`accepted`) but never streams, so without a synthesized turn the GUI
-/// stays on the optimistic "正在唤醒Hermes..." progress forever (python run.py).
+/// `message.complete` events through the transport asynchronously, so the
+/// real package never lands here. Only a synchronous stub payload accepts
+/// (`ok`/`accepted`) without streaming; without a synthesized turn the GUI
+/// would stay on the optimistic "正在唤醒Hermes..." progress forever.
 pub fn prompt_submit_needs_synthetic_turn(result: &Value) -> bool {
     // Never synthesize for explicit failures: an RPC error result or an
     // error-status payload must surface as an error, not a fake complete turn.
@@ -321,7 +357,7 @@ pub fn prompt_submit_needs_synthetic_turn(result: &Value) -> bool {
 }
 
 /// Build the two gateway events (`message.start` + `message.complete`) that
-/// resolve an embedded reference turn. The assistant reply text comes from the
+/// resolve a synchronous stub turn. The assistant reply text comes from the
 /// Python `handle_prompt` result (`reply`), with a neutral fallback.
 pub fn synthetic_turn_events(
     connection_id: &str,
@@ -507,10 +543,7 @@ mod tests {
         assert_eq!(events[1].event_type, "message.complete");
         assert_eq!(events[0].session_id.as_deref(), Some("embedded-session"));
         assert_eq!(events[1].session_id.as_deref(), Some("embedded-session"));
-        assert_eq!(
-            events[1].payload["text"],
-            "你好，我是嵌入式演示助手。"
-        );
+        assert_eq!(events[1].payload["text"], "你好，我是嵌入式演示助手。");
     }
 
     #[test]
@@ -531,7 +564,10 @@ mod tests {
         assert_eq!(frame["id"], "w1");
         assert_eq!(frame["error"]["code"], -32601);
         assert_eq!(frame["error"]["message"], "no FFI entry for method x");
-        assert!(frame.get("result").is_none(), "error frame must not carry result");
+        assert!(
+            frame.get("result").is_none(),
+            "error frame must not carry result"
+        );
     }
 
     #[test]
@@ -557,7 +593,10 @@ mod tests {
         assert_eq!(message, "boom");
 
         // Success / streaming results are NOT errors.
-        assert!(prompt_submit_error(&serde_json::json!({ "ok": true, "status": "streaming" })).is_none());
+        assert!(
+            prompt_submit_error(&serde_json::json!({ "ok": true, "status": "streaming" }))
+                .is_none()
+        );
         assert!(prompt_submit_error(&serde_json::json!({
             "ok": true,
             "accepted": true,
@@ -575,12 +614,16 @@ mod tests {
     #[test]
     fn error_response_event_is_raw_frame_and_none_for_notifications() {
         use crate::embedded::events::EmbeddedEvent;
-        let event: EmbeddedEvent = error_response_event("conn-1", Some(Value::from("w9")), -32000, "boom")
-            .expect("id-bearing request must produce an error response event");
+        let event: EmbeddedEvent =
+            error_response_event("conn-1", Some(Value::from("w9")), -32000, "boom")
+                .expect("id-bearing request must produce an error response event");
         let wire: Value = serde_json::from_str(&event.wire_data()).unwrap();
         assert_eq!(wire["id"], "w9");
         assert_eq!(wire["error"]["message"], "boom");
-        assert!(wire.get("method").is_none(), "error response must be a raw frame");
+        assert!(
+            wire.get("method").is_none(),
+            "error response must be a raw frame"
+        );
         assert!(error_response_event("conn-1", None, -32000, "boom").is_none());
     }
 

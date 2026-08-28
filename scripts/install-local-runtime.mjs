@@ -287,17 +287,15 @@ console.log(`wrote ${currentPath}`);
 console.log(`managed runtime executable: ${installedExecutable}`);
 
 // Embedded runtime dev support (refactor_report.md Phase 1): in embedded mode
-// the interpreter must be able to import `hermes_embedded`. Prefer the Core
-// checkout's package; fall back to the desktop repo's reference package, and
-// surface HERMES_DESKTOP_EMBEDDED_PAYLOAD so resolve_payload_root finds it.
+// the interpreter must be able to import `hermes_embedded`. The package lives
+// in the Core checkout (the desktop repo carries no embedded package).
 if (process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1") {
-  const embeddedSource = [
-    resolve(sourceRoot, "hermes_embedded"),
-    resolve(repoRoot, "hermes_embedded"),
-  ].find((candidate) => existsSync(join(candidate, "api.py")));
+  const embeddedSource = [resolve(sourceRoot, "hermes_embedded")].find((candidate) =>
+    existsSync(join(candidate, "api.py")),
+  );
   if (!embeddedSource) {
     console.warn(
-      "[install-local-runtime] embedded mode requested but no hermes_embedded package found; " +
+      `[install-local-runtime] embedded mode requested but ${sourceRoot} has no hermes_embedded package; ` +
         "the embedded runtime will fall back to the subprocess managed runtime",
     );
   } else {

@@ -163,12 +163,13 @@ Gateway transport
 唯一传输是 JSON-RPC over WebSocket（官方 /api/ws），与 Core 官方桌面端架构一致；SSE+POST 旧路径（P-009）已删。
 gateway-client.ts 负责协议层与重连编排：1→15s 指数退避、唤醒/online/visibility 触发、重连后 session.resume；对齐官方桌面端不主动发 synthetic ping，半开连接靠 close/error + RPC 超时 + OS 唤醒兜底。gateway-socket-path.ts 在原生 WebSocket 和 Rust 中继之间选择（?wspath= query > HERMES_WS_PATH_LEARNED 学习值 > 默认 native 自动回退 relay）；打包态 webview 拦 ws:// 时回退到 ws_proxy.rs，线协议仍是 /api/ws 不变。详见 docs/gateway-connection-overhaul.md。
 
-Embedded Python 运行时（refactor_report.md）
+Embedded Python 运行时（Hard FFI，真实后端）
 
-桌面端支持"进程内嵌入 CPython + Hard FFI"替代 hermes 子进程 + HTTP/WS 传输（零本地 HTTP：无 9120/8644/8645 监听、无 reqwest 转发、无 tokio-tungstenite 中继）。代码在 src/embedded/（lifecycle/call/ffi/events/transport/api）+ hermes_embedded/（Python FFI 面参考包），详见 docs/embedded-python.md。
-- 特性开关：pyo3 后端在 `embedded-python` cargo feature 后面（默认关，避免 CI 强制链接 libpython）；`HERMES_DESKTOP_EMBEDDED_PYTHON=0` 关闭嵌入、回退子进程 managed runtime。
-- 前端契约：`get_runtime_config` 返回 `embedded: true`、`apiBaseUrl: "embedded://local"`（占位，不绑定端口）；embedded 模式 transport.ts 强制 native IPC、gateway-socket-path.ts 强制 relay。
-- 门禁：`cargo test` 默认跑嵌入式架构的 mock/纯 Rust 测试（tests/embedded.rs）；真实解释器测试在 `--features embedded-python`（tests/embedded_python.rs）；CI 有 src/embedded/ 的 no-http deny grep 与 FFI 覆盖率门禁。
+桌面端支持"进程内嵌入 CPython + Hard FFI"替代 hermes 子进程 + HTTP/WS 传输（零本地 HTTP：无 9120/8644/8645 监听、无 reqwest 转发、无 tokio-tungstenite 中继）。Rust 侧在 src/embedded/（lifecycle/call/bridge/ffi/events/transport/api）。Python FFI 面已与 Core 合并：真实实现在 Hermes-CN-Core 检出的 hermes_embedded/（桌面仓库不再内置包，旧参考演示包已删除）。REST 路由经进程内 ASGI 直达真实 hermes_cli.web_server 应用，Gateway JSON-RPC 直达真实 tui_gateway.server（agent 事件经 src/embedded/bridge.rs 实时推给 WebView），详见 docs/embedded-python.md。
+- 特性开关：pyo3 后端在 embedded-python cargo feature 后面（默认关，避免 CI 强制链接 libpython）；HERMES_DESKTOP_EMBEDDED_PYTHON=0 关闭嵌入、回退子进程 managed runtime。
+- 前端契约：get_runtime_config 返回 embedded: true、apiBaseUrl: "embedded://local"（占位，不绑定端口）；embedded 模式 transport.ts 强制 native IPC、gateway-socket-path.ts 强制 relay。
+- 版本门：嵌入式 get_version 经 FFI 上报真实 hermes_cli.__version__；run.py 在嵌入式 dev 启动时设置 VITE_HERMES_SKIP_VERSION_CHECK=1（发版仍须同步 EXPECTED_BACKEND_VERSION）。
+- 门禁：cargo test 默认跑嵌入式架构的 mock/纯 Rust 测试（tests/embedded.rs）；真实解释器测试在 --features embedded-python（tests/embedded_python.rs，payload 取 Core 检出的 hermes_embedded，CI embedded job 会 checkout Core）；CI 有 src/embedded/ 的 no-http deny grep 与 FFI 覆盖率门禁；Core 侧自检：python -m hermes_embedded.selftest。
 - 例外：remote（远程 Hermes Agent）与 local（attach 外部 CLI dashboard）仍走 HTTP/WS——外部进程无法嵌入。
 
 ## 不要做的事
@@ -181,7 +182,7 @@ Embedded Python 运行时（refactor_report.md）
 
 ## 端口
 
-- 9120：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）。`run.py` 已改为嵌入式 Python 模式（零 HTTP），不再使用 9120；9120 只属于未嵌入的子进程 managed runtime 路径（`pnpm tauri:dev` 不带 `HERMES_DESKTOP_EMBEDDED_PYTHON=1` 时）与 Core Dashboard 本身。
+- 9120：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）。run.py 默认以嵌入式 Python 模式启动真实后端（零 HTTP）：payload 为 Core 检出的 hermes_embedded（真实 web_server + tui_gateway 经 FFI 进程内服务，桌面仓库已无内置包，找不到 payload 直接报错）；显式 --source/--backend/HERMES_CN_CORE 同样保持嵌入式。只有显式加 --real-backend 才走真实 managed runtime 路径（安装该 Core 并起 dashboard 子进程，端口 9120）；9120 其余归属不变（pnpm tauri:dev 不带 HERMES_DESKTOP_EMBEDDED_PYTHON=1 时）与 Core Dashboard 本身。
 - 9545：Vite dev server（`web/vite.config.ts` 默认值，strictPort；Windows 可能因 Hyper-V/WSL2 的“排除端口范围”屏蔽 9545 —— vite config 与 `tauri-dev-managed.mjs` 会探测并自动回退到空闲端口；`run.py` 不管理端口，见 `docs/run-py-usage.md`）
 
 ## Rust 测试约定

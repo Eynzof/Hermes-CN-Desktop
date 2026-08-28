@@ -38,6 +38,7 @@ use serde_json::Value;
 use crate::error::{AppError, AppResult};
 
 pub mod api;
+pub mod bridge;
 pub mod call;
 pub mod events;
 pub mod ffi;
@@ -71,6 +72,29 @@ pub fn embedded_enabled() -> bool {
         .unwrap_or(true)
 }
 
+/// Whether the embedded runtime is expected to start for this launch: the
+/// opt-out env is unset, the pyo3 backend is compiled in, AND a payload is
+/// reachable. Bootstrap uses this to skip the managed-runtime install/update
+/// work entirely in embedded mode — the in-process runtime replaces the
+/// `hermes dashboard` subprocess, so a fresh embedded-only install must never
+/// block on the (network) runtime-update check that only exists to provision
+/// the subprocess runtime.
+pub fn embedded_possible(resource_dir: Option<&Path>) -> bool {
+    if !embedded_enabled() {
+        return false;
+    }
+    #[cfg(feature = "embedded-python")]
+    {
+        resolve_payload_root(resource_dir).is_some()
+    }
+    #[cfg(not(feature = "embedded-python"))]
+    {
+        // Without the pyo3 backend the stub interpreter can never start, so
+        // the subprocess managed runtime remains the only viable path.
+        false
+    }
+}
+
 /// Locate the embedded Python payload root.
 ///
 /// Priority:
@@ -96,8 +120,8 @@ pub fn resolve_payload_root(resource_dir: Option<&Path>) -> Option<PathBuf> {
         candidates.push(res.join("static").join("embedded-python"));
         candidates.push(res.join("static").join("bundled-runtime"));
     }
-    // Dev-only: the reference Python package in the desktop repo (or a
-    // hermes-core mklink pointing at Hermes-CN-Core).
+    // Dev-only: a `hermes_embedded` package next to the desktop source tree
+    // (e.g. the sibling Hermes-CN-Core checkout or a `hermes-core` mklink).
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd.join("hermes_embedded"));
         candidates.push(cwd.join("hermes-core").join("hermes_embedded"));

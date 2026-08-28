@@ -99,6 +99,10 @@ impl PythonInterpreter {
                 });
             }
 
+            // Expose the Python → Rust event bridge so the Core-side
+            // RustBridgeTransport can push gateway frames into the WebView.
+            crate::embedded::bridge::install(py)?;
+
             Ok(PythonInterpreter {
                 payload_root: payload_root.to_path_buf(),
                 python_version: version_line,

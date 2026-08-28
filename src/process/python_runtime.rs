@@ -20,7 +20,7 @@ use crate::error::{AppError, AppResult};
 /// Kind of embedded payload we located.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PayloadKind {
-    /// A dev checkout of the `hermes_embedded` reference package (dev spike).
+    /// A dev checkout of the real `hermes_embedded` package (Core checkout / dev spike).
     DevPackage,
     /// A PyInstaller `_internal` extraction (production payload).
     PyInstallerInternal,

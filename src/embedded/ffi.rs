@@ -176,7 +176,8 @@ pub static REST_FFI_SURFACE: &[FfiRouteEntry] = &[
     FfiRouteEntry {
         pattern: "/api/gateway/restart",
         python_func: "handle_gateway_restart",
-        description: "POST /api/gateway/restart — gateway restart action (longer than /api/gateway)",
+        description:
+            "POST /api/gateway/restart — gateway restart action (longer than /api/gateway)",
     },
 ];
 

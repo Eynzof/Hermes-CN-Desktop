@@ -11,9 +11,7 @@ use hermes_agent_cn::embedded::transport::{
     build_error_frame, build_response_frame, parse_frame, prompt_submit_error,
     prompt_submit_needs_synthetic_turn, synthetic_turn_events,
 };
-use hermes_agent_cn::embedded::{
-    resolve_payload_root, EmbeddedPython, EmbeddedStatus, FFI_SURFACE_VERSION,
-};
+use hermes_agent_cn::embedded::{resolve_payload_root, FFI_SURFACE_VERSION};
 use hermes_agent_cn::process::python_runtime::{
     locate_payload, read_ffi_surface_version, validate_payload, EmbeddedPayloadInfo, PayloadKind,
 };
@@ -183,9 +181,9 @@ fn embedded_rpc_response_wire_is_raw_frame_for_gateway_client() {
 ///
 /// The real Core `prompt.submit` returns `{"status":"streaming"}` and then
 /// emits `message.start` / `message.complete` events through the transport, so
-/// the desktop's optimistic progress is replaced by a real turn. The reference
-/// hermes_embedded package is a synchronous stub: it accepts the prompt but
-/// never streams, so the desktop must synthesize a complete turn itself.
+/// the desktop's optimistic progress is replaced by a real turn. A synchronous
+/// stub payload accepts the prompt but never streams, so the desktop must
+/// synthesize a complete turn itself as a fallback.
 /// Without this, `sendPrompt` resolves while the chat store keeps the
 /// optimistic assistant message in `streaming` with the progress part forever.
 ///
@@ -199,7 +197,7 @@ fn embedded_prompt_submit_synthesizes_complete_turn_with_session_id() {
     use hermes_agent_cn::embedded::events::EmbeddedEvent;
     use serde_json::json;
 
-    // The reference package returns a synchronous accept with no
+    // A synchronous stub payload returns an accept with no
     // `status: "streaming"` promise — the desktop must synthesize the turn.
     let stub_result = json!({
         "ok": true,
@@ -210,7 +208,7 @@ fn embedded_prompt_submit_synthesizes_complete_turn_with_session_id() {
     });
     assert!(
         prompt_submit_needs_synthetic_turn(&stub_result),
-        "reference stub prompt.submit result must be treated as needing a synthetic turn"
+        "stub prompt.submit result must be treated as needing a synthetic turn"
     );
 
     // The real Core result promises streaming and emits its own events; the
@@ -255,6 +253,8 @@ fn embedded_prompt_submit_synthesizes_complete_turn_with_session_id() {
 #[test]
 #[serial_test::serial]
 fn embedded_status_is_not_ready_without_interpreter() {
+    use hermes_agent_cn::embedded::{EmbeddedPython, EmbeddedStatus};
+
     // Without the embedded-python feature the interpreter is never started;
     // the status must report something other than Ready so callers fall back
     // to subprocess. With the feature enabled this behavior is intentionally
@@ -357,7 +357,11 @@ fn embedded_rpc_errors_are_delivered_as_raw_error_frames() {
     use hermes_agent_cn::embedded::transport::error_response_event;
 
     // A registry miss / Python exception path builds an error frame echoing id.
-    let error = build_error_frame(serde_json::Value::String("w2".into()), -32601, "no FFI entry");
+    let error = build_error_frame(
+        serde_json::Value::String("w2".into()),
+        -32601,
+        "no FFI entry",
+    );
     assert_eq!(error["id"], "w2");
     assert_eq!(error["error"]["code"], -32601);
     assert!(error.get("result").is_none());
@@ -375,8 +379,14 @@ fn embedded_rpc_errors_are_delivered_as_raw_error_frames() {
     let wire: serde_json::Value = serde_json::from_str(&event.wire_data()).unwrap();
     assert_eq!(wire["id"], "w2");
     assert_eq!(wire["error"]["code"], -32601);
-    assert!(wire.get("result").is_none(), "error frame must not carry result: {wire}");
-    assert!(wire.get("method").is_none(), "error frame must be raw: {wire}");
+    assert!(
+        wire.get("result").is_none(),
+        "error frame must not carry result: {wire}"
+    );
+    assert!(
+        wire.get("method").is_none(),
+        "error frame must be raw: {wire}"
+    );
 
     // Notifications (no id) get no error response — the failure is logged.
     assert!(error_response_event("conn-1", None, -32601, "x").is_none());
@@ -398,13 +408,16 @@ fn embedded_prompt_submit_failure_is_jsonrpc_error_not_silent_success() {
     assert_eq!(code, -32000);
     assert_eq!(message, "session busy");
 
-    let (_, message) = prompt_submit_error(&json!({ "ok": true, "status": "error", "message": "boom" }))
-        .expect("status:error must be an error");
+    let (_, message) =
+        prompt_submit_error(&json!({ "ok": true, "status": "error", "message": "boom" }))
+            .expect("status:error must be an error");
     assert_eq!(message, "boom");
 
     // Streaming / complete results are not errors.
     assert!(prompt_submit_error(&json!({ "ok": true, "status": "streaming" })).is_none());
-    assert!(prompt_submit_error(&json!({ "ok": true, "status": "complete", "reply": "hi" })).is_none());
+    assert!(
+        prompt_submit_error(&json!({ "ok": true, "status": "complete", "reply": "hi" })).is_none()
+    );
 }
 
 /// The FFI gateway registry must cover every JSON-RPC method the current

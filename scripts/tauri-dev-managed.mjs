@@ -69,24 +69,32 @@ const child = spawn(pnpm, devArgs, {
     // deliberately want to attach to a separately started dashboard.
     HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: process.env.HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT ?? "0",
     HERMES_DASHBOARD_TUI: process.env.HERMES_DASHBOARD_TUI ?? "1",
-    // Embedded runtime dev support (refactor_report.md Phase 1): when the
-    // embedded interpreter is requested, point the payload at the repo's
-    // `hermes_embedded` reference package (or the explicit override) so
-    // resolve_payload_root finds it without a full PyInstaller payload.
-    ...(process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1"
-      ? {
-          HERMES_DESKTOP_EMBEDDED_PAYLOAD:
-            process.env.HERMES_DESKTOP_EMBEDDED_PAYLOAD ??
-            resolve(repoRoot, "hermes_embedded"),
-        }
-      : {}),
+      // Embedded runtime dev support (refactor_report.md Phase 1): when the
+      // embedded interpreter is requested, point the payload at the Core
+      // checkout's real `hermes_embedded` package (HERMES_AGENT_CN_SOURCE is
+      // set by install-local-runtime.mjs / run.py; the in-repo hermes_backend
+      // checkout and the sibling Hermes-CN-Core are fallbacks) so
+      // resolve_payload_root finds it without a PyInstaller payload. The
+      // desktop repo carries no embedded package of its own.
+      ...(process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1"
+        ? {
+            HERMES_DESKTOP_EMBEDDED_PAYLOAD:
+              process.env.HERMES_DESKTOP_EMBEDDED_PAYLOAD ??
+              [
+                process.env.HERMES_AGENT_CN_SOURCE &&
+                  resolve(process.env.HERMES_AGENT_CN_SOURCE, "hermes_embedded"),
+                resolve(repoRoot, "hermes_backend", "hermes_embedded"),
+                resolve(repoRoot, "..", "Hermes-CN-Core", "hermes_embedded"),
+              ].find(Boolean),
+          }
+        : {}),
   },
 });
 
 if (process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1") {
   console.log(
     "[tauri-dev-managed] embedded Python mode enabled (HERMES_DESKTOP_EMBEDDED_PYTHON=1); " +
-      `payload: ${process.env.HERMES_DESKTOP_EMBEDDED_PAYLOAD ?? resolve(repoRoot, "hermes_embedded")}`,
+      `payload: ${process.env.HERMES_DESKTOP_EMBEDDED_PAYLOAD ?? "(Core checkout hermes_embedded)"}`,
   );
 }
 

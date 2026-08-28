@@ -155,14 +155,19 @@ pub fn publish_and_emit(
     emit_gateway_ws_message(app, &event)
 }
 
-/// Publish and emit a raw JSON-RPC response frame (result of a request that
-/// carried an `id`). The `data` delivered to the webview is the frame itself,
+/// Publish and emit a raw JSON-RPC response frame (result of a request that carried an `id`). The `data` delivered to the webview is the frame itself,
 /// byte-identical to what the TCP relay (`ws_proxy.rs`) forwards, so
 /// `GatewayClient.handleFrame` matches the pending request by id and resolves
 /// it. Must NOT be wrapped as `{method:"event"}` — that would hang the caller
 /// until the RPC timeout (the workbench 发送 bug).
 pub fn publish_and_emit_raw(app: &tauri::AppHandle, connection_id: &str, frame: Value) -> bool {
     emit_gateway_ws_message(app, &EmbeddedEvent::response(connection_id, frame))
+}
+
+/// Publish and emit an already-structured event (the Python → Rust bridge
+/// route). Same wire contract as [`publish_and_emit`].
+pub fn publish_and_emit_event(app: &tauri::AppHandle, event: &EmbeddedEvent) -> bool {
+    emit_gateway_ws_message(app, event)
 }
 
 fn emit_gateway_ws_message(app: &tauri::AppHandle, event: &EmbeddedEvent) -> bool {
@@ -187,6 +192,9 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    // The bus is a process-global broadcast channel; concurrent publishing
+    // tests would consume each other's frames at high parallelism.
+    #[serial_test::serial]
     fn publish_reaches_subscribers() {
         let mut rx = subscribe();
         let delivered = publish(EmbeddedEvent {
@@ -222,6 +230,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn multiple_subscribers_all_receive() {
         let mut rx1 = subscribe();
         let mut rx2 = subscribe();
@@ -278,7 +287,12 @@ mod tests {
         // `applyGatewayEventAtom` drops events without `params.session_id`, so
         // a `message.start` / `message.complete` event that omits it leaves the
         // optimistic "正在唤醒Hermes..." progress stuck forever.
-        let event = EmbeddedEvent::gateway_event("conn-1", "embedded-session", "message.complete", json!({ "text": "ok" }));
+        let event = EmbeddedEvent::gateway_event(
+            "conn-1",
+            "embedded-session",
+            "message.complete",
+            json!({ "text": "ok" }),
+        );
         let wire: Value = serde_json::from_str(&event.wire_data()).unwrap();
         assert_eq!(wire["params"]["type"], "message.complete");
         assert_eq!(wire["params"]["session_id"], "embedded-session");

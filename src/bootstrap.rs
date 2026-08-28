@@ -141,8 +141,23 @@ pub async fn acquire_managed_dashboard(
         return Err("bundled runtime install failed".to_string());
     }
 
+    let embedded_possible = crate::embedded::embedded_possible(resource_dir.as_deref());
+    if embedded_possible {
+        log::info!(
+            "Bootstrap: embedded runtime available (payload: {:?}) — skipping managed-runtime install/update",
+            crate::embedded::resolve_payload_root(resource_dir.as_deref())
+                .map(|p| p.display().to_string())
+        );
+    }
+
     let info = runtime::get_runtime_info(None);
-    if info.current.is_none() && info.updates_configured {
+    // The managed-runtime install/update only provisions the `hermes dashboard`
+    // SUBPROCESS. In embedded mode the in-process Python runtime replaces that
+    // subprocess entirely, so a fresh embedded-only install must never block on
+    // this (network) check — first run would otherwise hang for the manifest
+    // fetch timeout (or worse, an unresolvable DNS) before the embedded runtime
+    // even gets a chance to start.
+    if !embedded_possible && info.current.is_none() && info.updates_configured {
         emit_runtime_status(app, "installing", "正在下载 hermes-agent-cn runtime...");
         log::info!("Bootstrap: install_runtime_update");
         let install = runtime::install_runtime_update(None).await;
@@ -158,7 +173,7 @@ pub async fn acquire_managed_dashboard(
         if let Some(installed) = &install.installed {
             log::info!("Installed managed runtime v{}", installed.runtime_version);
         }
-    } else if info.current.is_none() {
+    } else if !embedded_possible && info.current.is_none() {
         log::warn!(
             "No managed runtime installed and update channel is not configured. \
              PATH `hermes` fallback is disabled; dashboard startup will fail \

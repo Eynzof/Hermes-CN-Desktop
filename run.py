@@ -1,25 +1,44 @@
 #!/usr/bin/env python3
 """
-run.py — Start Hermes Agent CN Desktop in embedded Python mode (Hard FFI, zero HTTP).
+run.py — Start Hermes Agent CN Desktop against the REAL embedded backend
+(Hard FFI, zero HTTP).
 
-The desktop backend runs *inside* the Tauri process via the embedded CPython
-FFI surface: no hermes dashboard subprocess, no dashboard port (no 9120 /
+The backend runs *inside* the Tauri process: the embedded CPython interpreter
+loads the REAL Core package (``hermes_backend/hermes_embedded``) and serves
+every REST route through the real ``hermes_cli.web_server`` FastAPI app and
+every gateway JSON-RPC method through the real ``tui_gateway.server``
+dispatcher. No hermes dashboard subprocess, no dashboard port (no 9120 /
 8644 / 8645 listeners), no connection.json. REST goes through native IPC →
-Rust api_request → FFI registry; Gateway flows through the in-memory
-Rust-backed transport.
+Rust api_request → FFI registry → in-process app dispatch; Gateway events
+flow through the in-memory Rust-backed transport.
 
 This script is the dev convenience wrapper around `pnpm tauri:dev` with
 HERMES_DESKTOP_EMBEDDED_PYTHON=1 (+ payload resolution), plus stale
 connection.json removal so bootstrap takes the Managed → in-process path.
 
+Launch mode selection
+---------------------
+- run.py ALWAYS launches the embedded in-process runtime whenever the payload
+  resolves: HERMES_DESKTOP_EMBEDDED_PAYLOAD override or
+  ``<core>/hermes_embedded`` (the merged real package). No hermes dashboard
+  subprocess is spawned and nothing listens on the dashboard port (9120) — so
+  a stale or broken dev-runtime venv can never again fail startup with
+  「dashboard exited before ready」.
+- Pass --real-backend to opt into the legacy managed path instead: install
+  the Core checkout into dev-runtime and spawn the real `hermes dashboard`
+  subprocess on 9120 over HTTP/WS.
+
 Usage:
-    python run.py                                    # Embedded Python runtime (zero HTTP)
+    python run.py                                    # Real embedded backend (zero HTTP)
     python run.py --source C:/dev/Hermes-CN-Core     # Override Core checkout path
+    python run.py --backend hermes_backend           # Relative paths work too
+    python run.py --backend hermes_backend --real-backend   # Real dashboard subprocess on 9120
     python run.py --skip-prereqs                     # Skip pnpm / Core source checks
     python run.py --help                             # Show full help
 
 Requirements:
-    - Hermes-CN-Core at ../Hermes-CN-Core (or set HERMES_CN_CORE / use --source)
+    - Hermes-CN-Core checkout with the merged ``hermes_embedded`` package at
+      ../Hermes-CN-Core (or ./hermes_backend, or set HERMES_CN_CORE / --source)
     - pnpm installed and dependencies installed (pnpm install)
 """
 
@@ -119,44 +138,54 @@ def remove_connection_json() -> None:
     _connection_json_path = None
 
 
-def embedded_payload_root(core_root: Path) -> Path | None:
-    """Resolve the embedded Python payload root.
+def has_embedded_payload(root: Path) -> bool:
+    """A directory is a usable embedded payload when it exposes api.py."""
+    return (root / "api.py").is_file()
 
-    Prefer the user's explicit HERMES_DESKTOP_EMBEDDED_PAYLOAD, then the Core
-    checkout's hermes_embedded package, then the desktop repo's self-contained
-    reference package (the same fallback install-local-runtime.mjs uses).
+
+def resolve_embedded_payload(core_root: Path) -> tuple[Path | None, str]:
+    """Resolve the embedded Python payload root and where it came from.
+
+    The payload is the REAL backend package (the merged ``hermes_embedded``
+    inside the Core checkout). Resolution order:
+
+    1. HERMES_DESKTOP_EMBEDDED_PAYLOAD — explicit override. A missing api.py
+       here is a HARD error: the user configured a payload on purpose, and
+       silently swapping in a fallback would mask a broken checkout.
+    2. ``<core>/hermes_embedded`` — the Core-side real package.
+
+    There is no bundled demo fallback anymore: the desktop repo no longer
+    carries a ``hermes_embedded`` package.
+
+    Returns ``(payload_root, origin)`` with origin in
+    ``{"override", "core", ""}`` (empty means "nothing found").
     """
     override = os.environ.get("HERMES_DESKTOP_EMBEDDED_PAYLOAD")
     if override:
         p = Path(override).resolve()
-        if (p / "api.py").is_file() or (p / "hermes_embedded" / "api.py").is_file():
-            return p
-        eprint(f"⚠️  HERMES_DESKTOP_EMBEDDED_PAYLOAD points to {p}, but no api.py found under it")
-    for candidate in (core_root / "hermes_embedded", DESKTOP_ROOT / "hermes_embedded"):
-        if (candidate / "api.py").is_file():
-            return candidate
-    return None
+        if not has_embedded_payload(p):
+            eprint(
+                f"❌ HERMES_DESKTOP_EMBEDDED_PAYLOAD points to {p}, but no api.py was found under it.\n"
+                f"    Fix the path or unset the variable."
+            )
+            sys.exit(1)
+        return p, "override"
+    core_pkg = core_root / "hermes_embedded"
+    if has_embedded_payload(core_pkg):
+        return core_pkg, "core"
+    return None, ""
 
 
-def run_embedded_dev(pnpm_exe: str, core_root: Path) -> None:
-    """Launch the Tauri desktop dev app in embedded Python mode (Hard FFI, zero HTTP).
+def run_embedded_dev(pnpm_exe: str, core_root: Path, payload: Path, payload_origin: str) -> None:
+    """Launch the Tauri desktop dev app with the REAL embedded backend (Hard FFI, zero HTTP).
 
     No hermes dashboard subprocess, no HTTP listener (no dashboard port), no
-    connection.json: the Python backend is embedded inside the Rust process and
-    every REST/Gateway call goes through the FFI surface. This requires the
+    connection.json: the real Core package is embedded inside the Rust process
+    and every REST/Gateway call goes through the FFI surface. This requires the
     Tauri shell, so we run `pnpm tauri:dev` (scripts/tauri-dev-managed.mjs),
     which already honors HERMES_DESKTOP_EMBEDDED_PYTHON /
     HERMES_DESKTOP_EMBEDDED_PAYLOAD.
     """
-    payload = embedded_payload_root(core_root)
-    if payload is None:
-        eprint(
-            "❌ Embedded mode requires a hermes_embedded payload: set "
-            "HERMES_DESKTOP_EMBEDDED_PAYLOAD, or have ../Hermes-CN-Core/hermes_embedded "
-            "or ./hermes_embedded with api.py present."
-        )
-        sys.exit(1)
-
     remove_connection_json()
 
     embedded_env = {
@@ -167,13 +196,51 @@ def run_embedded_dev(pnpm_exe: str, core_root: Path) -> None:
         # same Core checkout we resolved, instead of its own sibling default.
         "HERMES_AGENT_CN_SOURCE": str(core_root),
         "PYTHONIOENCODING": "utf-8",
+        # The embedded package reports the REAL Core version via FFI, which
+        # can legitimately differ from the desktop bundle's baked
+        # EXPECTED_BACKEND_VERSION. Skip the strict gate in dev only.
+        "VITE_HERMES_SKIP_VERSION_CHECK": "1",
     }
-    eprint("🚀 Starting Tauri dev in embedded Python mode (Hard FFI, zero HTTP)...")
-    eprint(f"   Payload:  {payload}")
-    eprint(f"   Backend:  in-process (no HTTP listener, no dashboard port, no connection.json)")
+    eprint("🚀 Starting Tauri dev with the REAL embedded backend (Hard FFI, zero HTTP)...")
+    eprint(f"   Payload:  {payload} ({payload_origin})")
+    eprint(f"   Backend:  in-process real Core (no HTTP listener, no dashboard port, no connection.json)")
     proc = Popen(
         [pnpm_exe, "tauri:dev"],
         env=embedded_env,
+        cwd=str(DESKTOP_ROOT),
+    )
+    processes.append(proc)
+
+
+def run_real_backend_dev(pnpm_exe: str, core_root: Path) -> None:
+    """Launch Tauri dev against the REAL managed-runtime backend.
+
+    Opt-in via --real-backend (embedding is the unconditional default).
+    scripts/install-local-runtime.mjs installs THIS Core checkout into
+    dev-runtime (via HERMES_AGENT_CN_SOURCE) and bootstrap spawns the real
+    hermes dashboard subprocess on 9120 over HTTP/WS.
+
+    HERMES_DESKTOP_EMBEDDED_PYTHON is pinned to "0" — the documented opt-out
+    (src/embedded/mod.rs EMBEDDED_DISABLE_ENV). Merely unsetting it would not
+    be enough: resolve_payload_root also scans the Core checkout for
+    hermes_embedded and would re-embed. The payload override var is dropped as
+    well so the real launch cannot inherit a stale override.
+    """
+    env = dict(os.environ)
+    env.pop("HERMES_DESKTOP_EMBEDDED_PAYLOAD", None)
+    env["HERMES_DESKTOP_EMBEDDED_PYTHON"] = "0"
+    env["PYTHONIOENCODING"] = "utf-8"
+    # scripts/install-local-runtime.mjs must install THIS Core checkout into
+    # dev-runtime, not its own sibling default.
+    env["HERMES_AGENT_CN_SOURCE"] = str(core_root)
+
+    remove_connection_json()
+
+    eprint("🚀 Starting Tauri dev against the REAL managed-runtime backend...")
+    eprint(f"   Core:     {core_root}")
+    proc = Popen(
+        [pnpm_exe, "tauri:dev"],
+        env=env,
         cwd=str(DESKTOP_ROOT),
     )
     processes.append(proc)
@@ -236,17 +303,20 @@ def cleanup(signum=None, frame=None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run Hermes Agent CN Desktop in embedded Python mode (Hard FFI, zero HTTP)",
+        description="Run Hermes Agent CN Desktop against the REAL embedded backend (Hard FFI, zero HTTP)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python run.py                              # Embedded Python runtime (zero HTTP)\n"
+            "  python run.py                              # REAL embedded backend (zero HTTP)\n"
             "  python run.py --source C:/dev/Hermes-CN-Core\n"
+            "  python run.py --backend hermes_backend     # explicit Core checkout to embed\n"
+            "  python run.py --backend hermes_backend --real-backend  # dashboard subprocess on 9120\n"
             "\n"
             "Environment:\n"
             "  HERMES_CN_CORE              Path to Hermes-CN-Core repo (default: ../Hermes-CN-Core)\n"
-            "  HERMES_DESKTOP_EMBEDDED_PYTHON=1  Enables the embedded runtime (set automatically)\n"
-            "  HERMES_DESKTOP_EMBEDDED_PAYLOAD   Payload root override (default: <Core>/hermes_embedded, else ./hermes_embedded)\n"
+            "  HERMES_DESKTOP_EMBEDDED_PYTHON=1  Enables the embedded runtime (set automatically;\n"
+            "                              pinned to 0 only by the --real-backend opt-in)\n"
+            "  HERMES_DESKTOP_EMBEDDED_PAYLOAD   Payload root override (default: <Core>/hermes_embedded)\n"
             "  HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL=1  Skip re-installing the dev runtime\n"
         ),
     )
@@ -258,7 +328,16 @@ def main() -> None:
     parser.add_argument(
         "--backend",
         default=None,
-        help="Deprecated alias for --source",
+        help="Deprecated alias for --source. The embedded real backend is the default either way;\n"
+        "add --real-backend to launch the managed-runtime dashboard subprocess instead",
+    )
+    parser.add_argument(
+        "--real-backend",
+        action="store_true",
+        help="Opt into the REAL managed-runtime path even though embedding is available:\n"
+        "install the selected Core checkout into dev-runtime and spawn the real hermes\n"
+        "dashboard subprocess on port 9120 (HTTP/WS). Without this flag run.py always\n"
+        "launches the embedded in-process runtime (zero HTTP)",
     )
     parser.add_argument(
         "--embedded",
@@ -288,10 +367,36 @@ def main() -> None:
     signal(SIGINT, _signal_to_keyboard_interrupt)
     signal(SIGTERM, _signal_to_keyboard_interrupt)
 
-    run_embedded_dev(pnpm_exe, core_root)
+    payload, payload_origin = resolve_embedded_payload(core_root)
+
+    if getattr(args, "real_backend", False):
+        # Explicit --real-backend opt-in: the legacy managed path — install
+        # the Core checkout into dev-runtime and spawn the real hermes
+        # dashboard subprocess (HTTP/WS on 9120).
+        run_real_backend_dev(pnpm_exe, core_root)
+        launched = "managed-real-backend"
+    elif payload is not None:
+        # The real in-process backend: <core>/hermes_embedded is the merged
+        # package that drives the real web_server + tui_gateway via FFI.
+        run_embedded_dev(pnpm_exe, core_root, payload, payload_origin)
+        launched = "embedded-real"
+    else:
+        eprint(
+            "❌ Embedded mode requires the real hermes_embedded package inside the Core checkout: set "
+            "HERMES_DESKTOP_EMBEDDED_PAYLOAD, or have ../Hermes-CN-Core/hermes_embedded (or the --source "
+            "checkout) with api.py present."
+        )
+        sys.exit(1)
+
     eprint("─" * 50)
-    eprint("   Mode:     Embedded Python runtime (Hard FFI, zero HTTP)")
-    eprint("   Backend:  in-process (no HTTP listener, no dashboard port)")
+    if launched == "managed-real-backend":
+        eprint("   Mode:     REAL managed runtime (hermes dashboard subprocess)")
+        eprint(f"   Backend:  {core_root} over HTTP/WS (dashboard on port 9120)")
+        eprint("   Chat:     wired to the actual Hermes agent")
+    else:
+        eprint("   Mode:     Embedded Python runtime (Hard FFI, zero HTTP)")
+        eprint(f"   Payload:  {payload}")
+        eprint("   Backend:  REAL Core in-process (web_server REST + tui_gateway via FFI)")
     eprint("   Frontend: Tauri dev window (Vite on 9545 via pnpm tauri:dev)")
     eprint("   Press Ctrl+C to stop.")
     eprint("─" * 50)
