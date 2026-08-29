@@ -56,7 +56,7 @@ Hermes-CN-Desktop/
 
 UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**。
 
-后端源码在同级的 `../Hermes-CN-Core`（`pnpm tauri:dev` 默认从这里把 backend 装进桌面 dev-runtime，可用 `--source` 覆盖）。查：
+后端源码优先在本仓库内的 `hermes_backend/` 检出，其次在同级的 `../Hermes-CN-Core`（`pnpm tauri:dev` 默认从 `--source` 指向的目录把 backend 装进桌面 dev-runtime）。查：
 - REST 路由：`hermes_cli/web_server.py`
 - Gateway 事件：`tui_gateway/server.py`
 - 上游 Web 实现：`web/src/lib/api.ts`、`gatewayClient.ts`
