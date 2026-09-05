@@ -74,18 +74,24 @@ Existing URLs (`/memory`, ...) are unchanged — they now land under `Hermes 记
 
 Per project requirement, tests exercise the **real backend projects**:
 
-- **Hermes-CN-Core** (`C:\dev\Hermes-CN-Core`, port 9120) — real Hermes backend
+- **Hermes-CN-Core** (sibling checkout `../Hermes-CN-Core`, port 9120) — real Hermes backend
   for integration coverage (extends the existing `tests/real_backend.rs`
   pattern; web-side real-backend tests run against the real Core backend).
-- **Wander-Memory / MemOS** (`C:\dev\Wander-Memory`, REST 18400 / WS 18401 /
-  FS 18402, port-shift aware) — real MemOS backend for the WanderMemory client
-  and E2E (started in remote mode against the in-repo dummy OpenAI backend so
-  no real LLM is required; `--port 0` style ephemeral ports are used for the
-  test trio where possible, with discovery).
+- **Wander-Memory / MemOS** (`Wander-Minds/Wander-Memory`, sibling checkout
+  `../Wander-Memory`, REST 18400 / WS 18401 / FS 18402, port-shift aware) —
+  real MemOS backend for the WanderMemory client and E2E (started in remote
+  mode against the in-repo dummy OpenAI backend so no real LLM is required;
+  `--port 0` style ephemeral ports are used for the test trio where possible,
+  with discovery).
 - Unit tests (vitest, mock transport) run in `pnpm test:unit`; real-backend
   tests are opt-in via env vars (mirroring `HERMES_REAL_BACKEND_URL` /
   `HERMES_CORE_DIR`), and `e2e/wander-memory.spec.ts` runs against the real
   MemOS backend under the existing Playwright harness.
+
+CI pins the private backend to `efea8c6b0ea8c16cf1593082a93905acd7a055e3`
+and checks it out with the read-only `WANDER_MEMORY_DEPLOY_KEY` Actions Secret.
+Fork and Dependabot PRs receive no private-repository credentials, so they skip
+only the Wander-Memory server/spec while retaining the rest of the E2E suite.
 
 ## 7. Implementation Notes
 

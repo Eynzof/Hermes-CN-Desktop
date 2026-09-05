@@ -46,6 +46,15 @@ beforeEach(() => {
         currentProfile: "default",
       });
     }
+    if (command === "api_request") {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }),
+      });
+    }
     return Promise.resolve({ command, args });
   });
   (globalThis as any).window = {};
@@ -237,6 +246,7 @@ describe("isTauriDevMode", () => {
   });
 
   it("mounts the renderer without waiting when the managed runtime is intentionally offline", async () => {
+    (globalThis as any).window.__TAURI_INTERNALS__ = {};
     mockInvoke.mockImplementation((command: string) => {
       if (command === "get_runtime_config") {
         return Promise.resolve({
@@ -257,11 +267,82 @@ describe("isTauriDevMode", () => {
 
     expect(window.__HERMES_RUNTIME__).toMatchObject({
       backendReady: false,
+      backendRecoveryReason: "managed-runtime-offline",
       guideState: "pending",
       managedRuntimeDesiredState: "stopped",
       managedRuntimeLifecycleState: "stopped",
     });
     expect(mockInvoke).not.toHaveBeenCalledWith("runtime_info", undefined);
+    expect(mockInvoke).not.toHaveBeenCalledWith("api_request", expect.anything());
+  });
+
+  it("mounts the offline repair shell when an attached backend is unreachable", async () => {
+    (globalThis as any).window.__TAURI_INTERNALS__ = {};
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_runtime_config") {
+        return Promise.resolve({
+          apiBaseUrl: "http://127.0.0.1:9559",
+          gatewayUrl: "ws://127.0.0.1:9559/api/ws",
+          currentProfile: "default",
+          connectionMode: "local",
+          backendReady: true,
+          guideState: "completed",
+        });
+      }
+      if (command === "api_request") {
+        return Promise.reject({
+          code: "dashboard_unreachable",
+          kind: "dashboard",
+          message: "Dashboard not reachable at http://127.0.0.1:9559",
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    await installTauriBridge();
+
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      connectionMode: "local",
+      backendReady: false,
+      backendRecoveryReason: "external-backend-unreachable",
+      apiBaseUrl: "http://127.0.0.1:9559",
+      dashboardApiBaseUrl: "http://127.0.0.1:9559",
+    });
+  });
+
+  it("mounts the auth repair shell when an attached backend rejects credentials", async () => {
+    (globalThis as any).window.__TAURI_INTERNALS__ = {};
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_runtime_config") {
+        return Promise.resolve({
+          apiBaseUrl: "https://remote.example.com",
+          gatewayUrl: "wss://remote.example.com/api/ws",
+          currentProfile: "default",
+          connectionMode: "remote",
+          backendReady: true,
+          guideState: "completed",
+        });
+      }
+      if (command === "api_request") {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          statusText: "Unauthorized",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ error: "unauthenticated" }),
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    await installTauriBridge();
+
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      connectionMode: "remote",
+      backendReady: false,
+      backendRecoveryReason: "external-backend-auth-required",
+      dashboardApiBaseUrl: "https://remote.example.com",
+    });
   });
 
   it("waits for apiBaseUrl when managed runtime is still starting", () => {
@@ -305,22 +386,59 @@ describe("isTauriDevMode", () => {
 
   it("verifies backend version before mounting the runtime in Tauri mode", async () => {
     (globalThis as any).window.__TAURI_INTERNALS__ = {};
-      const fetchSpy = vi.fn(async () =>
-        new Response(JSON.stringify({ version: EXPECTED_BACKEND_VERSION, name: "hermes-agent" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
+    const fetchSpy = vi.fn();
     (globalThis as any).fetch = fetchSpy;
 
     await installTauriBridge();
 
-    expect(fetchSpy).toHaveBeenCalledWith("http://127.0.0.1:9120/api/version");
+    expect(mockInvoke).toHaveBeenCalledWith("api_request", {
+      input: { path: "/api/version", method: "GET" },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(window.__HERMES_RUNTIME__).toMatchObject({
       platform: "tauri",
       // In dev mode with managed connection the runtime hides apiBaseUrl so
       // requests flow through the Vite proxy, but the real dashboard origin is
       // preserved on dashboardApiBaseUrl.
+      dashboardApiBaseUrl: "http://127.0.0.1:9120",
+    });
+  });
+
+  it("uses the managed runtime kernel version for the initial compatibility gate", async () => {
+    (globalThis as any).window.__TAURI_INTERNALS__ = {};
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "get_runtime_config") {
+        return Promise.resolve({
+          apiBaseUrl: "http://127.0.0.1:9120",
+          gatewayUrl: "ws://127.0.0.1:9120/api/ws",
+          sessionToken: "token",
+          kernelVersion: "0.20.0",
+          currentProfile: "default",
+          connectionMode: "managed",
+        });
+      }
+      if (command === "api_request") {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ version: "0.20.0", name: "hermes-agent" }),
+        });
+      }
+      return Promise.resolve({});
+    });
+    const fetchSpy = vi.fn();
+    (globalThis as any).fetch = fetchSpy;
+
+    await installTauriBridge();
+
+    expect(mockInvoke).toHaveBeenCalledWith("api_request", {
+      input: { path: "/api/version", method: "GET" },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(window.__HERMES_RUNTIME__).toMatchObject({
+      kernelVersion: "0.20.0",
       dashboardApiBaseUrl: "http://127.0.0.1:9120",
     });
   });

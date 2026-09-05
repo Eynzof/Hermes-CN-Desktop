@@ -12,7 +12,16 @@ Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，
 
 官网与下载页见 [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn)。桌面端隶属于 [Hermes Agent 中文社区](https://hermesagent.org.cn) 生态，社区主站提供中文文档、实践指南、社群入口和更多生态项目。
 
-> 当前版本是 `v0.8.0-rc4`。项目仍在快速迭代，API、打包流程、运行时分发策略和界面细节都可能继续调整。
+> 当前版本是 `v0.8.0-rc7`。项目仍在快速迭代，API、打包流程、运行时分发策略和界面细节都可能继续调整。
+
+## ❤️赞助商
+
+<table>
+<tr>
+<td width="180"><a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn"><img src="./docs/assets/compshare.png" alt="优云智算" width="150"></a></td>
+<td>感谢优云智算赞助了本项目！优云智算是UCloud旗下AI云平台，提供稳定、全面的国内外模型API，仅一个key即可调用。主打包月、按次的高性价比 国模Coding Plan套餐，同时提供官转稳定海外模型。支持接入 Claude Code、Codex 及 API 调用。支持企业高并发、7*24技术支持、自助开票。通过<a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn">此链接</a>注册的用户，可得免费5元平台体验金！</td>
+</tr>
+</table>
 
 ## Hermes Agent 中文社区
 
@@ -96,9 +105,9 @@ Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外�
 
 当前版本包含：
 
-- macOS Apple Silicon DMG：`Hermes.Agent.CN.Desktop_0.8.0-rc4_aarch64.dmg`
-- macOS Intel DMG：`Hermes.Agent.CN.Desktop_0.8.0-rc4_x64.dmg`
-- Windows x64 安装器：`Hermes.Agent.CN.Desktop_0.8.0-rc4_x64-setup.exe`
+- macOS Apple Silicon DMG：`Hermes.Agent.CN.Desktop_0.8.0-rc7_aarch64.dmg`
+- macOS Intel DMG：`Hermes.Agent.CN.Desktop_0.8.0-rc7_x64.dmg`
+- Windows x64 安装器：`Hermes.Agent.CN.Desktop_0.8.0-rc7_x64-setup.exe`
 
 当前 Windows 与 macOS 安装包都会预置 `Hermes-CN-Core` runtime，安装后优先从包内 runtime 完成本地内核初始化；托管 runtime 下载与更新流程只作为升级或兜底路径使用。
 

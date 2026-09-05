@@ -83,7 +83,14 @@ import type {
   HermesGitBridge,
 } from "./runtime";
 import { BUILD_COMMIT, DESKTOP_VERSION, versionLabel } from "./build-info";
-import { assertCompatible, resetVersionCheck, verifyBackendVersion } from "./version-check";
+import {
+  assertCompatible,
+  deferBackendVersionCheckForOfflineRuntime,
+  recordRuntimeKernelVersion,
+  resetVersionCheck,
+  verifyBackendVersion,
+  type BackendRecoveryReason,
+} from "./version-check";
 import hermesLogo from "@/assets/hermes-default-avatar.png";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
@@ -1112,6 +1119,7 @@ export async function installTauriBridge(): Promise<void> {
     apiBaseUrl: string;
     gatewayUrl: string;
     sessionToken?: string;
+    kernelVersion?: string;
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
     portable?: boolean;
@@ -1168,17 +1176,31 @@ export async function installTauriBridge(): Promise<void> {
   // triggers a fatal dialog and force-quits. We pass the config's apiBaseUrl
   // explicitly because window.__HERMES_RUNTIME__ is not populated yet.
   resetVersionCheck();
-  const versionState = await verifyBackendVersion(config.apiBaseUrl);
-  if (versionState.kind !== "ok") {
-    assertCompatible();
-    throw new Error("version check failed during bridge installation");
+  recordRuntimeKernelVersion(config.kernelVersion);
+  const connectionMode = config.connectionMode ?? "managed";
+  const managedRuntimeIntentionallyOffline =
+    connectionMode === "managed" &&
+    config.backendReady === false &&
+    !config.apiBaseUrl &&
+    (config.managedRuntimeDesiredState ?? "running") !== "running";
+  let backendRecoveryReason: BackendRecoveryReason | undefined;
+  if (managedRuntimeIntentionallyOffline) {
+    deferBackendVersionCheckForOfflineRuntime();
+    backendRecoveryReason = "managed-runtime-offline";
+  } else {
+    const versionState = await verifyBackendVersion(config.apiBaseUrl, { connectionMode });
+    if (versionState.kind === "deferred") {
+      backendRecoveryReason = versionState.reason;
+    } else if (versionState.kind !== "ok") {
+      assertCompatible();
+      throw new Error("version check failed during bridge installation");
+    }
   }
 
   // Attached local/remote mode must keep the real URLs even in Vite dev: the
   // Vite proxy targets the managed dashboard port (9120), so relative URLs
   // would route traffic to the wrong backend. Managed dev still hides URLs and
   // uses the proxy as before.
-  const connectionMode = config.connectionMode ?? "managed";
   const hideUrlsForViteProxy = isDevMode && connectionMode === "managed";
 
   window.__HERMES_RUNTIME__ = {
@@ -1187,11 +1209,15 @@ export async function installTauriBridge(): Promise<void> {
     dashboardApiBaseUrl: config.apiBaseUrl,
     gatewayUrl: hideUrlsForViteProxy ? undefined : config.gatewayUrl,
     sessionToken: config.sessionToken,
+    kernelVersion: config.kernelVersion,
     currentProfile: config.currentProfile,
     connectionMode,
     portable: config.portable ?? false,
     embedded: config.embedded ?? false,
-    backendReady: config.backendReady ?? Boolean(config.apiBaseUrl),
+    backendReady: backendRecoveryReason
+      ? false
+      : config.backendReady ?? Boolean(config.apiBaseUrl),
+    backendRecoveryReason,
     guideState: config.guideState ?? "completed",
     managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
     managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",

@@ -30,9 +30,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const E2E_DIR = resolve(__dirname, "..");
 const DESKTOP_DIR = resolve(E2E_DIR, "..");
 
-// The WanderMemory backend checkout (the port-shift/CORS branch). Defaults to
-// the sibling checkout; override in CI (../Wander-Memory — resolved against
-// the harness cwd, which Playwright sets to the config dir e2e/).
+// The canonical WanderMemory backend checkout. It defaults to a sibling of the
+// desktop repository, independent of the caller's cwd; override when needed.
 const WANDER_MEMORY_DIR = process.env.WANDER_MEMORY_DIR
   ? resolve(process.env.WANDER_MEMORY_DIR)
   : resolve(DESKTOP_DIR, "..", "Wander-Memory");
@@ -226,7 +225,7 @@ async function main() {
     ),
   );
 
-  // 4. Real MemOS backend (port-shift/CORS branch).
+  // 4. Real MemOS backend.
   const memos = spawnChild(
     "memos",
     WANDER_MEMORY_PYTHON,

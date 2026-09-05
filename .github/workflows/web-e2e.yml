@@ -16,10 +16,11 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     env:
-      # The Playwright webServer inherits this env: harness/start-memos.mjs
-      # spawns the REAL MemOS backend (`python -m src.memory --remote …`)
-      # from the sibling Wander-Memory checkout (the port-shift/CORS branch).
-      WANDER_MEMORY_DIR: ../Wander-Memory
+      # The backend repository is private. Fork PRs and Dependabot do not
+      # receive repository secrets, so they run the rest of the E2E suite and
+      # skip only the Wander-Memory server/spec. Pushes, manual runs and
+      # trusted same-repository PRs exercise the full integration.
+      WANDER_MEMORY_E2E: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
     defaults:
       run:
         working-directory: Hermes-CN-Desktop
@@ -38,16 +39,27 @@ jobs:
           ref: main
           path: Hermes-CN-Core
 
-      # The MemOS backend behind the /wander-memory surface. Sibling checkout
-      # so the default WANDER_MEMORY_DIR (../Wander-Memory) resolves. ref =
-      # feat/hermes-port-shift carries the port auto-shift trio + the
-      # --cors-origins flag the E2E harness passes; flips to main once merged.
+      - name: Verify Wander-Memory access is configured
+        if: env.WANDER_MEMORY_E2E == 'true'
+        env:
+          WANDER_MEMORY_DEPLOY_KEY: ${{ secrets.WANDER_MEMORY_DEPLOY_KEY }}
+        run: |
+          if [ -z "$WANDER_MEMORY_DEPLOY_KEY" ]; then
+            echo "::error::WANDER_MEMORY_DEPLOY_KEY is not configured"
+            exit 1
+          fi
+
+      # Canonical private MemOS backend. Keep the full SHA paired with the
+      # Desktop integration instead of following a moving branch head.
       - name: Checkout Wander-Memory backend
+        if: env.WANDER_MEMORY_E2E == 'true'
         uses: actions/checkout@v4
         with:
-          repository: Eynzof/Wander-Memory
-          ref: feat/hermes-port-shift
+          repository: Wander-Minds/Wander-Memory
+          ref: efea8c6b0ea8c16cf1593082a93905acd7a055e3
           path: Wander-Memory
+          ssh-key: ${{ secrets.WANDER_MEMORY_DEPLOY_KEY }}
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:
@@ -75,6 +87,7 @@ jobs:
           .venv/bin/pip install -e ".[all]"
 
       - name: Install Wander-Memory (Python) into .venv
+        if: env.WANDER_MEMORY_E2E == 'true'
         working-directory: Wander-Memory
         # wandermemory (hatchling). The backend runs `python -m src.memory`,
         # which needs the package deps (orjson/websockets/numpy/msgspec/apsw/…).

@@ -499,7 +499,10 @@ export function useGateway() {
           }
         }
 
-        await rememberPersistentSessionKey(sessionId);
+        // `prompt.submit` has already acknowledged the turn. Session-title
+        // lookup is only mapping maintenance and may contend with the active
+        // turn's database write, so it must not delay composer cleanup.
+        void rememberPersistentSessionKey(sessionId);
       } catch (error) {
         setSessionError({ sessionId, message: errorMessage(error) });
         throw error;

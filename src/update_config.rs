@@ -354,6 +354,7 @@ mod tests {
 
     #[serial_test::serial]
     #[test]
+    #[serial_test::serial]
     fn missing_file_falls_back_to_defaults_without_error() {
         let dir = TempDir::new().unwrap();
         let load = load_from(&dir.path().join("nope.json"));
@@ -363,6 +364,7 @@ mod tests {
 
     #[serial_test::serial]
     #[test]
+    #[serial_test::serial]
     fn corrupt_file_falls_back_with_config_error() {
         let dir = TempDir::new().unwrap();
         let path = write_config(&dir, "{ not json");
@@ -374,6 +376,7 @@ mod tests {
 
     #[serial_test::serial]
     #[test]
+    #[serial_test::serial]
     fn parses_user_config_values() {
         let dir = TempDir::new().unwrap();
         let path = write_config(
@@ -462,6 +465,7 @@ mod tests {
 
     #[serial_test::serial]
     #[test]
+    #[serial_test::serial]
     fn save_writes_atomically_and_loads_back() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("sub").join(UPDATE_CONFIG_FILE);

@@ -37,12 +37,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(here, '..', '..', '..', '..');
 
 /**
- * The WanderMemory backend checkout. Env wins; the local default is the
- * port-shift worktree that carries the `--cors-origins` flag + the auto-shift
- * trio (C:\dev\wt\Wander-Memory-port-shift).
+ * The canonical WanderMemory backend checkout. Env wins; the local default is
+ * the desktop repository's `../Wander-Memory` sibling.
  */
 export function wanderMemoryDir(): string {
-  return process.env.WANDER_MEMORY_DIR ?? resolve(REPO_ROOT, '..', 'Wander-Memory-port-shift');
+  return process.env.WANDER_MEMORY_DIR ?? resolve(REPO_ROOT, '..', 'Wander-Memory');
 }
 
 /**

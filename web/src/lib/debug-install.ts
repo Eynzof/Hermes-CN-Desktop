@@ -1,6 +1,7 @@
 import { LogsResponse } from "@hermes/protocol";
 import { debugBus, type DebugEntryLevel } from "./debug-bus";
 import { getGatewayClient } from "./gateway-client";
+import { runtime } from "./runtime";
 import { fetchJSON } from "./transport";
 
 let installed = false;
@@ -66,6 +67,7 @@ function startBackendLogTail(): () => void {
   const tick = async () => {
     if (stopped) return;
     if (typeof document !== "undefined" && document.hidden) return;
+    if (!runtime.isBackendReady()) return;
     await Promise.all(LOG_TAIL_FILES.map(pollBackendLogFile));
   };
 

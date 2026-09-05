@@ -18,6 +18,38 @@ function OfflinePage({ title, sub, children }: { title: string; sub: string; chi
 }
 
 function OfflineHome() {
+  const runtimeConfig = window.__HERMES_RUNTIME__;
+  const recoveryReason = runtimeConfig?.backendRecoveryReason;
+  const externalTarget = runtimeConfig?.dashboardApiBaseUrl
+    ?? runtimeConfig?.apiBaseUrl
+    ?? "已保存的外部目标";
+
+  if (recoveryReason === "external-backend-auth-required") {
+    return (
+      <OfflinePage title="外部 Hermes 需要重新认证" sub={`${externalTarget} 已响应，但当前认证未通过。`}>
+        <div className={s.empty}>
+          <Globe2 size={32} />
+          <h2>连接地址有效，凭证需要修复</h2>
+          <p>请重新登录或更新访问令牌。认证完成后，桌面端会重新校验后端版本再进入工作台。</p>
+          <div><Button variant="solid" tone="accent" onClick={() => { window.location.hash = "#/connection"; }}><Globe2 size={12} />修复认证</Button></div>
+        </div>
+      </OfflinePage>
+    );
+  }
+
+  if (recoveryReason === "external-backend-unreachable") {
+    return (
+      <OfflinePage title="外部 Hermes 暂时无法连接" sub={`当前无法访问 ${externalTarget}。`}>
+        <div className={s.empty}>
+          <CircleOff size={32} />
+          <h2>目标地址没有响应</h2>
+          <p>请检查后端进程、网络和保存的地址。修复后在连接页重新测试并应用。</p>
+          <div><Button variant="solid" tone="accent" onClick={() => { window.location.hash = "#/connection"; }}><Globe2 size={12} />检查连接</Button></div>
+        </div>
+      </OfflinePage>
+    );
+  }
+
   return (
     <OfflinePage title="当前没有正在使用的 Hermes 后端" sub="内置内核已停止或卸载。你仍然可以连接外部 Hermes，或恢复内置内核。">
       <div className={s.empty}>
