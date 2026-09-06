@@ -1,6 +1,6 @@
 [package]
 name = "hermes-agent-cn-desktop"
-version = "0.8.0-rc7"
+version = "0.8.0-rc8"
 edition = "2021"
 description = "Hermes Agent CN Desktop (Tauri)"
 authors = ["Hermes Agent CN Contributors"]

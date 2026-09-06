@@ -1014,7 +1014,29 @@ pub fn sync_runtime_resources_if_available(
         return Ok(RuntimeResourceSyncResult::default());
     };
 
+    // Bootstrap calls this again after bundled installation. Apply the same
+    // revision rule here so that second sync cannot mix older resources into
+    // the newer runtime we just preserved.
+    if current.source != "local-source" {
+        if let Some(manifest) = bundled_runtime_dir(resource_dir)
+            .and_then(|dir| read_json_file::<RuntimeUpdateManifest>(&bundled_manifest_path(&dir)))
+        {
+            if is_newer_compatible_runtime(&current, &manifest) {
+                return Ok(RuntimeResourceSyncResult::default());
+            }
+        }
+    }
+
     sync_available_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
+}
+
+fn is_newer_compatible_runtime(
+    current: &RuntimeInstallRecord,
+    bundled: &RuntimeUpdateManifest,
+) -> bool {
+    current.kernel_version == bundled.kernel_version
+        && current.runtime_flavor == bundled.runtime_flavor
+        && current.runtime_revision > bundled.runtime_revision
 }
 
 pub fn current_bundled_skills_dir() -> Option<PathBuf> {
@@ -2149,6 +2171,21 @@ pub async fn install_bundled_runtime_if_needed(
                     error: Some(format!("failed to clear local-source current.json: {}", e)),
                 };
             }
+        } else if is_newer_compatible_runtime(&current, &manifest) {
+            // The dashboard contract is tied to the kernel version. Keep a
+            // newer revision of that same kernel/flavor, including its own
+            // resources; copying older bundled plugins would mix releases.
+            log::info!(
+                "Keeping installed runtime {} over older bundled {}",
+                current.runtime_version,
+                manifest.runtime_version
+            );
+            return RuntimeInstallUpdateResult {
+                ok: true,
+                installed: None,
+                previous: Some(current),
+                error: None,
+            };
         } else if current.runtime_version == manifest.runtime_version {
             if let Err(e) =
                 sync_runtime_resources_from_resource(resource_dir, Path::new(&current.path))
@@ -4274,6 +4311,110 @@ mod tests {
             .join("demo")
             .join("SKILL.md")
             .is_file());
+    }
+
+    #[tokio::test]
+    #[serial]
+    #[cfg(unix)]
+    async fn install_bundled_runtime_preserves_newer_compatible_revisions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        for (kernel, flavor, revision, executable_present, should_install) in [
+            ("0.20.0", "cn", 10, true, false),
+            ("0.20.0", "cn", 100, true, false),
+            ("0.20.0", "cn", 9, true, false),
+            ("0.20.0", "cn", 8, true, true),
+            ("0.19.0", "cn", 99, true, true),
+            ("0.21.0", "cn", 1, true, true),
+            ("0.20.0", "other", 10, true, true),
+            ("0.20.0", "cn", 10, false, true),
+        ] {
+            let dir = TempDir::new().unwrap();
+            let runtime_root = dir.path().join("runtime");
+            let resource = dir.path().join("resources");
+            let bundled = resource.join("bundled-runtime");
+            let expanded = bundled_expanded_runtime_dir(&bundled);
+            fs::create_dir_all(&expanded).unwrap();
+            let bundled_exe = expanded.join(primary_runtime_name());
+            fs::write(&bundled_exe, b"#!/bin/sh\nexit 0\n").unwrap();
+            fs::set_permissions(&bundled_exe, fs::Permissions::from_mode(0o755)).unwrap();
+
+            let (key, pem) = test_keypair();
+            let mut bundled_manifest = fixture_manifest();
+            bundled_manifest.kernel_version = "0.20.0".into();
+            bundled_manifest.runtime_version = "0.20.0-cn.9".into();
+            bundled_manifest.runtime_revision = 9;
+            bundled_manifest.platform = current_platform().into();
+            bundled_manifest.arch = current_arch().into();
+            sign_manifest(&key, &mut bundled_manifest);
+            write_json_file(&bundled_manifest_path(&bundled), &bundled_manifest).unwrap();
+
+            let mut current_manifest = bundled_manifest.clone();
+            current_manifest.kernel_version = kernel.into();
+            current_manifest.runtime_flavor = flavor.into();
+            current_manifest.runtime_revision = revision;
+            current_manifest.runtime_version = format!("{kernel}-{flavor}.{revision}");
+            let current_dir = runtime_root
+                .join("versions")
+                .join(&current_manifest.runtime_version);
+            fs::create_dir_all(&current_dir).unwrap();
+            let current_exe = current_dir.join(primary_runtime_name());
+            if executable_present {
+                fs::write(&current_exe, b"installed executable").unwrap();
+            }
+            let current = install_record_from_manifest(
+                &current_manifest,
+                &current_dir,
+                &current_exe,
+                "update",
+                None,
+            );
+            let current_web = current_dir
+                .join("_internal/hermes_cli")
+                .join(DASHBOARD_WEB_DIST_DIR);
+            fs::create_dir_all(&current_web).unwrap();
+            fs::write(current_web.join("index.html"), b"installed dashboard").unwrap();
+            let bundled_web = resource
+                .join(DASHBOARD_RESOURCE_DIR)
+                .join(DASHBOARD_WEB_DIST_DIR);
+            fs::create_dir_all(&bundled_web).unwrap();
+            fs::write(bundled_web.join("index.html"), b"bundled dashboard").unwrap();
+            let bundled_skill = resource.join(BUNDLED_SKILLS_RESOURCE_DIR).join("demo");
+            fs::create_dir_all(&bundled_skill).unwrap();
+            fs::write(bundled_skill.join("SKILL.md"), b"---\nname: demo\n---\n").unwrap();
+
+            std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", &runtime_root);
+            std::env::set_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", pem);
+            write_json_file(&current_record_path(), &current).unwrap();
+            let original_record = fs::read(current_record_path()).unwrap();
+            let result = install_bundled_runtime_if_needed(Some(&resource)).await;
+            let sync_result = sync_runtime_resources_if_available(Some(&resource));
+            let after = read_current_record();
+            let after_record = fs::read(current_record_path()).unwrap();
+            std::env::remove_var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM");
+            std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+            assert!(
+                result.ok,
+                "{kernel}-{flavor}.{revision}: {:?}",
+                result.error
+            );
+            assert!(sync_result.is_ok(), "{sync_result:?}");
+            assert_eq!(result.installed.is_some(), should_install);
+            let after = after.unwrap();
+            if should_install {
+                assert_eq!(after.runtime_version, bundled_manifest.runtime_version);
+            } else {
+                assert_eq!(after.runtime_version, current.runtime_version);
+                assert_eq!(after_record, original_record);
+                let expected: &[u8] = if revision > 9 {
+                    b"installed dashboard"
+                } else {
+                    b"bundled dashboard"
+                };
+                assert_eq!(fs::read(current_web.join("index.html")).unwrap(), expected);
+            }
+        }
     }
 
     #[tokio::test]
