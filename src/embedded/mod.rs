@@ -79,6 +79,7 @@ pub fn embedded_enabled() -> bool {
 /// `hermes dashboard` subprocess, so a fresh embedded-only install must never
 /// block on the (network) runtime-update check that only exists to provision
 /// the subprocess runtime.
+#[cfg_attr(not(feature = "embedded-python"), allow(unused_variables))]
 pub fn embedded_possible(resource_dir: Option<&Path>) -> bool {
     if !embedded_enabled() {
         return false;
@@ -395,6 +396,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
+    #[serial_test::serial]
     fn embedded_enabled_defaults_to_true() {
         // Safe default: without the opt-out env the feature is on.
         let prev = std::env::var_os(EMBEDDED_DISABLE_ENV);
@@ -406,6 +408,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn embedded_enabled_respects_opt_out() {
         std::env::set_var(EMBEDDED_DISABLE_ENV, "0");
         assert!(!embedded_enabled());

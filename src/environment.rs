@@ -1239,6 +1239,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn embedded_mode_environment_check_skips_http_ws_probes() {
         // With EMBEDDED_API_BASE_URL the dashboard entries must reflect the
         // embedded runtime (ready_runtime) instead of running an HTTP GET

@@ -345,6 +345,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn resolve_source_priority_input_beats_record_and_env() {
         std::env::remove_var("HERMES_AGENT_CN_SOURCE");
         // Input must win regardless of any local-source record.

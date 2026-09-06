@@ -864,6 +864,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn write_pending_marker_lands_in_runtime_root() {
         let dir = TempDir::new().unwrap();
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", dir.path());
