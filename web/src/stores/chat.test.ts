@@ -867,17 +867,15 @@ describe("startPromptAtom", () => {
     expect(runtime.streamStatus).toBe("streaming");
   });
 
-  it("stays stuck on the optimistic progress when the backend never streams (embedded-mode symptom)", () => {
-    // Reproduction: in embedded mode (python run.py) the reference payload
-    // used to accept `prompt.submit` without ever emitting message.* events.
-    // The chat store is driven only by gateway events, so the optimistic
-    // "正在唤醒Hermes..." assistant stays `streaming` forever.
+  it("keeps optimistic progress until the backend emits turn events", () => {
+    // The chat store is driven only by gateway events, so an acknowledged
+    // prompt without message.* events remains in its optimistic state.
     const store = createStore();
     store.set(startPromptAtom, { sessionId: "s1", text: "hello", now: 5 });
 
     // The gateway RPC response (raw frame) resolves `prompt.submit`, but no
-    // message.start / message.complete events arrive — exactly the pre-fix
-    // embedded backend. Nothing in the store clears the optimistic progress.
+    // message.start / message.complete events arrive. Nothing in the store
+    // clears the optimistic progress.
     const runtime = store.get(chatRuntimeBySessionAtom).s1;
     expect(runtime.streamStatus).toBe("streaming");
     expect(runtime.activeAssistantId).toBe("live-assistant-5");
@@ -886,11 +884,9 @@ describe("startPromptAtom", () => {
     ]);
   });
 
-  it("resolves the optimistic progress when embedded mode synthesizes message.start + message.complete", () => {
-    // Fix path: the Rust transport now turns the reference package's completed
-    // `prompt.submit` result into `message.start` + `message.complete` events
-    // carrying session_id (src/embedded/transport.rs). Applying those events
-    // must replace the "正在唤醒Hermes..." progress with the stub reply.
+  it("resolves optimistic progress when Core streams message.start + message.complete", () => {
+    // Real Core owns the streamed turn. Applying its events must replace the
+    // optimistic progress with the final assistant reply.
     const store = createStore();
     store.set(startPromptAtom, { sessionId: "s1", text: "hello", now: 5 });
 
@@ -904,7 +900,7 @@ describe("startPromptAtom", () => {
       rt = reduceGatewayEvent(rt, {
         type: "message.complete",
         session_id: "s1",
-        payload: { text: "（嵌入式演示模式）已收到：hello", status: "complete" },
+        payload: { text: "真实回复：hello", status: "complete" },
       }, 7);
       return { ...state, s1: rt };
     });
@@ -915,7 +911,7 @@ describe("startPromptAtom", () => {
     expect(runtime.turnStartedAt).toBeUndefined();
     expect(assistantMessage(runtime).status).toBe("complete");
     expect(assistantMessage(runtime).parts).toEqual([
-      { type: "text", text: "（嵌入式演示模式）已收到：hello" },
+      { type: "text", text: "真实回复：hello" },
     ]);
     expect(assistantMessage(runtime).parts.some((p) => p.type === "progress")).toBe(false);
   });

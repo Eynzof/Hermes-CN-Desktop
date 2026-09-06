@@ -194,13 +194,6 @@ pub async fn dispatch_frame(
         "hermesHome": state.inner.lock().map(|i| i.hermes_home.clone()).unwrap_or_default(),
     })
     .to_string();
-    // Read the session id before the params value moves into the blocking
-    // dispatch task — the synthetic-turn events need it to route to the frontend
-    // session (applyGatewayEventAtom drops events without session_id).
-    let session_id_hint = params
-        .get("session_id")
-        .and_then(Value::as_str)
-        .map(String::from);
 
     // Long agent turns must not hold the tokio worker; run detached with the
     // GIL released while waiting (report §10.5). Method dispatch goes through
@@ -248,17 +241,10 @@ pub async fn dispatch_frame(
         }
     };
 
-    // A synchronous prompt handler (no `status:"streaming"` promise and no
-    // self-emitted turn events — only possible with a stub payload, the real
-    // Core dispatcher streams) needs the desktop to synthesize a complete
-    // turn (message.start + message.complete) so the GUI's optimistic
-    // "正在唤醒Hermes..." progress resolves instead of hanging forever.
-    //
-    // An error-ish result (`ok:false` / `status:"error"`) is answered as a
-    // JSON-RPC *error* frame (below) so the frontend request rejects and
-    // `setSessionError` resolves the optimistic progress to error — the same
-    // path Core's `_err(rid, ...)` triggers, including the "session busy"
-    // retry branch.
+    // Normalize explicit failures and invalid success shapes to a JSON-RPC
+    // error so the optimistic UI resolves as failed. Real Core owns all turn
+    // events; the desktop must never fabricate an assistant reply when that
+    // contract is broken.
     if method == "prompt.submit" {
         if let Some((code, message)) = prompt_submit_error(&result) {
             if let Some(event) =
@@ -268,18 +254,6 @@ pub async fn dispatch_frame(
             }
             return Ok(());
         }
-        if prompt_submit_needs_synthetic_turn(&result) {
-            let session_id = session_id_hint.as_deref().unwrap_or("embedded-session");
-            for event in synthetic_turn_events(connection_id, session_id, &result) {
-                crate::embedded::events::publish_and_emit(
-                    app,
-                    connection_id,
-                    Some(session_id),
-                    &event.event_type,
-                    event.payload,
-                );
-            }
-        }
     }
 
     if let Some(event) = response_event(connection_id, parsed.id, result) {
@@ -288,29 +262,41 @@ pub async fn dispatch_frame(
     Ok(())
 }
 
-/// Whether a `prompt.submit` result is an explicit failure that must be
-/// answered as a JSON-RPC error (never synthesized into a fake complete turn
-/// and never delivered as a successful `result`).
+/// Whether a `prompt.submit` result must be answered as a JSON-RPC error.
 ///
 /// Real Core signals prompt failures via `_err(rid, ...)` (a JSON-RPC error
-/// frame); the reference package returns the failure in-band as `ok:false`
-/// or `status:"error"`. Normalize both to the Core wire shape so the
-/// frontend's request rejects and its "session busy" retry / error paths work
-/// identically in embedded mode.
+/// frame). Normalize any in-band failure to the same wire shape. Successful
+/// results must match one of Core's explicit outcomes: a new streaming turn,
+/// a busy-turn action, or a consumed voice stop. Reject every other shape so
+/// a stale payload cannot silently strand the optimistic UI or fabricate a
+/// user-visible assistant turn.
 pub fn prompt_submit_error(result: &Value) -> Option<(i64, String)> {
     let failed = result.get("error").is_some()
         || result.get("ok").and_then(Value::as_bool) == Some(false)
         || result.get("status").and_then(Value::as_str) == Some("error");
-    if !failed {
-        return None;
+    if failed {
+        let message = ["message", "error", "detail"]
+            .iter()
+            .find_map(|key| result.get(*key).and_then(Value::as_str))
+            .filter(|s| !s.trim().is_empty())
+            .map(String::from)
+            .unwrap_or_else(|| "prompt submit failed".to_string());
+        return Some((-32000, message));
     }
-    let message = ["message", "error", "detail"]
-        .iter()
-        .find_map(|key| result.get(*key).and_then(Value::as_str))
-        .filter(|s| !s.trim().is_empty())
-        .map(String::from)
-        .unwrap_or_else(|| "prompt submit failed".to_string());
-    Some((-32000, message))
+
+    let accepted_status = matches!(
+        result.get("status").and_then(Value::as_str),
+        Some("streaming" | "queued" | "steered" | "redirected")
+    );
+    let voice_stopped = result.get("voice_stopped").and_then(Value::as_bool) == Some(true);
+    if accepted_status || voice_stopped {
+        None
+    } else {
+        Some((
+            -32000,
+            "embedded Core returned an unexpected prompt.submit result".to_string(),
+        ))
+    }
 }
 
 /// Map an FFI dispatch error to a JSON-RPC error code.
@@ -333,57 +319,6 @@ fn dispatch_error_message(err: &AppError) -> String {
     } else {
         capped
     }
-}
-
-/// Whether a successful embedded `prompt.submit` result needs the desktop to
-/// synthesize the assistant turn.
-///
-/// The real Core handler (`tui_gateway/methods_prompt.py`) returns
-/// `{"status":"streaming"}` and emits `message.start` / `message.delta` /
-/// `message.complete` events through the transport asynchronously, so the
-/// real package never lands here. Only a synchronous stub payload accepts
-/// (`ok`/`accepted`) without streaming; without a synthesized turn the GUI
-/// would stay on the optimistic "正在唤醒Hermes..." progress forever.
-pub fn prompt_submit_needs_synthetic_turn(result: &Value) -> bool {
-    // Never synthesize for explicit failures: an RPC error result or an
-    // error-status payload must surface as an error, not a fake complete turn.
-    if result.get("error").is_some() || result.get("ok").and_then(Value::as_bool) == Some(false) {
-        return false;
-    }
-    if result.get("status").and_then(Value::as_str) == Some("error") {
-        return false;
-    }
-    result.get("status").and_then(Value::as_str) != Some("streaming")
-}
-
-/// Build the two gateway events (`message.start` + `message.complete`) that
-/// resolve a synchronous stub turn. The assistant reply text comes from the
-/// Python `handle_prompt` result (`reply`), with a neutral fallback.
-pub fn synthetic_turn_events(
-    connection_id: &str,
-    session_id: &str,
-    result: &Value,
-) -> Vec<crate::embedded::events::EmbeddedEvent> {
-    let reply = result
-        .get("reply")
-        .and_then(Value::as_str)
-        .map(String::from)
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| "（嵌入式演示模式）已收到你的消息。".to_string());
-    vec![
-        crate::embedded::events::EmbeddedEvent::gateway_event(
-            connection_id,
-            session_id,
-            "message.start",
-            serde_json::json!({}),
-        ),
-        crate::embedded::events::EmbeddedEvent::gateway_event(
-            connection_id,
-            session_id,
-            "message.complete",
-            serde_json::json!({ "text": reply, "status": "complete" }),
-        ),
-    ]
 }
 
 /// Build the delivery event for a completed gateway dispatch. Requests that
@@ -501,60 +436,29 @@ mod tests {
     }
 
     #[test]
-    fn prompt_submit_synthetic_decision_matches_backend_contract() {
-        // Reference package: synchronous accept, no streaming promise.
-        assert!(prompt_submit_needs_synthetic_turn(&serde_json::json!({
+    fn prompt_submit_contract_accepts_only_core_outcomes() {
+        for status in ["streaming", "queued", "steered", "redirected"] {
+            assert!(prompt_submit_error(&serde_json::json!({
+                "status": status,
+            }))
+            .is_none());
+        }
+        assert!(prompt_submit_error(&serde_json::json!({
+            "voice_stopped": true,
+        }))
+        .is_none());
+
+        let (_, message) = prompt_submit_error(&serde_json::json!({
             "ok": true,
             "accepted": true,
             "embedded": true,
-        })));
-        // Real Core: returns {"status":"streaming"} and emits its own events.
-        assert!(!prompt_submit_needs_synthetic_turn(&serde_json::json!({
-            "ok": true,
-            "status": "streaming",
-        })));
-        // Explicit failures must NOT be turned into a fake complete turn.
-        assert!(!prompt_submit_needs_synthetic_turn(&serde_json::json!({
-            "ok": false,
-            "error": "agent not ready",
-        })));
-        assert!(!prompt_submit_needs_synthetic_turn(&serde_json::json!({
-            "ok": true,
-            "status": "error",
-            "message": "boom",
-        })));
-    }
-
-    #[test]
-    fn synthetic_turn_events_carry_session_and_reply() {
-        let events = synthetic_turn_events(
-            "conn-1",
-            "embedded-session",
-            &serde_json::json!({
-                "ok": true,
-                "accepted": true,
-                "embedded": true,
-                "status": "complete",
-                "reply": "你好，我是嵌入式演示助手。",
-            }),
+            "status": "complete",
+        }))
+        .expect("stale synchronous payload must be rejected");
+        assert_eq!(
+            message,
+            "embedded Core returned an unexpected prompt.submit result"
         );
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[0].event_type, "message.start");
-        assert_eq!(events[1].event_type, "message.complete");
-        assert_eq!(events[0].session_id.as_deref(), Some("embedded-session"));
-        assert_eq!(events[1].session_id.as_deref(), Some("embedded-session"));
-        assert_eq!(events[1].payload["text"], "你好，我是嵌入式演示助手。");
-    }
-
-    #[test]
-    fn synthetic_turn_events_fall_back_to_neutral_reply() {
-        let events = synthetic_turn_events(
-            "conn-1",
-            "s1",
-            &serde_json::json!({ "ok": true, "accepted": true, "embedded": true }),
-        );
-        assert_eq!(events[1].event_type, "message.complete");
-        assert!(!events[1].payload["text"].as_str().unwrap_or("").is_empty());
     }
 
     #[test]
@@ -592,17 +496,20 @@ mod tests {
         assert_eq!(code, -32000);
         assert_eq!(message, "boom");
 
-        // Success / streaming results are NOT errors.
+        // Known Core success results are NOT errors.
         assert!(
             prompt_submit_error(&serde_json::json!({ "ok": true, "status": "streaming" }))
                 .is_none()
         );
+        assert!(prompt_submit_error(&serde_json::json!({ "status": "redirected" })).is_none());
+
+        // Unknown/stale success shapes are protocol failures.
         assert!(prompt_submit_error(&serde_json::json!({
             "ok": true,
             "accepted": true,
             "status": "complete",
         }))
-        .is_none());
+        .is_some());
     }
 
     #[test]

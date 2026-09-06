@@ -10,7 +10,9 @@ The desktop normally spawns a PyInstaller hermes subprocess and talks to
 its FastAPI dashboard over loopback HTTP/WebSocket (REST proxy + WS relay).
 The experimental mode replaces that transport with in-process embedding + C FFI:
 
-[code block: 3 lines]
+```text
+Tauri / Rust → PyO3 / CPython → hermes_embedded → Core REST + Gateway handlers
+```
 
 In embedded mode there is zero HTTP between Rust and Python: no
 9120/8644/8645 listeners, no proxy pass, no TCP WebSocket relay. REST routes
@@ -81,7 +83,14 @@ The pyo3 backend is behind the optional embedded-python cargo feature (NOT in
 default features — it links libpython, which CI runners without Python dev
 headers should not be forced to do):
 
-[code block: 7 lines]
+```toml
+[features]
+default = []
+embedded-python = ["dep:pyo3"]
+
+[dependencies]
+pyo3 = { version = "0.29", features = ["auto-initialize"], optional = true }
+```
 
 EmbeddedPython::ensure_started returns false (and the app falls back to the
 subprocess managed runtime) when:
@@ -120,7 +129,7 @@ rust-test.yml:
 - default job: cargo test (no --all-features), FFI coverage test, and the
   no-http deny grep over src/embedded/ (asgi|uvicorn|reqwest|tungstenite
   must be empty — success criteria 8).
-- embedded job: checks out Hermes-CN-Core (dev-fix), installs Core into the
+- embedded job: checks out Hermes-CN-Core (main), installs Core into the
   job interpreter (pip install -e), runs hermes_embedded.selftest from the
   Core checkout + cargo check/test --features embedded-python against the
   real payload (HERMES_DESKTOP_EMBEDDED_PAYLOAD).
@@ -128,6 +137,8 @@ rust-test.yml:
 Verification (local)
 
 - python -m hermes_embedded.selftest   # from the Core checkout
+- PYO3_PYTHON and PYTHONPATH must point at an interpreter where the Core
+  dependencies are installed; `run.py --embedded` injects both automatically.
 - cargo test --features embedded-python --test embedded_python
 - cargo test                            # default suite (embedded architecture)
 

@@ -9,7 +9,6 @@
 use hermes_agent_cn::embedded::ffi;
 use hermes_agent_cn::embedded::transport::{
     build_error_frame, build_response_frame, parse_frame, prompt_submit_error,
-    prompt_submit_needs_synthetic_turn, synthetic_turn_events,
 };
 use hermes_agent_cn::embedded::{resolve_payload_root, FFI_SURFACE_VERSION};
 use hermes_agent_cn::process::python_runtime::{
@@ -176,77 +175,35 @@ fn embedded_rpc_response_wire_is_raw_frame_for_gateway_client() {
     assert!(response_event("conn-1", None, serde_json::json!({ "ok": true })).is_none());
 }
 
-/// Regression for the GUI being stuck at the optimistic "正在唤醒Hermes..."
-/// progress in embedded mode (python run.py).
-///
-/// The real Core `prompt.submit` returns `{"status":"streaming"}` and then
-/// emits `message.start` / `message.complete` events through the transport, so
-/// the desktop's optimistic progress is replaced by a real turn. A synchronous
-/// stub payload accepts the prompt but never streams, so the desktop must
-/// synthesize a complete turn itself as a fallback.
-/// Without this, `sendPrompt` resolves while the chat store keeps the
-/// optimistic assistant message in `streaming` with the progress part forever.
-///
-/// Additionally every synthesized/relayed event must carry `session_id` in the
-/// wire frame (`{method:"event",params:{type,session_id,payload}}`, the exact
-/// shape Core's `tui_gateway.server._event_frame` produces): the frontend
-/// `applyGatewayEventAtom` drops events without a session id, so a missing
-/// session_id alone would leave the GUI stuck on the same progress.
+/// The embedded bridge must accept only the real Core `prompt.submit` result
+/// variants. In particular, it must reject the deleted reference payload's
+/// synchronous `status:"complete"` shape instead of fabricating an assistant
+/// turn that could hide a stale or incompatible Core checkout.
 #[test]
-fn embedded_prompt_submit_synthesizes_complete_turn_with_session_id() {
-    use hermes_agent_cn::embedded::events::EmbeddedEvent;
+fn embedded_prompt_submit_enforces_real_core_contract() {
     use serde_json::json;
 
-    // A synchronous stub payload returns an accept with no
-    // `status: "streaming"` promise — the desktop must synthesize the turn.
-    let stub_result = json!({
+    let stale_result = json!({
         "ok": true,
         "accepted": true,
         "embedded": true,
         "status": "complete",
-        "reply": "（嵌入式演示模式）已收到：你好",
+        "reply": "stale payload reply",
     });
-    assert!(
-        prompt_submit_needs_synthetic_turn(&stub_result),
-        "stub prompt.submit result must be treated as needing a synthetic turn"
-    );
-
-    // The real Core result promises streaming and emits its own events; the
-    // desktop must NOT synthesize a second turn on top of them.
-    let core_result = json!({"ok": true, "status": "streaming"});
-    assert!(
-        !prompt_submit_needs_synthetic_turn(&core_result),
-        "real Core streaming result must not trigger a synthetic turn"
-    );
-
-    // Build the events the way dispatch_frame would for session "embedded-session".
-    let events: Vec<EmbeddedEvent> =
-        synthetic_turn_events("conn-1", "embedded-session", &stub_result);
-    assert_eq!(events.len(), 2, "expected message.start + message.complete");
-    assert_eq!(events[0].event_type, "message.start");
-    assert_eq!(events[1].event_type, "message.complete");
-
-    // The wire shape must match Core's _event_frame: jsonrpc + method + params
-    // with type/session_id/payload — the frontend GatewayClient parses
-    // session_id from params and applyGatewayEventAtom drops events without it.
-    let start_wire: serde_json::Value = serde_json::from_str(&events[0].wire_data()).unwrap();
-    assert_eq!(start_wire["jsonrpc"], "2.0");
-    assert_eq!(start_wire["method"], "event");
-    assert_eq!(start_wire["params"]["type"], "message.start");
-    assert_eq!(start_wire["params"]["session_id"], "embedded-session");
-
-    let complete_wire: serde_json::Value = serde_json::from_str(&events[1].wire_data()).unwrap();
-    assert_eq!(complete_wire["params"]["type"], "message.complete");
-    assert_eq!(complete_wire["params"]["session_id"], "embedded-session");
+    let (_, message) = prompt_submit_error(&stale_result)
+        .expect("a synchronous completed result must violate the Core contract");
     assert_eq!(
-        complete_wire["params"]["payload"]["text"],
-        "（嵌入式演示模式）已收到：你好"
+        message,
+        "embedded Core returned an unexpected prompt.submit result"
     );
 
-    // Events must be tagged with the relay connection so the webview/browser
-    // relay shim accepts them.
-    assert_eq!(events[0].connection_id, "conn-1");
-    assert_eq!(events[1].connection_id, "conn-1");
+    for status in ["streaming", "queued", "steered", "redirected"] {
+        assert!(
+            prompt_submit_error(&json!({ "status": status })).is_none(),
+            "Core prompt outcome {status} must remain valid"
+        );
+    }
+    assert!(prompt_submit_error(&json!({ "voice_stopped": true })).is_none());
 }
 
 #[cfg(not(feature = "embedded-python"))]
@@ -413,11 +370,19 @@ fn embedded_prompt_submit_failure_is_jsonrpc_error_not_silent_success() {
             .expect("status:error must be an error");
     assert_eq!(message, "boom");
 
-    // Streaming / complete results are not errors.
+    // Known Core success outcomes are not errors.
     assert!(prompt_submit_error(&json!({ "ok": true, "status": "streaming" })).is_none());
-    assert!(
-        prompt_submit_error(&json!({ "ok": true, "status": "complete", "reply": "hi" })).is_none()
-    );
+    assert!(prompt_submit_error(&json!({ "status": "queued" })).is_none());
+    assert!(prompt_submit_error(&json!({ "voice_stopped": true })).is_none());
+
+    // A stale synchronous payload must fail closed instead of producing a
+    // fake assistant answer.
+    assert!(prompt_submit_error(&json!({
+        "ok": true,
+        "status": "complete",
+        "reply": "hi"
+    }))
+    .is_some());
 }
 
 /// The FFI gateway registry must cover every JSON-RPC method the current

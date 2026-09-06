@@ -76,8 +76,8 @@ pyo3 = { version = "0.29", features = ["auto-initialize"], optional = true }
 default = []
 # Enables the real pyo3 CPython embedding backend (Phase 0/1 spike + Phase 4
 # Hard FFI). Off by default: the crate still ships the embedded architecture
-# with a stub backend, so `cargo test --all-features` remains green on CI
-# runners that do not provide a linkable libpython.
+# with a stub backend, so default builds/tests remain green on runners that do
+# not provide a linkable libpython. The dedicated embedded job enables it.
 embedded-python = ["dep:pyo3"]
 
 [target.'cfg(target_os = "windows")'.dependencies]

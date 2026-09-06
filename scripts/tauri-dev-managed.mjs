@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareLocalDevResources } from "./prepare-local-dev-resources.mjs";
 
@@ -36,6 +36,56 @@ function devRuntimeRoot() {
         ? process.env.APPDATA ?? join(homedir(), "AppData", "Roaming")
         : process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "share");
   return join(base, "cn.org.hermesagent.desktop", "dev-runtime");
+}
+
+function currentRuntimePython() {
+  try {
+    const current = JSON.parse(readFileSync(join(devRuntimeRoot(), "current.json"), "utf8"));
+    if (typeof current?.executablePath !== "string") return null;
+    const binDir = dirname(current.executablePath);
+    const python = join(binDir, process.platform === "win32" ? "python.exe" : "python");
+    return existsSync(python) ? python : null;
+  } catch {
+    return null;
+  }
+}
+
+function embeddedInterpreterEnv() {
+  if (process.env.HERMES_DESKTOP_EMBEDDED_PYTHON !== "1") return {};
+
+  const sourceVenvPython = join(
+    sourceRoot,
+    ".venv",
+    process.platform === "win32" ? "Scripts" : "bin",
+    process.platform === "win32" ? "python.exe" : "python",
+  );
+  const python =
+    process.env.PYO3_PYTHON ??
+    currentRuntimePython() ??
+    (existsSync(sourceVenvPython) ? sourceVenvPython : null);
+  if (!python) return {};
+
+  const probe = spawnSync(
+    python,
+    [
+      "-c",
+      "import json, sysconfig; p=sysconfig.get_paths(); print(json.dumps([p.get('purelib'), p.get('platlib')]))",
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: false },
+  );
+  if (probe.status !== 0) {
+    throw new Error(
+      `failed to inspect embedded Python environment ${python}: ${probe.stderr.trim()}`,
+    );
+  }
+  const dependencyPaths = JSON.parse(probe.stdout.trim()).filter(
+    (entry, index, entries) =>
+      typeof entry === "string" && existsSync(entry) && entries.indexOf(entry) === index,
+  );
+  return {
+    PYO3_PYTHON: python,
+    PYTHONPATH: [...dependencyPaths, process.env.PYTHONPATH].filter(Boolean).join(delimiter),
+  };
 }
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -86,6 +136,7 @@ const embeddedPayload =
     resolve(repoRoot, "hermes_backend", "hermes_embedded"),
     resolve(repoRoot, "..", "Hermes-CN-Core", "hermes_embedded"),
   ].find((candidate) => existsSync(resolve(candidate, "api.py")));
+const embeddedPythonEnv = embeddedInterpreterEnv();
 const child = spawn(pnpm, devArgs, {
   cwd: repoRoot,
   stdio: "inherit",
@@ -125,6 +176,11 @@ const child = spawn(pnpm, devArgs, {
       "HERMES_DESKTOP_TUI_DIR",
       localResources.HERMES_DESKTOP_TUI_DIR,
     ),
+    // PyO3 chooses the interpreter at build time, while an embedded interpreter
+    // does not automatically inherit that venv's site-packages. Reuse the
+    // managed dev runtime interpreter and expose its dependency directories so
+    // Core imports (orjson, pybase64, etc.) work in `run.py --embedded`.
+    ...embeddedPythonEnv,
     // Embedded runtime dev support (docs/embedded-python.md): when requested,
     // point pyo3 at the selected Core checkout's real package. The desktop
     // repository carries no embedded package of its own.
