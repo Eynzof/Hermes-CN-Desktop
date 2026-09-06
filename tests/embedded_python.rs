@@ -63,6 +63,36 @@ fn temp_ctx() -> (tempfile::TempDir, String) {
     (home, ctx)
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn bundled_sqlite_symbols_are_not_exported() {
+    let executable = std::env::current_exe().expect("resolve embedded test executable");
+    let output = std::process::Command::new("nm")
+        .arg("-D")
+        .arg(&executable)
+        .output()
+        .expect("GNU nm must be available in the Linux embedded test job");
+    assert!(
+        output.status.success(),
+        "nm -D failed for {}: {}",
+        executable.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let exported: Vec<&str> = std::str::from_utf8(&output.stdout)
+        .expect("nm output should be UTF-8")
+        .lines()
+        .filter_map(|line| line.split_whitespace().last())
+        .filter(|symbol| symbol.starts_with("sqlite3_"))
+        .collect();
+    assert!(
+        exported.is_empty(),
+        "bundled SQLite symbols must stay out of the dynamic symbol table; \
+         Python _sqlite3 would otherwise mix bundled and system SQLite ABIs: {exported:?}"
+    );
+}
+
 #[test]
 #[serial_test::serial]
 fn interpreter_starts_and_runs_python() {
