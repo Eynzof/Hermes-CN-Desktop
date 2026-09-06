@@ -50,12 +50,15 @@ export async function reattachAfterReconnect(deps: ReattachAfterReconnectDeps): 
   const persistentId = deps.resolvePersistentId(activeSessionId);
   try {
     const result = await deps.resume(persistentId);
+    // A new conversation may have been activated while resume was in flight.
+    if (deps.getActiveSessionId() !== activeSessionId) return;
     if (!result?.session_id) {
       deps.onResumeFailed(new Error("session.resume returned no session_id"));
       return;
     }
     deps.onResumed(result.session_id, result.resumed ?? persistentId);
   } catch (error) {
+    if (deps.getActiveSessionId() !== activeSessionId) return;
     deps.onResumeFailed(error);
   }
 }

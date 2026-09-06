@@ -22,6 +22,7 @@ import { useSkills } from "@/hooks/use-skills";
 import { useMcpServers } from "@/hooks/use-mcp-servers";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { useLastUsedModel } from "@/lib/last-used-model";
+import { getProviderEntry } from "@/lib/provider-catalog";
 import { DiagnosticCopyButton } from "@/components/ui/diagnostic-copy-button";
 import { Dot } from "@/components/ui/pill";
 import s from "./health-grid.module.css";
@@ -124,6 +125,32 @@ function groupTone(items: HealthItem[]): Tone {
 function providerMap(config: Record<string, unknown> | undefined): Record<string, unknown> {
   const providers = config?.providers;
   return isRecord(providers) ? providers : {};
+}
+
+function nonEmptyString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function currentInlineCredential(
+  config: Record<string, unknown> | undefined,
+  currentProviderId: string,
+): { source: "model" | "provider"; label: string } | null {
+  const model = isRecord(config?.model) ? config.model : {};
+  const configuredProviderId = nonEmptyString(model.provider);
+  const modelKeyBelongsToCurrentProvider = !currentProviderId
+    || !configuredProviderId
+    || configuredProviderId === currentProviderId;
+  if (modelKeyBelongsToCurrentProvider && nonEmptyString(model.api_key)) {
+    return { source: "model", label: "当前模型内联凭证已保存" };
+  }
+
+  if (!currentProviderId) return null;
+  const provider = getProviderEntry(config, currentProviderId);
+  if (!nonEmptyString(provider.api_key)) return null;
+  return {
+    source: "provider",
+    label: `${nonEmptyString(provider.name) || currentProviderId} 内联凭证已保存`,
+  };
 }
 
 function findInvalidProviderApiKeys(providers: Record<string, unknown>): string[] {
@@ -295,7 +322,8 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
     const currentProviderId = modelInfo?.provider || lastUsedModel?.provider || "";
     const currentOAuthProvider = oauthProviders?.find((provider) => provider.id === currentProviderId);
     const currentOAuthLoggedIn = currentOAuthProvider?.status.logged_in === true;
-    const anyModelCredential = anyTokenSet || currentOAuthLoggedIn;
+    const inlineCredential = currentInlineCredential(config, currentProviderId);
+    const anyModelCredential = anyTokenSet || currentOAuthLoggedIn || inlineCredential !== null;
     const ctxLabel = formatContextLength(
       lastUsedModel?.contextWindow
         ?? modelInfo?.effective_context_length
@@ -366,14 +394,18 @@ export function HealthGrid({ variant = "compact" }: HealthGridProps) {
         value: envQuery.isError ? "读取失败" : env ? (anyModelCredential ? "已配置" : "未配置") : "检测中",
         sub: currentOAuthLoggedIn
           ? `${currentOAuthProvider?.name ?? currentProviderId} OAuth 已连接`
-          : anyTokenSet
-            ? formatTokenNames(setTokens)
-            : "模型调用需要 API Key 或 OAuth 凭证",
+          : inlineCredential
+            ? inlineCredential.label
+            : anyTokenSet
+              ? formatTokenNames(setTokens)
+              : "模型调用需要 API Key 或 OAuth 凭证",
         detail: currentOAuthLoggedIn
           ? "当前主模型使用 OAuth 登录凭证，无需额外 API Token。"
-          : anyTokenSet
-            ? "仅展示已设置的变量名称，不会暴露密钥内容。"
-            : "可在模型设置里补齐 API Key，或完成支持 OAuth 的模型登录。",
+          : inlineCredential
+            ? "凭证保存在当前 Profile 的模型或 Provider 配置中；健康检查只读取是否存在，不会展示密钥内容。"
+            : anyTokenSet
+              ? "仅展示已设置的变量名称，不会暴露密钥内容。"
+              : "可在模型设置里补齐 API Key，或完成支持 OAuth 的模型登录。",
         actionTo: anyModelCredential ? undefined : "/models",
         actionLabel: "配置凭证",
       },

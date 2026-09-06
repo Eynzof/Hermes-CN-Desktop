@@ -69,6 +69,7 @@ function SlotEditor({
       <div className={s.providerFormGrid}>
         <Field label="服务商" className={s.fieldRow}>
           <Select
+            aria-label="服务商"
             value={slot.provider}
             onChange={(event) => onChange({ provider: event.target.value, model: "" })}
           >
@@ -79,15 +80,16 @@ function SlotEditor({
             ))}
           </Select>
         </Field>
-        <label className={s.fieldRow}>
+        <div className={s.fieldRow}>
           <div className={s.fieldLabel}>模型</div>
           <ModelCombobox
+            label="模型"
             value={slot.model}
             onChange={(next) => onChange({ model: next })}
             options={current?.models ?? []}
             placeholder="搜索或输入模型 ID"
           />
-        </label>
+        </div>
       </div>
     </div>
   );

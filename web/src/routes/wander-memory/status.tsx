@@ -43,6 +43,36 @@ import {
 import type { ApiError, WanderMemoryEndpoints } from "@/lib/wander-memory";
 import s from "./status.module.css";
 
+interface ServerStatusPresentationInput {
+  mode: "live" | "demo";
+  loading: boolean;
+  hasData: boolean;
+  hasError: boolean;
+}
+
+export function serverStatusPresentation({
+  mode,
+  loading,
+  hasData,
+  hasError,
+}: ServerStatusPresentationInput): {
+  label: "checking" | "offline" | "live" | "demo";
+  tone: "neutral" | "danger" | "success" | "warning";
+} {
+  if (mode === "demo") return { label: "demo", tone: "warning" };
+  if (hasError) return { label: "offline", tone: "danger" };
+  if (hasData) return { label: "live", tone: "success" };
+  if (loading) return { label: "checking", tone: "neutral" };
+  return { label: "offline", tone: "danger" };
+}
+
+export function wanderStatusErrorText(error: ApiError): string {
+  if (error.code === "network_failure") {
+    return "offline — start MemOS or update endpoint settings below";
+  }
+  return `${error.code}: ${error.message}`;
+}
+
 function StatusPage() {
   const qc = useQueryClient();
   const toast = useWanderMemoryToast();
@@ -79,17 +109,21 @@ function StatusPage() {
   };
 
   const introspectError = health.error ?? models.error ?? backends.error;
+  const introspectLoading = [health, models, backends].some(
+    (query) => query.isLoading && !query.data,
+  );
+  const serverStatus = serverStatusPresentation({
+    mode,
+    loading: introspectLoading,
+    hasData: Boolean(health.data),
+    hasError: Boolean(introspectError),
+  });
 
-  const modeBadge =
-    mode === "live" ? (
-      <Badge tone="success" variant="outline" size="sm">
-        live
-      </Badge>
-    ) : (
-      <Badge tone="warning" variant="outline" size="sm">
-        demo
-      </Badge>
-    );
+  const modeBadge = (
+    <Badge tone={serverStatus.tone} variant="outline" size="sm">
+      {serverStatus.label}
+    </Badge>
+  );
 
   return (
     <div className={s.page}>
@@ -107,7 +141,7 @@ function StatusPage() {
           {health.isLoading && !health.data ? (
             <p className={s.cardMuted}>loading…</p>
           ) : health.error ? (
-            <p className={s.cardError}>{health.error.code}: {health.error.message}</p>
+            <p className={s.cardError}>{wanderStatusErrorText(health.error)}</p>
           ) : health.data ? (
             <dl className={s.defList}>
               <div className={s.defRow}>
@@ -141,7 +175,7 @@ function StatusPage() {
           {models.isLoading && !models.data ? (
             <p className={s.cardMuted}>loading…</p>
           ) : models.error ? (
-            <p className={s.cardError}>{models.error.code}: {models.error.message}</p>
+            <p className={s.cardError}>{wanderStatusErrorText(models.error)}</p>
           ) : models.data ? (
             <>
               <dl className={s.defList}>
@@ -170,7 +204,7 @@ function StatusPage() {
           {backends.isLoading && !backends.data ? (
             <p className={s.cardMuted}>loading…</p>
           ) : backends.error ? (
-            <p className={s.cardError}>{backends.error.code}: {backends.error.message}</p>
+            <p className={s.cardError}>{wanderStatusErrorText(backends.error)}</p>
           ) : backends.data ? (
             backends.data.remote || backends.data.devices.length === 0 ? (
               <p className={s.cardMuted}>remote backend — no llama.cpp devices</p>
@@ -204,7 +238,7 @@ function StatusPage() {
 
       {introspectError ? (
         <Alert tone="danger" size="sm">
-          introspection failed: {introspectError.code}: {introspectError.message}
+          introspection failed: {wanderStatusErrorText(introspectError)}
         </Alert>
       ) : null}
 

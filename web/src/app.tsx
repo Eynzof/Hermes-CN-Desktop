@@ -10,6 +10,7 @@ import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
 import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
 import { ConnectionAuthBanner } from "@/components/connection-auth-banner";
+import { WanderMemoryRouteLifecycle } from "@/components/wander-memory/route-lifecycle";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CommandPalette } from "@/components/command-palette";
 import { runtime } from "@/lib/runtime";
@@ -91,8 +92,10 @@ function withSuspense(node: ReactNode) {
 
 function BackendApp() {
   useBootstrapActiveProfile();
+  const location = useLocation();
   return (
     <>
+      <WanderMemoryRouteLifecycle active={location.pathname.startsWith("/wander-memory")} />
       <AppShell>
         <Suspense fallback={<RouteLoadingFallback />}>
           <Routes>

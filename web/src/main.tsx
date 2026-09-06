@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, HashRouter } from "react-router-dom";
-import { Provider as JotaiProvider, createStore } from "jotai";
+import { Provider as JotaiProvider, getDefaultStore } from "jotai";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { DEFAULT_THEME_CONFIG, applyPlatformToDOM, applyThemeToDOM, normalizeThemeConfig, themeAtom, type ThemeConfig } from "@hermes/shared-ui";
 import { queryClient } from "./lib/query-client";
@@ -52,7 +52,9 @@ async function bootstrap() {
   applyThemeToDOM(initialTheme);
   // Seed the shared jotai store so `useTheme()` (and the appearance controls)
   // start from the persisted theme/density/scale instead of the defaults.
-  const jotaiStore = createStore();
+  // Imperative gateway reconnects and transport profile lookups use this same
+  // store. A separate Provider store leaves the rendered session on its old ID.
+  const jotaiStore = getDefaultStore();
   jotaiStore.set(themeAtom, initialTheme);
 
   await fetchDevToken();

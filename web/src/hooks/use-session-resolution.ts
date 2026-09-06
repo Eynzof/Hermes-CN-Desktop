@@ -41,14 +41,16 @@ export function resolveSessionRuntime(
     gwSessionId && resolvePersistentSessionId(gwSessionId) === restSessionId
       ? gwSessionId
       : undefined;
-  const mappedGatewaySessionId = liveGatewaySessionId ?? resolveGatewaySessionId(taskId);
+  const mappedGatewaySessionId = liveGatewaySessionId ?? resolveGatewaySessionId(restSessionId);
   const activeMappedGatewaySessionId =
     mappedGatewaySessionId &&
     (gwSessionId === mappedGatewaySessionId || runtimeBySession[mappedGatewaySessionId])
       ? mappedGatewaySessionId
       : undefined;
+  // The route can still contain the gateway ID from before a Core restart.
+  // Once resumed, both rendering and sending must follow the new binding.
   const runtimeSessionId =
-    taskId && runtimeBySession[taskId] ? taskId : activeMappedGatewaySessionId;
+    activeMappedGatewaySessionId ?? (taskId && runtimeBySession[taskId] ? taskId : undefined);
   const runtime = taskId
     ? runtimeBySession[runtimeSessionId ?? taskId] ?? createEmptyChatRuntime()
     : createEmptyChatRuntime();

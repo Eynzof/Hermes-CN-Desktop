@@ -1,11 +1,29 @@
 #!/usr/bin/env node
 import { spawnSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { prepareLocalDevResources } from "./prepare-local-dev-resources.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const skipInstall = process.env.HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL === "1";
+
+function argValue(flag) {
+  const index = process.argv.indexOf(flag);
+  return index === -1 ? null : process.argv[index + 1] ?? null;
+}
+
+function defaultSourceRoot() {
+  const preferred = resolve(repoRoot, "../Hermes-CN-Core");
+  if (existsSync(preferred)) return preferred;
+  return resolve(repoRoot, "../hermes-agent-cn");
+}
+
+const sourceRoot = resolve(
+  repoRoot,
+  argValue("--source") ?? process.env.HERMES_AGENT_CN_SOURCE ?? defaultSourceRoot(),
+);
 
 function devRuntimeRoot() {
   if (process.env.HERMES_DESKTOP_RUNTIME_ROOT) {
@@ -24,7 +42,9 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: pnpm tauri:dev[:managed] [--source ../Hermes-CN-Core] [--force]
 
 Installs Hermes-CN-Core into the desktop managed runtime folder, then starts
-Tauri dev with external PATH hermes fallback disabled.`);
+Tauri dev with external PATH hermes fallback disabled. Missing Core Dashboard
+and TUI assets are built automatically, and all local resources are injected
+into the managed desktop process.`);
   process.exit(0);
 }
 
@@ -42,24 +62,61 @@ if (!skipInstall) {
   runNodeScript(resolve(repoRoot, "scripts", "install-local-runtime.mjs"), process.argv.slice(2));
 }
 
+const localResources = prepareLocalDevResources({
+  sourceRoot,
+  nodeExecutable: process.execPath,
+});
+
+function envDefault(name, fallback) {
+  return process.env[name] ?? fallback;
+}
+
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const child = spawn(pnpm, ["exec", "tauri", "dev"], {
   cwd: repoRoot,
   stdio: "inherit",
+  // Windows cannot execute .cmd files directly through CreateProcess; without
+  // a command shell Node reports spawn EINVAL before Tauri starts.
+  shell: process.platform === "win32",
   env: {
     ...process.env,
     // Dev kernels live under dev-runtime/ so they never overwrite the packaged
     // app's production runtime/current.json.
-    HERMES_DESKTOP_RUNTIME_ROOT:
-      process.env.HERMES_DESKTOP_RUNTIME_ROOT ?? devRuntimeRoot(),
-    HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME:
-      process.env.HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME ?? "1",
+    HERMES_DESKTOP_RUNTIME_ROOT: envDefault("HERMES_DESKTOP_RUNTIME_ROOT", devRuntimeRoot()),
+    HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME: envDefault("HERMES_DESKTOP_PRESERVE_LOCAL_RUNTIME", "1"),
     // Default dev mode now exercises the same managed runtime path as the
     // packaged app. Use HERMES_DESKTOP_DEV_EXTERNAL_DASHBOARD=1 only when you
     // deliberately want to attach to a separately started dashboard.
-    HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: process.env.HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT ?? "0",
-    HERMES_DASHBOARD_TUI: process.env.HERMES_DASHBOARD_TUI ?? "1",
+    HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: envDefault("HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT", "0"),
+    HERMES_DASHBOARD_TUI: envDefault("HERMES_DASHBOARD_TUI", "1"),
+    HERMES_DESKTOP_DASHBOARD_WEB_DIST_DIR: envDefault(
+      "HERMES_DESKTOP_DASHBOARD_WEB_DIST_DIR",
+      localResources.HERMES_DESKTOP_DASHBOARD_WEB_DIST_DIR,
+    ),
+    HERMES_DESKTOP_BUNDLED_SKILLS_DIR: envDefault(
+      "HERMES_DESKTOP_BUNDLED_SKILLS_DIR",
+      localResources.HERMES_DESKTOP_BUNDLED_SKILLS_DIR,
+    ),
+    HERMES_DESKTOP_BUNDLED_PLUGINS_DIR: envDefault(
+      "HERMES_DESKTOP_BUNDLED_PLUGINS_DIR",
+      localResources.HERMES_DESKTOP_BUNDLED_PLUGINS_DIR,
+    ),
+    HERMES_OPTIONAL_SKILLS: envDefault("HERMES_OPTIONAL_SKILLS", localResources.HERMES_OPTIONAL_SKILLS),
+    HERMES_OPTIONAL_MCPS: envDefault("HERMES_OPTIONAL_MCPS", localResources.HERMES_OPTIONAL_MCPS),
+    HERMES_DESKTOP_NODE_BINARY: envDefault(
+      "HERMES_DESKTOP_NODE_BINARY",
+      localResources.HERMES_DESKTOP_NODE_BINARY,
+    ),
+    HERMES_DESKTOP_TUI_DIR: envDefault(
+      "HERMES_DESKTOP_TUI_DIR",
+      localResources.HERMES_DESKTOP_TUI_DIR,
+    ),
   },
+});
+
+child.on("error", (error) => {
+  console.error(`Failed to start Tauri dev: ${error.message}`);
+  process.exit(1);
 });
 
 child.on("exit", (code, signal) => {

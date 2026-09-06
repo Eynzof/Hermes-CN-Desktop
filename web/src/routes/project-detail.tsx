@@ -256,7 +256,7 @@ export function ProjectDetailRoute() {
               <Folder size={24} />
             </span>
             <div className={s.heroMeta}>
-              <h1>{project.name}</h1>
+              <h2>{project.name}</h2>
               <div className={s.heroPath}>{project.path}</div>
               <div className={s.heroDates}>
                 创建于 {formatTimestampDate(project.createdAt / 1000)} · 更新于{" "}

@@ -88,10 +88,7 @@ export function ModelOnboardingDialog() {
     >
       <Dialog.Portal>
         <Dialog.Overlay className={s.overlay} />
-        <Dialog.Content
-          className={s.dialog}
-          aria-describedby="model-onboarding-description"
-        >
+        <Dialog.Content className={s.dialog}>
           <header className={s.header}>
             <span className={s.heroIcon} aria-hidden="true">
               <Sparkles size={28} />
@@ -99,7 +96,7 @@ export function ModelOnboardingDialog() {
             <div>
               <p className={s.kicker}>首次使用</p>
               <Dialog.Title className={s.title}>开始使用 Hermes</Dialog.Title>
-              <Dialog.Description id="model-onboarding-description" className={s.description}>
+              <Dialog.Description className={s.description}>
                 内置 Hermes 已经准备好。配置一个模型后即可开始任务；你也可以先浏览工作台，
                 稍后再完成设置。
               </Dialog.Description>

@@ -1762,6 +1762,7 @@ export function ModelsSection() {
                     <div className={s.providerFormGrid}>
                       <Field label={selectedProvider.apiKeyLabel} className={s.fieldRow}>
                         <Input
+                          aria-label={selectedProvider.apiKeyLabel}
                           mono
                           type="password"
                           value={providerForm.apiKey}
@@ -1777,6 +1778,7 @@ export function ModelsSection() {
                       </Field>
                       <Field label="Base URL" className={s.fieldRow}>
                         <Input
+                          aria-label="Base URL"
                           mono
                           value={providerForm.baseUrl}
                           onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
@@ -1787,10 +1789,11 @@ export function ModelsSection() {
                           请求将发送到 <code>{selectedProviderEndpointPreview}</code>
                         </div>
                       )}
-                      <label className={s.fieldRow}>
+                      <div className={s.fieldRow}>
                         <div className={s.fieldLabel}>模型</div>
                         <div className={s.modelPickerRow}>
                           <ModelCombobox
+                            label="模型"
                             value={providerForm.model}
                             onChange={(next) => setProviderForm((prev) => ({ ...prev, model: next }))}
                             options={mergedModelOptions}
@@ -1807,7 +1810,7 @@ export function ModelsSection() {
                             </Button>
                           ) : null}
                         </div>
-                      </label>
+                      </div>
                       {!supportsModelListing && (
                         <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
                       )}
@@ -1816,6 +1819,7 @@ export function ModelsSection() {
                       )}
                       <Field label="上下文窗口" className={s.fieldRow}>
                         <Input
+                          aria-label="上下文窗口"
                           mono
                           inputMode="numeric"
                           placeholder={
@@ -2055,6 +2059,7 @@ export function ModelsSection() {
               )}
               <Field label="名称" className={s.fieldRow}>
                 <Input
+                  aria-label="名称"
                   value={customForm.name}
                   placeholder={customProviderPlaceholders.name}
                   autoFocus
@@ -2087,6 +2092,7 @@ export function ModelsSection() {
               )}
               <Field label="Base URL" className={s.fieldRow}>
                 <Input
+                  aria-label="Base URL"
                   mono
                   value={customForm.baseUrl}
                   placeholder={customProviderPlaceholders.baseUrl}
@@ -2119,6 +2125,7 @@ export function ModelsSection() {
               )}
               <Field label="API Key" className={s.fieldRow}>
                 <Input
+                  aria-label="API Key"
                   mono
                   type="password"
                   value={customForm.apiKey}
@@ -2129,10 +2136,11 @@ export function ModelsSection() {
               <div className={s.modelPickerHint}>
                 部分模型服务商需要先填写有效的 API Key，才能获取模型列表。
               </div>
-              <label className={s.fieldRow}>
+              <div className={s.fieldRow}>
                 <div className={s.fieldLabel}>默认模型</div>
                 <div className={s.modelPickerRow}>
                   <ModelCombobox
+                    label="默认模型"
                     value={customForm.model}
                     options={customModelOptions}
                     placeholder={customProviderPlaceholders.model}
@@ -2149,7 +2157,7 @@ export function ModelsSection() {
                     {customRefreshLabel}
                   </Button>
                 </div>
-              </label>
+              </div>
               {customRefreshErrorText && (
                 <div className={s.modelPickerError}>{customRefreshErrorText}</div>
               )}
@@ -2160,6 +2168,7 @@ export function ModelsSection() {
                 <>
                   <Field label="上下文窗口" className={s.fieldRow}>
                     <Input
+                      aria-label="上下文窗口"
                       mono
                       inputMode="numeric"
                       value={customForm.contextWindow}
@@ -2444,6 +2453,7 @@ function AuxiliaryModelsPanel({
           <div className={s.providerFormGrid}>
             <Field label="服务商" className={s.fieldRow}>
               <Select
+                aria-label="服务商"
                 value={form.provider}
                 onChange={(event) => updateForm({
                   provider: event.target.value,
@@ -2462,19 +2472,21 @@ function AuxiliaryModelsPanel({
               </div>
             </Field>
 
-            <label className={s.fieldRow}>
+            <div className={s.fieldRow}>
               <div className={s.fieldLabel}>模型</div>
               <ModelCombobox
+                label="模型"
                 value={form.model}
                 onChange={(next) => updateForm({ model: next })}
                 options={modelOptions}
                 placeholder={isAutoProvider ? "自动模式下不需要填写模型" : "搜索或输入辅助模型 ID"}
                 disabled={isAutoProvider}
               />
-            </label>
+            </div>
 
             <Field label="调用超时（秒）" className={s.fieldRow}>
               <Input
+                aria-label="调用超时（秒）"
                 mono
                 value={form.timeout}
                 inputMode="numeric"
@@ -2506,6 +2518,7 @@ function AuxiliaryModelsPanel({
             <div className={s.auxAdvancedGrid}>
               <Field label="Base URL" className={s.fieldRow}>
                 <Input
+                  aria-label="Base URL"
                   mono
                   value={form.baseUrl}
                   placeholder="可选，自定义 OpenAI-compatible endpoint"
@@ -2515,6 +2528,7 @@ function AuxiliaryModelsPanel({
               </Field>
               <Field label="内联 API Key" className={s.fieldRow}>
                 <Input
+                  aria-label="内联 API Key"
                   mono
                   type="password"
                   value={form.apiKey}
@@ -2526,6 +2540,7 @@ function AuxiliaryModelsPanel({
               {selectedTask === "vision" && (
                 <Field label="图片下载超时（秒）" className={s.fieldRow}>
                   <Input
+                    aria-label="图片下载超时（秒）"
                     mono
                     value={form.downloadTimeout}
                     inputMode="numeric"

@@ -9,6 +9,8 @@
 // On SIGINT/SIGTERM (or when Playwright tears the webServer down) every child is
 // killed. Run standalone for debugging: `node harness/start-backend.mjs`.
 import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -35,7 +37,7 @@ function spawnChild(label, cmd, args, opts) {
   child.stdout?.on("data", (d) => process.stdout.write(`[${label}] ${d}`));
   child.stderr?.on("data", (d) => process.stderr.write(`[${label}] ${d}`));
   child.on("exit", (code) => {
-    if (!shuttingDown) {
+    if (!shuttingDown && !child.expectedExit) {
       console.error(`[harness] ${label} exited unexpectedly (code ${code})`);
       shutdown(1);
     }
@@ -45,9 +47,11 @@ function spawnChild(label, cmd, args, opts) {
 }
 
 let shuttingDown = false;
+let controlServer;
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
+  controlServer?.close();
   for (const c of children) {
     try {
       c.kill("SIGTERM");
@@ -121,26 +125,59 @@ async function main() {
   await waitForHttp(FAKE_MODEL_HEALTH, { timeoutMs: 30_000 });
   console.log(`[harness] fake model ready on :${FAKE_MODEL_PORT}`);
 
-  // 3. Core dashboard. Readiness is the stdout line it prints when serving.
-  const dash = spawnChild(
-    "dashboard",
-    VENV_PY,
-    [
-      "-m",
-      "hermes_cli.main",
+  // 3. Core dashboard. The restart test keeps HERMES_HOME and the model alive
+  // while replacing the actual Core process, including its session registry.
+  function startDashboard() {
+    return spawnChild(
       "dashboard",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(DASHBOARD_PORT),
-      "--no-open",
-      "--skip-build",
-    ],
-    { cwd: CORE_DIR, env },
-  );
-  await waitForLine(dash, `HERMES_DASHBOARD_READY port=${DASHBOARD_PORT}`, {
-    timeoutMs: 120_000,
+      VENV_PY,
+      [
+        "-m",
+        "hermes_cli.main",
+        "dashboard",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(DASHBOARD_PORT),
+        "--no-open",
+        "--skip-build",
+      ],
+      { cwd: CORE_DIR, env },
+    );
+  }
+  async function waitForDashboard(dash) {
+    await waitForLine(dash, `HERMES_DASHBOARD_READY port=${DASHBOARD_PORT}`, {
+      timeoutMs: 120_000,
+    });
+  }
+  let dash = startDashboard();
+  await waitForDashboard(dash);
+
+  // Test-only loopback control, published inside this harness's runtime dir.
+  controlServer = createServer(async (req, res) => {
+    if (req.method !== "POST" || req.url !== "/restart") {
+      res.writeHead(404).end();
+      return;
+    }
+    try {
+      const previousPid = dash.pid;
+      dash.expectedExit = true;
+      const exited = once(dash, "exit");
+      dash.kill("SIGTERM");
+      await exited;
+      dash = startDashboard();
+      await waitForDashboard(dash);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ previousPid, pid: dash.pid }));
+    } catch (error) {
+      res.writeHead(500).end(error.message);
+    }
   });
+  controlServer.listen(0, "127.0.0.1");
+  await once(controlServer, "listening");
+  writeFileSync(resolve(RUNTIME_DIR, "control.json"), JSON.stringify({
+    url: `http://127.0.0.1:${controlServer.address().port}`,
+  }));
   // Confirm the REST surface answers before we hand off to the browser tests.
   await waitForHttp(`${DASHBOARD_ORIGIN}/`, { timeoutMs: 30_000 }).catch(() => {});
   console.log(`[harness] dashboard ready on ${DASHBOARD_ORIGIN}`);

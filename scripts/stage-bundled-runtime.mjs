@@ -63,6 +63,9 @@ const keepExisting = hasFlag("--keep-existing");
 
 const runtimeName = `hermes-agent-cn-runtime-${platform}-${arch}`;
 const manifestName = `${channel}-${platform}-${arch}.json`;
+// The bundled loader has a fixed filename, independent of the signed update
+// channel. Preserve the manifest bytes so canary signatures remain valid.
+const bundledManifestName = `stable-${platform}-${arch}.json`;
 const zipName = `${runtimeName}.zip`;
 const baseUrl = tag === "latest"
   ? `https://github.com/${repo}/releases/latest/download`
@@ -192,7 +195,7 @@ if (actualSha !== String(manifest.sha256).toLowerCase()) {
   throw new Error(`sha256 mismatch for ${zipName}: expected ${manifest.sha256}, got ${actualSha}`);
 }
 
-writeFileSync(join(outDir, manifestName), manifestBytes);
+writeFileSync(join(outDir, bundledManifestName), manifestBytes);
 const artifactPath = expandArtifact
   ? expandRuntimeZip(zipBytes)
   : join(outDir, zipName);
@@ -209,6 +212,7 @@ writeFileSync(join(outDir, "README.generated.txt"), [
   `kernelVersion=${manifest.kernelVersion}`,
   `runtimeFlavor=${manifest.runtimeFlavor}`,
   `runtimeRevision=${manifest.runtimeRevision}`,
+  `manifestChannel=${manifest.channel}`,
   `sourceRepo=${manifest.sourceRepo}`,
   `sourceCommit=${manifest.sourceCommit}`,
   `sha256=${manifest.sha256}`,
@@ -217,4 +221,4 @@ writeFileSync(join(outDir, "README.generated.txt"), [
 
 console.log(`staged bundled runtime ${manifest.runtimeVersion} at ${outDir}`);
 console.log(`artifact: ${artifactPath}`);
-console.log(`manifest: ${join(outDir, manifestName)}`);
+console.log(`manifest: ${join(outDir, bundledManifestName)}`);

@@ -52,6 +52,7 @@ export class MemOsWsClient {
   private deadTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectEnabled = false;
   private state: ConnectionState = 'closed';
   private stateListeners = new Set<(s: ConnectionState) => void>();
   readonly url: string;
@@ -76,6 +77,7 @@ export class MemOsWsClient {
 
   connect(): void {
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) return;
+    this.reconnectEnabled = true;
     this.setState('connecting');
     let ws: WebSocket;
     try {
@@ -107,7 +109,7 @@ export class MemOsWsClient {
 
     ws.onclose = () => {
       this.handleSocketDown();
-      this.scheduleReconnect();
+      if (this.reconnectEnabled) this.scheduleReconnect();
     };
 
     ws.onerror = () => {
@@ -116,10 +118,14 @@ export class MemOsWsClient {
   }
 
   disconnect(): void {
+    this.reconnectEnabled = false;
     if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.stopKeepalive();
-    this.socket?.close();
+    if (this.socket) {
+      this.socket.onclose = null;
+      this.socket.close();
+    }
     this.handleSocketDown();
   }
 
@@ -134,6 +140,7 @@ export class MemOsWsClient {
   }
 
   private scheduleReconnect(): void {
+    if (!this.reconnectEnabled) return;
     if (this.reconnectTimer !== null) return;
     const exp = Math.min(BACKOFF_MAX_MS, BACKOFF_MIN_MS * 2 ** this.reconnectAttempts);
     const jittered = exp * (0.75 + Math.random() * 0.5);

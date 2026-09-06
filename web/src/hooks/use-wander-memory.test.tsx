@@ -159,6 +159,26 @@ describe('wander-memory query hooks', () => {
     expect(backends.result.current.data?.devices.length).toBeGreaterThan(0);
     expect(qc.getQueryState(WANDER_MEMORY_QUERY_KEYS.backends)?.status).toBe('success');
   });
+
+  it('status introspection hooks override application retry defaults', async () => {
+    setDemoClient();
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: 5 } },
+    });
+
+    const health = renderHook(() => useWanderMemoryHealth(), { wrapper: wrapperFor(qc) });
+    const models = renderHook(() => useWanderMemoryModels(), { wrapper: wrapperFor(qc) });
+    const backends = renderHook(() => useWanderMemoryBackends(), { wrapper: wrapperFor(qc) });
+
+    expect(qc.getQueryCache().find({ queryKey: WANDER_MEMORY_QUERY_KEYS.health })?.options.retry).toBe(false);
+    expect(qc.getQueryCache().find({ queryKey: WANDER_MEMORY_QUERY_KEYS.models })?.options.retry).toBe(false);
+    expect(qc.getQueryCache().find({ queryKey: WANDER_MEMORY_QUERY_KEYS.backends })?.options.retry).toBe(false);
+
+    health.unmount();
+    models.unmount();
+    backends.unmount();
+    qc.clear();
+  });
 });
 
 // ── mutations: call the client + invalidate list/search ─────────────────────

@@ -487,7 +487,7 @@ export const MemoryProviderConfigOption = z.object({
 export const MemoryProviderConfigField = z.object({
   key: z.string(),
   label: z.string(),
-  kind: z.enum(["text", "secret", "select", "boolean"]),
+  kind: z.enum(["text", "secret", "select", "boolean", "integer", "number"]),
   description: z.string().optional().default(""),
   placeholder: z.string().optional().default(""),
   required: z.boolean().optional().default(false),
@@ -496,6 +496,9 @@ export const MemoryProviderConfigField = z.object({
   options: z.array(MemoryProviderConfigOption).optional().default([]),
   url: z.string().optional().default(""),
   when: z.record(z.unknown()).nullable().optional(),
+  minimum: NullishNumber,
+  maximum: NullishNumber,
+  step: NullishNumber,
 }).passthrough();
 export type MemoryProviderConfigField = z.infer<typeof MemoryProviderConfigField>;
 
@@ -700,6 +703,15 @@ export const SkillContentResponse = z.object({
   path: z.string(),
 });
 export type SkillContentResponse = z.infer<typeof SkillContentResponse>;
+
+export const SkillWriteResponse = z.object({
+  success: z.boolean(),
+  message: z.string().optional(),
+  path: z.string().optional(),
+  skill_md: z.string().optional(),
+  category: z.string().optional(),
+}).passthrough();
+export type SkillWriteResponse = z.infer<typeof SkillWriteResponse>;
 
 // 技能 hub 搜索（GET /api/skills/hub/search?q=&source=&limit=&profile=）。
 // profile builder 的「从 hub 添加」用它；identifier 是安装时的唯一键。

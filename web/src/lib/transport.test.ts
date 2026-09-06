@@ -258,6 +258,41 @@ describe("transport · debug-bus integration", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
+  it("fetchExternalJSON aborts a pending desktop externalRequest", async () => {
+    type ExternalResult = {
+      ok: boolean;
+      status: number;
+      statusText: string;
+      headers: Record<string, string>;
+      body: string;
+    };
+    let finish: ((value: ExternalResult) => void) | undefined;
+    const externalRequest = vi.fn((): Promise<ExternalResult> => new Promise((resolve) => {
+      finish = resolve;
+    }));
+    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request: vi.fn(),
+      externalRequest,
+    };
+    const controller = new AbortController();
+
+    const request = fetchExternalJSON("http://127.0.0.1:18400/v1/health", {
+      signal: controller.signal,
+    });
+    controller.abort();
+    finish?.({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      body: "{}",
+    });
+
+    await expect(request).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("uploadAttachmentFile uses desktop uploadFile capability on Tauri", async () => {
     const uploadFile = vi.fn(async () => ({
       ok: true,

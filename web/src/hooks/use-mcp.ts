@@ -60,7 +60,10 @@ export function useRemoveMcpServer() {
   const qc = useQueryClient();
   return useMutation<MutationOkResponse, Error, string>({
     mutationFn: (name) => deleteJSON(mcpPath(name), undefined, MutationOkResponse),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [SERVERS_KEY] }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: [SERVERS_KEY] }),
+      qc.invalidateQueries({ queryKey: [CATALOG_KEY] }),
+    ]),
   });
 }
 

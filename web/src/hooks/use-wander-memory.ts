@@ -96,6 +96,7 @@ export function useWanderMemoryModels() {
   return useQuery<ModelsResponse, ApiError>({
     queryKey: WANDER_MEMORY_QUERY_KEYS.models,
     queryFn: ({ signal }) => raceAbort(getWanderMemoryClient().models(), signal),
+    retry: false,
   });
 }
 
@@ -103,6 +104,7 @@ export function useWanderMemoryBackends() {
   return useQuery<BackendsResponse, ApiError>({
     queryKey: WANDER_MEMORY_QUERY_KEYS.backends,
     queryFn: ({ signal }) => raceAbort(getWanderMemoryClient().backends(), signal),
+    retry: false,
   });
 }
 

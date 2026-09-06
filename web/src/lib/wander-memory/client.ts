@@ -151,6 +151,12 @@ export function resetWanderMemoryClient(next?: WanderMemoryClient | null): Wande
   return singleton;
 }
 
+/** Stop all background work and make the next Wander route create a fresh client. */
+export function disposeWanderMemoryClient(): void {
+  singleton?.dispose?.();
+  singleton = null;
+}
+
 /** Test hook: drop the singleton without disposing (e.g. after a disposed stub). */
 export function __resetWanderMemoryClientForTests(): void {
   singleton = null;

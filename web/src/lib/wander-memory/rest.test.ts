@@ -213,6 +213,17 @@ describe('error + edge-body handling', () => {
     expect(err.message).toContain('Failed to fetch');
   });
 
+  it('native HTTP 0 response is an offline network failure with startup guidance', async () => {
+    transportMocks.fetchExternalJSON.mockRejectedValue(
+      new Error('HTTP 0: error sending request for url (http://127.0.0.1:18400/v1/health)'),
+    );
+    const err = await new MemOsRestClient('http://api.test').health().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ code: 'network_failure', status: null });
+    expect(err.message).toContain('start MemOS');
+    expect(err.message).toContain('endpoint settings');
+  });
+
   it('DELETE with an empty 204 body (SyntaxError from transport) is success-with-no-payload', async () => {
     transportMocks.fetchExternalJSON.mockRejectedValue(new SyntaxError('Unexpected end of JSON input'));
     await expect(new MemOsRestClient('http://api.test').delete('m1')).resolves.toBeUndefined();
@@ -229,11 +240,15 @@ describe('error + edge-body handling', () => {
 });
 
 describe('timeout policy (§5.2)', () => {
-  it('no-LLM endpoints pass a client AbortSignal (10 s)', async () => {
-    await new MemOsRestClient('http://api.test').health();
-    const { init } = lastSent(transportMocks.fetchExternalJSON);
-    expect(init.signal).toBeInstanceOf(AbortSignal);
-    expect(init.signal!.aborted).toBe(false);
+  it('status introspection endpoints use a fast 3 s client timeout', async () => {
+    const signal = new AbortController().signal;
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+    const client = new MemOsRestClient('http://api.test');
+
+    await Promise.all([client.health(), client.models(), client.backends()]);
+
+    expect(timeout).toHaveBeenCalledTimes(3);
+    expect(timeout.mock.calls).toEqual([[3_000], [3_000], [3_000]]);
   });
 
   it('/chat and /dialogues have NO client timeout', async () => {
