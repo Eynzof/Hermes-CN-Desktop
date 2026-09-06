@@ -39,23 +39,6 @@ function npmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
 }
 
-function ensureBuiltAsset({ label, packageDir, valid, runCommand }) {
-  if (valid()) return;
-  if (!existsSync(join(packageDir, "package.json"))) {
-    throw new Error(`${label} package is missing: ${packageDir}`);
-  }
-
-  const npm = npmCommand();
-  if (!isDirectory(join(packageDir, "node_modules"))) {
-    runCommand(npm, ["install", "--no-package-lock"], { cwd: packageDir });
-  }
-  runCommand(npm, ["run", "build"], { cwd: packageDir });
-
-  if (!valid()) {
-    throw new Error(`${label} build did not create the expected output under ${packageDir}`);
-  }
-}
-
 function requireDirectory(path, label) {
   if (!isDirectory(path)) throw new Error(`${label} directory is missing: ${path}`);
 }
@@ -68,7 +51,6 @@ export function prepareLocalDevResources({
   const source = resolve(sourceRoot);
   const node = resolve(nodeExecutable);
   const dashboardDist = join(source, "hermes_cli", "web_dist");
-  const dashboardPackage = join(source, "web");
   const tuiDir = join(source, "ui-tui");
   const skillsDir = join(source, "skills");
   const pluginsDir = join(source, "plugins");
@@ -77,19 +59,30 @@ export function prepareLocalDevResources({
 
   if (!existsSync(node)) throw new Error(`Node executable is missing: ${node}`);
 
-  ensureBuiltAsset({
-    label: "Core Dashboard",
-    packageDir: dashboardPackage,
-    valid: () => existsSync(join(dashboardDist, "index.html"))
-      && isDirectory(join(dashboardDist, "assets")),
-    runCommand,
-  });
-  ensureBuiltAsset({
-    label: "Core TUI",
-    packageDir: tuiDir,
-    valid: () => existsSync(join(tuiDir, "dist", "entry.js")),
-    runCommand,
-  });
+  const assets = [
+    {
+      workspace: "web",
+      valid: () => existsSync(join(dashboardDist, "index.html"))
+        && isDirectory(join(dashboardDist, "assets")),
+    },
+    { workspace: "ui-tui", valid: () => existsSync(join(tuiDir, "dist", "entry.js")) },
+  ];
+  const missingAssets = assets.filter((asset) => !asset.valid());
+  if (missingAssets.length > 0) {
+    // Core owns a single workspace lockfile. Installing inside each package
+    // ignores its pinned dependency graph and can produce peer conflicts.
+    const npm = npmCommand();
+    runCommand(npm, [
+      "ci", "--workspace=web", "--workspace=ui-tui", "--include-workspace-root=false",
+      "--no-audit", "--no-fund",
+    ], { cwd: source });
+    for (const asset of missingAssets) {
+      runCommand(npm, ["run", "build", `--workspace=${asset.workspace}`], { cwd: source });
+      if (!asset.valid()) {
+        throw new Error(`Core ${asset.workspace} build did not create the expected output`);
+      }
+    }
+  }
 
   requireDirectory(skillsDir, "Bundled skills");
   if (!treeContains(skillsDir, (name) => name.toLowerCase() === "skill.md")) {

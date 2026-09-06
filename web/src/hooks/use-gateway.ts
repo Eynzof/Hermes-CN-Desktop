@@ -129,9 +129,9 @@ async function reattachActiveSessionAfterReconnect(): Promise<void> {
           ),
         ),
       onResumed: (gatewaySessionId, persistentId) => {
-        store.set(gwSessionIdAtom, gatewaySessionId);
         rememberSessionMapping(gatewaySessionId, persistentId);
         mirrorSessionWorkspaceMapping(gatewaySessionId, persistentId);
+        store.set(gwSessionIdAtom, gatewaySessionId);
       },
       onResumeFailed: (error) => {
         // A timeout or temporarily wedged backend does not mean the persistent
@@ -442,10 +442,10 @@ export function useGateway() {
       "session.resume",
     );
     const resumed = result.resumed ?? persistentSessionId;
-    setGwSessionId(result.session_id);
-    resetChatSession(result.session_id);
     rememberSessionMapping(result.session_id, resumed);
     mirrorSessionWorkspaceMapping(result.session_id, resumed);
+    setGwSessionId(result.session_id);
+    resetChatSession(result.session_id);
     // Compression rotated the conversation onto a new continuation: the backend
     // followed the chain and resumed a different persistent id than we asked
     // for. Record it so the detail route can project onto the live tip instead

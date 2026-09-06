@@ -61,12 +61,12 @@ test("installs dependencies and builds missing Dashboard and TUI outputs", () =>
     const calls = [];
     const runCommand = (command, args, options) => {
       calls.push({ command, args, cwd: options.cwd });
-      if (args[0] === "install") {
+      if (args[0] === "ci") {
         mkdirSync(join(options.cwd, "node_modules"), { recursive: true });
-      } else if (options.cwd === webDir) {
+      } else if (args.includes("--workspace=web")) {
         write(join(sourceRoot, "hermes_cli", "web_dist", "index.html"), "<main />");
         write(join(sourceRoot, "hermes_cli", "web_dist", "assets", "app.js"), "// app");
-      } else if (options.cwd === tuiDir) {
+      } else if (args.includes("--workspace=ui-tui")) {
         write(join(tuiDir, "dist", "entry.js"), "// tui");
       }
     };
@@ -76,10 +76,9 @@ test("installs dependencies and builds missing Dashboard and TUI outputs", () =>
     assert.deepEqual(
       calls.map(({ args, cwd }) => [args.join(" "), cwd]),
       [
-        ["install --no-package-lock", webDir],
-        ["run build", webDir],
-        ["install --no-package-lock", tuiDir],
-        ["run build", tuiDir],
+        ["ci --workspace=web --workspace=ui-tui --include-workspace-root=false --no-audit --no-fund", sourceRoot],
+        ["run build --workspace=web", sourceRoot],
+        ["run build --workspace=ui-tui", sourceRoot],
       ],
     );
   } finally {

@@ -325,7 +325,9 @@ export function DetailRoute() {
 
   const ensureGatewaySession = useCallback(async (): Promise<string> => {
     if (!taskId) throw new Error("缺少会话 ID");
-    if (restSessionId && taskId === restSessionId && !activeMappedGatewaySessionId) {
+    if (restSessionId && !activeMappedGatewaySessionId) {
+      // Old deep links can still use a gateway ID from a previous process.
+      // Resolve that alias to its persistent ID before resuming, too.
       // No URL navigate after the resume — atom + gwSessionIdAtom hold
       // the authoritative state; downstream callers go through
       // resolveGatewaySessionId / resolvePersistentSessionId helpers

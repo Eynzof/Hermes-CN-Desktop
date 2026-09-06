@@ -71,6 +71,27 @@ describe("reattachAfterReconnect", () => {
     expect(onResumed).not.toHaveBeenCalled();
     expect(onResumeFailed).toHaveBeenCalledTimes(1);
   });
+
+  it.each([false, true])("does not overwrite a newly activated session when the old resume settles (failure=%s)", async (fails) => {
+    let activeSessionId = "gw-old";
+    let finish!: () => void;
+    const waiting = new Promise<void>((resolve) => { finish = resolve; });
+    const { deps, onResumed, onResumeFailed } = makeDeps({
+      getActiveSessionId: () => activeSessionId,
+      resume: async () => {
+        await waiting;
+        if (fails) throw new Error("Session not found");
+        return { session_id: "gw-resumed" };
+      },
+    });
+    const reattaching = reattachAfterReconnect(deps);
+    activeSessionId = "gw-new-conversation";
+    finish();
+    await reattaching;
+
+    expect(onResumed).not.toHaveBeenCalled();
+    expect(onResumeFailed).not.toHaveBeenCalled();
+  });
 });
 
 describe("isDefinitiveMissingSessionError", () => {
