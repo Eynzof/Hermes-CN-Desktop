@@ -143,4 +143,4 @@ jobs:
         env:
           PYO3_PYTHON: python3
           HERMES_DESKTOP_EMBEDDED_PAYLOAD: ${{ github.workspace }}/Hermes-CN-Core
-        run: cargo test --features embedded-python --test embedded_python --no-fail-fast
+        run: cargo test --features embedded-python --test embedded_python --no-fail-fast -- --test-threads=1

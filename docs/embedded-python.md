@@ -139,7 +139,7 @@ Verification (local)
 - python -m hermes_embedded.selftest   # from the Core checkout
 - PYO3_PYTHON and PYTHONPATH must point at an interpreter where the Core
   dependencies are installed; `run.py --embedded` injects both automatically.
-- cargo test --features embedded-python --test embedded_python
+- cargo test --features embedded-python --test embedded_python -- --test-threads=1
 - cargo test                            # default suite (embedded architecture)
 
 Not yet implemented (documented follow-ups)

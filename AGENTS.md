@@ -190,4 +190,4 @@ gateway-client.ts 负责协议层与重连编排：1→15s 指数退避、唤醒
 - **真实后端测试（opt-in）**：`tests/real_backend.rs` 是 wiremock 套件的真实后端版，默认跳过（无 `HERMES_REAL_BACKEND_URL` 且找不到 `../Hermes-CN-Core` 时静默通过），CI 保持封闭；配置 `HERMES_REAL_BACKEND_URL`（外部后端）或 `HERMES_CORE_DIR`（自动起 Core venv dashboard）后跑 `cargo test --test real_backend`
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
 - **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `Eynzof/Hermes-CN-Core` 真实后端 + fake model）、`release-desktop.yml`（发布构建）
-- **本地**：常规改动跑 `cargo test`；嵌入式改动另用真实 Core payload 跑 `cargo test --features embedded-python --test embedded_python`。dashboard 常规测试不需要预先启动后端，均走 mock
+- **本地**：常规改动跑 `cargo test`；嵌入式改动另用真实 Core payload 跑 `cargo test --features embedded-python --test embedded_python -- --test-threads=1`，确保进程级 CPython 解释器始终由同一测试线程驱动。dashboard 常规测试不需要预先启动后端，均走 mock
