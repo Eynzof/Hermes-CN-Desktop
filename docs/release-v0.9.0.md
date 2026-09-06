@@ -1,7 +1,7 @@
 # v0.9.0：Core v0.21 与桌面热更新
 
-本地集成目标：Desktop `0.9.0`、Core `0.21.0`，Runtime `0.21.0-cn.1`（schema 2）。
-官方基线为 [v2026.8.31 / v0.21.0](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31)，上游提交 `29112bef099274229cadff79cdff7bf7b99c4b77`；中文内核合并提交 `23fb1a14a425ef9808d686e79ad52089a0724638`。
+本地集成目标：Desktop `0.9.0`、Core `0.21.0`，Runtime `0.21.0-cn.3`（schema 2）。
+官方基线为 [v2026.8.31 / v0.21.0](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31)，上游提交 `29112bef099274229cadff79cdff7bf7b99c4b77`；中文内核合并提交 `23fb1a14a425ef9808d686e79ad52089a0724638`，最终代码提交 `0419cae3ecf3ee1505c7ecf761677ad9a8b6647f`。
 
 ## 功能取舍
 
@@ -17,8 +17,8 @@
 
 ## 更新行为
 
-- 桌面壳更新：检查、下载、签名与 SHA-256 验证、安装准备状态；Windows 安装器失败后可恢复旧应用。
-- 内核更新：验证 schema、平台、签名和兼容矩阵，安装后重启受管内核；可回退上一版。
+- 桌面壳更新：检查、下载、签名与 SHA-256 验证、安装准备状态；Windows 安装器失败后可恢复旧应用，升级始终写入当前应用目录。
+- 内核更新：验证 schema、平台、签名和兼容矩阵；文件计数限额适配 v0.21 实际包体，安装后重启受管内核；可回退上一版。
 - 界面更新：独立签名 UI 包，使用 `hermesui` 加载，安装或回退后刷新界面。
 - 同一兼容范围内，已有更新的 Runtime 不被旧安装包降级；缺失可执行文件会修复安装。保留新 Runtime 的 Dashboard、skills、plugins 资源。
 - 产品标识继续为 `cn.org.hermesagent.desktop`；默认受管端口为 `9120`。用户配置、会话和数据存放在受管数据目录。

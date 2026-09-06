@@ -14,7 +14,7 @@ on:
         required: true
       bundled_runtime_tag:
         description: "要内置的 Hermes-CN-Core runtime 固定 tag；禁止 latest"
-        default: "runtime-v0.21.0-cn.1"
+        default: "runtime-v0.21.0-cn.3"
         required: true
       bundled_runtime_channel:
         description: "固定 runtime tag 中的 manifest 渠道"
@@ -63,7 +63,7 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          INPUT_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.21.0-cn.1' }}
+          INPUT_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.21.0-cn.3' }}
           INPUT_RUNTIME_CHANNEL: ${{ github.event.inputs.bundled_runtime_channel || 'stable' }}
           INPUT_CHANNEL: ${{ github.event.inputs.channel }}
         run: |
