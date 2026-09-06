@@ -15,8 +15,21 @@ import {
   User,
 } from "lucide-react";
 import type { SkillInfo } from "@hermes/protocol";
-import { LoadingState, PageTabs, type PageTabItem } from "@hermes/shared-ui";
-import { useSkillMarkdown, useSkills, useToggleSkill } from "@/hooks/use-skills";
+import {
+  Button,
+  Dialog,
+  Input as UiInput,
+  LoadingState,
+  PageTabs,
+  Select as UiSelect,
+  type PageTabItem,
+} from "@hermes/shared-ui";
+import {
+  useCopyBuiltinSkill,
+  useSkillMarkdown,
+  useSkills,
+  useToggleSkill,
+} from "@/hooks/use-skills";
 import {
   useActiveProfileName,
   useManagementProfile,
@@ -104,6 +117,36 @@ function markdownWithoutFrontmatter(content: string): string {
   return normalized.slice(match[0].length).replace(/^\s+/, "");
 }
 
+export function childPath(parent: string | undefined, child: string): string | null {
+  const normalized = parent?.trim().replace(/[\\/]+$/, "");
+  if (!normalized) return null;
+  const separator = normalized.includes("\\") ? "\\" : "/";
+  return `${normalized}${separator}${child}`;
+}
+
+export function suggestedSkillCopyName(source: string, existing: readonly string[]): string {
+  const occupied = new Set(existing);
+  const base = `${source}-custom`.slice(0, 64).replace(/[._-]+$/, "") || "custom-skill";
+  if (!occupied.has(base)) return base;
+  for (let suffix = 2; suffix < 10_000; suffix += 1) {
+    const marker = `-${suffix}`;
+    const candidate = `${base.slice(0, 64 - marker.length).replace(/[._-]+$/, "")}${marker}`;
+    if (!occupied.has(candidate)) return candidate;
+  }
+  return "custom-skill";
+}
+
+export function resolveSkillsManagementScope(
+  managementProfile: string | null,
+  activeProfile: string,
+  profileNames: readonly string[],
+  profilesLoaded: boolean,
+): string | null {
+  if (!managementProfile || managementProfile === activeProfile) return null;
+  if (profilesLoaded && !profileNames.includes(managementProfile)) return null;
+  return managementProfile;
+}
+
 export function SkillsRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
   // 管理范围：/skills?profile=X 深链或档案页「管理技能」会设它。scope ≠ 活跃档案时，
@@ -111,20 +154,34 @@ export function SkillsRoute() {
   const active = useActiveProfileName();
   const mgmt = useManagementProfile();
   const setMgmt = useSetManagementProfile();
-  const scope = mgmt && mgmt !== active ? mgmt : null;
   const profilesQuery = useProfiles();
-  const profileNames = (profilesQuery.data ?? []).map((p) => p.name);
+  const profileNames = useMemo(
+    () => (profilesQuery.data ?? []).map((profile) => profile.name),
+    [profilesQuery.data],
+  );
+  const scope = resolveSkillsManagementScope(
+    mgmt,
+    active,
+    profileNames,
+    profilesQuery.isSuccess,
+  );
   const urlProfile = searchParams.get("profile");
   useEffect(() => {
     if (urlProfile) setMgmt(urlProfile);
   }, [urlProfile, setMgmt]);
+
+  useEffect(() => {
+    if (mgmt && profilesQuery.isSuccess && !profileNames.includes(mgmt)) {
+      setMgmt(null);
+    }
+  }, [mgmt, profileNames, profilesQuery.isSuccess, setMgmt]);
 
   // Sync management scope TO the URL whenever it changes, so the scope
   // survives page refresh (Bug #4 fix — URL-Driven Scope).
   // Handles both onSelect changes and external clearing (active-profile switch).
   useEffect(() => {
     setSearchParams((prev) => {
-      const current = mgmt && mgmt !== active ? mgmt : null;
+      const current = scope;
       const inUrl = prev.get("profile");
       if (current && current !== inUrl) {
         prev.set("profile", current);
@@ -135,15 +192,21 @@ export function SkillsRoute() {
       }
       return prev;
     }, { replace: true });
-  }, [mgmt, active, setSearchParams]);
+  }, [scope, setSearchParams]);
 
   const { data: skills, isLoading, isFetching, isError, error, refetch } = useSkills(scope);
   const toggleSkill = useToggleSkill(scope);
+  const copyBuiltinSkill = useCopyBuiltinSkill(scope);
   const [tab, setTab] = useState<Tab>("builtin");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [lang, setLang] = useState<Lang>("zh");
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [copySourceName, setCopySourceName] = useState("");
+  const [copyName, setCopyName] = useState("");
+  const [copyValidationError, setCopyValidationError] = useState("");
+  const [userActionMessage, setUserActionMessage] = useState("");
   const selectedFromQuery = searchParams.get("skill");
 
   const { builtin, user } = useMemo(() => {
@@ -156,6 +219,79 @@ export function SkillsRoute() {
 
   const currentList = tab === "builtin" ? builtin : tab === "user" ? user : [];
   const enabledCount = (skills ?? []).filter((sk) => sk.enabled).length;
+  const managedProfileName = scope || active;
+  const managedProfilePath = profilesQuery.data?.find(
+    (profile) => profile.name === managedProfileName,
+  )?.path;
+  const userSkillsPath = childPath(managedProfilePath, "skills");
+
+  const selectCopySource = (sourceName: string) => {
+    setCopySourceName(sourceName);
+    setCopyName(suggestedSkillCopyName(sourceName, (skills ?? []).map((skill) => skill.name)));
+    setCopyValidationError("");
+    copyBuiltinSkill.reset();
+  };
+
+  const openCopyDialog = () => {
+    const first = builtin[0];
+    if (!first) return;
+    selectCopySource(first.name);
+    setCopyDialogOpen(true);
+  };
+
+  const openUserSkillsDirectory = async () => {
+    setUserActionMessage("");
+    if (!userSkillsPath) {
+      setUserActionMessage("尚未读取到当前档案目录，请刷新后重试。");
+      return;
+    }
+    if (!window.hermesDesktop?.openWorkspacePath) {
+      setUserActionMessage("当前环境不支持打开本机目录。");
+      return;
+    }
+    try {
+      const result = await window.hermesDesktop.openWorkspacePath({ path: userSkillsPath });
+      if (!result.ok) {
+        setUserActionMessage(result.body || result.statusText || "打开 Skills 目录失败。");
+      }
+    } catch (error) {
+      setUserActionMessage(error instanceof Error ? error.message : "打开 Skills 目录失败。");
+    }
+  };
+
+  const submitSkillCopy = async () => {
+    const name = copyName.trim();
+    if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(name)) {
+      setCopyValidationError("名称需为 1–64 位小写字母、数字、点、下划线或连字符，并以字母或数字开头。");
+      return;
+    }
+    if ((skills ?? []).some((skill) => skill.name === name)) {
+      setCopyValidationError("这个 Skill 名称已存在，请换一个名称。");
+      return;
+    }
+    const source = builtin.find((skill) => skill.name === copySourceName);
+    if (!source) {
+      setCopyValidationError("请选择一个可复制的内置 Skill。");
+      return;
+    }
+    setCopyValidationError("");
+    try {
+      await copyBuiltinSkill.mutateAsync({
+        sourceName: source.name,
+        name,
+        category: source.category,
+      });
+      await refetch();
+      setSelectedName(name);
+      setFilter("all");
+      setSearch("");
+      setTab("user");
+      setCopyDialogOpen(false);
+      setUserActionMessage(`已创建 ${name}，现在可以在文件系统中继续编辑。`);
+    } catch {
+      // Mutation state renders the backend's validated error below.
+    }
+  };
 
   useEffect(() => {
     if (!selectedFromQuery || !skills?.length) return;
@@ -287,7 +423,13 @@ export function SkillsRoute() {
           技能加载失败：{error instanceof Error ? error.message : "unknown error"}
         </div>
       ) : tab === "user" && user.length === 0 ? (
-        <UserEmptyState />
+        <UserEmptyState
+          canCopy={builtin.length > 0}
+          canOpen={Boolean(userSkillsPath && window.hermesDesktop?.openWorkspacePath)}
+          message={userActionMessage}
+          onCopy={openCopyDialog}
+          onOpen={() => void openUserSkillsDirectory()}
+        />
       ) : (
         <div className={s.split}>
           <aside className={s.listSide}>
@@ -380,6 +522,80 @@ export function SkillsRoute() {
           )}
         </div>
       )}
+
+      <Dialog.Root
+        open={copyDialogOpen}
+        onOpenChange={(open) => {
+          setCopyDialogOpen(open);
+          if (!open) {
+            setCopyValidationError("");
+            copyBuiltinSkill.reset();
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content className={s.copyDialog} aria-describedby="copy-skill-description">
+            <div className={s.copyDialogHeader}>
+              <Dialog.Title className={s.copyDialogTitle}>基于内置 Skill 复制</Dialog.Title>
+              <Dialog.Description id="copy-skill-description" className={s.copyDialogDescription}>
+                选择模板并为你的副本指定唯一 ID。副本写入当前管理档案，可以安全修改。
+              </Dialog.Description>
+            </div>
+            <div className={s.copyDialogBody}>
+              <label className={s.copyField} htmlFor="copy-skill-source">
+                <span>内置 Skill</span>
+                <UiSelect
+                  id="copy-skill-source"
+                  value={copySourceName}
+                  onChange={(event) => selectCopySource(event.target.value)}
+                >
+                  {builtin.map((skill) => (
+                    <option key={skill.name} value={skill.name}>
+                      {translateSkill(skill.name, skill.description).displayName} · {skill.name}
+                    </option>
+                  ))}
+                </UiSelect>
+              </label>
+              <label className={s.copyField} htmlFor="copy-skill-name">
+                <span>副本 ID</span>
+                <UiInput
+                  id="copy-skill-name"
+                  value={copyName}
+                  onChange={(event) => {
+                    setCopyName(event.target.value);
+                    setCopyValidationError("");
+                    copyBuiltinSkill.reset();
+                  }}
+                  autoComplete="off"
+                  spellCheck={false}
+                  mono
+                />
+              </label>
+              {(copyValidationError || copyBuiltinSkill.isError) && (
+                <div className={s.copyDialogError} role="alert">
+                  {copyValidationError || (copyBuiltinSkill.error instanceof Error
+                    ? copyBuiltinSkill.error.message
+                    : "复制 Skill 失败。")}
+                </div>
+              )}
+            </div>
+            <div className={s.copyDialogActions}>
+              <Dialog.Close asChild>
+                <Button variant="ghost">取消</Button>
+              </Dialog.Close>
+              <Button
+                variant="solid"
+                tone="accent"
+                loading={copyBuiltinSkill.isPending}
+                onClick={() => void submitSkillCopy()}
+              >
+                创建副本
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </main>
   );
 }
@@ -663,7 +879,19 @@ function SkillDetail({
 
 /* ── 「我的 Skills」空状态 ─────────────────────────────────── */
 
-function UserEmptyState() {
+function UserEmptyState({
+  canCopy,
+  canOpen,
+  message,
+  onCopy,
+  onOpen,
+}: {
+  canCopy: boolean;
+  canOpen: boolean;
+  message: string;
+  onCopy: () => void;
+  onOpen: () => void;
+}) {
   return (
     <div className={s.emptyState}>
       <div className={s.emptyStateIcon}>
@@ -675,18 +903,19 @@ function UserEmptyState() {
         放到 <code>~/.hermes/skills/&lt;分类&gt;/&lt;名称&gt;/</code> 目录下，
         刷新就会出现在这里。
         <br />
-        在线编辑器规划中——目前请通过文件系统手动管理。
+        复制模板后，可通过文件系统继续编辑。
       </p>
       <div className={s.emptyStateActions}>
-        <button type="button" className={s.btn}>
+        <button type="button" className={s.btn} onClick={onOpen} disabled={!canOpen}>
           <Folder size={12} />
           打开 ~/.hermes/skills/
         </button>
-        <button type="button" className={s.btnPrimary}>
+        <button type="button" className={s.btnPrimary} onClick={onCopy} disabled={!canCopy}>
           <Plus size={12} />
           基于内置 Skill 复制
         </button>
       </div>
+      {message && <div className={s.emptyStateMessage} role="status">{message}</div>}
     </div>
   );
 }

@@ -64,6 +64,7 @@ export function MemoryProviderConfig({
   const renderField = (field: MemoryProviderConfigResponse["fields"][number], index: number) => {
     const id = `${provider}-${field.key}-${index}`;
     const value = values[field.key];
+    const numeric = field.kind === "integer" || field.kind === "number";
     if (field.kind === "boolean") {
       return (
         <label className={s.booleanField} htmlFor={id} key={id}>
@@ -100,7 +101,11 @@ export function MemoryProviderConfig({
         ) : (
           <input
             id={id}
-            type={field.kind === "secret" ? "password" : "text"}
+            type={numeric ? "number" : field.kind === "secret" ? "password" : "text"}
+            min={numeric ? field.minimum : undefined}
+            max={numeric ? field.maximum : undefined}
+            step={numeric ? field.step ?? (field.kind === "integer" ? 1 : "any") : undefined}
+            inputMode={field.kind === "integer" ? "numeric" : field.kind === "number" ? "decimal" : undefined}
             value={String(value ?? "")}
             placeholder={field.kind === "secret" && field.is_set ? "已保存，留空保持不变" : field.placeholder}
             onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}

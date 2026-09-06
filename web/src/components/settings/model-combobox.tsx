@@ -6,6 +6,7 @@ import s from "./model-combobox.module.css";
 const MAX_VISIBLE = 200;
 
 export interface ModelComboboxProps {
+  label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[];
@@ -20,6 +21,7 @@ export function filterOptions(options: string[], query: string): string[] {
 }
 
 export function ModelCombobox({
+  label,
   value,
   onChange,
   options,
@@ -29,11 +31,19 @@ export function ModelCombobox({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
   const composingRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Reflect external value changes while the popover is closed.
   useEffect(() => {
     if (!open) setQuery(value);
   }, [value, open]);
+
+  // cmdk assumes its list is always visible and hard-codes aria-expanded=true.
+  // This combobox places that list in a controlled Popover, so keep the DOM
+  // attribute aligned with the actual popup state after each render.
+  useEffect(() => {
+    inputRef.current?.setAttribute("aria-expanded", open ? "true" : "false");
+  }, [open, query]);
 
   const filtered = filterOptions(options, query);
   const visible = filtered.slice(0, MAX_VISIBLE);
@@ -57,6 +67,7 @@ export function ModelCombobox({
 
   return (
     <Command
+      label={label}
       shouldFilter={false}
       loop
       className={s.root}
@@ -80,6 +91,7 @@ export function ModelCombobox({
       <Popover.Root open={open} onOpenChange={handleOpenChange}>
         <Popover.Anchor asChild>
           <Command.Input
+            ref={inputRef}
             className={s.input}
             value={query}
             onValueChange={(next) => {
@@ -101,8 +113,9 @@ export function ModelCombobox({
             autoComplete="off"
           />
         </Popover.Anchor>
-        <Popover.Portal>
+        <Popover.Portal forceMount>
           <Popover.Content
+            forceMount
             className={s.panel}
             align="start"
             sideOffset={4}

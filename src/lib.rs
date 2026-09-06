@@ -12,6 +12,7 @@ pub mod oauth_session;
 pub mod path_resolver;
 pub mod prevent_sleep;
 pub mod process;
+pub(crate) mod profile_name;
 pub mod session_archive;
 pub mod session_log;
 pub mod state;

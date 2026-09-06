@@ -220,12 +220,18 @@ export async function fetchExternalJSON<T>(
   const headers = (init?.headers as Record<string, string>) ?? {};
   const externalRequest = window.hermesDesktop?.externalRequest;
   if (externalRequest) {
-    const result = await externalRequest({
-      path: url,
-      method: init?.method,
-      headers,
-      body: typeof init?.body === "string" ? init.body : null,
-    });
+    const signal = init?.signal ?? null;
+    throwIfAborted(signal);
+    const result = await raceAbort(
+      externalRequest({
+        path: url,
+        method: init?.method,
+        headers,
+        body: typeof init?.body === "string" ? init.body : null,
+      }),
+      signal,
+    );
+    throwIfAborted(signal);
     if (!result.ok) {
       reportRestFailure(init?.method ?? "GET", url, result.status, result.body);
       throw new Error(`HTTP ${result.status}: ${result.body}`);

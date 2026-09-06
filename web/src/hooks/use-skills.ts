@@ -1,13 +1,39 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchJSON, putJSON } from "@/lib/transport";
+import { fetchJSON, postJSON, putJSON } from "@/lib/transport";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import {
   MutationOkResponse,
   SkillContentResponse,
+  SkillWriteResponse,
   SkillsHubSearchResponse,
   SkillsResponse,
   type SkillInfo,
 } from "@hermes/protocol";
+
+export interface CopyBuiltinSkillInput {
+  sourceName: string;
+  name: string;
+  category?: string | null;
+}
+
+export function replaceSkillFrontmatterName(content: string, name: string): string {
+  const bom = content.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const source = bom ? content.slice(1) : content;
+  if (!source.startsWith("---")) {
+    throw new Error("源 Skill 缺少 YAML frontmatter");
+  }
+  const closing = source.slice(3).match(/\r?\n---(?:\r?\n|$)/);
+  if (!closing || closing.index === undefined) {
+    throw new Error("源 Skill 的 YAML frontmatter 未闭合");
+  }
+  const frontmatterEnd = 3 + closing.index;
+  const frontmatter = source.slice(0, frontmatterEnd);
+  if (!/^\s*name\s*:/m.test(frontmatter)) {
+    throw new Error("源 Skill 的 frontmatter 缺少 name 字段");
+  }
+  const renamed = frontmatter.replace(/^([ \t]*name[ \t]*:).*$/m, `$1 ${name}`);
+  return `${bom}${renamed}${source.slice(frontmatterEnd)}`;
+}
 
 // 给路径追加 ?profile=（管理范围 scope）。override 为空时不动 URL，行为与历史一致。
 function scopedPath(path: string, override?: string | null): string {
@@ -41,6 +67,35 @@ export function useToggleSkill(profileOverride?: string | null) {
       ),
     // 失效所有档案的 skills query（含 scoped 与活跃），两边都会重新拉。
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+export function useCopyBuiltinSkill(profileOverride?: string | null) {
+  const qc = useQueryClient();
+  const active = useActiveProfileName();
+  const effectiveProfile = profileOverride || active;
+  return useMutation({
+    mutationFn: async ({ sourceName, name, category }: CopyBuiltinSkillInput) => {
+      const source = await fetchJSON(
+        scopedPath(`/api/skills/content?name=${encodeURIComponent(sourceName)}`, profileOverride),
+        undefined,
+        SkillContentResponse,
+      );
+      return postJSON(
+        "/api/skills",
+        {
+          name,
+          content: replaceSkillFrontmatterName(source.content, name),
+          category: category || undefined,
+          profile: profileOverride || undefined,
+        },
+        SkillWriteResponse,
+      );
+    },
+    onSuccess: (_result, input) => Promise.all([
+      qc.invalidateQueries({ queryKey: ["skills", effectiveProfile] }),
+      qc.invalidateQueries({ queryKey: ["skill-markdown", effectiveProfile, input.name] }),
+    ]),
   });
 }
 

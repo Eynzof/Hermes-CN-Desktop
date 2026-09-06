@@ -67,19 +67,15 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 
 ## 开发流程
 
-### Git 操作边界（铁律）
+### Git 工作流
 
-编码代理**绝不自动执行**任何 Git 写操作：不 `git commit` / `git push` / `git pull` / `git fetch` / `git checkout`、不创建 `git worktree` / 分支、不开 PR、不打 tag、不发布 Release、不同步 landing 仓库。
-
-所有仓库同步、分支 / worktree 隔离、commit、push、PR、tag、Release 与 Landing 同步均由**人**执行（或由 CI/CD 流水线触发）。代理只做只读检查（`git status` / `git diff` / `git log` / `git rev-parse`）用于验证与报告。
-
-完整的人工 Git 工作流（双仓同步 + worktree 预检、收尾 commit → push → PR、Commit 风格、发版 tag 与 Landing 同步）见 `docs/agents/git-workflow.md`。
+Git 操作必须限定在当前任务的独立分支 / worktree，避免破坏性重置或覆盖其它工作区。双仓同步、收尾 commit → push → PR、Commit 风格、发版 tag 与 Landing 同步的完整流程见 `docs/agents/git-workflow.md`。
 
 ### 开发前准备
 
-- 确认当前工作目录位于**人已准备好**的仓库状态（已同步、已开好分支 / worktree）；不要自己 `git checkout` 切分支或同步远端。
-- 需求同时横跨 Desktop 与 Core 时，人会用独立 worktree 隔离两仓改动；代理不要自己创建 / 操作 worktree。
-- 若发现工作区状态异常（脏树、分支不对、落后远端），**报告给人处理**，不要自行 commit / stash / reset / pull。
+- 确认当前工作目录位于已同步的任务分支 / worktree。
+- 需求同时横跨 Desktop 与 Core 时，使用独立 worktree 隔离两仓改动。
+- 若发现工作区状态异常（意外脏树、分支不对或落后远端），先核对差异与归属，禁止破坏性重置或覆盖他人改动。
 
 ### 仓库技能
 
@@ -91,7 +87,7 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 发版、版本号更新、安装包发布或 GitHub Release 相关任务必须按顺序使用仓库内技能：**先过** `.codex/skills/desktop-release-preflight/SKILL.md`（发版前安全闸门：防内核静默降级 / 防 schema 重置 / identifier 不变 / 公证签名 / 国内镜像先有 artifactUrl 再发清单 / 先发 canary），**再做** `.codex/skills/desktop-release-sync-landing/SKILL.md`（版本同步与官网清单）。
 只要桌面端 **stable/正式公开版本** 发生变化，就必须同步处理 `Eynzof/hermes-agent-cn-desktop-landing`，
 更新官网版本与 `https://desktop.hermesagent.org.cn/latest.json` 清单；如果 release 资产尚未生成，
-需要明确说明 Landing 同步被阻塞，不能把正式发版任务当作已经完整结束。**Landing 仓库的 commit / push / PR 由人执行**，代理只负责准备与核对内容、报告阻塞情况（见 `docs/agents/git-workflow.md` §5）。
+需要明确说明 Landing 同步被阻塞，不能把正式发版任务当作已经完整结束（见 `docs/agents/git-workflow.md` §5）。
 **RC / beta / alpha / canary 等预发布或内测版本禁止修改 Landing 仓库，禁止更新官网版本，
 禁止让 `https://desktop.hermesagent.org.cn/latest.json` 指向预发布版本。** 预发布版本只能通过
 GitHub Release、手工分发或明确的内测渠道验证，不能暴露给全量用户的官网入口和自动更新清单。
@@ -178,7 +174,6 @@ Embedded Python 运行时（Hard FFI，真实后端）
 - ❌ 不要直接调 `gateway-client.ts` 的 raw socket — 走 `hooks/use-gateway.ts`
 - ❌ 不要在 `web/src/routes/` 里塞业务逻辑 — 抽到 `hooks/` 或 `lib/`
 - ❌ 不要在组件里写硬编码颜色 — 用 `packages/shared-ui/src/tokens/` 里的 CSS 变量
-- ❌ **不要自动执行任何 Git 写操作**（commit / push / pull / checkout / worktree / 开 PR / 打 tag / 发 Release / 同步 landing）— 全部由人执行，见 `docs/agents/`
 
 ## 端口
 

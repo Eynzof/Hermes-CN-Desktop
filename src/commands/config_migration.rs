@@ -3,18 +3,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
 use tauri::State;
 
 use crate::commands::runtime_manager;
 use crate::error::{AppError, AppResult};
+use crate::profile_name::is_valid_profile_name;
 use crate::state::AppState;
-
-static PROFILE_NAME_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").expect("valid profile name regex")
-});
 
 const PROFILE_DIRS: &[&str] = &[
     "memories",
@@ -135,10 +130,6 @@ struct SourceHint {
     source_kind: String,
     distro: Option<String>,
     profile_name: Option<String>,
-}
-
-fn is_valid_profile_name(name: &str) -> bool {
-    PROFILE_NAME_RE.is_match(name)
 }
 
 fn active_profile_sticky_path(base: &Path) -> PathBuf {

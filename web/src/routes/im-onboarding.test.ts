@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildImDiagnosticBundle,
   buildImDiagnosticPrompt,
@@ -10,13 +10,60 @@ import {
   FEISHU_REQUIRED_SCOPES,
   railPanels,
   sectionFromPath,
+  startSerialPolling,
   statusText,
+  uniqueAllowedUserCount,
 } from "./im-onboarding";
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("im onboarding routing helpers", () => {
+  it("waits for an in-flight onboarding poll before scheduling the next one", async () => {
+    vi.useFakeTimers();
+    const releases: Array<() => void> = [];
+    let started = 0;
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    const stop = startSerialPolling(async () => {
+      started += 1;
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      inFlight -= 1;
+    }, 1_500);
+
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(started).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(started).toBe(1);
+    expect(maxInFlight).toBe(1);
+
+    releases.shift()?.();
+    await vi.advanceTimersByTimeAsync(1_499);
+    expect(started).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(started).toBe(2);
+    expect(maxInFlight).toBe(1);
+
+    stop();
+    releases.shift()?.();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(started).toBe(2);
+  });
+
   it("maps /im to the Feishu page by default", () => {
     expect(sectionFromPath("/im")).toBe("feishu");
     expect(sectionFromPath("/im/")).toBe("feishu");
+  });
+
+  it("counts allowlist users with the same deduplication used by save", () => {
+    expect(uniqueAllowedUserCount("id_alpha, id_alpha  id_beta，id_beta"))
+      .toBe(2);
+    expect(uniqueAllowedUserCount("  ")).toBe(0);
   });
 
   it("maps platform subroutes and rejects unrelated paths", () => {

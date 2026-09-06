@@ -247,8 +247,16 @@ export function useCreateProfile() {
   });
 }
 
+export function managementProfileAfterDelete(
+  current: string | null,
+  deletedProfile: string,
+): string | null {
+  return current === deletedProfile ? null : current;
+}
+
 export function useDeleteProfile() {
   const qc = useQueryClient();
+  const setManagement = useSetAtom(managementProfileAtom);
   return useMutation({
     mutationFn: (name: string) =>
       deleteJSON(
@@ -256,7 +264,8 @@ export function useDeleteProfile() {
         undefined,
         MutationOkResponse,
       ),
-    onSuccess: () => {
+    onSuccess: (_response, deletedProfile) => {
+      setManagement((current) => managementProfileAfterDelete(current, deletedProfile));
       qc.invalidateQueries({ queryKey: ["profiles"] });
     },
   });

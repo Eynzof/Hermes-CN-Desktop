@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Field, LoadingState, Textarea } from "@hermes/shared-ui";
 import { Sparkles } from "lucide-react";
 import type { ProfileSummary } from "@hermes/protocol";
@@ -189,11 +189,19 @@ export function ProfileSoulDialog({
   const soul = useProfileSoul(p.name);
   const update = useUpdateProfileSoul();
   const [content, setContent] = useState<string | null>(null);
+  const lastServerContent = useRef<string | null>(null);
 
-  // 内容到达后灌入一次；之后由用户编辑，不再被 refetch 覆盖。
+  // React Query 可能先给出缓存值，再交付 refetch 的最新值。只要编辑器仍然
+  // 保持上一份服务器内容，就安全地跟进新响应；已有本地草稿时则绝不覆盖。
   useEffect(() => {
-    if (content === null && soul.data) setContent(soul.data.content);
-  }, [soul.data, content]);
+    if (!soul.data) return;
+
+    const previousServerContent = lastServerContent.current;
+    setContent((current) =>
+      current === null || current === previousServerContent ? soul.data.content : current,
+    );
+    lastServerContent.current = soul.data.content;
+  }, [soul.data]);
 
   const save = () => {
     if (content === null) return;

@@ -96,4 +96,18 @@ describe("resolveSessionRuntime", () => {
     expect(resolved.runtimeIsBusy).toBe(false);
     expect(resolved.isLiveSession).toBe(false);
   });
+
+  it("follows the resumed runtime even when the route and old transcript use the previous gateway id", () => {
+    rememberSessionMapping("gw-old", "persistent-A");
+    rememberSessionMapping("gw-resumed", "persistent-A");
+    const resolved = resolveSessionRuntime("gw-old", "gw-resumed", {
+      "gw-old": runtimeWith("gw-old", "before restart"),
+      "gw-resumed": runtimeWith("gw-resumed", "after restart"),
+    });
+
+    expect(resolved.restSessionId).toBe("persistent-A");
+    expect(resolved.activeMappedGatewaySessionId).toBe("gw-resumed");
+    expect(resolved.runtimeSessionId).toBe("gw-resumed");
+    expect(firstText(resolved.runtime)).toBe("after restart");
+  });
 });

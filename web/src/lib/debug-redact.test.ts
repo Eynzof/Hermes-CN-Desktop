@@ -41,6 +41,7 @@ describe("redact", () => {
     ]) as any[];
     expect(out[0].user).toBe("claw");
     expect(out[0].password).toBe("***");
+    expect(out[1].token).toBe("***");
     expect(out[1].foo).toBe("bar");
   });
 
@@ -68,5 +69,13 @@ describe("redactSummary", () => {
   it("masks sensitive key-value fragments in log text", () => {
     expect(redactSummary("gateway failed token=secret-value api_key='sk-abcdefghijklmnop1234567890'"))
       .toBe("gateway failed token=*** api_key='***'");
+  });
+  it("masks quoted JSON keys and their complete values", () => {
+    const summary = 'console marker {"api_key":"e2e-debug-panel-secret","password":"two words","token":1234,"safe":"visible"}';
+    const out = redactSummary(summary);
+
+    expect(out).toBe('console marker {"api_key":"***","password":"***","token":***,"safe":"visible"}');
+    expect(out).not.toContain("e2e-debug-panel-secret");
+    expect(out).not.toContain("two words");
   });
 });

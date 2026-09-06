@@ -67,6 +67,38 @@ export const FEISHU_RECOMMENDED_SCOPES = [
 ] as const;
 const FEISHU_RECEIVE_EVENT = "im.message.receive_v1";
 
+export function startSerialPolling(
+  task: () => Promise<unknown>,
+  delayMs: number,
+  onError?: (error: unknown) => void,
+): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const schedule = () => {
+    timer = globalThis.setTimeout(() => {
+      timer = null;
+      void run();
+    }, delayMs);
+  };
+  const run = async () => {
+    try {
+      await task();
+    } catch (error) {
+      onError?.(error);
+    } finally {
+      if (!stopped) schedule();
+    }
+  };
+
+  schedule();
+  return () => {
+    stopped = true;
+    if (timer !== null) globalThis.clearTimeout(timer);
+    timer = null;
+  };
+}
+
 export function sectionFromPath(pathname: string): ImSection | null {
   if (pathname === "/im" || pathname === "/im/") return "feishu";
   if (pathname === "/im/feishu") return "feishu";
@@ -100,6 +132,10 @@ function compactList(items: string[]): string {
     out.push(trimmed);
   }
   return out.join(",");
+}
+
+export function uniqueAllowedUserCount(value: string): number {
+  return new Set(splitAllowedUsers(value)).size;
 }
 
 export function statusText(status?: string): string {
@@ -841,7 +877,7 @@ function FeishuRoute() {
       restartGateway: true,
     }, { onSuccess: setResult });
   };
-  const manualAllowedCount = splitAllowedUsers(allowedUsers).length;
+  const manualAllowedCount = uniqueAllowedUserCount(allowedUsers);
   const useScannedOpenId = Boolean(scannedOpenId) && (dmPolicy === "scanned" || (dmPolicy === "allowlist" && includeScannedOpenId));
   const allowPolicyReady = dmPolicy === "scanned"
     ? Boolean(scannedOpenId)
@@ -1044,6 +1080,7 @@ function WeixinRoute() {
   const [diagnosticPending, setDiagnosticPending] = useState(false);
   const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
   const qrAnchorRef = useRef<HTMLDivElement>(null);
+  const pollInFlightRef = useRef(false);
   const configured = stateQuery.data?.configured ?? {};
   const status = pollResult?.status ?? flow?.status;
   const credential = pollResult?.credentialSummary;
@@ -1068,14 +1105,40 @@ function WeixinRoute() {
     });
   };
   const pollOnce = () => {
-    if (!flow?.flowId) return;
-    poll.mutate({ platform: "weixin", flowId: flow.flowId }, { onSuccess: setPollResult });
+    const flowId = flow?.flowId;
+    if (!flowId || pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+    poll.mutate(
+      { platform: "weixin", flowId },
+      {
+        onSuccess: setPollResult,
+        onSettled: () => {
+          pollInFlightRef.current = false;
+        },
+      },
+    );
   };
   useEffect(() => {
-    if (!flow?.flowId || pollResult?.status === "confirmed" || pollResult?.status === "expired") return;
-    const id = window.setInterval(pollOnce, 1500);
-    return () => window.clearInterval(id);
-  }, [flow?.flowId, pollResult?.status]);
+    const flowId = flow?.flowId;
+    if (!flowId || pollResult?.status === "confirmed" || pollResult?.status === "expired") return;
+
+    let active = true;
+    const stop = startSerialPolling(async () => {
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
+      try {
+        const next = await poll.mutateAsync({ platform: "weixin", flowId });
+        if (active) setPollResult(next);
+      } finally {
+        pollInFlightRef.current = false;
+      }
+    }, 1_500);
+
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [flow?.flowId, poll.mutateAsync, pollResult?.status]);
   useEffect(() => {
     if (pollResult?.status === "confirmed" && scannedUserId && dmPolicy === "pairing") {
       setDmPolicy("allowlist");
@@ -1084,7 +1147,7 @@ function WeixinRoute() {
 
   const shouldAutoWeixinHomeChannel = Boolean(scannedUserId) && !homeChannel.trim();
   const useScannedUserId = Boolean(scannedUserId) && dmPolicy === "allowlist";
-  const manualAllowedCount = splitAllowedUsers(allowedUsers).length;
+  const manualAllowedCount = uniqueAllowedUserCount(allowedUsers);
   const allowPolicyReady = dmPolicy === "open" || dmPolicy === "pairing" || Boolean(useScannedUserId || manualAllowedCount > 0);
   const dmPolicyValue = dmPolicy === "open" ? "open" : dmPolicy === "pairing" ? "pairing" : "allowlist";
   const settings = () => {

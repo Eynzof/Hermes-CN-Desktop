@@ -34,6 +34,11 @@
   padding: 0;
 }
 
+/* Keep cmdk's listbox mounted so aria-controls never becomes a dangling ID. */
+.panel[data-state="closed"] {
+  display: none;
+}
+
 .list {
   display: flex;
   flex-direction: column;

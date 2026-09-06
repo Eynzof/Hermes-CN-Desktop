@@ -100,6 +100,32 @@ describe("buildAnalyticsViewModel", () => {
     expect(vm.models[0]?.share).toBeCloseTo(0.666, 2);
   });
 
+  it("keeps model identities distinct when providers share a model name", () => {
+    const sharedModel = {
+      model: "shared",
+      input_tokens: 100,
+      output_tokens: 0,
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
+      reasoning_tokens: 0,
+      sessions: 1,
+      api_calls: 1,
+    };
+    const vm = buildAnalyticsViewModel(response({
+      totals: totals({ total_tokens: 200, total_sessions: 2 }),
+      by_model: [
+        { ...sharedModel, provider: "provider-a" },
+        { ...sharedModel, provider: "provider-b" },
+      ],
+    }));
+
+    expect(vm.models.map((model) => model.id)).toEqual([
+      "provider-a:shared",
+      "provider-b:shared",
+    ]);
+    expect(new Set(vm.models.map((model) => model.id)).size).toBe(2);
+  });
+
   it("sorts top sessions by tokens then api calls", () => {
     const vm = buildAnalyticsViewModel(response({
       totals: totals({ total_tokens: 500, total_sessions: 2 }),

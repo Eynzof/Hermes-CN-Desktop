@@ -12,14 +12,14 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
+use crate::profile_name::is_valid_profile_name;
+
 const ROUTE_PREFIX: &str = "/__hermes_cron_runs/";
 const DEFAULT_LIMIT: usize = 30;
 const MAX_LIMIT: usize = 100;
 const LIST_PREVIEW_BYTES: u64 = 64 * 1024;
 const DETAIL_MAX_BYTES: u64 = 2 * 1024 * 1024;
 
-static PROFILE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").expect("valid profile regex"));
 static JOB_ID_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{1,128}$").expect("valid job id regex"));
 static OUTPUT_FILE_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -35,7 +35,7 @@ fn decode_path_segment(value: &str) -> Option<String> {
 }
 
 fn validate_profile(value: &str) -> Result<(), &'static str> {
-    if PROFILE_RE.is_match(value) {
+    if is_valid_profile_name(value) {
         Ok(())
     } else {
         Err("invalid profile")
@@ -192,29 +192,60 @@ fn first_meaningful_line(content: &str) -> Option<String> {
 }
 
 fn infer_status(content: &str) -> &'static str {
-    let lower = content.to_lowercase();
-    if lower.contains("**status:** blocked")
-        || lower.contains("prompt-injection scanner")
-        || lower.contains("blocked by injection scanner")
+    // Core persists the full Prompt before the Response. Standard cron
+    // guidance mentions [SILENT] and the injection scanner, so status hints
+    // must never be searched across the whole document.
+    let metadata = content
+        .split_once("\n## Prompt")
+        .map(|(head, _)| head)
+        .unwrap_or(content);
+    let metadata_lower = metadata.to_lowercase();
+
+    if metadata_lower.contains("**status:** blocked")
+        || metadata_lower.contains("blocked by prompt-injection scanner")
     {
         return "blocked";
     }
-    if lower.contains("[silent]")
-        || lower.contains("**status:** silent")
-        || lower.contains("silent run")
-        || lower.contains("wakeagent=false")
-        || lower.contains("empty stdout")
-    {
-        return "silent";
-    }
-    if lower.contains("# cron job:") && lower.contains("(failed)")
-        || lower.contains("\n## error")
-        || lower.contains("**status:** script failed")
-        || lower.contains(" script failed")
+    let explicit_failed_status = metadata_lower.lines().any(|line| {
+        let line = line.trim();
+        line.starts_with("**status:**") && line.contains("failed")
+    });
+    if metadata_lower.contains("# cron job:") && metadata_lower.contains("(failed)")
+        || explicit_failed_status
+        || (!content.contains("\n## Prompt") && metadata_lower.contains("\n## error"))
     {
         return "error";
     }
-    if lower.contains("\n## response") || lower.contains("# cron job:") {
+    if metadata_lower.contains("**status:** silent")
+        || metadata_lower.contains("**status:** no_change")
+        || metadata_lower.contains("silent run")
+        || metadata_lower.contains("wakeagent=false")
+        || metadata_lower.contains("empty stdout")
+    {
+        return "silent";
+    }
+
+    // The official Agent document writes Response after Prompt, so the final
+    // marker is the structural delimiter even when user text quotes a heading.
+    if let Some(marker_start) = content.rfind("\n## Response") {
+        let response = &content[marker_start + "\n## Response".len()..];
+        let first = first_meaningful_line(response)
+            .unwrap_or_default()
+            .to_lowercase();
+        if first.is_empty() || first == "[silent]" || first == "(no response generated)" {
+            return "silent";
+        }
+        if first.starts_with("status: silent") || first.starts_with("status: blocked") {
+            return if first.starts_with("status: blocked") {
+                "blocked"
+            } else {
+                "silent"
+            };
+        }
+        return "success";
+    }
+
+    if metadata_lower.contains("# cron job:") {
         return "success";
     }
     "unknown"
@@ -512,7 +543,47 @@ mod tests {
             "blocked"
         );
         assert_eq!(infer_status("**Status:** silent (empty output)"), "silent");
+        assert_eq!(
+            infer_status("# Cron Job: monitor\n\n**Status:** no_change (agent run suppressed)"),
+            "silent"
+        );
+        assert_eq!(
+            infer_status("# Cron Job: monitor\n\n**Status:** monitor source failed\n\ntimeout"),
+            "error"
+        );
         assert_eq!(infer_status("plain text"), "unknown");
+    }
+
+    #[test]
+    fn prompt_protocol_hints_do_not_override_a_substantive_response() {
+        let content = r#"# Cron Job: useful run
+
+**Job ID:** job1
+
+## Prompt
+
+Reply with [SILENT] only when there is nothing to report. The prompt-injection scanner may block unsafe input.
+
+## Response
+
+There is a substantive update for the user.
+"#;
+
+        assert_eq!(infer_status(content), "success");
+    }
+
+    #[test]
+    fn response_silence_markers_remain_silent() {
+        assert_eq!(
+            infer_status("# Cron Job: A\n\n## Prompt\n\nwork\n\n## Response\n\n[SILENT]"),
+            "silent"
+        );
+        assert_eq!(
+            infer_status(
+                "# Cron Job: A\n\n## Prompt\n\nwork\n\n## Response\n\n(No response generated)"
+            ),
+            "silent"
+        );
     }
 
     #[test]

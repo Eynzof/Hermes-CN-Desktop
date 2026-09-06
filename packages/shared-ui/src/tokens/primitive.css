@@ -28,17 +28,21 @@
   --h-color-blue-400: #4fc1ff;
   /* PrimeAPP tri-state palette — the only chromatic status hues. */
   --h-color-amber-500: #f59e0b;
+  --h-color-amber-800: #92400e;
   --h-color-green-500: #10b981;
   --h-color-green-600: #10b981;
+  --h-color-green-800: #065f46;
   --h-color-red-500: #ef4444;
   --h-color-red-600: #ef4444;
   --h-color-sky-500: #6e9bd1;
   --h-color-plum-500: #b58dc4;
 
-  --h-palette-success-light-fg: #10b981;
+  /* Darker foregrounds keep small status text at WCAG AA contrast on the
+     translucent light-theme status surfaces; surfaces retain the brand hue. */
+  --h-palette-success-light-fg: var(--h-color-green-800);
   --h-palette-success-light-surface: rgb(16 185 129 / 10%);
   --h-palette-success-light-border: rgb(16 185 129 / 30%);
-  --h-palette-warning-light-fg: #f59e0b;
+  --h-palette-warning-light-fg: var(--h-color-amber-800);
   --h-palette-warning-light-surface: rgb(245 158 11 / 10%);
   --h-palette-warning-light-border: rgb(245 158 11 / 30%);
   --h-palette-danger-light-fg: #ef4444;

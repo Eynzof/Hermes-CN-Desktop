@@ -117,7 +117,7 @@
   min-width: 0;
 }
 
-.heroMeta h1 {
+.heroMeta h2 {
   margin: 0 0 4px;
   font-size: 18px;
   color: var(--h-text);
