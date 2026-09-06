@@ -823,6 +823,7 @@ export function DetailRoute() {
         ) : null}
         {subagentPanelOpen ? (
           <SubagentPanel
+            sessionId={runtimeSessionId || activeMappedGatewaySessionId || usageGatewaySessionId || undefined}
             subagents={subagents}
             cliDelegations={cliDelegations}
             onClose={() => setSubagentPanelOpen(false)}

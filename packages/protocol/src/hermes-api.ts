@@ -967,6 +967,10 @@ export const CronJob = z.object({
   prompt: z.string().nullable().optional(),
   script: z.string().nullable().optional(),
   deliver: z.string().nullable().optional(),
+  context_from: z.array(z.string()).nullable().optional(),
+  monitor_url: z.string().nullable().optional(),
+  monitor_script: z.string().nullable().optional(),
+  no_agent: z.boolean().optional(),
   enabled: z.boolean().default(true),
   state: z.string().nullable().optional(),
   last_run: z.number().nullable().optional(),
@@ -1750,3 +1754,12 @@ export function parseGatewayEvent(value: unknown): GatewayEvent {
   if (known.success) return known.data;
   return RawGatewayEvent.parse(value);
 }
+
+export const SubagentSteerResult = z.object({
+  status: z.enum(["queued", "rejected"]),
+  subagent_id: z.string(),
+});
+export const SubagentInterruptResult = z.object({
+  found: z.boolean(),
+  subagent_id: z.string(),
+});

@@ -1,17 +1,15 @@
 import { useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useSetAtom } from "jotai";
 import type {
   AppUpdateCheckResult,
+  AppUpdateDownloadResult,
   AppUpdateInstallResult,
   AppUpdateProgressPayload,
 } from "@hermes/protocol";
-import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
-import { recordRuntimeKernelVersion } from "@/lib/version-check";
 import { runtime } from "@/lib/runtime";
 import { runtimeUpdatingAtom } from "@/stores/ui";
 
-const RUNTIME_INFO_KEY = ["desktop-runtime-info"] as const;
 const MAX_PROGRESS_LINES = 200;
 
 /**
@@ -38,15 +36,12 @@ function hasAppUpdateBridge(): boolean {
   return (
     typeof window !== "undefined" &&
     runtime.platform !== "web" &&
-    Boolean(window.hermesDesktop?.appUpdateCheck && window.hermesDesktop?.appUpdateInstall)
+    Boolean(
+      window.hermesDesktop?.appUpdateCheck &&
+      window.hermesDesktop?.appUpdateDownload &&
+      window.hermesDesktop?.appUpdateInstall,
+    )
   );
-}
-
-async function refreshDesktopGateway(): Promise<void> {
-  if (window.hermesDesktop?.refreshGatewayUrl) {
-    await runtime.refreshGatewayUrl();
-    forceExistingGatewayReconnect("app-update");
-  }
 }
 
 /** One-shot "检查更新" mutation (also used by the notifier CTA). */
@@ -65,14 +60,30 @@ export function useAppUpdateCheck() {
   });
 }
 
+/** Download and verify the authorised package without starting the installer. */
+export function useAppUpdateDownload() {
+  const setUpdating = useSetAtom(runtimeUpdatingAtom);
+  return useMutation<AppUpdateDownloadResult>({
+    mutationFn: () => {
+      if (!window.hermesDesktop?.appUpdateDownload) {
+        throw new Error("当前版本不支持预下载更新包");
+      }
+      return window.hermesDesktop.appUpdateDownload();
+    },
+    onMutate: () => {
+      setUpdating({ active: true, mode: "app-update", progress: [] });
+    },
+    onSettled: () => {
+      setUpdating({ active: false });
+    },
+  });
+}
+
 /**
- * One-shot "更新" mutation — drives the whole unified update (backend install
- * + respawn + verify + frontend stage + relaunch). While in flight it keeps
- * the blocking overlay up (dashboard restarts rotate the session token) and
- * streams `app-update-progress` events into the overlay's log panel.
+ * Apply a previously verified package. The Rust side rechecks rollout
+ * authorisation before stopping the managed Runtime and starting the installer.
  */
 export function useAppUpdateInstall() {
-  const qc = useQueryClient();
   const setUpdating = useSetAtom(runtimeUpdatingAtom);
 
   // Register the progress listener once; it only appends when an app-update
@@ -92,19 +103,14 @@ export function useAppUpdateInstall() {
   }, [setUpdating]);
 
   return useMutation<AppUpdateInstallResult>({
-    mutationFn: () => window.hermesDesktop!.appUpdateInstall!(),
+    mutationFn: () => {
+      if (!window.hermesDesktop?.appUpdateInstall) throw new Error("更新桥接不可用");
+      return window.hermesDesktop.appUpdateInstall();
+    },
     onMutate: () => {
       setUpdating({ active: true, mode: "app-update", progress: [] });
     },
-    onSettled: async () => {
-      // Runs on success AND failure — a partial install can still have
-      // restarted the dashboard, so always resync the rotated session token.
-      await refreshDesktopGateway();
-      await qc.invalidateQueries({ queryKey: RUNTIME_INFO_KEY });
-      const fresh = qc.getQueryData<{ current?: { kernelVersion?: string } }>(
-        RUNTIME_INFO_KEY,
-      );
-      recordRuntimeKernelVersion(fresh?.current?.kernelVersion);
+    onSettled: () => {
       setUpdating({ active: false });
     },
   });

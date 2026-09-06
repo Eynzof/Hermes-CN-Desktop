@@ -20,6 +20,7 @@ import { useActiveProfileName, useProfiles } from "@/hooks/use-profiles";
 import {
   cronJobProfile,
   useCreateCronJob,
+  useUpdateCronJob,
   useCronAction,
   useCronJobs,
   useCronRunDetail,
@@ -200,6 +201,7 @@ export function CronRoute() {
   const profilesQuery = useProfiles();
   const activeProfile = useActiveProfileName();
   const createJob = useCreateCronJob();
+  const updateJob = useUpdateCronJob();
   const deleteJob = useDeleteCronJob();
   const cronAction = useCronAction();
   const queryClient = useQueryClient();
@@ -211,6 +213,9 @@ export function CronRoute() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedRunFilename, setSelectedRunFilename] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingJob, setEditingJob] = useState<CronJob | null>(null);
+  const [newContinuity, setNewContinuity] = useState(false);
+  const [newMonitorUrl, setNewMonitorUrl] = useState("");
   const [newProfile, setNewProfile] = useState(activeProfile || "default");
   const [newName, setNewName] = useState("");
   const [newSchedule, setNewSchedule] = useState("");
@@ -306,35 +311,66 @@ export function CronRoute() {
 
   useEffect(() => clearQueuedRefreshes, [clearQueuedRefreshes]);
 
+  const openCreate = () => {
+    setEditingJob(null);
+    setNewProfile(activeProfile || "default");
+    setNewName("");
+    setNewSchedule("");
+    setNewPrompt("");
+    setNewDeliver("local");
+    setNewContinuity(false);
+    setNewMonitorUrl("");
+    setShowCreate(true);
+  };
+
+  const openEdit = (job: CronJob) => {
+    setEditingJob(job);
+    setNewProfile(cronJobProfile(job));
+    setNewName(job.name ?? "");
+    setNewSchedule(scheduleDisplay(job));
+    setNewPrompt(job.prompt ?? "");
+    setNewDeliver(job.deliver ?? "local");
+    setNewContinuity((job.context_from ?? []).some((ref) => ref.toLowerCase() === "self"));
+    setNewMonitorUrl(job.monitor_url ?? "");
+    setShowCreate(true);
+  };
+
   const handleCreate = () => {
     const schedule = newSchedule.trim();
     const prompt = newPrompt.trim();
-    if (!schedule || !prompt) {
-      setFeedback({ tone: "error", message: "请填写调度表达式和 Prompt。" });
+    if (!schedule || (!prompt && !editingJob?.no_agent && !editingJob?.skills)) {
+      setFeedback({ tone: "error", message: "请填写调度表达式和任务指令。" });
       return;
     }
-    createJob.mutate(
-      {
-        name: newName.trim() || undefined,
-        schedule,
-        prompt,
-        deliver: newDeliver,
-        profile: newProfile || "default",
+    const monitorUrl = newMonitorUrl.trim();
+    if (monitorUrl && !/^https?:\/\//i.test(monitorUrl)) {
+      setFeedback({ tone: "error", message: "监控网址须以 http:// 或 https:// 开头。" });
+      return;
+    }
+    const refs = (editingJob?.context_from ?? []).filter((ref) => ref.toLowerCase() !== "self");
+    if (newContinuity) refs.push("self");
+    const updates = {
+      name: newName.trim(), prompt, deliver: newDeliver,
+      context_from: refs, monitor_url: monitorUrl || null,
+    };
+    const callbacks = {
+      onSuccess: (job: CronJob) => {
+        setShowCreate(false);
+        setEditingJob(null);
+        setProfileFilter("all");
+        setSelectedKey(`${newProfile}:${job.id}`);
+        setFeedback({ tone: "ok", message: `已${editingJob ? "保存" : "创建"}定时任务「${titleOf(job)}」。` });
       },
-      {
-        onSuccess: (job) => {
-          setShowCreate(false);
-          setNewName("");
-          setNewSchedule("");
-          setNewPrompt("");
-          setNewDeliver("local");
-          setProfileFilter("all");
-          setSelectedKey(jobKey(job));
-          setFeedback({ tone: "ok", message: `已创建定时任务「${titleOf(job)}」。` });
-        },
-        onError: (err) => setFeedback({ tone: "error", message: `创建定时任务失败：${actionError(err)}` }),
-      },
-    );
+      onError: (err: unknown) => setFeedback({ tone: "error", message: `保存定时任务失败：${actionError(err)}` }),
+    };
+    if (editingJob) {
+      updateJob.mutate({
+        id: editingJob.id, profile: newProfile,
+        updates: { ...updates, ...(schedule !== scheduleDisplay(editingJob) ? { schedule } : {}) },
+      }, callbacks);
+    } else {
+      createJob.mutate({ ...updates, schedule, profile: newProfile }, callbacks);
+    }
   };
 
   const handleAction = (job: CronJob, action: "pause" | "resume" | "trigger") => {
@@ -386,7 +422,7 @@ export function CronRoute() {
       <button type="button" className={s.headerButton} onClick={refetchCronData} disabled={jobsQuery.isFetching || runsQuery.isFetching}>
         <RefreshCw size={12} /> 刷新
       </button>
-      <button type="button" className={s.headerPrimary} onClick={() => setShowCreate(true)}>
+      <button type="button" className={s.headerPrimary} onClick={openCreate}>
         <Plus size={12} /> 新建任务
       </button>
     </div>
@@ -458,7 +494,13 @@ export function CronRoute() {
               schedule={newSchedule}
               prompt={newPrompt}
               deliver={newDeliver}
-              creating={createJob.isPending}
+              editing={Boolean(editingJob)}
+              continuity={newContinuity}
+              monitorUrl={newMonitorUrl}
+              monitoringDisabled={Boolean(editingJob?.no_agent || editingJob?.monitor_script)}
+              onContinuity={setNewContinuity}
+              onMonitorUrl={setNewMonitorUrl}
+              creating={createJob.isPending || updateJob.isPending}
               onProfile={setNewProfile}
               onName={setNewName}
               onSchedule={setNewSchedule}
@@ -474,13 +516,14 @@ export function CronRoute() {
               onPauseResume={() => handleAction(selectedJob, isPaused(selectedJob) ? "resume" : "pause")}
               onTrigger={() => handleAction(selectedJob, "trigger")}
               onDelete={() => handleDelete(selectedJob)}
+              onEdit={() => openEdit(selectedJob)}
             />
           ) : (
             <div className={s.detailEmpty}>
               <CalendarClock size={28} />
               <h2>选择或创建一个定时任务</h2>
               <p>这里会展示任务配置、Prompt 和最近执行状态。</p>
-              <button type="button" className={s.primaryButton} onClick={() => setShowCreate(true)}>新建任务</button>
+              <button type="button" className={s.primaryButton} onClick={openCreate}>新建任务</button>
             </div>
           )}
         </main>
@@ -553,6 +596,12 @@ interface CreateJobPanelProps {
   prompt: string;
   deliver: string;
   creating: boolean;
+  editing: boolean;
+  continuity: boolean;
+  monitorUrl: string;
+  monitoringDisabled: boolean;
+  onContinuity: (value: boolean) => void;
+  onMonitorUrl: (value: string) => void;
   onProfile: (value: string) => void;
   onName: (value: string) => void;
   onSchedule: (value: string) => void;
@@ -568,14 +617,14 @@ function CreateJobPanel(props: CreateJobPanelProps) {
     <section className={s.card}>
       <div className={s.cardHeader}>
         <div>
-          <h1>新建定时任务</h1>
+          <h1>{props.editing ? "编辑定时任务" : "新建定时任务"}</h1>
           <p>保持任务指令自包含；系统会按计划唤起 Agent 执行。</p>
         </div>
       </div>
       <div className={s.formGrid}>
         <label className={s.field}>
           <span>Profile</span>
-          <select value={props.profile || props.activeProfile} onChange={(event) => props.onProfile(event.target.value)}>
+          <select disabled={props.editing} value={props.profile || props.activeProfile} onChange={(event) => props.onProfile(event.target.value)}>
             {profileOptions.map((profile) => <option key={profile} value={profile}>{profile}</option>)}
           </select>
         </label>
@@ -595,12 +644,27 @@ function CreateJobPanel(props: CreateJobPanelProps) {
         </label>
         <label className={`${s.field} ${s.fieldFull}`}>
           <span>Prompt</span>
-          <textarea value={props.prompt} onChange={(event) => props.onPrompt(event.target.value)} placeholder="描述每次定时执行的任务目标、边界和输出要求…" />
+          <textarea aria-label="Prompt" value={props.prompt} onChange={(event) => props.onPrompt(event.target.value)} placeholder="描述每次定时执行的任务目标、边界和输出要求…" />
+        </label>
+      </div>
+      <div className={s.formGrid}>
+        <label className={`${s.field} ${s.fieldFull}`}>
+          <span>运行记忆</span>
+          <select aria-label="运行记忆" value={props.continuity ? "on" : "off"} onChange={(event) => props.onContinuity(event.target.value === "on")}>
+            <option value="off">每次独立执行</option>
+            <option value="on">延续上次运行</option>
+          </select>
+          <small>开启后，Agent 会参考上次结果，适合持续跟进和避免重复汇报。</small>
+        </label>
+        <label className={`${s.field} ${s.fieldFull}`}>
+          <span>监控网页（可选）</span>
+          <input aria-label="监控网页（可选）" type="url" value={props.monitorUrl} disabled={props.monitoringDisabled} onChange={(event) => props.onMonitorUrl(event.target.value)} placeholder="https://example.com/updates" />
+          <small>{props.monitoringDisabled ? "当前任务使用脚本模式，保留已有执行方式。" : "仅在网页内容变化时唤起 Agent；无变化的检查不调用模型。"}</small>
         </label>
       </div>
       <div className={s.formActions}>
         <button type="button" className={s.secondaryButton} onClick={props.onCancel} disabled={props.creating}>取消</button>
-        <button type="button" className={s.primaryButton} onClick={props.onSubmit} disabled={props.creating}>{props.creating ? "创建中…" : "创建任务"}</button>
+        <button type="button" className={s.primaryButton} onClick={props.onSubmit} disabled={props.creating}>{props.creating ? "保存中…" : props.editing ? "保存修改" : "创建任务"}</button>
       </div>
     </section>
   );
@@ -612,9 +676,10 @@ interface JobDetailProps {
   onPauseResume: () => void;
   onTrigger: () => void;
   onDelete: () => void;
+  onEdit: () => void;
 }
 
-function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailProps) {
+function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete, onEdit }: JobDetailProps) {
   const paused = isPaused(job);
   return (
     <section className={s.card}>
@@ -623,6 +688,7 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
           <div className={s.breadcrumb}>自动化功能 / {cronJobProfile(job)}</div>
           <div className={s.detailActions}>
             <span className={s.statusBadge} data-tone={statusTone(job)}>{statusLabel(job)}</span>
+            <button type="button" className={s.secondaryButton} onClick={onEdit} disabled={busy}>编辑</button>
             <button type="button" className={s.secondaryButton} onClick={onPauseResume} disabled={busy}>
               {paused ? <Play size={16} /> : <Pause size={16} />}{paused ? "恢复" : "暂停"}
             </button>
@@ -660,6 +726,11 @@ function JobDetail({ job, busy, onPauseResume, onTrigger, onDelete }: JobDetailP
           <span>任务 ID</span>
           <strong>{job.id}</strong>
         </div>
+      </div>
+
+      <div className={s.detailGrid}>
+        <div className={s.detailItem}><span>运行记忆</span><strong>{(job.context_from ?? []).some((ref) => ref.toLowerCase() === "self") ? "延续上次运行" : "每次独立执行"}</strong></div>
+        {job.monitor_url ? <div className={s.detailItem}><span>变化监控</span><strong>{job.monitor_url}</strong></div> : null}
       </div>
 
       {text(job.last_error) ? <div className={s.lastError}>{job.last_error}</div> : null}

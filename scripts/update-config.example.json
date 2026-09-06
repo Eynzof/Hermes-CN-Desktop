@@ -1,6 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "channel": "stable",
+  "deviceId": "",
+  "shellUpdaterEndpoint": "https://hot-update-staging.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}",
   "releaseManifestUrl": "https://desktop.hermesagent.org.cn/latest.json",
   "runtimeBaseUrl": "https://desktop.hermesagent.org.cn/runtime",
   "runtimeManifestUrl": "",

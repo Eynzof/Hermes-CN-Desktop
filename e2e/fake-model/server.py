@@ -112,11 +112,11 @@ def _delegate_request(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
     return args
 
 
-def _tool_call_payload(args: dict[str, Any]) -> dict[str, Any]:
+def _tool_call_payload(args: dict[str, Any], name: str = "terminal") -> dict[str, Any]:
     return {
         "id": f"call_e2e_{uuid.uuid4().hex[:12]}",
         "type": "function",
-        "function": {"name": "terminal", "arguments": json.dumps(args, ensure_ascii=False)},
+        "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
     }
 
 
@@ -175,8 +175,19 @@ async def chat_completions(request: Request):
     messages = body.get("messages") or []
 
     delegate_args = _delegate_request(messages)
+    tool_name = "terminal"
+    last_user = next((m for m in reversed(messages) if m.get("role") == "user"), {})
+    user_text = _text_of(last_user.get("content")).strip()
+    after_tool = messages and messages[-1].get("role") == "tool"
+    if user_text == "v090-subagent-control" and not after_tool:
+        tool_name = "delegate_task"
+        delegate_args = {"tasks": [{"goal": "v090-child-wait: 验证桌面子任务控制。", "toolsets": ["terminal"]}]}
+    elif user_text.startswith("v090-child-wait:") and not after_tool:
+        # Keep a real child agent in a provider step long enough to steer/stop
+        # through the Desktop. The agent and gateway lifecycle remain real.
+        await asyncio.sleep(15)
     if delegate_args is not None:
-        tool_call = _tool_call_payload(delegate_args)
+        tool_call = _tool_call_payload(delegate_args, tool_name)
         if body.get("stream"):
 
             async def tool_gen():
@@ -187,7 +198,7 @@ async def chat_completions(request: Request):
                         "id": tool_call["id"],
                         "type": "function",
                         "function": {
-                            "name": "terminal",
+                            "name": tool_name,
                             "arguments": tool_call["function"]["arguments"],
                         },
                     }],

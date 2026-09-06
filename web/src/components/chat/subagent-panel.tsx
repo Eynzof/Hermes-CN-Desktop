@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "jotai";
 import { AlertCircle, Bot, CheckCircle2, ChevronRight, Copy, SquareTerminal, X } from "lucide-react";
 import { LoadingIndicator } from "@hermes/shared-ui";
 import { CopyButton } from "@/components/ui/copy-button";
+import { useSubagentControl } from "@/hooks/use-gateway";
+import { humanizeGatewayError } from "@/lib/gateway-result";
 import { formatTokens } from "@/lib/format";
 import {
   activeCliDelegationCount,
@@ -97,6 +99,50 @@ function StreamLine({ entry, active }: { entry: SubagentStreamEntry; active: boo
   );
 }
 
+const SubagentControlContext = createContext<ReturnType<typeof useSubagentControl> | null>(null);
+
+function SubagentActions({ id }: { id: string }) {
+  const controls = useContext(SubagentControlContext);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [stopping, setStopping] = useState(false);
+  if (!controls) return null;
+
+  const send = async (action: "steer" | "stop") => {
+    setPending(true);
+    try {
+      if (action === "steer") {
+        const result = await controls.steer(id, text.trim());
+        if (result.status !== "queued") throw new Error("子任务已结束或不属于当前会话，未能追加指令。");
+        setNotice("指令已排队，将在下一个执行步骤读取。");
+        setText("");
+        setEditing(false);
+      } else {
+        const result = await controls.stop(id);
+        setNotice(result.found ? "已请求停止，等待子任务退出。" : "子任务已结束或已离线。");
+        setStopping(result.found);
+      }
+    } catch (error) {
+      setNotice(humanizeGatewayError(error));
+    } finally {
+      setPending(false);
+    }
+  };
+  return <div className={s.controls}>
+    <div className={s.controlButtons}>
+      <button type="button" disabled={pending || stopping} onClick={() => setEditing((value) => !value)}>追加指令</button>
+      <button type="button" disabled={pending || stopping} onClick={() => void send("stop")}>{stopping ? "正在停止…" : "停止子任务"}</button>
+    </div>
+    {editing ? <form onSubmit={(event) => { event.preventDefault(); void send("steer"); }}>
+      <textarea aria-label="子任务追加指令" value={text} onChange={(event) => setText(event.target.value)} placeholder="补充要求或调整方向…" disabled={pending} />
+      <button type="submit" disabled={pending || !text.trim()}>发送指令</button>
+    </form> : null}
+    {notice ? <p role="status">{notice}</p> : null}
+  </div>;
+}
+
 function SubagentRow({ node, depth, now }: { node: SubagentNode; depth: number; now: number }) {
   const running = node.status === "running" || node.status === "queued";
   const [open, setOpen] = useState(() => running || depth < 2);
@@ -159,6 +205,8 @@ function SubagentRow({ node, depth, now }: { node: SubagentNode; depth: number; 
           {fileLines.length > 8 ? <span className={s.fileMore}>还有 {fileLines.length - 8} 个文件</span> : null}
         </div>
       ) : null}
+
+      {open && node.status === "running" ? <SubagentActions id={node.id} /> : null}
 
       {node.children.length > 0 ? (
         <div className={s.children}>
@@ -465,16 +513,20 @@ function DelegationGroup({ group, now }: { group: RootGroup; now: number }) {
 }
 
 export function SubagentPanel({
+  sessionId,
   subagents,
   cliDelegations = [],
   onClose,
   onClearFinished,
 }: {
+  sessionId?: string;
   subagents: SubagentProgress[];
   cliDelegations?: CliDelegationEntry[];
   onClose: () => void;
   onClearFinished?: () => void;
 }) {
+  const { steer, stop } = useSubagentControl(sessionId);
+  const controls = useMemo(() => sessionId ? { steer, stop } : null, [sessionId, steer, stop]);
   const tree = useMemo(() => buildSubagentTree(subagents), [subagents]);
   const flat = useMemo(() => flattenSubagents(tree), [tree]);
   const groups = useMemo(() => groupDelegations(tree), [tree]);
@@ -514,6 +566,7 @@ export function SubagentPanel({
   const { width, onResizeStart } = usePanelWidth(360, 280, 640);
 
   return (
+    <SubagentControlContext.Provider value={controls}>
     <aside
       className={s.panel}
       aria-label="子Agent 监视"
@@ -575,5 +628,6 @@ export function SubagentPanel({
         </>
       )}
     </aside>
+    </SubagentControlContext.Provider>
   );
 }

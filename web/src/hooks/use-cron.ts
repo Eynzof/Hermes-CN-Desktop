@@ -32,7 +32,7 @@ export function useCronJobs() {
 export function useCreateCronJob() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (job: { prompt: string; schedule: string; name?: string; deliver?: string; profile?: string }) => {
+    mutationFn: (job: { prompt: string; schedule: string; name?: string; deliver?: string; profile?: string; context_from?: string[]; monitor_url?: string | null }) => {
       const { profile = "default", ...body } = job;
       return postJSON(`/api/cron/jobs?profile=${encodePart(profile)}`, body, CronJobSchema);
     },

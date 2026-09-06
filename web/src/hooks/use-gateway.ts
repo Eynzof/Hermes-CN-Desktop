@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getDefaultStore, useAtomValue, useSetAtom } from "jotai";
 import {
   ConfigSetResult,
+  SubagentSteerResult,
+  SubagentInterruptResult,
   CommandDispatchResult,
   FileAttachResult,
   ImageAttachResult,
@@ -904,4 +906,23 @@ export function useGateway() {
     setSessionTitle,
     disconnect,
   };
+}
+
+/** Uses the existing session transport so Core can verify child ownership. */
+export function useSubagentControl(sessionId?: string) {
+  const steer = useCallback(async (subagentId: string, text: string) => {
+    if (!sessionId) throw new Error("请先连接任务会话。");
+    return parseGatewayResult(SubagentSteerResult,
+      await getGatewayClient().request("subagent.steer", {
+        session_id: sessionId, subagent_id: subagentId, text,
+      }), "subagent.steer");
+  }, [sessionId]);
+  const stop = useCallback(async (subagentId: string) => {
+    if (!sessionId) throw new Error("请先连接任务会话。");
+    return parseGatewayResult(SubagentInterruptResult,
+      await getGatewayClient().request("subagent.interrupt", {
+        session_id: sessionId, subagent_id: subagentId,
+      }), "subagent.interrupt");
+  }, [sessionId]);
+  return { steer, stop };
 }

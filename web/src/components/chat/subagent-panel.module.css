@@ -417,3 +417,18 @@
   gap: 12px;
   padding-left: 20px;
 }
+
+.controls { margin-top: 8px; display: grid; gap: 8px; }
+.controlButtons { display: flex; flex-wrap: wrap; gap: 8px; }
+.controls button {
+  padding: 4px 8px; border: 1px solid var(--h-line); background: var(--h-bg-soft);
+  color: var(--h-text); font: inherit; cursor: pointer;
+}
+.controls button:disabled { opacity: 0.5; cursor: default; }
+.controls form { display: grid; gap: 8px; }
+.controls textarea {
+  box-sizing: border-box; width: 100%; min-height: 80px; resize: vertical;
+  padding: 8px; border: 1px solid var(--h-line); background: var(--h-bg-app);
+  color: var(--h-text); font: inherit;
+}
+.controls p { margin: 0; color: var(--h-text-3); font-size: 12px; }

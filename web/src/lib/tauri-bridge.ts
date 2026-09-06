@@ -48,7 +48,11 @@ import type {
   TestConnectionResult,
   UpdateConfig,
   UpdateConfigSnapshot,
+  ImportUpdateInvitationInput,
+  UpdateCredentialStatus,
   AppUpdateCheckResult,
+  AppUpdateDownloadResult,
+  AppUpdatePendingResult,
   AppUpdateInstallResult,
   AppUpdateProgressPayload,
   HotUpdateBackendResult,
@@ -367,8 +371,24 @@ const tauriBridge = {
     return invokeCommand("set_update_config", { input: { config } });
   },
 
+  async importUpdateInvitation(input: ImportUpdateInvitationInput): Promise<UpdateConfigSnapshot> {
+    return invokeCommand("import_update_invitation", { input });
+  },
+
+  async getUpdateCredentialStatus(): Promise<UpdateCredentialStatus> {
+    return invokeCommand("get_update_credential_status");
+  },
+
   async appUpdateCheck(): Promise<AppUpdateCheckResult> {
     return invokeCommand("app_update_check");
+  },
+
+  async appUpdatePending(): Promise<AppUpdatePendingResult> {
+    return invokeCommand("app_update_pending");
+  },
+
+  async appUpdateDownload(): Promise<AppUpdateDownloadResult> {
+    return invokeCommand("app_update_download");
   },
 
   async appUpdateInstall(): Promise<AppUpdateInstallResult> {

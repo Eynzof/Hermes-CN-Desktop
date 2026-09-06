@@ -175,13 +175,23 @@ pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult,
 /// Install a runtime update and restart the dashboard.
 #[tauri::command]
 pub async fn runtime_install_update(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 更新")?;
     }
-    let result = runtime::install_runtime_update(None).await;
+    let mut result = runtime::install_runtime_update(None).await;
+    if result.ok {
+        let resource_dir = app.path().resource_dir().ok();
+        if let Err(error) = runtime::sync_runtime_resources_if_available(resource_dir.as_deref()) {
+            result.ok = false;
+            result.error = Some(format!(
+                "Runtime installed, but bundled resource sync failed: {error}"
+            ));
+        }
+    }
     if !result.ok {
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = result.error.clone();
