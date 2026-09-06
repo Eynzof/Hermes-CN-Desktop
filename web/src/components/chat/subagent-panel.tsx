@@ -169,7 +169,7 @@ function SubagentRow({ node, depth, now }: { node: SubagentNode; depth: number; 
   const fileLines = [...node.filesWritten.map((p) => `+ ${p}`), ...node.filesRead.map((p) => `· ${p}`)];
 
   return (
-    <div className={s.row} style={depth > 0 ? { paddingLeft: 16 } : undefined} data-running={running ? "true" : undefined}>
+    <div className={s.row} style={depth > 0 ? { paddingLeft: 16 } : undefined} data-subagent-id={node.id} data-running={running ? "true" : undefined}>
       <button className={s.rowHead} type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <ChevronRight className={s.chevron} data-open={open ? "true" : undefined} size={12} aria-hidden />
         <StatusIcon status={node.status} />
@@ -206,7 +206,7 @@ function SubagentRow({ node, depth, now }: { node: SubagentNode; depth: number; 
         </div>
       ) : null}
 
-      {open && node.status === "running" ? <SubagentActions id={node.id} /> : null}
+      {open && node.status === "running" && !node.id.startsWith("delegate-tool:") ? <SubagentActions id={node.id} /> : null}
 
       {node.children.length > 0 ? (
         <div className={s.children}>

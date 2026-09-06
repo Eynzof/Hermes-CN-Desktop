@@ -12,6 +12,10 @@ test("运行中的真实子任务可追加指令并停止", async ({ page }) => 
   await page.getByRole("button", { name: "发送消息" }).click();
   await expect(page).toHaveURL(/\/tasks\/.+/);
   await page.getByRole("button", { name: "子Agent 监视", exact: true }).click();
+  await expect(page.getByRole("button", { name: "追加指令", exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "输入消息" }).fill("v090-parent-follow-up");
+  await page.getByRole("button", { name: "发送消息" }).click();
+  await expect(page.getByRole("log").locator('[data-role="assistant"]').last()).toContainText("v090-parent-follow-up");
   await page.getByRole("button", { name: "追加指令", exact: true }).click();
   await page.getByRole("textbox", { name: "子任务追加指令" }).fill("补充：只处理当前测试数据。");
   await page.getByRole("button", { name: "发送指令", exact: true }).click();

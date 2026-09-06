@@ -180,7 +180,7 @@ describe("routeSubagentGatewayEventAtom", () => {
     expect(store.get(subagentsBySessionAtom).s1![0]).toMatchObject({ id: "a", goal: "Build" });
   });
 
-  it("keeps finished rows across turns; unfinished rows become interrupted on message.start", () => {
+  it("keeps background children running across parent turns and accepts their later completion", () => {
     const store = createStore();
     store.set(
       routeSubagentGatewayEventAtom,
@@ -202,8 +202,10 @@ describe("routeSubagentGatewayEventAtom", () => {
     const list = store.get(subagentsBySessionAtom).s1!;
     expect(list.map((n) => [n.id, n.status])).toEqual([
       ["done", "completed"],
-      ["hanging", "interrupted"],
+      ["hanging", "running"],
     ]);
+    store.set(routeSubagentGatewayEventAtom, event("subagent.complete", "s1", { subagent_id: "hanging", status: "completed" }), NOW + 4);
+    expect(store.get(subagentsBySessionAtom).s1![1].status).toBe("completed");
   });
 
   it("clearFinishedSubagentsAtom drops terminal rows only", () => {

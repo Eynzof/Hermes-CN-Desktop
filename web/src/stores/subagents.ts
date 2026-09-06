@@ -366,18 +366,9 @@ export const routeSubagentGatewayEventAtom = atom(
       event.payload && typeof event.payload === "object" ? event.payload : {}
     ) as SubagentPayload;
 
-    // 新回合不清空子代理树——与官方桌面端的有意分歧：已结束的子代理保留
-    // 在面板里（状态图标标终态）方便 debug，上限 MAX_ITEMS，手动「清空已
-    // 结束」删除。上一轮没收尾的行标 interrupted（原实现直接整树删除，
-    // 跨回合事件同样无法复活它们）；native/fallback 判定仍按轮重置。
+    // v0.21 子任务在后台运行，父会话开始新回合不代表子任务中断。
+    // 保留其真实生命周期，已结束的行仍可手动清空。
     if (type === "message.start") {
-      nativeSubagentSessions.delete(sid);
-      set(subagentsBySessionAtom, (state) => {
-        const prevList = state[sid];
-        if (!prevList?.length) return state;
-        const next = markUnfinishedInterrupted(prevList);
-        return next === prevList ? state : { ...state, [sid]: next };
-      });
       return;
     }
 
