@@ -633,7 +633,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       docsUrl: "https://platform.minimaxi.com/document",
       defaultModel: "MiniMax-M3",
       models: [
-        { id: "MiniMax-M3", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true },
+        { id: "MiniMax-M3", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true, supportsVision: true },
         { id: "MiniMax-M2.7", contextWindow: 204_800, supportsTools: true, supportsReasoning: true },
         { id: "MiniMax-M2.7-highspeed", contextWindow: 204_800, supportsTools: true, supportsReasoning: true },
         { id: "MiniMax-M2.5", contextWindow: 204_800, supportsTools: true },
