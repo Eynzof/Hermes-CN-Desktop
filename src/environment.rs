@@ -345,7 +345,7 @@ pub async fn collect_environment_check(input: EnvironmentCheckInput) -> Environm
             "Dashboard 尚未启动，无法检查 /api/ws",
         ));
     } else if input.api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
-        // Embedded Hard FFI — zero HTTP/WS (refactor_report.md §3.7): the
+        // Embedded Hard FFI — zero HTTP/WS (docs/embedded-python.md): the
         // dashboard is in-process, so there is no `/api/status` HTTP probe and
         // no `/api/ws` tungstenite handshake to run. Both entries reflect the
         // embedded runtime readiness instead of a reqwest/tungstenite scheme

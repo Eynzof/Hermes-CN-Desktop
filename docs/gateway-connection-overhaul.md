@@ -183,7 +183,7 @@
 
 ---
 
-## 9. 嵌入式网关(Embedded mode,refactor_report.md)
+## 9. 嵌入式网关（Embedded mode，见 `docs/embedded-python.md`）
 
 嵌入模式下 **Gateway 不走 WebSocket**:Rust 侧不再连 tokio-tungstenite,而是建 `EmbeddedGatewaySession`
 (`src/embedded/transport.rs`)——JSON-RPC 帧经 `hermes_embedded.api.handle_rpc` 直接分发到 Python,事件经

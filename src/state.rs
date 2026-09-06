@@ -127,7 +127,7 @@ impl DashboardHandle {
     }
 
     /// Build a handle for the in-process embedded Python runtime
-    /// (refactor_report.md Phase 1). There is no child process, no port lock
+    /// (see `docs/embedded-python.md`). There is no child process, no port lock
     /// and no ownership marker; `owns_process` stays false so shutdown paths
     /// never try to terminate a process — the interpreter is finalized via
     /// `crate::embedded::shutdown()` instead.
@@ -230,7 +230,7 @@ pub struct AppStateInner {
     /// first relay connect.
     pub gateway_ws: Option<GatewayWsHandle>,
     /// The live embedded gateway session, when the managed runtime is running
-    /// in-process (refactor_report.md Phase 3). Replaces `gateway_ws` in
+    /// in-process (see `docs/embedded-python.md`). Replaces `gateway_ws` in
     /// embedded mode; `gateway_ws_send/close` consult it first.
     pub embedded_gateway: Option<crate::embedded::transport::EmbeddedGatewayHandle>,
     /// True when the managed runtime is running in-process (embedded CPython)

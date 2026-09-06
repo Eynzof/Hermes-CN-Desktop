@@ -1,4 +1,4 @@
-//! Integration tests for the embedded runtime architecture (refactor_report.md).
+//! Integration tests for the embedded runtime architecture (`docs/embedded-python.md`).
 //!
 //! These tests run without a Python interpreter (default features): they cover
 //! the parts of the embedded design that are pure Rust — payload resolution,

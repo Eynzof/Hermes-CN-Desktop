@@ -544,7 +544,7 @@ fn split_multipart_parts<'a>(body: &'a [u8], boundary: &str) -> Vec<&'a [u8]> {
     let mut search_from = 0;
     while let Some(relative) = find_subslice(&body[search_from..], delimiter) {
         let boundary_at = search_from + relative;
-        if boundary_at != 0 && body[boundary_at - 1] != b'\n' {
+        if !is_multipart_boundary_at(body, boundary_at, delimiter) {
             search_from = boundary_at + 1;
             continue;
         }
@@ -556,7 +556,7 @@ fn split_multipart_parts<'a>(body: &'a [u8], boundary: &str) -> Vec<&'a [u8]> {
         let mut scan = part_start;
         while let Some(relative) = find_subslice(&body[scan..], delimiter) {
             let next_at = scan + relative;
-            if next_at != 0 && body[next_at - 1] == b'\n' {
+            if is_multipart_boundary_at(body, next_at, delimiter) {
                 end = next_at;
                 break;
             }
@@ -577,6 +577,20 @@ fn split_multipart_parts<'a>(body: &'a [u8], boundary: &str) -> Vec<&'a [u8]> {
         search_from = end;
     }
     parts
+}
+
+/// A multipart delimiter must begin a line and be followed by either a line
+/// ending or the closing `--`. Merely finding `\n--boundary` is insufficient:
+/// arbitrary binary content can contain that prefix followed by other bytes.
+fn is_multipart_boundary_at(body: &[u8], at: usize, delimiter: &[u8]) -> bool {
+    if at > body.len() || !body[at..].starts_with(delimiter) {
+        return false;
+    }
+    if at != 0 && body[at - 1] != b'\n' {
+        return false;
+    }
+    let suffix = &body[at + delimiter.len()..];
+    suffix.starts_with(b"--") || suffix.starts_with(b"\r\n") || suffix.starts_with(b"\n")
 }
 
 /// Lowercased header name → value pairs parsed from one multipart part.
@@ -1330,9 +1344,9 @@ mod tests {
     fn multipart_splitter_ignores_boundary_tokens_inside_binary_content() {
         use base64::Engine;
         let boundary = "BOUND";
-        // The file content contains the literal boundary token but it is not
-        // preceded by a line feed, so RFC 2046 says it is not a part delimiter.
-        let content = format!("prefix--{boundary}suffix");
+        // Neither token is a valid delimiter: one is not at line start and the
+        // other has non-delimiter bytes immediately after the boundary value.
+        let content = format!("prefix--{boundary}suffix\n--{boundary}still-data");
         let body = format!(
             "--{boundary}\r\n\
              Content-Disposition: form-data; name=\"session_id\"\r\n\

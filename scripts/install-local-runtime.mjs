@@ -286,7 +286,7 @@ writeFileSync(join(target, "manifest.json"), `${JSON.stringify({
 console.log(`wrote ${currentPath}`);
 console.log(`managed runtime executable: ${installedExecutable}`);
 
-// Embedded runtime dev support (refactor_report.md Phase 1): in embedded mode
+// Embedded runtime dev support (docs/embedded-python.md): in embedded mode
 // the interpreter must be able to import `hermes_embedded`. The package lives
 // in the Core checkout (the desktop repo carries no embedded package).
 if (process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1") {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stage an embeddable Python payload under static/embedded-python/ so the
-// embedded runtime (refactor_report.md Phase 1/5) can locate it at startup.
+// embedded runtime (docs/embedded-python.md) can locate it at startup.
 //
 // The payload is the PyInstaller `_internal` directory (or the whole expanded
 // runtime tree) from a staged managed runtime. `resolve_payload_root` looks

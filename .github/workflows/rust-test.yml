@@ -7,7 +7,7 @@
 # prevent_sleep.rs (macOS only, gated behind cfg). Running on ubuntu
 # is faster + cheaper than the cross-platform matrix.
 #
-# Embedded runtime (refactor_report.md):
+# Embedded runtime (docs/embedded-python.md):
 # - The default job runs `cargo test` WITHOUT --all-features: the optional
 #   `embedded-python` feature links libpython, which ubuntu runners do not
 #   provide out of the box. The embedded architecture (FFI registry, event

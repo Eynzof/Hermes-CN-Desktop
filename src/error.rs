@@ -99,7 +99,7 @@ pub enum AppError {
     StateLockPoisoned,
     #[error("Desktop runtime not ready")]
     NotReady,
-    // --- Embedded Python (refactor_report.md) ---
+    // --- Embedded Python (docs/embedded-python.md) ---
     #[error("Embedded Python error: {msg}")]
     EmbeddedPython {
         msg: String,

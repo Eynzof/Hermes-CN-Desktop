@@ -185,7 +185,7 @@ pub async fn acquire_managed_dashboard(
         log::warn!("Failed to sync bundled runtime resources: {}", err);
     }
 
-    // Embedded runtime path (refactor_report.md Phase 1): initialize CPython
+    // Embedded runtime path (docs/embedded-python.md): initialize CPython
     // inside this process instead of spawning a `hermes` subprocess. Falls back
     // to the subprocess path below when the payload is absent or the interpreter
     // fails to start (HERMES_DESKTOP_EMBEDDED_PYTHON=0 disables it entirely).

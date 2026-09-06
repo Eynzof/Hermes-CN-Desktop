@@ -60,24 +60,23 @@ describe("TOP_TABS", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "外置记忆")).toBe(false);
   });
 
-  // Wander 记忆窗口暂不可用（MemOS/WanderMemory 服务未接入），04 tab 已注释禁用。
-  // 恢复时：取消 use-active-top-tab.ts 中 wanderMemory tab 注释，并把下面改为 toBe("wanderMemory")。
-  it("hides the MemOS workbench (wander memory disabled) until the service is usable", () => {
-    expect(tabFor("/wander-memory")).toBeUndefined();
-    expect(tabFor("/wander-memory/memories")).toBeUndefined();
-    expect(tabFor("/wander-memory/files")).toBeUndefined();
-    expect(tabFor("/wander-memory/dialogue")).toBeUndefined();
-    expect(tabFor("/wander-memory/chat")).toBeUndefined();
-    expect(tabFor("/wander-memory/context")).toBeUndefined();
-    expect(tabFor("/wander-memory/status")).toBeUndefined();
-    expect(tabFor("/wander-memory/api")).toBeUndefined();
+  it("keeps the Wander memory workbench under the 04 tab", () => {
+    expect(tabFor("/wander-memory")).toBe("wanderMemory");
+    expect(tabFor("/wander-memory/memories")).toBe("wanderMemory");
+    expect(tabFor("/wander-memory/files")).toBe("wanderMemory");
+    expect(tabFor("/wander-memory/dialogue")).toBe("wanderMemory");
+    expect(tabFor("/wander-memory/chat")).toBe("wanderMemory");
+    expect(tabFor("/wander-memory/context")).toBe("wanderMemory");
+    expect(tabFor("/wander-memory/status")).toBe("wanderMemory");
+    expect(tabFor("/wander-memory/api")).toBe("wanderMemory");
   });
 
-  it("keeps memory tab ordering without the disabled wander memory entry", () => {
+  it("keeps memory tab ordering with the Wander memory entry", () => {
     expect(TOP_TABS.map((tab) => [tab.num, tab.label])).toEqual([
       ["01", "工作台"],
       ["02", "配置"],
       ["03", "消息接入"],
+      ["04", "Wander 记忆"],
       ["05", "Hermes 记忆"],
       ["06", "高级"],
     ]);

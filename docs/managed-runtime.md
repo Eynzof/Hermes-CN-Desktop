@@ -357,14 +357,14 @@ keypair 同时签的过渡期（这个我们的代码现在不支持，要的话
 
 ---
 
-## 十一、嵌入式运行时(Embedded Python,refactor_report.md)
+## 十一、嵌入式运行时（Embedded Python，实验性）
 
-除"子进程 managed runtime + HTTP/WS"外,桌面端还支持 **进程内嵌入 CPython + Hard FFI**(零本地 HTTP:
-无 9120/8644/8645 监听、无 reqwest 转发、无 tokio-tungstenite 中继)。`HERMES_DESKTOP_EMBEDDED_PYTHON=0`
-可关闭嵌入、回退到本文档描述的子进程模式(双轨并行、可回退)。
+除“子进程 managed runtime + HTTP/WS”外，桌面端还提供实验性的 **进程内嵌入 CPython + Hard FFI**
+（零本地 HTTP：无 9120/8644/8645 监听、无 reqwest 转发、无 tokio-tungstenite 中继）。
+开发时用 `python run.py --embedded` 显式开启；发布安装包仍使用本文档描述的 managed runtime。
 
-- 嵌入式 payload 与本文档的 runtime zip **同源**(PyInstaller `_internal`),`scripts/stage-bundled-runtime.mjs
-  `--embedded-payload` / `scripts/stage-embedded-payload.mjs` 会把它放到 `static/embedded-python/<platform>-<arch>/`。
+- `scripts/stage-bundled-runtime.mjs --embedded-payload` 与
+  `scripts/stage-embedded-payload.mjs` 可用于实验性 payload 验证；发布工作流尚未启用。
 - 更新语义:嵌入模式是"下载新 payload → 校验 → 替换 → 重启应用",不再"换 onefile 子进程";onefile 安装分支保留给非嵌入模式。
 - 生命周期:退出走 `shutdown_owned_runtime → EmbeddedPython::shutdown`(先停 agent 循环、再 cancel asyncio、再 Py_Finalize)。
-- 详见 `docs/embedded-python.md` 与 `refactor_report.md`。
+- 详见 `docs/embedded-python.md`。

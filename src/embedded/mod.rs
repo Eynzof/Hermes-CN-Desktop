@@ -1,4 +1,4 @@
-//! In-process CPython embedding — the Hard FFI end-state from refactor_report.md.
+//! In-process CPython embedding — see `docs/embedded-python.md`.
 //!
 //! The desktop no longer spawns a `hermes` subprocess and talks to it over
 //! loopback HTTP/WebSocket. Instead the Python runtime is embedded into the

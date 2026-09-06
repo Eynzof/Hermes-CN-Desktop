@@ -69,16 +69,13 @@ export const TOP_TABS: readonly TopTabDef[] = [
     href: "/im/feishu",
     matches: (path) => path.startsWith("/im"),
   },
-  // Wander 记忆窗口暂不可用（MemOS/WanderMemory 服务未接入），先注释掉顶部 tab 入口。
-  // TODO(embedded): 服务可用后恢复此 tab 定义（同时恢复 app.tsx 路由、
-  // app-sidebar.tsx 分支与 command-palette.ts 命令）。
-  // {
-  //   id: "wanderMemory",
-  //   num: "04",
-  //   label: "Wander 记忆",
-  //   href: "/wander-memory/memories",
-  //   matches: (path) => path.startsWith("/wander-memory"),
-  // },
+  {
+    id: "wanderMemory",
+    num: "04",
+    label: "Wander 记忆",
+    href: "/wander-memory/memories",
+    matches: (path) => path.startsWith("/wander-memory"),
+  },
   {
     id: "hermesMemory",
     num: "05",

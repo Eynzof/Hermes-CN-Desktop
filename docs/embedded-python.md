@@ -1,14 +1,14 @@
 Embedded Python Runtime (In-process CPython + Hard FFI)
 
-> Status: merged end-state. The Python FFI surface lives in the Hermes-CN-Core
+> Status: experimental, opt-in development path. The Python FFI surface lives in the Hermes-CN-Core
 > repo (the desktop repo's old self-contained reference package was deleted);
 > it drives the REAL Core handlers — no canned demo responses.
 
 What this is
 
-The desktop previously spawned a PyInstaller hermes subprocess and talked to
+The desktop normally spawns a PyInstaller hermes subprocess and talks to
 its FastAPI dashboard over loopback HTTP/WebSocket (REST proxy + WS relay).
-This refactor replaces that transport with in-process embedding + C FFI:
+The experimental mode replaces that transport with in-process embedding + C FFI:
 
 [code block: 3 lines]
 
@@ -93,7 +93,7 @@ Payload
 
 Payload resolution order (resolve_payload_root):
 
-1. HERMES_DESKTOP_EMBEDDED_PAYLOAD (explicit override; run.py sets it)
+1. HERMES_DESKTOP_EMBEDDED_PAYLOAD (explicit override; run.py --embedded sets it)
 2. static/embedded-python (staged Tauri resource)
 3. static/bundled-runtime/<platform>-<arch>/_internal
 4. a hermes_embedded package next to the desktop source (Core checkout)
@@ -133,8 +133,8 @@ Verification (local)
 
 Not yet implemented (documented follow-ups)
 
-- Real PyInstaller _internal payload production end-to-end (the payload
-  layout is staged; the interpreter runs against the Core checkout in dev).
+- Real PyInstaller _internal payload production end-to-end. Release installers
+  continue to use the managed runtime until this is verified on every platform.
 - Free-threaded CPython 3.14 runtime verification (the bridge uses
   Python::attach + std::sync::OnceLock — no GIL-as-sync-primitive
   assumption — but a free-threaded build matrix has not been exercised).

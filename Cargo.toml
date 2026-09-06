@@ -65,7 +65,7 @@ getrandom = "0.3"
 # Only from_path_iter is used — the desktop process env is never mutated.
 dotenvy = "0.15"
 tauri-plugin-clipboard-manager = "2.3.2"
-# In-process CPython embedding (refactor_report.md). Optional and NOT in the
+# In-process CPython embedding (docs/embedded-python.md). Optional and NOT in the
 # default feature set: the full pyo3 backend needs a real Python 3.14 install
 # (PYO3_PYTHON / python3 on PATH) to link libpython. The crate always compiles
 # the embedded architecture (src/embedded/) with a stub backend when the

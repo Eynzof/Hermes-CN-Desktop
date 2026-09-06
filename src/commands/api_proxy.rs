@@ -313,7 +313,10 @@ mod tests {
             resolve_request_profile(Some(&headers), Some("personal")),
             "personal"
         );
-        assert_eq!(resolve_request_profile(Some(&headers), Some("  ")), "default");
+        assert_eq!(
+            resolve_request_profile(Some(&headers), Some("  ")),
+            "default"
+        );
         assert_eq!(resolve_request_profile(None, None), "default");
     }
 
@@ -601,7 +604,7 @@ async fn api_request_impl_inner(
         return Ok(json_result(status, status_text, body));
     }
 
-    // 5. Embedded Hard FFI — zero HTTP (refactor_report.md §3.7). The
+    // 5. Embedded Hard FFI — zero HTTP (docs/embedded-python.md). The
     // api_proxy never forwards to reqwest here: routes are dispatched directly
     // into the embedded interpreter via the FFI registry.
     if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {

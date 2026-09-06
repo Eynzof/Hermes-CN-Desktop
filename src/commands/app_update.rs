@@ -278,7 +278,7 @@ fn verify_authenticode_best_effort(path: &Path) -> Result<(), String> {
 /// the dashboard responds but reports a different version — the caller rolls
 /// back the runtime.
 async fn verify_backend_version(api_base_url: &str, expected: &str) -> Result<bool, String> {
-    // Embedded Hard FFI — zero HTTP (refactor_report.md §3.7): the version is
+    // Embedded Hard FFI — zero HTTP (docs/embedded-python.md): the version is
     // read straight from Python `get_version` through pyo3, never from a
     // `GET /api/version` HTTP call (there is no HTTP endpoint to fetch).
     if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {

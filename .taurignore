@@ -1,7 +1,0 @@
-# Stop Tauri dev's file watcher from rebuilding the app in a loop when
-# install-local-runtime.mjs runs git commands in the hermes_backend submodule
-# (or any other nested .git metadata is touched).
-**/.git/
-
-# Also ignore root Git metadata just in case the watcher reaches it.
-/.git/

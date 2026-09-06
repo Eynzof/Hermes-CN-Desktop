@@ -167,10 +167,7 @@ jobs:
       - name: Stage bundled plugins
         run: node scripts/stage-bundled-plugins.mjs --source hermes-agent-cn-source
 
-      - name: Stage bundled Hermes-CN-Core runtime (+ embedded Python payload)
-        # Embedded runtime (refactor_report.md Phase 5): --embedded-payload also
-        # extracts the PyInstaller _internal tree under static/embedded-python so
-        # the in-process interpreter can locate it. One download pass.
+      - name: Stage bundled Hermes-CN-Core runtime
         shell: bash
         run: |
           args=(
@@ -179,7 +176,6 @@ jobs:
             --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.20.0-cn.8' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
-            --embedded-payload
           )
           node "${args[@]}"
 

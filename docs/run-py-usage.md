@@ -1,100 +1,71 @@
-run.py — Hermes Agent CN Desktop 开发启动脚本（真实后端嵌入式 Python runtime，零 HTTP）
+# run.py — Hermes Agent CN Desktop 开发启动脚本
 
-run.py 的默认目标是：以嵌入式 Python runtime（Hard FFI，零 HTTP）启动 Tauri 桌面端开发应用，后端是**真实的 Hermes-CN-Core**。
+`run.py` 是 `pnpm tauri:dev` 的开发包装器，用于选择真实 Hermes-CN-Core 的运行方式。
 
-- 不启动 hermes dashboard 子进程（无 9120 / 8644 / 8645 监听）。
-- 不写 connection.json（不会以 Local 模式 HTTP attach 到外部后端）；启动前还会主动删除 dev-runtime 下遗留的 connection.json。
-- 后端跑在 Rust 进程内，而且是真包：Core 侧的 `hermes_embedded`（已与 Core 合并）把每个 REST 路由直达真实的 `hermes_cli.web_server` FastAPI 应用（进程内 ASGI 调用，无 socket），每个 Gateway JSON-RPC 方法直达真实的 `tui_gateway.server` dispatcher；agent 事件（message.start / delta / complete、审批等）经 Rust 事件桥实时推给 WebView。全程没有到 Python 后端的 HTTP/WS 连接。
+## 默认模式：managed runtime
 
-  > 模式守则（2026 更新，合并后）：桌面仓库不再内置任何 `hermes_embedded` 参考包。payload 只有两处来源：HERMES_DESKTOP_EMBEDDED_PAYLOAD 覆盖、或 `<Core>/hermes_embedded`（与 Core 合并后的真实包）。找不到 payload 时 run.py 直接报错退出，不会再退回演示包。需要旧的真实 managed runtime 路径（安装该 Core 到 dev-runtime 并由 bootstrap 起 hermes dashboard 子进程，HTTP/WS 端口 9120）时，显式加 --real-backend。
+默认把所选 Core 检出安装到桌面端 `dev-runtime`，由 Tauri 启动真实的
+`hermes dashboard` 子进程，并通过本机 HTTP/WS（默认端口 9120）通信。这是当前
+发布安装包和常规开发使用的稳定路径。
 
-> 旧版 run.py 的「起后端 dashboard（9120）+ 浏览器前端（9545）」HTTP 模式已删除。纯浏览器前端调试请直接用 pnpm web:dev（需要自行起后端时用 Core 的 hermes dashboard）；完整桌面端开发用 python run.py 或 pnpm tauri:dev。
+```bash
+python run.py
+python run.py --source ../Hermes-CN-Core
+python run.py --backend C:/dev/Hermes-CN-Core  # --source 的兼容别名
+```
 
-前置要求
+Core 检出必须包含 `pyproject.toml`。解析顺序为：
 
-- 嵌入式模式（默认）只需要 `hermes_embedded` payload：优先 `HERMES_DESKTOP_EMBEDDED_PAYLOAD`，然后 `--source/--backend`，然后本仓库内的 `hermes_backend/hermes_embedded`，最后 `../Hermes-CN-Core/hermes_embedded`。
-- 只有 `--real-backend` 才需要完整的 Hermes-CN-Core 检出（含 `pyproject.toml`）。
-- pnpm：已安装且 `pnpm install` 已在桌面端仓库根目录执行过
+1. `--source` / `--backend`
+2. `HERMES_CN_CORE`
+3. 本仓库的 `hermes_backend`（若存在完整检出）
+4. 同级 `../Hermes-CN-Core`
 
-基本用法
+## 实验模式：embedded Python
 
-[code block: 14 lines]
+`--embedded` 显式启用进程内 CPython + Hard FFI。此模式不启动 dashboard 监听器，
+Rust 与 Python 之间不使用 HTTP/WS。它目前只用于开发和 CI 验证；正式安装包仍走
+managed runtime，直到 PyInstaller `_internal` payload 在三个平台完成端到端验证。
 
-完整选项
+```bash
+python run.py --source ../Hermes-CN-Core --embedded
+HERMES_DESKTOP_EMBEDDED_PAYLOAD=/path/to/hermes_embedded python run.py --embedded
+```
+
+payload 必须包含 `api.py`，解析顺序为：
+
+1. `HERMES_DESKTOP_EMBEDDED_PAYLOAD`
+2. `--source` / `--backend` 直接指向的 payload
+3. 所选 Core 检出的 `hermes_embedded`
+4. 本仓库 `hermes_backend/hermes_embedded`
+5. 同级 `../Hermes-CN-Core/hermes_embedded`
+
+嵌入模式会设置 `HERMES_DESKTOP_EMBEDDED_PYTHON=1`、
+`HERMES_DESKTOP_EMBEDDED_PAYLOAD=<payload>` 和仅限开发使用的
+`VITE_HERMES_SKIP_VERSION_CHECK=1`。
+
+## 选项
 
 | 选项 | 默认值 | 说明 |
-|------|--------|------|
-| --source | ./hermes_backend → ../Hermes-CN-Core | Hermes-CN-Core 仓库路径，或 `hermes_embedded` payload 目录；覆盖 HERMES_CN_CORE 环境变量 |
-| --backend | — | 已废弃的 --source 别名；无论指向什么都保持嵌入式启动（该 Core 必须带 hermes_embedded 包，否则报错退出） |
-| --real-backend | false | 显式 opt-in：走真实 managed runtime 路径——安装所选 Core 到 dev-runtime 并起 hermes dashboard 子进程（HTTP/WS，端口 9120）；不加班默认仍是嵌入式 |
-| --embedded | — | 已废弃的 no-op：嵌入式模式现在是默认模式 |
-| --skip-prereqs | false | 跳过前置检查（pnpm / payload 或 Core source 存在性） |
-| --help | — | 显示帮助信息 |
+|---|---:|---|
+| `--source` | 自动探测 | Core 检出或（配合 `--embedded`）payload 路径 |
+| `--backend` | — | `--source` 的兼容别名 |
+| `--embedded` | `false` | 显式启用实验性进程内运行时 |
+| `--real-backend` | `false` | 已废弃的兼容参数；managed runtime 已是默认值 |
+| `--skip-prereqs` | `false` | 跳过 pnpm、Core/payload 存在性检查 |
 
-> 旧的 --backend-port、--no-browser、--backend-only、--frontend-only 已删除——它们只属于已移除的 HTTP dashboard 模式。
+`--embedded` 与 `--real-backend` 互斥。
 
-环境变量
+## 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| HERMES_CN_CORE | ./hermes_backend → ../Hermes-CN-Core | Hermes-CN-Core 仓库路径；嵌入式模式下若指向的是 payload 目录也可直接使用 |
-| HERMES_AGENT_CN_SOURCE | 由 run.py 自动设为解析出的 Core 路径 | 传给 scripts/install-local-runtime.mjs，确保安装的 dev runtime 与 --source/HERMES_CN_CORE 一致 |
-| HERMES_DESKTOP_EMBEDDED_PYTHON | 1（run.py 自动设置） | 开启嵌入式 Python runtime；设为 0 可关闭嵌入、回退子进程 managed runtime |
-| HERMES_DESKTOP_EMBEDDED_PAYLOAD | <Core>/hermes_embedded | 嵌入式 Python payload 根目录（run.py 自动探测；桌面仓库已无内置包） |
-| VITE_HERMES_SKIP_VERSION_CHECK | 1（run.py 在嵌入式模式下自动设置） | 嵌入式包经 FFI 上报真实 Core 版本，可能与桌面端烘焙的 EXPECTED_BACKEND_VERSION 不一致；仅 dev 跳过严格版本门 |
-| HERMES_DESKTOP_RUNTIME_ROOT | 平台默认 | 桌面 dev-runtime 根目录（覆盖 connection.json 删除路径） |
-| HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL | — | 设为 1 时跳过 dev runtime 安装，直接 tauri dev |
+| 变量 | 说明 |
+|---|---|
+| `HERMES_CN_CORE` | Core 检出路径 |
+| `HERMES_AGENT_CN_SOURCE` | 传给本地 runtime 安装脚本的 Core 路径；run.py 自动设置 |
+| `HERMES_DESKTOP_EMBEDDED_PAYLOAD` | 嵌入式 payload 覆盖路径 |
+| `HERMES_DESKTOP_RUNTIME_ROOT` | 桌面 dev-runtime 根目录 |
+| `HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL=1` | 跳过 dev-runtime 重装 |
 
-工作流程
-
-1. 前置检查：pnpm 在 PATH；`--real-backend` 时要求 Core 检出（pyproject.toml），嵌入式模式时要求 `hermes_embedded` payload（api.py）。`--skip-prereqs` 可跳过。
-2. 解析 payload（resolve_embedded_payload()），返回 (payload, origin)：
-   1. HERMES_DESKTOP_EMBEDDED_PAYLOAD（显式覆盖）：没有 api.py 时直接报错退出；
-   2. `--source/--backend` 直接指向的 payload 目录；
-   3. `--source/--backend` Core 检出里的 `hermes_embedded`；
-   4. 解析出的 Core 检出里的 `hermes_embedded`；
-   5. 本仓库内的 `hermes_backend/hermes_embedded`；
-   6. `../Hermes-CN-Core/hermes_embedded`；
-   7. 都没有 → 报错退出（桌面仓库不再有参考包回退）。
-3. 选择启动模式：
-   - --real-backend 显式给出 → 真实 managed runtime 模式：设置 HERMES_DESKTOP_EMBEDDED_PYTHON=0（src/embedded/mod.rs 的 EMBEDDED_DISABLE_ENV；单纯不设还不够——Rust 的 resolve_payload_root 仍会扫到 Core 检出的 hermes_embedded）、清掉 HERMES_DESKTOP_EMBEDDED_PAYLOAD、保留 HERMES_AGENT_CN_SOURCE=<该 Core>，执行 pnpm tauri:dev。
-   - 否则走嵌入式模式（零 HTTP，真实后端）：HERMES_DESKTOP_EMBEDDED_PYTHON=1 + payload + VITE_HERMES_SKIP_VERSION_CHECK=1 执行 pnpm tauri:dev；若解析到了完整 Core 检出，还会带上 HERMES_AGENT_CN_SOURCE 让 install-local-runtime.mjs 使用同一处源码，否则自动跳过 dev-runtime 安装。
-4. 删除 dev-runtime 下遗留的 connection.json（防止 bootstrap 走 HTTP attach 旧路径）。
-5. 按 Ctrl+C 或进程退出时自动清理：删 connection.json → terminate() 子进程（等 5 秒）→ 仍未退出的 kill()（等 3 秒）。
-
-> 与 `pnpm tauri:dev` 的关系：`run.py` 只是它的嵌入式配置包装（补上 payload 解析与 connection.json 清理）。未解析到完整 Core 检出时，`run.py` 会在嵌入式模式下跳过 dev-runtime 安装；不带 `HERMES_DESKTOP_EMBEDDED_PYTHON=1` 直接 `pnpm tauri:dev` 仍是子进程 managed runtime 路径（默认 dashboard 端口 9120）。
-
-常见问题
-
-"Hermes-CN-Core not found"
-
-默认会先探测本仓库内的 `hermes_backend/` 检出；若不存在再探测 `../Hermes-CN-Core`。也可显式用 `--source` 或 `HERMES_CN_CORE` 指定。嵌入式模式只需要 `hermes_embedded` payload，未解析到完整 Core 检出时会自动跳过 dev-runtime 安装。
-
-"pnpm not found"
-
-安装 pnpm：
-
-[code block: 4 lines]
-
-"Embedded mode requires a hermes_embedded payload"
-
-裸 `python run.py` 会先尝试本仓库内的 `hermes_backend/hermes_embedded`，再尝试 `../Hermes-CN-Core/hermes_embedded`；都解析不到时会在启动前报错退出。解决：设置 `HERMES_DESKTOP_EMBEDDED_PAYLOAD`，或准备 `hermes_backend/` / `../Hermes-CN-Core` 检出。
-
-"--backend / --source 指向的 Core 没有 hermes_embedded"
-
-直接报错退出（合并后桌面仓库没有演示包可回退）。在 Core 侧补上 hermes_embedded 包（推荐，保持零 HTTP），或加 --real-backend 走 managed runtime 路径（安装该 Core 到 dev-runtime、起 hermes dashboard 子进程，HTTP/WS 端口 9120）。
-
-"dashboard exited before ready（9120 起不来）"
-  只有 --real-backend 才可能遇到。多半是 dev-runtime 里缓存的旧 venv 与当前 Core 源码不匹配（例如源码新增了顶层模块而旧 venv 未重装，ModuleNotFoundError 一类崩溃导致 hermes dashboard 提前退出）。修复：删除 %APPDATA%/cn.org.hermesagent.desktop/dev-runtime/versions/ 下对应版本目录后重试（install-local-runtime.mjs 会重建），或确认没设 HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL=1；嵌入式默认模式不依赖 9120，不受影响。
-
-HERMES_DESKTOP_EMBEDDED_PAYLOAD 指向的目录没有 api.py
-
-直接报错退出。修正路径或 unset 该变量。
-
-启动时弹出「版本不匹配」
-
-嵌入式包经 FFI 上报的是真实 Core 版本（hermes_cli.__version__），若与桌面端 web/src/lib/build-info.ts 烘焙的 EXPECTED_BACKEND_VERSION 不一致会触发严格版本门。run.py 在嵌入式 dev 模式自动设置 VITE_HERMES_SKIP_VERSION_CHECK=1 跳过；发版时仍须按仓库规范同步 EXPECTED_BACKEND_VERSION。
-
-端口
-
-run.py 自身不再绑定/探测任何端口（9120、9545 均已移出脚本）。Vite dev server 仍由 pnpm tauri:dev / web/vite.config.ts 管理（默认 9545，被 Windows Hyper-V/WSL2 排除端口范围屏蔽时自动回退）。
+两种模式都会在启动前清理 dev-runtime 下遗留的 `connection.json`，并在退出时终止
+其启动的 Tauri 子进程。纯浏览器前端调试请直接使用 `pnpm web:dev`；完整桌面开发
+也可直接使用 `pnpm tauri:dev`（managed runtime）。

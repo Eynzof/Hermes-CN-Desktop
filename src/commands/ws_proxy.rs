@@ -420,7 +420,11 @@ pub async fn gateway_ws_close(
 ) -> Result<(), AppError> {
     // Embedded mode: tear down the in-memory session.
     if state.inner.lock()?.embedded {
-        return crate::embedded::transport::close_embedded_gateway(&app, &state, &input.connection_id);
+        return crate::embedded::transport::close_embedded_gateway(
+            &app,
+            &state,
+            &input.connection_id,
+        );
     }
 
     let mut inner = state.inner.lock()?;

@@ -1,16 +1,16 @@
 """Launch-mode selection tests for run.py.
 
-Locks in the "always embed the REAL backend by default" policy:
+Locks in the safe launch-mode policy:
 
-- The payload is the merged real package: HERMES_DESKTOP_EMBEDDED_PAYLOAD
+- The managed runtime remains the default.
+- ``--embedded`` opts into the merged real package: HERMES_DESKTOP_EMBEDDED_PAYLOAD
   override or ``<core>/hermes_embedded``. The desktop repo carries no embedded
   package of its own, so a Core checkout without ``hermes_embedded`` (or a
   missing Core checkout) is a hard error — never a silent demo fallback.
 - The embedded launch sets VITE_HERMES_SKIP_VERSION_CHECK=1 because the
   embedded package reports the real Core version via FFI, which can differ
   from the desktop bundle's baked EXPECTED_BACKEND_VERSION.
-- The managed-runtime dashboard subprocess (port 9120) is reachable only
-  behind the explicit --real-backend flag.
+- ``--real-backend`` remains a deprecated alias for the default managed path.
 
 Run: python -m unittest discover -s tests/python -v
 """
@@ -36,7 +36,9 @@ def _load_run_module():
 
 
 def _make_core_root(tmp: str, with_payload: bool) -> Path:
-    core_root = Path(tmp)
+    # macOS exposes /var through /private/var. Match run.py's resolved paths so
+    # assertions describe identity rather than the spelling of the symlink.
+    core_root = Path(tmp).resolve()
     (core_root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
     if with_payload:
         pkg = core_root / "hermes_embedded"
@@ -113,7 +115,10 @@ class LaunchModeTests(unittest.TestCase):
     def test_backend_with_own_hermes_embedded_embeds_that_package(self):
         with tempfile.TemporaryDirectory() as tmp:
             core_root = _make_core_root(tmp, with_payload=True)
-            env, proc = self._launch(["--skip-prereqs", "--backend", str(core_root)], core_root)
+            env, proc = self._launch(
+                ["--skip-prereqs", "--backend", str(core_root), "--embedded"],
+                core_root,
+            )
 
         self.assertIsNotNone(env)
         self.assertEqual(env["HERMES_DESKTOP_EMBEDDED_PYTHON"], "1")
@@ -124,19 +129,38 @@ class LaunchModeTests(unittest.TestCase):
     def test_embedded_launch_skips_the_baked_version_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
             core_root = _make_core_root(tmp, with_payload=True)
-            env, _ = self._launch(["--skip-prereqs", "--source", str(core_root)], core_root)
+            env, _ = self._launch(
+                ["--skip-prereqs", "--source", str(core_root), "--embedded"],
+                core_root,
+            )
 
         self.assertEqual(env["VITE_HERMES_SKIP_VERSION_CHECK"], "1")
 
-    def test_backend_without_hermes_embedded_is_a_hard_error(self):
+    def test_embedded_backend_without_payload_is_a_hard_error(self):
         # No reference/demo fallback exists anymore: a Core checkout without
         # the merged package must fail loudly instead of embedding a stub.
         with tempfile.TemporaryDirectory() as tmp:
             core_root = _make_core_root(tmp, with_payload=False)
-            with mock.patch.object(sys, "argv", ["run.py", "--skip-prereqs", "--backend", str(core_root)]):
+            with mock.patch.object(
+                sys,
+                "argv",
+                ["run.py", "--skip-prereqs", "--backend", str(core_root), "--embedded"],
+            ):
                 self.assertRaises(SystemExit, self.run_mod.main)
 
-    def test_real_backend_flag_opts_into_managed_subprocess_path(self):
+    def test_default_launch_uses_managed_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            core_root = _make_core_root(tmp, with_payload=True)
+            env, proc = self._launch(
+                ["--skip-prereqs", "--backend", str(core_root)], core_root
+            )
+
+        self.assertEqual(env["HERMES_DESKTOP_EMBEDDED_PYTHON"], "0")
+        self.assertNotIn("HERMES_DESKTOP_EMBEDDED_PAYLOAD", env)
+        self.assertEqual(Path(env["HERMES_AGENT_CN_SOURCE"]), core_root)
+        self.assertIn("tauri:dev", proc.args)
+
+    def test_real_backend_flag_keeps_managed_subprocess_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             core_root = _make_core_root(tmp, with_payload=False)
             env, _ = self._launch(
@@ -147,7 +171,7 @@ class LaunchModeTests(unittest.TestCase):
         self.assertNotIn("HERMES_DESKTOP_EMBEDDED_PAYLOAD", env)
         self.assertEqual(Path(env["HERMES_AGENT_CN_SOURCE"]), core_root)
 
-    def test_missing_override_payload_is_a_hard_error(self):
+    def test_missing_override_payload_is_a_hard_error_in_embedded_mode(self):
         proc_holder = {}
 
         def fake_popen(args, **kwargs):
@@ -160,18 +184,33 @@ class LaunchModeTests(unittest.TestCase):
                  "HERMES_DESKTOP_EMBEDDED_PAYLOAD": str(tmp),
                  "HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL": "1",
              }):
-            with mock.patch.object(sys, "argv", ["run.py", "--skip-prereqs"]):
+            with mock.patch.object(
+                sys, "argv", ["run.py", "--skip-prereqs", "--embedded"]
+            ):
                 with self.assertRaises(SystemExit):
                     self.run_mod.main()
         self.assertNotIn("proc", proc_holder)
 
     def test_bare_run_without_any_core_checkout_is_a_hard_error(self):
-        # Bare run resolves ../Hermes-CN-Core by default; without the merged
-        # package there is no payload and run.py must refuse to launch.
-        missing = DESKTOP_ROOT.parent / "Hermes-CN-Core-does-not-exist"
-        with mock.patch.object(sys, "argv", ["run.py", "--skip-prereqs"]):
+        with mock.patch.object(self.run_mod, "_resolve_core_source", return_value=None), \
+             mock.patch.object(sys, "argv", ["run.py", "--skip-prereqs"]):
             self.assertRaises(SystemExit, self.run_mod.main)
-        self.assertFalse(missing.exists())
+
+    def test_explicit_missing_core_does_not_fall_back_to_sibling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp).resolve() / "missing-core"
+            self.assertIsNone(self.run_mod._resolve_core_source(str(missing)))
+            self.assertEqual(
+                self.run_mod.resolve_embedded_payload(str(missing), None),
+                (None, ""),
+            )
+
+    def test_conflicting_mode_flags_are_rejected(self):
+        with mock.patch.object(
+            sys, "argv", ["run.py", "--embedded", "--real-backend"]
+        ):
+            with self.assertRaises(SystemExit):
+                self.run_mod.main()
 
 
 if __name__ == "__main__":

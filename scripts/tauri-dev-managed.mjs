@@ -69,7 +69,7 @@ const child = spawn(pnpm, devArgs, {
     // deliberately want to attach to a separately started dashboard.
     HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: process.env.HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT ?? "0",
     HERMES_DASHBOARD_TUI: process.env.HERMES_DASHBOARD_TUI ?? "1",
-      // Embedded runtime dev support (refactor_report.md Phase 1): when the
+      // Embedded runtime dev support (docs/embedded-python.md): when the
       // embedded interpreter is requested, point the payload at the Core
       // checkout's real `hermes_embedded` package (HERMES_AGENT_CN_SOURCE is
       // set by install-local-runtime.mjs / run.py; the in-repo hermes_backend

@@ -141,7 +141,7 @@ pub async fn refresh_gateway_url(
 /// Return the Core backend version from the embedded interpreter (embedded
 /// mode only). The frontend version gate uses this instead of an HTTP
 /// `/api/version` fetch, which does not exist in embedded mode
-/// (refactor_report.md §8 success criteria 3). Non-embedded mode returns
+/// (docs/embedded-python.md). Non-embedded mode returns
 /// `None` so the frontend keeps using the HTTP path unchanged.
 ///
 /// The shape mirrors the HTTP `/api/version` response (`{ version: string }`)
