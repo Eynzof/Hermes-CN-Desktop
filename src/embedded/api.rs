@@ -51,10 +51,10 @@ pub async fn embedded_rest_request(
 
     let params = request_params(input, &path);
     let ctx = request_ctx(hermes_home, session_token, profile, &path);
-    // Python work must not hold the tokio worker (it can be long-running for
-    // e.g. logs/fs/agent handlers and would stall every other Tauri command,
-    // including gateway sends). Run the FFI call on the blocking pool — the
-    // GIL is held only for the duration of the Python call itself (§10.5).
+    // Waiting for the process-wide Python worker must not hold the tokio
+    // worker (it can be long-running for e.g. logs/fs/agent handlers). The
+    // blocking task queues the call onto that dedicated OS thread; no Tokio
+    // worker ever attaches directly to CPython.
     let python_func = entry.python_func;
     let result = tokio::task::spawn_blocking(move || {
         crate::embedded::call::call_handle_rpc(python_func, &params, &ctx)

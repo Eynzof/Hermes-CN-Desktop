@@ -15,7 +15,8 @@
 # - The embedded job installs python3-dev, enables the feature, checks out the
 #   Hermes-CN-Core repo, and runs the real-interpreter tests
 #   (tests/embedded_python.rs) against the merged `hermes_embedded` package in
-#   that Core checkout (the desktop repo carries no embedded package).
+#   that Core checkout (the desktop repo carries no embedded package). Tests
+#   use one harness thread and production FFI uses one process-lifetime worker.
 # - The no-http deny step enforces success criteria 8: src/embedded/ must
 #   contain no asgi/uvicorn/reqwest/tungstenite symbols (Hard FFI end-state).
 # - The FFI coverage step enforces success criteria 9: every proxy-pass route
@@ -142,5 +143,6 @@ jobs:
       - name: cargo test (embedded-python feature)
         env:
           PYO3_PYTHON: python3
+          PYTHONFAULTHANDLER: "1"
           HERMES_DESKTOP_EMBEDDED_PAYLOAD: ${{ github.workspace }}/Hermes-CN-Core
         run: cargo test --features embedded-python --test embedded_python --no-fail-fast -- --test-threads=1

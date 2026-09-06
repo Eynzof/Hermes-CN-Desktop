@@ -3,7 +3,7 @@
 //! Compiled and run only with the `embedded-python` feature:
 //!
 //! ```text
-//! cargo test --features embedded-python --test embedded_python
+//! cargo test --features embedded-python --test embedded_python -- --test-threads=1
 //! ```
 //!
 //! These tests link libpython and initialize a real CPython interpreter, so
@@ -121,6 +121,31 @@ fn call_handle_rpc_drives_the_real_backend_package() {
     );
     assert_eq!(status["gateway_running"], true);
     assert_eq!(status["runtime"], "in-process");
+
+    interp.shutdown();
+}
+
+#[test]
+#[serial_test::serial]
+fn concurrent_callers_share_the_process_python_worker() {
+    let root = payload_root();
+    let interp = hermes_agent_cn::embedded::call::PythonInterpreter::start(&root).unwrap();
+    let expected = hermes_agent_cn::embedded::call::call_handle_rpc("get_version", "{}", "{}")
+        .expect("baseline get_version should succeed");
+
+    std::thread::scope(|scope| {
+        let calls: Vec<_> = (0..8)
+            .map(|_| {
+                scope.spawn(|| {
+                    hermes_agent_cn::embedded::call::call_handle_rpc("get_version", "{}", "{}")
+                        .expect("concurrent get_version should succeed")
+                })
+            })
+            .collect();
+        for call in calls {
+            assert_eq!(call.join().unwrap(), expected);
+        }
+    });
 
     interp.shutdown();
 }

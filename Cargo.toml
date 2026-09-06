@@ -70,7 +70,10 @@ tauri-plugin-clipboard-manager = "2.3.2"
 # (PYO3_PYTHON / python3 on PATH) to link libpython. The crate always compiles
 # the embedded architecture (src/embedded/) with a stub backend when the
 # feature is off, so default builds/tests never depend on a Python runtime.
-pyo3 = { version = "0.29", features = ["auto-initialize"], optional = true }
+# Initialization is explicit inside the process-lifetime FFI worker; leaving
+# auto-initialize off prevents an incidental attach on another thread from
+# winning the process-global CPython initialization race.
+pyo3 = { version = "0.29", optional = true }
 
 [features]
 default = []

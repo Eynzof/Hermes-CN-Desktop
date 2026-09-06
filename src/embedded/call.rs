@@ -20,6 +20,9 @@
 
 use std::path::Path;
 
+#[cfg(feature = "embedded-python")]
+use std::sync::{mpsc, OnceLock};
+
 use serde_json::Value;
 
 #[cfg(feature = "embedded-python")]
@@ -29,13 +32,176 @@ use crate::error::{AppError, AppResult};
 
 /// Handle to a started CPython interpreter. Stored in the process-global
 /// `EmbeddedPython` so it is initialized exactly once. Holds no `Python`
-/// token (tokens are `!Send`); every call re-attaches via `Python::attach`.
+/// token (tokens are `!Send`); the process worker attaches for every call.
 #[cfg(feature = "embedded-python")]
 pub struct PythonInterpreter {
     #[allow(dead_code)] // payload path kept for diagnostics/updates
     payload_root: std::path::PathBuf,
     python_version: String,
     ffi_surface_version: String,
+}
+
+#[cfg(feature = "embedded-python")]
+#[derive(Clone)]
+struct PythonMetadata {
+    python_version: String,
+    ffi_surface_version: String,
+}
+
+/// Process-wide executor for every Rust → Python call.
+///
+/// CPython is process-global, while Tauri/Tokio may retire and recreate
+/// blocking-pool threads. Keeping initialization and all FFI entry points on
+/// one long-lived OS thread avoids carrying CPython thread state across those
+/// worker lifetimes and makes concurrent callers queue at the same boundary
+/// the GIL would serialize anyway.
+#[cfg(feature = "embedded-python")]
+struct PythonWorker {
+    sender: mpsc::Sender<PythonCommand>,
+    payload_root: std::path::PathBuf,
+    metadata: PythonMetadata,
+}
+
+#[cfg(feature = "embedded-python")]
+enum PythonCommand {
+    CallFfi {
+        module: String,
+        func: String,
+        args_json: String,
+        reply: mpsc::SyncSender<AppResult<Value>>,
+    },
+    CallHandleRpc {
+        method: String,
+        params_json: String,
+        ctx_json: String,
+        reply: mpsc::SyncSender<AppResult<Value>>,
+    },
+    Eval {
+        expr: String,
+        reply: mpsc::SyncSender<AppResult<String>>,
+    },
+    Ping {
+        reply: mpsc::SyncSender<bool>,
+    },
+}
+
+#[cfg(feature = "embedded-python")]
+static PYTHON_WORKER: OnceLock<Result<PythonWorker, AppError>> = OnceLock::new();
+
+#[cfg(feature = "embedded-python")]
+impl PythonWorker {
+    fn start(payload_root: &Path) -> AppResult<Self> {
+        set_payload_env(payload_root);
+        add_dll_directory(payload_root);
+
+        let payload_root = payload_root.to_path_buf();
+        let worker_root = payload_root.clone();
+        let (sender, receiver) = mpsc::channel();
+        let (startup_tx, startup_rx) = mpsc::sync_channel(1);
+
+        std::thread::Builder::new()
+            .name("hermes-embedded-python".to_string())
+            .spawn(move || {
+                // The thread that initializes CPython is also its only Rust
+                // caller for the rest of the process lifetime.
+                pyo3::Python::initialize();
+                let initialized =
+                    pyo3::Python::attach(|py| initialize_interpreter(py, &worker_root));
+                let metadata = match initialized {
+                    Ok(metadata) => metadata,
+                    Err(err) => {
+                        let _ = startup_tx.send(Err(err));
+                        return;
+                    }
+                };
+                if startup_tx.send(Ok(metadata.clone())).is_err() {
+                    return;
+                }
+
+                while let Ok(command) = receiver.recv() {
+                    run_command(command);
+                }
+            })
+            .map_err(|err| AppError::EmbeddedPython {
+                msg: format!("failed to start embedded Python worker: {err}"),
+                traceback: None,
+            })?;
+
+        let metadata = startup_rx.recv().map_err(|_| AppError::EmbeddedPython {
+            msg: "embedded Python worker stopped during startup".to_string(),
+            traceback: None,
+        })??;
+        Ok(Self {
+            sender,
+            payload_root,
+            metadata,
+        })
+    }
+
+    fn call_ffi(&self, module: &str, func: &str, args_json: &str) -> AppResult<Value> {
+        let (reply, result) = mpsc::sync_channel(1);
+        self.send(PythonCommand::CallFfi {
+            module: module.to_string(),
+            func: func.to_string(),
+            args_json: args_json.to_string(),
+            reply,
+        })?;
+        recv_worker_result(result)
+    }
+
+    fn call_handle_rpc(&self, method: &str, params_json: &str, ctx_json: &str) -> AppResult<Value> {
+        let (reply, result) = mpsc::sync_channel(1);
+        self.send(PythonCommand::CallHandleRpc {
+            method: method.to_string(),
+            params_json: params_json.to_string(),
+            ctx_json: ctx_json.to_string(),
+            reply,
+        })?;
+        recv_worker_result(result)
+    }
+
+    fn eval(&self, expr: &str) -> AppResult<String> {
+        let (reply, result) = mpsc::sync_channel(1);
+        self.send(PythonCommand::Eval {
+            expr: expr.to_string(),
+            reply,
+        })?;
+        recv_worker_result(result)
+    }
+
+    fn ping(&self) -> bool {
+        let (reply, result) = mpsc::sync_channel(1);
+        self.send(PythonCommand::Ping { reply }).is_ok() && result.recv().unwrap_or(false)
+    }
+
+    fn send(&self, command: PythonCommand) -> AppResult<()> {
+        self.sender
+            .send(command)
+            .map_err(|_| AppError::EmbeddedPython {
+                msg: "embedded Python worker is no longer running".to_string(),
+                traceback: None,
+            })
+    }
+}
+
+#[cfg(feature = "embedded-python")]
+fn recv_worker_result<T>(receiver: mpsc::Receiver<AppResult<T>>) -> AppResult<T> {
+    receiver.recv().map_err(|_| AppError::EmbeddedPython {
+        msg: "embedded Python worker stopped before returning a result".to_string(),
+        traceback: None,
+    })?
+}
+
+#[cfg(feature = "embedded-python")]
+fn python_worker() -> AppResult<&'static PythonWorker> {
+    match PYTHON_WORKER.get() {
+        Some(Ok(worker)) => Ok(worker),
+        Some(Err(err)) => Err(err.clone()),
+        None => Err(AppError::EmbeddedPython {
+            msg: "embedded Python worker has not been initialized".to_string(),
+            traceback: None,
+        }),
+    }
 }
 
 /// Non-feature placeholder so `EmbeddedPython.interpreter` compiles without
@@ -56,62 +222,18 @@ impl PythonInterpreter {
     /// - On Windows the payload's DLL directory is added so `python3.dll` and
     ///   `.pyd` extensions load without polluting the global PATH.
     pub fn start(payload_root: &Path) -> AppResult<Self> {
-        set_payload_env(payload_root);
-        add_dll_directory(payload_root);
-
-        // PyO3 v0.29: `initialize` prepares the freethreaded interpreter (the
-        // old `prepare_freethreaded_python` was removed); `attach` replaces
-        // `with_gil` (report §10.1 / §10.7).
-        pyo3::Python::initialize();
-
-        let payload_root_str = payload_root.display().to_string();
-        // If the payload root IS the `hermes_embedded` package dir (dev spike),
-        // put its parent on sys.path so `import hermes_embedded` resolves;
-        // otherwise (PyInstaller _internal) the root itself is the path entry.
-        let sys_path_entry = if payload_root.join("__init__.py").is_file() {
-            payload_root
-                .parent()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| payload_root_str.clone())
-        } else {
-            payload_root_str.clone()
+        let worker = match PYTHON_WORKER.get_or_init(|| PythonWorker::start(payload_root)) {
+            Ok(worker) => worker,
+            Err(err) => return Err(err.clone()),
         };
-        let interp = pyo3::Python::attach(|py| {
-            // Ensure the payload root is importable even when the build-time
-            // Python prefix would shadow PYTHONPATH (embedding quirk).
-            let sys = py.import("sys")?;
-            let sys_path = sys.getattr("path")?;
-            sys_path.call_method1("insert", (0, sys_path_entry.clone()))?;
-
-            let version_info: String = sys.getattr("version")?.extract()?;
-            let version_line = version_info.lines().next().unwrap_or("unknown").to_string();
-
-            let api = py.import("hermes_embedded.api")?;
-            let ffi_version: String = api.getattr("ffi_surface_version")?.extract()?;
-            if ffi_version != crate::embedded::FFI_SURFACE_VERSION {
-                return Err(AppError::EmbeddedPython {
-                    msg: format!(
-                        "FFI surface version mismatch: Python reports {ffi_version}, \
-                         Rust expects {}",
-                        crate::embedded::FFI_SURFACE_VERSION
-                    ),
-                    traceback: None,
-                });
-            }
-
-            // Expose the Python → Rust event bridge so the Core-side
-            // RustBridgeTransport can push gateway frames into the WebView.
-            crate::embedded::bridge::install(py)?;
-
-            Ok(PythonInterpreter {
-                payload_root: payload_root.to_path_buf(),
-                python_version: version_line,
-                ffi_surface_version: ffi_version,
-            })
-        })?;
+        let interp = PythonInterpreter {
+            payload_root: worker.payload_root.clone(),
+            python_version: worker.metadata.python_version.clone(),
+            ffi_surface_version: worker.metadata.ffi_surface_version.clone(),
+        };
         log::debug!(
             "PythonInterpreter started from {} ({})",
-            payload_root.display(),
+            interp.payload_root.display(),
             interp.python_version()
         );
         Ok(interp)
@@ -131,6 +253,53 @@ impl PythonInterpreter {
     pub fn shutdown(&self) {
         log::info!("PythonInterpreter::shutdown requested");
     }
+}
+
+#[cfg(feature = "embedded-python")]
+fn initialize_interpreter(py: pyo3::Python<'_>, payload_root: &Path) -> AppResult<PythonMetadata> {
+    let payload_root_str = payload_root.display().to_string();
+    // If the payload root IS the `hermes_embedded` package dir (dev spike),
+    // put its parent on sys.path so `import hermes_embedded` resolves;
+    // otherwise (PyInstaller _internal) the root itself is the path entry.
+    let sys_path_entry = if payload_root.join("__init__.py").is_file() {
+        payload_root
+            .parent()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| payload_root_str.clone())
+    } else {
+        payload_root_str
+    };
+
+    // Ensure the payload root is importable even when the build-time Python
+    // prefix would shadow PYTHONPATH (embedding quirk).
+    let sys = py.import("sys")?;
+    let sys_path = sys.getattr("path")?;
+    sys_path.call_method1("insert", (0, sys_path_entry))?;
+
+    let version_info: String = sys.getattr("version")?.extract()?;
+    let python_version = version_info.lines().next().unwrap_or("unknown").to_string();
+
+    let api = py.import("hermes_embedded.api")?;
+    let ffi_surface_version: String = api.getattr("ffi_surface_version")?.extract()?;
+    if ffi_surface_version != crate::embedded::FFI_SURFACE_VERSION {
+        return Err(AppError::EmbeddedPython {
+            msg: format!(
+                "FFI surface version mismatch: Python reports {ffi_surface_version}, \
+                 Rust expects {}",
+                crate::embedded::FFI_SURFACE_VERSION
+            ),
+            traceback: None,
+        });
+    }
+
+    // Expose the Python → Rust event bridge so the Core-side
+    // RustBridgeTransport can push gateway frames into the WebView.
+    crate::embedded::bridge::install(py)?;
+
+    Ok(PythonMetadata {
+        python_version,
+        ffi_surface_version,
+    })
 }
 
 #[cfg(not(feature = "embedded-python"))]
@@ -228,6 +397,67 @@ fn add_dll_directory(payload_root: &Path) {
     );
 }
 
+#[cfg(feature = "embedded-python")]
+fn run_command(command: PythonCommand) {
+    match command {
+        PythonCommand::CallFfi {
+            module,
+            func,
+            args_json,
+            reply,
+        } => {
+            let result =
+                pyo3::Python::attach(|py| call_ffi_attached(py, &module, &func, &args_json));
+            let _ = reply.send(result);
+        }
+        PythonCommand::CallHandleRpc {
+            method,
+            params_json,
+            ctx_json,
+            reply,
+        } => {
+            let result = pyo3::Python::attach(|py| {
+                call_handle_rpc_attached(py, &method, &params_json, &ctx_json)
+            });
+            let _ = reply.send(result);
+        }
+        PythonCommand::Eval { expr, reply } => {
+            let result = pyo3::Python::attach(|py| eval_attached(py, &expr));
+            let _ = reply.send(result);
+        }
+        PythonCommand::Ping { reply } => {
+            let alive = pyo3::Python::attach(|py| py.import("sys").is_ok());
+            let _ = reply.send(alive);
+        }
+    }
+}
+
+#[cfg(feature = "embedded-python")]
+fn call_ffi_attached(
+    py: pyo3::Python<'_>,
+    module: &str,
+    func: &str,
+    args_json: &str,
+) -> AppResult<Value> {
+    let module = py.import(module)?;
+    let func = module.getattr(func)?;
+    let result = func.call1((args_json,))?;
+    json_value(py, result)
+}
+
+#[cfg(feature = "embedded-python")]
+fn call_handle_rpc_attached(
+    py: pyo3::Python<'_>,
+    method: &str,
+    params_json: &str,
+    ctx_json: &str,
+) -> AppResult<Value> {
+    let api = py.import("hermes_embedded.api")?;
+    let func = api.getattr("handle_rpc")?;
+    let result = func.call1((method, params_json, ctx_json))?;
+    json_value(py, result)
+}
+
 /// Call a Python function with a JSON-encoded argument tuple and normalize the
 /// result to `serde_json::Value`. Works for both REST (`handle_rpc`-style) and
 /// gateway (`dispatch`-style) entry points.
@@ -238,12 +468,7 @@ fn add_dll_directory(payload_root: &Path) {
 pub fn call_ffi(module: &str, func: &str, args_json: &str) -> AppResult<Value> {
     #[cfg(feature = "embedded-python")]
     {
-        pyo3::Python::attach(|py| {
-            let module = py.import(module)?;
-            let func = module.getattr(func)?;
-            let result = func.call1((args_json,))?;
-            json_value(py, result)
-        })
+        python_worker()?.call_ffi(module, func, args_json)
     }
     #[cfg(not(feature = "embedded-python"))]
     {
@@ -260,12 +485,7 @@ pub fn call_ffi(module: &str, func: &str, args_json: &str) -> AppResult<Value> {
 pub fn call_handle_rpc(method: &str, params_json: &str, ctx_json: &str) -> AppResult<Value> {
     #[cfg(feature = "embedded-python")]
     {
-        pyo3::Python::attach(|py| {
-            let api = py.import("hermes_embedded.api")?;
-            let func = api.getattr("handle_rpc")?;
-            let result = func.call1((method, params_json, ctx_json))?;
-            json_value(py, result)
-        })
+        python_worker()?.call_handle_rpc(method, params_json, ctx_json)
     }
     #[cfg(not(feature = "embedded-python"))]
     {
@@ -294,22 +514,25 @@ fn json_value(py: pyo3::Python<'_>, obj: pyo3::Bound<'_, pyo3::PyAny>) -> AppRes
 /// unit tests and the Phase 0 spike to verify interpreter liveness.
 #[cfg(feature = "embedded-python")]
 pub fn eval_for_bootstrap(expr: &str) -> AppResult<String> {
+    python_worker()?.eval(expr)
+}
+
+#[cfg(feature = "embedded-python")]
+fn eval_attached(py: pyo3::Python<'_>, expr: &str) -> AppResult<String> {
     let expr_c = std::ffi::CString::new(expr).map_err(|e| AppError::EmbeddedPython {
         msg: format!("bootstrap expression contains NUL: {e}"),
         traceback: None,
     })?;
-    pyo3::Python::attach(|py| {
-        let result = py.eval(expr_c.as_c_str(), None, None)?;
-        let text: String = result.str()?.extract()?;
-        Ok(text)
-    })
+    let result = py.eval(expr_c.as_c_str(), None, None)?;
+    let text: String = result.str()?.extract()?;
+    Ok(text)
 }
 
 /// Fast check that a real interpreter is reachable (used by the feature-gated
 /// integration test and `embedded_status` command).
 #[cfg(feature = "embedded-python")]
 pub fn interpreter_alive() -> bool {
-    pyo3::Python::try_attach(|py| py.import("sys").is_ok()).unwrap_or(false)
+    python_worker().is_ok_and(PythonWorker::ping)
 }
 
 #[cfg(test)]
@@ -337,9 +560,10 @@ mod tests {
     #[cfg(feature = "embedded-python")]
     #[test]
     fn eval_bootstrap_runs_python() {
-        // The interpreter must be prepared first (mirrors start()).
+        // Exercise the attached helper in this isolated unit-test process;
+        // the public function is covered through the real worker integration.
         pyo3::Python::initialize();
-        let out = eval_for_bootstrap("str(1 + 1)").unwrap();
+        let out = pyo3::Python::attach(|py| eval_attached(py, "str(1 + 1)")).unwrap();
         assert_eq!(out, "2");
     }
 }

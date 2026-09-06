@@ -142,6 +142,10 @@ Verification (local)
 - cargo test --features embedded-python --test embedded_python -- --test-threads=1
 - cargo test                            # default suite (embedded architecture)
 
+Rust callers queue FFI work onto one process-lifetime Python worker thread.
+This keeps CPython initialization and calls off Tokio's recyclable blocking
+threads while preserving the synchronous `handle_rpc` contract.
+
 Not yet implemented (documented follow-ups)
 
 - Real PyInstaller _internal payload production end-to-end. Release installers

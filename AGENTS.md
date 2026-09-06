@@ -165,6 +165,7 @@ gateway-client.ts 负责协议层与重连编排：1→15s 指数退避、唤醒
 - 特性开关：pyo3 后端在 embedded-python cargo feature 后面（默认关，避免普通构建强制链接 libpython）；开发时仅通过 `run.py --embedded` 显式启用，`HERMES_DESKTOP_EMBEDDED_PYTHON=0` 关闭嵌入并使用子进程 managed runtime。
 - 前端契约：get_runtime_config 返回 embedded: true、apiBaseUrl: "embedded://local"（占位，不绑定端口）；embedded 模式 transport.ts 强制 native IPC、gateway-socket-path.ts 强制 relay。
 - 版本门：嵌入式 get_version 经 FFI 上报真实 hermes_cli.__version__；run.py 在嵌入式 dev 启动时设置 VITE_HERMES_SKIP_VERSION_CHECK=1（发版仍须同步 EXPECTED_BACKEND_VERSION）。
+- 线程边界：解释器初始化和全部 Rust → Python FFI 调用都经进程级长驻 worker 串行执行；Tokio `spawn_blocking` 只能等待该 worker，不能直接 attach CPython。
 - 门禁：cargo test 默认跑嵌入式架构的 mock/纯 Rust 测试（tests/embedded.rs）；真实解释器测试在 --features embedded-python（tests/embedded_python.rs，payload 取 Core 检出的 hermes_embedded，CI embedded job 会 checkout Core）；CI 有 src/embedded/ 的 no-http deny grep 与 FFI 覆盖率门禁；Core 侧自检：python -m hermes_embedded.selftest。
 - 例外：remote（远程 Hermes Agent）与 local（attach 外部 CLI dashboard）仍走 HTTP/WS——外部进程无法嵌入。
 
