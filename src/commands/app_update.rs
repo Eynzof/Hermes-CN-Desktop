@@ -1150,6 +1150,8 @@ fn wait_for_windows_updater_parent(parent_pid: u32) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn run_windows_updater_helper(args: &[OsString], log_path: &Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
     if args.len() < 3 {
         return Err("Windows updater helper 参数不足".to_string());
     }
@@ -1171,8 +1173,15 @@ fn run_windows_updater_helper(args: &[OsString], log_path: &Path) -> Result<(), 
 
     wait_for_windows_updater_parent(parent_pid)?;
     append_windows_updater_helper_log(log_path, "parent-exited");
+    let install_dir = app_exe
+        .parent()
+        .ok_or_else(|| "无法确认当前 Desktop 安装目录".to_string())?;
     let status = std::process::Command::new(&installer)
         .args(WINDOWS_NSIS_INSTALL_ARGS)
+        // NSIS requires /D to be the final, unquoted argument, including when
+        // the directory contains spaces. Update the executable we will restart
+        // instead of a different installation remembered in the registry.
+        .raw_arg(format!("/D={}", install_dir.display()))
         .status()
         .map_err(|error| format!("运行 Windows updater 失败：{error}"));
     if let Ok(status) = &status {
