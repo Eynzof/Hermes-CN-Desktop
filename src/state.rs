@@ -126,6 +126,21 @@ impl DashboardHandle {
         Self::attached(api_base_url, session_token, "local")
     }
 
+    /// Build a handle for the in-process embedded Python runtime
+    /// (see `docs/embedded-python.md`). There is no child process, no port lock
+    /// and no ownership marker; `owns_process` stays false so shutdown paths
+    /// never try to terminate a process — the interpreter is finalized via
+    /// `crate::embedded::shutdown()` instead.
+    pub fn embedded() -> Self {
+        let mut handle = Self::attached(
+            crate::embedded::EMBEDDED_API_BASE_URL.to_string(),
+            Some(crate::embedded::embedded_session_token()),
+            "embedded",
+        );
+        handle.command_program = Some("embedded-python".to_string());
+        handle
+    }
+
     fn attached(
         api_base_url: String,
         session_token: Option<String>,
@@ -214,6 +229,16 @@ pub struct AppStateInner {
     /// on the relay socket path. `None` on webview-direct WS or before the
     /// first relay connect.
     pub gateway_ws: Option<GatewayWsHandle>,
+    /// The live embedded gateway session, when the managed runtime is running
+    /// in-process (see `docs/embedded-python.md`). Replaces `gateway_ws` in
+    /// embedded mode; `gateway_ws_send/close` consult it first.
+    pub embedded_gateway: Option<crate::embedded::transport::EmbeddedGatewayHandle>,
+    /// True when the managed runtime is running in-process (embedded CPython)
+    /// instead of as a `hermes` subprocess. Drives api_proxy/ws_proxy/gateway
+    /// command behavior and the frontend `runtime.isEmbedded()` flag.
+    pub embedded: bool,
+    /// Resolved embedded payload root (validated), when `embedded` is true.
+    pub embedded_payload: Option<String>,
     /// Lazily started when the user chooses “在浏览器中打开社区桌面版”.
     pub browser_companion: Option<BrowserCompanionHandle>,
     /// Set while a managed-dashboard restart is in progress (profile switch or
@@ -285,6 +310,9 @@ impl AppState {
                 current_profile: "default".to_string(),
                 dashboard_handle: None,
                 gateway_ws: None,
+                embedded_gateway: None,
+                embedded: false,
+                embedded_payload: None,
                 browser_companion: None,
                 dashboard_restart_in_flight: false,
                 last_runtime_error: None,

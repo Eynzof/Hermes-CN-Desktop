@@ -352,6 +352,7 @@ mod tests {
         assert!(cfg.verify_signature);
     }
 
+    #[serial_test::serial]
     #[test]
     #[serial_test::serial]
     fn missing_file_falls_back_to_defaults_without_error() {
@@ -361,6 +362,7 @@ mod tests {
         assert_eq!(load.config, UpdateConfig::default());
     }
 
+    #[serial_test::serial]
     #[test]
     #[serial_test::serial]
     fn corrupt_file_falls_back_with_config_error() {
@@ -372,6 +374,7 @@ mod tests {
         assert_eq!(load.config, UpdateConfig::default());
     }
 
+    #[serial_test::serial]
     #[test]
     #[serial_test::serial]
     fn parses_user_config_values() {
@@ -460,6 +463,7 @@ mod tests {
         assert!(validate(&cfg_zero).is_err());
     }
 
+    #[serial_test::serial]
     #[test]
     #[serial_test::serial]
     fn save_writes_atomically_and_loads_back() {
@@ -478,6 +482,7 @@ mod tests {
         assert_eq!(load.config, cfg);
     }
 
+    #[serial_test::serial]
     #[test]
     fn save_rejects_invalid_config_before_writing() {
         let dir = TempDir::new().unwrap();

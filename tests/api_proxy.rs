@@ -663,6 +663,7 @@ async fn upload_file_rejects_invalid_base64() {
         },
         &server.uri(),
         None,
+        "C:/Users/test/.hermes",
     )
     .await
     .expect_err("base64 decode must fail");
@@ -724,6 +725,7 @@ async fn upload_file_posts_multipart_with_auth_header() {
         },
         &server.uri(),
         Some("my-token"),
+        "C:/Users/test/.hermes",
     )
     .await
     .expect("ok");

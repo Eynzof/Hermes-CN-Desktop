@@ -14,9 +14,19 @@ so this now starts the same managed dev path as pnpm tauri:dev.`);
   process.exit(0);
 }
 
-const child = spawn(pnpm, ["exec", "tauri", "dev"], {
+// Honor embedded mode when explicitly requested (the real pyo3 backend lives
+// behind the non-default `embedded-python` cargo feature).
+const devArgs = ["exec", "tauri", "dev"];
+if (process.env.HERMES_DESKTOP_EMBEDDED_PYTHON === "1") {
+  devArgs.push("--features", "embedded-python");
+}
+
+const child = spawn(pnpm, devArgs, {
   cwd: repoRoot,
   stdio: "inherit",
+  // Windows: pnpm resolves to pnpm.cmd, and Node cannot spawn .cmd files
+  // directly without a shell (spawn EINVAL otherwise).
+  shell: process.platform === "win32",
   env: {
     ...process.env,
     HERMES_DESKTOP_ALLOW_EXTERNAL_AGENT: "0",

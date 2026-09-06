@@ -6,6 +6,21 @@
 # Linux-only matrix: the test suite is platform-independent except for
 # prevent_sleep.rs (macOS only, gated behind cfg). Running on ubuntu
 # is faster + cheaper than the cross-platform matrix.
+#
+# Embedded runtime (docs/embedded-python.md):
+# - The default job runs `cargo test` WITHOUT --all-features: the optional
+#   `embedded-python` feature links libpython, which ubuntu runners do not
+#   provide out of the box. The embedded architecture (FFI registry, event
+#   bus, transport, payload resolution) is still fully tested by tests/embedded.rs.
+# - The embedded job installs python3-dev, enables the feature, checks out the
+#   Hermes-CN-Core repo, and runs the real-interpreter tests
+#   (tests/embedded_python.rs) against the merged `hermes_embedded` package in
+#   that Core checkout (the desktop repo carries no embedded package). Tests
+#   use one harness thread and production FFI uses one process-lifetime worker.
+# - The no-http deny step enforces success criteria 8: src/embedded/ must
+#   contain no asgi/uvicorn/reqwest/tungstenite symbols (Hard FFI end-state).
+# - The FFI coverage step enforces success criteria 9: every proxy-pass route
+#   registered in the REST FFI surface must have a direct FFI entry.
 
 name: rust-test
 
@@ -52,4 +67,82 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test
-        run: cargo test --all-features --no-fail-fast
+        # NOTE: no --all-features — the optional `embedded-python` feature
+        # links libpython and is exercised by the dedicated embedded job below.
+        run: cargo test --no-fail-fast
+
+      - name: Embedded FFI coverage gate (success criteria 9)
+        # tests/embedded.rs + the ffi.rs unit test assert every proxy-pass
+        # route has a direct FFI entry (1:1 with the report mapping table);
+        # this step is the CI-level grep so the gate cannot be skipped by an
+        # empty test binary.
+        run: cargo test --lib embedded::ffi::tests::proxy_pass_route_list_is_fully_covered
+
+      - name: Embedded no-http deny (success criteria 8)
+        # Hard FFI end-state: no in-process ASGI/uvicorn/HTTP/WS transport
+        # symbols may exist in the embedded architecture.
+        run: |
+          if grep -rniE "asgi|uvicorn|reqwest|tungstenite" src/embedded/; then
+            echo "::error::src/embedded/ must be zero-HTTP (no asgi/uvicorn/reqwest/tungstenite)"
+            exit 1
+          fi
+
+  embedded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout Hermes-CN-Core (real embedded payload)
+        uses: actions/checkout@v4
+        with:
+          repository: Eynzof/Hermes-CN-Core
+          ref: main
+          path: Hermes-CN-Core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install Core (Python) deps into the job interpreter
+        # The pyo3 backend links THIS interpreter, so the merged
+        # hermes_embedded package must be importable from it (no venv).
+        run: pip install -e "./Hermes-CN-Core"
+
+      - name: Install Linux build deps + Python dev headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf \
+            python3-dev \
+            python3
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Python embedded selftest
+        working-directory: Hermes-CN-Core
+        run: python3 -m hermes_embedded.selftest
+
+      - name: cargo check (embedded-python feature)
+        env:
+          PYO3_PYTHON: python3
+          HERMES_DESKTOP_EMBEDDED_PAYLOAD: ${{ github.workspace }}/Hermes-CN-Core
+        run: cargo check --features embedded-python
+
+      - name: cargo test (embedded-python feature)
+        env:
+          PYO3_PYTHON: python3
+          PYTHONFAULTHANDLER: "1"
+          HERMES_DESKTOP_EMBEDDED_PAYLOAD: ${{ github.workspace }}/Hermes-CN-Core
+        run: cargo test --features embedded-python --test embedded_python --no-fail-fast -- --test-threads=1

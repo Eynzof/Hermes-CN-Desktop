@@ -86,6 +86,9 @@ function shouldUseNativeIpc(path: string): boolean {
 
   if (runtime.platform === "tauri") {
     if (!window.hermesDesktop?.request) return false;
+    // Embedded mode: the backend lives inside the Rust process — there is no
+    // loopback HTTP at all, so every request must go through native IPC.
+    if (runtime.isEmbedded()) return true;
     if (isLocalDesktopRoute) return true;
     if (!window.__HERMES_RUNTIME__?.apiBaseUrl && window.__HERMES_RUNTIME__?.backendReady !== true) {
       return false;

@@ -279,6 +279,48 @@ mod tests {
     }
 
     #[test]
+    fn profile_resolution_prefers_request_header() {
+        let mut headers = HashMap::new();
+        headers.insert("X-Hermes-Profile".to_string(), "work".to_string());
+        assert_eq!(
+            resolve_request_profile(Some(&headers), Some("personal")),
+            "work"
+        );
+    }
+
+    #[test]
+    fn profile_resolution_header_lookup_is_case_insensitive() {
+        let mut headers = HashMap::new();
+        headers.insert("x-hermes-profile".to_string(), "work".to_string());
+        assert_eq!(resolve_request_profile(Some(&headers), None), "work");
+    }
+
+    #[test]
+    fn profile_resolution_falls_back_to_state_profile() {
+        let headers = HashMap::new();
+        assert_eq!(
+            resolve_request_profile(Some(&headers), Some("personal")),
+            "personal"
+        );
+        assert_eq!(resolve_request_profile(None, Some("personal")), "personal");
+    }
+
+    #[test]
+    fn profile_resolution_ignores_blank_header_and_blank_state() {
+        let mut headers = HashMap::new();
+        headers.insert("X-Hermes-Profile".to_string(), "   ".to_string());
+        assert_eq!(
+            resolve_request_profile(Some(&headers), Some("personal")),
+            "personal"
+        );
+        assert_eq!(
+            resolve_request_profile(Some(&headers), Some("  ")),
+            "default"
+        );
+        assert_eq!(resolve_request_profile(None, None), "default");
+    }
+
+    #[test]
     fn url_path_passes_through_without_query() {
         assert_eq!(url_path("/api/foo"), "/api/foo");
     }
@@ -424,6 +466,33 @@ enum ProxyAuth<'a> {
     Oauth(&'a crate::oauth_session::OauthSession),
 }
 
+/// Header the frontend transport layer sets to name the Hermes profile a
+/// request targets (web/src/lib/transport.ts injects `X-Hermes-Profile`).
+const PROFILE_HEADER: &str = "x-hermes-profile";
+
+/// Resolve the active profile for the embedded Hard FFI dispatch: an explicit
+/// request header wins, then the desktop state hint (`AppStateInner::
+/// current_profile`), then "default".
+fn resolve_request_profile(
+    headers: Option<&HashMap<String, String>>,
+    state_profile: Option<&str>,
+) -> String {
+    headers
+        .and_then(|h| {
+            h.iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(PROFILE_HEADER))
+                .map(|(_, v)| v.trim().to_string())
+        })
+        .filter(|p| !p.is_empty())
+        .or_else(|| {
+            state_profile
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "default".to_string())
+}
+
 /// Core implementation variant used by the Tauri command so local desktop
 /// intercepts can read both the active profile home and the profile root.
 /// Token-auth entry point (loopback/local/remote-token + all existing tests).
@@ -434,12 +503,36 @@ pub async fn api_request_impl_with_home_base(
     hermes_home: &str,
     hermes_home_base: &str,
 ) -> Result<ApiRequestResult, AppError> {
+    api_request_impl_with_profile(
+        input,
+        api_base_url,
+        session_token,
+        hermes_home,
+        hermes_home_base,
+        None,
+    )
+    .await
+}
+
+/// Token-auth entry point that also carries the desktop's active profile, so
+/// the embedded Hard FFI branch dispatches against the real profile instead of
+/// a hardcoded "default". `active_profile` is only a fallback — a per-request
+/// `X-Hermes-Profile` header still takes precedence.
+pub async fn api_request_impl_with_profile(
+    input: ApiRequestInput,
+    api_base_url: &str,
+    session_token: Option<&str>,
+    hermes_home: &str,
+    hermes_home_base: &str,
+    active_profile: Option<&str>,
+) -> Result<ApiRequestResult, AppError> {
     api_request_impl_inner(
         input,
         api_base_url,
         ProxyAuth::Token(session_token),
         hermes_home,
         hermes_home_base,
+        active_profile,
     )
     .await
 }
@@ -458,6 +551,7 @@ pub async fn api_request_impl_oauth(
         ProxyAuth::Oauth(session),
         hermes_home,
         hermes_home_base,
+        None,
     )
     .await
 }
@@ -468,6 +562,7 @@ async fn api_request_impl_inner(
     auth: ProxyAuth<'_>,
     hermes_home: &str,
     hermes_home_base: &str,
+    active_profile: Option<&str>,
 ) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
     let path = &input.path;
@@ -509,7 +604,20 @@ async fn api_request_impl_inner(
         return Ok(json_result(status, status_text, body));
     }
 
-    // 5. Proxy to dashboard
+    // 5. Embedded Hard FFI — zero HTTP (docs/embedded-python.md). The
+    // api_proxy never forwards to reqwest here: routes are dispatched directly
+    // into the embedded interpreter via the FFI registry.
+    if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
+        let token = match &auth {
+            ProxyAuth::Token(t) => *t,
+            ProxyAuth::Oauth(_) => None,
+        };
+        let profile = resolve_request_profile(input.headers.as_ref(), active_profile);
+        return crate::embedded::api::embedded_rest_request(hermes_home, token, &profile, &input)
+            .await;
+    }
+
+    // 6. Proxy to dashboard
     let full_url = if path.starts_with("http://") || path.starts_with("https://") {
         // Validate same origin
         let base = url::Url::parse(api_base_url)?;
@@ -603,13 +711,14 @@ pub async fn api_request_from_state(
     input: ApiRequestInput,
     state: &AppState,
 ) -> Result<ApiRequestResult, AppError> {
-    let (api_base_url, auth, hermes_home, hermes_home_base, mode) = {
+    let (api_base_url, auth, hermes_home, hermes_home_base, current_profile, mode) = {
         let inner = state.inner.lock()?;
         (
             inner.api_base_url.clone(),
             inner.dashboard_auth(),
             inner.hermes_home.clone(),
             inner.hermes_home_base.clone(),
+            inner.current_profile.clone(),
             inner.connection_mode,
         )
     };
@@ -655,12 +764,13 @@ pub async fn api_request_from_state(
         crate::state::DashboardAuth::Token(t) => t.clone(),
         crate::state::DashboardAuth::Oauth(_) => None,
     };
-    let first = api_request_impl_with_home_base(
+    let first = api_request_impl_with_profile(
         input.clone(),
         &api_base_url,
         session_token.as_deref(),
         &hermes_home,
         &hermes_home_base,
+        Some(&current_profile),
     )
     .await?;
     // Remote tokens are static (entered in Settings or via env); the
@@ -693,12 +803,13 @@ pub async fn api_request_from_state(
         inner.gateway_url = fresh_gateway_url;
     }
 
-    api_request_impl_with_home_base(
+    api_request_impl_with_profile(
         input,
         &api_base_url,
         fresh_token.as_deref(),
         &hermes_home,
         &hermes_home_base,
+        Some(&current_profile),
     )
     .await
 }
@@ -1070,6 +1181,20 @@ pub async fn upload_file_impl(
     input: UploadFileInput,
     api_base_url: &str,
     session_token: Option<&str>,
+    hermes_home: &str,
+) -> Result<ApiRequestResult, AppError> {
+    upload_file_impl_with_profile(input, api_base_url, session_token, hermes_home, None).await
+}
+
+/// `upload_file_impl` variant that carries the desktop's active profile so
+/// the embedded Hard FFI dispatch targets the real profile instead of a
+/// hardcoded "default".
+pub async fn upload_file_impl_with_profile(
+    input: UploadFileInput,
+    api_base_url: &str,
+    session_token: Option<&str>,
+    hermes_home: &str,
+    active_profile: Option<&str>,
 ) -> Result<ApiRequestResult, AppError> {
     use base64::Engine;
 
@@ -1078,6 +1203,34 @@ pub async fn upload_file_impl(
         .decode(&input.data)
         .map_err(|e| AppError::InvalidRequest(format!("Invalid base64: {}", e)))?;
     ensure_upload_decoded_size(file_bytes.len())?;
+
+    // Embedded Hard FFI — zero HTTP (refactor_plan.md Phase C): dispatch
+    // straight into the embedded interpreter's handle_upload (writes
+    // ~/.hermes/uploads/<session_id>/), never reqwest. Keeps src/embedded/
+    // free of reqwest so the no-http deny gate stays green.
+    if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
+        let body = serde_json::json!({
+            "session_id": input.session_id.clone(),
+            "name": input.name.clone(),
+            "type": input.r#type.clone().unwrap_or_else(|| "application/octet-stream".to_string()),
+            "data": input.data.clone(),
+        })
+        .to_string();
+        let embedded_input = ApiRequestInput {
+            path: "/api/upload".to_string(),
+            method: Some("POST".to_string()),
+            headers: None,
+            body: Some(body),
+        };
+        let profile = resolve_request_profile(None, active_profile);
+        return crate::embedded::api::embedded_rest_request(
+            hermes_home,
+            session_token,
+            &profile,
+            &embedded_input,
+        )
+        .await;
+    }
 
     let mime_type = input
         .r#type
@@ -1127,11 +1280,23 @@ pub async fn upload_file(
     input: UploadFileInput,
     state: State<'_, AppState>,
 ) -> Result<ApiRequestResult, AppError> {
-    let (api_base_url, session_token) = {
+    let (api_base_url, session_token, hermes_home, current_profile) = {
         let inner = state.inner.lock()?;
-        (inner.api_base_url.clone(), inner.session_token.clone())
+        (
+            inner.api_base_url.clone(),
+            inner.session_token.clone(),
+            inner.hermes_home.clone(),
+            inner.current_profile.clone(),
+        )
     };
-    upload_file_impl(input, &api_base_url, session_token.as_deref()).await
+    upload_file_impl_with_profile(
+        input,
+        &api_base_url,
+        session_token.as_deref(),
+        &hermes_home,
+        Some(&current_profile),
+    )
+    .await
 }
 
 #[derive(Debug, Deserialize)]

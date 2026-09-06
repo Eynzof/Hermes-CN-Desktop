@@ -188,6 +188,33 @@ pub async fn gateway_ws_open(
 ) -> Result<(), AppError> {
     let connection_id = input.connection_id;
     shutdown_active(&state)?;
+
+    // Embedded mode: no WebSocket — open the in-memory RustBridgeTransport
+    // session instead (report Phase 3). The webview relay contract is
+    // unchanged; only the byte carrier disappears.
+    {
+        let inner = state.inner.lock()?;
+        if inner.embedded {
+            // Consistency assertion (GAP 4 flag hygiene): an embedded flag must
+            // always point at the embedded://local placeholder. REST routing is
+            // keyed on api_base_url while the gateway is keyed on the flag, so
+            // a mismatch would split traffic between the interpreter and a
+            // subprocess/remote — fail loudly instead of silently misrouting.
+            if inner.api_base_url != crate::embedded::EMBEDDED_API_BASE_URL {
+                log::error!(
+                    "embedded flag inconsistent with api_base_url: embedded=true but api_base_url={}",
+                    inner.api_base_url
+                );
+                return Err(AppError::Internal(format!(
+                    "嵌入式标志与 api_base_url 不一致（embedded=true 但 api_base_url={}）；请重启桌面端",
+                    inner.api_base_url
+                )));
+            }
+            drop(inner);
+            return crate::embedded::transport::open_embedded_gateway(&app, &state, connection_id);
+        }
+    }
+
     let stream = connect_gateway_stream(&app, &state).await?;
 
     let (mut sink, mut read) = stream.split();
@@ -359,7 +386,20 @@ fn emit_ws_auth_expired(app: &tauri::AppHandle, base_url: &str) {
 pub async fn gateway_ws_send(
     input: GatewayWsSendInput,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    // Embedded mode: dispatch the frame into the Python interpreter directly
+    // (responses are emitted as gateway-ws-message events).
+    if state.inner.lock()?.embedded {
+        return crate::embedded::transport::dispatch_frame(
+            &app,
+            &state,
+            &input.connection_id,
+            input.data,
+        )
+        .await;
+    }
+
     let inner = state.inner.lock()?;
     match &inner.gateway_ws {
         Some(handle) if handle.connection_id == input.connection_id => handle
@@ -376,7 +416,17 @@ pub async fn gateway_ws_send(
 pub async fn gateway_ws_close(
     input: GatewayWsCloseInput,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    // Embedded mode: tear down the in-memory session.
+    if state.inner.lock()?.embedded {
+        return crate::embedded::transport::close_embedded_gateway(
+            &app,
+            &state,
+            &input.connection_id,
+        );
+    }
+
     let mut inner = state.inner.lock()?;
     if let Some(handle) = inner.gateway_ws.as_ref() {
         if handle.connection_id == input.connection_id {

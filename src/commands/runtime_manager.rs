@@ -345,6 +345,10 @@ fn stop_managed_backend(state: &State<'_, AppState>) -> Result<(), AppError> {
     inner.gateway_url.clear();
     inner.session_token = None;
     inner.oauth_session = None;
+    // The managed backend is stopped (or was never the embedded runtime);
+    // clear the flag so gateway traffic is not misrouted into an interpreter
+    // while REST points nowhere / at an external backend.
+    inner.embedded = false;
     Ok(())
 }
 

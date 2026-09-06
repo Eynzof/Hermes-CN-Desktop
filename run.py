@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
 """
-run.py — Start Hermes Agent CN Desktop with existing backend.
+run.py — Start Hermes Agent CN Desktop with the real Core backend.
 
-Starts the backend (hermes dashboard) and frontend (Vite dev server)
-concurrently. Cleans up both processes on exit.
+This script is a dev convenience wrapper around `pnpm tauri:dev`. The verified
+managed runtime remains the default. The in-process CPython/FFI path is an
+explicit experimental mode until packaged payload E2E is complete.
+
+Launch mode selection
+---------------------
+- By default, install the selected Core checkout into dev-runtime and launch
+  the managed `hermes dashboard` subprocess on 9120 over HTTP/WS.
+- Pass --embedded to opt into the experimental in-process runtime. It resolves
+  HERMES_DESKTOP_EMBEDDED_PAYLOAD or ``<core>/hermes_embedded`` and does not
+  spawn a dashboard listener.
 
 Usage:
-    python run.py                          # Default: port 9120 backend, 9545 frontend
-    python run.py --backend-port 9119      # Custom backend port
-    python run.py --no-browser             # Don't open browser automatically
-    python run.py --backend-only           # Only start the backend
-    python run.py --frontend-only           # Only start the frontend
-    python run.py --help                   # Show full help
+    python run.py                                    # Managed runtime (default)
+    python run.py --source C:/dev/Hermes-CN-Core     # Override Core checkout path
+    python run.py --backend ../Hermes-CN-Core        # Relative paths work too
+    python run.py --backend ../Hermes-CN-Core --embedded    # Experimental zero-HTTP mode
+    python run.py --skip-prereqs                     # Skip pnpm / Core source checks
+    python run.py --help                             # Show full help
 
 Requirements:
-    - Hermes-CN-Core at ../Hermes-CN-Core (or set HERMES_CN_CORE env var)
-    - Hermes-CN-Core venv at ../Hermes-CN-Core/.venv with `hermes` installed
+    - Managed mode (default) needs a full Core checkout with pyproject.toml.
+    - Embedded mode (--embedded) needs a ``hermes_embedded`` payload. run.py
+      looks for it in HERMES_DESKTOP_EMBEDDED_PAYLOAD, then the --source/--backend
+      argument, then ./hermes_backend/hermes_embedded, then
+      ../Hermes-CN-Core/hermes_embedded.
     - pnpm installed and dependencies installed (pnpm install)
 """
 
@@ -25,54 +37,49 @@ import argparse
 import os
 import sys
 import time
-import webbrowser
 from pathlib import Path
 from signal import SIGINT, SIGTERM, SIG_IGN, signal
-from subprocess import PIPE, Popen
-from typing import NoReturn
+from subprocess import Popen
 import shutil
-import atexit
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 
 DESKTOP_ROOT = Path(__file__).parent.resolve()
 
 
-def _resolve_core_root(backend_arg: str | None = None) -> Path:
-    """Resolve Hermes-CN-Core path: CLI arg > env var > default sibling."""
-    if backend_arg:
-        return Path(backend_arg).resolve()
-    return Path(os.environ.get("HERMES_CN_CORE", DESKTOP_ROOT.parent / "Hermes-CN-Core")).resolve()
+def _resolve_core_source(source_arg: str | None = None) -> Path | None:
+    """Resolve a full Hermes-CN-Core checkout for the managed-runtime path.
 
+    Priority:
+    1. CLI --source / --backend if it points to a checkout with pyproject.toml.
+    2. HERMES_CN_CORE env var if it points to a checkout with pyproject.toml.
+    3. In-repo ``hermes_backend`` checkout with pyproject.toml.
+    4. Sibling ``../Hermes-CN-Core`` checkout with pyproject.toml.
 
-def _resolve_venv_paths(core_root: Path) -> tuple[Path, Path]:
-    """Return (hermes_exe, python_exe) for the given core root.
-
-    Platform-dependent venv layout:
-      Windows: .venv\\Scripts\\hermes.exe / python.exe
-      macOS/Linux: .venv/bin/hermes / python3
+    Returns ``None`` when no full Core checkout is found.  Embedded mode can
+    still run from a standalone ``hermes_embedded`` payload without a full
+    checkout.
     """
-    if sys.platform == "win32":
-        scripts_dir = "Scripts"
-        hermes_name = "hermes.exe"
-        python_name = "python.exe"
-    else:
-        scripts_dir = "bin"
-        hermes_name = "hermes"
-        python_name = "python3"
-    hermes = core_root / ".venv" / scripts_dir / hermes_name
-    python = core_root / ".venv" / scripts_dir / python_name
-    return hermes, python
+    if source_arg:
+        p = Path(source_arg).resolve()
+        return p if (p / "pyproject.toml").is_file() else None
 
+    env = os.environ.get("HERMES_CN_CORE")
+    if env:
+        p = Path(env).resolve()
+        if (p / "pyproject.toml").is_file():
+            return p
 
-# Defaults — may be overridden in main() after CLI parsing
-CORE_ROOT = _resolve_core_root()
-VENV_HERMES, VENV_PYTHON = _resolve_venv_paths(CORE_ROOT)
+    local = DESKTOP_ROOT / "hermes_backend"
+    if (local / "pyproject.toml").is_file():
+        return local
 
-# ── Defaults ────────────────────────────────────────────────────────────────
+    sibling = DESKTOP_ROOT.parent / "Hermes-CN-Core"
+    if (sibling / "pyproject.toml").is_file():
+        return sibling
 
-DEFAULT_BACKEND_PORT = 9120   # Desktop convention (avoids conflict with global agent on 9119)
-DEFAULT_FRONTEND_PORT = 9545  # Vite dev server (strictPort); verified at runtime — Windows may block it via an excluded port range
+    return None
+
 
 # ── Globals ─────────────────────────────────────────────────────────────────
 
@@ -88,335 +95,43 @@ def eprint(*args, **kwargs) -> None:
     print(*args, file=sys.stderr, **kwargs)
 
 
-def check_prerequisites(core_root: Path | None = None, venv_hermes: Path | None = None) -> None:
-    """Verify that all required tools and paths exist."""
+def check_prerequisites(
+    core_source: Path | None, payload: Path | None, embedded_mode: bool
+) -> None:
+    """Verify prerequisites for the selected launch mode.
+
+    Embedded mode only needs a ``hermes_embedded`` payload (and pnpm). The
+    default managed-runtime path needs a full Core checkout with pyproject.toml.
+    """
     errors: list[str] = []
 
-    cr = core_root or CORE_ROOT
-    vh = venv_hermes or VENV_HERMES
-
-    if not cr.is_dir():
-        errors.append(
-            f"Hermes-CN-Core not found at {CORE_ROOT}.\n"
-            f"    Set HERMES_CN_CORE env var or clone it to: {cr}"
-        )
-    elif not vh.is_file():
-        venv_pip_path = ".venv\\Scripts\\pip" if sys.platform == "win32" else ".venv/bin/pip"
-        errors.append(
-            f"hermes CLI not found at {VENV_HERMES}.\n"
-            f"    Run: cd {cr} && python -m venv .venv && {venv_pip_path} install -e ."
-        )
-    else:
-        # Quick smoke-test: check hermes is runnable
-        import subprocess as sp
-
-        result = sp.run(
-            [str(vh), "--version"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-        )
-        if result.returncode != 0:
-            errors.append(f"hermes CLI exists but failed to run:\n  {result.stderr.strip()}")
-
-    # Check pnpm
-    import shutil
     if not shutil.which("pnpm"):
         errors.append(
             "pnpm not found in PATH.\n"
             "  Install: npm install -g pnpm  (or: corepack enable && corepack prepare pnpm@latest --activate)"
         )
 
+    if not embedded_mode:
+        if core_source is None or not (core_source / "pyproject.toml").is_file():
+            errors.append(
+                "Real managed-runtime mode requires a Hermes-CN-Core source checkout "
+                f"(pyproject.toml). Set HERMES_CN_CORE / use --source, or clone it to: "
+                f"{DESKTOP_ROOT.parent / 'Hermes-CN-Core'}"
+            )
+    else:
+        if payload is None:
+            errors.append(
+                "Embedded mode requires a hermes_embedded payload. Set "
+                "HERMES_DESKTOP_EMBEDDED_PAYLOAD, or ensure one of these exists:\n"
+                f"    - {DESKTOP_ROOT / 'hermes_backend' / 'hermes_embedded'}\n"
+                f"    - {DESKTOP_ROOT.parent / 'Hermes-CN-Core' / 'hermes_embedded'}"
+            )
+
     if errors:
         eprint("❌ Prerequisites not met:")
         for err in errors:
             eprint(f"  • {err}")
         sys.exit(1)
-
-
-def find_free_port(preferred: int) -> int:
-    """Try the preferred port; if occupied, find a free one."""
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(("127.0.0.1", preferred))
-            return preferred
-        except OSError:
-            pass
-    # Port occupied — let OS assign one
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def is_port_bindable(port: int) -> bool:
-    """Return True if a TCP server can actually bind `port` on loopback.
-
-    Windows reserves whole ranges of TCP ports for Hyper-V / WSL2 / WinNAT
-    ("excluded port ranges" — see `netsh interface ipv4 show excludedportrange
-    protocol=tcp`). Binding to a reserved port then fails with EACCES even
-    though nothing is listening, and the reserved ranges move across reboots,
-    so the port must be re-checked at runtime instead of being hard-coded.
-
-    Checks both IPv4 (127.0.0.1) and IPv6 (::1) loopback because the Vite dev
-    server binds every address `localhost` resolves to.
-    """
-    import socket
-    for family, addr in [(socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")]:
-        try:
-            with socket.socket(family, socket.SOCK_STREAM) as s:
-                s.bind((addr, port))
-        except OSError:
-            return False
-    return True
-
-
-def _find_pid_on_port_windows(port: int) -> str | None:
-    """Find PID listening on the given port on Windows using netstat."""
-    import subprocess as sp
-    result = sp.run(
-        ["netstat", "-ano"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-    )
-    if result.returncode != 0:
-        return None
-
-    for line in result.stdout.splitlines():
-        parts = line.strip().split()
-        # Look for lines like:
-        #   TCP    127.0.0.1:9545    0.0.0.0:0    LISTENING    12345
-        #   TCP    [::1]:9545        [::]:0        LISTENING    26452
-        #   TCP    0.0.0.0:9545      0.0.0.0:0    LISTENING    12345
-        #   TCP    [::]:9545         [::]:0        LISTENING    12345
-        if len(parts) >= 5 and "LISTENING" in parts[3]:
-            local_addr = parts[1]
-            if "]:" in local_addr:
-                addr_port = local_addr.split("]:")[-1]
-            elif ":" in local_addr:
-                addr_port = local_addr.rsplit(":", 1)[-1]
-            else:
-                continue
-            if addr_port.isdigit() and int(addr_port) == port:
-                return parts[4]
-    return None
-
-
-def _find_pid_on_port_macos(port: int) -> str | None:
-    """Find PID listening on the given port on macOS using lsof."""
-    import subprocess as sp
-    try:
-        result = sp.run(
-            ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            return None
-        # lsof -ti returns one PID per line; take the first
-        return result.stdout.strip().splitlines()[0]
-    except (FileNotFoundError, Exception):
-        return None
-
-
-def _find_pid_on_port_linux(port: int) -> str | None:
-    """Find PID listening on the given port on Linux using ss."""
-    import subprocess as sp
-    import re
-    try:
-        # ss -tlnp shows listening TCP sockets with PID
-        result = sp.run(
-            ["ss", "-tlnp", f"sport = :{port}"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-        )
-        if result.returncode != 0:
-            return None
-        # Parse output: LISTEN 0 128 127.0.0.1:9545 0.0.0.0:* users:(("node",pid=12345,fd=18))
-        for line in result.stdout.splitlines():
-            m = re.search(r'pid=(\d+)', line)
-            if m:
-                return m.group(1)
-        return None
-    except (FileNotFoundError, Exception):
-        return None
-
-
-def _kill_pid(pid: str, port: int) -> bool:
-    """Kill a process by PID using platform-appropriate tools."""
-    import subprocess as sp
-    try:
-        if sys.platform == "win32":
-            sp.run(["taskkill", "/F", "/PID", pid], capture_output=True, timeout=10)
-        else:
-            sp.run(["kill", "-9", pid], capture_output=True, timeout=10)
-        eprint(f"🧹 Killed stale process (PID {pid}) on port {port}")
-        time.sleep(0.5)  # Give OS time to release the port
-        return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int) -> bool:
-    """Find and kill the process listening on the given port.
-
-    Platform detection:
-      Windows: netstat + taskkill
-      macOS:   lsof + kill
-      Linux:   ss + kill
-
-    Returns True if a process was found and killed, False if the port was free.
-    """
-    import socket
-
-    # First check if port is actually occupied (check both IPv4 and IPv6)
-    port_occupied = False
-    for family, addr in [(socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")]:
-        try:
-            with socket.socket(family, socket.SOCK_STREAM) as s:
-                s.bind((addr, port))
-        except OSError:
-            port_occupied = True
-            break
-    if not port_occupied:
-        return False
-
-    # Port is occupied — find the PID using the platform-appropriate tool
-    try:
-        if sys.platform == "win32":
-            pid = _find_pid_on_port_windows(port)
-        elif sys.platform == "darwin":
-            pid = _find_pid_on_port_macos(port)
-        else:
-            # Linux and other Unix-likes
-            pid = _find_pid_on_port_linux(port)
-
-        if pid is None:
-            return False
-
-        return _kill_pid(pid, port)
-    except Exception:
-        return False
-
-
-def _kill_hermes_processes_windows() -> None:
-    """Kill existing hermes.exe / hermes python processes on Windows."""
-    import subprocess as sp
-
-    # Kill any existing hermes.exe processes
-    try:
-        result = sp.run(
-            ["tasklist", "/FI", "IMAGENAME eq hermes.exe", "/FO", "CSV"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-        )
-        if result.returncode == 0:
-            for line in result.stdout.splitlines()[1:]:  # Skip CSV header
-                parts = line.strip().split(",")
-                if len(parts) >= 2:
-                    pid = parts[1].strip('"')
-                    try:
-                        sp.run(["taskkill", "/F", "/PID", pid], capture_output=True, timeout=10)
-                        eprint(f"🧹 Killed existing hermes.exe (PID {pid})")
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-    # Also kill any python processes running hermes_cli
-    try:
-        result = sp.run(
-            ["wmic", "process", "where", 'name="python.exe"', "get", "ProcessId,CommandLine", "/format:csv"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-        )
-        if result.returncode == 0:
-            for line in result.stdout.splitlines():
-                if "hermes_cli" in line.lower() or "hermes" in line.lower():
-                    parts = line.split(",")
-                    if len(parts) >= 2:
-                        pid = parts[1].strip()
-                        if pid and pid != "ProcessId":
-                            try:
-                                sp.run(["taskkill", "/F", "/PID", pid], capture_output=True, timeout=10)
-                                eprint(f"🧹 Killed hermes python process (PID {pid})")
-                            except Exception:
-                                pass
-    except Exception:
-        pass
-
-
-def _kill_hermes_processes_unix() -> None:
-    """Kill existing hermes processes on macOS/Linux using pgrep/pkill."""
-    import subprocess as sp
-
-    # Kill hermes dashboard/gateway processes
-    try:
-        result = sp.run(
-            ["pgrep", "-f", "hermes"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            for pid in result.stdout.strip().splitlines():
-                pid = pid.strip()
-                if pid:
-                    try:
-                        sp.run(["kill", "-9", pid], capture_output=True, timeout=10)
-                        eprint(f"🧹 Killed existing hermes process (PID {pid})")
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-    # Kill python processes running hermes_cli
-    try:
-        result = sp.run(
-            ["pgrep", "-f", "hermes_cli"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            for pid in result.stdout.strip().splitlines():
-                pid = pid.strip()
-                if pid:
-                    try:
-                        sp.run(["kill", "-9", pid], capture_output=True, timeout=10)
-                        eprint(f"🧹 Killed hermes python process (PID {pid})")
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-
-def cleanup_hermes_state() -> None:
-    """Remove stale Hermes state (port-locks, gateway.pid, processes.json)
-    that might prevent a new dashboard from starting.
-    """
-    # Kill existing hermes processes (platform-specific)
-    if sys.platform == "win32":
-        _kill_hermes_processes_windows()
-    else:
-        _kill_hermes_processes_unix()
-
-    # Remove stale port-lock files (Windows: LOCALAPPDATA; macOS/Linux: XDG_DATA_HOME or ~/.local/share)
-    if sys.platform == "win32":
-        hermes_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "hermes"
-    elif sys.platform == "darwin":
-        hermes_data = Path.home() / "Library" / "Application Support" / "hermes"
-    else:
-        hermes_data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "hermes"
-    port_locks_dir = hermes_data / ".port-locks"
-    if port_locks_dir.is_dir():
-        for lock_file in port_locks_dir.iterdir():
-            try:
-                lock_file.unlink(missing_ok=True)
-                eprint(f"🧹 Removed stale port-lock: {lock_file.name}")
-            except Exception:
-                pass
-
-    # Remove gateway.pid and processes.json
-    for f in ["gateway.pid", "processes.json"]:
-        p = hermes_data / f
-        if p.is_file():
-            try:
-                p.unlink(missing_ok=True)
-                eprint(f"🧹 Removed stale state file: {f}")
-            except Exception:
-                pass
-
-    time.sleep(0.5)  # Give OS time to release resources
 
 
 def dev_runtime_root() -> Path:
@@ -437,47 +152,168 @@ def dev_runtime_root() -> Path:
     return base / "cn.org.hermesagent.desktop" / "dev-runtime"
 
 
-def write_connection_json(backend_port: int) -> Path | None:
-    """Write connection.json so the desktop uses Local mode (attach to existing backend).
+def remove_connection_json() -> None:
+    """Remove connection.json from the dev runtime root.
 
-    Returns the path written, or None on failure.
+    In embedded mode the desktop must NOT attach to an HTTP backend (Local /
+    Remote connection.json would force exactly that); deleting any stale file
+    lets bootstrap take the Managed → in-process EmbeddedPython path.
     """
     global _connection_json_path
-    try:
-        runtime_root = dev_runtime_root()
-        runtime_root.mkdir(parents=True, exist_ok=True)
-        conn_path = runtime_root / "connection.json"
-        content = {
-            "version": 2,
-            "mode": "local",
-            "local": {"url": f"http://127.0.0.1:{backend_port}"},
-        }
-        import json
-        conn_path.write_text(json.dumps(content, indent=2), encoding="utf-8")
-        _connection_json_path = conn_path
-        eprint(f"🔗 Wrote connection.json → {conn_path} (mode=local, url={content['local']['url']})")
-        return conn_path
-    except Exception as e:
-        eprint(f"⚠️  Failed to write connection.json: {e}")
-        return None
-
-
-def wait_for_backend(port: int, timeout: float = 30.0) -> bool:
-    """Poll the dashboard health endpoint until it responds."""
-    import urllib.error
-    import urllib.request
-
-    url = f"http://127.0.0.1:{port}/"
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    path = _connection_json_path or (dev_runtime_root() / "connection.json")
+    if path.is_file():
         try:
-            with urllib.request.urlopen(url, timeout=5) as resp:
-                if resp.status == 200:
-                    return True
-        except (urllib.error.URLError, ConnectionError, OSError):
-            pass
-        time.sleep(0.5)
-    return False
+            path.unlink(missing_ok=True)
+            eprint(f"🧹 Removed {path} (embedded mode must not attach over HTTP)")
+        except Exception as e:
+            eprint(f"⚠️  Failed to remove {path}: {e}")
+    _connection_json_path = None
+
+
+def has_embedded_payload(root: Path) -> bool:
+    """A directory is a usable embedded payload when it exposes api.py."""
+    return (root / "api.py").is_file()
+
+
+def resolve_embedded_payload(
+    source_arg: str | None, core_source: Path | None
+) -> tuple[Path | None, str]:
+    """Resolve the embedded Python payload root and where it came from.
+
+    The payload is the REAL backend package (``hermes_embedded``). Resolution
+    order:
+
+    1. HERMES_DESKTOP_EMBEDDED_PAYLOAD — explicit override. A missing api.py
+       here is a HARD error: the user configured a payload on purpose, and
+       silently swapping in a fallback would mask a broken checkout.
+    2. CLI --source/--backend if it points directly at a payload directory.
+    3. CLI --source/--backend Core checkout's ``hermes_embedded`` package.
+    4. Resolved Core checkout's ``hermes_embedded`` package.
+    5. In-repo ``hermes_backend/hermes_embedded`` package.
+    6. Sibling ``../Hermes-CN-Core/hermes_embedded`` package.
+
+    There is no bundled demo fallback anymore: the desktop repo no longer
+    carries a ``hermes_embedded`` package of its own.
+
+    Returns ``(payload_root, origin)`` with origin in
+    ``{"override", "cli-payload", "cli-core", "core", "local-backend",
+    "sibling-core", ""}`` (empty means "nothing found").
+    """
+    override = os.environ.get("HERMES_DESKTOP_EMBEDDED_PAYLOAD")
+    if override:
+        p = Path(override).resolve()
+        if not has_embedded_payload(p):
+            eprint(
+                f"❌ HERMES_DESKTOP_EMBEDDED_PAYLOAD points to {p}, but no api.py was found under it.\n"
+                f"    Fix the path or unset the variable."
+            )
+            sys.exit(1)
+        return p, "override"
+
+    if source_arg:
+        p = Path(source_arg).resolve()
+        if has_embedded_payload(p):
+            return p, "cli-payload"
+        core_pkg = p / "hermes_embedded"
+        if has_embedded_payload(core_pkg):
+            return core_pkg, "cli-core"
+        # An explicit CLI path is authoritative. Falling through to a sibling
+        # checkout would silently run different code from the path the caller
+        # asked to exercise.
+        return None, ""
+
+    if core_source is not None:
+        core_pkg = core_source / "hermes_embedded"
+        if has_embedded_payload(core_pkg):
+            return core_pkg, "core"
+
+    local_pkg = DESKTOP_ROOT / "hermes_backend" / "hermes_embedded"
+    if has_embedded_payload(local_pkg):
+        return local_pkg, "local-backend"
+
+    sibling_pkg = DESKTOP_ROOT.parent / "Hermes-CN-Core" / "hermes_embedded"
+    if has_embedded_payload(sibling_pkg):
+        return sibling_pkg, "sibling-core"
+
+    return None, ""
+
+
+def run_embedded_dev(
+    pnpm_exe: str, core_source: Path | None, payload: Path, payload_origin: str
+) -> None:
+    """Launch the Tauri desktop dev app with the REAL embedded backend (Hard FFI, zero HTTP).
+
+    No hermes dashboard subprocess, no HTTP listener (no dashboard port), no
+    connection.json: the real Core package is embedded inside the Rust process
+    and every REST/Gateway call goes through the FFI surface. This requires the
+    Tauri shell, so we run `pnpm tauri:dev` (scripts/tauri-dev-managed.mjs),
+    which already honors HERMES_DESKTOP_EMBEDDED_PYTHON /
+    HERMES_DESKTOP_EMBEDDED_PAYLOAD.
+    """
+    remove_connection_json()
+
+    embedded_env = {
+        **os.environ,
+        "HERMES_DESKTOP_EMBEDDED_PYTHON": "1",
+        "HERMES_DESKTOP_EMBEDDED_PAYLOAD": str(payload),
+        "PYTHONIOENCODING": "utf-8",
+        # The embedded package reports the REAL Core version via FFI, which
+        # can legitimately differ from the desktop bundle's baked
+        # EXPECTED_BACKEND_VERSION. Skip the strict gate in dev only.
+        "VITE_HERMES_SKIP_VERSION_CHECK": "1",
+    }
+    if core_source is not None:
+        # Make scripts/install-local-runtime.mjs (invoked by tauri:dev) use the
+        # same Core checkout we resolved, instead of its own sibling default.
+        embedded_env["HERMES_AGENT_CN_SOURCE"] = str(core_source)
+    else:
+        # No full Core checkout is available, but the in-process payload is
+        # self-sufficient.  Skip the managed-runtime install step so that
+        # tauri:dev does not fail looking for pyproject.toml.
+        embedded_env["HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL"] = "1"
+    eprint("🚀 Starting Tauri dev with the REAL embedded backend (Hard FFI, zero HTTP)...")
+    eprint(f"   Payload:  {payload} ({payload_origin})")
+    eprint(f"   Backend:  in-process real Core (no HTTP listener, no dashboard port, no connection.json)")
+    proc = Popen(
+        [pnpm_exe, "tauri:dev"],
+        env=embedded_env,
+        cwd=str(DESKTOP_ROOT),
+    )
+    processes.append(proc)
+
+
+def run_real_backend_dev(pnpm_exe: str, core_source: Path) -> None:
+    """Launch Tauri dev against the REAL managed-runtime backend.
+
+    This is the default, verified development path.
+    scripts/install-local-runtime.mjs installs THIS Core checkout into
+    dev-runtime (via HERMES_AGENT_CN_SOURCE) and bootstrap spawns the real
+    hermes dashboard subprocess on 9120 over HTTP/WS.
+
+    HERMES_DESKTOP_EMBEDDED_PYTHON is pinned to "0" — the documented opt-out
+    (src/embedded/mod.rs EMBEDDED_DISABLE_ENV). Merely unsetting it would not
+    be enough: resolve_payload_root also scans the Core checkout for
+    hermes_embedded and would re-embed. The payload override var is dropped as
+    well so the real launch cannot inherit a stale override.
+    """
+    env = dict(os.environ)
+    env.pop("HERMES_DESKTOP_EMBEDDED_PAYLOAD", None)
+    env["HERMES_DESKTOP_EMBEDDED_PYTHON"] = "0"
+    env["PYTHONIOENCODING"] = "utf-8"
+    # scripts/install-local-runtime.mjs must install THIS Core checkout into
+    # dev-runtime, not its own sibling default.
+    env["HERMES_AGENT_CN_SOURCE"] = str(core_source)
+
+    remove_connection_json()
+
+    eprint("🚀 Starting Tauri dev against the REAL managed-runtime backend...")
+    eprint(f"   Core:     {core_source}")
+    proc = Popen(
+        [pnpm_exe, "tauri:dev"],
+        env=env,
+        cwd=str(DESKTOP_ROOT),
+    )
+    processes.append(proc)
 
 
 def cleanup(signum=None, frame=None) -> None:
@@ -536,69 +372,66 @@ def cleanup(signum=None, frame=None) -> None:
 
 
 def main() -> None:
-    global CORE_ROOT, VENV_HERMES, VENV_PYTHON
-
     parser = argparse.ArgumentParser(
-        description="Run Hermes Agent CN Desktop (backend + frontend)",
+        description="Run Hermes Agent CN Desktop with the real Core backend",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python run.py                          # Default run\n"
-            "  python run.py --backend-port 9119      # Custom backend port\n"
-            "  python run.py --no-browser             # Headless mode\n"
-            "  python run.py --backend-only           # Backend only\n"
+            "  python run.py                              # managed runtime (default)\n"
+            "  python run.py --source C:/dev/Hermes-CN-Core\n"
+            "  python run.py --backend ../Hermes-CN-Core\n"
+            "  python run.py --backend ../Hermes-CN-Core --embedded  # experimental zero HTTP\n"
             "\n"
             "Environment:\n"
-            "  HERMES_CN_CORE        Path to Hermes-CN-Core repo (default: ../Hermes-CN-Core)\n"
-            "  HERMES_DASHBOARD_ORIGIN  Backend URL for Vite proxy (default: http://127.0.0.1:{port})"
+            "  HERMES_CN_CORE              Path to Hermes-CN-Core repo (default: ./hermes_backend,\n"
+            "                              then ../Hermes-CN-Core)\n"
+            "  HERMES_DESKTOP_EMBEDDED_PYTHON=1  Enables the embedded runtime when --embedded is used\n"
+            "  HERMES_DESKTOP_EMBEDDED_PAYLOAD   Payload root override (default: <Core>/hermes_embedded)\n"
+            "  HERMES_DESKTOP_SKIP_LOCAL_RUNTIME_INSTALL=1  Skip re-installing the dev runtime\n"
         ),
     )
     parser.add_argument(
-        "--backend-port",
-        type=int,
-        default=DEFAULT_BACKEND_PORT,
-        help=f"Backend dashboard port (default: {DEFAULT_BACKEND_PORT})",
-    )
-    parser.add_argument(
-        "--no-browser",
-        action="store_true",
-        help="Do not open browser automatically",
-    )
-    parser.add_argument(
-        "--backend-only",
-        action="store_true",
-        help="Only start the backend (no frontend)",
-    )
-    parser.add_argument(
-        "--frontend-only",
-        action="store_true",
-        help="Only start the frontend (no backend)",
+        "--source",
+        default=None,
+        help="Path to Hermes-CN-Core backend repo, a hermes_embedded payload directory, "
+        "or omitted to use the in-repo hermes_backend checkout / ../Hermes-CN-Core fallback",
     )
     parser.add_argument(
         "--backend",
         default=None,
-        help="Path to Hermes-CN-Core backend repo (overrides HERMES_CN_CORE env var, e.g. C:/dev/Hermes-CN-Core)",
+        help="Deprecated alias for --source. Accepts a Core checkout or, with --embedded, a payload",
+    )
+    parser.add_argument(
+        "--real-backend",
+        action="store_true",
+        help="Deprecated no-op: managed runtime is the default",
+    )
+    parser.add_argument(
+        "--embedded",
+        action="store_true",
+        help="Opt into the experimental embedded Python runtime (Hard FFI, zero HTTP)",
     )
     parser.add_argument(
         "--skip-prereqs",
         action="store_true",
-        help="Skip prerequisite checks (useful in scripts)",
+        help="Skip prerequisite checks (pnpm / payload or Core source)",
     )
 
     args = parser.parse_args()
 
-    # Resolve core root: CLI arg takes precedence
-    CORE_ROOT = _resolve_core_root(args.backend)
-    VENV_HERMES, VENV_PYTHON = _resolve_venv_paths(CORE_ROOT)
+    if args.embedded and args.real_backend:
+        parser.error("--embedded and --real-backend cannot be used together")
 
-    # Record the original working directory before any path overrides.
-    # Ensures the backend process inherits the user's shell cwd rather than
-    # CORE_ROOT (which causes TERMINAL_CWD to point at the Core repo instead
-    # of the directory the user actually launched from).
-    _original_cwd = os.getcwd()
+    source_arg = args.source or args.backend
+    core_source = _resolve_core_source(source_arg)
+    payload, payload_origin = (
+        resolve_embedded_payload(source_arg, core_source)
+        if args.embedded
+        else (None, "")
+    )
 
     if not args.skip_prereqs:
-        check_prerequisites(core_root=CORE_ROOT, venv_hermes=VENV_HERMES)
+        check_prerequisites(core_source, payload, args.embedded)
 
     # Find pnpm executable (Windows may have pnpm.cmd instead of pnpm.exe)
     pnpm_exe = shutil.which("pnpm.cmd") or shutil.which("pnpm") or "pnpm"
@@ -610,134 +443,44 @@ def main() -> None:
     signal(SIGINT, _signal_to_keyboard_interrupt)
     signal(SIGTERM, _signal_to_keyboard_interrupt)
 
-    backend_port = args.backend_port
-
-    # ── Clean up stale Hermes state ────────────────────────────────────
-    # Kill any existing hermes processes and remove port-locks to ensure
-    # the new dashboard can start (hermes CLI refuses to start when
-    # another instance is detected via port-locks / gateway.pid).
-    if not args.frontend_only:
-        cleanup_hermes_state()
-
-    # ── Port Conflict Resolution ────────────────────────────────────────
-    # If the preferred backend port is occupied, try to kill the stale
-    # process first. If that fails, fall back to a free port.
-    was_killed = kill_process_on_port(backend_port)
-    if not was_killed:
-        # Check if port is actually free; if not, find a free one
-        import socket
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(("127.0.0.1", backend_port))
-            except OSError:
-                free_port = find_free_port(backend_port)
-                if free_port != backend_port:
-                    eprint(f"⚠️  Port {backend_port} in use. Falling back to port {free_port}.")
-                    backend_port = free_port
-
-    dashboard_origin = os.environ.get(
-        "HERMES_DASHBOARD_ORIGIN", f"http://127.0.0.1:{backend_port}"
-    )
-
-    # ── Start Backend ───────────────────────────────────────────────────
-    if not args.frontend_only:
-        eprint(f"🔧 Starting backend (hermes dashboard) on port {backend_port}...")
-        backend_env = {
-            **os.environ,
-            "PYTHONIOENCODING": "utf-8",
-            "HERMES_DASHBOARD_TUI": "1",
-            "HERMES_DASHBOARD_ORIGIN": dashboard_origin,
-        }
-
-        proc = Popen(
-            [
-                str(VENV_HERMES),
-                "dashboard",
-                "--skip-build",     # Serve existing web_dist; skip npm install + Vite build
-                                    # (the Desktop Vite dev server at 9545 is the real frontend)
-                "--no-open",        # Don't open browser
-                "--port", str(backend_port),
-                "--host", "127.0.0.1",
-            ],
-            env=backend_env,
-            # Use the user's original cwd (not CORE_ROOT), so TERMINAL_CWD
-            # points at the directory the user actually launched from.
-            cwd=_original_cwd,
-        )
-        processes.append(proc)
-
-        # Wait for backend to be ready
-        eprint("⏳ Waiting for backend to be ready...")
-        if not wait_for_backend(backend_port, timeout=60):
-            eprint("❌ Backend failed to start within 60 seconds. Check logs above.")
-            cleanup()
+    if not args.embedded:
+        if core_source is None:
+            eprint(
+                "❌ Managed runtime requires a Hermes-CN-Core source checkout. "
+                "Set HERMES_CN_CORE / use --source, or clone it to: "
+                f"{DESKTOP_ROOT.parent / 'Hermes-CN-Core'}"
+            )
             sys.exit(1)
+        run_real_backend_dev(pnpm_exe, core_source)
+        launched = "managed-real-backend"
+    elif payload is not None:
+        # The real in-process backend: the resolved hermes_embedded package
+        # drives the real web_server + tui_gateway via FFI.
+        run_embedded_dev(pnpm_exe, core_source, payload, payload_origin)
+        launched = "embedded-real"
     else:
-        eprint("ℹ️  Skipping backend start (--frontend-only)")
-
-    # ── Write connection.json for Desktop Local mode ────────────────
-    # Tell the desktop Tauri app to attach to our backend instead of
-    # spawning its own managed runtime dashboard.
-    if not args.backend_only:
-        write_connection_json(backend_port)
-
-    # ── Frontend Port Resolution ────────────────────────────────────────
-    # Windows can reserve whole ranges of TCP ports (Hyper-V / WSL2 / WinNAT
-    # "excluded port ranges"); binding to a reserved port then fails with
-    # EACCES even though nothing is listening, and the ranges shift across
-    # reboots. Re-check 9545 at runtime and fall back to a free port when the
-    # OS blocks it, passing the chosen port to Vite via E2E_VITE_PORT.
-    frontend_port = DEFAULT_FRONTEND_PORT
-    if not is_port_bindable(frontend_port):
-        fallback = find_free_port(frontend_port)
         eprint(
-            f"⚠️  Frontend port {frontend_port} is blocked by the OS"
-            f" (Windows excluded port range, usually reserved by Hyper-V/WSL2)."
-            f" Falling back to port {fallback}."
+            "❌ Embedded mode requires a hermes_embedded payload. Set "
+            "HERMES_DESKTOP_EMBEDDED_PAYLOAD, or ensure one of these exists:\n"
+            f"    - {DESKTOP_ROOT / 'hermes_backend' / 'hermes_embedded'}\n"
+            f"    - {DESKTOP_ROOT.parent / 'Hermes-CN-Core' / 'hermes_embedded'}"
         )
-        frontend_port = fallback
-
-    # If the resolved frontend port is occupied, kill the stale process.
-    kill_process_on_port(frontend_port)
-
-    # ── Start Frontend ──────────────────────────────────────────────────
-    if not args.backend_only:
-        eprint(f"🚀 Starting frontend (Vite dev server) on port {frontend_port}...")
-        frontend_env = {
-            **os.environ,
-            "PYTHONIOENCODING": "utf-8",
-            "HERMES_DASHBOARD_ORIGIN": dashboard_origin,
-            "E2E_VITE_PORT": str(frontend_port),
-        }
-
-        proc = Popen(
-            [pnpm_exe, "web:dev"],
-            env=frontend_env,
-            cwd=str(DESKTOP_ROOT),
-        )
-        processes.append(proc)
-
-        # ── Open Browser ────────────────────────────────────────────────
-        if not args.no_browser:
-            frontend_url = f"http://localhost:{frontend_port}"
-            eprint(f"🌐 Opening browser at {frontend_url} ...")
-            webbrowser.open(frontend_url)
-    else:
-        eprint("ℹ️  Skipping frontend start (--backend-only)")
+        sys.exit(1)
 
     eprint("─" * 50)
-    if not args.backend_only and not args.frontend_only:
-        eprint(f"   Backend:  http://127.0.0.1:{backend_port}")
-        eprint(f"   Frontend: http://localhost:{frontend_port}")
-    elif args.backend_only:
-        eprint(f"   Backend:  http://127.0.0.1:{backend_port}")
-    elif args.frontend_only:
-        eprint(f"   Frontend: http://localhost:{frontend_port}")
+    if launched == "managed-real-backend":
+        eprint("   Mode:     REAL managed runtime (hermes dashboard subprocess)")
+        eprint(f"   Backend:  {core_source} over HTTP/WS (dashboard on port 9120)")
+        eprint("   Chat:     wired to the actual Hermes agent")
+    else:
+        eprint("   Mode:     Embedded Python runtime (Hard FFI, zero HTTP)")
+        eprint(f"   Payload:  {payload} ({payload_origin})")
+        eprint("   Backend:  REAL Core in-process (web_server REST + tui_gateway via FFI)")
+    eprint("   Frontend: Tauri dev window (Vite on 9545 via pnpm tauri:dev)")
     eprint("   Press Ctrl+C to stop.")
     eprint("─" * 50)
 
-    # Wait for either process to exit
-    # KeyboardInterrupt propagates out → atexit fires cleanup()
+    # Wait for the dev app to exit (KeyboardInterrupt propagates to __main__).
     while True:
         for proc in list(processes):
             ret = proc.poll()

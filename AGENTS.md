@@ -56,7 +56,7 @@ Hermes-CN-Desktop/
 
 UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**。
 
-后端源码在同级的 `../Hermes-CN-Core`（`pnpm tauri:dev` 默认从这里把 backend 装进桌面 dev-runtime，可用 `--source` 覆盖）。查：
+`pnpm tauri:dev` 默认使用同级的 `../Hermes-CN-Core`，可用 `--source` 或 `HERMES_AGENT_CN_SOURCE` 覆盖；`run.py` 还会依次探测 `HERMES_CN_CORE`、本仓库内可选的 `hermes_backend/` 检出和同级 Core。查：
 - REST 路由：`hermes_cli/web_server.py`
 - Gateway 事件：`tui_gateway/server.py`
 - 上游 Web 实现：`web/src/lib/api.ts`、`gatewayClient.ts`
@@ -156,8 +156,18 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 
 ### Gateway transport
 
-唯一传输是 **JSON-RPC over WebSocket（官方 `/api/ws`）**，与 Core 官方桌面端架构一致；SSE+POST 旧路径（P-009）已删。
-`gateway-client.ts` 负责协议层与重连编排：1→15s 指数退避、唤醒/online/visibility 触发、重连后 `session.resume`；**对齐官方桌面端不主动发 synthetic ping**，半开连接靠 close/error + RPC 超时 + OS 唤醒兜底。`gateway-socket-path.ts` 在原生 WebSocket 和 Rust 中继之间选择（`?wspath=` query > `HERMES_WS_PATH_LEARNED` 学习值 > 默认 native 自动回退 relay）；打包态 webview 拦 `ws://` 时回退到 `ws_proxy.rs`，线协议仍是 `/api/ws` 不变。详见 `docs/gateway-connection-overhaul.md`。
+唯一传输是 JSON-RPC over WebSocket（官方 /api/ws），与 Core 官方桌面端架构一致；SSE+POST 旧路径（P-009）已删。
+gateway-client.ts 负责协议层与重连编排：1→15s 指数退避、唤醒/online/visibility 触发、重连后 session.resume；对齐官方桌面端不主动发 synthetic ping，半开连接靠 close/error + RPC 超时 + OS 唤醒兜底。gateway-socket-path.ts 在原生 WebSocket 和 Rust 中继之间选择（?wspath= query > HERMES_WS_PATH_LEARNED 学习值 > 默认 native 自动回退 relay）；打包态 webview 拦 ws:// 时回退到 ws_proxy.rs，线协议仍是 /api/ws 不变。详见 docs/gateway-connection-overhaul.md。
+
+### Embedded Python 运行时（Hard FFI，真实后端）
+
+桌面端支持"进程内嵌入 CPython + Hard FFI"替代 hermes 子进程 + HTTP/WS 传输（零本地 HTTP：无 9120/8644/8645 监听、无 reqwest 转发、无 tokio-tungstenite 中继）。Rust 侧在 src/embedded/（lifecycle/call/bridge/ffi/events/transport/api）。Python FFI 面已与 Core 合并：真实实现在 Hermes-CN-Core 检出的 hermes_embedded/（桌面仓库不再内置包，旧参考演示包已删除）。REST 路由经进程内 ASGI 直达真实 hermes_cli.web_server 应用，Gateway JSON-RPC 直达真实 tui_gateway.server（agent 事件经 src/embedded/bridge.rs 实时推给 WebView），详见 docs/embedded-python.md。
+- 特性开关：pyo3 后端在 embedded-python cargo feature 后面（默认关，避免普通构建强制链接 libpython）；开发时仅通过 `run.py --embedded` 显式启用，`HERMES_DESKTOP_EMBEDDED_PYTHON=0` 关闭嵌入并使用子进程 managed runtime。
+- 前端契约：get_runtime_config 返回 embedded: true、apiBaseUrl: "embedded://local"（占位，不绑定端口）；embedded 模式 transport.ts 强制 native IPC、gateway-socket-path.ts 强制 relay。
+- 版本门：嵌入式 get_version 经 FFI 上报真实 hermes_cli.__version__；run.py 在嵌入式 dev 启动时设置 VITE_HERMES_SKIP_VERSION_CHECK=1（发版仍须同步 EXPECTED_BACKEND_VERSION）。
+- 线程边界：解释器初始化和全部 Rust → Python FFI 调用都经进程级长驻 worker 串行执行；Tokio `spawn_blocking` 只能等待该 worker，不能直接 attach CPython。
+- 门禁：cargo test 默认跑嵌入式架构的 mock/纯 Rust 测试（tests/embedded.rs）；真实解释器测试在 --features embedded-python（tests/embedded_python.rs，payload 取 Core 检出的 hermes_embedded，CI embedded job 会 checkout Core）；CI 有 src/embedded/ 的 no-http deny grep 与 FFI 覆盖率门禁；Core 侧自检：python -m hermes_embedded.selftest。
+- 例外：remote（远程 Hermes Agent）与 local（attach 外部 CLI dashboard）仍走 HTTP/WS——外部进程无法嵌入。
 
 ## 不要做的事
 
@@ -168,8 +178,8 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 
 ## 端口
 
-- **9120**：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）
-- **9545**：Vite dev server（`web/vite.config.ts` 默认值，strictPort；Windows 可能因 Hyper-V/WSL2 的“排除端口范围”屏蔽 9545 —— `run.py` 与 vite config 都会在启动时探测并自动回退到空闲端口，见 `docs/run-py-usage.md` 的 EACCES FAQ）
+- 9120：Hermes Dashboard（桌面端与 `run.py` 默认走 managed runtime；9119 通常留给用户全局 Hermes Agent）。只有显式传入 `run.py --embedded` 才切换到零 HTTP 的实验性嵌入模式；`--source` / `--backend` / `HERMES_CN_CORE` 只选择 Core 来源，不改变启动模式。`--real-backend` 是兼容旧用法的 deprecated managed 别名。
+- 9545：Vite dev server（`web/vite.config.ts` 默认值，strictPort；Windows 可能因 Hyper-V/WSL2 的“排除端口范围”屏蔽 9545 —— vite config 与 `tauri-dev-managed.mjs` 会探测并自动回退到空闲端口；`run.py` 不管理端口，见 `docs/run-py-usage.md`）
 
 ## Rust 测试约定
 
@@ -181,4 +191,4 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - **真实后端测试（opt-in）**：`tests/real_backend.rs` 是 wiremock 套件的真实后端版，默认跳过（无 `HERMES_REAL_BACKEND_URL` 且找不到 `../Hermes-CN-Core` 时静默通过），CI 保持封闭；配置 `HERMES_REAL_BACKEND_URL`（外部后端）或 `HERMES_CORE_DIR`（自动起 Core venv dashboard）后跑 `cargo test --test real_backend`
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
 - **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `Eynzof/Hermes-CN-Core` 真实后端 + fake model）、`release-desktop.yml`（发布构建）
-- **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock
+- **本地**：常规改动跑 `cargo test`；嵌入式改动另用真实 Core payload 跑 `cargo test --features embedded-python --test embedded_python -- --test-threads=1`，确保进程级 CPython 解释器始终由同一测试线程驱动。dashboard 常规测试不需要预先启动后端，均走 mock

@@ -344,6 +344,63 @@ pub async fn collect_environment_check(input: EnvironmentCheckInput) -> Environm
             true,
             "Dashboard 尚未启动，无法检查 /api/ws",
         ));
+    } else if input.api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
+        // Embedded Hard FFI — zero HTTP/WS (docs/embedded-python.md): the
+        // dashboard is in-process, so there is no `/api/status` HTTP probe and
+        // no `/api/ws` tungstenite handshake to run. Both entries reflect the
+        // embedded runtime readiness instead of a reqwest/tungstenite scheme
+        // error from the placeholder `embedded://local` URL.
+        let runtime_ready = crate::embedded::ready_runtime();
+        if runtime_ready.is_ok() {
+            items.push(EnvironmentCheckItem::new(
+                "dashboard-api",
+                EnvironmentCheckCategory::Runtime,
+                "Dashboard API",
+                EnvironmentCheckStatus::Ok,
+                true,
+                "嵌入式内核运行中(Hard FFI,无 HTTP)",
+            ));
+            items.push(EnvironmentCheckItem::new(
+                "dashboard-ws",
+                EnvironmentCheckCategory::Runtime,
+                "网关 WebSocket",
+                EnvironmentCheckStatus::Ok,
+                true,
+                "嵌入式网关就绪(内存传输,无 WS)",
+            ));
+        } else {
+            let embedded_msg = match &runtime_ready {
+                Ok(_) => unreachable!("runtime_ready must be Err here"),
+                Err(e) => format!("嵌入式内核未就绪: {}", e),
+            };
+            let recommendation = Some(
+                "检查嵌入式运行时状态；如需回退，可设置 HERMES_DESKTOP_EMBEDDED_PYTHON=0 使用 managed runtime",
+            );
+            items.push(
+                EnvironmentCheckItem::new(
+                    "dashboard-api",
+                    EnvironmentCheckCategory::Runtime,
+                    "Dashboard API",
+                    EnvironmentCheckStatus::Error,
+                    true,
+                    embedded_msg.clone(),
+                )
+                .details(Some(embedded_msg.clone()))
+                .recommendation(recommendation),
+            );
+            items.push(
+                EnvironmentCheckItem::new(
+                    "dashboard-ws",
+                    EnvironmentCheckCategory::Runtime,
+                    "网关 WebSocket",
+                    EnvironmentCheckStatus::Error,
+                    true,
+                    embedded_msg.clone(),
+                )
+                .details(Some(embedded_msg))
+                .recommendation(recommendation),
+            );
+        }
     } else {
         items.push(
             check_dashboard_status(&input.api_base_url, input.session_token.as_deref()).await,
@@ -1179,5 +1236,50 @@ mod tests {
         assert!(text.starts_with("安装 ripgrep；"));
         assert!(text.contains("刷新检查"));
         assert!(text.contains("重启内核"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn embedded_mode_environment_check_skips_http_ws_probes() {
+        // With EMBEDDED_API_BASE_URL the dashboard entries must reflect the
+        // embedded runtime (ready_runtime) instead of running an HTTP GET
+        // /api/status or a tungstenite /api/ws handshake. In default builds
+        // the runtime is not initialized, so both items are Error — but the
+        // failure text is the embedded-runtime message, never a reqwest or
+        // tungstenite scheme error from the embedded://local placeholder.
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", dir.path());
+        let input = EnvironmentCheckInput {
+            api_base_url: crate::embedded::EMBEDDED_API_BASE_URL.to_string(),
+            hermes_home: dir.path().join("home").to_string_lossy().to_string(),
+            session_token: None,
+            current_profile: "default".to_string(),
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(collect_environment_check(input));
+        std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
+
+        let find = |id: &str| {
+            result
+                .items
+                .iter()
+                .find(|item| item.id == id)
+                .unwrap_or_else(|| panic!("expected {id} environment check item"))
+        };
+        let api = find("dashboard-api");
+        let ws = find("dashboard-ws");
+        for (id, item) in [("dashboard-api", api), ("dashboard-ws", ws)] {
+            let text = format!(
+                "{} {}",
+                item.details.as_deref().unwrap_or_default(),
+                item.summary
+            );
+            for bad in ["builder error", "scheme", "reqwest", "tungstenite"] {
+                assert!(
+                    !text.contains(bad),
+                    "{id} must not fall back to an HTTP/WS probe, got: {text}"
+                );
+            }
+        }
     }
 }

@@ -60,7 +60,7 @@ describe("TOP_TABS", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "外置记忆")).toBe(false);
   });
 
-  it("routes the MemOS workbench under 04 wander memory", () => {
+  it("keeps the Wander memory workbench under the 04 tab", () => {
     expect(tabFor("/wander-memory")).toBe("wanderMemory");
     expect(tabFor("/wander-memory/memories")).toBe("wanderMemory");
     expect(tabFor("/wander-memory/files")).toBe("wanderMemory");
@@ -71,7 +71,7 @@ describe("TOP_TABS", () => {
     expect(tabFor("/wander-memory/api")).toBe("wanderMemory");
   });
 
-  it("places both memory tabs between message access and advanced", () => {
+  it("keeps memory tab ordering with the Wander memory entry", () => {
     expect(TOP_TABS.map((tab) => [tab.num, tab.label])).toEqual([
       ["01", "工作台"],
       ["02", "配置"],

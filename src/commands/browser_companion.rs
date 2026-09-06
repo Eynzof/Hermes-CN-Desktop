@@ -34,10 +34,12 @@ use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Role};
 use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 use tokio_tungstenite::WebSocketStream;
 
-use crate::commands::api_proxy::{api_request_from_state, ApiRequestInput};
+use crate::commands::api_proxy::{
+    api_request_from_state, upload_file_impl, ApiRequestInput, ApiRequestResult, UploadFileInput,
+};
 use crate::commands::ws_proxy::connect_gateway_stream;
 use crate::error::AppError;
-use crate::state::{AppState, BrowserCompanionHandle, DashboardAuth};
+use crate::state::{AppState, AppStateInner, BrowserCompanionHandle, DashboardAuth};
 
 const PREFERRED_PORT: u16 = 9546;
 const MAX_REQUEST_BYTES: u64 = 100 * 1024 * 1024;
@@ -210,6 +212,18 @@ async fn serve(
     }
 }
 
+/// True when the desktop is running the in-process embedded runtime (Hard FFI).
+///
+/// This mirrors the checks used by `api_proxy` / `ws_proxy`: the `embedded`
+/// flag is authoritative, and the placeholder `embedded://local` URL covers the
+/// connection-switch window where the flag is not yet flipped. When true, the
+/// browser companion must route REST through the FFI (`api_request_from_state`
+/// / `upload_file_impl`) and the gateway through the in-memory embedded
+/// transport — never reqwest/tungstenite against `embedded://`.
+fn is_embedded_state(inner: &AppStateInner) -> bool {
+    inner.embedded || inner.api_base_url == crate::embedded::EMBEDDED_API_BASE_URL
+}
+
 async fn handle_request(
     mut request: Request<Incoming>,
     app: tauri::AppHandle,
@@ -270,7 +284,22 @@ async fn handle_request(
             ));
         }
         let response = if path == "/api/upload" {
-            proxy_http(request, &app).await
+            let embedded = app
+                .state::<AppState>()
+                .inner
+                .lock()
+                .map(|inner| is_embedded_state(&inner))
+                .unwrap_or(false);
+            if embedded {
+                // Embedded mode has zero HTTP: parse the multipart body and hand
+                // it to upload_file_impl, whose embedded branch dispatches the
+                // FFI handle_upload (same path as the Tauri upload_file command).
+                proxy_embedded_upload(request, &app).await
+            } else {
+                // Non-embedded: keep the legacy direct multipart upload to the
+                // real dashboard, byte-for-byte identical.
+                proxy_http(request, &app).await
+            }
         } else {
             proxy_desktop_api(request, &app).await
         };
@@ -337,6 +366,13 @@ async fn proxy_desktop_api(
         Err(error) => return text_response(StatusCode::BAD_GATEWAY, &error.to_string()),
     };
 
+    api_result_response(result)
+}
+
+/// Build an HTTP response from an `ApiRequestResult` envelope, mirroring how the
+/// desktop IPC surface returns `{ status, headers, body }` to the renderer.
+/// Shared by `proxy_desktop_api` and the embedded upload branch.
+fn api_result_response(result: ApiRequestResult) -> Response<CompanionBody> {
     let mut response = Response::new(Full::new(Bytes::from(result.body)));
     *response.status_mut() =
         StatusCode::from_u16(result.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -353,6 +389,273 @@ async fn proxy_desktop_api(
         response.headers_mut().append(name, value);
     }
     response
+}
+
+/// Embedded-mode `/api/upload` for the browser companion.
+///
+/// The browser frontend has no Tauri bridge, so it POSTs a multipart form
+/// (`session_id` + `file`) to the companion origin. In embedded mode there is
+/// zero HTTP: parse the multipart body here, base64-encode the file bytes, and
+/// hand it to `upload_file_impl` — the same FFI `handle_upload` path the Tauri
+/// `upload_file` command uses (its embedded branch never touches reqwest).
+async fn proxy_embedded_upload(
+    request: Request<Incoming>,
+    app: &tauri::AppHandle,
+) -> Response<CompanionBody> {
+    let (hermes_home, session_token) = {
+        let state = app.state::<AppState>();
+        let inner = match state.inner.lock() {
+            Ok(inner) => inner,
+            Err(error) => {
+                return text_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+            }
+        };
+        (inner.hermes_home.clone(), inner.session_token.clone())
+    };
+    let content_type = request
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let body = match request
+        .into_body()
+        .collect()
+        .await
+        .map(|collected| collected.to_bytes())
+    {
+        Ok(body) if body.len() as u64 <= MAX_REQUEST_BYTES => body,
+        Ok(_) => return text_response(StatusCode::PAYLOAD_TOO_LARGE, "Request body too large"),
+        Err(error) => return text_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    };
+    let input = match parse_embedded_upload_body(&body, &content_type) {
+        Ok(input) => input,
+        Err(error) => return text_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    };
+    let result = match upload_file_impl(
+        input,
+        crate::embedded::EMBEDDED_API_BASE_URL,
+        session_token.as_deref(),
+        &hermes_home,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(error) => return text_response(StatusCode::BAD_GATEWAY, &error.to_string()),
+    };
+    api_result_response(result)
+}
+
+/// Parse a multipart/form-data upload body into the FFI `UploadFileInput`
+/// contract. The browser sends `session_id` and `file` fields; the file bytes
+/// are base64-encoded here because the embedded `handle_upload` FFI expects
+/// `{ session_id, name, type, data }` with base64 `data`.
+fn parse_embedded_upload_body(
+    body: &[u8],
+    content_type: &str,
+) -> Result<UploadFileInput, AppError> {
+    let boundary = parse_multipart_boundary(content_type)
+        .filter(|boundary| !boundary.is_empty())
+        .ok_or_else(|| {
+            AppError::InvalidRequest("multipart boundary missing from Content-Type".to_string())
+        })?;
+    let mut session_id: Option<String> = None;
+    let mut file_name: Option<String> = None;
+    let mut file_type: Option<String> = None;
+    let mut file_data: Option<Vec<u8>> = None;
+
+    for part in split_multipart_parts(body, &boundary) {
+        if part.is_empty() {
+            continue;
+        }
+        let (headers, content) = split_part_headers(part)?;
+        let disposition = headers
+            .iter()
+            .find(|(name, _)| name == "content-disposition")
+            .map(|(_, value)| value.as_str())
+            .unwrap_or("");
+        let (name, filename) = parse_disposition_name_and_filename(disposition);
+        match name.as_deref() {
+            Some("session_id") => {
+                session_id = Some(String::from_utf8(content.to_vec()).map_err(|error| {
+                    AppError::InvalidRequest(format!(
+                        "multipart session_id is not valid UTF-8: {error}"
+                    ))
+                })?);
+            }
+            Some("file") => {
+                file_name = filename;
+                file_type = headers
+                    .iter()
+                    .find(|(name, _)| name == "content-type")
+                    .map(|(_, value)| value.clone());
+                file_data = Some(content.to_vec());
+            }
+            _ => {}
+        }
+    }
+
+    let session_id = session_id.ok_or_else(|| {
+        AppError::InvalidRequest("multipart upload missing session_id field".to_string())
+    })?;
+    let file_name = file_name.filter(|name| !name.is_empty()).ok_or_else(|| {
+        AppError::InvalidRequest("multipart upload missing file field".to_string())
+    })?;
+    let file_data = file_data.ok_or_else(|| {
+        AppError::InvalidRequest("multipart upload missing file field".to_string())
+    })?;
+    let data = base64::engine::general_purpose::STANDARD.encode(&file_data);
+    Ok(UploadFileInput {
+        session_id,
+        name: file_name,
+        r#type: file_type,
+        data,
+    })
+}
+
+/// Extract the `boundary=...` parameter from a `multipart/form-data`
+/// Content-Type value (quoted or bare, case-insensitive key).
+fn parse_multipart_boundary(content_type: &str) -> Option<String> {
+    for parameter in content_type.split(';').skip(1) {
+        let parameter = parameter.trim();
+        let Some((key, value)) = parameter.split_once('=') else {
+            continue;
+        };
+        if !key.trim().eq_ignore_ascii_case("boundary") {
+            continue;
+        }
+        let value = value.trim();
+        if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+            return Some(value[1..value.len() - 1].to_string());
+        }
+        return Some(value.to_string());
+    }
+    None
+}
+
+/// Split a multipart body into part payloads (headers + content) using the
+/// RFC 2046 boundary rule: only `--boundary` tokens at offset 0 or preceded by
+/// a line feed delimit parts, so binary file content that happens to contain
+/// the boundary token is not truncated.
+fn split_multipart_parts<'a>(body: &'a [u8], boundary: &str) -> Vec<&'a [u8]> {
+    let delimiter = format!("--{boundary}");
+    let delimiter = delimiter.as_bytes();
+    let mut parts = Vec::new();
+    let mut search_from = 0;
+    while let Some(relative) = find_subslice(&body[search_from..], delimiter) {
+        let boundary_at = search_from + relative;
+        if !is_multipart_boundary_at(body, boundary_at, delimiter) {
+            search_from = boundary_at + 1;
+            continue;
+        }
+        let part_start = boundary_at + delimiter.len();
+        if body[part_start..].starts_with(b"--") {
+            break; // closing `--boundary--`
+        }
+        let mut end = body.len();
+        let mut scan = part_start;
+        while let Some(relative) = find_subslice(&body[scan..], delimiter) {
+            let next_at = scan + relative;
+            if is_multipart_boundary_at(body, next_at, delimiter) {
+                end = next_at;
+                break;
+            }
+            scan = next_at + 1;
+        }
+        let mut chunk = &body[part_start..end];
+        if chunk.starts_with(b"\r\n") {
+            chunk = &chunk[2..];
+        } else if chunk.starts_with(b"\n") {
+            chunk = &chunk[1..];
+        }
+        if chunk.ends_with(b"\r\n") {
+            chunk = &chunk[..chunk.len() - 2];
+        } else if chunk.ends_with(b"\n") {
+            chunk = &chunk[..chunk.len() - 1];
+        }
+        parts.push(chunk);
+        search_from = end;
+    }
+    parts
+}
+
+/// A multipart delimiter must begin a line and be followed by either a line
+/// ending or the closing `--`. Merely finding `\n--boundary` is insufficient:
+/// arbitrary binary content can contain that prefix followed by other bytes.
+fn is_multipart_boundary_at(body: &[u8], at: usize, delimiter: &[u8]) -> bool {
+    if at > body.len() || !body[at..].starts_with(delimiter) {
+        return false;
+    }
+    if at != 0 && body[at - 1] != b'\n' {
+        return false;
+    }
+    let suffix = &body[at + delimiter.len()..];
+    suffix.starts_with(b"--") || suffix.starts_with(b"\r\n") || suffix.starts_with(b"\n")
+}
+
+/// Lowercased header name → value pairs parsed from one multipart part.
+type MultipartPartHeaders = Vec<(String, String)>;
+
+/// Split one part payload into its header list and content bytes.
+fn split_part_headers(part: &[u8]) -> Result<(MultipartPartHeaders, &[u8]), AppError> {
+    let separator_len = if let Some(separator) = find_subslice(part, b"\r\n\r\n") {
+        let header_bytes = &part[..separator];
+        (separator, 4, header_bytes)
+    } else if let Some(separator) = find_subslice(part, b"\n\n") {
+        let header_bytes = &part[..separator];
+        (separator, 2, header_bytes)
+    } else {
+        return Err(AppError::InvalidRequest(
+            "multipart part missing header separator".to_string(),
+        ));
+    };
+    let (separator, separator_len, header_bytes) = separator_len;
+    let content = &part[separator + separator_len..];
+    let header_text = std::str::from_utf8(header_bytes).map_err(|error| {
+        AppError::InvalidRequest(format!("multipart headers are not valid UTF-8: {error}"))
+    })?;
+    let mut headers = Vec::new();
+    for line in header_text.split("\r\n").flat_map(|line| line.split('\n')) {
+        if let Some((name, value)) = line.split_once(':') {
+            headers.push((name.trim().to_ascii_lowercase(), value.trim().to_string()));
+        }
+    }
+    Ok((headers, content))
+}
+
+/// Extract `name="..."` and `filename="..."` from a Content-Disposition value.
+fn parse_disposition_name_and_filename(disposition: &str) -> (Option<String>, Option<String>) {
+    let mut name = None;
+    let mut filename = None;
+    for parameter in disposition.split(';').skip(1) {
+        let parameter = parameter.trim();
+        if let Some(value) = parameter.strip_prefix("name=") {
+            name = parse_parameter_value(value.trim());
+        } else if let Some(value) = parameter.strip_prefix("filename=") {
+            filename = parse_parameter_value(value.trim());
+        }
+    }
+    (name, filename)
+}
+
+/// Parse a quoted or bare multipart parameter value.
+fn parse_parameter_value(value: &str) -> Option<String> {
+    if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+        let inner = &value[1..value.len() - 1];
+        Some(inner.replace("\\\"", "\"").replace("\\\\", "\\"))
+    } else {
+        Some(value.to_string())
+    }
+}
+
+/// First occurrence of `needle` in `haystack` (byte-level).
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 fn valid_host(value: Option<&HeaderValue>, port: u16) -> bool {
@@ -607,6 +910,19 @@ where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     let state = app.state::<AppState>();
+    let embedded = state
+        .inner
+        .lock()
+        .map(|inner| is_embedded_state(&inner))
+        .unwrap_or(false);
+    if embedded {
+        // Embedded mode has no WebSocket: relay through the in-memory embedded
+        // transport (open/send/close mirror gateway_ws_open/send/close).
+        // Never reach connect_gateway_stream, which would build a tungstenite
+        // URL against the embedded:// placeholder.
+        return relay_embedded_websocket(client, app).await;
+    }
+
     let mut upstream = match connect_gateway_stream(&app, &state).await {
         Ok(upstream) => upstream,
         Err(error) => {
@@ -657,6 +973,114 @@ where
 
     let _ = client.close(None).await;
     let _ = upstream.close(None).await;
+    Ok(())
+}
+
+/// Generate a unique connection id for a browser-companion embedded gateway
+/// session. The id tags every `gateway-ws-message` event so a stale relay can
+/// never deliver into a different connection's socket.
+fn new_browser_companion_connection_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let sequence = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    format!("browser-companion-{sequence}-{nanos}")
+}
+
+/// Embedded-mode gateway relay for the browser companion.
+///
+/// Mirrors the webview `gateway_ws_open`/`send`/`close` contract (ws_proxy.rs):
+/// open an in-memory embedded gateway session, dispatch browser JSON-RPC frames
+/// via `dispatch_frame`, and forward inbound `gateway-ws-message` events back to
+/// the browser socket. The embedded transport emits events both to the Tauri
+/// emitter and to the in-process broadcast bus (`embedded::events::subscribe`);
+/// the browser companion consumes the bus and filters by its own connection id.
+///
+/// Note: the embedded transport currently keeps a single active gateway session
+/// (`AppStateInner::embedded_gateway`), so opening this relay replaces the
+/// webview's session, exactly like a webview reconnect does. The webview's
+/// gateway client reconnects automatically; this is a transport-level property
+/// (one in-memory RustBridgeTransport), not something the companion can fix.
+async fn relay_embedded_websocket<S>(
+    mut client: WebSocketStream<S>,
+    app: tauri::AppHandle,
+) -> Result<(), AppError>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let state = app.state::<AppState>();
+    let connection_id = new_browser_companion_connection_id();
+    let mut events = crate::embedded::events::subscribe();
+
+    if let Err(error) =
+        crate::embedded::transport::open_embedded_gateway(&app, &state, connection_id.clone())
+    {
+        let reason = Utf8Bytes::from(error.to_string().chars().take(100).collect::<String>());
+        let _ = client
+            .send(Message::Close(Some(CloseFrame {
+                code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Error,
+                reason,
+            })))
+            .await;
+        return Err(error);
+    }
+
+    loop {
+        tokio::select! {
+            item = client.next() => match item {
+                Some(Ok(Message::Close(_))) => break,
+                Some(Ok(Message::Frame(_))) => {}
+                // No network half-open in embedded mode; answer the browser's
+                // control frames locally instead of relaying them to Python.
+                Some(Ok(Message::Ping(payload))) => {
+                    if client.send(Message::Pong(payload)).await.is_err() { break; }
+                }
+                Some(Ok(Message::Pong(_))) => {}
+                Some(Ok(Message::Binary(_))) => {
+                    // The JSON-RPC gateway speaks text frames only; ignore binary.
+                }
+                Some(Ok(Message::Text(text))) => {
+                    if let Err(error) = crate::embedded::transport::dispatch_frame(
+                        &app,
+                        &state,
+                        &connection_id,
+                        text.to_string(),
+                    )
+                    .await
+                    {
+                        log::debug!(
+                            "Browser companion embedded gateway dispatch failed: {error}"
+                        );
+                        break;
+                    }
+                }
+                Some(Err(error)) => return Err(AppError::GatewayWs(error.to_string())),
+                None => break,
+            },
+            event = events.recv() => match event {
+                Ok(event) if event.connection_id == connection_id => {
+                    // wire_data() delivers RPC responses as raw JSON-RPC frames
+                    // and everything else as {method:"event"} — same contract as
+                    // the webview relay shim.
+                    let frame = event.wire_data();
+                    if client.send(Message::Text(Utf8Bytes::from(frame))).await.is_err() {
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                    log::debug!("Browser companion embedded event bus lagged; skipping");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            },
+        }
+    }
+
+    let _ = crate::embedded::transport::close_embedded_gateway(&app, &state, &connection_id);
+    let _ = client.close(None).await;
     Ok(())
 }
 
@@ -817,5 +1241,205 @@ mod tests {
         assert!(valid_host(Some(&good), 9546));
         assert!(valid_host(Some(&localhost), 9546));
         assert!(!valid_host(Some(&wrong), 9546));
+    }
+
+    #[test]
+    fn embedded_state_detection_routes_upload_away_from_proxy_http() {
+        // The /api/upload branch in handle_request consults is_embedded_state:
+        // embedded -> proxy_embedded_upload (FFI, no reqwest);
+        // non-embedded -> proxy_http (direct multipart to the real dashboard).
+        let embedded = AppState::new();
+        embedded.inner.lock().unwrap().embedded = true;
+        embedded.inner.lock().unwrap().api_base_url =
+            crate::embedded::EMBEDDED_API_BASE_URL.to_string();
+
+        let placeholder_only = AppState::new();
+        placeholder_only.inner.lock().unwrap().api_base_url =
+            crate::embedded::EMBEDDED_API_BASE_URL.to_string();
+
+        let plain = AppState::new();
+
+        assert!(is_embedded_state(&embedded.inner.lock().unwrap()));
+        assert!(is_embedded_state(&placeholder_only.inner.lock().unwrap()));
+        assert!(!is_embedded_state(&plain.inner.lock().unwrap()));
+    }
+
+    #[test]
+    fn embedded_ws_relay_decision_never_reaches_connect_gateway_stream() {
+        // relay_websocket branches on is_embedded_state BEFORE calling
+        // connect_gateway_stream. In embedded mode it returns
+        // relay_embedded_websocket (in-memory transport), so no tungstenite URL
+        // is ever built against the embedded:// placeholder.
+        let embedded = AppState::new();
+        embedded.inner.lock().unwrap().embedded = true;
+        embedded.inner.lock().unwrap().api_base_url =
+            crate::embedded::EMBEDDED_API_BASE_URL.to_string();
+        let plain = AppState::new();
+
+        assert!(is_embedded_state(&embedded.inner.lock().unwrap()));
+        assert!(!is_embedded_state(&plain.inner.lock().unwrap()));
+    }
+
+    #[test]
+    fn multipart_parser_extracts_session_and_file_as_base64() {
+        use base64::Engine;
+        let boundary = "X-UPLOAD-BOUNDARY";
+        let body = format!(
+            "--{boundary}\r\n\
+             Content-Disposition: form-data; name=\"session_id\"\r\n\
+             \r\n\
+             sess-123\r\n\
+             --{boundary}\r\n\
+             Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n\
+             Content-Type: text/plain\r\n\
+             \r\n\
+             Hello, world!\r\n\
+             --{boundary}--\r\n"
+        );
+        let input = parse_embedded_upload_body(
+            body.as_bytes(),
+            &format!("multipart/form-data; boundary={boundary}"),
+        )
+        .expect("valid multipart upload");
+        assert_eq!(input.session_id, "sess-123");
+        assert_eq!(input.name, "hello.txt");
+        assert_eq!(input.r#type.as_deref(), Some("text/plain"));
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&input.data)
+            .expect("valid base64");
+        assert_eq!(decoded, b"Hello, world!");
+    }
+
+    #[test]
+    fn multipart_parser_accepts_lf_line_endings_and_quoted_boundary() {
+        use base64::Engine;
+        let boundary = "LF-BOUNDARY";
+        let file_bytes = "\u{1}\u{2}\u{FF}";
+        let body = format!(
+            "--{boundary}\n\
+             Content-Disposition: form-data; name=\"session_id\"\n\
+             \n\
+             s-9\n\
+             --{boundary}\n\
+             Content-Disposition: form-data; name=\"file\"; filename=\"data.bin\"\n\
+             Content-Type: application/octet-stream\n\
+             \n\
+             {file_bytes}\n\
+             --{boundary}--\n"
+        );
+        let input = parse_embedded_upload_body(
+            body.as_bytes(),
+            &format!("multipart/form-data; boundary=\"{boundary}\""),
+        )
+        .expect("valid LF multipart upload");
+        assert_eq!(input.session_id, "s-9");
+        assert_eq!(input.name, "data.bin");
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&input.data)
+            .expect("valid base64");
+        assert_eq!(decoded, file_bytes.as_bytes());
+    }
+
+    #[test]
+    fn multipart_splitter_ignores_boundary_tokens_inside_binary_content() {
+        use base64::Engine;
+        let boundary = "BOUND";
+        // Neither token is a valid delimiter: one is not at line start and the
+        // other has non-delimiter bytes immediately after the boundary value.
+        let content = format!("prefix--{boundary}suffix\n--{boundary}still-data");
+        let body = format!(
+            "--{boundary}\r\n\
+             Content-Disposition: form-data; name=\"session_id\"\r\n\
+             \r\n\
+             s-7\r\n\
+             --{boundary}\r\n\
+             Content-Disposition: form-data; name=\"file\"; filename=\"t.bin\"\r\n\
+             \r\n\
+             {content}\r\n\
+             --{boundary}--\r\n"
+        );
+        let input = parse_embedded_upload_body(
+            body.as_bytes(),
+            &format!("multipart/form-data; boundary={boundary}"),
+        )
+        .expect("boundary token inside content must not split the part");
+        assert_eq!(input.session_id, "s-7");
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&input.data)
+            .expect("valid base64");
+        assert_eq!(decoded, content.as_bytes());
+    }
+
+    #[test]
+    fn multipart_parser_rejects_missing_boundary() {
+        let error = parse_embedded_upload_body(b"", "multipart/form-data").unwrap_err();
+        assert!(matches!(error, AppError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn multipart_parser_rejects_missing_file_or_session() {
+        let boundary = "B";
+        let only_session = format!(
+            "--{boundary}\r\n\
+             Content-Disposition: form-data; name=\"session_id\"\r\n\
+             \r\n\
+             s-1\r\n\
+             --{boundary}--\r\n"
+        );
+        let error = parse_embedded_upload_body(
+            only_session.as_bytes(),
+            &format!("multipart/form-data; boundary={boundary}"),
+        )
+        .expect_err("missing file field");
+        assert!(matches!(error, AppError::InvalidRequest(_)));
+
+        let only_file = format!(
+            "--{boundary}\r\n\
+             Content-Disposition: form-data; name=\"file\"; filename=\"f.bin\"\r\n\
+             \r\n\
+             bytes\r\n\
+             --{boundary}--\r\n"
+        );
+        let error = parse_embedded_upload_body(
+            only_file.as_bytes(),
+            &format!("multipart/form-data; boundary={boundary}"),
+        )
+        .expect_err("missing session_id field");
+        assert!(matches!(error, AppError::InvalidRequest(_)));
+    }
+
+    #[test]
+    fn browser_companion_connection_ids_are_unique_with_prefix() {
+        let first = new_browser_companion_connection_id();
+        let second = new_browser_companion_connection_id();
+        assert!(first.starts_with("browser-companion-"));
+        assert!(second.starts_with("browser-companion-"));
+        assert_ne!(first, second);
+    }
+
+    #[tokio::test]
+    async fn api_result_response_builds_http_response_from_envelope() {
+        let mut headers = std::collections::HashMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        let result = ApiRequestResult {
+            ok: true,
+            status: 200,
+            status_text: "OK".to_string(),
+            headers,
+            body: "{\"ok\":true}".to_string(),
+        };
+        let response = api_result_response(result);
+        assert_eq!(response.status(), StatusCode::OK);
+        let content_type = response
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let body = http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .expect("collect body")
+            .to_bytes();
+        assert_eq!(body, Bytes::from_static(b"{\"ok\":true}"));
+        assert_eq!(content_type.as_deref(), Some("application/json"));
     }
 }

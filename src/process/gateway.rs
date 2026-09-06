@@ -699,11 +699,17 @@ mod tests {
         let pid = std::process::id();
         fs::write(
             lock_dir.join("weixin.lock"),
-            format!(
-                r#"{{"pid":{},"kind":"hermes-gateway","argv":["{}/versions/old/hermes","gateway","run","--replace"]}}"#,
-                pid,
-                runtime_root.display()
-            ),
+            serde_json::to_string(&serde_json::json!({
+                "pid": pid,
+                "kind": "hermes-gateway",
+                "argv": [
+                    format!("{}/versions/old/hermes", runtime_root.display()),
+                    "gateway",
+                    "run",
+                    "--replace",
+                ],
+            }))
+            .expect("record json"),
         )
         .expect("lock");
 
@@ -724,11 +730,17 @@ mod tests {
         fs::create_dir_all(&lock_dir).expect("locks");
         fs::write(
             lock_dir.join("weixin.lock"),
-            format!(
-                r#"{{"pid":{},"kind":"hermes-gateway","argv":["{}/versions/old/hermes","gateway","run","--replace"]}}"#,
-                std::process::id(),
-                other_root.display()
-            ),
+            serde_json::to_string(&serde_json::json!({
+                "pid": std::process::id(),
+                "kind": "hermes-gateway",
+                "argv": [
+                    format!("{}/versions/old/hermes", other_root.display()),
+                    "gateway",
+                    "run",
+                    "--replace",
+                ],
+            }))
+            .expect("record json"),
         )
         .expect("lock");
 

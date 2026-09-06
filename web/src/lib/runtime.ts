@@ -450,6 +450,10 @@ declare global {
       managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
       /** Running as the portable (unzip-and-run) desktop distribution. */
       portable?: boolean;
+      /** True when the managed runtime runs in-process (embedded CPython).
+       *  apiBaseUrl is the `embedded://local` placeholder; REST goes through
+       *  native IPC and the gateway rides the in-memory relay (zero HTTP). */
+      embedded?: boolean;
       /** UI is running in a system browser through the desktop loopback relay. */
       browserCompanion?: boolean;
     };
@@ -490,6 +494,8 @@ declare global {
       onHotUpdateProgress?(handler: (payload: import("@hermes/protocol").HotUpdateProgressPayload) => void): () => void;
       getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
       refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;
+      /** Embedded mode only: Core version read from Python via IPC (no HTTP). */
+      getBackendVersion?(): Promise<{ version: string }>;
       getRuntimeInfo?(): Promise<RuntimeInfo>;
       checkRuntimeUpdate?(): Promise<RuntimeUpdateCheckResult>;
       installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
@@ -649,10 +655,16 @@ export const runtime = {
     window.__HERMES_RUNTIME__.managedRuntimeLifecycleState = result.lifecycleState;
   },
 
-  /** True when running as the portable (unzip-and-run) desktop distribution. */
-  isPortable(): boolean {
-    return window.__HERMES_RUNTIME__?.portable ?? false;
-  },
+    /** True when running as the portable (unzip-and-run) desktop distribution. */
+    isPortable(): boolean {
+      return window.__HERMES_RUNTIME__?.portable ?? false;
+    },
+    /** True when the managed runtime runs in-process (embedded CPython).
+     *  In this mode REST must go through native IPC and the gateway must ride
+     *  the Rust relay — there is no loopback HTTP/WebSocket at all. */
+    isEmbedded(): boolean {
+      return window.__HERMES_RUNTIME__?.embedded ?? false;
+    },
 
   getApiUrl(path: string): string {
     const baseUrl = window.__HERMES_RUNTIME__?.apiBaseUrl;

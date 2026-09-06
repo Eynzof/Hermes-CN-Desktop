@@ -278,6 +278,15 @@ fn verify_authenticode_best_effort(path: &Path) -> Result<(), String> {
 /// the dashboard responds but reports a different version — the caller rolls
 /// back the runtime.
 async fn verify_backend_version(api_base_url: &str, expected: &str) -> Result<bool, String> {
+    // Embedded Hard FFI — zero HTTP (docs/embedded-python.md): the version is
+    // read straight from Python `get_version` through pyo3, never from a
+    // `GET /api/version` HTTP call (there is no HTTP endpoint to fetch).
+    if api_base_url == crate::embedded::EMBEDDED_API_BASE_URL {
+        let actual = crate::embedded::get_backend_version_async()
+            .await
+            .map_err(|e| format!("后端版本读取失败：{}", e))?;
+        return Ok(actual.trim().trim_start_matches('v') == expected.trim().trim_start_matches('v'));
+    }
     let url = format!("{}/api/version", api_base_url.trim_end_matches('/'));
     let response = APP_UPDATE_HTTP_CLIENT
         .get(&url)
@@ -835,6 +844,27 @@ mod tests {
     }
 
     #[test]
+    fn verify_backend_version_embedded_mode_dispatches_through_ffi_without_reqwest() {
+        // With EMBEDDED_API_BASE_URL the version check must go through the
+        // embedded FFI (pyo3 `get_version`), never through reqwest GET
+        // /api/version. In default builds the embedded runtime is not
+        // initialized, so the error is the embedded-runtime message — the old
+        // reqwest scheme failure must be gone (same flip as upload_file).
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let err = rt
+            .block_on(verify_backend_version(
+                crate::embedded::EMBEDDED_API_BASE_URL,
+                "0.8.0",
+            ))
+            .expect_err("embedded version check must not fall back to reqwest");
+        assert!(
+            !err.contains("scheme") && !err.contains("builder") && !err.contains("http"),
+            "embedded version check must dispatch through FFI, got: {err}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn write_pending_marker_lands_in_runtime_root() {
         let dir = TempDir::new().unwrap();
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", dir.path());
