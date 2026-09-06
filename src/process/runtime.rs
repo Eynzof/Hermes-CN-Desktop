@@ -2581,8 +2581,10 @@ pub fn rollback_runtime() -> RuntimeInstallUpdateResult {
     }
 }
 
-const MAX_ZIP_ENTRIES: usize = 10_000;
-const MAX_ZIP_FILES: usize = 5_000;
+const MAX_ZIP_ENTRIES: usize = 20_000;
+// v0.21's Windows payload (Python, Node, TUI and built-in tools) contains
+// over 5,300 files. Keep a bounded allowance for the supported release.
+const MAX_ZIP_FILES: usize = 10_000;
 const MAX_ZIP_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
 
 fn validate_zip_entry_counts(
@@ -3897,7 +3899,7 @@ mod tests {
         let file = std::fs::File::create(&zip_path).unwrap();
         let mut writer = zip::ZipWriter::new(file);
         let opts = zip::write::SimpleFileOptions::default();
-        // MAX_ZIP_FILES = 5000 — push 5001 real file entries.
+        // Push one more real file entry than the supported payload limit.
         for i in 0..=MAX_ZIP_FILES {
             writer.start_file(format!("f{}", i), opts).unwrap();
         }
