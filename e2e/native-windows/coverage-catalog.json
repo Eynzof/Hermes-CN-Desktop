@@ -32,8 +32,14 @@
   {
     "id": "MODEL-006",
     "route": "/models",
-    "requirement": "OAuth 设备码登录、取消、登出与状态刷新",
+    "requirement": "OAuth 设备码完成登录、凭据持久化、登出与已登录状态刷新",
     "prerequisite": "OAuth 测试账号"
+  },
+  {
+    "id": "MODEL-010",
+    "route": "/models",
+    "requirement": "OAuth 真实设备码发起、复制、外部验证页、正常取消与发起中关闭",
+    "prerequisite": null
   },
   {
     "id": "MODEL-007",

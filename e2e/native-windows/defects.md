@@ -27,6 +27,7 @@
 | WIN-021 | 默认本地转写不可用 | WebView2 原生麦克风授权、MediaRecorder 录制和离开页面后释放音轨均成功；通过已校准的虚拟麦克风输入测试句，提交真实录音后，Core 返回未配置可用 STT 提供方。 | VOICE-002 runs/20260907T094008Z；输入校准、实际设备和转写错误均有附件。当前 stt.provider=local，未注入转写文本，后续文字发送因转写失败未完成；需排查冻结包中的本地识别依赖 |
 | WIN-022 | Wander 聊天取消 | 页面提示 Escape 可取消等待，但生成时唯一绑定 onKeyDown 的输入框被 disabled。实际按键后没有 cancelled 标记，最终回复仍写入界面。 | WANDER-008 runs/20260907T102700Z 记录了发送后输入框禁用、实际 Escape 按键、真实 DeepSeek 完成及最终界面；两个取消断言失败，未修复 |
 | WIN-023 | MCP OAuth 界面缺失 | 添加对话框没有认证方式，受保护的 HTTP MCP 返回 401 后仅显示错误，服务卡片没有授权入口；保存的 auth 为 null。Core 已有独立授权接口，但 Desktop 未接入。 | MCP-004 runs/20260907T104625Z 实际服务自检通过后，从安装版添加并探测；服务只收到 401 请求，没有 OAuth 握手。授权入口断言失败，后续登录、取消、刷新和退出尚未执行。详见 mcp-oauth-coverage-audit.md；未修复 |
+| WIN-024 | OAuth 发起中关闭无效 | 启动请求尚未返回时关闭登录弹窗，没有 session ID 可取消；迟到响应仍创建 pending 会话并打开官方验证页。 | MODEL-010 runs/20260907T105653Z 使用 Nous 官方设备码：发起 34 ms 后关闭，1056 ms 后响应完成，查询会话仍 HTTP 200 / pending；正常等待设备码后取消则返回 404。整项保留失败，测试清理迟到会话且凭据摘要未变。详见 model-oauth-coverage-audit.md；未修复 |
 | TEST-001 | 脚本 | UI 新会话短 ID 与 state.db 中 Agent Session ID 不同，最初不能取到持久化证据。 | 已按 Core 日志的明确映射修正 |
 | TEST-002 | 脚本 | 工具参数包含 marker、第一轮 API 已累计 Token，原脚本仍在工具运行时检查文件，导致 ENOENT 误报。 | 已修正，真实文件读写复跑通过 |
 | TEST-003 | 脚本 | 归档状态误读 Core 数据库，实际由 Desktop Rust 代理持久化；辅助会话查询 limit 超过 100。 | 已按真实来源修正，HIST-001 全流程通过 |
