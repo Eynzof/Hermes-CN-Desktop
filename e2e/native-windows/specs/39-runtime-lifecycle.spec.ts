@@ -32,6 +32,7 @@ for (const [id, title, operation] of [
     await app.waitForFunction(() => (window as any).__HERMES_RUNTIME__?.backendReady, undefined, { timeout: 120_000 });
     await expect(app.getByRole('button', { name: '停止内核', exact: true })).toBeEnabled({ timeout: 120_000 });
   };
+  try {
   await route(app, '/kernel');
   if (operation === 'stop') {
     const initialPid = (await bridge<any>(app, 'getRuntimeInfo')).process.pid;
@@ -83,10 +84,36 @@ for (const [id, title, operation] of [
     await ready();
     await checkpoint('installed-again-data-preserved');
   }
-  await route(app, `/tasks/${id}`);
+  await route(app, '/history');
+  const history = app.getByRole('main');
+  await history.getByRole('searchbox').fill(id);
+  await expect(history.locator('[data-status]')).toHaveCount(1);
+  await history.locator('[data-status]').click();
+  await expect(app).toHaveURL(new RegExp(`/tasks/${id}$`));
+  await expect(app.getByRole('log')).toContainText('READY');
+  await testInfo.attach('history-opened-original-session', { body: await app.screenshot(), contentType: 'image/png' });
   const resumed = await sendChat(app, '只凭当前会话上下文回复暗号，不要调用任何工具，也不要读取记忆或搜索历史。', marker);
   expect(resumed.evidence.session.id).toBe(id);
   expect(resumed.evidence.session.tool_call_count).toBe(0);
   await testInfo.attach('lifecycle-and-file-integrity', { body: JSON.stringify(records, null, 2), contentType: 'application/json' });
   await testInfo.attach('real-resumed-session', { body: JSON.stringify(resumed.evidence, null, 2), contentType: 'application/json' });
+  } finally {
+    // A Desktop exit blocks subsequent UI steps, but disk preservation is
+    // independently observable. Keep it as evidence, never a lifecycle pass.
+    const disk: Record<string, unknown> = {
+      operation, pageClosed: app.isClosed(), completedCheckpoints: records,
+      initialHashes: originalHashes, finalHashes: hashes(),
+      markerPreserved: existsSync(file) && readFileSync(file, 'utf8') === marker,
+      currentRecordExists: existsSync(path.join(root, 'runtime', 'current.json')),
+      versionsDirectoryExists: existsSync(path.join(root, 'runtime', 'versions')),
+    };
+    try {
+      const evidence = sessionEvidence(id);
+      disk.sessionId = id;
+      disk.readyReplyPreserved = evidence.messages.some((m: any) => m.role === 'assistant' && m.content.trim() === 'READY');
+    } catch (error) {
+      disk.sessionReadError = String(error);
+    }
+    await testInfo.attach('lifecycle-final-disk-evidence', { body: JSON.stringify(disk, null, 2), contentType: 'application/json' });
+  }
 });

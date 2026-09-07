@@ -17,7 +17,7 @@
 | WIN-011 | Build 向导能力提示 | v0.21 将 hermes-agent 定义为 ESSENTIAL_SKILLS，不允许禁用；Desktop 向导仍允许取消勾选并承诺未选技能会禁用。生成后该技能仍启用，没有说明保护规则。 | PROF-003 多次复现；区分必需技能保护与普通技能禁用，保留界面断言 |
 | WIN-012 | 定时运行历史覆盖 | 连续点击立即运行，13:42:22 的真实模型结果和同一秒内的 no_change 结果只有一份历史。Core cron/jobs.py 的 save_job_output 使用秒级文件名后 atomic_replace 覆盖。 | runs/20260907T054009Z CRON-002 已捕获；连续记忆主流程间隔到下一秒，快速重复的历史完整性另列待回归 |
 | WIN-013 | 内核生命周期 | 在安装版内核页点击“停止内核”，停止状态已落盘，但 Desktop 主进程随后退出，预期的离线控制台未显示；CDP 和 API 均消失。 | RUNTIME-001 在 runs/20260907T065558Z、20260907T065935Z 连续复现，后次记录 Desktop PID 31724 退出码 0；重新启动应用可进入离线控制台并手动恢复内核，根因待确认 |
-| WIN-014 | 网关重启反馈 | 内核页点击“重启 Gateway”后显示 backend version check has not completed，未向真实 Gateway 发起成功操作。刷新网关地址使版本状态失效后，紧接的 postJSON 仍受版本门禁阻止。 | runs/20260907T070200Z 的 RUNTIME-005 已捕获界面反馈；需复验修正后的 Gateway 成功态断言，不以 Dashboard PID 代替 Gateway 状态 |
+| WIN-014 | 网关重启反馈 | 内核页点击“重启 Gateway”后显示 backend version check has not completed，未向真实 Gateway 发起成功操作。刷新网关地址使版本状态失效后，紧接的 postJSON 仍受版本门禁阻止。 | runs/20260907T070200Z 已捕获；114227Z 按修正后的 Gateway 成功态断言再次复现，不以 Dashboard PID 代替 Gateway 状态 |
 | WIN-015 | 内核热更新后会话恢复 | 实际签名更新完成，Core 已运行候选版本 .4，旧会话历史仍可见；发送原会话续聊却提示 session not found，输入留在编辑器，未产生新的模型调用。 | RUNTIME-002 runs/20260907T074015Z 已复现；更新和回滚后的续聊分别保留断言，不能只凭 current.json 或进程就判定更新通过 |
 | WIN-016 | 生命周期状态不一致 | 前次停止状态留存时，通过 Runtime 回滚可以启动 Core，却未同步用户期望状态：同一内核页同时显示“本机内核正在运行”和“已停止”，backendReady=false。 | runs/20260907T073404Z 准备阶段超时，实际 PID 65736 / runtime .3；点击“启动内核”恢复一致，未修改产品代码 |
 | WIN-017 | 高优先级界面回退 | 一次点击“回退”后，ui/current.json 在约 45ms 内从 e2e.2 → e2e.1 → e2e.2，最终实际页面仍是 e2e.2；网络记录中的 ui_rollback 在重载时 ERR_ABORTED，控制台报告 IPC 降级为 postMessage。 | RUNTIME-003 runs/20260907T075835Z 保留版本变更时间线、实际页面 meta、IPC 请求及真实任务证据；现象支持重载中 IPC 重发导致回退执行两次的判断。更新中 Core PID 不变、真实任务完成和回退后续聊均已验证，整体回退断言仍失败 |

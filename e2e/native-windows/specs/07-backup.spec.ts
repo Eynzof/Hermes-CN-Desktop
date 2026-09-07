@@ -25,8 +25,8 @@ test('BACKUP-001 原生备份导出、取消、恢复到独立档案并核对数
   expect(existsSync(archive)).toBe(true);
   const summary = execFileSync(python, [fileURLToPath(new URL('../scripts/inspect-backup.py', import.meta.url)), archive], { encoding: 'utf8' });
   await testInfo.attach('backup-validation', { body: summary, contentType: 'application/json' });
-  const exported = JSON.parse(summary);
-  expect.soft(exported.hasStateDb || exported.sessionTranscripts.length > 0, 'Backup promises chat history but contains neither the live database nor session transcripts').toBe(true);
+  // sessions/ also contains request_dump JSON. File presence alone is not
+  // restorable chat history; the restored session assertion below decides it.
   const shot = await native({ action: 'screenshot' });
   await testInfo.attach('native-export', { path: shot.path, contentType: 'image/png' });
   await route(app, '/memory');

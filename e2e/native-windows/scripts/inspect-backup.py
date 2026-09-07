@@ -13,5 +13,5 @@ with zipfile.ZipFile(archive) as z:
     assert 'profile/.env' in z.namelist()
     print(json.dumps({'kind': manifest['kind'], 'entries': len(z.namelist()),
                       'hasStateDb': 'profile/state.db' in z.namelist(),
-                      'sessionTranscripts': [name for name in z.namelist() if name.startswith('profile/sessions/') and not name.endswith('/')],
+                      'sessionFiles': [name for name in z.namelist() if name.startswith('profile/sessions/') and not name.endswith('/')],
                       'bytes': archive.stat().st_size, 'sha256': hashlib.sha256(archive.read_bytes()).hexdigest()}))
