@@ -342,6 +342,24 @@
     "prerequisite": "微信扫码测试账号和明确授权的测试接收者"
   },
   {
+    "id": "IM-FEISHU-002",
+    "route": "/im/feishu",
+    "requirement": "飞书官方二维码生成、像素解码、复制、重新生成及离页停止轮询",
+    "prerequisite": null
+  },
+  {
+    "id": "IM-WEIXIN-002",
+    "route": "/im/weixin",
+    "requirement": "微信官方二维码生成、像素解码、复制、重新生成及离页停止轮询",
+    "prerequisite": null
+  },
+  {
+    "id": "IM-WEIXIN-003",
+    "route": "/im/weixin",
+    "requirement": "二维码自然过期自动刷新、最终过期及停止轮询",
+    "prerequisite": "真实等待最长约 8 分钟；不修改时钟或模拟响应"
+  },
+  {
     "id": "VOICE-001",
     "route": "/voice",
     "requirement": "语音供应商表单切换、配置保存与重新加载；真实合成另见 VOICE-003",
