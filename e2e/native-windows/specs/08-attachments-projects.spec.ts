@@ -1,0 +1,70 @@
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { test, expect, route, chat, sendChat, nativeDialog, root } from '../fixtures';
+
+test('CHAT-006 原生附件选择取消、移除和真实模型读取文件内容', async ({ app }, testInfo) => {
+  const marker = `attachment-${Date.now()}`;
+  const file = path.join(root, 'workspace', `${marker}.txt`);
+  const secret = `文档验证码-${Math.random().toString(36).slice(2)}`;
+  writeFileSync(file, `这是一份附件测试文档。文档验证码：${secret}\n`, 'utf8');
+  await route(app, '/');
+  await app.getByRole('button', { name: '添加附件', exact: true }).click();
+  await nativeDialog('选择附件');
+  await expect(app.getByRole('button', { name: `移除 ${path.basename(file)}` })).toHaveCount(0);
+  await app.getByRole('button', { name: '添加附件', exact: true }).click();
+  await nativeDialog('选择附件', file, '%o');
+  await app.getByRole('button', { name: `移除 ${path.basename(file)}` }).click();
+  await expect(app.getByRole('button', { name: `移除 ${path.basename(file)}` })).toHaveCount(0);
+  await app.getByRole('button', { name: '添加附件', exact: true }).click();
+  await nativeDialog('选择附件', file, '%o');
+  const { evidence } = await sendChat(app, '读取附件中的文档验证码，只回复完整验证码，不要猜测。', secret);
+  expect(evidence.messages.some((m: any) => m.role === 'user' && m.content.includes(path.basename(file)))).toBe(true);
+  await testInfo.attach('attachment-session', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
+});
+
+test('PROJ-001 原生目录添加项目、搜索、置顶取消及移除', async ({ app }) => {
+  const name = `project-${Date.now()}`;
+  const folder = path.join(root, 'workspace', name);
+  mkdirSync(folder);
+  writeFileSync(path.join(folder, 'keep.txt'), '移除项目不能删除磁盘文件');
+  await route(app, '/projects');
+  await app.getByRole('button', { name: '添加项目', exact: true }).first().click();
+  await nativeDialog('选择工作区');
+  await app.getByRole('button', { name: '添加项目', exact: true }).first().click();
+  await nativeDialog('选择工作区', folder, '%s');
+  const search = app.getByPlaceholder('按名称或路径搜索…');
+  await search.fill(name);
+  const row = app.getByRole('row').filter({ hasText: name });
+  await expect(row).toHaveCount(1);
+  await search.fill(name + '-missing');
+  await expect(app.getByText('没有匹配的项目', { exact: true })).toBeVisible();
+  await search.fill(name);
+  await row.getByRole('button', { name: '项目操作' }).click();
+  await app.getByRole('menuitem', { name: '置顶项目' }).click();
+  await row.getByRole('button', { name: '项目操作' }).click();
+  await app.getByRole('menuitem', { name: '取消置顶' }).click();
+  await row.getByRole('button', { name: '项目操作' }).click();
+  await app.getByRole('menuitem', { name: '删除项目' }).click();
+  await app.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
+  await expect(row).toHaveCount(1);
+  await row.getByRole('button', { name: '项目操作' }).click();
+  await app.getByRole('menuitem', { name: '删除项目' }).click();
+  await app.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  expect(readFileSync(path.join(folder, 'keep.txt'), 'utf8')).toBe('移除项目不能删除磁盘文件');
+});
+
+test('CHAT-003 多轮续聊、离开返回及 WebView 重载后恢复上下文', async ({ app }, testInfo) => {
+  const marker = `context-${Math.random().toString(36).slice(2)}`;
+  const first = await chat(app, `本会话的暗号是 ${marker}。请只回复“已记住”。不要调用记忆工具。`, '已记住');
+  const hash = new URL(app.url()).hash.slice(1);
+  await route(app, '/history');
+  await route(app, hash);
+  await expect(app.getByRole('log')).toContainText('已记住');
+  await app.reload();
+  await expect(app.getByRole('textbox', { name: '输入消息', exact: true })).toBeVisible();
+  const second = await sendChat(app, '刚才告诉你的本会话暗号是什么？只回复暗号，不要调用工具。', marker);
+  expect(second.evidence.session.id).toBe(first.evidence.session.id);
+  expect(second.evidence.messages.filter((m: any) => m.role === 'user')).toHaveLength(2);
+  await testInfo.attach('continued-session', { body: JSON.stringify(second.evidence, null, 2), contentType: 'application/json' });
+});

@@ -1,0 +1,84 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { test, expect, route, api, chat, switchProfile, removeProfile, bridge, root, python, deepseekKey, baseline } from '../fixtures';
+
+test('PROF-003 Build 全步骤、校验、技能选择、MCP 配置及新档案真实调用', async ({ app }, testInfo) => {
+  const name = `builder-${Date.now()}`;
+  const server = `builder-digest-${Date.now()}`;
+  await route(app, '/profiles');
+  await route(app, '/profiles/new');
+  const next = app.getByRole('button', { name: '下一步', exact: true });
+  await app.getByPlaceholder('例如 work / sandbox').fill('INVALID NAME');
+  await next.click();
+  await expect(app.getByText(/名称只允许小写字母/)).toBeVisible();
+  await app.getByPlaceholder('例如 work / sandbox').fill('default');
+  await next.click();
+  await expect(app.getByText('已存在同名档案', { exact: true })).toBeVisible();
+  await app.getByPlaceholder('例如 work / sandbox').fill(name);
+  await app.getByPlaceholder('一两句话说明这个档案的角色。').fill('由原生端到端向导生成的独立测试档案');
+  await next.click();
+  await app.getByRole('combobox').selectOption(`deepseek\0${baseline.model}`);
+  await next.click();
+  await app.getByRole('checkbox', { name: /从完整默认技能包开始/ }).uncheck();
+  const filter = app.getByPlaceholder('过滤技能（名称 / 描述 / 分类）');
+  await filter.fill('no-matching-skill-unique');
+  await expect(app.getByText('没有匹配的技能', { exact: true })).toBeVisible();
+  await filter.fill('hermes-agent');
+  const audit = app.getByRole('checkbox', { name: /^hermes-agent autonomous/ });
+  expect.soft(await audit.isDisabled(), 'Core protects essential hermes-agent, so the builder must not promise it can be disabled').toBe(true);
+  await filter.fill('architecture-diagram');
+  const optional = app.getByRole('checkbox', { name: /^architecture-diagram / });
+  await optional.uncheck();
+  await expect(optional).not.toBeChecked();
+  await next.click();
+  await app.getByRole('button', { name: '添加 server', exact: true }).click();
+  await expect(app.getByText('MCP server 需要一个名字', { exact: true })).toBeVisible();
+  const fields = app.getByRole('main').getByRole('textbox');
+  await fields.nth(0).fill(server);
+  await app.getByRole('button', { name: '添加 server', exact: true }).click();
+  await expect(app.getByText('给 MCP server 一个 URL 或 command', { exact: true })).toBeVisible();
+  await fields.nth(2).fill(python);
+  await fields.nth(3).fill(`${path.join(root, 'native-windows', 'scripts', 'mcp-evidence.py')} ${root}`);
+  await app.getByRole('button', { name: '添加 server', exact: true }).click();
+  await expect(app.getByRole('button', { name: `移除 ${server}`, exact: true })).toBeVisible();
+  await next.click();
+  await expect(app.getByRole('main')).toContainText(name);
+  await expect(app.getByRole('main')).toContainText(baseline.model);
+  await expect(app.getByRole('main')).toContainText(server);
+  await app.getByRole('button', { name: '上一步', exact: true }).click();
+  await expect(app.getByRole('button', { name: `移除 ${server}`, exact: true })).toBeVisible();
+  await next.click();
+  await app.getByRole('button', { name: '创建档案', exact: true }).click();
+  await expect(app).toHaveURL(/#\/profiles$/);
+  try {
+    await switchProfile(app, name);
+    const browse = app.getByRole('button', { name: '先看看界面', exact: true });
+    if (await browse.isVisible()) await browse.click();
+    await route(app, '/models');
+    await app.getByRole('button', { name: /^DeepSeek(?: 当前| 已保存密钥)?$/ }).click();
+    await app.getByRole('textbox', { name: 'DEEPSEEK_API_KEY', exact: true }).fill(deepseekKey());
+    await app.getByRole('textbox', { name: 'Base URL', exact: true }).fill(baseline.baseUrl);
+    await app.getByRole('combobox', { name: '模型', exact: true }).fill(baseline.model);
+    await app.getByRole('combobox', { name: '模型', exact: true }).press('Enter');
+    await app.getByRole('textbox', { name: '上下文窗口', exact: true }).fill('1048576');
+    // A builder can inherit the same provider configuration. A disabled save
+    // then represents an unchanged form; the real call below validates it.
+    const save = app.getByRole('button', { name: '保存配置', exact: true });
+    if (await save.isEnabled()) await save.click();
+    await expect.poll(async () => (await api(app, '/api/model/info')).model).toBe(baseline.model);
+    expect((await api(app, '/api/skills')).find((s: any) => s.name === 'architecture-diagram').enabled).toBe(false);
+    expect((await api(app, '/api/mcp/servers')).servers.some((s: any) => s.name === server)).toBe(true);
+    const marker = `build-${Date.now()}`;
+    const digest = createHash('sha256').update(marker).digest('hex');
+    const { evidence } = await chat(app, `请调用 MCP 服务 ${server} 的 e2e_digest 工具，text 参数为 ${marker}，最后只回复返回的 SHA256。`, digest);
+    const events = readFileSync(path.join(root, 'workspace', 'mcp-events.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    expect(events.some(e => e.text === marker && e.sha256 === digest)).toBe(true);
+    expect(evidence.messages.some((m: any) => m.role === 'tool' && m.content?.includes(digest))).toBe(true);
+    await testInfo.attach('builder-profile-session', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
+  } finally {
+    if ((await bridge<any>(app, 'getRuntimeInfo')).process.currentProfile !== 'default') await switchProfile(app, 'default');
+    await removeProfile(app, name);
+    await app.reload();
+  }
+});

@@ -1,0 +1,11 @@
+{
+  "desktopVersion": "0.9.0",
+  "desktopCodeCommit": "55c672ce4e9872485715e27f2a16e695a1990675",
+  "desktopSourceCommit": "45c233e5f91de7d697e6badd8f2804c2fd9584e3",
+  "installedDesktopSha256": "0b982275aabe02c3180f548c52433eaa5d9bfae2ede401efbb778e86e90c4419",
+  "runtimeVersion": "0.21.0-cn.3",
+  "coreCommit": "0419cae3ecf3ee1505c7ecf761677ad9a8b6647f",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "baseUrl": "https://api.deepseek.com/v1"
+}

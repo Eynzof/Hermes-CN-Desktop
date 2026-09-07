@@ -1,0 +1,65 @@
+import { test, expect, route, chat, api, bridge, switchProfile, removeProfile } from '../fixtures';
+
+test('HS-001 连接真实 Hindsight、设为当前、工具写入和跨会话检索', async ({ app }, testInfo) => {
+  test.setTimeout(240_000);
+  const name = `hindsight-${Date.now()}`;
+  const passphrase = `Cobalt-badger-${Math.random().toString(36).slice(2)}`;
+  const llmMetrics = async () => (await (await fetch('http://127.0.0.1:18888/metrics')).text()).split('\n').filter(line => /^hindsight_llm_(calls_total|tokens_)/.test(line) && line.includes('model="deepseek-v4-flash"') && line.includes('success="true"'));
+  const calls = (lines: string[]) => lines.filter(line => line.startsWith('hindsight_llm_calls_total')).reduce((sum, line) => sum + Number(line.slice(line.lastIndexOf(' ') + 1)), 0);
+  const metricsBefore = await llmMetrics();
+  expect((await api(app, '/api/memory')).active || '').toBe('');
+  await route(app, '/profiles');
+  await app.getByRole('button', { name: '新建档案', exact: true }).click();
+  await app.getByRole('dialog').getByPlaceholder('例如 work / sandbox').fill(name);
+  await app.getByRole('dialog').getByRole('combobox').first().selectOption('default');
+  await app.getByRole('dialog').getByRole('button', { name: '创建', exact: true }).click();
+  await expect(app.getByRole('button', { name: `${name} 的操作` })).toBeVisible();
+  try {
+    await switchProfile(app, name);
+    await route(app, '/hindsight');
+    await app.getByRole('combobox', { name: /^Mode Connection/ }).selectOption('local_external');
+    await app.getByRole('textbox', { name: /^API URL / }).fill('http://127.0.0.1:18888');
+    await app.getByRole('textbox', { name: /^Dashboard URL / }).fill('http://127.0.0.1:19999/dashboard');
+    await app.getByRole('textbox', { name: /^Bank ID / }).fill(name);
+    await app.getByText('高级配置 · 23 项', { exact: true }).click();
+    await app.getByRole('checkbox', { name: /^auto recall / }).uncheck();
+    await app.getByRole('checkbox', { name: /^auto retain / }).uncheck();
+    await app.getByRole('textbox', { name: /^recall types / }).fill('world,experience,observation');
+    await app.getByRole('button', { name: '保存并检测', exact: true }).click();
+    await expect(app.getByText('已保存并完成状态检测；确认在线后可设为当前。', { exact: true })).toBeVisible();
+    await expect(app.getByRole('button', { name: '设为当前', exact: true })).toBeEnabled({ timeout: 60_000 });
+    const configured = await api(app, '/api/memory/providers/hindsight/status');
+    expect(configured.healthy).toBe(true);
+    expect(configured.version).toBe('0.4.9');
+    expect(configured.details.bank_id).toBe(name);
+    expect(configured.details.stats.total_nodes).toBe(0);
+    await app.getByRole('button', { name: '设为当前', exact: true }).click();
+    await expect.poll(async () => (await api(app, '/api/memory')).active).toBe('hindsight');
+    const retained = await chat(app, `Call the hindsight_retain tool to store this fact: Researcher ${name} has the launch passphrase ${passphrase}. Use only Hindsight, not files or built-in memory. After successful retention reply RETAINED.`, 'RETAINED');
+    const retainTool = retained.evidence.messages.find((m: any) => m.role === 'tool' && m.tool_name === 'hindsight_retain');
+    expect(retainTool).toBeTruthy();
+    expect(retainTool.content).not.toMatch(/"error"\s*:/);
+    await expect.poll(async () => (await api(app, '/api/memory/providers/hindsight/status')).details.stats.total_nodes, { timeout: 90_000 }).toBeGreaterThan(0);
+    const recalled = await chat(app, `Use hindsight_recall to look up researcher ${name}'s launch passphrase. This is a new session: do not guess and do not search files or other sessions. Reply with exactly the retrieved passphrase.`, passphrase);
+    expect(recalled.evidence.session.id).not.toBe(retained.evidence.session.id);
+    const recallTool = recalled.evidence.messages.find((m: any) => m.role === 'tool' && m.tool_name === 'hindsight_recall');
+    expect(recallTool?.content).toContain(passphrase);
+    expect(recalled.evidence.session.model).toBe('deepseek-v4-flash');
+    expect(recalled.evidence.session.billing_provider).toBe('deepseek');
+    await route(app, '/hindsight');
+    await app.getByRole('button', { name: '刷新状态', exact: true }).click();
+    const status = await api(app, '/api/memory/providers/hindsight/status');
+    expect(status.details.stats.total_documents).toBeGreaterThan(0);
+    const metricsAfter = await llmMetrics();
+    expect(calls(metricsAfter)).toBeGreaterThan(calls(metricsBefore));
+    await testInfo.attach('hindsight-server-llm-metrics', { body: JSON.stringify({ before: metricsBefore, after: metricsAfter }, null, 2), contentType: 'application/json' });
+    await testInfo.attach('hindsight-provider-status', { body: JSON.stringify(status, null, 2), contentType: 'application/json' });
+    await testInfo.attach('hindsight-real-sessions', { body: JSON.stringify({ retained: retained.evidence, recalled: recalled.evidence }, null, 2), contentType: 'application/json' });
+  } finally {
+    if ((await bridge<any>(app, 'getRuntimeInfo')).process.currentProfile !== 'default') await switchProfile(app, 'default');
+    await removeProfile(app, name);
+    await app.reload();
+    await app.waitForFunction(() => (window as any).__HERMES_RUNTIME__?.backendReady && typeof (window as any).hermesDesktop?.request === 'function');
+    expect((await api(app, '/api/memory')).active || '').toBe('');
+  }
+});

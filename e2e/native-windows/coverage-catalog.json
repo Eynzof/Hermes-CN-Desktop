@@ -1,0 +1,548 @@
+[
+  {
+    "id": "MODEL-001",
+    "route": "/models",
+    "requirement": "DeepSeek 凭证保存、官方探测、模型与上下文持久化",
+    "prerequisite": null
+  },
+  {
+    "id": "MODEL-002",
+    "route": "/models",
+    "requirement": "默认及会话推理档位切换、持久化与真实调用参数证明",
+    "prerequisite": null
+  },
+  {
+    "id": "MODEL-003",
+    "route": "/models",
+    "requirement": "自定义供应商增改删、无效地址校验、错误凭证反馈与真实调用",
+    "prerequisite": null
+  },
+  {
+    "id": "MODEL-004",
+    "route": "/models",
+    "requirement": "辅助模型配置、智能审批模型、图片输入模式",
+    "prerequisite": null
+  },
+  {
+    "id": "MODEL-005",
+    "route": "/models",
+    "requirement": "MoA 预设增改删及真实多模型执行",
+    "prerequisite": null
+  },
+  {
+    "id": "MODEL-006",
+    "route": "/models",
+    "requirement": "OAuth 设备码登录、取消、登出与状态刷新",
+    "prerequisite": "OAuth 测试账号"
+  },
+  {
+    "id": "MODEL-007",
+    "route": "/models",
+    "requirement": "环境变量和工具密钥设置、替换、查看、删除",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-001",
+    "route": "/",
+    "requirement": "真实模型新建对话、流式展示、持久化与调用来源证明",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-002",
+    "route": "/tasks/:taskId",
+    "requirement": "真实模型调用本地写入和读取工具并核对实际文件",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-003",
+    "route": "/tasks/:taskId",
+    "requirement": "多轮续聊、离开返回及 WebView 重载后恢复上下文",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-004",
+    "route": "/tasks/:taskId",
+    "requirement": "运行中中止与继续发送；错误恢复另见 CHAT-012",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-005",
+    "route": "/tasks/:taskId",
+    "requirement": "手动审批允许、拒绝及 Smart 审批实际执行效果",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-006",
+    "route": "/tasks/:taskId",
+    "requirement": "附件文件选择、移除、上传及真实模型读取内容",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-007",
+    "route": "/tasks/:taskId",
+    "requirement": "图片附件与剪贴板图片及不支持视觉的明确反馈",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-008",
+    "route": "/tasks/:taskId",
+    "requirement": "消息复制、详细用量、推理展示与对话宽度；朗读另见 VOICE-004",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-009",
+    "route": "/tasks/:taskId",
+    "requirement": "预览面板、代码与文件制品、分屏与打开文件",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-010",
+    "route": "/tasks/:taskId",
+    "requirement": "子 Agent 发起、监视、追加消息与停止",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-011",
+    "route": "/tasks/:taskId",
+    "requirement": "真实压缩上下文、压缩后续聊、草稿隔离保留与输入快捷键",
+    "prerequisite": null
+  },
+  {
+    "id": "HIST-001",
+    "route": "/history",
+    "requirement": "搜索筛选、重命名、置顶、归档恢复与单条删除",
+    "prerequisite": null
+  },
+  {
+    "id": "HIST-002",
+    "route": "/history",
+    "requirement": "批量选择删除、取消删除、会话导出与原生保存对话框",
+    "prerequisite": null
+  },
+  {
+    "id": "PROJ-001",
+    "route": "/projects",
+    "requirement": "原生目录选择、添加项目、搜索、置顶与移除；排序另见 PROJ-003",
+    "prerequisite": null
+  },
+  {
+    "id": "PROJ-002",
+    "route": "/projects/:workspacePath",
+    "requirement": "项目内新建会话、文件树、文件打开和 Git 差异",
+    "prerequisite": null
+  },
+  {
+    "id": "KANBAN-001",
+    "route": "/kanban",
+    "requirement": "打开真实看板、卡片创建编辑、状态迁移及删除",
+    "prerequisite": null
+  },
+  {
+    "id": "PROF-001",
+    "route": "/profiles",
+    "requirement": "克隆档案、改描述、改模型、重命名与删除；空白隔离另见 PROF-004",
+    "prerequisite": null
+  },
+  {
+    "id": "PROF-002",
+    "route": "/profiles",
+    "requirement": "克隆档案切换、自动重启、记忆隔离与默认档案恢复；密钥会话隔离另见 PROF-004",
+    "prerequisite": null
+  },
+  {
+    "id": "PROF-003",
+    "route": "/profiles/new",
+    "requirement": "Build 向导全部步骤、预览与生成后真实对话",
+    "prerequisite": null
+  },
+  {
+    "id": "PROF-004",
+    "route": "/profiles",
+    "requirement": "空白档案创建、独立密钥和会话存储、真实模型配置与删除",
+    "prerequisite": null
+  },
+  {
+    "id": "SKILL-001",
+    "route": "/skills",
+    "requirement": "内置技能搜索分类、详情阅读、禁用启用、同步与统计",
+    "prerequisite": null
+  },
+  {
+    "id": "SKILL-002",
+    "route": "/skills",
+    "requirement": "基于内置技能复制、名称校验、文件持久化与真实模型加载",
+    "prerequisite": null
+  },
+  {
+    "id": "SKILL-003",
+    "route": "/skills",
+    "requirement": "市场目录浏览、外链和说明；安装入口位于 Build 向导",
+    "prerequisite": null
+  },
+  {
+    "id": "MCP-001",
+    "route": "/mcp",
+    "requirement": "真实 stdio 服务添加、探测、启停、重载、模型调用和删除",
+    "prerequisite": null
+  },
+  {
+    "id": "MCP-002",
+    "route": "/mcp",
+    "requirement": "真实 HTTP MCP 添加探测、模型调用、失联反馈和删除",
+    "prerequisite": null
+  },
+  {
+    "id": "PTY-001",
+    "route": "/console",
+    "requirement": "原生终端输入真实命令、快捷命令、关闭与重开；尺寸变化另见 PTY-003",
+    "prerequisite": null
+  },
+  {
+    "id": "PTY-002",
+    "route": "/console",
+    "requirement": "外部终端打开并核对当前 Profile 和运行环境",
+    "prerequisite": null
+  },
+  {
+    "id": "SOUL-001",
+    "route": "/soul",
+    "requirement": "自定义人格保存、重新加载与真实模型行为验证",
+    "prerequisite": null
+  },
+  {
+    "id": "SOUL-002",
+    "route": "/soul",
+    "requirement": "人格市场搜索筛选、预览、应用与恢复",
+    "prerequisite": null
+  },
+  {
+    "id": "CODE-001",
+    "route": "/coding-agents",
+    "requirement": "编程 Agent 检测、刷新、路径配置与实际调用",
+    "prerequisite": "外部编程 Agent 测试账号或本地可用配置"
+  },
+  {
+    "id": "BACKUP-001",
+    "route": "/backup",
+    "requirement": "原生导出、归档内容验证、导入恢复和取消操作",
+    "prerequisite": null
+  },
+  {
+    "id": "MIGRATE-001",
+    "route": "/config-migration",
+    "requirement": "迁移说明复制、当前目录来源、新任务预填及发送前确认",
+    "prerequisite": null
+  },
+  {
+    "id": "CRON-001",
+    "route": "/cron",
+    "requirement": "定时任务创建编辑、搜索筛选、暂停恢复、真实执行历史和删除",
+    "prerequisite": null
+  },
+  {
+    "id": "CRON-002",
+    "route": "/cron",
+    "requirement": "连续运行记忆、页面变化监控和无变化不调用模型",
+    "prerequisite": null
+  },
+  {
+    "id": "CRON-003",
+    "route": "/cron",
+    "requirement": "向已授权消息目标投递定时结果",
+    "prerequisite": "已授权测试接收者及消息渠道账号"
+  },
+  {
+    "id": "MEM-001",
+    "route": "/memory",
+    "requirement": "内置记忆增改删、容量、用户画像和真实跨会话召回",
+    "prerequisite": null
+  },
+  {
+    "id": "MEMCFG-001",
+    "route": "/memconfig",
+    "requirement": "记忆提供商配置、可用状态、选择与停用",
+    "prerequisite": null
+  },
+  {
+    "id": "OV-001",
+    "route": "/openviking",
+    "requirement": "OpenViking 安装或连接、写入检索和状态验证",
+    "prerequisite": "OpenViking 服务或可用本地安装依赖"
+  },
+  {
+    "id": "HS-001",
+    "route": "/hindsight",
+    "requirement": "Hindsight 安装或连接、写入检索和状态验证",
+    "prerequisite": "Hindsight 服务或可用本地安装依赖"
+  },
+  {
+    "id": "WANDER-001",
+    "route": "/wander-memory/status",
+    "requirement": "Wander 登录连接、空间选择、探测与退出",
+    "prerequisite": "Wander 测试账号或服务配置"
+  },
+  {
+    "id": "WANDER-002",
+    "route": "/wander-memory/memories",
+    "requirement": "记忆创建查询编辑删除及过滤",
+    "prerequisite": "Wander 测试账号或服务配置"
+  },
+  {
+    "id": "WANDER-003",
+    "route": "/wander-memory/files",
+    "requirement": "文件上传、目录管理、检索和删除",
+    "prerequisite": "Wander 测试账号或服务配置"
+  },
+  {
+    "id": "WANDER-004",
+    "route": "/wander-memory/dialogue",
+    "requirement": "对话记录浏览检索及导入操作",
+    "prerequisite": "Wander 测试账号或服务配置"
+  },
+  {
+    "id": "WANDER-005",
+    "route": "/wander-memory/chat",
+    "requirement": "基于记忆的真实聊天和引文溯源",
+    "prerequisite": "Wander 测试账号或服务配置"
+  },
+  {
+    "id": "WANDER-006",
+    "route": "/wander-memory/context",
+    "requirement": "上下文查询、筛选与可视化结果",
+    "prerequisite": "Wander 测试账号或服务配置"
+  },
+  {
+    "id": "WANDER-007",
+    "route": "/wander-memory/api",
+    "requirement": "API 文档浏览和示例复制",
+    "prerequisite": null
+  },
+  {
+    "id": "IM-FEISHU-001",
+    "route": "/im/feishu",
+    "requirement": "飞书配置、探测、网关启停与真实收发",
+    "prerequisite": "飞书测试应用和明确授权的测试接收者"
+  },
+  {
+    "id": "IM-WEIXIN-001",
+    "route": "/im/weixin",
+    "requirement": "微信二维码登录、网关状态与真实收发",
+    "prerequisite": "微信扫码测试账号和明确授权的测试接收者"
+  },
+  {
+    "id": "VOICE-001",
+    "route": "/voice",
+    "requirement": "语音供应商表单切换、配置保存与重新加载；真实合成另见 VOICE-003",
+    "prerequisite": "如选择付费语音供应商需对应凭证"
+  },
+  {
+    "id": "VOICE-002",
+    "route": "/voice",
+    "requirement": "真实麦克风录音、转写、取消和文字发送",
+    "prerequisite": "可用输入设备或专用虚拟音频测试源"
+  },
+  {
+    "id": "VOICE-003",
+    "route": "/voice",
+    "requirement": "真实语音合成、播放停止及自动朗读",
+    "prerequisite": null
+  },
+  {
+    "id": "OBS-001",
+    "route": "/health",
+    "requirement": "健康检查刷新、诊断结果与实际模型可用性一致",
+    "prerequisite": null
+  },
+  {
+    "id": "OBS-002",
+    "route": "/analytics",
+    "requirement": "真实对话后的 Token、成本、模型及时间筛选",
+    "prerequisite": null
+  },
+  {
+    "id": "OBS-003",
+    "route": "/logs",
+    "requirement": "日志筛选搜索、详情、复制和原生导出",
+    "prerequisite": null
+  },
+  {
+    "id": "OBS-004",
+    "route": "/debug",
+    "requirement": "Debug 事件筛选、清空、诊断复制和导出",
+    "prerequisite": null
+  },
+  {
+    "id": "SET-001",
+    "route": "/common",
+    "requirement": "助手名称头像、推理显示、发送快捷键和偏好持久化",
+    "prerequisite": null
+  },
+  {
+    "id": "SET-002",
+    "route": "/notifications",
+    "requirement": "通知及声音策略开关持久化、真实 Windows 测试与完成通知、总开关禁用效果",
+    "prerequisite": null
+  },
+  {
+    "id": "SET-003",
+    "route": "/theme",
+    "requirement": "全部主题、缩放、密度、字号切换及重载持久化",
+    "prerequisite": null
+  },
+  {
+    "id": "SET-004",
+    "route": "/config",
+    "requirement": "配置搜索、结构化编辑保存与重新加载",
+    "prerequisite": null
+  },
+  {
+    "id": "SET-005",
+    "route": "/connection",
+    "requirement": "内置、外部本地、远程连接配置、探测与切换",
+    "prerequisite": "远程认证流需对应测试服务"
+  },
+  {
+    "id": "RUNTIME-001",
+    "route": "/kernel",
+    "requirement": "内核停止、重启、重装、卸载再安装及数据保留",
+    "prerequisite": null
+  },
+  {
+    "id": "RUNTIME-002",
+    "route": "/kernel",
+    "requirement": "更新源配置、邀请导入、签名内核更新和回滚",
+    "prerequisite": null
+  },
+  {
+    "id": "RUNTIME-003",
+    "route": "/kernel",
+    "requirement": "签名 UI 热更新、回滚及更新中正在运行的会话",
+    "prerequisite": null
+  },
+  {
+    "id": "RUNTIME-004",
+    "route": "/about",
+    "requirement": "完整安装包更新下载、安装、取消和失败恢复",
+    "prerequisite": null
+  },
+  {
+    "id": "ENV-001",
+    "route": "/env",
+    "requirement": "环境扫描、分类详情、重新检查与诊断复制；路径打开另见 ENV-002",
+    "prerequisite": null
+  },
+  {
+    "id": "ABOUT-001",
+    "route": "/about",
+    "requirement": "版本来源、更新检查和邮箱复制；浏览器外链另见 ABOUT-002",
+    "prerequisite": null
+  },
+  {
+    "id": "SHELL-001",
+    "route": "/",
+    "requirement": "主导航、侧栏展开收起、命令搜索和快捷键",
+    "prerequisite": null
+  },
+  {
+    "id": "SHELL-002",
+    "route": "/guide",
+    "requirement": "首次引导、步骤跳转、完成和再次打开",
+    "prerequisite": null
+  },
+  {
+    "id": "SHELL-003",
+    "route": "offline",
+    "requirement": "正常退出、冷启动首条真实消息、持久数据与旧会话恢复；离线另见 SHELL-005",
+    "prerequisite": null
+  },
+  {
+    "id": "SHELL-004",
+    "route": "native",
+    "requirement": "主窗口最小化、最大化、关闭到托盘和恢复真实会话",
+    "prerequisite": null
+  },
+  {
+    "id": "MODEL-008",
+    "route": "/models",
+    "requirement": "官方模型列表刷新、搜索、设为当前模型及会话中模型切换",
+    "prerequisite": null
+  },
+  {
+    "id": "MODEL-009",
+    "route": "/models",
+    "requirement": "本地部署供应商配置、探测与真实本地推理",
+    "prerequisite": "真实本地模型服务；与官方 flash 验收分开"
+  },
+  {
+    "id": "CHAT-012",
+    "route": "/tasks/:taskId",
+    "requirement": "请求失败后的错误反馈、重试和原输入保留",
+    "prerequisite": null
+  },
+  {
+    "id": "CHAT-013",
+    "route": "/tasks/:taskId",
+    "requirement": "图片原生输入和视觉辅助模型真实识别",
+    "prerequisite": "需要允许使用视觉模型；默认 flash 只验不支持视觉的反馈"
+  },
+  {
+    "id": "PROJ-003",
+    "route": "/projects",
+    "requirement": "项目最近活动排序及真实会话活动更新",
+    "prerequisite": null
+  },
+  {
+    "id": "MCP-003",
+    "route": "/mcp",
+    "requirement": "MCP 市场目录安装、配置参数和真实工具调用",
+    "prerequisite": null
+  },
+  {
+    "id": "MCP-004",
+    "route": "/mcp",
+    "requirement": "MCP OAuth 登录、取消、刷新及退出",
+    "prerequisite": "OAuth 服务账号"
+  },
+  {
+    "id": "PTY-003",
+    "route": "/console",
+    "requirement": "终端实际尺寸变化和内容保留",
+    "prerequisite": null
+  },
+  {
+    "id": "CRON-004",
+    "route": "/cron",
+    "requirement": "同一秒快速重复运行保留每次历史结果",
+    "prerequisite": null
+  },
+  {
+    "id": "SET-006",
+    "route": "/notifications",
+    "requirement": "前后台条件与审批通知实际效果和系统音频播放证明",
+    "prerequisite": null
+  },
+  {
+    "id": "ENV-002",
+    "route": "/env",
+    "requirement": "从环境诊断打开实际磁盘路径",
+    "prerequisite": null
+  },
+  {
+    "id": "ABOUT-002",
+    "route": "/about",
+    "requirement": "真实系统浏览器打开官网及项目外链",
+    "prerequisite": null
+  },
+  {
+    "id": "SHELL-005",
+    "route": "offline",
+    "requirement": "内核失联、离线修复、重连和发送恢复",
+    "prerequisite": null
+  },
+  {
+    "id": "VOICE-004",
+    "route": "/tasks/:taskId",
+    "requirement": "消息朗读、停止与自动朗读真实播放",
+    "prerequisite": null
+  }
+]
