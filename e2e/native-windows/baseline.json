@@ -7,5 +7,13 @@
   "coreCommit": "0419cae3ecf3ee1505c7ecf761677ad9a8b6647f",
   "provider": "deepseek",
   "model": "deepseek-v4-flash",
-  "baseUrl": "https://api.deepseek.com/v1"
+  "baseUrl": "https://api.deepseek.com/v1",
+  "acceptanceBuild": {
+    "productName": "Hermes v090 Acceptance",
+    "features": [
+      "reqwest/rustls-tls-native-roots"
+    ],
+    "testSigningKey": true,
+    "productionReleaseArtifact": false
+  }
 }

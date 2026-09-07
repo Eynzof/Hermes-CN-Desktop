@@ -32,6 +32,8 @@ node scripts/inventory.mjs
 & scripts/start-test-browser.ps1
 # Hindsight 真服务：固定镜像摘要、独立数据库和向量模型，端口 18888/19999。
 & scripts/start-hindsight.ps1
+# 后续复跑前统一准备三个固定版本服务，已存在的专用数据卷继续保留。
+& scripts/prepare-services.ps1
 # 导出每个流程最近一次结果对应的完整证据包。
 & scripts/export-evidence.ps1
 ```
@@ -50,7 +52,7 @@ node scripts/inventory.mjs
 
 2026-09-07 已采集 42 个实际页面，正在将逐项操作转为脚本。最新清单以 `C:\HermesE2E\reports\coverage.md` 为准；它按安装版基线汇总每项工作流最近一次结果，属于累积进度，不能代替同一轮全量结果。
 
-每轮 `reports/runs/<UTC>/` 包含安装版摘要、Desktop/Core 版本与提交、`framework-manifest.json`（脚本逐文件 SHA256）、Playwright JSON/HTML/JUnit、截图与断言附件。对话附件核对 UI 会话 ID 到 Core Agent Session ID 的明确映射、SQLite 中的真实计费来源和 Token、工具回执及回合完成日志。MCP 另有服务自身调用记录，文件工具另核对磁盘内容。失败时额外保留 Windows 全屏，原生文件对话框也通过系统窗口和控件操作。
+每轮 `reports/runs/<UTC>/` 包含安装版摘要、Desktop/Core 版本与提交、`framework-manifest.json`（脚本逐文件 SHA256；新运行另存 `framework-source/` 精确源码快照）、Playwright JSON/HTML/JUnit、截图与断言附件。对话附件核对 UI 会话 ID 到 Core Agent Session ID 的明确映射、SQLite 中的真实计费来源和 Token、工具回执及回合完成日志。MCP 另有服务自身调用记录，文件工具另核对磁盘内容。失败时额外保留 Windows 全屏，原生文件对话框也通过系统窗口和控件操作。
 
 `defects.md` 区分产品问题与脚本问题。当前已确认备份未包含 state.db 聊天历史、重复恢复同名档案未清除 Core 删除标记、默认 Edge TTS 缺少冻结包依赖，以及 Build 对必需技能的提示不一致。间歇性的冷启动和档案重连问题继续保留回归，不用自动重试把失败变绿。
 
@@ -60,8 +62,26 @@ node scripts/inventory.mjs
 
 完整覆盖仍在实施中。现有脚本全绿也不代表全部功能验收完成；未编写、未运行、外部账号待提供和已发现产品缺陷都必须继续列出。
 
-清单现已拆分为 91 个必测工作流。列表刷新、失败重试、终端尺寸、外链、通知实际策略等子功能有独立用例编号，原用例通过不能代替这些待测项。`--list` 只报告收集到的脚本数量，不记录执行通过。
+清单现已拆分为 95 个必测工作流。列表刷新、失败重试、终端尺寸、外链、通知实际策略等子功能有独立用例编号，原用例通过不能代替这些待测项。`--list` 只报告收集到的脚本数量，不记录执行通过。
 
 Hindsight 固定为 0.4.9 镜像（摘要写在启动脚本中），通过该版本的 OpenAI 兼容适配器直连 DeepSeek 官方 `/v1`，模型仍为 `deepseek-v4-flash`。嵌入使用真实 `BAAI/bge-small-en-v1.5`，重排使用 FlashRank；命名卷只属于本框架。首次启动需要下载镜像和模型。启动脚本不以容器存活冒充健康，执行 HS-001 前应确认 `http://127.0.0.1:18888/health` 的数据库状态。测试使用独立 Hermes 档案和唯一 Hindsight Bank，实际调用 retain/recall，并检查服务端成功模型调用计数增长。Bank 留在隔离数据库中供回溯。
 
 证据包包含真实桌面截图，属于本地测试材料。不要把它当作公开发布附件。导出仅选择清单中最近结果的报告，不包含密钥目录和配置备份 ZIP。
+
+当前 Windows 包是独立 Acceptance 构建，productName 为 Hermes v090 Acceptance，启用 reqwest/rustls-tls-native-roots 以信任本机短期 TLS 证书，并使用测试签名公钥。EXE 的 SHA256 固定在基线中；它不是正式分发包。签名流程可以在这个包中真实验证，但正式发布包仍需用正式签名和最终字节复验。
+
+签名 Runtime/UI 更新用例会调用 `scripts/prepare-update-service.ps1`（使用 Acceptance 包原有测试签名密钥），并在需要时通过真实托盘退出再以 `scripts/start.ps1 -UpdateFixture` 启动。更新服务只绑定 `127.0.0.1:19445`，Runtime 候选复用已安装 Core 的确切归档字节，UI 候选仅增加可读取的版本标记。清单签名及下载校验仍由产品执行。全部更新测试结束后可正常退出并以默认启动脚本恢复，再运行 `scripts/stop-update-fixture.ps1` 删除该服务及精确指纹的短期证书；文件和失败证据保留。不要设置只含测试 CA 的 `SSL_CERT_FILE`，否则 Core 会拒绝真实 DeepSeek 的公共证书链。
+
+OpenViking 使用固定 v0.4.17.1 镜像和独立数据卷。依次执行 `scripts/start-ollama.ps1`、`scripts/start-openviking.ps1`、`scripts/initialize-openviking.ps1`；后者将 tenant 凭证写入 secrets/openviking-client.json，不能把服务 root key 填到 Desktop 的记忆客户端。嵌入为真实本地 nomic-embed-text:v1.5，提取与对话仍用 DeepSeek flash；服务端口 19333，Ollama 11435。MEMCFG-001 同时验证外置记忆停用后配置保留。
+
+CODE-001 使用已安装的真实 Claude Code CLI，将 DeepSeek Anthropic 兼容接口配置写入唯一的 secrets/claude/<case>/settings.json，所有模型档位均设为 flash。CLI 配置与用户个人账号隔离，验证生成文件的实际执行结果、CLI 流式回执和界面委派卡片。SET-005 为外部 Core 创建独立私有数据目录，测试本地自动令牌和远程模式手动令牌；后者使用回环服务验证协议，不代表跨机器网络或第三方 OAuth 已通过。
+
+SET-006 使用 PyAudioWPatch 0.2.12.8 采集短时间的真实 WASAPI 扬声器输出，并与静音基线、关闭提示音后的输出比较。音频附件与桌面截图一样仅作为本地测试材料。依赖版本写入 requirements 和锁定文件。
+
+RUNTIME-004 在流程内启动专用的 19446 回环代理，仅接受两个更新主机名，不转发其他目标。HTTPS_PROXY 只传给这次测试 Desktop，DeepSeek 通过 NO_PROXY 直连；不改 hosts、系统代理或公共服务。短期 CA 带两个域名的约束，私钥在 secrets 中，结束后删除精确证书指纹。候选使用已存在的真实 Tauri 签名 NSIS 文件，验证错误签名、摘要拒绝、取消、稍后安装、授权撤回、实际自动重启和旧会话续聊。finally 用原 NSIS 恢复 0.9.0 并核对原 EXE 摘要，保留测试数据。候选版本为本机 0.9.1-prototype.local.1，不属于正式发布。
+
+VOICE-002 使用已存在的 Steam Streaming Microphone 驱动对：Windows SAPI 生成测试句，向虚拟输出播放，并从实际输入端录音校准，再由 Desktop 的 MediaRecorder 录制和 STT 转写。脚本读取设备实际采样率，不改默认设备；找不到指定输入输出对时不会伪造音频。WebView2 的原生麦克风授权弹窗通过真实 HWND 和 UIA 控件处理；界面外的校准录音不代表 Desktop 转写已通过。
+
+整包更新 RUNTIME-004 在 runs/20260907T093139Z 完整通过，包含更新器自动启动新版本、原会话真实续聊和原安装版自动恢复。失败探索记录全部保留。当前共实现 82 个工作流脚本，覆盖进度按真实执行结果统计，其余需要账号或专项模型授权的工作流仍未完成。
+
+失败后恢复测试基线与功能通过是两个不同结果。流程中的软断言仅用于继续收集同一功能的后续步骤，整项仍标为 failed；同一次操作没有自动重试。外部连接的首次失败和显式再次发送分别留证。进程故障注入仅针对已核对 PID 和可执行路径的测试 Core，不结束用户的其他应用。

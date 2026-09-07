@@ -218,8 +218,8 @@
   {
     "id": "CODE-001",
     "route": "/coding-agents",
-    "requirement": "编程 Agent 检测、刷新、路径配置与实际调用",
-    "prerequisite": "外部编程 Agent 测试账号或本地可用配置"
+    "requirement": "编程 Agent 检测、刷新、路径查看、技能控制及真实 Claude Code 委派",
+    "prerequisite": "真实 Claude Code CLI；本框架用隔离配置直连 DeepSeek flash"
   },
   {
     "id": "BACKUP-001",
@@ -339,7 +339,7 @@
     "id": "VOICE-002",
     "route": "/voice",
     "requirement": "真实麦克风录音、转写、取消和文字发送",
-    "prerequisite": "可用输入设备或专用虚拟音频测试源"
+    "prerequisite": "当前 Windows 已有的 Steam 虚拟麦克风输入输出对；由脚本生成实际测试音源"
   },
   {
     "id": "VOICE-003",
@@ -404,7 +404,7 @@
   {
     "id": "RUNTIME-001",
     "route": "/kernel",
-    "requirement": "内核停止、重启、重装、卸载再安装及数据保留",
+    "requirement": "内核停止、离线状态、启动及数据保留；重启/重装/卸载另见 RUNTIME-005 至 007",
     "prerequisite": null
   },
   {
@@ -421,7 +421,7 @@
   },
   {
     "id": "RUNTIME-004",
-    "route": "/about",
+    "route": "/kernel",
     "requirement": "完整安装包更新下载、安装、取消和失败恢复",
     "prerequisite": null
   },
@@ -543,6 +543,30 @@
     "id": "VOICE-004",
     "route": "/tasks/:taskId",
     "requirement": "消息朗读、停止与自动朗读真实播放",
+    "prerequisite": null
+  },
+  {
+    "id": "RUNTIME-005",
+    "route": "/kernel",
+    "requirement": "Gateway 重启、进程更替和真实原会话恢复",
+    "prerequisite": null
+  },
+  {
+    "id": "RUNTIME-006",
+    "route": "/kernel",
+    "requirement": "内核重装、配置密钥及会话保留与真实续聊",
+    "prerequisite": null
+  },
+  {
+    "id": "RUNTIME-007",
+    "route": "/kernel",
+    "requirement": "取消卸载、卸载再安装、数据保留和真实续聊",
+    "prerequisite": null
+  },
+  {
+    "id": "MCP-005",
+    "route": "/mcp",
+    "requirement": "带空格 Windows 路径参数的真实服务探测与模型调用",
     "prerequisite": null
   }
 ]

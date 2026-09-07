@@ -7,8 +7,12 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Collections.Generic;
 public class NativeE2EWindow {
+  [DllImport("advapi32.dll", EntryPoint="CredDeleteW", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool CredDelete(string target, uint type, uint flags);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out Rect bounds);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hwnd);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
   [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
@@ -49,7 +53,8 @@ public class NativeE2EWindow {
       var text = new StringBuilder(4096); var type = new StringBuilder(128);
       GetWindowText(hwnd, text, text.Capacity); GetClassName(hwnd, type, type.Capacity);
       uint processId; GetWindowThreadProcessId(hwnd, out processId);
-      result.Add(new Control { handle=hwnd.ToInt64(), pid=processId, text=text.ToString(), type=type.ToString() });
+      Rect bounds; GetWindowRect(hwnd, out bounds);
+      result.Add(new Control { handle=hwnd.ToInt64(), pid=processId, text=text.ToString(), type=type.ToString(), left=bounds.left,top=bounds.top,right=bounds.right,bottom=bounds.bottom });
       return true;
     }, IntPtr.Zero);
     return result.ToArray();
@@ -82,8 +87,19 @@ while($true) {
       $processInfo=Get-Content (Join-Path $Root 'reports\desktop-process.json') -Raw | ConvertFrom-Json
       # Owned modal dialogs may be absent from UIA RootElement.Children.
       # Enumerate real HWNDs for this exact installed-app process first.
-      $windows=@([NativeE2EWindow]::Windows() | Where-Object {$_.pid -eq [int]$processInfo.pid} | ForEach-Object {[System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$_.handle)})
-      if($request.action -eq 'windows') {
+      $windows=@([NativeE2EWindow]::Windows() | Where-Object {$_.pid -eq [int]$processInfo.pid} | ForEach-Object {
+        $handle=[IntPtr]$_.handle
+        try {[System.Windows.Automation.AutomationElement]::FromHandle($handle)}
+        catch {if([NativeE2EWindow]::IsWindow($handle)){throw}}
+      })
+      if($request.action -eq 'deleteUpdateFixtureCredential') {
+        if([string]$request.deviceId -notmatch '^signed-update-\d+$'){throw 'Only an exact local test invitation credential may be removed'}
+        $target=[string]$request.deviceId+'.cn.org.hermesagent.desktop.hot-update'
+        $deleted=[NativeE2EWindow]::CredDelete($target,1,0)
+        $code=if($deleted){0}else{[Runtime.InteropServices.Marshal]::GetLastWin32Error()}
+        if($code -notin @(0,1168)){throw "Test credential removal failed: $code"}
+        $result=@{ok=$true;target=$target;deleted=$deleted}
+      } elseif($request.action -eq 'windows') {
         $result=@{ok=$true;windows=@($windows | ForEach-Object {DescribeElement $_})}
       } elseif($request.action -eq 'notificationCenter') {
         [NativeE2EWindow]::keybd_event(0x5B,0,0,[UIntPtr]::Zero)
@@ -93,18 +109,42 @@ while($true) {
         $result=@{ok=$true}
       } elseif($request.action -eq 'systemWindows') {
         $result=@{ok=$true;windows=[NativeE2EWindow]::Windows()}
-      } elseif($request.action -in @('externalSnapshot','externalKeys')) {
-        $matches=@([NativeE2EWindow]::Windows() | Where-Object {$_.text -eq [string]$request.window -and $_.type -eq [string]$request.windowClass})
+      } elseif($request.action -eq 'foreground') {
+        $handle=[NativeE2EWindow]::GetForegroundWindow().ToInt64()
+        $result=@{ok=$true;window=([NativeE2EWindow]::Windows() | Where-Object {$_.handle -eq $handle})}
+      } elseif($request.action -in @('externalSnapshot','externalKeys','externalPaste','externalInvoke')) {
+        $matches=@([NativeE2EWindow]::Windows() | Where-Object {$_.type -eq [string]$request.windowClass})
+        # Page titles change during normal navigation. An observed HWND and
+        # class identify the actual browser window across that title change.
         if($request.windowHandle){$matches=@($matches | Where-Object {$_.handle -eq [long]$request.windowHandle})}
+        else{$matches=@($matches | Where-Object {$_.text -eq [string]$request.window})}
         if($matches.Count -ne 1){throw 'External window must match one observed title and class'}
         $external=[System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$matches[0].handle)
-        if($request.action -eq 'externalKeys') {
+        if($request.action -eq 'externalInvoke') {
+          if(-not $request.windowHandle){throw 'Invoking an external native control requires its observed HWND'}
+          $match=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,[string]$request.controlName)
+          $controls=$external.FindAll([System.Windows.Automation.TreeScope]::Descendants,$match)
+          if($controls.Count -ne 1){throw 'Expected one matching native permission control'}
+          $controls[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+          $result=@{ok=$true}
+        } elseif($request.action -in @('externalKeys','externalPaste')) {
           [NativeE2EWindow]::SetForegroundWindow([IntPtr]$matches[0].handle) | Out-Null
-          [System.Windows.Forms.SendKeys]::SendWait([string]$request.keys)
+          if($request.action -eq 'externalPaste') {
+            [System.Windows.Forms.Clipboard]::SetText([string]$request.value)
+            [System.Windows.Forms.SendKeys]::SendWait('^v')
+          } else { [System.Windows.Forms.SendKeys]::SendWait([string]$request.keys) }
           $result=@{ok=$true}
         } else {
           $children=$external.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
-          $result=@{ok=$true;window=(DescribeElement $external);controls=@($children | ForEach-Object {DescribeElement $_})}
+          $controls=@($children | ForEach-Object {
+            $description=DescribeElement $_
+            if($_.Current.ClassName -eq 'TermControl') {
+              $pattern=$null
+              if($_.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern,[ref]$pattern)){$description.text=$pattern.DocumentRange.GetText(20000)}
+            }
+            $description
+          })
+          $result=@{ok=$true;window=(DescribeElement $external);controls=$controls}
         }
       } elseif($request.action -eq 'shellRoots') {
         $roots=[System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition)
@@ -185,6 +225,14 @@ while($true) {
           $result=@{ok=$true;controls=[NativeE2EWindow]::Controls([IntPtr]$window[0].Current.NativeWindowHandle)}
         } elseif($request.action -eq 'activate') {
           [NativeE2EWindow]::SetForegroundWindow([IntPtr]$window[0].Current.NativeWindowHandle) | Out-Null
+        } elseif($request.action -eq 'focusTitleBar') {
+          if($window[0].Current.ClassName -ne 'Tauri Window'){throw 'Title-bar focus is limited to the actual Desktop window'}
+          $handle=[IntPtr]$window[0].Current.NativeWindowHandle
+          $bounds=New-Object NativeE2EWindow+Rect
+          if(-not [NativeE2EWindow]::GetWindowRect($handle,[ref]$bounds)){throw 'Cannot read actual Desktop bounds'}
+          [NativeE2EWindow]::SetCursorPos([int](($bounds.left+$bounds.right)/2),[int]($bounds.top+12)) | Out-Null
+          [NativeE2EWindow]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+          [NativeE2EWindow]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
         } elseif($request.action -eq 'setControlText') {
           $controls=@([NativeE2EWindow]::Controls([IntPtr]$window[0].Current.NativeWindowHandle) | Where-Object {$_.id -eq [int]$request.controlId -and $_.type -eq 'Edit'})
           if($controls.Count -ne 1){throw 'Native edit must resolve to one visible control'}

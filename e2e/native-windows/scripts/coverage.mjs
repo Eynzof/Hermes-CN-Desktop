@@ -6,6 +6,9 @@ const output = path.join(root, 'reports');
 await mkdir(path.join(output, 'runs'), { recursive: true });
 const catalog = JSON.parse(await readFile(new URL('../coverage-catalog.json', import.meta.url), 'utf8'));
 const baseline = JSON.parse(await readFile(new URL('../baseline.json', import.meta.url), 'utf8'));
+// Descriptive provenance can be enriched later without changing the installed
+// bytes. Match all execution identity fields, including the exact EXE hash.
+const identity = value => JSON.stringify(['desktopVersion', 'desktopCodeCommit', 'desktopSourceCommit', 'installedDesktopSha256', 'runtimeVersion', 'coreCommit', 'provider', 'model', 'baseUrl'].map(key => value[key]));
 const observed = new Map();
 function collect(suite, run) {
   for (const spec of suite.specs || []) {
@@ -24,7 +27,7 @@ for (const run of (await readdir(path.join(output, 'runs'))).sort()) {
   const dir = path.join(output, 'runs', run);
   try {
     const provenance = JSON.parse(await readFile(path.join(dir, 'baseline.json'), 'utf8'));
-    if (JSON.stringify(provenance) !== JSON.stringify(baseline)) continue;
+    if (identity(provenance) !== identity(baseline)) continue;
     const result = JSON.parse(await readFile(path.join(dir, 'results.json'), 'utf8'));
     for (const suite of result.suites || []) collect(suite, run);
   } catch (error) {

@@ -3,13 +3,15 @@ import path from 'node:path';
 import { test, expect, chat, sendChat, root, sessionEvidence } from '../fixtures';
 
 test('CHAT-010 真实子 Agent 委派、监视、追加指令、停止及清空记录', async ({ app }, testInfo) => {
+  test.setTimeout(240_000);
   const marker = `child-${Date.now()}`;
   const file = path.join(root, 'workspace', marker + '.txt');
   const stoppedFile = path.join(root, 'workspace', marker + '-stopped.txt');
   const goal = `STEER-${marker}：先用 terminal 同步执行 powershell -NoProfile -Command Start-Sleep -Seconds 25，然后按最新收到的指令用文件写入工具创建 ${file.replaceAll('\\', '/')}，默认内容 ORIGINAL。只操作该文件。`;
+  const panel = app.getByRole('complementary', { name: '子Agent 监视', exact: true });
+  try {
   const parent = await chat(app, `本次测试需要真实子 Agent。请调用 delegate_task，tasks 中仅包含一个子任务，goal 完整填写：${goal}。沿用当前 deepseek-v4-flash 模型。派发后不要等待、不要反复查询，立即只回复 CHILD-SPAWNED。`, 'CHILD-SPAWNED');
   await app.getByRole('button', { name: '子Agent 监视', exact: true }).click();
-  const panel = app.getByRole('complementary', { name: '子Agent 监视', exact: true });
   const child = panel.locator('[data-subagent-id]').filter({ hasText: `STEER-${marker}` });
   await expect(child.getByRole('button', { name: '追加指令', exact: true })).toBeVisible();
   await child.getByRole('button', { name: '追加指令', exact: true }).click();
@@ -35,4 +37,22 @@ test('CHAT-010 真实子 Agent 委派、监视、追加指令、停止及清空�
   await expect(panel).toContainText('暂无子Agent 活动');
   await panel.getByRole('button', { name: '关闭子Agent 监视', exact: true }).click();
   await expect(panel).toHaveCount(0);
+  } finally {
+    if (!app.isClosed()) {
+      const toggle = app.getByRole('button', { name: '子Agent 监视', exact: true });
+      if (!await panel.isVisible() && await toggle.isVisible()) await toggle.click();
+      if (await panel.isVisible()) {
+        const own = panel.locator('[data-subagent-id][data-running="true"]').filter({ hasText: marker });
+        for (const child of await own.all()) {
+          const stop = child.getByRole('button', { name: '停止子任务', exact: true });
+          if (await stop.isVisible()) await stop.click();
+        }
+        await expect(own, "Only this workflow's child agents must finish before the next case").toHaveCount(0, { timeout: 60_000 });
+        await panel.getByRole('button', { name: '关闭子Agent 监视', exact: true }).click();
+      }
+      const stop = app.getByRole('button', { name: '中止响应', exact: true });
+      if (await stop.isVisible()) { await stop.click(); await expect(stop).toBeHidden({ timeout: 30_000 }); }
+    }
+  }
+
 });

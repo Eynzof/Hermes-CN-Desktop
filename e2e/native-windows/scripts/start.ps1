@@ -2,7 +2,9 @@ param(
   [string]$Root='C:\HermesE2E',
   [string]$AppExe='C:\HermesV090\Desktop App\hermes-agent-cn-desktop.exe',
   [int]$CdpPort=19229,
-  [int]$ApiPort=9120
+  [int]$ApiPort=9120,
+  [switch]$UpdateFixture,
+  [switch]$ShellUpdateFixture
 )
 $ErrorActionPreference='Stop'
 $taskName='HermesNativeE2E'
@@ -16,9 +18,11 @@ $baseline=Get-Content (Join-Path $PSScriptRoot '..\baseline.json') -Raw | Conver
 $actual=(Get-FileHash $AppExe -Algorithm SHA256).Hash.ToLowerInvariant()
 if($actual -ne $baseline.installedDesktopSha256){throw "Desktop artifact differs from baseline: $actual"}
 $listeners=@(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in $ApiPort,$CdpPort })
-if($listeners.Count){throw "Test ports are occupied; inspect the owning processes before starting: $($listeners | ConvertTo-Json -Compress)"}
+if($listeners.Count){throw "Test ports are occupied; inspect the owning processes before starting: $($listeners | Select-Object LocalPort,OwningProcess | ConvertTo-Json -Compress)"}
 $launch=Join-Path $PSScriptRoot 'launch.ps1'
 $arguments="-NoProfile -ExecutionPolicy Bypass -File `"$launch`" -Root `"$Root`" -AppExe `"$AppExe`" -CdpPort $CdpPort -ApiPort $ApiPort"
+if($UpdateFixture){$arguments+=' -UpdateFixture'}
+if($ShellUpdateFixture){$arguments+=' -ShellUpdateFixture'}
 $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
 $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 $settings=New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 12) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries

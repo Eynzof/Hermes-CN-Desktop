@@ -13,7 +13,8 @@ test('SHELL-003 托盘正常退出、内核退出、冷启动立即真实发送�
   const sentinel = `lifecycle-${Date.now()}`;
   const file = path.join(root, 'workspace', sentinel + '.txt');
   writeFileSync(file, sentinel);
-  const history = await chat(app, `请记住当前会话的暗号 ${sentinel}，只回复 READY。`, 'READY');
+  const history = await chat(app, `当前会话的暗号是 ${sentinel}，只回复 READY。禁止调用任何工具，也不要保存到文件或记忆。`, 'READY');
+  expect(history.evidence.messages.filter((m: any) => m.role === 'tool')).toHaveLength(0);
   const persistedId = history.evidence.session.id;
   const core = await bridge<any>(app, 'getRuntimeInfo');
   let menu = (await native({ action: 'windows' })).windows.find((w: any) => w.class === '#32768');
@@ -41,15 +42,16 @@ test('SHELL-003 托盘正常退出、内核退出、冷启动立即真实发送�
     // No transport warm-up or retry. Send at the first usable composer after
     // normal launcher readiness, retaining cold-start failures as failures.
     await route(fresh, '/');
-    const cold = await sendChat(fresh, '这是冷启动首条真实消息，请只回复 COLD-START-READY。', 'COLD-START-READY');
+    const cold = await sendChat(fresh, '这是冷启动首条真实消息，不要调用任何工具，请只回复 COLD-START-READY。', 'COLD-START-READY');
     const after = JSON.parse(readFileSync(path.join(root, 'reports', 'desktop-process.json'), 'utf8').replace(/^\uFEFF/, ''));
     expect(after.pid).not.toBe(before.pid);
     expect(readFileSync(file, 'utf8')).toBe(sentinel);
     expect(sessionEvidence(persistedId).session.id).toBe(persistedId);
     await route(fresh, `/tasks/${persistedId}`);
     await expect(fresh.getByRole('log')).toContainText('READY');
-    const restored = await sendChat(fresh, '这个会话在重启前告诉你的暗号是什么？只回复暗号。', sentinel);
+    const restored = await sendChat(fresh, '这个会话在重启前告诉你的暗号是什么？只从本会话上下文读取，禁止调用任何工具，只回复暗号。', sentinel);
     expect(restored.evidence.session.id).toBe(persistedId);
+    expect(restored.evidence.messages.filter((m: any) => m.role === 'tool')).toHaveLength(0);
     await testInfo.attach('cold-and-resumed-sessions', { body: JSON.stringify({ cold: cold.evidence, restored: restored.evidence }, null, 2), contentType: 'application/json' });
     await testInfo.attach('restarted-window', { body: await fresh.screenshot(), contentType: 'image/png' });
   } finally { await browser.close(); }

@@ -1,1 +1,4 @@
 mcp==2.0.0
+pywin32==312
+cryptography==50.0.1
+PyAudioWPatch==0.2.12.8

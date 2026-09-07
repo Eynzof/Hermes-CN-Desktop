@@ -15,7 +15,12 @@ if (!targets?.some(target => target.url?.includes('hermesui.localhost'))) throw 
 const browser = await chromium.connectOverCDP(endpoint);
 try {
   const page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes('hermesui.localhost'));
-  await page.waitForFunction(() => window.__HERMES_RUNTIME__?.backendReady, undefined, { timeout: 120_000 });
+  // A deliberately stopped/uninstalled backend is a valid desktop launch.
+  // Do not restart it from the harness or time out before testing Offline Shell.
+  await page.waitForFunction(() => window.hermesDesktop?.getRuntimeInfo && (
+    window.__HERMES_RUNTIME__?.backendReady ||
+    ['stopped', 'uninstalled'].includes(window.__HERMES_RUNTIME__?.managedRuntimeDesiredState)
+  ), undefined, { timeout: 120_000 });
   const runtime = await page.evaluate(() => window.hermesDesktop.getRuntimeInfo());
   console.log(JSON.stringify({ url: page.url(), mode: runtime.mode, root: runtime.runtimeRoot, current: runtime.current }));
 } finally { await browser.close(); }
