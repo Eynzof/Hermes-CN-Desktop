@@ -1112,6 +1112,15 @@ fn tui_override_if_present(raw: Option<std::ffi::OsString>) -> Option<PathBuf> {
     tui.join("dist").join("entry.js").is_file().then_some(tui)
 }
 
+fn installed_payload_resource(
+    record: &RuntimeInstallRecord,
+    find: fn(&Path) -> Option<PathBuf>,
+) -> Option<PathBuf> {
+    // Archives may contain a named PyInstaller directory inside the version
+    // directory. Node and the TUI remain beside that directory's executable.
+    find(Path::new(&record.path)).or_else(|| find(Path::new(&record.executable_path).parent()?))
+}
+
 /// Directory holding the bundled `node`/`npm`/`npx`, when the current managed
 /// runtime ships one. Prepend to a spawned child's PATH so `shutil.which`
 /// (TUI launch, node-based MCP servers, playwright, `npx tsc`) resolves them
@@ -1120,7 +1129,7 @@ pub fn current_node_bin_dir() -> Option<PathBuf> {
     if let Some(node) = node_override_if_present(std::env::var_os("HERMES_DESKTOP_NODE_BINARY")) {
         return node.parent().map(Path::to_path_buf);
     }
-    node_bin_dir_if_present(Path::new(&read_current_record()?.path))
+    installed_payload_resource(&read_current_record()?, node_bin_dir_if_present)
 }
 
 /// Absolute path to the bundled `node` executable, for the `HERMES_NODE` env
@@ -1129,7 +1138,7 @@ pub fn current_node_binary() -> Option<PathBuf> {
     if let Some(node) = node_override_if_present(std::env::var_os("HERMES_DESKTOP_NODE_BINARY")) {
         return Some(node);
     }
-    node_binary_if_present(Path::new(&read_current_record()?.path))
+    installed_payload_resource(&read_current_record()?, node_binary_if_present)
 }
 
 /// Directory holding the prebuilt Ink TUI bundle (`tui/dist/entry.js`), for
@@ -1139,7 +1148,7 @@ pub fn current_tui_dir() -> Option<PathBuf> {
     if let Some(tui) = tui_override_if_present(std::env::var_os("HERMES_DESKTOP_TUI_DIR")) {
         return Some(tui);
     }
-    tui_dir_if_present(Path::new(&read_current_record()?.path))
+    installed_payload_resource(&read_current_record()?, tui_dir_if_present)
 }
 
 /// Prepend the bundled node `bin/` dir (when present) to `base`, so a spawned
@@ -3044,6 +3053,32 @@ mod tests {
 
         std::fs::write(dist.join("entry.js"), b"//tui").unwrap();
         assert_eq!(tui_dir_if_present(root), Some(root.join("tui")));
+    }
+
+    #[test]
+    fn installed_node_and_tui_resolve_inside_archive_payload() {
+        let dir = TempDir::new().unwrap();
+        let payload = dir.path().join("hermes-agent-cn-runtime");
+        let node = runtime_node_binary(&payload);
+        fs::create_dir_all(node.parent().unwrap()).unwrap();
+        fs::write(&node, b"node").unwrap();
+        fs::create_dir_all(payload.join("tui/dist")).unwrap();
+        fs::write(payload.join("tui/dist/entry.js"), b"// tui").unwrap();
+        let mut record = fixture_install_record("0.21.0", 5);
+        record.path = dir.path().display().to_string();
+        record.executable_path = payload.join("hermes.exe").display().to_string();
+        assert_eq!(
+            installed_payload_resource(&record, node_binary_if_present),
+            Some(node)
+        );
+        assert_eq!(
+            installed_payload_resource(&record, node_bin_dir_if_present),
+            Some(runtime_node_bin_dir(&payload))
+        );
+        assert_eq!(
+            installed_payload_resource(&record, tui_dir_if_present),
+            Some(payload.join("tui"))
+        );
     }
 
     #[test]

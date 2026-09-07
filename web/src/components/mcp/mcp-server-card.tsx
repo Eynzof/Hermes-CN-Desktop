@@ -10,6 +10,7 @@ export function McpServerCard({
   server,
   result,
   testing,
+  reloading,
   toggling,
   onTest,
   onToggle,
@@ -18,6 +19,7 @@ export function McpServerCard({
   server: McpServer;
   result?: McpTestResult;
   testing: boolean;
+  reloading: boolean;
   toggling: boolean;
   onTest: () => void;
   onToggle: () => void;
@@ -80,7 +82,7 @@ export function McpServerCard({
           oauth.authorizing ? (
             <Button size="sm" variant="outline" onClick={() => void oauth.cancel()}>取消授权</Button>
           ) : (
-            <Button size="sm" variant="outline" disabled={oauth.busy} onClick={() => void oauth.authorize().then(ok => { if (ok) onTest(); })}>
+            <Button size="sm" variant="outline" disabled={oauth.busy || reloading} onClick={() => void oauth.authorize().then(ok => { if (ok) onTest(); })}>
               {server.auth === "oauth" ? "重新授权" : "OAuth 授权"}
             </Button>
           )
@@ -107,6 +109,7 @@ export function McpServerCard({
           aria-label="测试连接"
           title="测试连接"
           loading={testing}
+          disabled={reloading}
           onClick={onTest}
         >
           {testing ? null : <Zap size={16} />}

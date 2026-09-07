@@ -101,7 +101,11 @@ export function McpRoute() {
         setTestResults((prev) => ({ ...prev, [server.name]: res }));
         if (!res.ok) setNotice({ tone: "err", text: `${server.name}：${res.error ?? "连接失败"}` });
       },
-      onError: (err) => setNotice({ tone: "err", text: errText(err) }),
+      onError: (err) => {
+        const error = errText(err);
+        setTestResults((prev) => ({ ...prev, [server.name]: { ok: false, error, tools: [] } }));
+        setNotice({ tone: "err", text: error });
+      },
       onSettled: () => setTestingName(null),
     });
   };
@@ -206,6 +210,7 @@ export function McpRoute() {
               testing={testingName === server.name}
               toggling={togglingName === server.name}
               onTest={() => handleTest(server)}
+              reloading={reloading}
               onToggle={() => handleToggle(server)}
               onDelete={() => setEditor({ kind: "delete", name: server.name })}
             />
