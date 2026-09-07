@@ -26,6 +26,7 @@
 | WIN-020 | 崩溃恢复状态不同步 | 强制结束已核对路径的测试 Core 后，Core 被重新拉起，Rust control.running/backendReady=true；界面 backendReady=false 并显示“已停止”，可点击的启动按钮返回“内核操作正在进行中”。 | SHELL-005 runs/20260907T083913Z；Desktop 进程保持不变、Core PID 更新，手动重载页面可恢复，自动恢复及原会话续聊尚未通过 |
 | WIN-021 | 默认本地转写不可用 | WebView2 原生麦克风授权、MediaRecorder 录制和离开页面后释放音轨均成功；通过已校准的虚拟麦克风输入测试句，提交真实录音后，Core 返回未配置可用 STT 提供方。 | VOICE-002 runs/20260907T094008Z；输入校准、实际设备和转写错误均有附件。当前 stt.provider=local，未注入转写文本，后续文字发送因转写失败未完成；需排查冻结包中的本地识别依赖 |
 | WIN-022 | Wander 聊天取消 | 页面提示 Escape 可取消等待，但生成时唯一绑定 onKeyDown 的输入框被 disabled。实际按键后没有 cancelled 标记，最终回复仍写入界面。 | WANDER-008 runs/20260907T102700Z 记录了发送后输入框禁用、实际 Escape 按键、真实 DeepSeek 完成及最终界面；两个取消断言失败，未修复 |
+| WIN-023 | MCP OAuth 界面缺失 | 添加对话框没有认证方式，受保护的 HTTP MCP 返回 401 后仅显示错误，服务卡片没有授权入口；保存的 auth 为 null。Core 已有独立授权接口，但 Desktop 未接入。 | MCP-004 runs/20260907T104625Z 实际服务自检通过后，从安装版添加并探测；服务只收到 401 请求，没有 OAuth 握手。授权入口断言失败，后续登录、取消、刷新和退出尚未执行。详见 mcp-oauth-coverage-audit.md；未修复 |
 | TEST-001 | 脚本 | UI 新会话短 ID 与 state.db 中 Agent Session ID 不同，最初不能取到持久化证据。 | 已按 Core 日志的明确映射修正 |
 | TEST-002 | 脚本 | 工具参数包含 marker、第一轮 API 已累计 Token，原脚本仍在工具运行时检查文件，导致 ENOENT 误报。 | 已修正，真实文件读写复跑通过 |
 | TEST-003 | 脚本 | 归档状态误读 Core 数据库，实际由 Desktop Rust 代理持久化；辅助会话查询 limit 超过 100。 | 已按真实来源修正，HIST-001 全流程通过 |
@@ -74,3 +75,4 @@ RUNTIME-002 / RUNTIME-003 在 runs/20260907T094008Z 再次复现 WIN-015 / WIN-0
 | TEST-034 | 源码归档中文路径 | Windows tar.exe 提取中文文件名后，与 Python 读取的 Git 归档名称不一致，固定源码校验失败。 | 使用 Python tarfile 重新完整提取，并在服务启动时逐文件核对归档 SHA256；101538Z 失败证据和旧提取目录保留 |
 | TEST-035 | MemOS 元数据输入 | 测试把 source 写成任意字符串，但真实 MemoryOS 类型只接受 conversation / retrieved / web / file / system。 | 将正向用例改为 source=system；WANDER-002 在 102104Z 通过。此前 101705Z 等待库存失败属于脚本输入错误 |
 | TEST-036 | MemOS 用例隔离 | 对话提取可能产生不含唯一标记的额外事实，仅删除带标记的结果会在下一项参与真实冲突合并，改变新事实的文本。 | 开始前保存完整库存快照，再通过 UI 清理本框架独立服务的库存；结束后保存库存。102305Z 未进入 Escape 断言的探索失败保留；隔离后六项主流程 102700Z 同轮通过 |
+| TEST-037 | OAuth 设施版本适配 | 固定 MCP SDK 2.0.0 使用 httpx2；其撤销表单的 nullable client_secret 字段没有默认值，公开客户端省略该字段仍返回 400。 | 104443Z / 104522Z 失败发生在设施自检阶段，保留记录。改用已锁定的 httpx2，并显式提交空字段；104625Z 七项设施验证通过后才开始 Desktop UI 验收 |

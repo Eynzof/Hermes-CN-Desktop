@@ -507,7 +507,7 @@
     "id": "MCP-004",
     "route": "/mcp",
     "requirement": "MCP OAuth 登录、取消、刷新及退出",
-    "prerequisite": "OAuth 服务账号"
+    "prerequisite": null
   },
   {
     "id": "PTY-003",
