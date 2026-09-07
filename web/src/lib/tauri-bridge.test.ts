@@ -10,6 +10,13 @@ import { EXPECTED_BACKEND_VERSION } from "./build-info";
 
 const mockInvoke = vi.fn();
 const mockFileDropUnlisten = vi.fn();
+let managedRuntimeChangedHandler: (() => void) | undefined;
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async (event: string, handler: () => void) => {
+    if (event === "managed-runtime-changed") managedRuntimeChangedHandler = handler;
+    return () => {};
+  }),
+}));
 let fileDropHandler: ((event: {
   payload: {
     type: "enter" | "over" | "drop" | "leave";
@@ -33,6 +40,7 @@ vi.mock("@tauri-apps/api/webview", () => ({
 }));
 
 beforeEach(() => {
+  managedRuntimeChangedHandler = undefined;
   mockInvoke.mockReset();
   mockFileDropUnlisten.mockReset();
   mockOnDragDropEvent.mockClear();
@@ -65,6 +73,18 @@ afterEach(() => {
 });
 
 describe("isTauriDevMode", () => {
+  it("refreshes offline UI readiness and credentials after the supervisor adopts a new Core", async () => {
+    await installTauriBridge();
+    window.__HERMES_RUNTIME__!.backendReady = false;
+    window.dispatchEvent = vi.fn();
+    const recovered = { backendReady: true, sessionToken: "new-token", gatewayUrl: "ws://127.0.0.1:9120/new", apiBaseUrl: "http://127.0.0.1:9120" };
+    mockInvoke.mockImplementation(async (command: string) => command === "get_runtime_config" ? recovered : { gatewayUrl: recovered.gatewayUrl, sessionToken: recovered.sessionToken });
+
+    managedRuntimeChangedHandler!();
+
+    await vi.waitFor(() => expect(window.__HERMES_RUNTIME__).toMatchObject(recovered));
+    expect(window.dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "hermes-runtime-changed" }));
+  });
   it("uses Vite build mode instead of the window URL protocol", () => {
     expect(isTauriDevMode(true)).toBe(true);
     expect(isTauriDevMode(false)).toBe(false);
@@ -412,7 +432,7 @@ describe("isTauriDevMode", () => {
           apiBaseUrl: "http://127.0.0.1:9120",
           gatewayUrl: "ws://127.0.0.1:9120/api/ws",
           sessionToken: "token",
-          kernelVersion: "0.20.0",
+          kernelVersion: "0.21.1",
           currentProfile: "default",
           connectionMode: "managed",
         });
@@ -423,7 +443,7 @@ describe("isTauriDevMode", () => {
           status: 200,
           statusText: "OK",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ version: "0.20.0", name: "hermes-agent" }),
+          body: JSON.stringify({ version: "0.21.1", name: "hermes-agent" }),
         });
       }
       return Promise.resolve({});
@@ -438,7 +458,7 @@ describe("isTauriDevMode", () => {
     });
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(window.__HERMES_RUNTIME__).toMatchObject({
-      kernelVersion: "0.20.0",
+      kernelVersion: "0.21.1",
       dashboardApiBaseUrl: "http://127.0.0.1:9120",
     });
   });

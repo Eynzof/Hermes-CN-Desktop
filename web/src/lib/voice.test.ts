@@ -51,6 +51,10 @@ describe("sanitizeTextForSpeech", () => {
 });
 
 describe("voiceErrorMessage", () => {
+  it("explains an empty provider response without reporting a missing dependency", () => {
+    expect(voiceErrorMessage(new Error("No audio was received. Please verify that your parameters are correct."), "语音失败"))
+      .toContain("音色支持当前文本语言");
+  });
   it("maps old runtime 404 to an update hint", () => {
     expect(voiceErrorMessage(new Error("HTTP 404: Not Found"), "语音失败"))
       .toBe("当前 Hermes runtime 不支持语音接口，请先更新 runtime。");

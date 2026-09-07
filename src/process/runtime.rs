@@ -1936,7 +1936,11 @@ async fn install_runtime_zip(
         }
     };
 
-    if let Err(e) = extract_zip(&cached_zip_path, staging.path()) {
+    if let Err(e) = extract_zip_with_limit(
+        &cached_zip_path,
+        staging.path(),
+        MAX_RUNTIME_ZIP_TOTAL_BYTES,
+    ) {
         return RuntimeInstallUpdateResult {
             ok: false,
             installed: None,
@@ -2586,6 +2590,9 @@ const MAX_ZIP_ENTRIES: usize = 20_000;
 // over 5,300 files. Keep a bounded allowance for the supported release.
 const MAX_ZIP_FILES: usize = 10_000;
 const MAX_ZIP_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
+                                                    // The v0.21 Windows runtime with local voice dependencies expands to over 500 MiB.
+                                                    // Runtime bundles need more room than the separately updated UI bundle.
+const MAX_RUNTIME_ZIP_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 fn validate_zip_entry_counts(
     archive: &mut zip::ZipArchive<fs::File>,
@@ -2656,6 +2663,10 @@ fn symlink_target_within(dest: &Path, link_parent: &Path, target: &Path) -> bool
 }
 
 pub(crate) fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
+    extract_zip_with_limit(zip_path, dest, MAX_ZIP_TOTAL_BYTES)
+}
+
+fn extract_zip_with_limit(zip_path: &Path, dest: &Path, max_bytes: u64) -> Result<(), String> {
     let file = fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
     validate_zip_entry_counts(&mut archive)?;
@@ -2692,10 +2703,10 @@ pub(crate) fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
             fs::create_dir_all(&out_path).map_err(|e| e.to_string())?;
         } else {
             total_bytes += entry.size();
-            if total_bytes > MAX_ZIP_TOTAL_BYTES {
+            if total_bytes > max_bytes {
                 return Err(format!(
                     "Zip exceeds size limit ({} MB)",
-                    MAX_ZIP_TOTAL_BYTES / 1024 / 1024
+                    max_bytes / 1024 / 1024
                 ));
             }
 
@@ -3870,6 +3881,22 @@ mod tests {
 
         assert_eq!(std::fs::read(dest.join("foo.txt")).unwrap(), b"hello");
         assert_eq!(std::fs::read(dest.join("bin/x")).unwrap(), b"binary");
+    }
+
+    #[test]
+    fn extract_zip_enforces_cumulative_size_for_selected_bundle_limit() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("bundle.zip");
+        write_zip(&zip_path, &[("first", b"12345"), ("second", b"67890")]);
+        let dest = dir.path().join("out");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        let err = extract_zip_with_limit(&zip_path, &dest, 9).unwrap_err();
+        assert!(err.contains("Zip exceeds size limit"));
+        assert!(!dest.join("second").exists());
+
+        extract_zip_with_limit(&zip_path, &dest, 10).unwrap();
+        assert_eq!(std::fs::read(dest.join("second")).unwrap(), b"67890");
     }
 
     #[test]

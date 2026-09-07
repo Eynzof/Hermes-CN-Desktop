@@ -16,7 +16,7 @@
 
 use std::time::{Duration, Instant};
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use crate::commands::restart;
 use crate::connection::ConnectionMode;
@@ -135,6 +135,10 @@ pub async fn supervise_managed_dashboard(app: tauri::AppHandle) {
             restart::respawn_managed_dashboard(&state, &host, port, &target_home, &target_home)
                 .await;
         restart::end_restart(&state);
+        // The WebView may already have switched to OfflineShell while the
+        // process was down. Notify it after adoption so it refreshes the new
+        // readiness, gateway URL and session token without a manual reload.
+        let _ = app.emit("managed-runtime-changed", ());
 
         match result {
             Ok(res) => match res.outcome {

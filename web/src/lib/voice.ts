@@ -149,6 +149,9 @@ export function voiceErrorMessage(error: unknown, fallback: string): string {
   if (!message) return fallback;
 
   const lower = message.toLowerCase();
+  if (lower.includes("no audio was received")) {
+    return "语音服务没有返回音频。请确认音色支持当前文本语言（中文可用 zh-CN-XiaoxiaoNeural），然后重试。";
+  }
   if (lower.includes("no stt provider available")) {
     return "语音识别尚未配置可用提供方。请到“语音”设置选择本地识别，或填写 Groq、OpenAI、xAI、ElevenLabs 的 API Key。";
   }

@@ -1252,4 +1252,10 @@ export async function installTauriBridge(): Promise<void> {
   };
 
   registerDevtoolsShortcut();
+  const { listen } = await import("@tauri-apps/api/event");
+  await listen("managed-runtime-changed", () => {
+    void tauriBridge.refreshGatewayUrl().catch((error) => {
+      console.error("Cannot refresh the recovered managed runtime", error);
+    });
+  });
 }
