@@ -14,7 +14,7 @@ const flowPath = (id: string) => `/api/mcp/oauth/flows/${encodeURIComponent(id)}
 
 export function useMcpOAuth(name: string) {
   const qc = useQueryClient();
-  const [phase, setPhase] = useState<"authorize" | "cancel" | "logout" | null>(null);
+  const [phase, setPhase] = useState<"authorize" | "reload" | "cancel" | "logout" | null>(null);
   const [message, setMessage] = useState("");
   const generation = useRef(0);
   const flowId = useRef<string | null>(null);
@@ -59,8 +59,12 @@ export function useMcpOAuth(name: string) {
         if (flow.status === "error") throw new Error(flow.error || "授权失败");
         if (flow.status === "approved") {
           flowId.current = null;
-          setMessage("授权成功");
+          setPhase("reload");
+          setMessage("授权已完成，正在加载工具…");
           await qc.invalidateQueries({ queryKey: ["mcp-servers-full"] });
+          await reloadMcp();
+          if (run !== generation.current) return false;
+          setMessage("授权成功");
           return true;
         }
         if (flow.authorization_url && !opened) {

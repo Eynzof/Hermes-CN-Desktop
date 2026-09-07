@@ -373,15 +373,27 @@ export function SkillsRoute() {
             ? "加载中…"
             : "—"}
         right={
-          <TopBarActionButton
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            loading={isFetching}
-            leadingIcon={<RefreshCw size={12} />}
-          >
-            同步内置
-          </TopBarActionButton>
+          <>
+            {tab === "user" && user.length > 0 && (
+              <TopBarActionButton
+                type="button"
+                onClick={openCopyDialog}
+                disabled={builtin.length === 0}
+                leadingIcon={<Plus size={12} />}
+              >
+                基于内置 Skill 复制
+              </TopBarActionButton>
+            )}
+            <TopBarActionButton
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              loading={isFetching}
+              leadingIcon={<RefreshCw size={12} />}
+            >
+              同步内置
+            </TopBarActionButton>
+          </>
         }
       />
 
