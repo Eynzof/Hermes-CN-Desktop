@@ -1,0 +1,12 @@
+{
+  "repository": "Wander-Minds/Wander-Memory",
+  "sourceCommit": "efea8c6b0ea8c16cf1593082a93905acd7a055e3",
+  "archive": "wander-memos-efea8c6b.tar.gz",
+  "archiveSha256": "e1ff189aa78ef71586580b524c842f244b86dc5b1201f228a576c1587126751e",
+  "sourceDirectory": "services/wander-memos-efea8c6b",
+  "memoryOSVersion": "2.0.27",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "baseUrl": "https://api.deepseek.com/v1",
+  "ports": [18400, 18401, 18402]
+}

@@ -11,7 +11,7 @@ Copy-Item (Join-Path $reports 'coverage.json'),(Join-Path $reports 'coverage.md'
 foreach($runId in $runIds){
   Copy-Item (Join-Path $reports "runs\$runId") $runs -Recurse
 }
-foreach($file in @('hindsight-fixture.json','openviking-fixture.json','ollama-fixture.json','python-dependencies.txt')){
+foreach($file in @('hindsight-fixture.json','openviking-fixture.json','ollama-fixture.json','python-dependencies.txt','wander-fixture.json','wander-source-manifest.json','wander-python-dependencies.txt','wander-model-calls.ndjson')){
   if(Test-Path (Join-Path $reports $file)){Copy-Item (Join-Path $reports $file) $destination}
 }
 $archive=$destination+'.zip'

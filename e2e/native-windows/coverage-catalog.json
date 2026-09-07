@@ -278,44 +278,50 @@
   {
     "id": "WANDER-001",
     "route": "/wander-memory/status",
-    "requirement": "Wander 登录连接、空间选择、探测与退出",
-    "prerequisite": "Wander 测试账号或服务配置"
+    "requirement": "本地 MemOS 健康状态、端点发现重连与维护",
+    "prerequisite": "固定提交的本地 MemOS 服务，使用官方 DeepSeek flash"
   },
   {
     "id": "WANDER-002",
     "route": "/wander-memory/memories",
-    "requirement": "记忆创建查询编辑删除及过滤",
-    "prerequisite": "Wander 测试账号或服务配置"
+    "requirement": "记忆校验、创建、JSON 查看、搜索限制及取消和确认删除",
+    "prerequisite": "本地 MemOS 服务"
   },
   {
     "id": "WANDER-003",
     "route": "/wander-memory/files",
-    "requirement": "文件上传、目录管理、检索和删除",
-    "prerequisite": "Wander 测试账号或服务配置"
+    "requirement": "实际目录扫描、文件详情、自定义入库及磁盘变化刷新",
+    "prerequisite": "本地 MemOS 文件服务及隔离测试目录"
   },
   {
     "id": "WANDER-004",
     "route": "/wander-memory/dialogue",
-    "requirement": "对话记录浏览检索及导入操作",
-    "prerequisite": "Wander 测试账号或服务配置"
+    "requirement": "对话输入校验、真实模型提取、导入结果及库存持久化",
+    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash"
   },
   {
     "id": "WANDER-005",
     "route": "/wander-memory/chat",
     "requirement": "基于记忆的真实聊天和引文溯源",
-    "prerequisite": "Wander 测试账号或服务配置"
+    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash"
   },
   {
     "id": "WANDER-006",
     "route": "/wander-memory/context",
-    "requirement": "上下文查询、筛选与可视化结果",
-    "prerequisite": "Wander 测试账号或服务配置"
+    "requirement": "上下文检索、限制条数、实际内容展示及系统剪贴板",
+    "prerequisite": "本地 MemOS 服务"
   },
   {
     "id": "WANDER-007",
     "route": "/wander-memory/api",
     "requirement": "API 文档浏览和示例复制",
     "prerequisite": null
+  },
+  {
+    "id": "WANDER-008",
+    "route": "/wander-memory/chat",
+    "requirement": "生成中按 Escape 取消界面等待、解除输入禁用并丢弃迟到结果",
+    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash"
   },
   {
     "id": "IM-FEISHU-001",
