@@ -70,22 +70,15 @@ export const TOP_TABS: readonly TopTabDef[] = [
     matches: (path) => path.startsWith("/im"),
   },
   {
-    id: "wanderMemory",
-    num: "04",
-    label: "Wander 记忆",
-    href: "/wander-memory/memories",
-    matches: (path) => path.startsWith("/wander-memory"),
-  },
-  {
     id: "hermesMemory",
-    num: "05",
+    num: "04",
     label: "Hermes 记忆",
     href: "/memory",
     matches: (path) => ["/memory", "/memconfig", "/openviking", "/hindsight"].some((route) => isRoute(path, route)),
   },
   {
     id: "advanced",
-    num: "06",
+    num: "05",
     label: "高级",
     href: "/health",
     matches: (path) =>

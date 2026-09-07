@@ -9,6 +9,7 @@ import {
 beforeEach(() => {
   resetVersionCheck();
   (globalThis as any).window = {
+    dispatchEvent: () => true,
     __HERMES_RUNTIME__: {
       platform: "tauri",
       apiBaseUrl: "http://old",

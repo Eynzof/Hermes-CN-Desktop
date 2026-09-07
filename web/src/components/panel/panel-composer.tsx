@@ -9,7 +9,7 @@ import { useSkills } from "@/hooks/use-skills";
 import { useSessions } from "@/hooks/use-sessions";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { resolveModelContextWindow } from "@/lib/model-context";
-import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
+import { useLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { recordModelUsage } from "@/lib/model-usage-log";
 import {
   composerDraftStorageKey,
@@ -57,9 +57,7 @@ export function PanelComposer() {
   const activeProfile = useActiveProfileName();
   const saveConfig = useSaveConfig();
   const [sending, setSending] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
-    () => readLastUsedModel(),
-  );
+  const selectedModel = useLastUsedModel();
   const [reasoningEffortOverride, setReasoningEffortOverride] =
     useState<ReasoningEffort | null>(null);
   const [prefilledDraft, setPrefilledDraft] = useState({ text: "", nonce: 0 });
@@ -158,7 +156,6 @@ export function PanelComposer() {
       ...selection,
       contextWindow: resolveModelContextWindow(config, selection),
     };
-    setSelectedModel(enriched);
     rememberLastUsedModel(enriched);
     recordModelUsage(enriched);
   }, [config]);

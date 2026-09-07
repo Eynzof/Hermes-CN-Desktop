@@ -410,11 +410,19 @@ const tauriBridge = {
   },
 
   async uiInstallUpdate(): Promise<UiInstallUpdateResult> {
-    return invokeCommand("ui_install_update");
+    const result = await invokeCommand<UiInstallUpdateResult>("ui_install_update");
+    // Reload only after IPC is acknowledged. Reloading inside the Rust command
+    // aborts its response and Tauri replays the mutation via postMessage.
+    if (result.ok) window.setTimeout(() => window.location.reload(), 0);
+    return result;
   },
 
   async uiRollback(): Promise<UiInstallUpdateResult> {
-    return invokeCommand("ui_rollback");
+    const result = await invokeCommand<UiInstallUpdateResult>("ui_rollback");
+    // Reload only after IPC is acknowledged. Reloading inside the Rust command
+    // aborts its response and Tauri replays the mutation via postMessage.
+    if (result.ok) window.setTimeout(() => window.location.reload(), 0);
+    return result;
   },
 
   onUiUpdateReady(handler: (payload: UiUpdateReadyPayload) => void): () => void {
@@ -479,7 +487,13 @@ const tauriBridge = {
   },
 
   async refreshGatewayUrl(): Promise<{ gatewayUrl: string; sessionToken?: string }> {
-    return invokeCommand("refresh_gateway_url");
+    const result = await invokeCommand<{ gatewayUrl: string; sessionToken?: string }>("refresh_gateway_url");
+    const config = await invokeCommand<Partial<NonNullable<Window["__HERMES_RUNTIME__"]>>>("get_runtime_config");
+    if (window.__HERMES_RUNTIME__) {
+      Object.assign(window.__HERMES_RUNTIME__, config);
+      window.dispatchEvent(new Event("hermes-runtime-changed"));
+    }
+    return result;
   },
 
   async getRuntimeInfo(): Promise<RuntimeInfo> {

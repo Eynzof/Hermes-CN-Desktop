@@ -11,6 +11,13 @@ interface SessionEntry {
 
 type SessionMap = Record<string, SessionEntry>;
 
+// Persisted aliases identify history, but do not prove a handle exists in the
+// current Core process. Revalidate after every transport disconnect.
+const attachedSessions = new Set<string>();
+export function isGatewaySessionAttached(id: string): boolean { return attachedSessions.has(id); }
+export function invalidateAttachedSessions(): void { attachedSessions.clear(); }
+
+
 function readMap(): SessionMap {
   const parsed = readUiValue<unknown>(STORAGE_KEY, {});
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -59,6 +66,7 @@ function pruneExpired(map: SessionMap): SessionMap {
 
 export function rememberSessionMapping(gatewaySessionId: string, persistentSessionId: string) {
   if (!gatewaySessionId || !persistentSessionId) return;
+  attachedSessions.add(gatewaySessionId);
   if (gatewaySessionId === persistentSessionId) return;
   const map = pruneExpired(readMap());
   map[gatewaySessionId] = { persistentId: persistentSessionId, ts: Date.now() };

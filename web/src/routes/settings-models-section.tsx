@@ -1369,7 +1369,11 @@ export function ModelsSection() {
     saveConfig.mutate(
       nextConfig,
       {
-        onSuccess: () => {
+        onSuccess: async () => {
+          rememberLastUsedModel({ model, provider: candidate, providerName: name });
+          try { await setRuntimeModel(model, candidate); } catch (error) {
+            console.warn("保存自定义主模型后热切换失败", error);
+          }
           selectProvider(candidate);
           closeCustomForm();
           setProviderForm({ apiKey: "", baseUrl, model, contextWindow });

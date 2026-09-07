@@ -20,6 +20,7 @@ export function McpAddDialog({
   const add = useAddMcpServer();
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<Transport>("http");
+  const [auth, setAuth] = useState("");
   const [url, setUrl] = useState("");
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
@@ -49,10 +50,13 @@ export function McpAddDialog({
     const body: McpServerCreate = { name: trimmed };
     if (transport === "http") {
       body.url = url.trim();
+      if (auth) body.auth = auth;
     } else {
       body.command = command.trim();
-      const argList = parseArgs(args);
-      if (argList.length) body.args = argList;
+      try {
+        const argList = parseArgs(args);
+        if (argList.length) body.args = argList;
+      } catch (error) { setError(errText(error)); return; }
     }
     const envMap = parseEnv(env);
     if (Object.keys(envMap).length) body.env = envMap;
@@ -102,6 +106,7 @@ export function McpAddDialog({
 
       <Field label="传输方式">
         <Select
+          aria-label="传输方式"
           value={transport}
           onChange={(e) => setTransport(e.target.value as Transport)}
           disabled={add.isPending}
@@ -112,6 +117,13 @@ export function McpAddDialog({
       </Field>
 
       {transport === "http" ? (
+        <>
+        <Field label="认证方式">
+          <Select aria-label="认证方式" value={auth} onChange={(event) => setAuth(event.target.value)} disabled={add.isPending}>
+            <option value="">无认证</option>
+            <option value="oauth">OAuth 浏览器授权</option>
+          </Select>
+        </Field>
         <Field label="URL" required>
           <Input
             value={url}
@@ -121,6 +133,7 @@ export function McpAddDialog({
             disabled={add.isPending}
           />
         </Field>
+        </>
       ) : (
         <>
           <Field label="命令" required>
@@ -132,7 +145,7 @@ export function McpAddDialog({
               disabled={add.isPending}
             />
           </Field>
-          <Field label="参数（可选）" hint="按空格或逗号分隔。">
+          <Field label="参数（可选）" hint="按空格或逗号分隔；包含空格的路径请用引号包围。">
             <Input
               value={args}
               onChange={(e) => setArgs(e.target.value)}

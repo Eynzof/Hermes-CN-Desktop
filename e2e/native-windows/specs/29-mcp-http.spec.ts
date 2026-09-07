@@ -26,7 +26,7 @@ test('MCP-002 真实 HTTP MCP 探测、模型调用、服务离线错误与删�
     await app.getByRole('button', { name: '添加服务', exact: true }).click();
     const dialog = app.getByRole('dialog');
     await dialog.getByPlaceholder('例如 filesystem').fill(name);
-    await dialog.getByRole('combobox').selectOption('http');
+    await dialog.getByRole('combobox', { name: '传输方式', exact: true }).selectOption('http');
     await dialog.getByPlaceholder('https://example.com/mcp').fill(`http://127.0.0.1:${port}/mcp`);
     await dialog.getByRole('button', { name: '添加', exact: true }).click();
     await expect(dialog).toHaveCount(0, { timeout: 60_000 });

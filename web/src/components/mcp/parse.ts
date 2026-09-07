@@ -1,11 +1,29 @@
-// stdio 服务的 args / env 解析，行为对齐官方 McpPage：
-// args 按空白或逗号切分；env 每行一个 KEY=VALUE（取第一个 = 之前为 key）。
-
+// Arguments use whitespace/comma separators outside quotes. Backslashes are
+// literal so Windows paths are preserved; quotes group a single argument.
 export function parseArgs(raw: string): string[] {
-  return raw
-    .split(/[\s,]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const args: string[] = [];
+  let value = "";
+  let quote = "";
+  let started = false;
+  for (const char of raw) {
+    if (quote) {
+      if (char === quote) quote = "";
+      else value += char;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      started = true;
+    } else if (/[\s,]/.test(char)) {
+      if (started) args.push(value);
+      value = "";
+      started = false;
+    } else {
+      value += char;
+      started = true;
+    }
+  }
+  if (quote) throw new Error("参数中的引号未闭合");
+  if (started) args.push(value);
+  return args;
 }
 
 export function parseEnv(raw: string): Record<string, string> {

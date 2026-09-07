@@ -243,7 +243,7 @@ export function ProfileBuilderRoute() {
               <input type="checkbox" checked={keepAll} onChange={(e) => setKeepAll(e.target.checked)} />
               <span className={s.skillMain}>
                 <span className={s.skillName}>从完整默认技能包开始（推荐）</span>
-                <span className={s.skillDesc}>取消勾选可只保留下方选中的技能（其余在新档案里禁用）。</span>
+                <span className={s.skillDesc}>取消勾选可选择保留的技能。hermes-agent 是必需技能，始终保留；其余未选技能在新档案中禁用。</span>
               </span>
             </label>
 
@@ -265,12 +265,14 @@ export function ProfileBuilderRoute() {
                       <label key={sk.name} className={s.skillRow}>
                         <input
                           type="checkbox"
-                          checked={keptSkills.has(sk.name)}
+                          checked={sk.name === "hermes-agent" || keptSkills.has(sk.name)}
+                          disabled={sk.name === "hermes-agent"}
                           onChange={() => toggleKept(sk.name)}
                         />
                         <span className={s.skillMain}>
                           <span className={s.skillName}>
                             {sk.name}
+                            {sk.name === "hermes-agent" && <Badge size="sm">必需</Badge>}
                             {sk.category && (
                               <Badge variant="outline" size="sm">
                                 {sk.category}

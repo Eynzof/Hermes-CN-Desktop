@@ -106,11 +106,11 @@ async function flushMicrotasks() {
 }
 
 describe("createGatewaySocket path selection", () => {
-  it("defaults to the native WebSocket on Tauri", async () => {
+  it("defaults to the authenticated Rust relay on Tauri", async () => {
     const { mod } = await loadModule();
     const socket = mod.createGatewaySocket(URL);
-    expect(socket).toBeInstanceOf(MockNativeSocket);
-    expect(mod.getActiveSocketPath()).toBe("native");
+    expect(socket).toBeInstanceOf(FakeRelaySocket);
+    expect(mod.getActiveSocketPath()).toBe("relay");
   });
 
   it("always uses native WebSocket off Tauri, even with a learned relay preference", async () => {
@@ -138,7 +138,7 @@ describe("createGatewaySocket path selection", () => {
 
   it("flips to relay within the same attempt on a synchronous constructor throw", async () => {
     MockNativeSocket.throwOnConstruct = true;
-    const { mod, uiStore } = await loadModule();
+    const { mod, uiStore } = await loadModule({ HERMES_WS_PATH_LEARNED: "native" });
     const socket = mod.createGatewaySocket(URL);
     expect(socket).toBeInstanceOf(FakeRelaySocket);
     expect(mod.getActiveSocketPath()).toBe("relay");
@@ -146,7 +146,7 @@ describe("createGatewaySocket path selection", () => {
   });
 
   it("flips to relay after two consecutive async pre-open failures", async () => {
-    const { mod } = await loadModule();
+    const { mod } = await loadModule({ HERMES_WS_PATH_LEARNED: "native" });
 
     const first = mod.createGatewaySocket(URL) as unknown as MockNativeSocket;
     first.failBeforeOpen();
@@ -161,7 +161,7 @@ describe("createGatewaySocket path selection", () => {
   });
 
   it("does not count post-open closes toward the relay flip", async () => {
-    const { mod } = await loadModule();
+    const { mod } = await loadModule({ HERMES_WS_PATH_LEARNED: "native" });
     for (let i = 0; i < 4; i++) {
       const ws = mod.createGatewaySocket(URL) as unknown as MockNativeSocket;
       ws.open();
@@ -171,7 +171,7 @@ describe("createGatewaySocket path selection", () => {
   });
 
   it("a successful native open resets the failure streak and learns native", async () => {
-    const { mod, uiStore } = await loadModule();
+    const { mod, uiStore } = await loadModule({ HERMES_WS_PATH_LEARNED: "native" });
     const first = mod.createGatewaySocket(URL) as unknown as MockNativeSocket;
     first.failBeforeOpen();
 
@@ -206,7 +206,7 @@ describe("createGatewaySocket path selection", () => {
 
   it("local mode ignores the remote override path", async () => {
     fakeWindow.__HERMES_RUNTIME__ = { connectionMode: "local" };
-    const { mod } = await loadModule();
+    const { mod } = await loadModule({ HERMES_WS_PATH_LEARNED: "native" });
     const socket = mod.createGatewaySocket(URL);
     expect(socket).toBeInstanceOf(MockNativeSocket);
   });

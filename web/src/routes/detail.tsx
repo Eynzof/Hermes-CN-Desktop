@@ -1,3 +1,4 @@
+import { isGatewaySessionAttached, resolveGatewaySessionId } from "@/lib/session-map";
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -325,17 +326,10 @@ export function DetailRoute() {
 
   const ensureGatewaySession = useCallback(async (): Promise<string> => {
     if (!taskId) throw new Error("缺少会话 ID");
-    if (restSessionId && !activeMappedGatewaySessionId) {
-      // Old deep links can still use a gateway ID from a previous process.
-      // Resolve that alias to its persistent ID before resuming, too.
-      // No URL navigate after the resume — atom + gwSessionIdAtom hold
-      // the authoritative state; downstream callers go through
-      // resolveGatewaySessionId / resolvePersistentSessionId helpers
-      // which understand both id shapes. The async navigate that used
-      // to live here was the source of #52 (closure-stale replace
-      // yanking the URL back to the previous session after rapid
-      // switches). See #53 for the broader rework.
-      return await resumeSession(restSessionId);
+    if (restSessionId) {
+      const attachedId = resolveGatewaySessionId(restSessionId);
+      if (!attachedId || !isGatewaySessionAttached(attachedId)) return await resumeSession(restSessionId);
+      return attachedId;
     }
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);

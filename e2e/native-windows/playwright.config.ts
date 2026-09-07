@@ -5,6 +5,7 @@ const reportRoot = process.env.HERMES_E2E_REPORT || '.';
 
 export default defineConfig({
   testDir: './specs',
+  testIgnore: ['**/59-wander-memory.spec.ts'], // Feature hidden by product scope.
   fullyParallel: false,
   workers: 1,
   retries: 0,

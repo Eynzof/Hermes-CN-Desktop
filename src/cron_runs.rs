@@ -23,7 +23,8 @@ const DETAIL_MAX_BYTES: u64 = 2 * 1024 * 1024;
 static JOB_ID_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{1,128}$").expect("valid job id regex"));
 static OUTPUT_FILE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.md$").expect("valid output file regex")
+    Regex::new(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:-\d{6}-[A-Za-z0-9_-]+)?\.md$")
+        .expect("valid output file regex")
 });
 
 fn error_body(message: &str) -> Value {
@@ -132,7 +133,10 @@ fn started_at_from_filename(filename: &str) -> String {
     let stem = filename.strip_suffix(".md").unwrap_or(filename);
     let mut parts = stem.split('_');
     let date = parts.next().unwrap_or_default();
-    let time = parts.next().unwrap_or_default().replace('-', ":");
+    let time = parts.next().unwrap_or_default();
+    // Core appends microseconds and an opaque uniqueness suffix. Only the
+    // first HH-MM-SS portion belongs to the displayed start time.
+    let time = time.get(..8).unwrap_or(time).replace('-', ":");
     if date.is_empty() || time.is_empty() {
         stem.to_string()
     } else {
@@ -456,6 +460,26 @@ mod tests {
             handle_cron_runs_request("/api/cron/jobs", "GET", dir.path().to_str().unwrap())
                 .is_none()
         );
+    }
+
+    #[test]
+    fn unique_output_filename_round_trips_without_corrupting_time() {
+        let dir = TempDir::new().unwrap();
+        let filename = "2026-09-07_12-30-45-123456-abc_def.md";
+        write_output(
+            dir.path(),
+            "default",
+            "job1",
+            filename,
+            "## Response\n\nretained",
+        );
+        let (status, body) = get(
+            &format!("/__hermes_cron_runs/default/job1/{filename}"),
+            dir.path(),
+        );
+        assert_eq!(status, 200);
+        assert_eq!(body["started_at"], "2026-09-07T12:30:45");
+        assert!(body.to_string().contains("retained"));
     }
 
     #[test]

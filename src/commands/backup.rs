@@ -179,12 +179,7 @@ fn should_skip_nested_entry(name: &str) -> bool {
         // data, and on Windows they are byte-range locked while the owning
         // process is alive (os error 33 on read) — issue #107 / #427.
         || name.ends_with(".lock")
-        // The live kernel database. SQLite on Windows holds byte-range
-        // locks on it while the kernel runs, so copying it mid-session both
-        // fails with os error 33 and would produce a corrupt snapshot
-        // anyway. Sessions live under `sessions/`, so user data is still
-        // fully exported. The official `hermes profile export` CLI excludes
-        // state.db for the same reason.
+        // SQLite files are exported separately through a consistent SQL snapshot.
         || name == "state.db"
         || name == "state.db-wal"
         || name == "state.db-shm"
@@ -303,6 +298,36 @@ fn export_profile_backup_to_path(
         &mut warnings,
     )?;
 
+    // VACUUM INTO includes committed WAL data without copying locked live files.
+    // Snapshot failure must fail the export: history is part of the backup contract.
+    let snapshot_dir = tempfile::tempdir()?;
+    let state_db = home.join("state.db");
+    if state_db.is_file() {
+        let snapshot_path = snapshot_dir.path().join("state.db");
+        let snapshot = rusqlite::Connection::open_with_flags(
+            &state_db,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .map_err(|e| AppError::FileError(format!("无法读取会话数据库：{e}")))?;
+        snapshot
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|e| AppError::FileError(e.to_string()))?;
+        snapshot
+            .execute("VACUUM INTO ?1", [snapshot_path.to_string_lossy().as_ref()])
+            .map_err(|e| AppError::FileError(format!("无法备份会话数据库：{e}")))?;
+        planned.push(PlannedBackupEntry {
+            source_path: snapshot_path.clone(),
+            zip_path: "profile/state.db".to_string(),
+            manifest_entry: BackupManifestEntry {
+                path: "state.db".to_string(),
+                kind: BackupEntryKind::File,
+                size_bytes: Some(fs::metadata(&snapshot_path)?.len()),
+            },
+            #[cfg(unix)]
+            mode: Some(0o600),
+        });
+    }
+
     if let Some(parent) = backup_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -360,7 +385,9 @@ fn export_profile_backup_to_path(
         exported_at: unix_timestamp(),
         desktop_version: env!("CARGO_PKG_VERSION").to_string(),
         includes_secrets: true,
-        includes_sessions: true,
+        includes_sessions: written_entries
+            .iter()
+            .any(|entry| entry.path == "state.db" || entry.path.starts_with("sessions/")),
         entries: written_entries,
     };
     let manifest_options =
@@ -676,17 +703,22 @@ fn install_staging_profile(staging: &Path, target: &Path) -> AppResult<()> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }
-    match fs::rename(staging, target) {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            if let Err(err) = copy_dir_all(staging, target) {
-                let _ = fs::remove_dir_all(target);
-                return Err(err);
-            }
-            fs::remove_dir_all(staging)?;
-            Ok(())
+    if fs::rename(staging, target).is_err() {
+        if let Err(err) = copy_dir_all(staging, target) {
+            let _ = fs::remove_dir_all(target);
+            return Err(err);
+        }
+        fs::remove_dir_all(staging)?;
+    }
+    if let (Some(parent), Some(name)) = (target.parent(), target.file_name()) {
+        let marker = parent.join(".deleted").join(name);
+        match fs::remove_file(marker) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
         }
     }
+    Ok(())
 }
 
 fn harden_secret_permissions(_target: &Path) {
@@ -1073,23 +1105,32 @@ mod tests {
     }
 
     #[test]
-    fn export_skips_live_kernel_state_db() {
+    fn export_snapshots_live_wal_history_and_restores_deleted_profile() {
         let tmp = TempDir::new().unwrap();
         let home = tmp.path().join("home");
         let zip = tmp.path().join("backup.zip");
         write(&home.join("config.yaml"), "model: test\n");
-        write(&home.join("state.db"), "sqlite-bytes\n");
-        write(&home.join("state.db-wal"), "wal-bytes\n");
-        write(&home.join("state.db-shm"), "shm-bytes\n");
-        write(&home.join("sessions/session_1.json"), "{}\n");
-
-        let stats = export_profile_backup_to_path(&home, "default", &zip).unwrap();
-
-        assert_eq!(stats.file_count, 2);
+        let db = rusqlite::Connection::open(home.join("state.db")).unwrap();
+        db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE messages(content TEXT); INSERT INTO messages VALUES('真实历史');").unwrap();
+        export_profile_backup_to_path(&home, "default", &zip).unwrap();
         let names = zip_names(&zip);
-        assert!(names.contains(&"profile/config.yaml".to_string()));
-        assert!(names.contains(&"profile/sessions/session_1.json".to_string()));
-        assert!(!names.iter().any(|name| name.contains("state.db")));
+        assert!(names.contains(&"profile/state.db".to_string()));
+        assert!(!names
+            .iter()
+            .any(|name| name.ends_with("-wal") || name.ends_with("-shm")));
+        let staging = tmp.path().join("staging");
+        let (manifest, _) = extract_profile_backup_to_staging(&zip, &staging).unwrap();
+        assert!(manifest.includes_sessions);
+        let target = tmp.path().join("profiles/restored");
+        let marker = tmp.path().join("profiles/.deleted/restored");
+        write(&marker, "deleted");
+        install_staging_profile(&staging, &target).unwrap();
+        assert!(!marker.exists());
+        let restored = rusqlite::Connection::open(target.join("state.db")).unwrap();
+        let text: String = restored
+            .query_row("SELECT content FROM messages", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(text, "真实历史");
     }
 
     #[test]

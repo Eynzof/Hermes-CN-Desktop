@@ -13,7 +13,7 @@ test('MCP-005 带空格的 Windows 路径参数、真实服务探测和模型调
   await app.getByRole('button', { name: '添加服务', exact: true }).click();
   const dialog = app.getByRole('dialog');
   await dialog.getByPlaceholder('例如 filesystem').fill(name);
-  await dialog.getByRole('combobox').selectOption('stdio');
+  await dialog.getByRole('combobox', { name: '传输方式', exact: true }).selectOption('stdio');
   await dialog.getByPlaceholder('npx').fill(python);
   await dialog.getByPlaceholder('-y @modelcontextprotocol/server-filesystem /tmp').fill(`"${script}" ${root}`);
   await dialog.getByRole('button', { name: '添加', exact: true }).click();

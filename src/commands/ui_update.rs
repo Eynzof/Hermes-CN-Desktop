@@ -2,10 +2,10 @@
 //
 // Thin wrappers around crate::process::ui_update. Unlike the kernel/runtime
 // commands these never restart the dashboard — after a successful install or
-// rollback they emit `ui-update-ready` and reload the main webview window, so
+// rollback the caller reloads after receiving the IPC response, so
 // the new React bundle is picked up without touching the Python backend.
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::connection;
 use crate::error::AppError;
@@ -35,25 +35,6 @@ fn end_ui_update(state: &State<'_, AppState>) {
     }
 }
 
-/// Emit `ui-update-ready` and reload the main window so the new UI bytes take
-/// effect immediately. The kernel/dashboard subprocess is deliberately left
-/// running — UI and backend are decoupled.
-fn notify_and_reload(app: &AppHandle, result: &ui_update::UiInstallUpdateResult) {
-    if let Some(installed) = &result.installed {
-        let _ = app.emit(
-            UI_UPDATE_READY_EVENT,
-            ui_update::UiUpdateReadyPayload {
-                ui_version: installed.ui_version.clone(),
-            },
-        );
-    }
-    if let Some(window) = app.get_webview_window("main") {
-        if let Err(e) = window.reload() {
-            log::warn!("failed to reload main window after UI update: {e}");
-        }
-    }
-}
-
 #[tauri::command]
 pub async fn ui_check_update() -> Result<ui_update::UiUpdateCheckResult, AppError> {
     Ok(ui_update::check_ui_update().await)
@@ -61,7 +42,7 @@ pub async fn ui_check_update() -> Result<ui_update::UiUpdateCheckResult, AppErro
 
 #[tauri::command]
 pub async fn ui_install_update(
-    app: AppHandle,
+    _app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ui_update::UiInstallUpdateResult, AppError> {
     {
@@ -78,15 +59,12 @@ pub async fn ui_install_update(
     }
     let result = ui_update::install_ui_update().await;
     end_ui_update(&state);
-    if result.ok {
-        notify_and_reload(&app, &result);
-    }
     Ok(result)
 }
 
 #[tauri::command]
 pub async fn ui_rollback(
-    app: AppHandle,
+    _app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ui_update::UiInstallUpdateResult, AppError> {
     {
@@ -103,8 +81,5 @@ pub async fn ui_rollback(
     }
     let result = ui_update::rollback_ui_update();
     end_ui_update(&state);
-    if result.ok {
-        notify_and_reload(&app, &result);
-    }
     Ok(result)
 }

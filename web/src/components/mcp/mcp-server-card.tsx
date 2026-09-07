@@ -1,3 +1,5 @@
+import { useMcpOAuth } from "@/hooks/use-mcp-oauth";
+import { useConfirm } from "@/lib/use-confirm";
 import { Badge, Button } from "@hermes/shared-ui";
 import { Power, Trash2, Zap } from "lucide-react";
 import type { McpServer, McpTestResult } from "@hermes/protocol";
@@ -21,6 +23,8 @@ export function McpServerCard({
   onToggle: () => void;
   onDelete: () => void;
 }) {
+  const oauth = useMcpOAuth(server.name);
+  const { confirm } = useConfirm();
   const envCount = Object.keys(server.env ?? {}).length;
   const target =
     server.transport === "http"
@@ -52,6 +56,7 @@ export function McpServerCard({
           {envCount > 0 && <span>{envCount} 个环境变量</span>}
         </div>
 
+        {oauth.message && <p role="status">{oauth.message}</p>}
         {result && (
           result.ok ? (
             <p className={s.testOk}>
@@ -71,6 +76,20 @@ export function McpServerCard({
       </div>
 
       <div className={s.cardActions}>
+        {server.transport === "http" && server.auth !== "header" && (
+          oauth.authorizing ? (
+            <Button size="sm" variant="outline" onClick={() => void oauth.cancel()}>取消授权</Button>
+          ) : (
+            <Button size="sm" variant="outline" disabled={oauth.busy} onClick={() => void oauth.authorize().then(ok => { if (ok) onTest(); })}>
+              {server.auth === "oauth" ? "重新授权" : "OAuth 授权"}
+            </Button>
+          )
+        )}
+        {server.auth === "oauth" && !oauth.busy && (
+          <Button size="sm" variant="outline" onClick={() => void confirm({
+            title: "退出 MCP 登录", body: "将清除本机保存的登录凭证、禁用该服务并刷新 MCP 连接。", confirmLabel: "退出登录", danger: true,
+          }).then(ok => { if (ok) void oauth.logout(); })}>退出登录</Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

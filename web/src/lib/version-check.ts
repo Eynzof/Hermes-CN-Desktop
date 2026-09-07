@@ -29,6 +29,8 @@ export interface VersionCheckOptions {
 }
 
 let state: VersionCheckState = { kind: "unchecked" };
+let generation = 0;
+let pendingCheck: Promise<VersionCheckState> | null = null;
 
 /**
  * Kernel version recorded from the managed runtime install record (set by the
@@ -59,6 +61,8 @@ export function getVersionCheckState(): VersionCheckState {
 }
 
 export function resetVersionCheck(): void {
+  generation += 1;
+  pendingCheck = null;
   state = { kind: "unchecked" };
   runtimeKernelVersion = null;
 }
@@ -69,6 +73,8 @@ export function resetVersionCheck(): void {
  * before a subsequently started backend can serve REST or WebSocket traffic.
  */
 export function deferBackendVersionCheckForOfflineRuntime(): void {
+  generation += 1;
+  pendingCheck = null;
   state = { kind: "deferred", reason: "managed-runtime-offline" };
 }
 
@@ -148,10 +154,11 @@ async function fetchBackendVersion(apiBaseUrl?: string): Promise<BackendVersionI
   return parseBackendVersion(await response.json());
 }
 
-export async function verifyBackendVersion(
+async function checkBackendVersion(
   apiBaseUrl?: string,
   options: VersionCheckOptions = {},
 ): Promise<VersionCheckState> {
+  let state: VersionCheckState;
   const exactExpected = options.expectedVersion ?? runtimeKernelVersion;
   const expected = expectedBackendContract(options.expectedVersion);
   if (runtime.platform === "web") {
@@ -199,6 +206,30 @@ export async function verifyBackendVersion(
   }
 }
 
+export async function verifyBackendVersion(
+  apiBaseUrl?: string,
+  options: VersionCheckOptions = {},
+): Promise<VersionCheckState> {
+  const startedGeneration = generation;
+  const result = await checkBackendVersion(apiBaseUrl, options);
+  // A stopped/replaced backend invalidates in-flight probes from its predecessor.
+  if (generation === startedGeneration) state = result;
+  return state;
+}
+
+export async function ensureBackendCompatible(): Promise<void> {
+  while (state.kind === "unchecked" || state.kind === "unavailable") {
+    if (!pendingCheck) {
+      const check = verifyBackendVersion(undefined, { connectionMode: runtime.getConnectionMode() });
+      pendingCheck = check;
+      void check.finally(() => { if (pendingCheck === check) pendingCheck = null; });
+    }
+    await pendingCheck;
+    if (state.kind !== "unchecked") break;
+  }
+  assertCompatible();
+}
+
 async function fatalErrorAndExit(title: string, message: string): Promise<never> {
   if (runtime.platform === "tauri" && window.hermesDesktop?.fatalErrorAndExit) {
     await window.hermesDesktop.fatalErrorAndExit({ title, message });
@@ -235,19 +266,10 @@ export function assertCompatible(): void {
   }
 
   if (state.kind === "unavailable") {
-    // The backend does not expose the API (very old backend) or is unreachable.
-    // For strict enforcement, treat this as a fatal error in Tauri builds.
-    const message =
-      `无法验证后端版本：${state.reason}\n\n` +
-      `请确认后端已启动，且与当前桌面端版本兼容。`;
-    void fatalErrorAndExit("版本验证失败", message);
+    // A stopped or restarting Core is recoverable; background requests must
+    // never terminate the desktop shell while its lifecycle UI is operating.
     throw new Error(`backend version unavailable: ${state.reason}`);
   }
 
-  // unchecked: trigger the async verification. The current call must still
-  // fail fast so callers don't proceed against an unchecked backend.
-  void verifyBackendVersion(undefined, { connectionMode: runtime.getConnectionMode() }).then((s) => {
-    if (s.kind !== "ok" && s.kind !== "deferred") assertCompatible();
-  });
   throw new Error("backend version check has not completed");
 }

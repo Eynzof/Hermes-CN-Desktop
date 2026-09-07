@@ -639,7 +639,7 @@ export const runtime = {
     // intentional-offline exemption after stop/uninstall refreshes.
     if (window.__HERMES_RUNTIME__.connectionMode !== "local"
       && window.__HERMES_RUNTIME__.connectionMode !== "remote") {
-      resetVersionCheck();
+      if (window.__HERMES_RUNTIME__.backendReady !== result.backendReady) resetVersionCheck();
       window.__HERMES_RUNTIME__.backendReady = result.backendReady;
       if (!result.backendReady && result.desiredState !== "running") {
         deferBackendVersionCheckForOfflineRuntime();
@@ -651,6 +651,7 @@ export const runtime = {
     window.__HERMES_RUNTIME__.guideState = result.guideState;
     window.__HERMES_RUNTIME__.managedRuntimeDesiredState = result.desiredState;
     window.__HERMES_RUNTIME__.managedRuntimeLifecycleState = result.lifecycleState;
+    window.dispatchEvent(new Event("hermes-runtime-changed"));
   },
 
   /** True when running as the portable (unzip-and-run) desktop distribution. */

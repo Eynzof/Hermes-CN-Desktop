@@ -1,6 +1,7 @@
+import { invalidateAttachedSessions } from "./session-map";
 import { parseGatewayEvent, type GatewayEvent } from "@hermes/protocol";
 import { runtime } from "./runtime";
-import { assertCompatible, resetVersionCheck } from "./version-check";
+import { assertCompatible, ensureBackendCompatible, getVersionCheckState, resetVersionCheck } from "./version-check";
 
 export type ConnectionState = "idle" | "connecting" | "open" | "closed" | "error";
 
@@ -92,7 +93,26 @@ export class GatewayClient {
     this.removeWakeListeners();
   }
 
+  private compatibilityConnectPromise: Promise<void> | null = null;
+
   connect(options?: GatewayConnectOptions | number): Promise<void> {
+    const version = getVersionCheckState();
+    if (runtime.platform === "web" || version.kind === "ok" || version.kind === "deferred") {
+      return this.connectVerified(options);
+    }
+    if (!this.compatibilityConnectPromise) {
+      this.compatibilityConnectPromise = ensureBackendCompatible().then(() => {
+        this.compatibilityConnectPromise = null;
+        return this.connectVerified(options);
+      }, error => {
+        this.compatibilityConnectPromise = null;
+        throw error;
+      });
+    }
+    return this.compatibilityConnectPromise;
+  }
+
+  private connectVerified(options?: GatewayConnectOptions | number): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN) return Promise.resolve();
     if (this.connectPromise) return this.connectPromise;
 
@@ -249,6 +269,7 @@ export class GatewayClient {
   }
 
   private emitDisconnect() {
+    invalidateAttachedSessions();
     this.emit({
       type: "gateway.disconnected",
       payload: { message: "WebSocket connection lost" },

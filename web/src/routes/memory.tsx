@@ -224,7 +224,7 @@ export function MemoryRoute() {
                                 <Button type="button" variant="plain" size="xs" onClick={() => setConfirmDelete(null)}>否</Button>
                               </span>
                             ) : (
-                              <Button type="button" variant="plain" size="xs" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={12} /></Button>
+                              <Button type="button" variant="plain" size="xs" aria-label="删除记忆" onClick={() => setConfirmDelete(entry.index)}><Trash2 size={12} /></Button>
                             )}
                           </div>
                         </>

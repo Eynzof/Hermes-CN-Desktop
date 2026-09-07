@@ -66,7 +66,7 @@ describe("transport · debug-bus integration", () => {
 
   it("fetchJSON invokes the version guard in Tauri mode", async () => {
     resetVersionCheck();
-    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.__HERMES_RUNTIME__ = { platform: "tauri", apiBaseUrl: "http://127.0.0.1:9120", backendReady: true };
     window.__TAURI_INTERNALS__ = {};
     const request = vi.fn(async () => ({
       ok: true,
@@ -78,12 +78,11 @@ describe("transport · debug-bus integration", () => {
     window.hermesDesktop = { windowType: "tauri", request };
     globalThis.fetch = vi.fn() as unknown as typeof globalThis.fetch;
 
-    await expect(fetchJSON("/api/x")).rejects.toThrow(/backend version check has not completed/);
-
-    // The version probe went through Rust IPC, but the actual /api/x request
-    // was not issued while compatibility was still unchecked.
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(request).toHaveBeenCalledWith({ path: "/api/version", method: "GET" });
+    await fetchJSON("/api/x");
+    // The request waits for compatibility, then proceeds exactly once.
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[0]).toEqual([{ path: "/api/version", method: "GET" }]);
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({ path: "/api/x" }));
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 

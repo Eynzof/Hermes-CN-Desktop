@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetUiStoreForTests, readUiValue, writeUiValue } from "./ui-store";
 import {
+  invalidateAttachedSessions,
+  isGatewaySessionAttached,
   rememberSessionMapping,
   resolveGatewaySessionId,
   resolvePersistentSessionId,
@@ -10,11 +12,22 @@ import {
 describe("session-map", () => {
   beforeEach(() => {
     __resetUiStoreForTests();
+    invalidateAttachedSessions();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("keeps persistent history aliases while requiring reattachment after disconnect", () => {
+    rememberSessionMapping("gw-before-restart", "history-id");
+    expect(isGatewaySessionAttached("gw-before-restart")).toBe(true);
+    invalidateAttachedSessions();
+    expect(isGatewaySessionAttached("gw-before-restart")).toBe(false);
+    expect(resolvePersistentSessionId("gw-before-restart")).toBe("history-id");
+    rememberSessionMapping("gw-after-restart", "history-id");
+    expect(isGatewaySessionAttached("gw-after-restart")).toBe(true);
   });
 
   it("maps gateway session ids to persistent session ids", () => {

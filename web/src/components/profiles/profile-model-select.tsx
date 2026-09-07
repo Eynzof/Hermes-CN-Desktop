@@ -83,6 +83,7 @@ export function ProfileModelSelect({
 }: ProfileModelSelectProps) {
   return (
     <Select
+      aria-label="模型"
       id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}

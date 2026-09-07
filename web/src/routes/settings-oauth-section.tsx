@@ -238,7 +238,12 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
   );
 
   useEffect(() => {
+    let disposed = false;
     startLogin.mutateAsync(provider.id).then((result) => {
+      if (disposed) {
+        cancelSession.mutate(result.session_id);
+        return;
+      }
       setStartResult(result as StartResultPkce | StartResultDeviceCode | StartResultLoopback);
       sessionIdRef.current = result.session_id;
       setCountdown(result.expires_in);
@@ -254,9 +259,11 @@ function OAuthLoginModal({ provider, onClose }: { provider: OAuthProvider; onClo
         setPhase("polling");
       }
     }).catch((err) => {
+      if (disposed) return;
       setErrorMsg(err instanceof Error ? err.message : "启动登录失败");
       setPhase("error");
     });
+    return () => { disposed = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

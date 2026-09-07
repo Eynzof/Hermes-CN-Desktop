@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { DEFAULT_THEME_CONFIG, hydrateThemeAtom, usePlatform, type ThemeConfig } from "@hermes/shared-ui";
-import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
 import { readUiValue } from "@/lib/ui-store";
@@ -10,7 +10,6 @@ import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
 import { RuntimeUpdateOverlay } from "@/components/runtime-update-overlay";
 import { DesktopUpdateNotifier } from "@/components/desktop-update-notifier";
 import { ConnectionAuthBanner } from "@/components/connection-auth-banner";
-import { WanderMemoryRouteLifecycle } from "@/components/wander-memory/route-lifecycle";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CommandPalette } from "@/components/command-palette";
 import { runtime } from "@/lib/runtime";
@@ -45,13 +44,6 @@ const ProfilesRoute = lazy(() => import("@/routes/profiles").then((m) => ({ defa
 const ProfileBuilderRoute = lazy(() => import("@/routes/profile-builder").then((m) => ({ default: m.ProfileBuilderRoute })));
 const MemoryRoute = lazy(() => import("@/routes/memory").then((m) => ({ default: m.MemoryRoute })));
 const ExternalMemoryRoute = lazy(() => import("@/routes/external-memory").then((m) => ({ default: m.ExternalMemoryRoute })));
-const WanderMemoryMemoriesRoute = lazy(() => import("@/routes/wander-memory/memories").then((m) => ({ default: m.WanderMemoryMemoriesRoute })));
-const WanderMemoryFilesRoute = lazy(() => import("@/routes/wander-memory/files").then((m) => ({ default: m.WanderMemoryFilesRoute })));
-const WanderMemoryDialogueRoute = lazy(() => import("@/routes/wander-memory/dialogue").then((m) => ({ default: m.WanderMemoryDialogueRoute })));
-const WanderMemoryChatRoute = lazy(() => import("@/routes/wander-memory/chat").then((m) => ({ default: m.WanderMemoryChatRoute })));
-const WanderMemoryContextRoute = lazy(() => import("@/routes/wander-memory/context").then((m) => ({ default: m.WanderMemoryContextRoute })));
-const WanderMemoryStatusRoute = lazy(() => import("@/routes/wander-memory/status").then((m) => ({ default: m.WanderMemoryStatusRoute })));
-const WanderMemoryApiDocsRoute = lazy(() => import("@/routes/wander-memory/api-docs").then((m) => ({ default: m.WanderMemoryApiDocsRoute })));
 const SoulRoute = lazy(() => import("@/routes/soul").then((m) => ({ default: m.SoulRoute })));
 const CronRoute = lazy(() => import("@/routes/cron").then((m) => ({ default: m.CronRoute })));
 const ImOnboardingRoute = lazy(() => import("@/routes/im-onboarding").then((m) => ({ default: m.ImOnboardingRoute })));
@@ -92,10 +84,8 @@ function withSuspense(node: ReactNode) {
 
 function BackendApp() {
   useBootstrapActiveProfile();
-  const location = useLocation();
   return (
     <>
-      <WanderMemoryRouteLifecycle active={location.pathname.startsWith("/wander-memory")} />
       <AppShell>
         <Suspense fallback={<RouteLoadingFallback />}>
           <Routes>
@@ -118,15 +108,7 @@ function BackendApp() {
             <Route path="/memconfig" element={withBoundary(<ExternalMemoryRoute page="config" />)} />
             <Route path="/openviking" element={withBoundary(<ExternalMemoryRoute page="openviking" />)} />
             <Route path="/hindsight" element={withBoundary(<ExternalMemoryRoute page="hindsight" />)} />
-            <Route path="/wander-memory" element={<Navigate to="/wander-memory/memories" replace />} />
-            <Route path="/wander-memory/memories" element={withBoundary(<WanderMemoryMemoriesRoute />)} />
-            <Route path="/wander-memory/files" element={withBoundary(<WanderMemoryFilesRoute />)} />
-            <Route path="/wander-memory/dialogue" element={withBoundary(<WanderMemoryDialogueRoute />)} />
-            <Route path="/wander-memory/chat" element={withBoundary(<WanderMemoryChatRoute />)} />
-            <Route path="/wander-memory/context" element={withBoundary(<WanderMemoryContextRoute />)} />
-            <Route path="/wander-memory/status" element={withBoundary(<WanderMemoryStatusRoute />)} />
-            <Route path="/wander-memory/api" element={withBoundary(<WanderMemoryApiDocsRoute />)} />
-            <Route path="/wander-memory/*" element={<Navigate to="/wander-memory/memories" replace />} />
+            <Route path="/wander-memory/*" element={<Navigate to="/memory" replace />} />
             <Route path="/soul" element={withBoundary(<SoulRoute />)} />
             <Route path="/cron" element={withBoundary(<CronRoute />)} />
             <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />
@@ -159,7 +141,13 @@ function BackendApp() {
   );
 }
 
+function subscribeRuntime(listener: () => void) {
+  window.addEventListener("hermes-runtime-changed", listener);
+  return () => window.removeEventListener("hermes-runtime-changed", listener);
+}
+
 export function App() {
+  const backendReady = useSyncExternalStore(subscribeRuntime, () => runtime.isBackendReady());
   const platform = usePlatform();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
   const location = useLocation();
@@ -175,7 +163,7 @@ export function App() {
   let content: ReactNode;
   if (isGuide) {
     content = withSuspense(withBoundary(<GuideRoute />));
-  } else if (!runtime.isBackendReady()) {
+  } else if (!backendReady) {
     content = withSuspense(<OfflineShell />);
   } else {
     content = <BackendApp />;

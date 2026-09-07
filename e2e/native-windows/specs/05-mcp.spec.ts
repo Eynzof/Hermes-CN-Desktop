@@ -11,7 +11,7 @@ test('MCP-001 添加真实 stdio 服务、测试、启停、模型调用及删�
   await app.getByRole('button', { name: '添加服务', exact: true }).click();
   const dialog = app.getByRole('dialog');
   await dialog.getByPlaceholder('例如 filesystem').fill(name);
-  await dialog.getByRole('combobox').selectOption('stdio');
+  await dialog.getByRole('combobox', { name: '传输方式', exact: true }).selectOption('stdio');
   await dialog.getByPlaceholder('npx').fill(python);
   // The shipped editor splits on whitespace and retains literal quote marks.
   // This isolated root has no spaces; paths with spaces need separate coverage.

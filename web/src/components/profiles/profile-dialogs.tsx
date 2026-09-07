@@ -108,6 +108,7 @@ export function ProfileCreateDialog({
 
       <Field label="克隆来源" hint="从某个档案复制配置、密钥、人格和技能；留空则新建空白档案。">
         <Select
+          aria-label="克隆来源"
           value={cloneFrom}
           onChange={(e) => setCloneFrom(e.target.value)}
           disabled={create.isPending}

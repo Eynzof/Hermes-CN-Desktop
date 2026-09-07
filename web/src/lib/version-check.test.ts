@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   assertCompatible,
+  ensureBackendCompatible,
   deferBackendVersionCheckForOfflineRuntime,
   expectedBackendVersion,
   getVersionCheckState,
@@ -94,16 +95,16 @@ describe("version-check", () => {
       expect(state.kind).toBe("mismatch");
       expect(state).toMatchObject({
         backendVersion: "0.18.0",
-        expectedVersion: "0.20.x",
+        expectedVersion: "0.21.x",
       });
     });
 
     it("accepts another patch version in the compatible Core series for an external backend", async () => {
-      stubDesktopRequest({ version: "0.20.9", name: "hermes-agent" });
+      stubDesktopRequest({ version: "0.21.9", name: "hermes-agent" });
 
       const state = await verifyBackendVersion(undefined, { connectionMode: "remote" });
 
-      expect(state).toEqual({ kind: "ok", backendVersion: "0.20.9" });
+      expect(state).toEqual({ kind: "ok", backendVersion: "0.21.9" });
     });
 
     it("returns unavailable when /api/version is missing or unreachable", async () => {
@@ -180,7 +181,7 @@ describe("version-check", () => {
       });
       stubDesktopRequest({ error: "unauthenticated" }, 401);
 
-      expect(() => assertCompatible()).toThrow("backend version check has not completed");
+      await ensureBackendCompatible();
       await vi.waitFor(() => {
         expect(getVersionCheckState()).toEqual({
           kind: "deferred",
@@ -222,10 +223,7 @@ describe("version-check", () => {
       await verifyBackendVersion();
 
       expect(() => assertCompatible()).toThrow(/backend version unavailable/);
-      expect(fatalErrorAndExit).toHaveBeenCalledWith({
-        title: "版本验证失败",
-        message: expect.stringContaining("无法验证后端版本"),
-      });
+      expect(fatalErrorAndExit).not.toHaveBeenCalled();
     });
 
     it("resetVersionCheck resets state to unchecked", async () => {
@@ -249,26 +247,26 @@ describe("version-check", () => {
     });
 
     it("prefers the recorded runtime kernel version over the baked constant", async () => {
-      recordRuntimeKernelVersion("0.20.1");
-      expect(expectedBackendVersion()).toBe("0.20.1");
-      stubDesktopRequest({ version: "0.20.1", name: "hermes-agent" });
+      recordRuntimeKernelVersion("0.21.1");
+      expect(expectedBackendVersion()).toBe("0.21.1");
+      stubDesktopRequest({ version: "0.21.1", name: "hermes-agent" });
 
       const state = await verifyBackendVersion();
 
       expect(state.kind).toBe("ok");
-      expect(state).toMatchObject({ backendVersion: "0.20.1" });
+      expect(state).toMatchObject({ backendVersion: "0.21.1" });
     });
 
     it("keeps the managed runtime install record as an exact integrity check", async () => {
-      recordRuntimeKernelVersion("0.20.0");
-      stubDesktopRequest({ version: "0.20.1", name: "hermes-agent" });
+      recordRuntimeKernelVersion("0.21.0");
+      stubDesktopRequest({ version: "0.21.1", name: "hermes-agent" });
 
       const state = await verifyBackendVersion(undefined, { connectionMode: "managed" });
 
       expect(state).toMatchObject({
         kind: "mismatch",
-        backendVersion: "0.20.1",
-        expectedVersion: "0.20.0",
+        backendVersion: "0.21.1",
+        expectedVersion: "0.21.0",
       });
     });
 
@@ -285,7 +283,7 @@ describe("version-check", () => {
     });
 
     it("resetVersionCheck clears the recorded kernel version", () => {
-      recordRuntimeKernelVersion("0.20.1");
+      recordRuntimeKernelVersion("0.21.1");
       resetVersionCheck();
       expect(expectedBackendVersion()).toBe(EXPECTED_BACKEND_VERSION);
     });

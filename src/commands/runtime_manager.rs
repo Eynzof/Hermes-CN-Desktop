@@ -822,6 +822,7 @@ pub async fn runtime_rollback(
         return Ok(result);
     }
 
+    desktop_control::set_managed_runtime_desired_state(ManagedRuntimeDesiredState::Running)?;
     if let Err(e) = restart_dashboard(&state).await {
         let mut inner = state.inner.lock()?;
         inner.last_runtime_error = Some(e.to_string());

@@ -33,7 +33,9 @@
     "id": "MODEL-006",
     "route": "/models",
     "requirement": "OAuth 设备码完成登录、凭据持久化、登出与已登录状态刷新",
-    "prerequisite": "OAuth 测试账号"
+    "prerequisite": "OAuth 测试账号",
+    "scope": "waived",
+    "scopeReason": "用户于 2026-09-07 明确取消该项端到端验收要求。"
   },
   {
     "id": "MODEL-010",
@@ -255,7 +257,9 @@
     "id": "CRON-003",
     "route": "/cron",
     "requirement": "向已授权消息目标投递定时结果",
-    "prerequisite": "已授权测试接收者及消息渠道账号"
+    "prerequisite": "已授权测试接收者及消息渠道账号",
+    "scope": "waived",
+    "scopeReason": "用户于 2026-09-07 明确取消该项端到端验收要求。"
   },
   {
     "id": "MEM-001",
@@ -285,61 +289,81 @@
     "id": "WANDER-001",
     "route": "/wander-memory/status",
     "requirement": "本地 MemOS 健康状态、端点发现重连与维护",
-    "prerequisite": "固定提交的本地 MemOS 服务，使用官方 DeepSeek flash"
+    "prerequisite": "固定提交的本地 MemOS 服务，使用官方 DeepSeek flash",
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "WANDER-002",
     "route": "/wander-memory/memories",
     "requirement": "记忆校验、创建、JSON 查看、搜索限制及取消和确认删除",
-    "prerequisite": "本地 MemOS 服务"
+    "prerequisite": "本地 MemOS 服务",
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "WANDER-003",
     "route": "/wander-memory/files",
     "requirement": "实际目录扫描、文件详情、自定义入库及磁盘变化刷新",
-    "prerequisite": "本地 MemOS 文件服务及隔离测试目录"
+    "prerequisite": "本地 MemOS 文件服务及隔离测试目录",
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "WANDER-004",
     "route": "/wander-memory/dialogue",
     "requirement": "对话输入校验、真实模型提取、导入结果及库存持久化",
-    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash"
+    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash",
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "WANDER-005",
     "route": "/wander-memory/chat",
     "requirement": "基于记忆的真实聊天和引文溯源",
-    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash"
+    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash",
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "WANDER-006",
     "route": "/wander-memory/context",
     "requirement": "上下文检索、限制条数、实际内容展示及系统剪贴板",
-    "prerequisite": "本地 MemOS 服务"
+    "prerequisite": "本地 MemOS 服务",
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "WANDER-007",
     "route": "/wander-memory/api",
     "requirement": "API 文档浏览和示例复制",
-    "prerequisite": null
+    "prerequisite": null,
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "WANDER-008",
     "route": "/wander-memory/chat",
     "requirement": "生成中按 Escape 取消界面等待、解除输入禁用并丢弃迟到结果",
-    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash"
+    "prerequisite": "本地 MemOS 服务，使用官方 DeepSeek flash",
+    "scope": "hidden",
+    "scopeReason": "用户要求隐藏 Wander Memory；由 SHELL-006 验证入口和直达路由均不可用。"
   },
   {
     "id": "IM-FEISHU-001",
     "route": "/im/feishu",
     "requirement": "飞书配置、探测、网关启停与真实收发",
-    "prerequisite": "飞书测试应用和明确授权的测试接收者"
+    "prerequisite": "飞书测试应用和明确授权的测试接收者",
+    "scope": "waived",
+    "scopeReason": "用户于 2026-09-07 明确取消该项端到端验收要求。"
   },
   {
     "id": "IM-WEIXIN-001",
     "route": "/im/weixin",
     "requirement": "微信二维码登录、网关状态与真实收发",
-    "prerequisite": "微信扫码测试账号和明确授权的测试接收者"
+    "prerequisite": "微信扫码测试账号和明确授权的测试接收者",
+    "scope": "waived",
+    "scopeReason": "用户于 2026-09-07 明确取消该项端到端验收要求。"
   },
   {
     "id": "IM-FEISHU-002",
@@ -597,6 +621,12 @@
     "id": "MCP-005",
     "route": "/mcp",
     "requirement": "带空格 Windows 路径参数的真实服务探测与模型调用",
+    "prerequisite": null
+  },
+  {
+    "id": "SHELL-006",
+    "route": "/",
+    "requirement": "Wander Memory 导航、命令搜索及直达路由隐藏；无 Wanderminds 账号登录入口",
     "prerequisite": null
   }
 ]

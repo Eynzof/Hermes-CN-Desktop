@@ -11,7 +11,7 @@
 //   1. URL query ?wspath=native|relay — ad-hoc QA override, not persisted
 //   2. learned value (HERMES_WS_PATH_LEARNED in the UI store) — sticky result
 //      of a previous probe, skips re-probing on every launch
-//   3. default "native", with automatic runtime fallback (below)
+//   3. desktop defaults to the authenticated Rust relay; web uses native WS
 //
 // Fallback policy: a webview that blocks ws://127.0.0.1 fails in one of two
 // ways. A synchronous SecurityError from `new WebSocket(...)` flips to relay
@@ -71,7 +71,7 @@ function learn(path: GatewaySocketPath | null): void {
 
 export function getActiveSocketPath(): GatewaySocketPath {
   if (currentPath) return currentPath;
-  currentPath = readQueryOverride() ?? readLearnedPath() ?? "native";
+  currentPath = readQueryOverride() ?? readLearnedPath() ?? (runtime.platform === "tauri" ? "relay" : "native");
   return currentPath;
 }
 

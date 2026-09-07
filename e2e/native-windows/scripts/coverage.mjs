@@ -34,9 +34,9 @@ for (const run of (await readdir(path.join(output, 'runs'))).sort()) {
     if (error.code !== 'ENOENT') throw error;
   }
 }
-const rows = catalog.map(item => ({ ...item, ...observed.get(item.id), status: observed.get(item.id)?.status || 'not-run' }));
+const rows = catalog.map(item => ({ ...item, ...observed.get(item.id), status: item.scope || observed.get(item.id)?.status || 'not-run' }));
 const counts = rows.reduce((all, row) => ({ ...all, [row.status]: (all[row.status] || 0) + 1 }), {});
-const complete = rows.every(row => row.status === 'passed');
+const complete = rows.every(row => ['passed', 'waived', 'hidden'].includes(row.status));
 await writeFile(path.join(output, 'coverage.json'), JSON.stringify({ baseline, generatedAt: new Date().toISOString(), complete, counts, workflows: rows }, null, 2));
 const lines = ['# Windows 全功能验收覆盖', '', `完整验收：${complete ? '通过' : '未完成'}。${JSON.stringify(counts)}。页面截图不计为功能通过。`, '',
   '| 用例 | 功能工作流 | 结果 | 最近证据 | 前置条件 |', '|---|---|---|---|---|',

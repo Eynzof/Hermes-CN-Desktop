@@ -931,6 +931,7 @@ async fn weixin_get(base_url: &str, endpoint: &str) -> Result<Value, AppError> {
     );
     let res = HTTP
         .get(url)
+        .timeout(Duration::from_secs(35))
         .header("iLink-App-Id", "bot")
         .header("iLink-App-ClientVersion", WEIXIN_CLIENT_VERSION)
         .send()
