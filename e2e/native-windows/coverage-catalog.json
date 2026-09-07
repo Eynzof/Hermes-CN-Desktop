@@ -501,7 +501,7 @@
     "id": "MODEL-009",
     "route": "/models",
     "requirement": "本地部署供应商配置、探测与真实本地推理",
-    "prerequisite": "真实本地模型服务；与官方 flash 验收分开"
+    "prerequisite": null
   },
   {
     "id": "CHAT-012",
@@ -513,7 +513,7 @@
     "id": "CHAT-013",
     "route": "/tasks/:taskId",
     "requirement": "图片原生输入和视觉辅助模型真实识别",
-    "prerequisite": "需要允许使用视觉模型；默认 flash 只验不支持视觉的反馈"
+    "prerequisite": null
   },
   {
     "id": "PROJ-003",
