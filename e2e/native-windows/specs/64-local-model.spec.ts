@@ -5,6 +5,7 @@ import { test, expect, route, api, chat, sendChat, baseline, root } from '../fix
 
 test('MODEL-009 本地部署模型发现、无密钥探测、64K 真实推理与切回官方模型', async ({ app }, info) => {
   test.setTimeout(900_000);
+  const originalContext = Number((await api(app, '/api/config')).model_context_length || 0);
   const prepared = execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'native-windows', 'scripts', 'prepare-local-model.ps1'), '-Root', root], { encoding: 'utf8', windowsHide: true, timeout: 1_200_000 });
   const fixture = JSON.parse(readFileSync(path.join(root, 'reports', 'local-model-fixture.json'), 'utf8').replace(/^\uFEFF/, ''));
   await info.attach('real-local-model-provenance', { body: JSON.stringify({ prepared, fixture }, null, 2), contentType: 'application/json' });
@@ -75,8 +76,12 @@ test('MODEL-009 本地部署模型发现、无密钥探测、64K 真实推理与
     if (added) {
     await goModels();
     await app.getByRole('button', { name: /^DeepSeek(?: 当前| 已保存密钥)?$/ }).click();
+    await app.getByRole('textbox', { name: '上下文窗口', exact: true }).fill(originalContext ? String(originalContext) : '');
     if ((await api(app, '/api/model/info')).provider !== 'deepseek') await app.getByRole('button', { name: '设为当前模型', exact: true }).click();
+    else if (Number((await api(app, '/api/config')).model_context_length || 0) !== originalContext) await app.getByRole('button', { name: '保存配置', exact: true }).click();
     await expect.poll(async () => (await api(app, '/api/model/info')).model).toBe(baseline.model);
+    await expect.poll(async () => Number((await api(app, '/api/config')).model_context_length || 0)).toBe(originalContext);
+    await info.attach('restored-main-model-context', { body: JSON.stringify({ originalContext, restoredContext: (await api(app, '/api/config')).model_context_length }), contentType: 'application/json' });
     await app.getByRole('button', { name: new RegExp(`^${name}(?: 当前| 已保存密钥)?$`) }).click();
     await app.getByRole('button', { name: '删除服务商', exact: true }).click();
     await app.getByRole('dialog', { name: '删除服务商', exact: true }).getByRole('button', { name: '删除', exact: true }).click();

@@ -13,6 +13,7 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
   const before = await api(app, '/api/config');
   expect(before.auxiliary?.vision?.provider || 'auto', 'Use the isolated unconfigured vision slot').toBe('auto');
   const originalMode = before.agent?.image_input_mode || 'auto';
+  const originalContext = Number(before.model_context_length || 0);
   const name = `E2E Vision ${Date.now()}`;
   const startedAt = new Date().toISOString();
   const mainModels = async () => { await route(app, '/models'); await app.getByRole('tab', { name: /^主模型/ }).click(); };
@@ -20,8 +21,11 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
   const useDeepSeek = async () => {
     await mainModels();
     await app.getByRole('button', { name: /^DeepSeek(?: 当前| 已保存密钥)?$/ }).click();
+    await app.getByRole('textbox', { name: '上下文窗口', exact: true }).fill(originalContext ? String(originalContext) : '');
     if ((await api(app, '/api/model/info')).provider !== 'deepseek') await app.getByRole('button', { name: '设为当前模型', exact: true }).click();
+    else if (Number((await api(app, '/api/config')).model_context_length || 0) !== originalContext) await app.getByRole('button', { name: '保存配置', exact: true }).click();
     await expect.poll(async () => (await api(app, '/api/model/info')).model).toBe(baseline.model);
+    await expect.poll(async () => Number((await api(app, '/api/config')).model_context_length || 0)).toBe(originalContext);
   };
   const imageMode = async (mode: string) => {
     await auxiliary();
@@ -46,10 +50,10 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
     writeFileSync(file, PNG.sync.write(png));
     return { file, expected: palette.map(item => item.name) };
   };
-  const recognize = async (mode: 'native' | 'auxiliary') => {
+  const recognize = async (mode: 'native' | 'auxiliary', stage: string) => {
     const input = picture();
-    await info.attach(mode + '-actual-pixels', { path: input.file, contentType: 'image/png' });
-    await info.attach(mode + '-expected-colors', { body: JSON.stringify(input), contentType: 'application/json' });
+    await info.attach(stage + '-actual-pixels', { path: input.file, contentType: 'image/png' });
+    await info.attach(stage + '-expected-colors', { body: JSON.stringify(input), contentType: 'application/json' });
     await route(app, '/');
     await app.getByRole('button', { name: '添加附件', exact: true }).click();
     await nativeDialog('选择附件', input.file, '%o');
@@ -90,7 +94,7 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
     if (forbiddenTool) throw new Error(`Native pixel recognition issued forbidden tool ${forbiddenTool}; stopped through the actual UI. Inspect the persisted session and service logs for image routing.`);
     if (outcome.error) throw outcome.error;
     const result = outcome.value!;
-    await info.attach(mode + '-real-session', { body: JSON.stringify(result.evidence, null, 2), contentType: 'application/json' });
+    await info.attach(stage + '-real-session', { body: JSON.stringify(result.evidence, null, 2), contentType: 'application/json' });
     const answer = result.evidence.messages.filter((m: any) => m.role === 'assistant').at(-1).content;
     expect(result.evidence.session.model).toBe(mode === 'native' ? fixture.model : baseline.model);
     expect(result.evidence.session.billing_base_url).toBe(mode === 'native' ? fixture.origin + '/v1' : baseline.baseUrl);
@@ -98,9 +102,11 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
     const toolResults = result.evidence.messages.filter((m: any) => m.role === 'tool');
     if (mode === 'native') expect(toolResults).toHaveLength(0);
     else expect(toolResults.map((m: any) => m.tool_name)).toEqual(['vision_analyze']);
-    await info.attach(mode + '-rendered-answer', { body: await app.screenshot(), contentType: 'image/png' });
+    await info.attach(stage + '-rendered-answer', { body: await app.screenshot(), contentType: 'image/png' });
   };
   let added = false;
+  let provider = '';
+  let auxiliaryFailed = false;
   try {
     await mainModels();
     await app.getByRole('button', { name: '本地部署', exact: true }).click();
@@ -113,12 +119,18 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
     await dialog.getByRole('button', { name: '添加并选中', exact: true }).click();
     added = true;
     await expect(dialog).toBeHidden();
-    const provider = (await api(app, '/api/model/info')).provider;
+    provider = (await api(app, '/api/model/info')).provider;
     expect(provider).toMatch(/^custom:127-0-0-1-11435/);
-    for (const mode of ['native', 'auxiliary'] as const) {
+    const entries = (await api(app, '/api/config')).providers;
+    const entry = entries[provider] || entries[provider.replace(/^custom:/, '')];
+    expect(entry, 'Read the saved provider from the actual v0.21 providers mapping').toBeTruthy();
+    await info.attach('saved-local-provider-metadata', { body: JSON.stringify(Object.fromEntries(Object.entries(entry).filter(([key]) => ['name', 'base_url', 'model', 'default_model', 'models', 'api_mode', 'api_type', 'type'].includes(key))), null, 2), contentType: 'application/json' });
+    for (const stage of ['native', 'auxiliary', 'auxiliary-after-ttl', 'auxiliary-after-resave'] as const) {
+      if (stage.startsWith('auxiliary-after-') && !auxiliaryFailed) continue;
+      const mode = stage === 'native' ? 'native' : 'auxiliary';
       try {
-        if (mode === 'native') await imageMode('native');
-        else {
+        if (stage === 'native') await imageMode('native');
+        else if (stage === 'auxiliary') {
           await useDeepSeek();
           await imageMode('text');
           await app.getByRole('button', { name: /^视觉分析 / }).click();
@@ -128,6 +140,20 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
           await app.getByRole('textbox', { name: '调用超时（秒）', exact: true }).fill('300');
           await app.getByRole('button', { name: '保存此辅助任务', exact: true }).click();
           await expect.poll(async () => (await api(app, '/api/config')).auxiliary?.vision?.model).toBe(fixture.model);
+        } else if (stage === 'auxiliary-after-ttl') {
+          // A distinct cache-expiry scenario, preserving the immediate failure.
+          // registry.py caches tool availability for 30s; use actual wall time.
+          const started = Date.now();
+          await new Promise(resolve => setTimeout(resolve, 35_000));
+          await info.attach('tool-cache-expiry-wait', { body: JSON.stringify({ started, finished: Date.now(), expectedTtlMs: 30_000 }), contentType: 'application/json' });
+        } else {
+          // model_tools.py also memoizes definitions by config mtime. Test an
+          // explicit UI re-save after expiry, not a hidden cache invalidation.
+          await auxiliary();
+          await app.getByRole('button', { name: /^视觉分析 / }).click();
+          await app.getByRole('textbox', { name: '调用超时（秒）', exact: true }).fill('301');
+          await app.getByRole('button', { name: '保存此辅助任务', exact: true }).click();
+          await expect.poll(async () => (await api(app, '/api/config')).auxiliary?.vision?.timeout).toBe(301);
         }
         // Verify saved configuration after a real WebView reload. Prior runs
         // separately retain the stale model/picker/tool inventory without it.
@@ -135,20 +161,21 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
         await app.waitForFunction(() => (window as any).__HERMES_RUNTIME__?.backendReady && typeof (window as any).hermesDesktop?.request === 'function');
         await expect.poll(async () => (await api(app, '/api/model/info')).model).toBe(mode === 'native' ? fixture.model : baseline.model);
         await expect.poll(async () => (await api(app, '/api/config')).agent?.image_input_mode).toBe(mode === 'native' ? 'native' : 'text');
-        await recognize(mode);
+        await recognize(mode, stage);
       } catch (error) {
+        if (stage === 'auxiliary') auxiliaryFailed = true;
         if (app.url().includes('#/tasks/')) {
           const evidence = sessionEvidence(decodeURIComponent(app.url().split('#/tasks/')[1].split('?')[0]));
-          await info.attach(mode + '-failed-real-session', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
+          await info.attach(stage + '-failed-real-session', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
           if (mode === 'native' && evidence.session?.model === fixture.model) {
             const label = await app.getByRole('button', { name: /^模型 / }).textContent();
             await info.attach('native-actual-model-vs-display', { body: JSON.stringify({ persistedModel: evidence.session.model, label }), contentType: 'application/json' });
             expect.soft(label, 'Session model display must match actual local inference').toContain(fixture.model);
           }
         }
-        await info.attach(mode + '-failure', { body: String(error), contentType: 'text/plain' });
-        await info.attach(mode + '-failure-ui', { body: await app.screenshot(), contentType: 'image/png' });
-        expect.soft(error, mode + ' real visual recognition').toBeUndefined();
+        await info.attach(stage + '-failure', { body: String(error), contentType: 'text/plain' });
+        await info.attach(stage + '-failure-ui', { body: await app.screenshot(), contentType: 'image/png' });
+        expect.soft(error, stage + ' real visual recognition').toBeUndefined();
         const stop = app.getByRole('button', { name: '中止响应', exact: true });
         if (await stop.isVisible()) { await stop.click(); await expect(stop).toHaveCount(0, { timeout: 30_000 }); }
       }
@@ -162,9 +189,13 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
       await app.getByRole('button', { name: new RegExp(`^${name}(?: 当前| 已保存密钥)?$`) }).click();
       await app.getByRole('button', { name: '删除服务商', exact: true }).click();
       await app.getByRole('dialog', { name: '删除服务商', exact: true }).getByRole('button', { name: '删除', exact: true }).click();
+      await expect(app.getByRole('button', { name: new RegExp(`^${name}(?: 当前| 已保存密钥)?$`) })).toHaveCount(0);
+      const remaining = (await api(app, '/api/config')).providers;
+      expect(remaining[provider] || remaining[provider.replace(/^custom:/, '')]).toBeUndefined();
     }
     const restored = await chat(app, '不要调用工具，只回复 VISION-TEST-RESTORED。', 'VISION-TEST-RESTORED');
     expect(restored.evidence.session.model).toBe(baseline.model);
+    await info.attach('restored-main-model-context', { body: JSON.stringify({ originalContext, restoredContext: (await api(app, '/api/config')).model_context_length }), contentType: 'application/json' });
     await info.attach('restored-official-model', { body: JSON.stringify(restored.evidence, null, 2), contentType: 'application/json' });
     const logs = spawnSync('docker', ['logs', '--since', startedAt, fixture.container], { encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 });
     await info.attach('real-local-vision-service-log', { body: (logs.stdout || '') + (logs.stderr || ''), contentType: 'text/plain' });
