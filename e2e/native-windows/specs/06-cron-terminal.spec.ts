@@ -40,7 +40,7 @@ test('CRON-001 定时任务创建编辑、暂停恢复、真实执行历史和�
   await app.getByRole('button', { name: '删除', exact: true }).click();
   await app.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
   await expect(app.getByRole('heading', { name, exact: true })).toHaveCount(0);
-  expect((await api(app, '/api/cron/jobs')).some((j: any) => j.id === job.id)).toBe(false);
+  await expect.poll(async () => (await api(app, '/api/cron/jobs')).some((j: any) => j.id === job.id)).toBe(false);
 });
 
 test('PTY-001 原生终端执行真实命令、快捷命令、关闭和重开', async ({ app }, testInfo) => {

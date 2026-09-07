@@ -2,14 +2,15 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { test, expect, route, native, nativeDialog, bridge, api, root, python, chat } from '../fixtures';
+import { test, expect, route, native, nativeDialog, bridge, api, root, home, python, chat, sendChat, switchProfile, removeProfile } from '../fixtures';
 
 test('BACKUP-001 原生备份导出、取消、恢复到独立档案并核对数据', async ({ app }, testInfo) => {
   const marker = `backup-${Date.now()}`;
   const folder = path.join(root, 'secrets', 'backups');
   mkdirSync(folder, { recursive: true });
   const archive = path.join(folder, marker + '.zip');
-  const conversation = await chat(app, `请只回复备份验收标记 ${marker}`, marker);
+  const conversation = await chat(app, `禁止调用任何工具，也不要更新记忆。请只回复备份验收标记 ${marker}`, marker);
+  expect(conversation.evidence.session.tool_call_count).toBe(0);
   await route(app, '/memory');
   await app.getByRole('button', { name: '添加记忆', exact: true }).click();
   await app.getByPlaceholder('例如：用户偏好使用 TypeScript，修改前先跑 typecheck。').fill(marker);
@@ -30,8 +31,8 @@ test('BACKUP-001 原生备份导出、取消、恢复到独立档案并核对数
   const shot = await native({ action: 'screenshot' });
   await testInfo.attach('native-export', { path: shot.path, contentType: 'image/png' });
   await route(app, '/memory');
-  const card = app.locator('article').filter({ hasText: marker });
-  await card.getByRole('button', { name: '', exact: true }).click();
+  const card = app.locator('article').filter({ has: app.getByText(marker, { exact: true }) });
+  await card.getByRole('button', { name: '删除记忆', exact: true }).click();
   await card.getByRole('button', { name: '是', exact: true }).click();
   await expect(card).toHaveCount(0);
   await route(app, '/backup');
@@ -69,4 +70,23 @@ test('BACKUP-001 原生备份导出、取消、恢复到独立档案并核对数
   await app.getByRole('menuitem', { name: '删除', exact: true }).click();
   await app.getByRole('dialog').getByRole('button', { name: '确认删除', exact: true }).click();
   await expect(app.getByRole('button', { name: `${restored} 的操作` })).toHaveCount(0);
+  const tombstone = path.join(home, 'profiles', '.deleted', restored);
+  await expect.poll(() => existsSync(tombstone)).toBe(true);
+  // Restoring the same archive must reuse the deleted name and clear the
+  // durable deletion marker; otherwise Core rejects the newly restored home.
+  await route(app, '/backup');
+  await app.getByRole('button', { name: '导入备份压缩包', exact: true }).click();
+  await nativeDialog('选择 Hermes 备份压缩包', archive, '%o');
+  await expect(app.getByText(/已恢复到新 profile/)).toBeVisible({ timeout: 90_000 });
+  expect((await api(app, '/api/profiles/active')).current).toBe(restored);
+  try {
+    expect(existsSync(tombstone)).toBe(false);
+    await route(app, `/tasks/${conversation.evidence.session.id}`);
+    const resumed = await sendChat(app, '仅从本会话上下文回答刚才的备份验收标记，禁止调用工具。', marker);
+    expect(resumed.evidence.session.id).toBe(conversation.evidence.session.id);
+    await testInfo.attach('restored-deleted-profile-conversation', { body: JSON.stringify(resumed.evidence, null, 2), contentType: 'application/json' });
+  } finally {
+    await switchProfile(app, 'default');
+    await removeProfile(app, restored);
+  }
 });

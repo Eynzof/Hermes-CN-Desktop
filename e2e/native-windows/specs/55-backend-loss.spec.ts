@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect, chat, sendChat, route, bridge, root } from '../fixtures';
 
-test('SHELL-005 真实内核进程意外结束、失联反馈、启动修复与原会话恢复', async ({ app }, testInfo) => {
+test('SHELL-005 真实内核进程意外结束、失联反馈、自动重启与原会话恢复', async ({ app }, testInfo) => {
   const marker = `backend-loss-${Date.now()}`;
   const file = path.join(root, 'workspace', marker + '.txt');
   writeFileSync(file, marker);
@@ -19,13 +19,16 @@ test('SHELL-005 真实内核进程意外结束、失联反馈、启动修复与�
   await testInfo.attach('verified-core-fault-injection', { body: JSON.stringify({ desktop: desktop.pid, core: process, killed }, null, 2), contentType: 'application/json' });
   await expect.poll(async () => (await bridge<any>(app, 'getDesktopControlState')).running, { timeout: 30_000 }).toBe(false);
   await route(app, '/kernel');
-  await expect(app.getByRole('button', { name: '启动内核', exact: true })).toBeEnabled({ timeout: 30_000 });
   await testInfo.attach('backend-lost-recovery-control', { body: await app.screenshot(), contentType: 'image/png' });
-  const loaded = app.waitForEvent('load', { timeout: 120_000 });
-  await app.getByRole('button', { name: '启动内核', exact: true }).click();
-  await loaded;
-  await app.waitForFunction(() => (window as any).__HERMES_RUNTIME__?.backendReady, undefined, { timeout: 120_000 });
+  // The supervisor owns recovery after an unexpected exit. Do not race it
+  // with a manual start or reload the WebView to hide a stale runtime state.
+  await expect.poll(async () => {
+    const current = await bridge<any>(app, 'getRuntimeInfo');
+    return (current.process?.pid ?? 0) > 0 && current.process?.pid !== process.ProcessId
+      && await app.evaluate(() => (window as any).__HERMES_RUNTIME__?.backendReady === true);
+  }, { timeout: 120_000 }).toBe(true);
   const after = await bridge<any>(app, 'getRuntimeInfo');
+  expect(after.process.pid).toBeGreaterThan(0);
   expect(after.process.pid).not.toBe(process.ProcessId);
   expect(JSON.parse(readFileSync(path.join(root, 'reports', 'desktop-process.json'), 'utf8').replace(/^\uFEFF/, '')).pid).toBe(desktop.pid);
   expect(readFileSync(file, 'utf8')).toBe(marker);

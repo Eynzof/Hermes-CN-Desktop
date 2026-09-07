@@ -1,8 +1,8 @@
 param(
   [string]$Root='C:\HermesE2E',
-  [string]$RuntimeArchive='C:\HermesV090\artifacts\hermes-agent-cn-runtime-win32-x64-0.21.0-cn.3.zip',
+  [string]$RuntimeArchive='C:\HermesV090Fixes\artifacts\hermes-agent-cn-runtime-win32-x64-0.21.0-cn.10.zip',
   [string]$RuntimeManifest='C:\HermesV090\Desktop App\bundled-runtime\stable-win32-x64.json',
-  [string]$UiDist='C:\HermesV090\Desktop\web\dist',
+  [string]$UiDist='C:\HermesV090Fixes\artifacts\desktop-0.9.0-cn10\web-dist',
   [string]$SigningKey='C:\HermesV090\keys\runtime-test.pem'
 )
 $ErrorActionPreference='Stop'

@@ -24,9 +24,21 @@ test('SET-006 前后台完成提醒、真实审批提醒以及扬声器提示音
   await route(app, '/notifications');
   const previous = await Promise.all(labels.map(label => row(label).locator('button[data-active="true"]').innerText()));
   const observed: any[] = [];
+  await app.evaluate(() => {
+    const w = window as any, bridge = w.hermesDesktop, original = bridge.desktopNotify;
+    w.__notificationAcceptance = { original, events: [] };
+    bridge.desktopNotify = async function(input: any) {
+      const event: any = { input, startedAt: Date.now() };
+      w.__notificationAcceptance.events.push(event);
+      try { const result = await original.call(bridge, input); event.result = result; return result; }
+      catch(error) { event.error = String(error); throw error; }
+      finally { event.finishedAt = Date.now(); }
+    };
+  });
+
   const record = async (phase: string, trigger?: () => Promise<unknown>) => {
     const target = path.join(testInfo.outputDir, phase);
-    const child = spawn(python, [path.join(root, 'native-windows', 'scripts', 'audio-evidence.py'), '--output', target, '--seconds', '4'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(python, [path.join(root, 'native-windows', 'scripts', 'audio-evidence.py'), '--output', target, '--seconds', '10'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let log = '';
     child.stdout.on('data', data => log += data);
     child.stderr.on('data', data => log += data);
@@ -45,6 +57,20 @@ test('SET-006 前后台完成提醒、真实审批提醒以及扬声器提示音
     } finally { if (child.exitCode === null) child.kill(); }
   };
   try {
+    await set('系统通知', '开启');
+    await set('提示音', '开启');
+    await native({ action: 'windowState', window: window.name, state: 'minimized' });
+    const audible = await record('notification-sound-on', () => app.getByRole('button', { name: '测试', exact: true }).click());
+    expect(audible.peak, 'An isolated real notification must reach the speaker before testing later notification policies').toBeGreaterThan(0.01);
+    expect(audible.maxRms).toBeGreaterThan(0.001);
+    await foreground();
+    await set('提示音', '关闭');
+    const quiet = await record('speaker-quiet-baseline');
+    expect(quiet.peak).toBeLessThan(0.01);
+    const silent = await record('notification-sound-off', () => app.getByRole('button', { name: '测试', exact: true }).click());
+    expect(silent.peak, 'Turning prompt sound off must keep actual output silent').toBeLessThan(0.01);
+    observed.push({ phase: 'speaker-loopback', quietPeak: quiet.peak, soundOffPeak: silent.peak, soundOnPeak: audible.peak, soundOnFrames: audible.totalFrames, device: audible.device,
+      toasts: receipts().filter((item: any) => item.Payload.includes('Hermes 通知测试')).slice(0, 2) });
     const calibration = await record('speaker-positive-calibration', () => new Promise<void>((resolve, reject) => {
       const player = spawn(python, ['-c', 'import winsound; winsound.PlaySound("C:/Windows/Media/Windows Notify System Generic.wav", winsound.SND_FILENAME)'], { windowsHide: true });
       player.once('error', reject);
@@ -89,21 +115,9 @@ test('SET-006 前后台完成提醒、真实审批提醒以及扬声器提示音
     expect(readFileSync(path.join(folder, 'keep.txt'), 'utf8')).toBe(marker);
     const id = decodeURIComponent(app.url().split('#/tasks/')[1].split('?')[0]);
     await testInfo.attach('real-approval-session', { body: JSON.stringify(sessionEvidence(id), null, 2), contentType: 'application/json' });
-    await route(app, '/notifications');
-    await set('仅窗口在后台时通知', '关闭');
-    const quiet = await record('speaker-quiet-baseline');
-    expect(quiet.peak, 'The bounded capture must start with a quiet speaker output').toBeLessThan(0.01);
-    const silent = await record('notification-sound-off', () => app.getByRole('button', { name: '测试', exact: true }).click());
-    expect.soft(silent.peak, 'Turning prompt sound off must keep the actual output silent').toBeLessThan(0.01);
-    // Separate the sound-policy samples. The interval alone is not proof of
-    // Windows notification throttling; retain raw output and actual toast XML.
-    await app.waitForTimeout(12_000);
-    await set('提示音', '开启');
-    const audible = await record('notification-sound-on', () => app.getByRole('button', { name: '测试', exact: true }).click());
-    observed.push({ phase: 'speaker-loopback', quietPeak: quiet.peak, soundOffPeak: silent.peak, soundOnPeak: audible.peak, soundOnFrames: audible.totalFrames, device: audible.device, toasts: receipts().filter((item: any) => item.Payload.includes('Hermes 通知测试')).slice(-2) });
-    expect(audible.peak).toBeGreaterThan(0.01);
-    expect(audible.maxRms).toBeGreaterThan(0.001);
+
   } finally {
+    await testInfo.attach('native-notification-calls', { body: JSON.stringify(await app.evaluate(() => { const w = window as any, data = w.__notificationAcceptance; w.hermesDesktop.desktopNotify = data.original; delete w.__notificationAcceptance; return data.events; }), null, 2), contentType: 'application/json' });
     await testInfo.attach('actual-notification-policy', { body: JSON.stringify(observed, null, 2), contentType: 'application/json' });
     await foreground();
     const reject = app.getByRole('button', { name: '拒绝', exact: true });

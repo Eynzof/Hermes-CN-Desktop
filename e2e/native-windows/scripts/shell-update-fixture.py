@@ -21,12 +21,13 @@ from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 parser = argparse.ArgumentParser()
 parser.add_argument('--root', type=Path, default=Path('C:/HermesE2E'))
 parser.add_argument('--prepare', action='store_true')
-parser.add_argument('--artifacts', type=Path, default=Path('C:/HermesV090/artifacts'))
+parser.add_argument('--artifacts', type=Path, default=Path('C:/HermesV090Fixes/artifacts'))
 args = parser.parse_args()
 folder = args.root / 'shell-update-fixture'
 private = args.root / 'secrets/shell-update-fixture'
 hosts = ('hot-update-staging.hermesagent.org.cn', 'dl-desktop.hermesagent.org.cn')
-version = '0.9.1-prototype.local.1'
+baseline = json.loads((args.root / 'native-windows/baseline.json').read_text(encoding='utf-8'))
+version = baseline['shellUpdateCandidate']['version']
 asset_path = f'/v{version}/update.exe'
 
 
@@ -42,13 +43,12 @@ def save(name, value):
 if args.prepare:
     if folder.exists():
         raise SystemExit('Existing fixture is retained; use its pinned metadata')
-    original = args.artifacts / 'desktop-0.9.0/Hermes v090 Acceptance_0.9.0_x64-setup.exe'
+    original = args.artifacts / baseline['desktopArtifactsDir'] / 'Hermes v090 Acceptance_0.9.0_x64-setup.exe'
     candidate = args.artifacts / f'desktop-{version}/Hermes v090 Acceptance_{version}_x64-setup.exe'
     exe = candidate.parent / 'hermes-agent-cn-desktop.exe'
-    baseline = json.loads((args.root / 'native-windows/baseline.json').read_text(encoding='utf-8'))
-    assert sha(original) == 'c99c23bd9289b23bf44147f13741a0eb7412dce253739f861a69161032dabace'
-    assert sha(candidate) == '6db2342bafd2c6d018c8bae98a60ca970405e9c427d80354916307372c509188'
-    assert sha(exe) == 'ac0e4df0b841525fddc86fb04480de66d49ec8c79a8c58dea202e7fb49635506'
+    assert sha(original) == baseline['desktopInstallerSha256']
+    assert sha(candidate) == baseline['shellUpdateCandidate']['installerSha256']
+    assert sha(exe) == baseline['shellUpdateCandidate']['exeSha256']
     # Tauri's NSIS bundler changes this bundle-type marker before packaging.
     # Compute the expected installed bytes without modifying the signed asset.
     unpacked = exe.read_bytes()
@@ -63,7 +63,7 @@ if args.prepare:
                     metadata=dict(schemaVersion=2, releaseId=f'desktop-{version}-windows-x86_64', channel='prototype',
                                 githubReleaseTag=f'v{version}', githubFallbackUrl=f'https://github.com/Eynzof/Hermes-CN-Desktop/releases/download/v{version}/update.exe',
                                 sha256=sha(candidate), size=candidate.stat().st_size, bundledCoreVersion='0.21.0',
-                                bundledRuntimeVersion='0.21.0-cn.3', runtimeRevision=3))
+                                bundledRuntimeVersion=baseline['runtimeVersion'], runtimeRevision=int(baseline['runtimeVersion'].rsplit('.', 1)[1])))
     save('good.json', manifest)
     save('bad-hash.json', {**manifest, 'metadata': {**manifest['metadata'], 'sha256': '0' * 64}})
     lines = base64.b64decode(signature).decode().splitlines()

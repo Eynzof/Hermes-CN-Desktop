@@ -26,6 +26,10 @@ test('VOICE-001 语音供应商表单、参数保存和重新加载', async ({ a
 test('VOICE-003 真实 Edge 语音合成和播放', async ({ app }, testInfo) => {
   await route(app, '/voice');
   await app.getByRole('button', { name: /^Edge TTS 无需密钥/ }).click();
+  const voice = app.getByRole('textbox', { name: 'Edge 语音', exact: true });
+  const originalVoice = await voice.inputValue();
+  try {
+  await voice.fill('zh-CN-XiaoxiaoNeural');
   await app.getByRole('button', { name: '保存配置', exact: true }).click();
   await expect(app.getByText(/^语音配置已保存。/)).toBeVisible();
   await app.getByRole('textbox', { name: '朗读测试文本', exact: true }).fill('你好，这是桌面端语音播放测试。');
@@ -44,4 +48,10 @@ test('VOICE-003 真实 Edge 语音合成和播放', async ({ app }, testInfo) =>
   await cdp.detach();
   expect(audio.result.value.some((a: any) => a.audioData && a.sourceBytes > 1000 && a.duration > 0)).toBe(true);
   await testInfo.attach('actual-audio-playback', { body: JSON.stringify(audio.result.value, null, 2), contentType: 'application/json' });
+  } finally {
+    await route(app, '/voice');
+    await voice.fill(originalVoice);
+    await app.getByRole('button', { name: '保存配置', exact: true }).click();
+    await expect(app.getByText(/^语音配置已保存。/)).toBeVisible();
+  }
 });

@@ -36,7 +36,7 @@ test('PROF-002 克隆档案切换、配置可用、记忆隔离及切回后继�
     await route(app, '/memory');
     const card = app.locator('article').filter({ hasText: marker });
     if (await card.count()) {
-      await card.getByRole('button', { name: '', exact: true }).click();
+      await card.getByRole('button', { name: '删除记忆', exact: true }).click();
       await card.getByRole('button', { name: '是', exact: true }).click();
     }
     // Recovery is outside the asserted workflow and does not turn its failure

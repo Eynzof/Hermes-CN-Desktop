@@ -29,12 +29,26 @@ test('MODEL-005 MoA 预设增改删与两路真实参考模型、聚合器执行
     await app.getByRole('button', { name: '设为默认', exact: true }).click();
     await expect.poll(async () => (await api(app, '/api/model/moa')).default_preset).toBe(name);
     await app.reload();
+    await app.evaluate(async () => {
+      const w = window as any, internal = w.__TAURI_INTERNALS__;
+      const observed = { events: [] as any[], eventId: 0 };
+      w.__moaAcceptance = observed;
+      observed.eventId = await internal.invoke('plugin:event|listen', {
+        event: 'gateway-ws-message', target: { kind: 'Any' },
+        handler: internal.transformCallback((event: any) => {
+          const frame = JSON.parse(event.payload.data);
+          if (frame.result?.key === 'model') observed.events.push({ at: Date.now(), response: frame });
+        }),
+      });
+    });
     await go();
     await expect(app.getByRole('combobox').first()).toHaveValue(name);
     await route(app, '/');
     await app.getByRole('button', { name: /^模型 / }).click();
     await app.getByRole('textbox', { name: '搜索模型、平台或能力', exact: true }).fill(name);
     await app.getByRole('button', { name: new RegExp(`切换到 .* 的 ${name}$`) }).click();
+    await expect(app.getByRole('dialog', { name: '切换模型', exact: true })).toBeHidden();
+    await expect(app.getByRole('button', { name: `模型 ${name}`, exact: true })).toBeVisible();
     const { id, evidence } = await sendChat(app, '请计算 17 乘以 19，最终只回复数字 323，不要调用工具。', '323');
     await expect(app.getByRole('log')).toContainText(/参考|MoA/);
     await route(app, '/debug');
@@ -50,7 +64,35 @@ test('MODEL-005 MoA 预设增改删与两路真实参考模型、聚合器执行
     }
     await testInfo.attach('moa-reference-events', { body: JSON.stringify(references, null, 2), contentType: 'application/json' });
     await testInfo.attach('moa-aggregator-session', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
+    await go();
+    await app.getByRole('combobox').first().selectOption(name);
+    await app.getByRole('button', { name: '删除此预设', exact: true }).click();
+    await expect.poll(async () => Boolean((await api(app, '/api/model/moa')).presets[name])).toBe(false);
+    await route(app, '/');
+    await expect(app.getByRole('button', { name: `模型 ${baseline.model}`, exact: true })).toBeVisible();
+    const restored = await sendChat(app, '不要使用工具，仅回复 AFTER-MOA-DELETE。', 'AFTER-MOA-DELETE');
+    expect(restored.evidence.session.model).toBe(baseline.model);
+    expect(restored.evidence.session.billing_provider).toBe(baseline.provider);
+    await testInfo.attach('ordinary-chat-after-preset-deletion', { body: JSON.stringify(restored.evidence, null, 2), contentType: 'application/json' });
   } finally {
+    const modelChanges = await app.evaluate(async () => {
+      const w = window as any, observed = w.__moaAcceptance;
+      if (!observed) return [];
+      w.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener('gateway-ws-message', observed.eventId);
+      await w.__TAURI_INTERNALS__.invoke('plugin:event|unlisten', { event: 'gateway-ws-message', eventId: observed.eventId });
+      delete w.__moaAcceptance;
+      return observed.events;
+    });
+    await testInfo.attach('actual-model-switch-rpc', { body: JSON.stringify(modelChanges, null, 2), contentType: 'application/json' });
+    // The new-chat picker remembers a session selection independently from
+    // the global provider. Restore it before deleting this disposable preset.
+    await route(app, '/');
+    await app.getByRole('button', { name: /^模型 / }).click();
+    const picker = app.getByRole('dialog', { name: '切换模型', exact: true });
+    await picker.getByRole('textbox', { name: '搜索模型、平台或能力', exact: true }).fill(baseline.model);
+    await picker.getByRole('button', { name: `切换到 DeepSeek 的 ${baseline.model}`, exact: true }).click();
+    await expect(picker).toBeHidden();
+    await expect(app.getByRole('button', { name: `模型 ${baseline.model}`, exact: true })).toBeVisible();
     await route(app, '/models');
     await app.getByRole('tab', { name: /^主模型/ }).click();
     await app.getByRole('button', { name: /^DeepSeek(?: 当前| 已保存密钥)?$/ }).click();
@@ -60,8 +102,10 @@ test('MODEL-005 MoA 预设增改删与两路真实参考模型、聚合器执行
     await app.getByRole('combobox').first().selectOption(original.default_preset);
     const setDefault = app.getByRole('button', { name: '设为默认', exact: true });
     if (await setDefault.isEnabled()) await setDefault.click();
-    await app.getByRole('combobox').first().selectOption(name);
-    await app.getByRole('button', { name: '删除此预设', exact: true }).click();
-    await expect.poll(async () => Boolean((await api(app, '/api/model/moa')).presets[name])).toBe(false);
+    if ((await api(app, '/api/model/moa')).presets[name]) {
+      await app.getByRole('combobox').first().selectOption(name);
+      await app.getByRole('button', { name: '删除此预设', exact: true }).click();
+      await expect.poll(async () => Boolean((await api(app, '/api/model/moa')).presets[name])).toBe(false);
+    }
   }
 });

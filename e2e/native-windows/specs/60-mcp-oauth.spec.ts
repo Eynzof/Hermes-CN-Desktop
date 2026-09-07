@@ -62,6 +62,22 @@ test('MCP-004 真实 OAuth 授权、取消、凭证刷新、模型调用与退�
       { encoding: 'utf8', windowsHide: true, timeout: 30_000 });
     await testInfo.attach('fixture-self-check-not-desktop-acceptance', { body: selfCheck, contentType: 'application/json' });
     desktopStart = events().length;
+    await app.evaluate(() => {
+      const w = window as any, bridge = w.hermesDesktop, original = bridge.request;
+      w.__mcpAcceptance = { original, events: [] };
+      bridge.request = async function(input: any) {
+        if (!input.path.startsWith('/api/mcp/')) return original.call(bridge, input);
+        const event: any = { path: input.path, startedAt: Date.now() };
+        w.__mcpAcceptance.events.push(event);
+        try {
+          const result = await original.call(bridge, input);
+          event.status = result.status;
+          if (input.path.endsWith('/test')) event.body = result.body;
+          return result;
+        } catch (error) { event.error = String(error); throw error; }
+        finally { event.finishedAt = Date.now(); }
+      };
+    });
     await route(app, '/mcp');
     await app.getByRole('button', { name: '添加服务', exact: true }).click();
     const dialog = app.getByRole('dialog');
@@ -74,7 +90,7 @@ test('MCP-004 真实 OAuth 授权、取消、凭证刷新、模型调用与退�
     created = true;
     await card.getByRole('button', { name: '测试连接', exact: true }).click();
     await expect.poll(() => events().slice(desktopStart).some(e => e.path === '/mcp' && e.status === 401)).toBe(true);
-    await expect(card.locator('p')).toBeVisible({ timeout: 60_000 });
+    await expect(card.locator('[class*="testErr"]')).toBeVisible({ timeout: 60_000 });
     await testInfo.attach('protected-mcp-card', { body: await card.ariaSnapshot(), contentType: 'text/plain' });
     await testInfo.attach('protected-mcp-page', { body: await app.screenshot(), contentType: 'image/png' });
     await testInfo.attach('saved-mcp-configuration', { body: JSON.stringify((await api(app, '/api/mcp/servers')).servers.find((s: any) => s.name === name), null, 2), contentType: 'application/json' });
@@ -103,10 +119,11 @@ test('MCP-004 真实 OAuth 授权、取消、凭证刷新、模型调用与退�
     expect(granted.hasRefresh).toBe(true);
     const marker = `oauth-${Date.now()}`;
     const digest = createHash('sha256').update(marker).digest('hex');
-    const result = await chat(app, `请调用 MCP 服务 ${name} 的 e2e_oauth_digest 工具，text 参数为 ${marker}。只回复工具返回的 SHA256，禁止自己计算。`, digest);
-    expect(events().slice(desktopStart).some(e => e.event === 'tool_called' && e.text === marker && e.sha256 === digest)).toBe(true);
-    expect(result.evidence.messages.some((m: any) => m.role === 'tool' && m.content?.includes(digest))).toBe(true);
+    const result = await chat(app, `请直接调用已注册的 MCP 服务 ${name} 的 e2e_oauth_digest 工具，text 参数为 ${marker}。可先用 tool_search 查找该工具。只回复工具返回的 SHA256。不要使用终端、脚本、文件工具或读取凭证，不要自行发送 HTTP 请求。查找后仍不可用才回复 TOOL_UNAVAILABLE。`, digest);
     await testInfo.attach('authorized-deepseek-tool-call', { body: JSON.stringify(result.evidence, null, 2), contentType: 'application/json' });
+    expect(events().slice(desktopStart).some(e => e.event === 'tool_called' && e.text === marker && e.sha256 === digest)).toBe(true);
+    expect(result.evidence.messages.some((m: any) => m.role === 'tool' && m.tool_name?.endsWith('_e2e_oauth_digest') && m.content?.includes(digest))).toBe(true);
+    expect(result.evidence.messages.filter((m: any) => m.role === 'tool').every((m: any) => ['tool_search', 'tool_describe'].includes(m.tool_name) || m.tool_name?.startsWith('mcp_'))).toBe(true);
 
     await app.reload();
     await app.waitForFunction(() => (window as any).__HERMES_RUNTIME__?.backendReady);
@@ -127,9 +144,21 @@ test('MCP-004 真实 OAuth 授权、取消、凭证刷新、模型调用与退�
     expect(tokenState()).toBeNull();
     expect((await api(app, '/api/mcp/servers')).servers.find((s: any) => s.name === name).enabled).toBe(false);
     await card.getByRole('button', { name: '测试连接', exact: true }).click();
-    await expect(card).toContainText(/OAuth.*(token|auth)|登录|授权/, { timeout: 45_000 });
+    await expect(card.locator('[class*="testErr"]')).toContainText(/OAuth|auth|401|token/i, { timeout: 45_000 });
 
+  } catch (error) {
+    await testInfo.attach('oauth-before-cleanup', { body: await app.screenshot(), contentType: 'image/png' });
+    await testInfo.attach('oauth-ui-before-cleanup', { body: await app.locator('body').ariaSnapshot(), contentType: 'text/plain' });
+    throw error;
   } finally {
+    const requests = await app.evaluate(() => {
+      const w = window as any, observed = w.__mcpAcceptance;
+      if (!observed) return [];
+      w.hermesDesktop.request = observed.original;
+      delete w.__mcpAcceptance;
+      return observed.events;
+    });
+    await testInfo.attach('mcp-native-requests', { body: JSON.stringify(requests, null, 2), contentType: 'application/json' });
     await consentPage.close();
     await browser.close();
     await testInfo.attach('oauth-desktop-events', { body: JSON.stringify(events().slice(desktopStart), null, 2), contentType: 'application/json' });

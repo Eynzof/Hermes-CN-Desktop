@@ -1,4 +1,4 @@
-param([string]$Root='C:\HermesE2E')
+param([string]$Root='C:\HermesE2E',[switch]$Vision)
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $containerName='hermes-native-e2e-ollama'
@@ -6,12 +6,23 @@ $image='ollama/ollama@sha256:32931b46719f673c05fdbaa81ccb26da18ea4a1c57590a75487
 $base='qwen3.5:0.8b'
 $baseDigest='f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4'
 $model='hermes-e2e-qwen35:0.8b-64k'
+$reportName='local-model-fixture.json'
+if($Vision){
+  $base='qwen3.5:4b'
+  $baseDigest='2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd'
+  $model='hermes-e2e-qwen35:4b-64k'
+  $reportName='local-vision-fixture.json'
+}
 $origin='http://127.0.0.1:11435'
 if(-not @(docker ps -a --filter "name=^/$containerName`$" --format '{{.Names}}').Count){
   & (Join-Path $PSScriptRoot 'start-ollama.ps1') -Root $Root
 }
 $container=(docker inspect $containerName | ConvertFrom-Json)[0]
 if($container.Config.Image -ne $image -or $container.Config.Labels.'hermes.native-e2e' -ne 'true'){throw 'Ollama is not the isolated pinned fixture'}
+if($Vision -and $container.HostConfig.Memory -lt 12884901888){
+  docker update --memory=12g --memory-swap=12g $containerName | Out-Null
+  if($LASTEXITCODE){throw 'Cannot allocate 12 GiB to the dedicated visual inference fixture'}
+}
 if($container.HostConfig.NanoCpus -ne 8000000000){
   docker update --cpus=8 $containerName | Out-Null
   if($LASTEXITCODE){throw 'Cannot allocate eight CPU cores to the dedicated local inference fixture'}
@@ -36,6 +47,6 @@ if($warm.eval_count -le 0 -or -not $warm.message.content){throw 'Real local mode
 $loaded=Invoke-RestMethod "$origin/api/ps" -TimeoutSec 10
 $active=$loaded.models | Where-Object {$_.name -eq $model}
 if($active.context_length -lt 65536){throw 'Ollama did not actually load the configured 64K context'}
-$report=@{checkedAt=(Get-Date).ToUniversalTime().ToString('o');origin=$origin;container=$containerName;cpuQuota=8;image=$image;ollamaVersion=$version.version;baseModel=$base;baseDigest=$baseDigest;model=$model;parameters=$parameters;capabilities=$show.capabilities;loaded=$active;calibration=@{content=$warm.message.content;inputTokens=$warm.prompt_eval_count;outputTokens=$warm.eval_count};calibrationIsDesktopAcceptance=$false;source='https://ollama.com/library/qwen3.5:0.8b'}
-$report | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Root 'reports\local-model-fixture.json') -Encoding UTF8
+$report=@{checkedAt=(Get-Date).ToUniversalTime().ToString('o');origin=$origin;container=$containerName;cpuQuota=8;image=$image;ollamaVersion=$version.version;baseModel=$base;baseDigest=$baseDigest;model=$model;parameters=$parameters;capabilities=$show.capabilities;loaded=$active;calibration=@{content=$warm.message.content;inputTokens=$warm.prompt_eval_count;outputTokens=$warm.eval_count};calibrationIsDesktopAcceptance=$false;source="https://ollama.com/library/$base"}
+$report | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Root "reports\$reportName") -Encoding UTF8
 Write-Output 'Pinned local generation model is loaded with a real 64K context.'

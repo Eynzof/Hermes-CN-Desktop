@@ -1,6 +1,6 @@
 # Windows 真实模型测试缺陷台账
 
-基线：Desktop 0.9.0 / 55c672ce，Core 0419cae3 / 0.21.0-cn.3。原始证据保存在独立测试根目录 reports，仓库不保存密钥和运行数据库。
+原始发现基线：Desktop 0.9.0 / 55c672ce，Core 0419cae3 / 0.21.0-cn.3。下表保留发现时状态和证据，后续修复及新安装版验收以 [修复进度](../../docs/e2e-fixes-progress.md)、`baseline.json` 和相同基线的 `reports/coverage.md` 为准。原始证据保存在独立测试根目录 reports，仓库不保存密钥和运行数据库。
 
 | ID | 类别 | 现象与证据 | 当前状态 |
 |---|---|---|---|

@@ -7,8 +7,8 @@ import { test, expect, route, api, sendChat, chat, nativeDialog, root, baseline,
 
 test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', async ({ app }, info) => {
   test.setTimeout(1_200_000);
-  execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'native-windows', 'scripts', 'prepare-local-model.ps1'), '-Root', root], { encoding: 'utf8', windowsHide: true, timeout: 1_000_000 });
-  const fixture = JSON.parse(readFileSync(path.join(root, 'reports', 'local-model-fixture.json'), 'utf8').replace(/^\uFEFF/, ''));
+  execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'native-windows', 'scripts', 'prepare-local-model.ps1'), '-Root', root, '-Vision'], { encoding: 'utf8', windowsHide: true, timeout: 1_000_000 });
+  const fixture = JSON.parse(readFileSync(path.join(root, 'reports', 'local-vision-fixture.json'), 'utf8').replace(/^\uFEFF/, ''));
   await info.attach('local-vision-model-provenance', { body: JSON.stringify(fixture, null, 2), contentType: 'application/json' });
   const before = await api(app, '/api/config');
   expect(before.auxiliary?.vision?.provider || 'auto', 'Use the isolated unconfigured vision slot').toBe('auto');
@@ -67,7 +67,7 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
     // This is an observed failure, never a retry or a synthetic model result.
     let settled = false;
     let forbiddenTool = '';
-    const attempt = sendChat(app, prompt, /red|blue|green|yellow/i, undefined, 600_000)
+    const attempt = sendChat(app, prompt, /red|blue|green|yellow|红色|紅色|蓝色|藍色|绿色|綠色|黄色|黃色/i, undefined, 600_000)
       .then(value => ({ value, error: undefined }), error => ({ value: undefined, error }))
       .finally(() => { settled = true; });
     try {
@@ -98,7 +98,12 @@ test('CHAT-013 原生像素识别及官方主模型调用本地辅助视觉', as
     const answer = result.evidence.messages.filter((m: any) => m.role === 'assistant').at(-1).content;
     expect(result.evidence.session.model).toBe(mode === 'native' ? fixture.model : baseline.model);
     expect(result.evidence.session.billing_base_url).toBe(mode === 'native' ? fixture.origin + '/v1' : baseline.baseUrl);
-    expect(answer.toLowerCase().match(/\b(red|blue|green|yellow)\b/g)).toEqual(input.expected);
+    // The community persona may answer in Chinese. Normalize only equivalent
+    // color names; the four actual pixel positions remain the assertion.
+    const aliases: Record<string, string> = { crimson: 'red', 红色: 'red', 紅色: 'red', 蓝色: 'blue', 藍色: 'blue', 绿色: 'green', 綠色: 'green', 黄色: 'yellow', 黃色: 'yellow' };
+    const colors = answer.toLowerCase().match(/\b(red|crimson|blue|green|yellow)\b|红色|紅色|蓝色|藍色|绿色|綠色|黄色|黃色/g)
+      ?.map((color: string) => aliases[color] || color);
+    expect(colors).toEqual(input.expected);
     const toolResults = result.evidence.messages.filter((m: any) => m.role === 'tool');
     if (mode === 'native') expect(toolResults).toHaveLength(0);
     else expect(toolResults.map((m: any) => m.tool_name)).toEqual(['vision_analyze']);

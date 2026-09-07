@@ -99,10 +99,10 @@ test('RUNTIME-002 更新源校验、邀请凭据、签名和摘要拒绝、真�
     await runtimeCard.getByRole('button', { name: '检查更新', exact: true }).click();
     await expect(app.getByRole('button', { name: '安装更新', exact: true })).toBeEnabled();
     await app.getByRole('button', { name: '安装更新', exact: true }).click();
-    await expect.poll(async () => (await bridge<any>(app, 'getRuntimeInfo')).current?.runtimeVersion, { timeout: 120_000 }).toBe('0.21.0-cn.4');
+    await expect.poll(async () => (await bridge<any>(app, 'getRuntimeInfo')).current?.runtimeVersion, { timeout: 120_000 }).toBe(metadata.runtimeVersion);
     // current.json is committed before the new Core finishes booting. Wait
     // for the UI's completed result, including its token-refresh settlement.
-    await expect(app.getByText('已切换到 runtime 0.21.0-cn.4', { exact: true })).toBeVisible({ timeout: 120_000 });
+    await expect(app.getByText(`已切换到 runtime ${metadata.runtimeVersion}`, { exact: true })).toBeVisible({ timeout: 120_000 });
     await expect.poll(async () => (await bridge<any>(app, 'getRuntimeInfo')).process?.pid).toBeGreaterThan(0);
     await expect(app.getByRole('button', { name: '回滚 Runtime', exact: true })).toBeEnabled({ timeout: 120_000 });
     const updated = (await bridge<any>(app, 'getRuntimeInfo')).current;
@@ -119,7 +119,7 @@ test('RUNTIME-002 更新源校验、邀请凭据、签名和摘要拒绝、真�
   } finally {
     if (!app.isClosed()) {
       await testInfo.attach('runtime-before-cleanup', { body: await app.screenshot(), contentType: 'image/png' });
-      if ((await bridge<any>(app, 'getRuntimeInfo')).current?.runtimeVersion === '0.21.0-cn.4') {
+      if ((await bridge<any>(app, 'getRuntimeInfo')).current?.runtimeVersion === metadata.runtimeVersion) {
         await route(app, '/kernel');
         await app.getByRole('button', { name: '回滚 Runtime', exact: true }).click();
         await expect(app.getByText(`已回滚到 runtime ${before.runtimeVersion}`, { exact: true })).toBeVisible({ timeout: 120_000 });

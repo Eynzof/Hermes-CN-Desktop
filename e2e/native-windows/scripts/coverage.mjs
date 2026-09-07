@@ -8,7 +8,7 @@ const catalog = JSON.parse(await readFile(new URL('../coverage-catalog.json', im
 const baseline = JSON.parse(await readFile(new URL('../baseline.json', import.meta.url), 'utf8'));
 // Descriptive provenance can be enriched later without changing the installed
 // bytes. Match all execution identity fields, including the exact EXE hash.
-const identity = value => JSON.stringify(['desktopVersion', 'desktopCodeCommit', 'desktopSourceCommit', 'installedDesktopSha256', 'runtimeVersion', 'coreCommit', 'provider', 'model', 'baseUrl'].map(key => value[key]));
+const identity = value => JSON.stringify(['desktopVersion', 'desktopCodeCommit', 'desktopSourceCommit', 'installedDesktopSha256', 'runtimeVersion', 'runtimeArchiveSha256', 'coreCommit', 'provider', 'model', 'baseUrl'].map(key => value[key]));
 const observed = new Map();
 function collect(suite, run) {
   for (const spec of suite.specs || []) {

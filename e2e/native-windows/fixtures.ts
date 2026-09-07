@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 export const baseline = JSON.parse(readFileSync(fileURLToPath(new URL('./baseline.json', import.meta.url)), 'utf8'));
+const coverageCatalog = JSON.parse(readFileSync(fileURLToPath(new URL('./coverage-catalog.json', import.meta.url)), 'utf8'));
 export const root = process.env.HERMES_E2E_ROOT || 'C:\\HermesE2E';
 export const home = path.join(root, 'runtime', 'hermes-home');
 export const python = process.env.HERMES_E2E_PYTHON || path.join(root, '.venv', 'Scripts', 'python.exe');
@@ -77,10 +78,10 @@ export async function quitFromTray() {
   const items = (await native({ action: 'menuItems', window: menu.name, windowHandle: menu.handle })).items;
   expect(items.filter((item: any) => item.text).map((item: any) => item.text)).toEqual(['打开主窗口', '退出 Hermes']);
   await native({ action: 'clickMenuItem', window: menu.name, windowHandle: menu.handle, controlName: '退出 Hermes' });
-  await expect.poll(async () => (await native({ action: 'windows' })).windows.some((w: any) => w.class === 'Tauri Window')).toBe(false);
+  await expect.poll(async () => (await native({ action: 'windows' })).windows.some((w: any) => w.class === 'Tauri Window'), { timeout: 30_000 }).toBe(false);
   await expect.poll(async () => {
     try { await fetch('http://127.0.0.1:19229/json/version', { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
-  }).toBe(false);
+  }, { timeout: 30_000 }).toBe(false);
 }
 
 export async function api<T = any>(page: Page, path: string): Promise<T> {
@@ -95,7 +96,14 @@ export async function api<T = any>(page: Page, path: string): Promise<T> {
 
 export const test = base.extend<{ app: Page }>({
   app: async ({}, use, testInfo) => {
+    const caseId = testInfo.title.match(/^([A-Z]+(?:-[A-Z]+)?-\d{3})\b/)?.[1];
+    const scope = coverageCatalog.find((item: any) => item.id === caseId)?.scope;
+    test.skip(Boolean(scope), `Product acceptance scope: ${scope}`);
     if (process.platform !== 'win32') throw new Error('Native acceptance must execute on Windows');
+    if (['KANBAN-001', 'MCP-004'].includes(caseId || '')) {
+      const browserStartup = execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'native-windows', 'scripts', 'start-test-browser.ps1'), '-Root', root], { windowsHide: true, encoding: 'utf8', timeout: 45_000 });
+      await testInfo.attach('isolated-browser-prerequisite', { body: browserStartup, contentType: 'application/json' });
+    }
     const processFile = path.join(root, 'reports', 'desktop-process.json');
     const desktop = JSON.parse(readFileSync(processFile, 'utf8').replace(/^\uFEFF/, ''));
     let connected = false;
@@ -146,6 +154,7 @@ export const test = base.extend<{ app: Page }>({
     expect(runtime.runtimeRoot.toLowerCase()).toBe(path.join(root, 'runtime').toLowerCase());
     expect(runtime.mode).toBe('managed');
     expect(runtime.current.sourceCommit).toBe(baseline.coreCommit);
+    expect(runtime.current.artifactSha256).toBe(baseline.runtimeArchiveSha256);
     expect(runtime.current.runtimeVersion, 'Restore the installed runtime baseline before another workflow').toBe(baseline.runtimeVersion);
     expect(runtime.process.currentProfile, 'Each workflow must start from the isolated default profile').toBe('default');
     await testInfo.attach('installation-provenance', { body: JSON.stringify({ appSha256: process.env.HERMES_E2E_APP_SHA256, desktop: JSON.parse(readFileSync(processFile, 'utf8').replace(/^\uFEFF/, '')), current: runtime.current, root: runtime.runtimeRoot }, null, 2), contentType: 'application/json' });

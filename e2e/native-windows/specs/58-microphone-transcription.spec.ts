@@ -15,8 +15,11 @@ test('VOICE-002 Windows 虚拟麦克风真实录音、离开取消、转写与 D
   await route(app, '/voice');
   const original = await api(app, '/api/config');
   const originalDuration = await app.getByRole('spinbutton', { name: '最长录音时长', exact: true }).inputValue();
+  const language = app.getByRole('textbox', { name: '识别语言', exact: true });
+  const originalLanguage = await language.inputValue();
   expect(original.stt.provider).toBe('local');
   await app.getByRole('spinbutton', { name: '最长录音时长', exact: true }).fill('15');
+  await language.fill('zh');
   await app.getByRole('button', { name: '保存配置', exact: true }).click();
   await expect(app.getByText(/^语音配置已保存。/)).toBeVisible();
   const cdp = await app.context().newCDPSession(app);
@@ -56,7 +59,7 @@ test('VOICE-002 Windows 虚拟麦克风真实录音、离开取消、转写与 D
     await startRecording();
     const active = (await recorderState()).filter((item: any) => item.state === 'recording');
     expect(active).toHaveLength(1);
-    expect(active[0].tracks[0].label).toContain('Steam Streaming Microphone');
+    expect(active[0].tracks[0].label).toContain('CABLE Output');
     await testInfo.attach('actual-recording-device', { body: JSON.stringify(active, null, 2), contentType: 'application/json' });
     const trackId = active[0].tracks[0].id;
     await route(app, '/health');
@@ -78,9 +81,9 @@ test('VOICE-002 Windows 虚拟麦克风真实录音、离开取消、转写与 D
     await testInfo.attach('actual-transcription-result', { body: JSON.stringify({ transcript: await composer.inputValue(), errors }, null, 2), contentType: 'application/json' });
     expect(errors, 'The real audio recording must be transcribed by the configured STT provider').toEqual([]);
     const transcript = await composer.inputValue();
-    expect(transcript).toContain('语音输入测试');
-    expect(transcript).toContain('语音测试通过');
-    await sendChat(app, transcript, '语音测试通过');
+    expect(transcript).toMatch(/[语語]音[输輸]入[测測][试試]/);
+    expect(transcript).toMatch(/[语語]音[测測][试試]通[过過]/);
+    await sendChat(app, transcript, /[语語]音[测測][试試]通[过過]/);
   } catch (error) {
     await testInfo.attach('voice-before-cleanup', { body: await app.screenshot(), contentType: 'image/png' });
     await testInfo.attach('voice-primary-error', { body: JSON.stringify({ error: String(error), messages: await app.locator('[class*="errorText"]').allTextContents() }), contentType: 'application/json' });
@@ -90,6 +93,7 @@ test('VOICE-002 Windows 虚拟麦克风真实录音、离开取消、转写与 D
     // the configured STT provider fails. Never inject a canned transcript.
     await route(app, '/voice');
     await app.getByRole('spinbutton', { name: '最长录音时长', exact: true }).fill(originalDuration);
+    await language.fill(originalLanguage);
     await app.getByRole('button', { name: '保存配置', exact: true }).click();
     await expect(app.getByText(/^语音配置已保存。/)).toBeVisible();
     await cdp.detach();

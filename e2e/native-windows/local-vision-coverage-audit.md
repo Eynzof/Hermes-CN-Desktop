@@ -1,12 +1,14 @@
 # 本地推理与图片端到端复核
 
+> 下方早期运行记录针对原 cn.3。当前 cn.10 的修复和验收结论见 [修复进度](../../docs/e2e-fixes-progress.md)，历史失败不会被覆盖。
+
 用户已授权完整操作 Windows 测试机。本地生成和视觉模型属于本次测试设施，原先将这两项另列为待授权不准确，现已取消该前置条件。主流程继续使用官方 deepseek-v4-flash；仅 MODEL-009 和 CHAT-013 使用隔离本地模型，结束后从 UI 切回官方模型并实际对话验证。
 
 ## 真实模型设施
 
 - 专用 Ollama 0.33.3，容器及镜像摘要固定在 prepare-local-model.ps1，回环地址 11435。
 - 模型 qwen3.5:0.8b，摘要 f3817196d142eaf72ce79dfebe53dcb20bd21da87ce13e138a8f8e10a866b3a4，真实模型约 1 GB，声明支持 completion / vision / tools / thinking。
-- 派生配置 hermes-e2e-qwen35:0.8b-64k，实际加载上下文 65536，输出上限 256，温度 0。只是 Ollama 模型参数配置，不是伪造的模型服务器。
+- 派生配置 hermes-e2e-qwen35:0.8b-64k，实际加载上下文 65536，默认输出 256，温度 0；Hermes 的实际请求参数可覆盖这些默认值。只是 Ollama 模型参数配置，不是伪造的模型服务器。
 - 独立容器内存 4 GB，CPU 从 2 核调整到 8 核，调整记录和实际模型加载信息随报告保存。READY 预热只是服务校准，不计 Desktop 通过。
 
 ## 已执行的关键证据
@@ -37,3 +39,7 @@ Core 的 run_agent.py::_prepare_messages_for_non_vision_model 会在能力判断
 默认模型不同步的源码边界也已收敛：settings-models-section.tsx 的 handleAddCustom 保存配置并关闭表单，没有像“保存配置”和“设为当前模型”那样调用 rememberLastUsedModel；工作台 PanelComposer 则从该记录初始化 selectedModel，新会话提交时把它作为显式 modelSelection。125301Z 的错误实际计费来源与这条路径一致。该说明不代表已修改或修复产品。
 
 为保留此前成功本地推理、辅助识图及配置不同步的证据，导出时用 export-evidence.ps1 的 IncludeRun 参数额外保留 121230Z、122527Z、123050Z、123301Z、123616Z、124843Z。最新清单仍只按各工作流最近一次结果统计，旧成功不能覆盖新失败。目前 100 项中 73 通过、23 失败、4 未运行；新增两项都有可执行脚本，不能据此宣称功能通过。
+
+## cn.10 最终专项设施
+
+当前图片专项通过 prepare-local-model.ps1 -Vision 使用真实 Qwen3.5 4B；官方模型清单 SHA256 为 2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd，派生名称 hermes-e2e-qwen35:4b-64k。固定 8 CPU、12 GiB 专用容器内存，实际上下文 65536。原 0.8B 本地模型工作流继续保留。4B 只替换视觉测试设施，不修改模型接口或随机图片断言。最新结果见修复验收报告。

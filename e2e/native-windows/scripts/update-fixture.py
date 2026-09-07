@@ -57,7 +57,7 @@ if args.prepare:
         return manifest
 
     runtime_fields = ["schemaVersion", "channel", "runtimeVersion", "kernelVersion", "runtimeFlavor", "runtimeRevision", "platform", "arch", "artifactUrl", "sha256", "sourceRepo", "sourceCommit"]
-    manifest = dict(schemaVersion=2, channel="prototype", runtimeVersion="0.21.0-cn.4", kernelVersion="0.21.0", runtimeFlavor="cn", runtimeRevision=4,
+    manifest = dict(schemaVersion=2, channel="prototype", runtimeVersion=f"0.21.0-cn.{current['runtimeRevision'] + 1}", kernelVersion="0.21.0", runtimeFlavor="cn", runtimeRevision=current["runtimeRevision"] + 1,
                     platform="win32", arch="x64", artifactUrl=base + "/runtime.zip", sha256=runtime_sha,
                     sourceRepo="Eynzof/Hermes-CN-Core", sourceCommit=baseline["coreCommit"], minAppVersion="0.9.0")
     save("runtime-good.json", sign(manifest, runtime_fields))
@@ -92,7 +92,7 @@ if args.prepare:
     (folder / "ca.pem").write_bytes(ca.public_bytes(serialization.Encoding.PEM))
     (keys / "tls.pem").write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
     (keys / "tls-key.pem").write_bytes(tls_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
-    save("metadata.json", dict(baseUrl=base, caThumbprint=ca.fingerprint(hashes.SHA1()).hex(), expires=ca.not_valid_after_utc.isoformat(), runtimeSha256=runtime_sha))
+    save("metadata.json", dict(baseUrl=base, caThumbprint=ca.fingerprint(hashes.SHA1()).hex(), expires=ca.not_valid_after_utc.isoformat(), runtimeSha256=runtime_sha, runtimeVersion=manifest["runtimeVersion"]))
     save("mode.json", dict(runtime="runtime-good.json", ui="ui-1.json"))
     print("Prepared localhost fixture with real archives and isolated signing key")
     raise SystemExit(0)

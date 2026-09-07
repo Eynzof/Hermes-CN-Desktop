@@ -1,4 +1,4 @@
-"""Feed a SAPI test utterance through the existing Windows virtual mic driver.
+"""Feed a SAPI test utterance through the Windows VB-CABLE virtual mic driver.
 
 No browser/media/API mocks and no change to the system default audio devices.
 The input endpoint must already be the user's chosen test microphone.
@@ -55,19 +55,21 @@ def capture(data, count, clock, status):
 with pa.PyAudio() as audio:
     devices = [audio.get_device_info_by_index(i) for i in range(audio.get_device_count())]
     matches = [item for item in devices if item['hostApi'] == audio.get_host_api_info_by_type(pa.paWASAPI)['index']
-               and 'Steam Streaming Microphone' in item['name'] and not item.get('isLoopbackDevice')]
+               and item['name'] in ('CABLE Input (VB-Audio Virtual Cable)', 'CABLE Output (VB-Audio Virtual Cable)') and not item.get('isLoopbackDevice')]
     inputs = [item for item in matches if item['maxInputChannels'] > 0]
     outputs = [item for item in matches if item['maxOutputChannels'] > 0]
     assert len(inputs) == len(outputs) == 1, 'Existing virtual microphone input/output pair is required'
-    assert 'Steam Streaming Microphone' in audio.get_default_input_device_info()['name'], 'Default input differs; do not silently change it'
+    assert 'CABLE Output' in audio.get_default_input_device_info()['name'], 'Default input differs; do not silently change it'
     input_rate = int(inputs[0]['defaultSampleRate'])
+    input_channels = inputs[0]['maxInputChannels']
+    assert (input_rate, input_channels) == (48000, 2), 'Use the pinned 48 kHz stereo VB-CABLE recording format'
     evidence = dict(phrase=phrase, source='Windows SAPI Microsoft Huihui Desktop', wavSha256=hashlib.sha256(file.read_bytes()).hexdigest(),
                     inputDevice=inputs[0], outputDevice=outputs[0], durationSeconds=len(samples) / rate)
     if args.prepare:
         (folder / 'metadata.json').write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding='utf-8')
     input_stream = None
     if args.verify:
-        input_stream = audio.open(format=pa.paInt16, channels=1, rate=input_rate, input=True,
+        input_stream = audio.open(format=pa.paInt16, channels=input_channels, rate=input_rate, input=True,
                                   input_device_index=inputs[0]['index'], frames_per_buffer=512, stream_callback=capture)
     try:
         if args.output:
@@ -83,10 +85,10 @@ with pa.PyAudio() as audio:
             input_stream.close()
     if args.verify:
         actual = array.array('h', b''.join(recorded))
-        evidence.update(inputPeak=max((abs(value) for value in actual), default=0) / 32768, recordedFrames=len(actual))
+        evidence.update(inputPeak=max((abs(value) for value in actual), default=0) / 32768, recordedFrames=len(actual) // input_channels)
         destination = args.output or folder / 'calibration'
         with wave.open(str(destination.with_suffix('.wav')), 'wb') as target:
-            target.setnchannels(1); target.setsampwidth(2); target.setframerate(input_rate); target.writeframes(actual.tobytes())
+            target.setnchannels(input_channels); target.setsampwidth(2); target.setframerate(input_rate); target.writeframes(actual.tobytes())
         destination.with_suffix('.json').write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding='utf-8')
         assert evidence['inputPeak'] > 0.005, 'Virtual output did not reach the actual microphone input'
     print(json.dumps(evidence, ensure_ascii=True))

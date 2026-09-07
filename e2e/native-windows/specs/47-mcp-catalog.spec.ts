@@ -5,9 +5,19 @@ test('MCP-003 官方目录安装 Microsoft Learn、真实文档工具调用及�
   const catalog = await api(app, '/api/mcp/catalog');
   await testInfo.attach('shipped-mcp-catalog', { body: JSON.stringify(catalog, null, 2), contentType: 'application/json' });
   expect(catalog.entries.some((entry: any) => entry.name === 'microsoft-learn'), 'The shipped Core catalog includes the public Microsoft Learn service').toBe(true);
+  const card = app.locator('[class*="card"]').filter({ has: app.getByText('microsoft-learn', { exact: true }) }).filter({ has: app.getByRole('button', { name: '测试连接', exact: true }) });
+  // A previous interrupted acceptance run can leave this public test service.
+  // Reinstall through the UI so the catalog action is exercised each run.
+  if ((await api(app, '/api/mcp/servers')).servers.some((server: any) => server.name === 'microsoft-learn')) {
+    await card.getByRole('button', { name: '删除', exact: true }).click();
+    await app.getByRole('dialog').getByRole('button', { name: '确认删除', exact: true }).click();
+    await expect(card).toHaveCount(0);
+  }
   const entry = app.locator('[class*="card"]').filter({ has: app.getByText('microsoft-learn', { exact: true }) }).filter({ has: app.getByRole('button', { name: '安装', exact: true }) });
   await entry.getByRole('button', { name: '安装', exact: true }).click();
-  const card = app.locator('[class*="card"]').filter({ has: app.getByText('microsoft-learn', { exact: true }) }).filter({ has: app.getByRole('button', { name: '测试连接', exact: true }) });
+  // Wait for installation before entering cleanup: an install failure must
+  // retain its original error, rather than be replaced by a missing-delete timeout.
+  await expect(card).toBeVisible({ timeout: 60_000 });
   try {
     await card.getByRole('button', { name: '测试连接', exact: true }).click();
     await expect(card).toContainText('microsoft_docs_search', { timeout: 60_000 });

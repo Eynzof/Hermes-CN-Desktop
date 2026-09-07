@@ -6,7 +6,7 @@ test('SHELL-001 主导航、侧栏切换、命令搜索、键盘导航和会话�
   await expect(app.getByRole('button', { name: '显示左侧边栏', exact: true })).toBeVisible();
   await app.getByRole('button', { name: '显示左侧边栏', exact: true }).click();
   await expect(app.getByRole('button', { name: '隐藏左侧边栏', exact: true })).toBeVisible();
-  const mainLinks = [['02 配置', '/models'], ['03 消息接入', '/im/feishu'], ['04 Wander 记忆', '/wander-memory/memories'], ['05 Hermes 记忆', '/memory'], ['06 高级', '/health'], ['01 工作台', '/']];
+  const mainLinks = [['02 配置', '/models'], ['03 消息接入', '/im/feishu'], ['04 Hermes 记忆', '/memory'], ['05 高级', '/health'], ['01 工作台', '/']];
   for (const [name, target] of mainLinks) {
     await app.getByRole('navigation', { name: '主导航' }).getByRole('link', { name, exact: true }).click();
     await expect.poll(() => new URL(app.url()).hash).toBe(`#${target}`);
@@ -41,7 +41,7 @@ test('ENV-001 原生环境重新检测、分类和诊断来源核对', async ({ 
   const diagnostics = JSON.parse((await native({ action: 'clipboard' })).text);
   const serialized = JSON.stringify(diagnostics);
   expect(serialized).toContain('C:\\\\HermesE2E\\\\runtime');
-  expect(serialized).toContain('0.21.0-cn.3');
+  expect(serialized).toContain(baseline.runtimeVersion);
   await expect(app.getByRole('heading', { name: '核心环境正常', exact: true })).toBeVisible();
   for (const title of ['核心环境', '本机内核', '本机工具', '浏览器能力', '路径']) await expect(app.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await testInfo.attach('environment-diagnostics', { body: JSON.stringify(diagnostics, null, 2), contentType: 'application/json' });

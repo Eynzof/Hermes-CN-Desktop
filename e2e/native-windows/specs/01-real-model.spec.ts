@@ -6,7 +6,8 @@ test('CHAT-001 已安装应用通过 DeepSeek 官方模型完成真实对话', a
   const runtime = await bridge<any>(app, 'getRuntimeInfo');
   expect(runtime.current.runtimeVersion).toBe(baseline.runtimeVersion);
   expect(runtime.current.sourceCommit).toBe(baseline.coreCommit);
-  expect(runtime.current.source).toBe('bundled');
+  expect(['bundled', 'update']).toContain(runtime.current.source);
+  expect(runtime.current.artifactSha256).toBe(baseline.runtimeArchiveSha256);
   expect(runtime.mode).toBe('managed');
   const marker = `native-e2e-${Date.now()}`;
   const { evidence } = await chat(app, `这是桌面端真实模型端到端测试。请只原样回复下面这个标记，不调用任何工具：${marker}`, marker);

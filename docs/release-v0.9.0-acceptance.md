@@ -1,5 +1,7 @@
 # v0.9.0 本地集成验收
 
+这是 cn.3 初始集成的历史报告。后续官方 DeepSeek 全功能测试、缺陷修复、Wander 功能隐藏及新安装包验收见 [修复进度](e2e-fixes-progress.md) 和 [Windows 端到端框架](../e2e/native-windows/README.md)；本文的版本与结果不代表当前构建。
+
 验收日期：2026-09-06 至 2026-09-07。范围为本地源码、Windows x64 冻结内核和原生 Tauri/WebView2 应用；没有执行推送、PR、GitHub Release 发布或远程 CI/CD。
 
 ## 版本与源码

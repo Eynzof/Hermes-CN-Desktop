@@ -24,6 +24,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run.ps1
 # 定位一个功能，只跑相应工作流。可用正则；含 | 时应从 PowerShell 内调用。
 & scripts/run.ps1 -Case 'CHAT-002|MCP-001'
+# 默认首次失败即停止，保留完整报告；只续跑相同安装基线尚未通过的必需项。
+& scripts/run.ps1 -Remaining
+# 排查时若明确需要继续收集后续失败，可指定 -MaxFailures 0。
 # 完整发布门槛：清单中存在失败、未运行或缺前置条件时退出非零。
 & scripts/run.ps1 -RequireComplete
 # 仅页面观察，不计功能通过。
@@ -44,25 +47,25 @@ node scripts/inventory.mjs
 
 - `MODEL/CHAT/MEM/...` 用例是功能验证；`inventory.mjs` 仅是页面观察，不计入通过数量。
 - 飞书、微信真实收发需要测试账号及明确授权的接收者；其他账号服务也需要实际凭证。缺少时记录前置条件，不发送到猜测的接收者。
-- 主流程使用官方 `deepseek-v4-flash`；本地部署和图片专项使用隔离 Ollama 中的真实 Qwen3.5 0.8B。用户的完整测试机操作授权已覆盖该测试设施准备，结束后恢复官方主模型。
+- 主流程使用官方 `deepseek-v4-flash`；本地部署专项使用隔离 Ollama 中的真实 Qwen3.5 0.8B，图片专项使用固定摘要的 Qwen3.5 4B（专用容器内存 12 GiB）。用户的完整测试机操作授权已覆盖该测试设施准备，结束后恢复官方主模型。
 - 语音、原生文件对话框、托盘、完整安装更新需要原生 Windows 证据，不能用 DOM 设置或接口替代这些操作后宣称通过。
 - 本任务全部在本地和授权 Windows 主机进行，不推送、创建 PR、操作 CI 或发布版本。
 
 ## 证据与当前进度
 
-2026-09-07 已采集 42 个实际页面，正在将逐项操作转为脚本。最新清单以 `C:\HermesE2E\reports\coverage.md` 为准；它按安装版基线汇总每项工作流最近一次结果，属于累积进度，不能代替同一轮全量结果。
+第一阶段已采集 42 个实际页面并通过视觉和原生控件操作定位问题；第二阶段当前 89 个必需工作流已全部由脚本在 cn.10 安装包上验收通过（2026-09-08），另有 4 项用户豁免、8 项随功能隐藏移出范围。结论及证据索引见 [最终验收报告](../../docs/e2e-fixes-acceptance.md)。最新清单位于 `C:\HermesE2E\reports\coverage.md`；它按精确安装版基线汇总每项最近一次结果，属于累积覆盖，不宣称单轮连续执行全部用例。
 
 每轮 `reports/runs/<UTC>/` 包含安装版摘要、Desktop/Core 版本与提交、`framework-manifest.json`（脚本逐文件 SHA256；新运行另存 `framework-source/` 精确源码快照）、Playwright JSON/HTML/JUnit、截图与断言附件。对话附件核对 UI 会话 ID 到 Core Agent Session ID 的明确映射、SQLite 中的真实计费来源和 Token、工具回执及回合完成日志。MCP 另有服务自身调用记录，文件工具另核对磁盘内容。失败时额外保留 Windows 全屏，原生文件对话框也通过系统窗口和控件操作。
 
-`defects.md` 区分产品问题与脚本问题。当前已确认备份未包含 state.db 聊天历史、重复恢复同名档案未清除 Core 删除标记、默认 Edge TTS 缺少冻结包依赖，以及 Build 对必需技能的提示不一致。间歇性的冷启动和档案重连问题继续保留回归，不用自动重试把失败变绿。
+`defects.md` 区分产品问题与脚本问题，保留原始发现证据。备份、生命周期、模型、MCP 和冻结依赖等后续修复及验证见 [修复进度](../../docs/e2e-fixes-progress.md)。间歇性的冷启动和档案重连仍保留独立回归，不用自动重试把失败变绿。
 
 运行环境与数据留在隔离目录。`SHELL-003` 读取并点击原生托盘的“退出 Hermes”，验证 Desktop 与内核结束，再冷启动、立即真实发送并恢复旧会话。启动器不注入进程级 DeepSeek Key，以便测试每个档案自身保存的凭证。停止脚本默认尝试关闭主窗口，而应用设计会隐藏到托盘；需要彻底退出时使用实际托盘退出，或显式 `scripts/stop.ps1 -Force` 终止本测试进程树。强制结束不是正常退出验收。重启不清除 runtime、密钥、数据库或报告。
 
 项目和文件用例创建没有 remote 的独立 Git 仓库，测试暂存、还原与本地提交。通知用例核对 Windows 通知数据库中新产生、且注册标识为 `cn.org.hermesagent.desktop` 的记录。HTTP MCP 和网页监控服务均绑定 Windows 回环地址，测试结束关闭服务；不会把其他项目或消息接收者作为测试目标。
 
-完整覆盖仍在实施中。现有脚本全绿也不代表全部功能验收完成；未编写、未运行、外部账号待提供和已发现产品缺陷都必须继续列出。
+只有 coverage-catalog.json 中所有必需项在相同产物基线上通过，完整验收才算完成。用户已豁免 MODEL-006、CRON-003、IM-FEISHU-001、IM-WEIXIN-001；隐藏的 WANDER-001 至 008 由 SHELL-006 验证入口和直达路径隐藏，不再启动对应服务或执行其功能用例。
 
-清单现已拆分为 100 个必测工作流。列表刷新、失败重试、终端尺寸、外链、通知实际策略等子功能有独立用例编号，原用例通过不能代替这些待测项。`--list` 只报告收集到的脚本数量，不记录执行通过。
+列表刷新、失败重试、终端尺寸、外链、通知实际策略等子功能有独立用例编号，原用例通过不能代替这些专项。`--list` 只报告收集到的脚本数量，不记录执行通过。以下带旧 run ID 的段落记录历史诊断，不能代替当前 coverage 结果。
 
 Hindsight 固定为 0.4.9 镜像（摘要写在启动脚本中），通过该版本的 OpenAI 兼容适配器直连 DeepSeek 官方 `/v1`，模型仍为 `deepseek-v4-flash`。嵌入使用真实 `BAAI/bge-small-en-v1.5`，重排使用 FlashRank；命名卷只属于本框架。首次启动需要下载镜像和模型。启动脚本不以容器存活冒充健康，执行 HS-001 前应确认 `http://127.0.0.1:18888/health` 的数据库状态。测试使用独立 Hermes 档案和唯一 Hindsight Bank，实际调用 retain/recall，并检查服务端成功模型调用计数增长。Bank 留在隔离数据库中供回溯。
 
@@ -78,19 +81,19 @@ CODE-001 使用已安装的真实 Claude Code CLI，将 DeepSeek Anthropic 兼�
 
 SET-006 使用 PyAudioWPatch 0.2.12.8 采集短时间的真实 WASAPI 扬声器输出，并与静音基线、关闭提示音后的输出比较。音频附件与桌面截图一样仅作为本地测试材料。依赖版本写入 requirements 和锁定文件。
 
-RUNTIME-004 在流程内启动专用的 19446 回环代理，仅接受两个更新主机名，不转发其他目标。HTTPS_PROXY 只传给这次测试 Desktop，DeepSeek 通过 NO_PROXY 直连；不改 hosts、系统代理或公共服务。短期 CA 带两个域名的约束，私钥在 secrets 中，结束后删除精确证书指纹。候选使用已存在的真实 Tauri 签名 NSIS 文件，验证错误签名、摘要拒绝、取消、稍后安装、授权撤回、实际自动重启和旧会话续聊。finally 用原 NSIS 恢复 0.9.0 并核对原 EXE 摘要，保留测试数据。候选版本为本机 0.9.1-prototype.local.1，不属于正式发布。
+RUNTIME-004 在流程内启动专用的 19446 回环代理，仅接受两个更新主机名，不转发其他目标。HTTPS_PROXY 只传给这次测试 Desktop，DeepSeek 通过 NO_PROXY 直连；不改 hosts、系统代理或公共服务。短期 CA 带两个域名的约束，私钥在 secrets 中，结束后删除精确证书指纹。候选使用已存在的真实 Tauri 签名 NSIS 文件，验证错误签名、摘要拒绝、取消、稍后安装、授权撤回、实际自动重启和旧会话续聊。finally 用原 NSIS 恢复 0.9.0 并核对原 EXE 摘要，保留测试数据。候选版本、安装器和 EXE 哈希以 baseline.json 的 shellUpdateCandidate 为准，不属于正式发布。
 
-VOICE-002 使用已存在的 Steam Streaming Microphone 驱动对：Windows SAPI 生成测试句，向虚拟输出播放，并从实际输入端录音校准，再由 Desktop 的 MediaRecorder 录制和 STT 转写。脚本读取设备实际采样率，不改默认设备；找不到指定输入输出对时不会伪造音频。WebView2 的原生麦克风授权弹窗通过真实 HWND 和 UIA 控件处理；界面外的校准录音不代表 Desktop 转写已通过。
+VOICE-002 使用测试机单独安装的 VB-CABLE Pack45 驱动对（不打入 Desktop 安装器）：Windows SAPI 生成测试句，向虚拟输出播放，并从实际输入端录音校准，再由 Desktop 的 MediaRecorder 录制和 STT 转写。采集与输出采用 48 kHz 双声道，测试默认输入为 CABLE Output；默认播放仍为原扬声器。脚本校验设备格式，找不到指定输入输出对时不会伪造音频。Steam 虚拟输入曾在实录中失真，已排除出验收夹具。WebView2 的原生麦克风授权弹窗通过真实 HWND 和 UIA 控件处理；界面外的校准录音不代表 Desktop 转写已通过。
 
-整包更新 RUNTIME-004 在 runs/20260907T093139Z 完整通过，包含更新器自动启动新版本、原会话真实续聊和原安装版自动恢复。失败探索记录全部保留。当前已收集 96 个工作流脚本，其中 MCP-004 执行到缺失的授权入口门槛，后续流程尚未脚本化。覆盖进度按真实执行结果统计，其余四项需要账号及明确的消息接收者。
+整包更新 RUNTIME-004 在旧基线 runs/20260907T093139Z 完整通过，包含更新器自动启动新版本、原会话真实续聊和原安装版自动恢复。失败探索记录全部保留，新基线需要重新执行；候选和原安装器的确切摘要由 baseline.json 固定。
 
 失败后恢复测试基线与功能通过是两个不同结果。流程中的软断言仅用于继续收集同一功能的后续步骤，整项仍标为 failed；同一次操作没有自动重试。外部连接的首次失败和显式再次发送分别留证。进程故障注入仅针对已核对 PID 和可执行路径的测试 Core，不结束用户的其他应用。
 
-Wander 页面的真实依赖是本地 MemOS，不需要 Wander 云账号。六项清单的纠正依据见 `wander-coverage-audit.md`。在有权限的本地 Wander-Memory 仓库执行 `git archive --format=tar.gz --output=wander-memos-efea8c6b.tar.gz efea8c6b0ea8c16cf1593082a93905acd7a055e3`，将归档复制到 `C:\HermesE2E`，再执行 `scripts/bootstrap-wander.ps1`。归档摘要与提交固定在 `wander-baseline.json`；独立 venv 使用该提交 uv.lock 的约束，MemoryOS 固定 2.0.27。`scripts/start-wander.ps1` 通过独立计划任务启动，并验证三个端口的进程归属及真实健康状态；`run.ps1 -Case 'WANDER-00[1-68]'` 自动准备服务并执行六项主流程及 Escape 取消专项。
+Wander 已从本轮产品范围隐藏。历史 MemOS 依赖、脚本和证据保留供追溯，详见 `wander-coverage-audit.md` 和 `wander-baseline.json`，当前运行流程不准备或启动这些服务。
 
 Wander 用例只连接本框架新建的独立 MemOS 数据目录，开始前先保存库存快照，再通过实际界面删除上一项遗留的测试事实；每次结束另保存库存，SQLite 版本记录继续保留。这避免对话提取产生不含用例标记的事实后污染下一项冲突合并。六项主流程在 runs/20260907T102700Z 同轮通过，Escape 取消实际失败并保留为 WIN-022。
 
-MCP OAuth 使用框架自有的真实 SDK 服务和一次性身份，无需外部账号。`run.ps1 -Case MCP-004` 自动验证授权服务本身，再通过 Desktop 添加受保护地址并测试连接。104625Z 确认缺少授权入口（WIN-023）；服务自检的取消、刷新和撤销不计为 Desktop 通过。具体边界见 `mcp-oauth-coverage-audit.md`。
+MCP OAuth 使用框架自有的真实 SDK 服务和一次性身份，无需外部账号。`run.ps1 -Case MCP-004` 自动验证服务本身，再从 Desktop 完成添加、探测、取消后重试、授权、真实模型调用、自然过期后的刷新、退出和删除。模型必须命中注册 MCP 工具，只允许附带 tool_search/tool_describe 发现步骤，不能用终端或文件操作代替。cn.10 的 runs/20260907T180716Z 已完整通过；服务自检不计为 Desktop 通过。原始缺陷边界见 `mcp-oauth-coverage-audit.md`。
 
 模型 OAuth 的账号登录与登出仍为 MODEL-006；无需账号的官方设备码和取消拆为 MODEL-010。`run.ps1 -Case MODEL-010` 使用真实 Nous Portal，验证设备码、剪贴板、原生浏览器、正常取消和发起中关闭。105653Z 的正常取消通过，发起中关闭留下 pending 会话并迟到打开验证页，整项保留为失败（WIN-024）。详见 `model-oauth-coverage-audit.md`。
 
@@ -101,3 +104,5 @@ MCP OAuth 使用框架自有的真实 SDK 服务和一次性身份，无需外�
 失败后的步骤复核见 `failure-continuation-audit.md`。114227Z 重新执行备份和四项生命周期；114633Z、114905Z 分别独立核对停机与卸载的异常退出。新增失败后的磁盘证据，并把原会话续聊改为从真实历史列表点击；新入口仍受前面的产品退出问题阻挡，不能宣称已验证。备份检查不再把 request_dump 文件误称为会话备份，最终以真实恢复结果判断。
 
 本地推理与图片专项执行 `run.ps1 -Case 'MODEL-009|CHAT-013'`，自动准备固定摘要的 `qwen3.5:0.8b`，在专用 Ollama 11435 创建 `hermes-e2e-qwen35:0.8b-64k`（实际 65536 上下文、8 CPU、4 GB 容器内存）。不会替换模型返回。首轮下载约 1 GB；完整出处和实际加载信息附在报告中。图片是无文字、随机排列的四色色块，文件名是 UUID，答案不进入模型提示；经 Windows 原生文件选择器上传，并检查实际识别、调用工具和计费来源。辅助识图仍由官方 DeepSeek 发起，视觉请求才发往本地模型。复核和失败边界见 `local-vision-coverage-audit.md`。
+
+当前缺陷修复与逐轮安装包、实机通过记录见 [修复进度](../../docs/e2e-fixes-progress.md)。原有日期段落保留历史证据，不代表当前构建全部通过。Wander Memory/账号功能已隐藏，四项外部账号与消息投递由用户豁免，具体范围以 coverage-catalog.json 为准。

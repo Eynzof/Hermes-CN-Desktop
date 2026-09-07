@@ -84,6 +84,8 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     script('start-shell-update-fixture.ps1');
     fixtureStarted = true;
     const metadata = JSON.parse(readFileSync(path.join(fixture, 'metadata.json'), 'utf8'));
+    expect(metadata.version).toBe(baseline.shellUpdateCandidate.version);
+    expect(metadata.candidateInstallerSha256).toBe(baseline.shellUpdateCandidate.installerSha256);
     await quitFromTray();
     script('start.ps1', '-ShellUpdateFixture');
     desktopRestarted = true;
@@ -103,7 +105,7 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     await expect(page.getByText('邀请配置已导入，令牌已写入系统凭据库', { exact: true })).toBeVisible();
     mode('good.json');
     await check();
-    await expect(page.getByText(/发现新版本.*0\.9\.1-prototype\.local\.1/)).toBeVisible();
+    await expect(page.getByText(/发现新版本/)).toContainText(metadata.version);
     const count = downloadCount();
     await page.getByRole('button', { name: '一键更新', exact: true }).click();
     await page.getByRole('dialog', { name: '更新 Hermes Desktop', exact: true }).getByRole('button', { name: '取消', exact: true }).click();

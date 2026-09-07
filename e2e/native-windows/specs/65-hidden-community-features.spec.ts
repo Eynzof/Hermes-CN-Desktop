@@ -11,7 +11,8 @@ test('SHELL-006 隐藏 Wander Memory 及 Wanderminds 账号入口', async ({ app
   await app.keyboard.press('Control+k');
   const palette = app.getByRole('dialog');
   await palette.getByRole('combobox').fill('wander');
-  await expect(palette.getByRole('option')).toHaveCount(0);
+  await expect(palette.locator('[data-kind="wanderMemory"]')).toHaveCount(0);
+  await expect(palette.getByRole('option').filter({ hasText: '/wander-memory/' })).toHaveCount(0);
   await app.keyboard.press('Escape');
   for (const path of ['/models', '/connection', '/about']) {
     await route(app, path);

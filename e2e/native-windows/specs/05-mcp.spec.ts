@@ -29,7 +29,7 @@ test('MCP-001 添加真实 stdio 服务、测试、启停、模型调用及删�
   const { evidence } = await chat(app, `请必须调用 MCP 服务 ${name} 的 e2e_digest 工具，参数 text 为 ${marker}。不要使用其他工具计算哈希，最后只回复这个工具返回的完整 SHA256。`, expected);
   const events = readFileSync(path.join(root, 'workspace', 'mcp-events.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
   expect(events.some(e => e.text === marker && e.sha256 === expected)).toBe(true);
-  expect(evidence.messages.some((m: any) => m.role === 'tool' && m.content?.includes(expected))).toBe(true);
+  expect(evidence.messages.some((m: any) => m.role === 'tool' && m.tool_name?.endsWith('_e2e_digest') && m.content?.includes(expected))).toBe(true);
   await testInfo.attach('mcp-model-session', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
   await route(app, '/mcp');
   await card.getByRole('button', { name: '删除', exact: true }).click();

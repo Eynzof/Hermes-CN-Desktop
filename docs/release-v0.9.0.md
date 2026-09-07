@@ -1,7 +1,7 @@
 # v0.9.0：Core v0.21 与桌面热更新
 
-本地集成目标：Desktop `0.9.0`、Core `0.21.0`，Runtime `0.21.0-cn.3`（schema 2）。
-官方基线为 [v2026.8.31 / v0.21.0](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31)，上游提交 `29112bef099274229cadff79cdff7bf7b99c4b77`；中文内核合并提交 `23fb1a14a425ef9808d686e79ad52089a0724638`，最终代码提交 `0419cae3ecf3ee1505c7ecf761677ad9a8b6647f`。
+本地集成目标：Desktop `0.9.0`、Core `0.21.0`，当前 Windows 验收 Runtime 为 `0.21.0-cn.10`（schema 2）。
+官方基线为 [v2026.8.31 / v0.21.0](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31)，上游提交 `29112bef099274229cadff79cdff7bf7b99c4b77`；中文内核合并提交 `23fb1a14a425ef9808d686e79ad52089a0724638`，当前修复后代码为 Core `92d532982c23627ccd7defe88519c462cbbb3656`、Desktop `5328dee023e32b468d227fcd18834c0365a65875`。
 
 ## 功能取舍
 
@@ -9,11 +9,16 @@
 | --- | --- | --- |
 | 定时任务连续运行与网页变化监控 | 新增任务编辑、运行记忆开关和监控网址；关闭时清除相应配置；编辑不改变未修改的调度，也不丢失跨任务引用 | 配置 → 定时任务 |
 | 运行中的子 Agent 调整方向、停止 | 新增追加指令、排队状态、停止操作；请求携带父会话身份，等待真实退出事件 | 对话 → 子Agent 监视 |
-| MCP 2 服务管理 | 复用服务添加、启停、测试连接、工具列表、目录和重新加载；升级 SDK 后以真实 stdio 服务验证 | 配置 → MCP |
+| MCP 2 服务管理 | 服务添加、启停、测试连接、目录安装、重新加载；新增 OAuth 授权、取消、退出，授权成功后加载对话工具；支持带空格的 Windows 路径 | 配置 → MCP |
 | 模型目录、能力与上下文覆盖 | 保留中文模型目录、离线镜像和自定义能力设置；内核合并上游模型元数据覆盖 | 配置 → 模型 |
 | 流式恢复、上下文压缩、委派和工具生命周期 | 合并到内核，继续使用现有对话、上下文、子任务界面 | 对话 |
 | 定时任务 notepad、跨任务 context、脚本监控 | 内核保留；高级参数仍可通过工具/API 使用，本版不增加低频表单 | Agent 工具 / Core |
 | 上游 Bot Mode、peer 和内置浏览器 Agent | 内核及随附官方 Dashboard 保留；本版不移植另一套群聊和浏览器管理界面，原有档案/消息接入继续使用 | Core Dashboard / CLI |
+| Wander Memory / Wanderminds 账号 | 本版隐藏相应导航、命令入口和直达路由；模型供应商 OAuth 与远程 Core 通用认证继续保留 | 无 |
+
+Windows 验收期间还修复了会话数据库备份与重复恢复、内核重启后的连接状态、MoA 首次选择竞争、技能复制入口、默认语音依赖和定时运行历史覆盖。具体问题、源码检查和安装版证据见 [修复进度](e2e-fixes-progress.md)。
+
+修复后的 Windows 安装包已完成 89 个必需工作流的脚本验收，4 项用户豁免、8 项随功能隐藏移出范围。最终版本、摘要、测试边界与证据包见 [验收报告](e2e-fixes-acceptance.md)。
 
 ## 更新行为
 
@@ -29,4 +34,4 @@ Core 使用 Python 3.14、uv 0.12.10 和锁定依赖；Windows 随附 Node.js 22
 
 正式构建应固定 Runtime tag、manifest 渠道和源码提交，按 `compatibility/desktop-core.json` 校验；`latest` 不作为固定版本构建输入。生产签名公钥和应用标识保持不变。
 
-本次操作只在本地与获授权的 Windows 测试机进行，没有推送、PR、Release 发布或远程 CI 操作。Windows 验收包使用独立测试签名和本地 HTTPS 服务，不能直接作为正式签名发布包。完整验收记录在同目录 `release-v0.9.0-acceptance.md`，只将已经完成的项目列为通过。
+本次操作只在本地与获授权的 Windows 测试机进行，没有推送、PR、Release 发布或远程 CI 操作。Windows 验收包使用独立测试签名和本地 HTTPS 服务，不能直接作为正式签名发布包。官方 DeepSeek 全功能验收使用 [Windows 测试框架](../e2e/native-windows/README.md)，以精确基线的 coverage 报告判定；`release-v0.9.0-acceptance.md` 保留初始 cn.3 集成的历史记录。

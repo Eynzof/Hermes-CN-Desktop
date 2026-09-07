@@ -33,6 +33,17 @@ public class NativeE2EWindow {
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wparam, IntPtr lparam);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wparam, string lparam);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] static extern IntPtr ReadMessage(IntPtr hwnd, uint msg, IntPtr wparam, StringBuilder text);
+  public static string[] ComboOptions(IntPtr hwnd) {
+    int count=SendMessage(hwnd,0x146,IntPtr.Zero,IntPtr.Zero).ToInt32();
+    var items=new List<string>();
+    for(int i=0;i<count;i++) {
+      int length=SendMessage(hwnd,0x149,(IntPtr)i,IntPtr.Zero).ToInt32();
+      var text=new StringBuilder(length+1);
+      ReadMessage(hwnd,0x148,(IntPtr)i,text);items.Add(text.ToString());
+    }
+    return items.ToArray();
+  }
   public class Control { public long handle; public int id; public uint pid; public string text; public string type; public int left,top,right,bottom; }
   public static Control[] MenuItems(IntPtr hwnd) {
     IntPtr menu = SendMessage(hwnd, 0x1E1, IntPtr.Zero, IntPtr.Zero);
@@ -77,7 +88,11 @@ $outbox=Join-Path $Root 'control\outbox'
 New-Item $inbox,$outbox -ItemType Directory -Force | Out-Null
 function DescribeElement($element) {
   $c=$element.Current
-  return @{name=$c.Name;id=$c.AutomationId;type=$c.ControlType.ProgrammaticName;class=$c.ClassName;pid=$c.ProcessId;handle=$c.NativeWindowHandle;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen;minimized=[NativeE2EWindow]::IsIconic([IntPtr]$c.NativeWindowHandle);maximized=[NativeE2EWindow]::IsZoomed([IntPtr]$c.NativeWindowHandle)}
+   $description=@{name=$c.Name;id=$c.AutomationId;type=$c.ControlType.ProgrammaticName;class=$c.ClassName;pid=$c.ProcessId;handle=$c.NativeWindowHandle;enabled=$c.IsEnabled;offscreen=$c.IsOffscreen;minimized=[NativeE2EWindow]::IsIconic([IntPtr]$c.NativeWindowHandle);maximized=[NativeE2EWindow]::IsZoomed([IntPtr]$c.NativeWindowHandle)}
+  $toggle=$null
+  if($element.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern,[ref]$toggle)){$description.toggleState=$toggle.Current.ToggleState.ToString()}
+  if($c.ClassName -eq 'ComboBox'){$description.options=[NativeE2EWindow]::ComboOptions([IntPtr]$c.NativeWindowHandle)}
+  return $description
 }
 while($true) {
   foreach($file in @(Get-ChildItem $inbox -Filter '*.json')) {
@@ -107,12 +122,22 @@ while($true) {
         [NativeE2EWindow]::keybd_event(0x4E,0,2,[UIntPtr]::Zero)
         [NativeE2EWindow]::keybd_event(0x5B,0,2,[UIntPtr]::Zero)
         $result=@{ok=$true}
+      } elseif($request.action -eq 'inspectPoint') {
+        # Phase-one visual diagnostics may inspect a point from a fresh screenshot.
+        $point=[System.Windows.Point]::new([double]$request.x,[double]$request.y)
+        $element=[System.Windows.Automation.AutomationElement]::FromPoint($point)
+        $ancestors=@()
+        for($level=0;$element -and $level -lt 8;$level++){
+          $ancestors+=DescribeElement $element
+          $element=[System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($element)
+        }
+        $result=@{ok=$true;ancestors=$ancestors}
       } elseif($request.action -eq 'systemWindows') {
         $result=@{ok=$true;windows=[NativeE2EWindow]::Windows()}
       } elseif($request.action -eq 'foreground') {
         $handle=[NativeE2EWindow]::GetForegroundWindow().ToInt64()
         $result=@{ok=$true;window=([NativeE2EWindow]::Windows() | Where-Object {$_.handle -eq $handle})}
-      } elseif($request.action -in @('externalSnapshot','externalKeys','externalPaste','externalInvoke')) {
+      } elseif($request.action -in @('externalSnapshot','externalKeys','externalPaste','externalInvoke','externalClick')) {
         $matches=@([NativeE2EWindow]::Windows() | Where-Object {$_.type -eq [string]$request.windowClass})
         # Page titles change during normal navigation. An observed HWND and
         # class identify the actual browser window across that title change.
@@ -120,12 +145,22 @@ while($true) {
         else{$matches=@($matches | Where-Object {$_.text -eq [string]$request.window})}
         if($matches.Count -ne 1){throw 'External window must match one observed title and class'}
         $external=[System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$matches[0].handle)
-        if($request.action -eq 'externalInvoke') {
+        if($request.action -in @('externalInvoke','externalClick')) {
           if(-not $request.windowHandle){throw 'Invoking an external native control requires its observed HWND'}
           $match=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,[string]$request.controlName)
           $controls=$external.FindAll([System.Windows.Automation.TreeScope]::Descendants,$match)
-          if($controls.Count -ne 1){throw 'Expected one matching native permission control'}
-          $controls[0].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+          $index=0
+          if($request.PSObject.Properties.Name -contains 'controlIndex'){$index=[int]$request.controlIndex}
+          elseif($controls.Count -ne 1){throw 'Expected one matching native permission control'}
+          if($index -lt 0 -or $index -ge $controls.Count){throw 'Observed native control index is out of range'}
+          if($request.action -eq 'externalClick'){
+            $control=$controls[$index]
+            if($control.Current.IsOffscreen -or -not $control.Current.IsEnabled){throw 'Native control is not visible and enabled'}
+            $bounds=$control.Current.BoundingRectangle
+            [NativeE2EWindow]::SetCursorPos([int]($bounds.X+$bounds.Width/2),[int]($bounds.Y+$bounds.Height/2)) | Out-Null
+            [NativeE2EWindow]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+            [NativeE2EWindow]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+          } else {$controls[$index].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()}
           $result=@{ok=$true}
         } elseif($request.action -in @('externalKeys','externalPaste')) {
           [NativeE2EWindow]::SetForegroundWindow([IntPtr]$matches[0].handle) | Out-Null
@@ -154,9 +189,9 @@ while($true) {
         $shell=@($roots | Where-Object {$_.Current.ClassName -eq [string]$request.shellClass})
         if($shell.Count -ne 1){throw 'Expected one shell surface'}
         if($request.shellClass -notin @('Shell_TrayWnd','NotifyIconOverflowWindow','TopLevelWindowForOverflowXamlIsland')){throw 'Unsupported shell surface'}
-        $match=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,[string]$request.controlName)
-        $controls=$shell[0].FindAll([System.Windows.Automation.TreeScope]::Descendants,$match)
-        if($controls.Count -ne 1){throw 'Expected one live shell control'}
+        # A hovered tray icon also exposes a tooltip/text with the same name.
+        $controls=@($shell[0].FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object {$_.Current.Name -eq [string]$request.controlName -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button})
+        if($controls.Count -ne 1){throw "Expected one live shell button, found $($controls.Count): $($request.controlName)"}
         $control=$controls[0]
         if($control.Current.IsOffscreen -or -not $control.Current.IsEnabled){throw 'Shell control is not visible and enabled'}
         $bounds=$control.Current.BoundingRectangle

@@ -30,6 +30,7 @@ test('MCP-005 带空格的 Windows 路径参数、真实服务探测和模型调
     const expected = createHash('sha256').update(marker).digest('hex');
     const result = await chat(app, `必须使用 MCP 服务 ${name} 的 e2e_digest 工具计算 ${marker} 的 SHA256，仅回复工具返回值。`, expected);
     expect(readFileSync(path.join(root, 'workspace', 'mcp-events.jsonl'), 'utf8')).toContain(expected);
+    expect(result.evidence.messages.some((m: any) => m.role === 'tool' && m.tool_name?.endsWith('_e2e_digest') && m.content?.includes(expected))).toBe(true);
     await testInfo.attach('real-spaced-path-tool-call', { body: JSON.stringify(result.evidence, null, 2), contentType: 'application/json' });
   } finally {
     await route(app, '/mcp');

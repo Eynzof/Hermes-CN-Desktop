@@ -25,7 +25,8 @@ test('PROF-003 Build 全步骤、校验、技能选择、MCP 配置及新档案�
   await filter.fill('no-matching-skill-unique');
   await expect(app.getByText('没有匹配的技能', { exact: true })).toBeVisible();
   await filter.fill('hermes-agent');
-  const audit = app.getByRole('checkbox', { name: /^hermes-agent autonomous/ });
+  const audit = app.getByRole('checkbox', { name: /^hermes-agent 必需 autonomous/ });
+  await expect(audit).toBeChecked();
   expect.soft(await audit.isDisabled(), 'Core protects essential hermes-agent, so the builder must not promise it can be disabled').toBe(true);
   await filter.fill('architecture-diagram');
   const optional = app.getByRole('checkbox', { name: /^architecture-diagram / });

@@ -31,9 +31,13 @@ test('VOICE-004 真实模型回复手动及自动朗读、实际音频播放和�
     } finally { await cdp.detach(); }
   };
   await route(app, '/voice');
+  await app.getByRole('button', { name: /^Edge TTS 无需密钥/ }).click();
+  const voice = app.getByRole('textbox', { name: 'Edge 语音', exact: true });
+  const originalVoice = await voice.inputValue();
   const toggle = app.getByRole('button', { name: '自动朗读助手回复', exact: true });
   const original = await toggle.getAttribute('data-on') === 'true';
   try {
+    await voice.fill('zh-CN-XiaoxiaoNeural');
     if (original) await toggle.click();
     await app.getByRole('button', { name: '保存配置', exact: true }).click();
     await expect(app.getByText(/^语音配置已保存。/)).toBeVisible();
@@ -50,6 +54,7 @@ test('VOICE-004 真实模型回复手动及自动朗读、实际音频播放和�
     await verifyPlayback('automatic');
   } finally {
     await route(app, '/voice');
+    await voice.fill(originalVoice);
     if ((await toggle.getAttribute('data-on') === 'true') !== original) await toggle.click();
     await app.getByRole('button', { name: '保存配置', exact: true }).click();
     await expect(app.getByText(/^语音配置已保存。/)).toBeVisible();
