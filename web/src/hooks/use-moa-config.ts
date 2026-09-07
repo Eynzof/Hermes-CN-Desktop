@@ -3,6 +3,7 @@ import { fetchJSON, putJSON } from "@/lib/transport";
 import { invalidateModelOptionsCache } from "@/lib/model-options-cache";
 import { useActiveProfileName } from "@/hooks/use-profiles";
 import { MoaConfigResponse } from "@hermes/protocol";
+import { forgetLastUsedModel, readLastUsedModel } from "@/lib/last-used-model";
 
 // MoA（Mixture of Agents）预设配置。对齐官方桌面端（Core apps/desktop
 // model-settings）：编辑器读写 REST /api/model/moa，preset 列表在模型选择器里
@@ -31,6 +32,10 @@ export function useSaveMoaConfig() {
     mutationFn: (config: MoaConfigResponse) =>
       putJSON("/api/model/moa", config, MoaConfigResponse),
     onSuccess: (saved) => {
+      const selected = readLastUsedModel();
+      if (selected?.provider === "moa" && !saved.presets[selected.model]) {
+        forgetLastUsedModel();
+      }
       // 预设增删会改变模型选择器里 moa 虚拟 provider 的模型列表：
       // 既要清 gateway RPC 的 5 分钟模块缓存，也要触发 React Query 重取。
       invalidateModelOptionsCache();
