@@ -14,19 +14,24 @@ const flowPath = (id: string) => `/api/mcp/oauth/flows/${encodeURIComponent(id)}
 
 export function useMcpOAuth(name: string) {
   const qc = useQueryClient();
-  const [phase, setPhase] = useState<"authorize" | "logout" | null>(null);
+  const [phase, setPhase] = useState<"authorize" | "cancel" | "logout" | null>(null);
   const [message, setMessage] = useState("");
   const generation = useRef(0);
   const flowId = useRef<string | null>(null);
+  const starting = useRef<Promise<McpOAuthFlow> | null>(null);
   const cancel = async () => {
-    generation.current += 1;
-    const id = flowId.current;
-    flowId.current = null;
-    setPhase(null);
-    setMessage("授权已取消");
-    if (id) {
-      try { await deleteJSON(flowPath(id)); }
-      catch (error) { setMessage(error instanceof Error ? error.message : "取消授权失败"); }
+    const run = ++generation.current;
+    setPhase("cancel");
+    setMessage("正在取消授权…");
+    try {
+      const id = flowId.current ?? (await starting.current)?.flow_id;
+      flowId.current = null;
+      if (id) await deleteJSON(flowPath(id));
+      if (run === generation.current) setMessage("授权已取消");
+    } catch (error) {
+      if (run === generation.current) setMessage(error instanceof Error ? error.message : "取消授权失败");
+    } finally {
+      if (run === generation.current) setPhase(null);
     }
   };
   useEffect(() => () => {
@@ -41,7 +46,9 @@ export function useMcpOAuth(name: string) {
     setPhase("authorize");
     setMessage("正在发起授权…");
     try {
-      let flow = await postJSON<McpOAuthFlow>(`/api/mcp/servers/${encodeURIComponent(name)}/auth`, {});
+      starting.current = postJSON<McpOAuthFlow>(`/api/mcp/servers/${encodeURIComponent(name)}/auth`, {});
+      let flow = await starting.current;
+      starting.current = null;
       if (run !== generation.current) {
         await deleteJSON(flowPath(flow.flow_id));
         return false;
