@@ -1204,7 +1204,7 @@ export function GooseComposer({
   const voiceButtonDisabled = controlsDisabled || voiceStatus === "transcribing" || !sttEnabled;
 
   return (
-    <div className={s.wrapper} data-compact={compact} data-variant={variant}>
+    <div className={s.wrapper} data-compact={compact} data-variant={variant} data-update-blocked={voiceStatus !== "idle" ? "true" : undefined}>
       <div
         className={s.box}
         data-disabled={disabled}

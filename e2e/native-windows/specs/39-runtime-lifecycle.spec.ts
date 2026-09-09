@@ -42,6 +42,15 @@ for (const [id, title, operation] of [
     await expect(app.getByText('离线控制台', { exact: true })).toBeVisible();
     expect(existsSync(path.join(root, 'runtime', 'current.json'))).toBe(true);
     await checkpoint('stopped-data-preserved');
+    await app.getByRole('link', { name: /^软件更新：/ }).click();
+    await expect(app).toHaveURL(/#\/updates$/);
+    await expect(app.getByRole('heading', { name: '软件更新', exact: true })).toBeVisible();
+    await expect(app.getByText('Hermes Desktop v0.9.0', { exact: true })).toBeVisible();
+    await expect(app.getByLabel('runtimeManifestUrl（可选，完整覆盖）')).toBeHidden();
+    await testInfo.attach('updates-remain-available-offline', { body: await app.screenshot(), contentType: 'image/png' });
+    await app.getByText('高级更新选项', { exact: true }).click();
+    await expect(app.getByRole('button', { name: '检查内核更新', exact: true })).toBeVisible();
+    await route(app, '/kernel');
     await app.reload();
     await expect(app.getByRole('button', { name: '启动内核', exact: true })).toBeEnabled();
     expect((await control()).running).toBe(false);

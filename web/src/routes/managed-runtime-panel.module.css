@@ -157,3 +157,5 @@
 .fieldInput:focus {
   outline: 1px solid var(--h-accent);
 }
+
+.updatePageLink { display: inline-flex; color: var(--h-accent); font-size: 12px; padding: 8px 0; }

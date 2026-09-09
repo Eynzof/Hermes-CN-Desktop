@@ -116,10 +116,28 @@ export function readUiValue<T>(key: string, fallback: T): T {
   return value === undefined ? fallback : clone(value as T);
 }
 
+const pendingWrites = new Set<Promise<unknown>>();
+let lastWriteError: unknown;
+function trackWrite(promise: Promise<unknown> | undefined): void {
+  if (!promise) return;
+  pendingWrites.add(promise);
+  void promise.catch((error) => { lastWriteError = error; }).finally(() => pendingWrites.delete(promise));
+}
+
+/** Await the native persistence barrier before an update can close the renderer. */
+export async function flushUiStore(): Promise<void> {
+  await Promise.allSettled([...pendingWrites]);
+  if (lastWriteError) {
+    const error = lastWriteError;
+    lastWriteError = undefined;
+    throw error;
+  }
+}
+
 export function writeUiValue(key: string, value: unknown): void {
   kvCache[key] = clone(value);
   notify();
-  void bridge()?.uiStoreSetKv?.({ key, value }).catch(() => {});
+  trackWrite(bridge()?.uiStoreSetKv?.({ key, value }));
   // localStorage fallback for web mode (no native bridge)
   if (!bridge()) {
     try {
@@ -133,7 +151,7 @@ export function writeUiValue(key: string, value: unknown): void {
 export function removeUiValue(key: string): void {
   delete kvCache[key];
   notify();
-  void bridge()?.uiStoreRemoveKv?.({ key }).catch(() => {});
+  trackWrite(bridge()?.uiStoreRemoveKv?.({ key }));
   if (!bridge()) {
     try {
       localStorage.setItem(UI_STORE_BACKUP_KEY, JSON.stringify(kvCache));
@@ -149,6 +167,8 @@ export function subscribeUiStore(listener: Listener): () => void {
 }
 
 export function __resetUiStoreForTests(seed: Record<string, unknown> = {}): void {
+  pendingWrites.clear();
+  lastWriteError = undefined;
   kvCache = clone(seed);
   initialized = true;
   initPromise = null;

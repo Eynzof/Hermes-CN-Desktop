@@ -72,6 +72,45 @@ pub struct ShellUpdateMetadata {
     pub runtime_revision: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShellCandidate {
+    pub version: String,
+    pub metadata: ShellUpdateMetadata,
+    pub notes: Option<String>,
+    pub published_at: Option<String>,
+}
+
+pub(crate) async fn selected_candidate(app: &AppHandle) -> Result<Option<ShellCandidate>, String> {
+    let (updater, config) = build_updater(app)?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+    update
+        .map(|update| {
+            let metadata =
+                validate_update_target(&update.version, &update.raw_json, &config.channel)?;
+            Ok(ShellCandidate {
+                version: update.version,
+                metadata,
+                notes: update.body,
+                published_at: update.date.map(|date| date.to_string()),
+            })
+        })
+        .transpose()
+}
+
+fn require_selected(
+    expected: Option<&ShellCandidate>,
+    version: &str,
+    metadata: &ShellUpdateMetadata,
+) -> Result<(), String> {
+    if expected
+        .is_some_and(|candidate| candidate.version != version || candidate.metadata != *metadata)
+    {
+        return Err("更新版本已发生变化，请重新检查更新".into());
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppUpdateCheckResult {
@@ -203,6 +242,7 @@ fn emit_progress(
     download_source: Option<&str>,
     fallback_used: bool,
 ) {
+    crate::commands::software_update::app_progress(percent, download_source);
     let _ = app.emit(
         APP_UPDATE_PROGRESS_EVENT,
         AppUpdateProgressPayload {
@@ -647,10 +687,15 @@ async fn download_from(
     let finish_app = app.clone();
     let mut downloaded = 0_u64;
     let mut last_reported = 8_u8;
+    let mut reported = std::time::Instant::now();
     update
         .download(
             move |chunk_length, content_length| {
                 downloaded = downloaded.saturating_add(chunk_length as u64);
+                if reported.elapsed() >= Duration::from_millis(150) || content_length == Some(downloaded) {
+                    super::software_update::download_progress(downloaded, content_length);
+                    reported = std::time::Instant::now();
+                }
                 let percent = content_length
                     .filter(|total| *total > 0)
                     .map(|total| {
@@ -900,15 +945,20 @@ pub async fn app_update_download(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<AppUpdateDownloadResult, AppError> {
+    let _operation =
+        crate::update_operation::UpdateOperation::begin().map_err(AppError::RuntimeUnavailable)?;
     if let Err(error) = set_in_flight(&state) {
         return Ok(download_failure(error));
     }
-    let result = run_download(&app).await;
+    let result = run_download(&app, None).await;
     clear_in_flight(&state);
     Ok(result)
 }
 
-async fn run_download(app: &AppHandle) -> AppUpdateDownloadResult {
+pub(crate) async fn run_download(
+    app: &AppHandle,
+    expected: Option<&ShellCandidate>,
+) -> AppUpdateDownloadResult {
     emit_progress(app, "check", 2, "重新确认候选版本与兼容矩阵…", None, false);
     let (updater, config) = match build_updater(app) {
         Ok(value) => value,
@@ -924,6 +974,9 @@ async fn run_download(app: &AppHandle) -> AppUpdateDownloadResult {
         Ok(metadata) => metadata,
         Err(error) => return download_failure(error),
     };
+    if let Err(error) = require_selected(expected, &update.version, &metadata) {
+        return download_failure(error);
+    }
     let outcome = match download_with_fallback(app, &update, &metadata).await {
         Ok(outcome) => outcome,
         Err(error) => return download_failure(error),
@@ -972,15 +1025,48 @@ pub async fn app_update_install(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<AppUpdateInstallResult, AppError> {
-    if let Err(error) = set_in_flight(&state) {
-        return Ok(install_failure(error));
-    }
-    let result = run_install(&app, &state).await;
-    clear_in_flight(&state);
-    Ok(result)
+    let _operation =
+        crate::update_operation::UpdateOperation::begin().map_err(AppError::RuntimeUnavailable)?;
+    let _maintenance = super::software_update::maintenance(&state)?;
+    Ok(run_install(&app, &state, None).await)
 }
 
-async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateInstallResult {
+pub(crate) async fn run_install(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    expected: Option<&ShellCandidate>,
+) -> AppUpdateInstallResult {
+    if let Err(error) = set_in_flight(state) {
+        return install_failure(error);
+    }
+    let was_running = state
+        .inner
+        .lock()
+        .map(|s| s.dashboard_handle.as_ref().is_some_and(|h| h.owns_process))
+        .unwrap_or(false);
+    let mut result = perform_install(app, state, expected).await;
+    let stopped = state
+        .inner
+        .lock()
+        .map(|s| s.dashboard_handle.is_none())
+        .unwrap_or(false);
+    if !result.ok && was_running && stopped {
+        let recovery = super::runtime_manager::restart_dashboard(state).await;
+        let detail = result.error.take().unwrap_or_default();
+        result.error = Some(match recovery {
+            Ok(()) => format!("{detail}；原内核已重新启动"),
+            Err(error) => format!("{detail}；原内核恢复失败：{error}"),
+        });
+    }
+    clear_in_flight(state);
+    result
+}
+
+async fn perform_install(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    expected: Option<&ShellCandidate>,
+) -> AppUpdateInstallResult {
     emit_progress(app, "check", 2, "安装前重新确认灰度授权…", None, false);
     let (updater, config) = match build_updater(app) {
         Ok(value) => value,
@@ -997,6 +1083,9 @@ async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateI
         Err(error) => return install_failure(error),
     };
 
+    if let Err(error) = require_selected(expected, &update.version, &metadata) {
+        return install_failure(error);
+    }
     let (bytes, source, fallback_used) = match read_pending_record() {
         Ok(Some(record))
             if record.version == update.version
@@ -1013,6 +1102,9 @@ async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateI
             (bytes, record.download_source, record.fallback_used)
         }
         Ok(_) => {
+            if expected.is_some() {
+                return install_failure("已下载的更新包不可用，请重新下载");
+            }
             let outcome = match download_with_fallback(app, &update, &metadata).await {
                 Ok(outcome) => outcome,
                 Err(error) => return install_failure(error),
@@ -1064,14 +1156,19 @@ async fn run_install(app: &AppHandle, state: &State<'_, AppState>) -> AppUpdateI
         fallback_used,
     );
     match launch_verified_update(&update, bytes) {
-        Ok(()) => AppUpdateInstallResult {
-            ok: true,
-            install_started: true,
-            manifest_source: Some(MANIFEST_SOURCE.to_string()),
-            download_source: Some(source),
-            fallback_used,
-            error: None,
-        },
+        Ok(()) => {
+            #[cfg(target_os = "macos")]
+            app.restart();
+            #[allow(unreachable_code)]
+            AppUpdateInstallResult {
+                ok: true,
+                install_started: true,
+                manifest_source: Some(MANIFEST_SOURCE.to_string()),
+                download_source: Some(source),
+                fallback_used,
+                error: None,
+            }
+        }
         Err(error) => install_failure(error),
     }
 }

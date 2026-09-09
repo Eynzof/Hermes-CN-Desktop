@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
+  ArrowUpCircle,
   Bell,
   Bug,
   Cable,
@@ -38,6 +39,7 @@ const ADVANCED_ITEMS: readonly AdvancedItem[] = [
   { label: "内核", path: "/kernel", icon: Cpu },
   { label: "环境", path: "/env", icon: MonitorCog },
   { label: "关于", path: "/about", icon: Info },
+  { label: "软件更新", path: "/updates", icon: ArrowUpCircle },
 ];
 
 const SECTIONS: readonly {

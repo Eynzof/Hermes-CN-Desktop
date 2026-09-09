@@ -59,7 +59,7 @@ static UI_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
 /// Signed UI update manifest. Field order is load-bearing: the Ed25519
 /// payload joins exactly these ten fields with `\n` (see
 /// [`ui_signature_payload`]), matching the Core signing pipeline.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiUpdateManifest {
     pub schema_version: u32,
@@ -155,7 +155,11 @@ fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?;
-    fs::write(path, format!("{}\n", json)).map_err(|e| e.to_string())
+    let file = tempfile::NamedTempFile::new_in(path.parent().ok_or("UI record directory missing")?)
+        .map_err(|e| e.to_string())?;
+    fs::write(file.path(), format!("{}\n", json)).map_err(|e| e.to_string())?;
+    file.persist(path).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Create `path` under `ui_root()` and verify it cannot escape the UI root
@@ -260,6 +264,7 @@ pub(crate) fn ui_manifest_url() -> Option<String> {
     let channel = std::env::var("HERMES_UI_UPDATE_CHANNEL")
         .ok()
         .filter(|s| !s.trim().is_empty())
+        .or_else(|| crate::update_config::load_optional().map(|c| c.channel))
         .or_else(|| UI_BAKED_MANIFEST_CHANNEL.map(|s| s.to_string()))
         .unwrap_or_else(|| UI_DEFAULT_CHANNEL.to_string());
     let base = if base.ends_with('/') {
@@ -366,10 +371,13 @@ pub fn ui_app_version_floor() -> Option<String> {
 /// `None` ⇒ the handler falls back to the embedded `frontendDist`.
 pub fn ui_serving_version_dir() -> Option<PathBuf> {
     let record = ui_current_record()?;
-    if !desktop_ge(&record.app_version_floor) {
+    if !desktop_ge(&record.app_version_floor)
+        || !ui_version_is_newer(&record.ui_version, env!("CARGO_PKG_VERSION"))
+    {
         return None;
     }
-    Some(PathBuf::from(&record.path))
+    let path = PathBuf::from(&record.path);
+    path.join("index.html").is_file().then_some(path)
 }
 
 // ─────────────────── serve-time path traversal guard ───────────────────────
@@ -490,6 +498,9 @@ pub async fn check_ui_update() -> UiUpdateCheckResult {
         .send()
         .await
     {
+        Ok(res) if res.status() == reqwest::StatusCode::NO_CONTENT => UiUpdateCheckResult {
+            ok: true, update_available: false, current_ui_version: Some(effective_ui_version()), manifest: None, error: None,
+        },
         Ok(res) if res.status().is_success() => match res.json::<UiUpdateManifest>().await {
             Ok(manifest) => {
                 if manifest.schema_version != UI_SCHEMA_VERSION {
@@ -519,15 +530,12 @@ pub async fn check_ui_update() -> UiUpdateCheckResult {
                         env!("CARGO_PKG_VERSION")
                     ));
                 }
-                let current = ui_current_record();
-                let update_available = current
-                    .as_ref()
-                    .map(|c| c.ui_version != manifest.ui_version)
-                    .unwrap_or(true);
+                let current_version = effective_ui_version();
+                let update_available = ui_version_is_newer(&manifest.ui_version, &current_version);
                 UiUpdateCheckResult {
                     ok: true,
                     update_available,
-                    current_ui_version: current.map(|c| c.ui_version),
+                    current_ui_version: Some(current_version),
                     manifest: Some(manifest),
                     error: None,
                 }
@@ -554,91 +562,97 @@ fn err_check(error: String) -> UiUpdateCheckResult {
 /// reloads the webview.
 pub async fn install_ui_update() -> UiInstallUpdateResult {
     let check = check_ui_update().await;
-    let manifest = match check.manifest {
-        Some(m) => m,
-        None => {
-            return UiInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(
-                    check
-                        .error
-                        .unwrap_or_else(|| "No UI manifest available".to_string()),
-                ),
-            };
-        }
+    let Some(manifest) = check
+        .manifest
+        .filter(|_| check.ok && check.update_available)
+    else {
+        return err_install(check.error.unwrap_or_else(|| "没有可用的界面更新".into()));
     };
-
-    // Defensive re-verify (check already verified; the manifest is the only
-    // trust anchor we pass between the two calls).
-    if let Err(e) = verify_ui_signature(&manifest) {
-        return err_install(e);
+    if let Err(error) = prepare_ui_update(&manifest).await {
+        return err_install(error);
     }
-    let version_segment = match runtime::safe_version_segment(&manifest.ui_version) {
-        Ok(segment) => segment,
-        Err(e) => return err_install(e),
-    };
+    apply_prepared_ui(manifest)
+}
+
+pub fn effective_ui_version() -> String {
+    ui_current_record()
+        .filter(|r| desktop_ge(&r.app_version_floor)
+            && Path::new(&r.path).join("index.html").is_file()
+            && ui_version_is_newer(&r.ui_version, env!("CARGO_PKG_VERSION")))
+        .map(|r| r.ui_version)
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").into())
+}
+
+pub fn ui_version_is_newer(candidate: &str, installed: &str) -> bool {
+    match (
+        semver::Version::parse(candidate),
+        semver::Version::parse(installed),
+    ) {
+        (Ok(candidate), Ok(installed)) => candidate > installed,
+        _ => false,
+    }
+}
+
+fn validate_ui_candidate(manifest: &UiUpdateManifest) -> Result<String, String> {
+    if manifest.schema_version != UI_SCHEMA_VERSION
+        || manifest.platform != runtime::current_platform()
+        || manifest.arch != runtime::current_arch()
+    {
+        return Err("界面更新包的平台或格式不匹配".into());
+    }
+    verify_ui_signature(manifest)?;
     if !desktop_ge(&manifest.app_version_floor) {
-        return err_install(format!(
-            "UI package requires desktop >= {}, current {}",
-            manifest.app_version_floor,
-            env!("CARGO_PKG_VERSION")
-        ));
+        return Err("此界面更新需要先升级桌面应用".into());
     }
+    if !ui_version_is_newer(&manifest.ui_version, &effective_ui_version()) {
+        return Err("当前界面已经是此版本或更新版本".into());
+    }
+    runtime::safe_version_segment(&manifest.ui_version)
+}
 
-    // artifactUrl must be https (force-https, mirrors runtime.rs). Unit tests
-    // exercise the full flow against a wiremock HTTP server, and the
-    // dummy-server integration test / manual dev flow against a local server,
-    // so allow an explicit http artifact ONLY when the caller opts in via env
-    // AND the build is a test or debug (dev) build — release builds always
-    // force https.
-    let artifact_scheme = match url::Url::parse(&manifest.artifact_url) {
-        Ok(url) => url.scheme().to_string(),
-        Err(e) => return err_install(format!("Invalid artifact_url: {e}")),
-    };
-    let allow_http_artifact = artifact_scheme == "http"
+pub async fn prepare_ui_update(manifest: &UiUpdateManifest) -> Result<(), String> {
+    let version = validate_ui_candidate(manifest)?;
+    let url = url::Url::parse(&manifest.artifact_url).map_err(|e| e.to_string())?;
+    let allow_http = url.scheme() == "http"
         && (cfg!(test) || cfg!(debug_assertions))
         && std::env::var("HERMES_UI_UPDATE_ALLOW_HTTP_ARTIFACT").is_ok();
-    if artifact_scheme != "https" && !allow_http_artifact {
-        return err_install(format!("artifact_url must be https, got {artifact_scheme}"));
+    if url.scheme() != "https" && !allow_http {
+        return Err("artifact_url must be https".into());
     }
-
-    // Download the zip.
-    let artifact = match UI_HTTP_CLIENT
-        .get(&manifest.artifact_url)
+    let downloads = ensure_ui_subdir(&ui_downloads_root(), "downloads")?;
+    let path = downloads.join(format!("{version}.zip"));
+    if runtime::file_sha256(&path).as_deref() == Some(&manifest.sha256.to_lowercase()) {
+        return Ok(());
+    }
+    let response = UI_HTTP_CLIENT
+        .get(url)
         .timeout(UI_ARTIFACT_HTTP_TIMEOUT)
         .send()
         .await
-    {
-        Ok(res) if res.status().is_success() => match res.bytes().await {
-            Ok(b) => b.to_vec(),
-            Err(e) => return err_install(format!("Download failed: {e}")),
-        },
-        Ok(res) => return err_install(format!("Download HTTP {}", res.status())),
-        Err(e) => return err_install(format!("Download failed: {e}")),
-    };
+        .map_err(|e| format!("Download failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
+    let bytes = crate::update_operation::response_bytes(response).await?;
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    if runtime::file_sha256(&path).as_deref() != Some(&manifest.sha256.to_lowercase()) {
+        return Err("SHA-256 mismatch: 界面更新包校验失败".into());
+    }
+    Ok(())
+}
 
-    // Cache the zip under ui/downloads/<uiVersion>.zip and check sha256.
+pub fn apply_prepared_ui(manifest: UiUpdateManifest) -> UiInstallUpdateResult {
+    let version_segment = match validate_ui_candidate(&manifest) {
+        Ok(version) => version,
+        Err(error) => return err_install(error),
+    };
     let downloads = match ensure_ui_subdir(&ui_downloads_root(), "downloads") {
-        Ok(d) => d,
-        Err(e) => return err_install(e),
+        Ok(path) => path,
+        Err(error) => return err_install(error),
     };
     let zip_path = downloads.join(format!("{version_segment}.zip"));
-    if let Err(e) = fs::write(&zip_path, &artifact) {
-        return err_install(format!("Failed to write zip: {e}"));
+    if runtime::file_sha256(&zip_path).as_deref() != Some(&manifest.sha256.to_lowercase()) {
+        return err_install("SHA-256 mismatch: 已下载的界面更新包不可用，请重新下载".into());
     }
-    let digest = match runtime::file_sha256(&zip_path) {
-        Some(d) => d,
-        None => return err_install(format!("UI artifact not readable: {}", zip_path.display())),
-    };
-    if digest != manifest.sha256.to_lowercase() {
-        return err_install(format!(
-            "SHA-256 mismatch: expected {}, got {}",
-            manifest.sha256, digest
-        ));
-    }
-
     // Extract into a staging dir inside ui/versions (not system temp — keep
     // the same tree discipline as the runtime installer).
     let versions = match ensure_ui_subdir(&ui_versions_root(), "versions") {
@@ -692,14 +706,28 @@ pub async fn install_ui_update() -> UiInstallUpdateResult {
         previous_ui_version: previous.as_ref().map(|p| p.ui_version.clone()),
     };
 
-    let _ = write_json_file(&target.join(UI_MANIFEST_FILE), &manifest);
-    let _ = write_json_file(&ui_current_record_path(), &installed);
+    if let Err(error) = write_json_file(&target.join(UI_MANIFEST_FILE), &manifest)
+        .and_then(|_| write_json_file(&ui_current_record_path(), &installed))
+    {
+        return err_install(error);
+    }
 
     UiInstallUpdateResult {
         ok: true,
         installed: Some(installed),
         previous,
         error: None,
+    }
+}
+
+pub fn restore_ui_record(record: Option<&UiInstallRecord>) -> Result<(), String> {
+    match record {
+        Some(record) => write_json_file(&ui_current_record_path(), record),
+        None => match fs::remove_file(ui_current_record_path()) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        },
     }
 }
 
@@ -720,11 +748,14 @@ pub fn rollback_ui_update() -> UiInstallUpdateResult {
     let prev_ui_version = match &current.previous_ui_version {
         Some(v) => v.clone(),
         None => {
+            if let Err(error) = restore_ui_record(None) {
+                return err_install(error);
+            }
             return UiInstallUpdateResult {
-                ok: false,
+                ok: true,
                 installed: None,
                 previous: Some(current),
-                error: Some("No previous UI version recorded".to_string()),
+                error: None,
             };
         }
     };
@@ -781,7 +812,9 @@ pub fn rollback_ui_update() -> UiInstallUpdateResult {
         installed_at: utc_now_rfc3339(),
         previous_ui_version: Some(current.ui_version.clone()),
     };
-    let _ = write_json_file(&ui_current_record_path(), &installed);
+    if let Err(error) = write_json_file(&ui_current_record_path(), &installed) {
+        return err_install(error);
+    }
     UiInstallUpdateResult {
         ok: true,
         installed: Some(installed),
@@ -928,6 +961,15 @@ mod tests {
     // ── signature payload order lock ─────────────────────────────────────────
 
     #[test]
+    fn newer_ui_requires_forward_semver_progress() {
+        assert!(ui_version_is_newer("0.9.1", "0.9.0"));
+        assert!(!ui_version_is_newer("0.8.9", "0.9.0"));
+        assert!(!ui_version_is_newer("0.9.0", "0.9.0"));
+        assert!(!ui_version_is_newer("0.9.1-beta.1", "0.9.1"));
+        assert!(!ui_version_is_newer("invalid", "0.9.0"));
+    }
+
+    #[test]
     fn ui_signature_payload_has_stable_field_order() {
         let manifest = fixture_manifest();
         let payload = String::from_utf8(ui_signature_payload(&manifest)).unwrap();
@@ -1056,14 +1098,14 @@ mod tests {
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", root);
 
         let versions = ui_versions_root();
-        let dir = versions.join("0.5.0");
+        let dir = versions.join("2.0.0");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("index.html"), b"<html></html>").unwrap();
 
         // Floor above the shell → not eligible.
         let record = UiInstallRecord {
             schema_version: UI_SCHEMA_VERSION,
-            ui_version: "0.5.0".to_string(),
+            ui_version: "2.0.0".to_string(),
             app_version_floor: "99.0.0".to_string(),
             channel: "stable".to_string(),
             path: dir.to_string_lossy().to_string(),
@@ -1080,6 +1122,10 @@ mod tests {
         ok_record.app_version_floor = "0.1.0".to_string();
         write_json_file(&ui_current_record_path(), &ok_record).unwrap();
         assert_eq!(ui_serving_version_dir(), Some(dir));
+        // An old overlay must not hide the newer UI bundled with a shell upgrade.
+        ok_record.ui_version = "0.1.0".into();
+        write_json_file(&ui_current_record_path(), &ok_record).unwrap();
+        assert!(ui_serving_version_dir().is_none());
 
         if old_root.is_empty() {
             std::env::remove_var("HERMES_DESKTOP_RUNTIME_ROOT");
@@ -1332,11 +1378,11 @@ mod tests {
         assert!(target_dir.join("assets").join("app-abc123.js").is_file());
         assert!(target_dir.join("manifest.json").is_file());
 
-        // Second install of the same version records the previous version.
+        // Repeating an install cannot turn the rollback pointer into a self-cycle.
         let result2 = install_ui_update().await;
-        assert!(result2.ok, "second install failed: {:?}", result2.error);
-        let installed2 = result2.installed.expect("installed record 2");
-        assert_eq!(installed2.previous_ui_version.as_deref(), Some("2.0.0"));
+        assert!(!result2.ok);
+        assert_eq!(ui_current_record().unwrap().previous_ui_version, None);
+        assert!(!check_ui_update().await.update_available);
 
         restore_env("HERMES_DESKTOP_RUNTIME_ROOT", &old_root);
         restore_env("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM", &old_key);
@@ -1468,7 +1514,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn rollback_ui_update_fails_without_previous_version() {
+    fn first_ui_update_rolls_back_to_embedded_interface() {
         let tmp = TempDir::new().unwrap();
         let old_root = std::env::var("HERMES_DESKTOP_RUNTIME_ROOT").unwrap_or_default();
         std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", tmp.path());
@@ -1491,11 +1537,9 @@ mod tests {
         write_json_file(&ui_current_record_path(), &current).unwrap();
 
         let result = rollback_ui_update();
-        assert!(!result.ok);
-        assert!(result
-            .error
-            .unwrap()
-            .contains("No previous UI version recorded"));
+        assert!(result.ok);
+        assert!(ui_current_record().is_none());
+        assert!(ui_serving_version_dir().is_none());
 
         restore_env("HERMES_DESKTOP_RUNTIME_ROOT", &old_root);
     }

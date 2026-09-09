@@ -379,6 +379,36 @@ const tauriBridge = {
     return invokeCommand("get_update_credential_status");
   },
 
+  async softwareUpdateSnapshot(): Promise<import("@hermes/protocol").SoftwareUpdateState> {
+    return invokeCommand("software_update_snapshot");
+  },
+  async softwareUpdateCheck(component: import("@hermes/protocol").SoftwareUpdateComponent = "all"): Promise<import("@hermes/protocol").SoftwareUpdateState> {
+    return invokeCommand("software_update_check", { component });
+  },
+  async softwareUpdateDownload(): Promise<import("@hermes/protocol").SoftwareUpdateState> {
+    return invokeCommand("software_update_download");
+  },
+  async softwareUpdateRollback(component: "runtime" | "ui"): Promise<import("@hermes/protocol").SoftwareUpdateState> {
+    return invokeCommand("software_update_rollback", { component });
+  },
+  async softwareUpdateCancel(): Promise<import("@hermes/protocol").SoftwareUpdateState> {
+    return invokeCommand("software_update_cancel");
+  },
+  async softwareUpdateApply(): Promise<import("@hermes/protocol").SoftwareUpdateState> {
+    return invokeCommand("software_update_apply");
+  },
+  async softwareUpdateAcknowledge(): Promise<import("@hermes/protocol").SoftwareUpdateState> {
+    return invokeCommand("software_update_acknowledge", { sourceCommit: BUILD_COMMIT });
+  },
+  onSoftwareUpdateState(handler: (state: import("@hermes/protocol").SoftwareUpdateState) => void): () => void {
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    import("@tauri-apps/api/event").then(({ listen }) =>
+      listen<import("@hermes/protocol").SoftwareUpdateState>("software-update-state", (event) => handler(event.payload)),
+    ).then((fn) => { if (disposed) safeUnlisten(fn); else unlisten = fn; }).catch(() => {});
+    return () => { disposed = true; safeUnlisten(unlisten); };
+  },
+
   async appUpdateCheck(): Promise<AppUpdateCheckResult> {
     return invokeCommand("app_update_check");
   },

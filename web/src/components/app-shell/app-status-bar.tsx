@@ -21,6 +21,7 @@ import {
 import { detectHostOS, runtime } from "@/lib/runtime";
 import { buildSidebarVersionRows } from "./sidebar-version-tag";
 import s from "./app-status-bar.module.css";
+import { SoftwareUpdateStatus } from "./software-update-status";
 
 function formatModelShort(model: string | null | undefined): string {
   if (!model) return "—";
@@ -174,6 +175,8 @@ export function AppStatusBar() {
           <span className={s.lbl}>今日 Tokens</span>
           <span className={s.val}>{formatTokens(todayTokens)}</span>
         </span>
+        <span className={s.sep} />
+        <SoftwareUpdateStatus />
       </div>
     </footer>
   );

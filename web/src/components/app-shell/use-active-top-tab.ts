@@ -26,6 +26,7 @@ const ADVANCED_ROUTES = [
   "/kernel",
   "/env",
   "/about",
+  "/updates",
   "/advanced",
   "/settings",
 ] as const;

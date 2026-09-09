@@ -1,9 +1,9 @@
 {
   "desktopVersion": "0.9.0",
-  "desktopCodeCommit": "5328dee023e32b468d227fcd18834c0365a65875",
-  "desktopSourceCommit": "5328dee023e32b468d227fcd18834c0365a65875",
-  "installedDesktopSha256": "fd3ebae91731b933a6707070192b2a3913620153c663fd1f2ca9296c65a069ac",
-  "runtimeVersion": "0.21.0-cn.10",
+  "desktopCodeCommit": "71af0da7e8cafc42c987c9451de310f60e3f1c66",
+  "desktopSourceCommit": "71af0da7e8cafc42c987c9451de310f60e3f1c66",
+  "installedDesktopSha256": "2cfe6a8fa0f972de2c68fd1dc3f52af3b0dec27cd9a9ba782e1b7751461107d6",
+  "runtimeVersion": "0.21.0-cn.12",
   "coreCommit": "92d532982c23627ccd7defe88519c462cbbb3656",
   "provider": "deepseek",
   "model": "deepseek-v4-flash",
@@ -14,16 +14,24 @@
       "reqwest/rustls-tls-native-roots"
     ],
     "testSigningKey": true,
-    "productionReleaseArtifact": false
+    "productionReleaseArtifact": false,
+    "windowsAuthenticodeSigned": false,
+    "nsisCompression": "zlib"
   },
-  "desktopInstallerSha256": "16751b4814dfd90994df3bd443d24569cdb97a2bd8497acf3f507293ff552663",
-  "runtimeArchiveSha256": "5daa85d5b3974f2a0ab0202d3bf3d5e173375301124e6fc7c29c895f565a5cbc",
-  "desktopArtifactsDir": "desktop-0.9.0-cn10",
+  "desktopInstallerSha256": "91b99b20cf4cb751766045162d1c7148df96dd973490d0dd695bb7e1c0e9e115",
+  "runtimeArchiveSha256": "48be060f30b3ea74be98b93b6db7855c9289a243e2b7d62502f09abda7701148",
+  "desktopArtifactsDir": "desktop-0.9.0-ux12",
   "shellUpdateCandidate": {
-    "version": "0.9.1-prototype.local.5",
-    "desktopCodeCommit": "5328dee023e32b468d227fcd18834c0365a65875",
-    "installerSha256": "47eebe2f5359824b8b465cb44a2e239b2ec0b31f255250bc77f9e2bb616f28de",
-    "exeSha256": "9c632144a88e27dba48ce5f76c699d257f2f346067c05b376cb0d697d40a184e",
-    "runtimeVersion": "0.21.0-cn.10"
+    "version": "0.9.1-prototype.ux.6",
+    "desktopCodeCommit": "71af0da7e8cafc42c987c9451de310f60e3f1c66",
+    "installerSha256": "8da39dfd12ab4a487ed1343ee2ab648447f44877d4685895a301042c94dc6c34",
+    "exeSha256": "0b6ed7b18911aa9917a8903c3c43b56c4e268712bafc48aff2ddb211d3637efb",
+    "runtimeVersion": "0.21.0-cn.12"
+  },
+  "sourceSnapshot": {
+    "dirty": true,
+    "desktopManifest": "desktop-source.json",
+    "coreManifest": "core-source.json",
+    "note": "提交号是基点；本轮产品改动尚未提交，确切源码以验收证据中的逐文件摘要为准。"
   }
 }

@@ -26,3 +26,5 @@
 .cards h2 { margin: 12px 0 4px; font-size: 14px; }
 .cards p { margin: 0 0 16px; color: var(--h-text-2); font-size: 11px; line-height: 1.6; }
 @media (max-width: 760px) { .shell { grid-template-columns: 64px 1fr; } .brand div, .shell nav a { font-size: 0; } .shell nav a { justify-content: center; } .cards { grid-template-columns: 1fr; } }
+
+.updateFooter { display: flex; justify-content: flex-end; padding: 12px 24px; border-top: 1px solid var(--h-line); }

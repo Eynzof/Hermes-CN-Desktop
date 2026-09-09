@@ -478,6 +478,14 @@ declare global {
       setUpdateConfig?(config: import("@hermes/protocol").UpdateConfig): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
       importUpdateInvitation?(input: import("@hermes/protocol").ImportUpdateInvitationInput): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
       getUpdateCredentialStatus?(): Promise<import("@hermes/protocol").UpdateCredentialStatus>;
+      softwareUpdateSnapshot?(): Promise<import("@hermes/protocol").SoftwareUpdateState>;
+      softwareUpdateCheck?(component?: import("@hermes/protocol").SoftwareUpdateComponent): Promise<import("@hermes/protocol").SoftwareUpdateState>;
+      softwareUpdateDownload?(): Promise<import("@hermes/protocol").SoftwareUpdateState>;
+      softwareUpdateRollback?(component: "runtime" | "ui"): Promise<import("@hermes/protocol").SoftwareUpdateState>;
+      softwareUpdateCancel?(): Promise<import("@hermes/protocol").SoftwareUpdateState>;
+      softwareUpdateApply?(): Promise<import("@hermes/protocol").SoftwareUpdateState>;
+      softwareUpdateAcknowledge?(): Promise<import("@hermes/protocol").SoftwareUpdateState>;
+      onSoftwareUpdateState?(handler: (state: import("@hermes/protocol").SoftwareUpdateState) => void): () => void;
       appUpdateCheck?(): Promise<import("@hermes/protocol").AppUpdateCheckResult>;
       appUpdatePending?(): Promise<import("@hermes/protocol").AppUpdatePendingResult>;
       appUpdateDownload?(): Promise<import("@hermes/protocol").AppUpdateDownloadResult>;

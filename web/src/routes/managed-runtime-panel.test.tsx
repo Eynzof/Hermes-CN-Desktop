@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import ReactDOMServer from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -114,33 +115,40 @@ describe("ManagedRuntimePanel — signed shell update buttons", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows 检查更新 / 一键更新 / 更新源设置 for a managed runtime with the update bridge", () => {
-    const html = ReactDOMServer.renderToStaticMarkup(<ManagedRuntimePanel />);
-    expect(html).toContain("检查更新");
-    expect(html).toContain("一键更新");
+  it("keeps update controls out of the ordinary kernel panel", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(<MemoryRouter><ManagedRuntimePanel /></MemoryRouter>);
+    expect(html).toContain("软件更新");
+    expect(html).not.toContain("更新源设置");
+    expect(html).not.toContain("下载界面更新");
+  });
+
+  it("shows 检查更新 / 下载桌面应用更新 / 更新源设置 for a managed runtime with the update bridge", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(<MemoryRouter><ManagedRuntimePanel advancedUpdates /></MemoryRouter>);
+    expect(html).toContain("检查桌面应用更新");
+    expect(html).toContain("下载桌面应用更新");
     expect(html).toContain("更新源设置");
   });
 
-  it("shows the UI hot-update buttons (检查界面更新 / UI 热更新 / 回退界面) when the ui bridge is present", () => {
-    const html = ReactDOMServer.renderToStaticMarkup(<ManagedRuntimePanel />);
-    expect(html).toContain("UI 热更新");
+  it("shows the UI hot-update buttons (检查界面更新 / 下载界面更新 / 回退界面) when the ui bridge is present", () => {
+    const html = ReactDOMServer.renderToStaticMarkup(<MemoryRouter><ManagedRuntimePanel advancedUpdates /></MemoryRouter>);
+    expect(html).toContain("下载界面更新");
     expect(html).toContain("检查界面更新");
     expect(html).toContain("回退界面");
   });
 
   it("hides the UI hot-update buttons when the ui bridge is missing", () => {
     stubWindow({ hermesDesktop: { appUpdateCheck: vi.fn(), appUpdateDownload: vi.fn(), appUpdateInstall: vi.fn(), getDesktopControlState: vi.fn() } });
-    const html = ReactDOMServer.renderToStaticMarkup(<ManagedRuntimePanel />);
-    expect(html).not.toContain("UI 热更新");
+    const html = ReactDOMServer.renderToStaticMarkup(<MemoryRouter><ManagedRuntimePanel advancedUpdates /></MemoryRouter>);
+    expect(html).not.toContain("下载界面更新");
     expect(html).not.toContain("检查界面更新");
     expect(html).not.toContain("回退界面");
   });
 
   it("hides the update section when the bridge is missing", () => {
     stubWindow({ hermesDesktop: { getDesktopControlState: vi.fn() } });
-    const html = ReactDOMServer.renderToStaticMarkup(<ManagedRuntimePanel />);
+    const html = ReactDOMServer.renderToStaticMarkup(<MemoryRouter><ManagedRuntimePanel advancedUpdates /></MemoryRouter>);
     expect(html).not.toContain("检查更新");
-    expect(html).not.toContain("一键更新");
+    expect(html).not.toContain("下载桌面应用更新");
   });
 
   it("renders the update-source settings form with the CN defaults", () => {
@@ -148,7 +156,7 @@ describe("ManagedRuntimePanel — signed shell update buttons", () => {
     // default); verify the defaults helper backing the form are consistent.
     expect(defaultUpdateConfig().releaseManifestUrl).toContain("desktop.hermesagent.org.cn");
     expect(defaultUpdateConfig().shellUpdaterEndpoint).toBe("");
-    const html = ReactDOMServer.renderToStaticMarkup(<ManagedRuntimePanel />);
+    const html = ReactDOMServer.renderToStaticMarkup(<MemoryRouter><ManagedRuntimePanel advancedUpdates /></MemoryRouter>);
     expect(html).not.toContain("releaseManifestUrl（统一更新清单）");
   });
 });

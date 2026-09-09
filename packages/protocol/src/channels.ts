@@ -835,3 +835,36 @@ export interface ApplyConnectionResult {
   sessionToken?: string;
   error?: string;
 }
+
+
+export type SoftwareUpdateComponent = "all" | "app" | "runtime" | "ui";
+export interface SoftwareUpdateTarget {
+  kind: Exclude<SoftwareUpdateComponent, "all">;
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+  publishedAt: string | null;
+  size: number | null;
+}
+export interface SoftwareUpdateIssue { code: string; message: string; detail: string }
+export interface SoftwareUpdateActivity { id: string; kind: string; sessionId: string; pid: number; started: number | null }
+export interface SoftwareUpdateState {
+  phase: "idle" | "checking" | "available" | "downloading" | "ready" | "waiting" | "applying" | "completed" | "error";
+  currentVersion: string;
+  channel: string;
+  customSource: boolean;
+  development: boolean;
+  checkedAt: number | null;
+  targets: SoftwareUpdateTarget[];
+  progress: number | null;
+  downloadedBytes: number;
+  totalBytes: number | null;
+  currentComponent: string | null;
+  error: SoftwareUpdateIssue | null;
+  warnings: SoftwareUpdateIssue[];
+  activities: SoftwareUpdateActivity[];
+  activityError: string | null;
+  downloadSource: string | null;
+  reloadRequired: boolean;
+  completedAt: number | null;
+}

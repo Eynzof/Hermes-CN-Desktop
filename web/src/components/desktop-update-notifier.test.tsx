@@ -1,170 +1,86 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SoftwareUpdateState } from "@hermes/protocol";
+import { DesktopUpdateNotifier, APP_UPDATE_INITIAL_DELAY_MS, nextAppUpdateDelay } from "./desktop-update-notifier";
+import { acceptSoftwareUpdateState, INITIAL_UPDATE_STATE } from "@/lib/software-update";
+import { __resetUiStoreForTests } from "@/lib/ui-store";
 
-vi.mock("@/lib/desktop-update", () => ({
-  checkDesktopUpdate: vi.fn(),
-  DESKTOP_UPDATE_AUTO_CHECK_DATE_KEY: "k.auto",
-  DESKTOP_UPDATE_DISMISSED_VERSION_KEY: "k.dismissed",
-  desktopUpdateDateKey: () => "2026-01-01",
-  shouldRunAutoDesktopUpdateCheck: () => true,
-  shouldShowDesktopUpdateNotice: (
-    result: { ok: boolean; updateAvailable: boolean; latestVersion?: string },
-    dismissed: string | null,
-  ) => Boolean(result.ok && result.updateAvailable && result.latestVersion !== dismissed),
-}));
-
-vi.mock("@/lib/ui-store", () => ({
-  readUiValue: vi.fn(() => null),
-  writeUiValue: vi.fn(),
-}));
-
-vi.mock("@/lib/external-links", () => ({
-  openExternalUrl: vi.fn(async () => ({ ok: true })),
-}));
-
-vi.mock("@/lib/build-info", () => ({
-  versionLabel: (version: string | undefined) => (version ? `v${version}` : "v—"),
-}));
-
-vi.mock("@/lib/runtime", () => ({
-  runtime: { platform: "tauri", isPortable: () => false },
-}));
-
-vi.mock("@/lib/app-update", () => ({
-  checkAppUpdate: vi.fn(),
-  downloadAppUpdate: vi.fn(),
-  getPendingAppUpdate: vi.fn(async () => ({ ready: false, fallbackUsed: false })),
-  installAppUpdate: vi.fn(async () => ({ ok: true, installStarted: true })),
-  hasAppUpdateBridge: vi.fn(() => true),
-}));
-
-import {
-  APP_UPDATE_INITIAL_DELAY_MS,
-  DesktopUpdateNotifier,
-  nextAppUpdateDelay,
-} from "./desktop-update-notifier";
-import * as desktopUpdate from "@/lib/desktop-update";
-import { openExternalUrl } from "@/lib/external-links";
-import {
-  checkAppUpdate,
-  downloadAppUpdate,
-  getPendingAppUpdate,
-  hasAppUpdateBridge,
-  installAppUpdate,
-} from "@/lib/app-update";
-
-const authorised = {
-  ok: true,
-  updateAvailable: true,
-  compatible: true,
-  currentVersion: "0.8.0",
-  latestVersion: "0.8.1",
-  releaseId: "desktop-0.8.1-windows-x86_64",
-  channel: "canary",
-  manifestSource: "cloudflare-control",
+let live: SoftwareUpdateState;
+const candidate: SoftwareUpdateState = {
+  ...INITIAL_UPDATE_STATE, phase: "available", checkedAt: 1000,
+  targets: [{ kind: "app", version: "0.9.1", currentVersion: "0.9.0", notes: "修复会话恢复问题", publishedAt: null, size: 1000 }],
 };
-
-async function runInitialCheck() {
-  await act(async () => {
-    vi.advanceTimersByTime(APP_UPDATE_INITIAL_DELAY_MS);
-    await Promise.resolve();
-    await Promise.resolve();
-  });
+function mount() {
+  return render(<MemoryRouter><DesktopUpdateNotifier /><Routes><Route path="/updates" element={<h1>软件更新页面</h1>} /></Routes></MemoryRouter>);
 }
-
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.clearAllMocks();
-  vi.mocked(checkAppUpdate).mockResolvedValue(authorised);
-  vi.mocked(getPendingAppUpdate).mockResolvedValue({ ready: false, fallbackUsed: false });
-  vi.mocked(downloadAppUpdate).mockResolvedValue({
-    ok: true,
-    ready: true,
-    version: "0.8.1",
-    releaseId: authorised.releaseId,
-    manifestSource: "cloudflare-control",
-    downloadSource: "cloudflare-cache",
-    fallbackUsed: false,
-  });
-  Object.defineProperty(window, "hermesDesktop", {
-    configurable: true,
-    value: {
-      checkDesktopUpdate: vi.fn(),
-      appUpdateCheck: vi.fn(),
-      appUpdatePending: vi.fn(),
-      appUpdateDownload: vi.fn(),
-      appUpdateInstall: vi.fn(),
-    },
-  });
+  vi.setSystemTime(new Date("2026-09-09T12:00:00Z"));
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  __resetUiStoreForTests();
+  live = { ...INITIAL_UPDATE_STATE };
+  acceptSoftwareUpdateState(live);
+  window.hermesDesktop = {
+    softwareUpdateSnapshot: vi.fn(async () => live),
+    softwareUpdateAcknowledge: vi.fn(async () => live),
+    softwareUpdateCheck: vi.fn(async () => { live = candidate; return live; }),
+    softwareUpdateDownload: vi.fn(async () => live),
+    softwareUpdateApply: vi.fn(async () => live),
+  } as unknown as typeof window.hermesDesktop;
 });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); delete window.hermesDesktop; });
 
-afterEach(() => {
-  cleanup();
-  vi.useRealTimers();
-  delete (window as unknown as { hermesDesktop?: unknown }).hermesDesktop;
-});
-
-describe("DesktopUpdateNotifier — controlled update flow", () => {
-  it("checks the authorised Cloudflare control path only after the 60 second delay", async () => {
-    render(<DesktopUpdateNotifier />);
-    expect(checkAppUpdate).not.toHaveBeenCalled();
-    await runInitialCheck();
-    expect(checkAppUpdate).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("下载并验证")).toBeTruthy();
-    expect(desktopUpdate.checkDesktopUpdate).not.toHaveBeenCalled();
+describe("desktop update notification", () => {
+  it("checks after startup, presents user language, and never automatically downloads", async () => {
+    mount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(APP_UPDATE_INITIAL_DELAY_MS); });
+    expect(window.hermesDesktop?.softwareUpdateCheck).toHaveBeenCalledOnce();
+    expect(screen.getByText("Hermes 有更新可用")).toBeTruthy();
+    expect(screen.getByText("修复会话恢复问题")).toBeTruthy();
+    expect(screen.queryByText(/Cloudflare|SHA-256|灰度授权/)).toBeNull();
+    expect(window.hermesDesktop?.softwareUpdateDownload).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "查看更新" }));
+    expect(screen.getByRole("heading", { name: "软件更新页面" })).toBeTruthy();
   });
 
-  it("downloads and verifies before offering restart, preserving actual source diagnostics", async () => {
-    render(<DesktopUpdateNotifier />);
-    await runInitialCheck();
-    fireEvent.click(screen.getByText("下载并验证"));
+  it("closing the dialog postpones the same release rather than hiding its update state", async () => {
+    live = candidate;
+    mount();
     await act(async () => { await Promise.resolve(); });
-    expect(downloadAppUpdate).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("立即重启安装")).toBeTruthy();
-    expect(screen.getByText(/Cloudflare 缓存/)).toBeTruthy();
-    fireEvent.click(screen.getByText("立即重启安装"));
-    await act(async () => { await Promise.resolve(); });
-    expect(installAppUpdate).toHaveBeenCalledTimes(1);
-    expect(openExternalUrl).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "稍后提醒" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(live.targets).toHaveLength(1);
   });
 
-  it("restores a verified pending package without discovering through GitHub", async () => {
-    vi.mocked(getPendingAppUpdate).mockResolvedValue({
-      ready: true,
-      version: "0.8.1",
-      releaseId: authorised.releaseId,
-      downloadSource: "github-release",
-      fallbackUsed: true,
-    });
-    render(<DesktopUpdateNotifier />);
+  it("waits for running tasks and reminds after they finish without applying", async () => {
+    live = { ...candidate, phase: "waiting", activities: [{ id: "job", kind: "cron", sessionId: "", pid: 123, started: null }] };
+    mount();
     await act(async () => { await Promise.resolve(); });
-    expect(screen.getByText("立即重启安装")).toBeTruthy();
-    expect(screen.getByText(/GitHub Release 回退源/)).toBeTruthy();
-    expect(checkAppUpdate).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    live = { ...candidate, phase: "ready" };
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.getByText("更新已准备好")).toBeTruthy();
+    expect(window.hermesDesktop?.softwareUpdateApply).not.toHaveBeenCalled();
   });
 
-  it("keeps the legacy website path only when the new bridge is absent", async () => {
-    vi.mocked(hasAppUpdateBridge).mockReturnValue(false);
-    vi.mocked(desktopUpdate.checkDesktopUpdate).mockResolvedValue({
-      ok: true,
-      updateAvailable: true,
-      currentVersion: "0.7.0",
-      latestVersion: "0.8.0",
-      downloadUrl: "https://desktop.hermesagent.org.cn/#download",
-      manifestUrl: "https://desktop.hermesagent.org.cn/latest.json",
-      checkedAtMs: 1,
-    });
-    render(<DesktopUpdateNotifier />);
-    await runInitialCheck();
-    fireEvent.click(screen.getByText("手工下载"));
+  it("does not interrupt an existing dialog", async () => {
+    live = candidate;
+    const existing = document.createElement("div");
+    existing.setAttribute("role", "dialog"); existing.setAttribute("aria-modal", "true"); document.body.appendChild(existing);
+    mount();
     await act(async () => { await Promise.resolve(); });
-    expect(openExternalUrl).toHaveBeenCalledWith("https://desktop.hermesagent.org.cn/#download");
-    expect(checkAppUpdate).not.toHaveBeenCalled();
+    expect(screen.queryByText("Hermes 有更新可用")).toBeNull();
+    existing.remove();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.getByText("Hermes 有更新可用")).toBeTruthy();
   });
 
-  it("adds a bounded 12-hour jitter", () => {
-    expect(nextAppUpdateDelay(() => 0)).toBe(11.5 * 60 * 60 * 1_000);
-    expect(nextAppUpdateDelay(() => 1)).toBe(12.5 * 60 * 60 * 1_000);
+  it("keeps the existing polling jitter bounded", () => {
+    expect(nextAppUpdateDelay(() => 0)).toBe(11.5 * 60 * 60 * 1000);
+    expect(nextAppUpdateDelay(() => 1)).toBe(12.5 * 60 * 60 * 1000);
   });
 });

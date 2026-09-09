@@ -210,6 +210,8 @@ export async function chat(page: Page, prompt: string, answer: string | RegExp, 
 }
 
 export async function sendChat(page: Page, prompt: string, answer: string | RegExp, evidenceHome?: string, turnTimeoutMs = 120_000) {
+  const updateNotice = page.getByRole('dialog', { name: /^(Hermes 有更新可用|更新已准备好)$/ });
+  if (await updateNotice.isVisible()) await updateNotice.getByRole('button', { name: '稍后提醒', exact: true }).click();
   const sessionHome = evidenceHome ?? (await bridge<any>(page, 'getRuntimeInfo')).process.hermesHome;
   const previousId = page.url().includes('#/tasks/') ? decodeURIComponent(page.url().split('#/tasks/')[1].split('?')[0]) : null;
   const finished = (id: string) => sessionEvidence(id, sessionHome).log.filter((line: string) => line.includes('tui turn finished:'));

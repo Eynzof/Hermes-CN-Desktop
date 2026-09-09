@@ -779,7 +779,7 @@ fn configured_manifest_url_from_update_config() -> Option<String> {
     ))
 }
 
-fn configured_manifest_url() -> Option<String> {
+pub(crate) fn configured_manifest_url() -> Option<String> {
     // 1. Fully-formed URL via runtime env (highest precedence)
     if let Ok(explicit) = std::env::var("HERMES_RUNTIME_UPDATE_MANIFEST_URL") {
         let trimmed = explicit.trim().to_string();
@@ -1488,6 +1488,9 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
         .send()
         .await
     {
+        Ok(res) if res.status() == reqwest::StatusCode::NO_CONTENT => RuntimeUpdateCheckResult {
+            ok: true, update_available: false, current_runtime_version: read_current_record().map(|r| r.runtime_version), manifest: None, error: None,
+        },
         Ok(res) if res.status().is_success() => match res.json::<RuntimeUpdateManifest>().await {
             Ok(manifest) => {
                 if manifest.schema_version != MANIFEST_SCHEMA_VERSION {
@@ -1517,7 +1520,9 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
                         )),
                     };
                 }
-                if let Err(error) = validate_manifest_for_desktop_compatibility(&manifest) {
+                if let Err(error) = validate_manifest_for_desktop_compatibility(&manifest)
+                    .and_then(|_| verify_signature(&manifest))
+                {
                     return RuntimeUpdateCheckResult {
                         ok: false,
                         update_available: false,
@@ -1527,10 +1532,7 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
                     };
                 }
                 let current = read_current_record();
-                let update_available = current
-                    .as_ref()
-                    .map(|c| c.runtime_version != manifest.runtime_version)
-                    .unwrap_or(true);
+                let update_available = runtime_candidate_is_newer(&manifest);
                 RuntimeUpdateCheckResult {
                     ok: true,
                     update_available,
@@ -2358,139 +2360,116 @@ pub async fn install_bundled_runtime_if_needed(
     result
 }
 
-/// Download, verify, and install a runtime update.
+/// Cache and verify a pinned candidate without changing the active runtime.
+pub async fn prepare_runtime_update(resolved: &RuntimeUpdateManifest) -> Result<(), String> {
+    verify_signature(resolved)?;
+    let version = validate_manifest_for_current_platform(resolved)?;
+    validate_manifest_for_desktop_compatibility(resolved)?;
+    if !runtime_candidate_is_newer(resolved) {
+        return Err("当前内核已经是此版本或更新版本".into());
+    }
+    let url = url::Url::parse(&resolved.artifact_url).map_err(|e| e.to_string())?;
+    if url.scheme() != "https" {
+        return Err("artifact_url must be https".into());
+    }
+    let path = downloads_root().join(format!("{version}.zip"));
+    if file_sha256(&path).as_deref() == Some(&resolved.sha256.to_lowercase()) {
+        return Ok(());
+    }
+    let response = RUNTIME_HTTP_CLIENT
+        .get(url)
+        .timeout(RUNTIME_ARTIFACT_HTTP_TIMEOUT)
+        .send()
+        .await
+        .map_err(|e| format!("Download failed: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("Download failed: {e}"))?;
+    let bytes = crate::update_operation::response_bytes(response).await?;
+    prepare_runtime_cache_target(&path)?;
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    if file_sha256(&path).as_deref() != Some(&resolved.sha256.to_lowercase()) {
+        return Err("SHA-256 mismatch: 内核更新包校验失败".into());
+    }
+    Ok(())
+}
+
+pub fn runtime_candidate_is_newer(manifest: &RuntimeUpdateManifest) -> bool {
+    let Some(current) = read_current_record() else {
+        return true;
+    };
+    match (
+        semver::Version::parse(&manifest.kernel_version),
+        semver::Version::parse(&current.kernel_version),
+    ) {
+        (Ok(next), Ok(installed)) => {
+            next > installed
+                || (next == installed && manifest.runtime_revision > current.runtime_revision)
+        }
+        _ => false,
+    }
+}
+
+/// Apply only the already verified archive; never silently download a different candidate.
+pub async fn apply_prepared_runtime(resolved: RuntimeUpdateManifest) -> RuntimeInstallUpdateResult {
+    let validation = verify_signature(&resolved)
+        .and_then(|_| validate_manifest_for_desktop_compatibility(&resolved))
+        .and_then(|_| validate_manifest_for_current_platform(&resolved));
+    let version = match validation {
+        Ok(version) if runtime_candidate_is_newer(&resolved) => version,
+        Ok(_) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some("当前内核已经是此版本或更新版本".into()),
+            }
+        }
+        Err(error) => {
+            return RuntimeInstallUpdateResult {
+                ok: false,
+                installed: None,
+                previous: None,
+                error: Some(error),
+            }
+        }
+    };
+    let path = downloads_root().join(format!("{version}.zip"));
+    install_runtime_zip(resolved, &path, "update").await
+}
+
+/// Compatibility entrypoint for existing callers.
 pub async fn install_runtime_update(
     manifest: Option<RuntimeUpdateManifest>,
 ) -> RuntimeInstallUpdateResult {
     let resolved = match manifest {
-        Some(m) => m,
+        Some(manifest) => manifest,
         None => {
             let check = check_runtime_update().await;
-            match check.manifest {
-                Some(m) => m,
+            match check
+                .manifest
+                .filter(|_| check.ok && check.update_available)
+            {
+                Some(manifest) => manifest,
                 None => {
                     return RuntimeInstallUpdateResult {
                         ok: false,
                         installed: None,
                         previous: None,
-                        error: Some(
-                            check
-                                .error
-                                .unwrap_or_else(|| "No manifest available".into()),
-                        ),
-                    };
+                        error: Some(check.error.unwrap_or_else(|| "没有可用的内核更新".into())),
+                    }
                 }
             }
         }
     };
-
-    // Verify signature
-    if let Err(e) = verify_signature(&resolved) {
+    if let Err(error) = prepare_runtime_update(&resolved).await {
         return RuntimeInstallUpdateResult {
             ok: false,
             installed: None,
             previous: None,
-            error: Some(e),
+            error: Some(error),
         };
     }
-
-    let version_segment = match validate_manifest_for_current_platform(&resolved) {
-        Ok(version_segment) => version_segment,
-        Err(e) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(e),
-            };
-        }
-    };
-    if let Err(e) = validate_manifest_for_desktop_compatibility(&resolved) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
-
-    // Validate URL scheme before downloading
-    match url::Url::parse(&resolved.artifact_url) {
-        Ok(u) if u.scheme() == "https" => {}
-        Ok(u) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("artifact_url must be https, got {}", u.scheme())),
-            };
-        }
-        Err(e) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Invalid artifact_url: {}", e)),
-            };
-        }
-    }
-
-    let artifact = match RUNTIME_HTTP_CLIENT
-        .get(&resolved.artifact_url)
-        .timeout(RUNTIME_ARTIFACT_HTTP_TIMEOUT)
-        .send()
-        .await
-    {
-        Ok(res) if res.status().is_success() => match res.bytes().await {
-            Ok(b) => b.to_vec(),
-            Err(e) => {
-                return RuntimeInstallUpdateResult {
-                    ok: false,
-                    installed: None,
-                    previous: None,
-                    error: Some(format!("Download failed: {}", e)),
-                };
-            }
-        },
-        Ok(res) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Download HTTP {}", res.status())),
-            };
-        }
-        Err(e) => {
-            return RuntimeInstallUpdateResult {
-                ok: false,
-                installed: None,
-                previous: None,
-                error: Some(format!("Download failed: {}", e)),
-            };
-        }
-    };
-
-    // Write zip to downloads dir; the shared installer path verifies,
-    // extracts, smoke-tests, and records it.
-    let zip_path = downloads_root().join(format!("{version_segment}.zip"));
-    if let Err(e) = prepare_runtime_cache_target(&zip_path) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(e),
-        };
-    }
-    if let Err(e) = fs::write(&zip_path, &artifact) {
-        return RuntimeInstallUpdateResult {
-            ok: false,
-            installed: None,
-            previous: None,
-            error: Some(format!("Failed to write zip: {}", e)),
-        };
-    }
-
-    install_runtime_zip(resolved, &zip_path, "update").await
+    apply_prepared_runtime(resolved).await
 }
 
 /// Rollback to the previous runtime version.

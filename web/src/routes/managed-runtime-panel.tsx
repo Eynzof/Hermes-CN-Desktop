@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useSoftwareUpdate } from "@/hooks/use-software-update";
 import { Download, PackageX, Play, RefreshCw, RotateCcw, Settings2, Square, Trash2 } from "lucide-react";
 import type { RuntimeControlResult, UpdateConfig, UpdateCredentialStatus } from "@hermes/protocol";
 import { Alert, Button, LoadingIndicator } from "@hermes/shared-ui";
@@ -15,12 +17,8 @@ import {
   setUpdateConfig,
   validateUpdateConfig,
 } from "@/lib/update-config";
-import { parseAppUpdateCheckResult } from "@/lib/app-update";
-import { useAppUpdateCheck, useAppUpdateDownload, useAppUpdateInstall } from "@/hooks/use-app-update";
 import { useHotUpdateBackend } from "@/hooks/use-hot-update-backend";
 import { useRuntimeInfo } from "@/hooks/use-runtime-update";
-import { useUiUpdateCheck, useUiUpdateInstall, useUiUpdateRollback } from "@/hooks/use-ui-update";
-import { versionLabel } from "@/lib/build-info";
 import s from "./managed-runtime-panel.module.css";
 
 type RuntimeAction =
@@ -32,7 +30,7 @@ type RuntimeAction =
   | "reinstall"
   | "switch";
 
-export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) {
+export function ManagedRuntimePanel({ compact = false, advancedUpdates = false }: { compact?: boolean; advancedUpdates?: boolean }) {
   const desktop = typeof window === "undefined" ? undefined : window.hermesDesktop;
   const [control, setControl] = useState<RuntimeControlResult | null>(null);
   const [busy, setBusy] = useState<RuntimeAction | null>(null);
@@ -41,17 +39,11 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
   const attached = runtime.isAttached();
 
   // --- Signed shell update (target bundled Core checked by compatibility matrix) ---
-  const appCheck = useAppUpdateCheck();
-  const appDownload = useAppUpdateDownload();
-  const appInstall = useAppUpdateInstall();
+  const updates = useSoftwareUpdate();
   const hotUpdate = useHotUpdateBackend();
-  const uiCheck = useUiUpdateCheck();
-  const uiInstall = useUiUpdateInstall();
-  const uiRollback = useUiUpdateRollback();
   const runtimeInfoQuery = useRuntimeInfo();
   const isLocalSource =
     runtimeInfoQuery.data?.current?.source === "local-source";
-  const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [updateSourceOpen, setUpdateSourceOpen] = useState(false);
   const [cfgDraft, setCfgDraft] = useState<UpdateConfig>(() => defaultUpdateConfig());
   const [cfgLoaded, setCfgLoaded] = useState(false);
@@ -81,72 +73,8 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
     }
   }, []);
 
-  const handleCheckUpdate = useCallback(async () => {
-    setMessage(null);
-    try {
-      const result = parseAppUpdateCheckResult(await appCheck.mutateAsync());
-      if (!result.ok) {
-        setMessage({ tone: "error", text: result.error ?? "检查更新失败" });
-        setLastCheck(null);
-        return;
-      }
-      if (!result.compatible) {
-        setMessage({
-          tone: "error",
-          text: result.error ?? "候选 Desktop 与其内置 Core 不兼容，已暂停更新",
-        });
-        setLastCheck("incompatible");
-        return;
-      }
-      setLastCheck(result.updateAvailable ? result.latestVersion ?? "new" : "latest");
-      setMessage({
-        tone: result.updateAvailable ? "ok" : "ok",
-        text: result.updateAvailable
-          ? `发现新版本 ${versionLabel(result.latestVersion)}（内置 Core ${result.targetCoreVersion ?? "未知"}），可安全更新`
-          : `已是最新版本（${versionLabel(result.currentVersion)}）`,
-      });
-    } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
-    }
-  }, [appCheck]);
-
-  const handleInstallUpdate = useCallback(async () => {
-    const ok = await confirm({
-      title: "更新 Hermes Desktop",
-      body: "将先下载完整 Desktop 包并校验 Tauri 签名与 SHA-256。下载完成前不会停止当前 Runtime。确定继续吗？",
-      confirmLabel: "下载并验证",
-      danger: false,
-    });
-    if (!ok) return;
-    setMessage(null);
-    try {
-      const downloaded = await appDownload.mutateAsync();
-      if (!downloaded.ok) {
-        setMessage({ tone: "error", text: downloaded.error ?? "更新包下载失败" });
-        return;
-      }
-      const source = downloaded.downloadSource === "github-release" ? "GitHub 回退源" : "Cloudflare 缓存";
-      const installNow = await confirm({
-        title: "更新包已准备好",
-        body: `签名验证通过，实际下载源：${source}。立即安装会停止本应用管理的 Runtime 并退出；也可以稍后再安装。`,
-        confirmLabel: "立即重启安装",
-        cancelLabel: "稍后",
-        danger: false,
-      });
-      if (!installNow) {
-        setMessage({ tone: "ok", text: `更新包已缓存（${source}），可稍后继续安装` });
-        return;
-      }
-      const installed = await appInstall.mutateAsync();
-      if (!installed.ok) {
-        setMessage({ tone: "error", text: installed.error ?? "启动安装器失败" });
-        return;
-      }
-      setMessage({ tone: "ok", text: "授权已复核，安装器已启动…" });
-    } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
-    }
-  }, [appDownload, appInstall, confirm]);
+  const handleCheckUpdate = () => updates.check("app");
+  const handleInstallUpdate = () => updates.download();
 
   const handleImportInvitation = useCallback(async () => {
     setCfgSaving(true);
@@ -156,6 +84,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
       setCfgDraft(normalizeUpdateConfig(saved.config));
       setInvitationText("");
       setCredentialStatus(await getUpdateCredentialStatus());
+      await updates.check();
       setMessage({ tone: "ok", text: "邀请配置已导入，令牌已写入系统凭据库" });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -164,7 +93,7 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
     } finally {
       setCfgSaving(false);
     }
-  }, [invitationText]);
+  }, [invitationText, updates.check]);
 
   const handleSaveUpdateConfig = useCallback(async (testConnection: boolean) => {
     setCfgSaving(true);
@@ -174,13 +103,11 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
       setCfgDraft(normalizeUpdateConfig(saved.config));
       setCfgError(saved.configError ?? null);
       setMessage({ tone: "ok", text: "更新源配置已保存" });
+      const result = await updates.check();
       if (testConnection) {
-        const result = parseAppUpdateCheckResult(await appCheck.mutateAsync());
         setMessage({
-          tone: result.ok ? "ok" : "error",
-          text: result.ok
-            ? `连接正常：最新版本 ${versionLabel(result.latestVersion)}`
-            : `连接失败：${result.error ?? "未知错误"}`,
+          tone: result.phase === "error" ? "error" : "ok",
+          text: result.phase === "error" ? `连接失败：${result.error?.detail ?? "未知错误"}` : "更新源已保存，检查完成",
         });
       }
     } catch (error) {
@@ -189,11 +116,12 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
     } finally {
       setCfgSaving(false);
     }
-  }, [cfgDraft, appCheck]);
+  }, [cfgDraft, updates.check]);
 
   const cfgValidationError = validateUpdateConfig(cfgDraft);
 
-  const handleHotUpdateBackend = useCallback(async () => {    const ok = await confirm({
+  const handleHotUpdateBackend = useCallback(async () => {
+    const ok = await confirm({
       title: "热更新后端（本地源码）",
       body: "将从本地 Core 源码仓库 git pull 最新代码并重装进 dev-runtime，随后自动重启内核。确定继续吗？",
       confirmLabel: "热更新",
@@ -216,49 +144,8 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
     }
   }, [hotUpdate, confirm]);
 
-  const [lastUiCheck, setLastUiCheck] = useState<string | null>(null);
-
-  const handleUiCheckUpdate = useCallback(async () => {
-    setMessage(null);
-    try {
-      const result = await uiCheck.mutateAsync();
-      if (!result.ok) {
-        setMessage({ tone: "error", text: result.error ?? "检查界面更新失败" });
-        setLastUiCheck(null);
-        return;
-      }
-      setLastUiCheck(result.updateAvailable ? result.manifest?.uiVersion ?? "new" : "latest");
-      setMessage({
-        tone: "ok",
-        text: result.updateAvailable
-          ? `发现新界面版本 ${result.manifest?.uiVersion ?? ""}，可热更新`
-          : `界面已是最新（${result.currentUiVersion ?? "内嵌"}）`,
-      });
-    } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
-    }
-  }, [uiCheck]);
-
-  const handleUiInstallUpdate = useCallback(async () => {
-    const ok = await confirm({
-      title: "UI 热更新",
-      body: "将下载并安装新版界面包（仅替换界面资源，不重启内核）。确定继续吗？",
-      confirmLabel: "立即热更新",
-      danger: false,
-    });
-    if (!ok) return;
-    setMessage(null);
-    try {
-      const result = await uiInstall.mutateAsync();
-      if (!result.ok) {
-        setMessage({ tone: "error", text: result.error ?? "界面热更新失败" });
-        return;
-      }
-      setMessage({ tone: "ok", text: "界面已更新，正在刷新…" });
-    } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
-    }
-  }, [uiInstall, confirm]);
+  const handleUiCheckUpdate = () => updates.check("ui");
+  const handleUiInstallUpdate = () => updates.download();
 
   const handleUiRollback = useCallback(async () => {
     const ok = await confirm({
@@ -270,16 +157,16 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
     if (!ok) return;
     setMessage(null);
     try {
-      const result = await uiRollback.mutateAsync();
-      if (!result.ok) {
-        setMessage({ tone: "error", text: result.error ?? "界面回退失败" });
+      const result = await updates.rollback("ui");
+      if (result.phase === "error") {
+        setMessage({ tone: "error", text: result.error?.message ?? "界面回退失败" });
         return;
       }
       setMessage({ tone: "ok", text: "界面已回退，正在刷新…" });
     } catch (error) {
       setMessage({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     }
-  }, [uiRollback, confirm]);
+  }, [updates.rollback, confirm]);
 
   const adopt = useCallback((result: RuntimeControlResult) => {
     setControl(result);
@@ -358,10 +245,11 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
     lifecycleState: lifecycle,
     desiredState,
   });
-  const anyBusy = busy !== null;
+  const anyBusy = busy !== null || updates.busy;
 
   return (
     <section className={s.panel} data-compact={compact ? "true" : undefined}>
+      {!advancedUpdates && <>
       <div className={s.header}>
         <div>
           <p className={s.eyebrow}>内置内核生命周期</p>
@@ -478,7 +366,10 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
         </Button>
       </div>
 
-      {managed && (isLocalSource || updateBridgeReady) && (
+      <Link to="/updates" className={s.updatePageLink}>软件更新 →</Link>
+      </>}
+
+      {advancedUpdates && (isLocalSource || updateBridgeReady) && (
         <div className={s.actions}>
           {managed && isLocalSource && desktop?.hotUpdateBackend && (
             <Button
@@ -495,21 +386,21 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
               <Button
                 variant="outline"
                 onClick={() => void handleCheckUpdate()}
-                disabled={anyBusy || appCheck.isPending}
+                disabled={anyBusy || updates.busy}
               >
-                {appCheck.isPending ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
-                检查更新
+                {updates.busy ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+                检查桌面应用更新
               </Button>
               <Button
                 variant="solid"
                 tone="accent"
                 onClick={() => void handleInstallUpdate()}
                 disabled={
-                  anyBusy || appCheck.isPending || appDownload.isPending || appInstall.isPending || lastCheck === null || lastCheck === "incompatible" || lastCheck === "latest"
+                  anyBusy || updates.busy || !updates.state.targets.some((target) => target.kind === "app")
                 }
               >
-                {appDownload.isPending || appInstall.isPending ? <LoadingIndicator size="xs" /> : <Download size={12} />}
-                一键更新
+                {updates.busy ? <LoadingIndicator size="xs" /> : <Download size={12} />}
+                下载桌面应用更新
               </Button>
               <Button
                 variant="ghost"
@@ -527,54 +418,56 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
         </div>
       )}
 
-      {managed && uiBridgeReady && (
+      {advancedUpdates && uiBridgeReady && (
         <div className={s.actions}>
           <Button
             variant="outline"
             onClick={() => void handleUiCheckUpdate()}
-            disabled={anyBusy || uiCheck.isPending}
+            disabled={anyBusy || updates.busy}
           >
-            {uiCheck.isPending ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
+            {updates.busy ? <LoadingIndicator size="xs" /> : <RefreshCw size={12} />}
             检查界面更新
           </Button>
           <Button
             variant="solid"
             tone="accent"
             onClick={() => void handleUiInstallUpdate()}
-            disabled={anyBusy || uiCheck.isPending || uiInstall.isPending || lastUiCheck === "latest"}
+            disabled={anyBusy || updates.busy || !updates.state.targets.some((target) => target.kind === "ui")}
           >
-            {uiInstall.isPending ? <LoadingIndicator size="xs" /> : <Download size={12} />}
-            UI 热更新
+            {updates.busy ? <LoadingIndicator size="xs" /> : <Download size={12} />}
+            下载界面更新
           </Button>
           <Button
             variant="ghost"
             onClick={() => void handleUiRollback()}
-            disabled={anyBusy || uiRollback.isPending}
+            disabled={anyBusy || updates.busy}
           >
-            {uiRollback.isPending ? <LoadingIndicator size="xs" /> : <RotateCcw size={12} />}
+            {updates.busy ? <LoadingIndicator size="xs" /> : <RotateCcw size={12} />}
             回退界面
           </Button>
         </div>
       )}
 
-      {updateSourceOpen && (
+      {advancedUpdates && updateSourceOpen && (
         <div className={s.updateSource}>
-          <p className={s.updateSourceTitle}>更新下载源（update-config.json）</p>
+          <h3 className={s.updateSourceTitle}>更新渠道</h3>
+          <p className={s.updateSourceHint}>nightly 构建沿用原有分发渠道，请使用对应渠道和邀请配置；切换渠道不会自动降级。</p>
           <p className={s.updateSourceHint}>
             壳更新清单来自 Cloudflare 控制面，安装包优先走 Cloudflare 缓存并可按规则回退 GitHub。令牌只保存在系统凭据库，不写入 update-config.json。
           </p>
           <label className={s.fieldLabel}>
-            channel
+            更新渠道（channel）
             <select
               className={s.fieldInput}
               value={cfgDraft.channel}
               onChange={(e) => setCfgDraft((c) => ({ ...c, channel: e.target.value }))}
             >
-              {["stable", "beta", "canary", "prototype"].map((ch) => (
-                <option key={ch} value={ch}>{ch}</option>
+              {[["stable", "正式版（stable）"], ["beta", "测试版（beta）"], ["canary", "预览版（canary）"], ["prototype", "内部测试（prototype）"]].map(([ch, label]) => (
+                <option key={ch} value={ch}>{label}</option>
               ))}
             </select>
           </label>
+          <h3 className={s.updateSourceTitle}>更新源与连接</h3>
           <label className={s.fieldLabel}>
             shellUpdaterEndpoint（Tauri 动态检查端点）
             <input
@@ -584,28 +477,6 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
               placeholder="https://staging.example.workers.dev/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}"
             />
           </label>
-          <label className={s.fieldLabel}>
-            deviceId（非密钥）
-            <input
-              className={s.fieldInput}
-              value={cfgDraft.deviceId}
-              onChange={(e) => setCfgDraft((c) => ({ ...c, deviceId: e.target.value }))}
-              placeholder="稳定渠道首次检查时自动生成；内测由邀请配置提供"
-            />
-          </label>
-          <label className={s.fieldLabel}>
-            一次性邀请配置（JSON）
-            <textarea
-              className={s.fieldInput}
-              rows={5}
-              value={invitationText}
-              onChange={(e) => setInvitationText(e.target.value)}
-              placeholder='{"schemaVersion":1,"endpoint":"https://.../v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}","channel":"canary","deviceId":"...","token":"..."}'
-            />
-          </label>
-          <p className={s.updateSourceHint}>
-            凭据状态：{credentialStatus?.configured ? "已配置（系统凭据库）" : "未配置或不可读取"}
-          </p>
           <label className={s.fieldLabel}>
             releaseManifestUrl（旧清单兼容保留）
             <input
@@ -644,6 +515,29 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
               onChange={(e) => setCfgDraft((c) => ({ ...c, timeoutSeconds: Number(e.target.value) }))}
             />
           </label>
+          <h3 className={s.updateSourceTitle}>内测配置</h3>
+          <label className={s.fieldLabel}>
+            deviceId（非密钥）
+            <input
+              className={s.fieldInput}
+              value={cfgDraft.deviceId}
+              onChange={(e) => setCfgDraft((c) => ({ ...c, deviceId: e.target.value }))}
+              placeholder="稳定渠道首次检查时自动生成；内测由邀请配置提供"
+            />
+          </label>
+          <label className={s.fieldLabel}>
+            一次性邀请配置（JSON）
+            <textarea
+              className={s.fieldInput}
+              rows={5}
+              value={invitationText}
+              onChange={(e) => setInvitationText(e.target.value)}
+              placeholder='{"schemaVersion":1,"endpoint":"https://.../v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}","channel":"canary","deviceId":"...","token":"..."}'
+            />
+          </label>
+          <p className={s.updateSourceHint}>
+            凭据状态：{credentialStatus?.configured ? "已配置（系统凭据库）" : "未配置或不可读取"}
+          </p>
           {(cfgError || cfgValidationError) && (
             <Alert tone="error" size="sm">{cfgError ?? cfgValidationError}</Alert>
           )}
@@ -651,14 +545,14 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             <Button
               variant="outline"
               onClick={() => void handleImportInvitation()}
-              disabled={cfgSaving || !invitationText.trim()}
+              disabled={anyBusy || cfgSaving || !invitationText.trim()}
             >
               导入邀请配置
             </Button>
             <Button
               variant="outline"
               onClick={() => void handleSaveUpdateConfig(false)}
-              disabled={cfgSaving || Boolean(cfgValidationError)}
+              disabled={anyBusy || cfgSaving || Boolean(cfgValidationError)}
             >
               {cfgSaving ? <LoadingIndicator size="xs" /> : null}
               保存
@@ -666,9 +560,9 @@ export function ManagedRuntimePanel({ compact = false }: { compact?: boolean }) 
             <Button
               variant="outline"
               onClick={() => void handleSaveUpdateConfig(true)}
-              disabled={cfgSaving || Boolean(cfgValidationError) || appCheck.isPending}
+              disabled={anyBusy || cfgSaving || Boolean(cfgValidationError) || updates.busy}
             >
-              {appCheck.isPending ? <LoadingIndicator size="xs" /> : null}
+              {updates.busy ? <LoadingIndicator size="xs" /> : null}
               保存并测试连接
             </Button>
           </div>

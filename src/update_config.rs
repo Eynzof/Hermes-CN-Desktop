@@ -36,6 +36,7 @@ use serde::{Deserialize, Serialize};
 pub const UPDATE_CONFIG_SCHEMA_VERSION: u32 = 2;
 pub const DEFAULT_RELEASE_MANIFEST_URL: &str = "https://desktop.hermesagent.org.cn/latest.json";
 pub const DEFAULT_RUNTIME_BASE_URL: &str = "https://desktop.hermesagent.org.cn/runtime";
+pub const DEFAULT_SHELL_UPDATE_ENDPOINT: &str = "https://hot-update.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}";
 pub const DEFAULT_CHANNEL: &str = "stable";
 pub const DEFAULT_TIMEOUT_SECONDS: u64 = 10;
 const UPDATE_CONFIG_FILE: &str = "update-config.json";
@@ -91,7 +92,11 @@ impl Default for UpdateConfig {
             .filter(|channel| ALLOWED_CHANNELS.contains(channel))
             .unwrap_or(DEFAULT_CHANNEL);
         let baked_shell_endpoint = option_env!("HERMES_BAKED_SHELL_UPDATE_ENDPOINT")
-            .unwrap_or("")
+            .unwrap_or(if cfg!(debug_assertions) {
+                ""
+            } else {
+                DEFAULT_SHELL_UPDATE_ENDPOINT
+            })
             .trim();
         Self {
             schema_version: UPDATE_CONFIG_SCHEMA_VERSION,
@@ -156,6 +161,13 @@ fn read_env_trimmed(name: &str) -> Option<String> {
 /// documented cascade.
 pub fn apply_env_overrides(base: &UpdateConfig) -> UpdateConfig {
     let mut cfg = base.clone();
+    // Only migrate the old empty stable default. Explicit internal sources survive.
+    if !cfg!(debug_assertions)
+        && cfg.channel == "stable"
+        && cfg.shell_updater_endpoint.trim().is_empty()
+    {
+        cfg.shell_updater_endpoint = UpdateConfig::default().shell_updater_endpoint;
+    }
     if let Some(v) = read_env_trimmed("HERMES_UPDATE_CHANNEL") {
         cfg.channel = v;
     }
@@ -397,6 +409,7 @@ pub struct SetUpdateConfigInput {
 
 #[tauri::command]
 pub fn set_update_config(input: SetUpdateConfigInput) -> Result<UpdateConfigSnapshot, String> {
+    let _operation = crate::update_operation::UpdateOperation::begin()?;
     let mut config = input.config;
     config.schema_version = UPDATE_CONFIG_SCHEMA_VERSION;
     save(&config)?;
@@ -467,6 +480,7 @@ fn validate_invitation(input: &ImportUpdateInvitationInput) -> Result<(), String
 pub fn import_update_invitation(
     input: ImportUpdateInvitationInput,
 ) -> Result<UpdateConfigSnapshot, String> {
+    let _operation = crate::update_operation::UpdateOperation::begin()?;
     validate_invitation(&input)?;
     let mut config = load().config;
     config.schema_version = UPDATE_CONFIG_SCHEMA_VERSION;

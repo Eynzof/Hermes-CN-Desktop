@@ -3,7 +3,8 @@ import { DEFAULT_THEME_CONFIG, hydrateThemeAtom, usePlatform, type ThemeConfig }
 import { lazy, Suspense, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
 import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
-import { readUiValue } from "@/lib/ui-store";
+import { readUiValue, removeUiValue } from "@/lib/ui-store";
+import { UPDATE_ROUTE_KEY } from "@/lib/software-update";
 import { sendTelemetryPingIfDue, sendTokenUsageTelemetryIfDue } from "@/lib/telemetry";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
@@ -28,6 +29,7 @@ import { runtime } from "@/lib/runtime";
 // it is the chrome that must render immediately. Only route *pages* are
 // deferred; on navigation the lazy chunk loads once and is then cached.
 // ---------------------------------------------------------------------------
+const UpdatesRoute = lazy(() => import("@/routes/updates").then((m) => ({ default: m.UpdatesRoute })));
 const PanelRoute = lazy(() => import("@/routes/panel").then((m) => ({ default: m.PanelRoute })));
 const DetailRoute = lazy(() => import("@/routes/detail").then((m) => ({ default: m.DetailRoute })));
 const HistoryRoute = lazy(() => import("@/routes/history").then((m) => ({ default: m.HistoryRoute })));
@@ -125,6 +127,7 @@ function BackendApp() {
             <Route path="/kernel" element={withBoundary(<AdvancedRoute />)} />
             <Route path="/env" element={withBoundary(<AdvancedRoute />)} />
             <Route path="/coding-agents" element={withBoundary(<CodingAgentsRoute />)} />
+            <Route path="/updates" element={withBoundary(<UpdatesRoute />)} />
             <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
             <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
             <Route path="/settings" element={<Navigate to="/common" replace />} />
@@ -134,7 +137,6 @@ function BackendApp() {
       </AppShell>
       <ProfileSwitchOverlay />
       <RuntimeUpdateOverlay />
-      <DesktopUpdateNotifier />
       <ConnectionAuthBanner />
       <CommandPalette />
     </>
@@ -159,6 +161,14 @@ export function App() {
     if (runtime.isBackendReady()) void sendTokenUsageTelemetryIfDue();
   }, []);
 
+  useEffect(() => {
+    const savedRoute = readUiValue<string | null>(UPDATE_ROUTE_KEY, null);
+    if (savedRoute?.startsWith("#/")) {
+      removeUiValue(UPDATE_ROUTE_KEY);
+      window.location.hash = savedRoute;
+    }
+  }, []);
+
   const isGuide = location.pathname === "/guide";
   let content: ReactNode;
   if (isGuide) {
@@ -169,5 +179,5 @@ export function App() {
     content = <BackendApp />;
   }
 
-  return <div lang="zh-CN" data-hermes-platform={platform}>{content}</div>;
+  return <div lang="zh-CN" data-hermes-platform={platform}>{content}<DesktopUpdateNotifier /></div>;
 }

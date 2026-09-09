@@ -198,3 +198,21 @@
   background: var(--h-bg-soft);
   outline: 1px solid var(--h-accent-border);
 }
+
+.updateLink {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+  color: var(--h-text-2);
+  text-decoration: none;
+  padding: 4px 0;
+  white-space: nowrap;
+}
+.updateLink[data-attention="true"] { color: var(--h-accent); }
+.updateLink:hover { color: var(--h-text); }
+.updateLink:focus-visible { outline: 1px solid var(--h-accent); outline-offset: 4px; }
+@media (max-width: 1100px) {
+  .statusbar > .stat, .statusbar > .sep, .right > .stat, .right > .sep { display: none; }
+  .right { margin-left: auto; }
+}

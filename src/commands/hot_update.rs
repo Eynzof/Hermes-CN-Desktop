@@ -152,6 +152,9 @@ pub async fn hot_update_backend(
     state: State<'_, AppState>,
     input: HotUpdateBackendInput,
 ) -> Result<HotUpdateBackendResult, AppError> {
+    let _operation =
+        crate::update_operation::UpdateOperation::begin().map_err(AppError::RuntimeUnavailable)?;
+    let _maintenance = super::software_update::maintenance(&state)?;
     // Guard 1 — managed mode + local-source runtime.
     {
         let inner = state.inner.lock()?;

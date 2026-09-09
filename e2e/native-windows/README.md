@@ -6,6 +6,10 @@
 
 ## 当前基线
 
+2026-09-09 更新专项基线已切到 Desktop 0.9.0 / Core 0.21.0-cn.12，四项 RUNTIME 工作流在此安装包上通过。历史 cn.10 的 89 项全功能结果仍保留，本轮没有全量重跑。更新实现、精确产物和发布阻塞见 [软件更新验收报告](../../docs/v0.9.0-software-update-acceptance.md)。
+
+本轮可执行 `scripts/run.ps1 -Case 'RUNTIME-00[1-4]'` 复跑离线、Core、UI 和整包流程；沿用交互式计划任务、真实模型和本地签名更新服务。测试报告里的 `ux-runtime-4`、`ux-ui-1`、`ux-offline-1`、`ux-shell-4` 为本轮通过记录。软件更新页面是普通入口，原组件操作位于默认收起的高级更新选项。
+
 具体版本、Desktop/Core 提交及安装版 EXE 摘要见 `baseline.json`。测试独立根目录默认是 `C:\HermesE2E`，使用独立 runtime、HERMES_HOME 和工作区。托管 API 使用 9120，WebView2 CDP 使用 19229。测试在 Windows 上执行，连接已安装的原生应用，不启动 Vite，不替换模型接口。
 
 唯一默认模型是 DeepSeek 官方 `deepseek-v4-flash`。模型配置测试通过 UI 保存真实凭证并探测；对话测试核对 SQLite 中的模型、计费来源、Token、消息和 Core 回合结束日志。工具测试还检查实际文件。MCP 等测试服务是有明确行为的本地真实服务，用于验证第三方协议，不伪造模型或 Hermes 后端。

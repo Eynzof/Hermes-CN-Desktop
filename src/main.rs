@@ -287,6 +287,7 @@ fn main() {
         .setup(move |app| {
             use tauri::Manager;
             let state = app.state::<AppState>();
+            commands::software_update::initialize(app.handle().clone());
 
             // Create the main window: production loads the hot-updatable UI
             // through the `hermesui:` custom scheme; dev builds keep the Vite
@@ -679,6 +680,13 @@ fn main() {
             commands::session_export::export_session_json,
             commands::debug_bundle::export_debug_bundle,
             commands::desktop_update::desktop_check_update,
+            commands::software_update::software_update_snapshot,
+            commands::software_update::software_update_check,
+            commands::software_update::software_update_download,
+            commands::software_update::software_update_cancel,
+            commands::software_update::software_update_apply,
+            commands::software_update::software_update_acknowledge,
+            commands::software_update::software_update_rollback,
             commands::app_update::app_update_check,
             commands::app_update::app_update_pending,
             commands::app_update::app_update_download,

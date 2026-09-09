@@ -8,6 +8,7 @@ import ipaddress
 import json
 import shutil
 import ssl
+import time
 import zipfile
 from pathlib import Path
 
@@ -78,10 +79,16 @@ if args.prepare:
                     package.writestr(relative, file.read_text(encoding="utf-8").replace("</head>", f'<meta name="hermes-native-e2e-ui" content="{revision}"></head>'))
                 else:
                     package.write(file, relative)
-        ui = dict(schemaVersion=1, channel="prototype", uiVersion=f"0.9.0-e2e.{revision}", appVersionFloor="0.9.0", platform="win32", arch="x64",
+        ui = dict(schemaVersion=1, channel="prototype", uiVersion=f"0.9.1-e2e.{revision}", appVersionFloor="0.9.0", platform="win32", arch="x64",
                   artifactUrl=f"{base}/ui-{revision}.zip", sha256=hashlib.file_digest(archive.open("rb"), "sha256").hexdigest(),
-                  sourceRepo="Eynzof/Hermes-CN-Desktop", sourceCommit="local-e2e-candidate-see-ui-source-files")
+                  sourceRepo="Eynzof/Hermes-CN-Desktop", sourceCommit=baseline["desktopCodeCommit"])
         save(f"ui-{revision}.json", sign(ui, ui_fields))
+    save("ui-bad-hash.json", sign({**ui, "sha256": "0" * 64}, ui_fields))
+    broken = folder / "ui-broken-launch.zip"
+    with zipfile.ZipFile(broken, "w", zipfile.ZIP_DEFLATED) as package:
+        package.writestr("index.html", '<html><head><script type="module" src="./assets/broken.js"></script></head><body>Update recovery test</body></html>')
+        package.writestr("assets/broken.js", 'throw new Error("signed fixture: failed UI startup");')
+    save("ui-broken-launch.json", sign({**ui, "uiVersion": "0.9.1-e2e.3", "artifactUrl": base + "/ui-broken-launch.zip", "sha256": hashlib.file_digest(broken.open("rb"), "sha256").hexdigest()}, ui_fields))
     now = dt.datetime.now(dt.timezone.utc)
     ca_key = rsa.generate_private_key(65537, 2048)
     ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Hermes Native E2E localhost only")])
@@ -105,12 +112,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         mode = json.loads((folder / "mode.json").read_text(encoding="utf-8"))
         if self.path in ("/runtime.json", "/ui.json"):
-            self.path = "/" + mode[self.path[1:-5]]
+            selected = mode[self.path[1:-5]]
+            if selected is None:
+                self.send_response(204)
+                self.end_headers()
+                return
+            self.path = "/" + selected
         if self.path.startswith("/v1/check/"):
             self.send_response(204)
             self.end_headers()
             return
         super().do_GET()
+
+    def copyfile(self, source, outputfile):
+        delay = json.loads((folder / "mode.json").read_text(encoding="utf-8")).get("delayMs", 0) / 1000
+        try:
+            while chunk := source.read(65536):
+                outputfile.write(chunk)
+                if delay:
+                    time.sleep(delay)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # A cancelled native download closes the connection.
 
     def log_message(self, format, *params):
         with (folder / "requests.jsonl").open("a", encoding="utf-8") as log:

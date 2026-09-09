@@ -1,0 +1,39 @@
+.page { width: 100%; max-width: 880px; flex: 1; min-height: 0; overflow-y: auto; box-sizing: border-box; margin: 0 auto; padding: 32px; color: var(--h-text); }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.header h1 { margin: 0 0 8px; font-size: 24px; }
+.header p, .summary p { margin: 0; color: var(--h-text-2); font-size: 12px; line-height: 1.6; }
+.card { padding: 32px; border: 1px solid var(--h-line); background: var(--h-bg-pane); }
+.summary { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; }
+.summary h2 { margin: 0 0 8px; font-size: 20px; }
+.icon { width: 48px; height: 48px; display: grid; place-items: center; color: var(--h-accent); background: var(--h-accent-soft); flex-shrink: 0; }
+.meta { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; color: var(--h-text-3); font-size: 12px; line-height: 1.7; }
+.release { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--h-line); }
+.releaseHeading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.releaseHeading h3, .componentControls h3, .diagnostics h3 { margin: 0; font-size: 16px; }
+.releaseHeading span { font-size: 12px; color: var(--h-text-3); }
+.notes { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-size: 14px; color: var(--h-text-2); }
+.componentDetails { font-size: 12px; color: var(--h-text-3); margin-top: 12px; }
+.componentDetails summary, .advanced summary { cursor: pointer; }
+.componentDetails p { font-family: var(--h-font-mono); overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 20px; }
+.impact { display: flex; gap: 8px; align-items: center; color: var(--h-text-2); font-size: 12px; line-height: 1.7; margin-top: 24px; }
+.notice { background: var(--h-bg-soft); border: 1px solid var(--h-line); padding: 12px 16px; margin-top: 20px; font-size: 12px; line-height: 1.8; color: var(--h-text-2); }
+.notice p { margin: 0; }
+.error { border: 1px solid var(--h-line); padding: 16px; margin-top: 20px; font-size: 12px; line-height: 1.8; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.page a, .page button:not([class]) { color: var(--h-accent); }
+.page button:not([class]) { border: 0; background: transparent; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
+.download { margin-top: 24px; }
+.download progress { width: 100%; height: 8px; accent-color: var(--h-accent); }
+.download p { font-size: 12px; color: var(--h-text-2); }
+.advanced { margin-top: 24px; border: 1px solid var(--h-line); }
+.advanced > summary { display: flex; align-items: center; gap: 12px; padding: 20px; font-size: 14px; }
+.advanced > summary::after { content: "+"; margin-left: auto; }
+.advanced[open] > summary::after { content: "−"; }
+.advanced > summary small { color: var(--h-text-3); font-size: 12px; }
+.advancedBody { padding: 0 20px 20px; }
+.componentControls, .diagnostics { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--h-line); }
+.diagnostics dl { display: grid; grid-template-columns: 120px 1fr; gap: 12px; font-size: 12px; }
+.diagnostics dd { margin: 0; overflow-wrap: anywhere; }
+.diagnostics dt { color: var(--h-text-3); }
+.diagnostics pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 12px; background: var(--h-bg-soft); }
+@media (max-width: 640px) { .page { padding: 16px; } .card { padding: 20px; } .header { align-items: flex-start; gap: 12px; } .advanced > summary small { display: none; } }

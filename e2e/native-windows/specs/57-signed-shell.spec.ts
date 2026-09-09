@@ -12,8 +12,12 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
   const configFile = path.join(root, 'runtime', 'update-config.json');
   const pendingFile = path.join(root, 'runtime', 'desktop-updater-cache', 'pending.json');
   const originalConfig = readFileSync(configFile);
+  const stateFile = path.join(root, 'runtime', 'software-update.json');
+  const originalState = existsSync(stateFile) ? readFileSync(stateFile) : undefined;
   const originalProcess = JSON.parse(readFileSync(processFile, 'utf8').replace(/^\uFEFF/, ''));
   const marker = `signed-update-${Date.now()}`;
+  const failInstaller = 'C:\\HermesV090\\fail-installer';
+  expect(existsSync(failInstaller), 'The deterministic installer failure flag must start absent').toBe(false);
   const recovery = path.join(root, 'secrets', 'shell-cases', marker);
   mkdirSync(recovery, { recursive: true });
   writeFileSync(path.join(recovery, 'update-config.json'), originalConfig);
@@ -47,22 +51,10 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     page = candidate!;
     page.setDefaultTimeout(20_000);
     await page.waitForFunction(() => (window as any).__HERMES_RUNTIME__?.backendReady, undefined, { timeout: 120_000 });
-    if (hash(originalProcess.appExe) === baseline.installedDesktopSha256 && existsSync(pendingFile)) {
-      const pending = JSON.parse(readFileSync(pendingFile, 'utf8'));
-      const metadata = JSON.parse(readFileSync(path.join(fixture, 'metadata.json'), 'utf8'));
-      expect(pending.sha256).toBe(metadata.candidateInstallerSha256);
-      expect(pending.version).toBe(metadata.version);
-      const notice = page.getByRole('dialog', { name: 'Hermes Desktop 更新包已准备好', exact: true });
-      await expect(notice).toBeVisible();
-      await testInfo.attach('owned-pending-update-startup-notice', { body: await notice.ariaSnapshot(), contentType: 'text/plain' });
-      await notice.getByRole('button', { name: '稍后', exact: true }).click();
-      await expect(notice).toBeHidden();
-    } else if (hash(originalProcess.appExe) !== baseline.installedDesktopSha256) {
-      // The candidate consumes its pending record asynchronously on startup;
-      // it must not offer an update to the version it is already running.
-      await expect.poll(() => existsSync(pendingFile)).toBe(false);
-      await expect(page.getByRole('dialog', { name: 'Hermes Desktop 更新包已准备好', exact: true })).toBeHidden();
-    }
+    const readyNotice = page.getByRole('dialog', { name: '更新已准备好', exact: true });
+    if (await readyNotice.isVisible()) await readyNotice.getByRole('button', { name: '稍后提醒', exact: true }).click();
+    await route(page, '/updates?advanced=1');
+
   };
   const identify = () => {
     const processes = JSON.parse(ps(`@(Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -eq '${originalProcess.appExe}'} | Select-Object ProcessId,ExecutablePath) | ConvertTo-Json -Compress`));
@@ -75,11 +67,16 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
   const mode = (manifest: string, authorized = true) => writeFileSync(path.join(fixture, 'mode.json'), JSON.stringify({ manifest, authorized, deviceId: marker }));
   const requests = () => existsSync(path.join(fixture, 'requests.jsonl')) ? readFileSync(path.join(fixture, 'requests.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
   const downloadCount = () => requests().filter(item => item.host === 'dl-desktop.hermesagent.org.cn' && item.method === 'GET').length;
-  const check = () => page.getByRole('button', { name: '一键更新', exact: true }).locator('..').getByRole('button', { name: '检查更新', exact: true }).click();
-  const begin = async () => {
-    await page.getByRole('button', { name: '一键更新', exact: true }).click();
-    await page.getByRole('dialog', { name: '更新 Hermes Desktop', exact: true }).getByRole('button', { name: '下载并验证', exact: true }).click();
+  const state = () => bridge<any>(page, 'softwareUpdateSnapshot');
+  const check = async () => {
+    await route(page, '/updates?advanced=1');
+    await page.getByRole('button', { name: '检查桌面应用更新', exact: true }).click();
+    await expect.poll(async () => (await state()).phase).not.toBe('checking');
   };
+  const begin = async () => {
+    await page.getByRole('button', { name: /^(下载更新|重新下载)$/ }).click();
+  };
+
   try {
     script('start-shell-update-fixture.ps1');
     fixtureStarted = true;
@@ -96,58 +93,87 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     const modelKeySha = hash(path.join(home, '.env'));
     const beforeRecord = identify();
     const coreBefore = (await bridge<any>(page, 'getRuntimeInfo')).process.pid;
-    await route(page, '/kernel');
+    await route(page, '/updates?advanced=1');
     await page.getByRole('button', { name: '更新源设置', exact: true }).click();
     await expect(page.getByLabel('deviceId（非密钥）', { exact: true })).toHaveValue(JSON.parse(originalConfig.toString('utf8').replace(/^\uFEFF/, '')).deviceId);
     const invitation = { schemaVersion: 1, channel: 'prototype', deviceId: marker, token: `local-fixture-${marker}`, endpoint: 'https://hot-update-staging.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}' };
+    await page.getByLabel(/^一次性邀请配置（JSON）/).fill('{invalid-json');
+    await page.getByRole('button', { name: '导入邀请配置', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: /JSON/ }).first()).toBeVisible();
     await page.getByLabel(/^一次性邀请配置（JSON）/).fill(JSON.stringify(invitation));
     await page.getByRole('button', { name: '导入邀请配置', exact: true }).click();
     await expect(page.getByText('邀请配置已导入，令牌已写入系统凭据库', { exact: true })).toBeVisible();
     mode('good.json');
     await check();
-    await expect(page.getByText(/发现新版本/)).toContainText(metadata.version);
+    expect((await state()).targets.map((target: any) => target.kind)).toEqual(['app']);
+    expect((await state()).targets[0].version).toBe(metadata.version);
     const count = downloadCount();
-    await page.getByRole('button', { name: '一键更新', exact: true }).click();
-    await page.getByRole('dialog', { name: '更新 Hermes Desktop', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
+    expect(readFileSync(configFile, 'utf8')).not.toContain(invitation.token);
+    expect((await bridge<any>(page, 'getUpdateCredentialStatus')).configured).toBe(true);
+    await route(page, '/about');
+    const availableNotice = page.getByRole('dialog', { name: 'Hermes 有更新可用', exact: true });
+    if (await availableNotice.isVisible()) await availableNotice.getByRole('button', { name: '稍后提醒', exact: true }).click();
+    await page.getByRole('button', { name: '查看软件更新', exact: true }).click();
     expect(downloadCount()).toBe(count);
-    expect((await bridge<any>(page, 'getRuntimeInfo')).process.pid).toBe(coreBefore);
-    for (const [candidate, expected] of [['bad-signature.json', /签名验证失败.*禁止回退/], ['bad-hash.json', /SHA-256 不匹配/]] as const) {
+    for (const candidate of ['bad-signature.json', 'bad-hash.json']) {
       mode(candidate);
+      await check();
       await begin();
-      await expect(page.getByText(expected)).toBeVisible({ timeout: 90_000 });
+      await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('error');
+      expect((await state()).error.code).toBe('verification_failed');
       expect(hash(originalProcess.appExe)).toBe(baseline.installedDesktopSha256);
       expect((await bridge<any>(page, 'getRuntimeInfo')).process.pid).toBe(coreBefore);
-      await testInfo.attach(candidate, { body: await page.screenshot(), contentType: 'image/png' });
+      await testInfo.attach(candidate, { body: JSON.stringify(await state()), contentType: 'application/json' });
     }
     mode('good.json');
-    await begin();
-    await expect(page.getByRole('dialog', { name: '更新包已准备好', exact: true })).toBeVisible({ timeout: 90_000 });
-    await page.getByRole('button', { name: '稍后', exact: true }).click();
-    await expect(page.getByText(/更新包已缓存/)).toBeVisible();
-    expect(hash(path.join(root, 'runtime', 'desktop-updater-cache', 'pending-update.exe'))).toBe(metadata.candidateInstallerSha256);
-    expect((await bridge<any>(page, 'getRuntimeInfo')).process.pid).toBe(coreBefore);
-    await route(page, `/tasks/${id}`);
-    await sendChat(page, '请只从本会话上下文回复暗号，不调用工具。', marker);
-    await route(page, '/kernel');
     await check();
     await begin();
-    await expect(page.getByRole('button', { name: '立即重启安装', exact: true })).toBeVisible({ timeout: 90_000 });
-    mode('good.json', false);
-    await page.getByRole('button', { name: '立即重启安装', exact: true }).click();
-    // Tauri maps non-success HTTP responses to this generic release error.
-    // Keep the actual 403 in server evidence instead of assuming UI wording.
-    await expect(page.getByText(/检查更新失败.*Could not fetch a valid release JSON/)).toBeVisible();
-    expect(requests().filter(item => item.path.startsWith('/v1/check/')).at(-1)?.status).toBe(403);
-    expect(identify().pid).toBe(beforeRecord.pid);
+    await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('ready');
+    expect(hash(path.join(root, 'runtime', 'desktop-updater-cache', 'pending-update.exe'))).toBe(metadata.candidateInstallerSha256);
     expect((await bridge<any>(page, 'getRuntimeInfo')).process.pid).toBe(coreBefore);
-    await testInfo.attach('installation-authorization-recheck', { body: await page.screenshot(), contentType: 'image/png' });
+    // Restart the real application before applying: native persistent state,
+    // the fixed target and verified download must survive process replacement.
+    await quitFromTray();
+    script('start.ps1', '-ShellUpdateFixture');
+    await connect();
+    expect((await state()).phase).toBe('ready');
+    await testInfo.attach('ready-after-process-restart', { body: JSON.stringify(await state()), contentType: 'application/json' });
+    mode('good.json', false);
+    const beforeApply = identify();
+    const coreBeforeApply = (await bridge<any>(page, 'getRuntimeInfo')).process.pid;
+    await page.getByRole('button', { name: '重启应用并安装', exact: true }).click();
+    await expect.poll(async () => (await state()).phase).toBe('error');
+    expect(requests().filter(item => item.path.startsWith('/v1/check/')).at(-1)?.status).toBe(403);
+    expect(identify().pid).toBe(beforeApply.pid);
+    expect((await bridge<any>(page, 'getRuntimeInfo')).process.pid).toBe(coreBeforeApply);
+    await testInfo.attach('installation-authorization-recheck', { body: JSON.stringify(await state()), contentType: 'application/json' });
     mode('good.json');
+    await check();
     await begin();
-    await expect(page.getByRole('button', { name: '立即重启安装', exact: true })).toBeVisible({ timeout: 90_000 });
+    await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('ready');
+    // The acceptance-only NSIS hook fails before writing application files.
+    // Desktop itself must reopen the original installation and report failure.
+    writeFileSync(failInstaller, marker);
+    helperOffset = existsSync(helper) ? readFileSync(helper, 'utf8').length : 0;
+    const failedInstallClosed = page.waitForEvent('close', { timeout: 90_000 });
+    await page.getByRole('button', { name: '重启应用并安装', exact: true }).click();
+    await failedInstallClosed;
+    await expect.poll(helperOutput, { timeout: 120_000 }).toContain('installer-exit=exit code: 77');
+    await connect();
+    expect((await state()).phase).toBe('error');
+    expect((await state()).currentVersion).toBe(baseline.desktopVersion);
+    expect(hash(originalProcess.appExe)).toBe(baseline.installedDesktopSha256);
+    expect(hash(path.join(home, 'config.yaml'))).toBe(userConfigSha);
+    expect(hash(path.join(home, '.env'))).toBe(modelKeySha);
+    await testInfo.attach('failed-installer-original-restored', { body: JSON.stringify({ state: await state(), helper: helperOutput(), runtime: await bridge(page, 'getRuntimeInfo') }), contentType: 'application/json' });
+    unlinkSync(failInstaller);
+    await check();
+    await begin();
+    await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('ready');
     helperOffset = existsSync(helper) ? readFileSync(helper, 'utf8').length : 0;
     installRequested = true;
     const closed = page.waitForEvent('close', { timeout: 90_000 });
-    await page.getByRole('button', { name: '立即重启安装', exact: true }).click();
+    await page.getByRole('button', { name: '重启应用并安装', exact: true }).click();
     await closed;
     // No launcher is invoked here. The installed updater must restart Desktop.
     // The old CDP listener can briefly outlive its Page. Wait for the real
@@ -157,7 +183,9 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     expect(helperOutput()).toMatch(/desktop-restarted=\d+/);
     await connect();
     const updatedRecord = identify();
-    expect(updatedRecord.pid).not.toBe(beforeRecord.pid);
+    expect(updatedRecord.pid).not.toBe(beforeApply.pid);
+    expect((await state()).currentVersion).toBe(metadata.version);
+    expect((await state()).phase).toBe('completed');
     expect(hash(originalProcess.appExe)).toBe(metadata.candidateInstalledSha256);
     const bundled = JSON.parse(readFileSync(path.join(path.dirname(originalProcess.appExe), 'bundled-runtime', 'stable-win32-x64.json'), 'utf8').replace(/^\uFEFF/, ''));
     expect(bundled.sourceCommit).toBe(baseline.coreCommit);
@@ -178,6 +206,7 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     await testInfo.attach('primary-shell-workflow-error', { body: String(error), contentType: 'text/plain' });
     throw error;
   } finally {
+    if (existsSync(failInstaller) && readFileSync(failInstaller, 'utf8') === marker) unlinkSync(failInstaller);
     if (fixtureStarted) {
       if (installRequested) {
         await expect.poll(helperOutput, { timeout: 120_000 }).toContain('helper-complete');
@@ -192,6 +221,8 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
           if ((Array.isArray(listeners) ? listeners : [listeners]).length) { await connect(); identify(); await quitFromTray(); }
         }
         writeFileSync(configFile, originalConfig);
+        if (originalState) writeFileSync(stateFile, originalState);
+        else if (existsSync(stateFile)) unlinkSync(stateFile);
         // A deliberately cached test candidate otherwise opens a global modal
         // on the next independent workflow. Remove only these exact test bytes
         // after Desktop exits; never delete an unrelated pending update.

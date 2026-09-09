@@ -1,3 +1,5 @@
+import { useSoftwareUpdate } from "@/hooks/use-software-update";
+import { updateStatusLabel } from "@/lib/software-update";
 import { useState, useMemo, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { useAtom, useAtomValue } from "jotai";
 import { useNavigate } from "react-router-dom";
@@ -36,9 +38,6 @@ import { useActiveProfileName } from "@/hooks/use-profiles";
 import { useYoloMode, useSetYoloMode, isYoloModeSupported } from "@/hooks/use-yolo-mode";
 import { useGatewayRestartAction } from "@/hooks/use-gateway-restart";
 import {
-  useCheckRuntimeUpdate,
-  useInstallRuntimeUpdate,
-  useRollbackRuntime,
   useRuntimeInfo,
 } from "@/hooks/use-runtime-update";
 import {
@@ -62,7 +61,7 @@ import {
 import { playChime, shouldPlayFallbackSound } from "@/lib/notifications";
 import { openExternalUrl } from "@/lib/external-links";
 import { detectHostOS, runtime } from "@/lib/runtime";
-import { checkDesktopUpdate, DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
+import { DESKTOP_UPDATE_DOWNLOAD_URL } from "@/lib/desktop-update";
 import { DESKTOP_VERSION, versionLabel } from "@/lib/build-info";
 import {
   approvalModeConfigValue,
@@ -1184,34 +1183,9 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const statusQuery = useStatus();
   const status = statusQuery.data;
   const runtimeInfo = useRuntimeInfo();
-  const checkRuntimeUpdate = useCheckRuntimeUpdate();
-  const installRuntimeUpdate = useInstallRuntimeUpdate();
-  const rollbackRuntime = useRollbackRuntime();
   const gatewayRestart = useGatewayRestartAction();
   const [runtimeMessage, setRuntimeMessage] = useState("");
   const [aboutMessage, setAboutMessage] = useState("");
-
-  const handleCheckRuntime = async () => {
-    setRuntimeMessage("");
-    const result = await checkRuntimeUpdate.mutateAsync();
-    setRuntimeMessage(formatRuntimeUpdateResult(result));
-  };
-
-  const handleInstallRuntime = async () => {
-    setRuntimeMessage("");
-    const result = await installRuntimeUpdate.mutateAsync();
-    setRuntimeMessage(result.ok
-      ? `已切换到 runtime ${result.installed?.runtimeVersion ?? ""}`.trim()
-      : result.error ?? "runtime 更新失败");
-  };
-
-  const handleRollbackRuntime = async () => {
-    setRuntimeMessage("");
-    const result = await rollbackRuntime.mutateAsync();
-    setRuntimeMessage(result.ok
-      ? `已回滚到 runtime ${result.installed?.runtimeVersion ?? ""}`.trim()
-      : result.error ?? "runtime 回滚失败");
-  };
 
   const info = runtimeInfo.data;
   const process = info?.process;
@@ -1226,12 +1200,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
   const runtimeRootPath = info?.runtimeRoot;
   const runtimeVersionPath = info?.current?.path;
   const currentRecordPath = info?.currentRecordPath;
-  const updateResult = checkRuntimeUpdate.data;
-  const installing = installRuntimeUpdate.isPending;
-  const checking = checkRuntimeUpdate.isPending;
-  const rollingBack = rollbackRuntime.isPending;
   const hasRuntimeBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.getRuntimeInfo);
-  const canInstall = Boolean(updateResult?.ok && updateResult.updateAvailable && info?.updatesConfigured);
   const refreshing = runtimeInfo.isFetching || statusQuery.isFetching;
   const runtimeInsideRoot = Boolean(
     info?.current?.executablePath &&
@@ -1402,56 +1371,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
                 </div>
               )}
               <div className={s.providerActions}>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => handleOpenPath(runtimeVersionPath, " runtime 版本目录")}
-                  disabled={!runtimeVersionPath || !window.hermesDesktop?.openWorkspacePath}
-                >
-                  <FolderOpen size={12} />
-                  打开版本目录
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={() => handleOpenPath(currentRecordPath, " current.json")}
-                  disabled={!currentRecordPath || !window.hermesDesktop?.openWorkspacePath}
-                >
-                  <FolderOpen size={12} />
-                  打开 current.json
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={handleCheckRuntime}
-                  loading={checking}
-                  disabled={!info?.updatesConfigured || isAttachedConnection}
-                  leadingIcon={<RefreshCw size={12} />}
-                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
-                >
-                  检查更新
-                </Button>
-                <Button
-                  variant="solid"
-                  tone="accent"
-                  type="button"
-                  onClick={handleInstallRuntime}
-                  loading={installing}
-                  disabled={!canInstall || isAttachedConnection}
-                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
-                >
-                  安装更新
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  onClick={handleRollbackRuntime}
-                  loading={rollingBack}
-                  disabled={!info?.current?.previousRuntimeVersion || isAttachedConnection}
-                  title={isAttachedConnection ? "当前连接模式下本机 runtime 未在使用" : undefined}
-                >
-                  回滚 Runtime
-                </Button>
+                <Button variant="outline" onClick={() => { window.location.hash = "#/updates?advanced=1"; }}>软件更新与高级选项</Button>
               </div>
               {!info?.updatesConfigured && (
                 <p className={s.desc}>
@@ -1530,22 +1450,7 @@ export function KernelSection({ showHeading = true }: SettingsSectionProps) {
 /* ── About ───────────────────────────────────────────────────────────── */
 
 export function AboutSection({ showHeading = true }: SettingsSectionProps) {
-  const [desktopUpdateResult, setDesktopUpdateResult] = useState<DesktopUpdateCheckResult | null>(null);
-  const [desktopUpdateChecking, setDesktopUpdateChecking] = useState(false);
-  const hasDesktopUpdateBridge = typeof window !== "undefined" && Boolean(window.hermesDesktop?.checkDesktopUpdate);
-
-  const handleCheckDesktopUpdate = async () => {
-    setDesktopUpdateChecking(true);
-    try {
-      setDesktopUpdateResult(await checkDesktopUpdate());
-    } finally {
-      setDesktopUpdateChecking(false);
-    }
-  };
-
-  const handleOpenDesktopDownload = () => {
-    void openExternalUrl(desktopUpdateResult?.downloadUrl ?? DESKTOP_UPDATE_DOWNLOAD_URL);
-  };
+  const { state: updateState } = useSoftwareUpdate();
 
   // Developer mode ships enabled; the shortcut to open devtools follows the
   // platform's browser convention (registered in web/src/lib/tauri-bridge.ts).
@@ -1556,44 +1461,17 @@ export function AboutSection({ showHeading = true }: SettingsSectionProps) {
     <div className={s.aboutSection}>
       {showHeading && <h2 className={s.heading}>关于</h2>}
       <div className={s.aboutDebugGrid}>
-        <DebugCard icon={<Download size={16} />} title="桌面端更新" sub="检查新版本并前往官网下载覆盖安装" wide>
+        <DebugCard icon={<Download size={16} />} title="软件更新" sub="查看更新说明，按需下载并选择生效时间" wide>
           <div className={s.runtimeGrid}>
-            <RuntimeField label="当前版本" value={versionLabel(DESKTOP_VERSION)} />
-            <RuntimeField
-              label="最新版本"
-              value={desktopUpdateResult?.latestVersion ? versionLabel(desktopUpdateResult.latestVersion) : "—"}
-            />
-            <RuntimeField
-              label="检查时间"
-              value={formatDesktopUpdateCheckedAt(desktopUpdateResult?.checkedAtMs)}
-            />
-            <RuntimeField
-              label="清单地址"
-              value={desktopUpdateResult?.manifestUrl ?? "https://desktop.hermesagent.org.cn/latest.json"}
-              mono
-              wide
-            />
-          </div>
-          <div
-            className={s.runtimeMessage}
-            data-tone={desktopUpdateResult && !desktopUpdateResult.ok ? "error" : "normal"}
-          >
-            {formatDesktopUpdateMessage(desktopUpdateResult, desktopUpdateChecking, hasDesktopUpdateBridge)}
+            <RuntimeField label="当前版本" value={versionLabel(updateState.currentVersion)} />
+            <RuntimeField label="更新状态" value={updateStatusLabel(updateState)} />
           </div>
           <div className={s.providerActions}>
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => void handleCheckDesktopUpdate()}
-              loading={desktopUpdateChecking}
-              disabled={!hasDesktopUpdateBridge}
-              leadingIcon={<RefreshCw size={12} />}
-            >
-              检查更新
+            <Button variant="solid" tone="accent" onClick={() => { window.location.hash = "#/updates"; }}>
+              <RefreshCw size={12} />查看软件更新
             </Button>
-            <Button variant="solid" tone="accent" type="button" onClick={handleOpenDesktopDownload}>
-              <ExternalLinkIcon size={12} />
-              去官网下载
+            <Button variant="outline" onClick={() => void openExternalUrl(DESKTOP_UPDATE_DOWNLOAD_URL)}>
+              <ExternalLinkIcon size={12} />去官网下载
             </Button>
           </div>
         </DebugCard>

@@ -21,7 +21,7 @@ describe("TOP_TABS", () => {
     expect(tabFor("/kanban")).toBe("workbench");
   });
 
-  it("keeps canonical advanced pages under the 06 advanced tab", () => {
+  it("keeps canonical advanced pages and updates under the advanced tab", () => {
     expect(tabFor("/common")).toBe("advanced");
     expect(tabFor("/notifications")).toBe("advanced");
     expect(tabFor("/config")).toBe("advanced");
@@ -29,6 +29,7 @@ describe("TOP_TABS", () => {
     expect(tabFor("/kernel")).toBe("advanced");
     expect(tabFor("/env")).toBe("advanced");
     expect(tabFor("/about")).toBe("advanced");
+    expect(tabFor("/updates")).toBe("advanced");
   });
 
   it("shows config migration in the 023 backup and restore sidebar section", () => {
@@ -51,7 +52,7 @@ describe("TOP_TABS", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "人格" && item.path === "/soul")).toBe(true);
   });
 
-  it("keeps built-in and external memory together under 05 hermes memory", () => {
+  it("keeps built-in and external memory together under hermes memory", () => {
     expect(tabFor("/memory")).toBe("hermesMemory");
     expect(tabFor("/memconfig")).toBe("hermesMemory");
     expect(tabFor("/openviking")).toBe("hermesMemory");
@@ -60,25 +61,18 @@ describe("TOP_TABS", () => {
     expect(CONFIG_ITEMS.some((item) => item.label === "外置记忆")).toBe(false);
   });
 
-  it("routes the MemOS workbench under 04 wander memory", () => {
-    expect(tabFor("/wander-memory")).toBe("wanderMemory");
-    expect(tabFor("/wander-memory/memories")).toBe("wanderMemory");
-    expect(tabFor("/wander-memory/files")).toBe("wanderMemory");
-    expect(tabFor("/wander-memory/dialogue")).toBe("wanderMemory");
-    expect(tabFor("/wander-memory/chat")).toBe("wanderMemory");
-    expect(tabFor("/wander-memory/context")).toBe("wanderMemory");
-    expect(tabFor("/wander-memory/status")).toBe("wanderMemory");
-    expect(tabFor("/wander-memory/api")).toBe("wanderMemory");
+  it("keeps the hidden Wander feature out of the visible navigation", () => {
+    expect(tabFor("/wander-memory")).toBeUndefined();
+    expect(tabFor("/wander-memory/memories")).toBeUndefined();
   });
 
-  it("places both memory tabs between message access and advanced", () => {
+  it("places Hermes memory between message access and advanced", () => {
     expect(TOP_TABS.map((tab) => [tab.num, tab.label])).toEqual([
       ["01", "工作台"],
       ["02", "配置"],
       ["03", "消息接入"],
-      ["04", "Wander 记忆"],
-      ["05", "Hermes 记忆"],
-      ["06", "高级"],
+      ["04", "Hermes 记忆"],
+      ["05", "高级"],
     ]);
   });
 });

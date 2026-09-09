@@ -178,6 +178,9 @@ pub async fn runtime_install_update(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
+    let _operation =
+        crate::update_operation::UpdateOperation::begin().map_err(AppError::RuntimeUnavailable)?;
+    let _maintenance = super::software_update::maintenance(&state)?;
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 更新")?;
@@ -811,6 +814,9 @@ mod tests {
 pub async fn runtime_rollback(
     state: State<'_, AppState>,
 ) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
+    let _operation =
+        crate::update_operation::UpdateOperation::begin().map_err(AppError::RuntimeUnavailable)?;
+    let _maintenance = super::software_update::maintenance(&state)?;
     {
         let inner = state.inner.lock()?;
         crate::connection::require_managed_mode(inner.connection_mode, "Runtime 回滚")?;
