@@ -174,7 +174,9 @@ mod tests {
     fn embedded_matrix_is_valid() {
         let matrix = CompatibilityMatrix::parse_embedded().unwrap();
         assert_eq!(matrix.schema_version, 1);
-        assert_eq!(matrix.rules.len(), 4);
+        let matched = matrix.check("0.9.0", "0.21.9").unwrap();
+        assert_eq!(matched.desktop_series, "0.9");
+        assert_eq!(matched.core_series, "0.21");
     }
 
     #[test]
@@ -207,7 +209,7 @@ mod tests {
     #[test]
     fn unknown_desktop_series_is_rejected() {
         let matrix = CompatibilityMatrix::parse_embedded().unwrap();
-        let error = matrix.check("0.9.0", "0.21.0").unwrap_err();
-        assert!(error.contains("未声明 Desktop 0.9.x"));
+        let error = matrix.check("99.0.0", "0.21.0").unwrap_err();
+        assert!(error.contains("未声明 Desktop 99.0.x"));
     }
 }
