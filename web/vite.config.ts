@@ -442,6 +442,7 @@ export default defineConfig({
     },
   },
   build: {
+    target: ["es2020", "safari15"],
     // Split heavy third-party libraries into their own chunks so the app
     // shell + route chunks stay small and, critically, Rollup never merges a
     // big vendor (e.g. the 3.3 MB mermaid bundle) into the startup chunk.

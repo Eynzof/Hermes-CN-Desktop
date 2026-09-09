@@ -1575,7 +1575,7 @@ fn spawn_managed_gateway_process(hermes_home: &str) -> Result<(u32, PathBuf), St
     })?;
 
     let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
-    let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
+    let gateway_lock_dir = crate::process::runtime::gateway_lock_dir();
     fs::create_dir_all(&gateway_runtime_dir)
         .map_err(|err| format!("无法创建 Gateway runtime 目录：{err}"))?;
     fs::create_dir_all(&gateway_lock_dir)

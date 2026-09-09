@@ -7,6 +7,8 @@ import { Alert, Button } from "@hermes/shared-ui";
 import { runtime } from "@/lib/runtime";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
+import { resetGatewaySessionsAtom } from "@/stores/chat";
+import { assertCompatible, verifyBackendVersion } from "@/lib/version-check";
 import { activeProfileAtom, profileSwitchingAtom } from "@/stores/ui";
 import { SectionShell } from "./section-shell";
 import { SettingsHero } from "./settings-hero";
@@ -42,6 +44,7 @@ async function openBackupDirectory(path: string | undefined): Promise<string | n
 
 export function BackupRoute() {
   const queryClient = useQueryClient();
+  const resetGatewaySessions = useSetAtom(resetGatewaySessionsAtom);
   const setActiveProfile = useSetAtom(activeProfileAtom);
   const setSwitching = useSetAtom(profileSwitchingAtom);
   const [exporting, setExporting] = useState(false);
@@ -97,6 +100,11 @@ export function BackupRoute() {
         return;
       }
       runtime.applyBackupImportResult(result);
+      if (result.ok || result.recoveredPreviousProfile) resetGatewaySessions();
+      if (result.ok || result.recoveredPreviousProfile) {
+        await verifyBackendVersion(result.apiBaseUrl, { connectionMode: runtime.getConnectionMode() });
+        assertCompatible();
+      }
       if (result.recoveredPreviousProfile) forceExistingGatewayReconnect("backup-import-recovery");
       if (!result.ok) throw new Error(result.error || "导入备份失败");
       forceExistingGatewayReconnect("backup-import");

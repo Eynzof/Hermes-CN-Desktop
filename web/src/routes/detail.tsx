@@ -18,6 +18,8 @@ import {
   appendNoticeAtom,
   recoverCompletedTurnFromStoredMessagesAtom,
   removeApprovalAtom,
+  removeClarificationAtom,
+  type PendingClarification,
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
 import { useSkills } from "@/hooks/use-skills";
@@ -619,6 +621,7 @@ export function DetailRoute() {
     [config, contextSelection],
   );
   const pendingApproval = runtime.pendingApprovals[0] ?? null;
+  const pendingClarification = runtime.pendingClarifications?.[0];
 
   const composerTick = useComposerTimer(runtimeIsBusy, runtime.turnStartedAt);
   // Task-level stall watchdog: detects a turn wedged on a dead provider call
@@ -738,9 +741,10 @@ export function DetailRoute() {
             loading={isLoading && runtime.messages.length === 0}
             statusMessage={timelineStatus}
             pendingApproval={
-              pendingApproval ? (
-                <ApprovalDialog approval={pendingApproval} />
-              ) : undefined
+              pendingApproval || pendingClarification ? <>
+                {pendingApproval && <ApprovalDialog approval={pendingApproval} />}
+                {pendingClarification && <ClarificationDialog key={pendingClarification.requestId} request={pendingClarification} />}
+              </> : undefined
             }
             turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
             sessionUsage={runtimeIsBusy ? sessionUsage : undefined}
@@ -831,6 +835,53 @@ export function DetailRoute() {
 }
 
 /* ── Approval Dialog ──────────────────────────────────────────────────── */
+
+function ClarificationDialog({ request }: { request: PendingClarification }) {
+  const remove = useSetAtom(removeClarificationAtom);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const answer = text.trim() || (request.multiSelect ? JSON.stringify(selected) : selected[0] ?? "");
+  const canSend = Boolean(text.trim() || selected.length);
+  const respond = async () => {
+    if (sending || !canSend) return;
+    setSending(true);
+    setError("");
+    try {
+      await getGatewayClient().request("clarify.respond", {
+        session_id: request.sessionId, request_id: request.requestId, answer,
+      });
+      remove(request);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <form className={s.approvalCard} aria-label="补充信息" onSubmit={(event) => { event.preventDefault(); void respond(); }}>
+      <div className={s.approvalHeader}>{request.question}</div>
+      <div className={s.clarificationChoices}>
+        {request.choices.map((choice) => (
+          <label key={choice}>
+            <input type={request.multiSelect ? "checkbox" : "radio"} name={request.requestId}
+              checked={selected.includes(choice)} disabled={sending}
+              onChange={(event) => setSelected(request.multiSelect
+                ? event.target.checked ? [...selected, choice] : selected.filter((item) => item !== choice)
+                : [choice])} />
+            {choice}
+          </label>
+        ))}
+      </div>
+      <textarea className={s.clarificationInput} aria-label="补充回答" placeholder="也可以输入自己的回答" value={text} onChange={(event) => setText(event.target.value)} disabled={sending} />
+      {error && <div className={s.approvalError}>发送失败：{error}</div>}
+      <div className={s.approvalActions}>
+        <button className={s.approvalApprove} type="submit" disabled={sending || !canSend}>{sending ? "发送中…" : "提交回答"}</button>
+      </div>
+    </form>
+  );
+}
 
 function ApprovalDialog({ approval }: { approval: { requestId: string; sessionId: string; command: string; reason?: string } }) {
   const navigate = useNavigate();

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GatewayClient } from "./gateway-client";
+import * as versionCheck from "./version-check";
 
 class MockWebSocket {
   static CONNECTING = 0;
@@ -40,6 +41,18 @@ class MockWebSocket {
 }
 
 describe("GatewayClient", () => {
+  it("can reconnect after the version gate was still checking", async () => {
+    vi.spyOn(versionCheck, "assertCompatible").mockImplementationOnce(() => {
+      throw new Error("backend version check has not completed");
+    });
+    const client = new GatewayClient();
+    await expect(client.connect()).rejects.toThrow("version check");
+    const retry = client.connect();
+    expect(MockWebSocket.instances).toHaveLength(1);
+    MockWebSocket.instances[0].open();
+    await expect(retry).resolves.toBeUndefined();
+    client.close();
+  });
   beforeEach(() => {
     MockWebSocket.instances = [];
     vi.stubGlobal("WebSocket", MockWebSocket);

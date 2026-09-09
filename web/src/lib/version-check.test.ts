@@ -107,6 +107,35 @@ describe("version-check", () => {
       expect(state).toEqual({ kind: "ok", backendVersion: "0.21.9" });
     });
 
+    it.each(["local", "remote"] as const)("accepts a newer stable patch on an external %s backend", async (connectionMode) => {
+      const [major, minor, patch] = EXPECTED_BACKEND_VERSION.split(".").map(Number);
+      const version = `${major}.${minor}.${patch + 5}`;
+      stubDesktopRequest({ version });
+      recordRuntimeKernelVersion("0.19.0");
+
+      expect(await verifyBackendVersion(undefined, { connectionMode })).toEqual({ kind: "ok", backendVersion: version });
+      expect(() => assertCompatible()).not.toThrow();
+    });
+
+    it("keeps the recorded managed install version exact", async () => {
+      recordRuntimeKernelVersion(EXPECTED_BACKEND_VERSION);
+      const [major, minor, patch] = EXPECTED_BACKEND_VERSION.split(".").map(Number);
+      stubDesktopRequest({ version: `${major}.${minor}.${patch + 5}` });
+      expect((await verifyBackendVersion(undefined, { connectionMode: "managed" })).kind).toBe("mismatch");
+    });
+
+    it("accepts a compatible managed patch while the install record is being refreshed", async () => {
+      // Profile switches reset the probe before runtime status reloads its record.
+      stubDesktopRequest({ version: "0.21.9" });
+      expect(await verifyBackendVersion(undefined, { connectionMode: "managed" }))
+        .toEqual({ kind: "ok", backendVersion: "0.21.9" });
+    });
+
+    it("keeps an explicit external version expectation exact", async () => {
+      stubDesktopRequest({ version: "0.21.5" });
+      expect((await verifyBackendVersion(undefined, { connectionMode: "remote", expectedVersion: "0.21.0" })).kind).toBe("mismatch");
+    });
+
     it("returns unavailable when /api/version is missing or unreachable", async () => {
       stubDesktopRequest({ detail: "not found" }, 404);
 

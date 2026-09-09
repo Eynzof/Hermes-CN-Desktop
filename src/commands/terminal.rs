@@ -468,8 +468,7 @@ fn build_terminal_env(
     );
     vars.insert(
         "HERMES_GATEWAY_LOCK_DIR".to_string(),
-        runtime::gateway_runtime_dir()
-            .join("token-locks")
+        runtime::gateway_lock_dir()
             .to_string_lossy()
             .to_string(),
     );

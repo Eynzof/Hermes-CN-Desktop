@@ -11,6 +11,8 @@ import {
 import { runtime } from "@/lib/runtime";
 import { forceExistingGatewayReconnect } from "@/lib/gateway-client";
 import { reloadUiStore } from "@/lib/ui-store";
+import { resetGatewaySessionsAtom } from "@/stores/chat";
+import { assertCompatible, verifyBackendVersion } from "@/lib/version-check";
 import {
   activeProfileAtom,
   managementProfileAtom,
@@ -186,6 +188,7 @@ export interface SwitchProfileMutationResult {
 
 export function useSetActiveProfile() {
   const qc = useQueryClient();
+  const resetGatewaySessions = useSetAtom(resetGatewaySessionsAtom);
   const setActive = useSetAtom(activeProfileAtom);
   const setManagement = useSetAtom(managementProfileAtom);
   const setSwitching = useSetAtom(profileSwitchingAtom);
@@ -200,8 +203,11 @@ export function useSetActiveProfile() {
         setSwitching({ active: true, targetName: name });
         try {
           const result = await window.hermesDesktop.switchProfile({ name });
+          if (result.ok || result.recoveredPreviousProfile) resetGatewaySessions();
           if (result.ok) {
             runtime.applySwitchProfileResult(result);
+            await verifyBackendVersion(result.apiBaseUrl, { connectionMode: runtime.getConnectionMode() });
+            assertCompatible();
             forceExistingGatewayReconnect("profile-switch");
             return { mode: "electron-restart", profileName: name };
           }

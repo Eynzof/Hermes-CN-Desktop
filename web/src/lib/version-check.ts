@@ -49,13 +49,6 @@ export function expectedBackendVersion(): string {
   return runtimeKernelVersion ?? EXPECTED_BACKEND_VERSION;
 }
 
-function expectedBackendContract(explicit?: string): string {
-  return explicit
-    ?? runtimeKernelVersion
-    ?? expectedCoreSeriesLabel(DESKTOP_VERSION)
-    ?? EXPECTED_BACKEND_VERSION;
-}
-
 export function getVersionCheckState(): VersionCheckState {
   return state;
 }
@@ -104,6 +97,15 @@ class BackendVersionHttpError extends Error {
 
 function isExternalConnection(mode: ConnectionMode | undefined): boolean {
   return mode === "local" || mode === "remote";
+}
+
+function isCompatibleExternalPatch(actual: string, expected: string): boolean {
+  const actualParts = /^(\d+)\.(\d+)\.(\d+)$/.exec(actual);
+  const expectedParts = /^(\d+)\.(\d+)\.(\d+)$/.exec(expected);
+  return actualParts !== null && expectedParts !== null
+    && actualParts[1] === expectedParts[1]
+    && actualParts[2] === expectedParts[2]
+    && Number(actualParts[3]) >= Number(expectedParts[3]);
 }
 
 function ipcErrorCode(error: unknown): string | undefined {
@@ -159,8 +161,13 @@ async function checkBackendVersion(
   options: VersionCheckOptions = {},
 ): Promise<VersionCheckState> {
   let state: VersionCheckState;
-  const exactExpected = options.expectedVersion ?? runtimeKernelVersion;
-  const expected = expectedBackendContract(options.expectedVersion);
+  const external = isExternalConnection(options.connectionMode ?? runtime.getConnectionMode());
+  // A managed install record must not constrain a separately managed server.
+  const exactExpected = options.expectedVersion
+    ?? (external ? null : runtimeKernelVersion);
+  const expected = exactExpected
+    ?? expectedCoreSeriesLabel(DESKTOP_VERSION)
+    ?? EXPECTED_BACKEND_VERSION;
   if (runtime.platform === "web") {
     // Web/browser-companion mode: no managed runtime; skip the gate.
     state = { kind: "ok", backendVersion: "web" };
@@ -174,10 +181,11 @@ async function checkBackendVersion(
 
   try {
     const info = await fetchBackendVersion(apiBaseUrl);
-    const exactMismatch = exactExpected !== null && exactExpected !== undefined
-      && info.version !== exactExpected;
+    const versionMismatch = exactExpected !== null
+      ? info.version !== exactExpected
+      : external && !isCompatibleExternalPatch(info.version, EXPECTED_BACKEND_VERSION);
     const seriesMismatch = !isDesktopCoreCompatible(DESKTOP_VERSION, info.version);
-    if (exactMismatch || seriesMismatch) {
+    if (versionMismatch || seriesMismatch) {
       state = {
         kind: "mismatch",
         backendVersion: info.version,
@@ -188,7 +196,7 @@ async function checkBackendVersion(
     state = { kind: "ok", backendVersion: info.version };
     return state;
   } catch (error) {
-    if (isExternalConnection(options.connectionMode)) {
+    if (external) {
       if (error instanceof BackendVersionHttpError && (error.status === 401 || error.status === 403)) {
         state = { kind: "deferred", reason: "external-backend-auth-required" };
         return state;

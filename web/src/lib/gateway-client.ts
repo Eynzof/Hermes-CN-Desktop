@@ -174,9 +174,8 @@ export class GatewayClient {
       // Hard version-compatibility gate: refuse to open a WebSocket against an
       // unchecked or incompatible backend. The cached state is invalidated by
       // runtime reconnect / profile-switch helpers in runtime.ts.
-      assertCompatible();
-
       try {
+        assertCompatible();
         ws = this.socketFactory(runtime.getGatewayUrl());
       } catch (e) {
         syncConnectFailed = true;

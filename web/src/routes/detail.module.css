@@ -84,6 +84,33 @@
   font-weight: 600;
 }
 
+.clarificationChoices {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.clarificationChoices label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--h-text);
+}
+
+.clarificationInput {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--h-line-soft);
+  background: var(--h-bg-input);
+  color: var(--h-text);
+  font: inherit;
+  resize: vertical;
+}
+
 .approvalCommand {
   margin-bottom: 8px;
   border: 1px solid var(--h-line-soft);

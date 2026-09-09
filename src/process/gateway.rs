@@ -331,15 +331,18 @@ fn managed_gateway_pid_candidates(
     pids.into_iter().collect()
 }
 
-fn cleanup_stale_gateway_token_lock_files(gateway_lock_dir: &Path, _runtime_root: &Path) -> usize {
+fn cleanup_stale_gateway_token_lock_files(gateway_lock_dir: &Path, runtime_root: &Path) -> usize {
     let mut removed = 0;
     for path in token_lock_paths(gateway_lock_dir) {
         let remove = match read_gateway_runtime_record(&path) {
             Some(record) => match record.pid {
-                Some(pid) if pid_is_running(pid) => !record_looks_like_gateway(&record),
-                _ => true,
+                Some(pid) => !pid_is_running(pid)
+                    && token_lock_record_matches_managed_runtime(&record, pid, runtime_root),
+                None => false,
             },
-            None => true,
+            // This directory is shared with source CLIs and other profiles.
+            // An incomplete record may belong to a process still writing it.
+            None => false,
         };
         if remove {
             match fs::remove_file(&path) {
@@ -687,6 +690,21 @@ mod tests {
 
         assert_eq!(removed, 1);
         assert!(!lock_path.exists());
+    }
+
+    #[test]
+    fn token_lock_cleanup_preserves_other_owners_and_incomplete_records() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let runtime_root = temp.path().join("managed");
+        for (name, contents) in [
+            ("live.lock", format!(r#"{{"pid":{},"kind":"other-worker"}}"#, std::process::id())),
+            ("source.lock", r#"{"pid":0,"kind":"hermes-gateway","argv":["/source/cli","gateway","run"]}"#.to_string()),
+            ("pending.lock", String::new()),
+        ] {
+            fs::write(temp.path().join(name), contents).unwrap();
+        }
+        assert_eq!(cleanup_stale_gateway_token_lock_files(temp.path(), &runtime_root), 0);
+        assert_eq!(token_lock_paths(temp.path()).len(), 3);
     }
 
     #[test]

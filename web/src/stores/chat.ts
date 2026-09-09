@@ -56,12 +56,21 @@ export interface PendingApproval {
   reason?: string;
 }
 
+export interface PendingClarification {
+  requestId: string;
+  sessionId: string;
+  question: string;
+  choices: string[];
+  multiSelect: boolean;
+}
+
 export type StreamStatus = "idle" | "connecting" | "streaming" | "complete" | "error";
 
 export interface ChatSessionRuntime {
   messages: HermesUIMessage[];
   streamStatus: StreamStatus;
   pendingApprovals: PendingApproval[];
+  pendingClarifications?: PendingClarification[];
   statusMessage: string;
   statusKind?: string;
   statusUpdatedAt?: number;
@@ -112,6 +121,14 @@ export const gwSessionIdAtom = atom(
 );
 
 export const chatRuntimeBySessionAtom = atom<ChatRuntimeBySession>({});
+
+// Profile switches and backup restores replace the Core process. Its gateway
+// IDs no longer exist, even when we later return to a previously opened profile.
+// Keep the durable ID map so old deep links can resume their stored sessions.
+export const resetGatewaySessionsAtom = atom(null, (_get, set) => {
+  set(gwSessionIdAtom, null);
+  set(chatRuntimeBySessionAtom, {});
+});
 
 const GENERIC_TURN_FAILURE_TEXT =
   "模型服务调用未成功。常见原因：API Key 失效或不在模型权限范围、网络/服务不可达。请到 设置 → 模型 检查后重试。";
@@ -164,6 +181,7 @@ function pickErrorText(payload: Record<string, any>, fallback = GENERIC_TURN_FAI
 function resetStream(runtime: ChatSessionRuntime, now: number): ChatSessionRuntime {
   return {
     ...runtime,
+    pendingClarifications: [],
     statusMessage: "",
     statusKind: undefined,
     statusUpdatedAt: undefined,
@@ -833,6 +851,7 @@ function reduceGatewayEventInner(
 
       return {
         ...next,
+        pendingClarifications: [],
         streamStatus: isErrorCompletion ? "error" : "complete",
         statusMessage: warningText ?? "",
         statusKind: warningText ? "warn" : undefined,
@@ -905,6 +924,24 @@ function reduceGatewayEventInner(
         }),
       );
     }
+
+    case "clarify.request": {
+      if (typeof payload.request_id !== "string" || typeof payload.question !== "string") return runtime;
+      const request: PendingClarification = {
+        requestId: payload.request_id,
+        sessionId,
+        question: payload.question,
+        choices: Array.isArray(payload.choices) ? payload.choices.filter((c: unknown): c is string => typeof c === "string") : [],
+        multiSelect: payload.multi_select === true,
+      };
+      return {
+        ...runtime,
+        pendingClarifications: [...(runtime.pendingClarifications ?? []).filter((r) => r.requestId !== request.requestId), request],
+        updatedAt: now,
+      };
+    }
+    case "clarify.expire":
+      return { ...runtime, pendingClarifications: (runtime.pendingClarifications ?? []).filter((r) => r.requestId !== payload.request_id) };
 
     case "approval.request": {
       const requestId = String(payload.request_id ?? `approval-${now}`);
@@ -1034,6 +1071,7 @@ export const markSessionInterruptedAtom = atom(null, (_get, set, sessionId: stri
     updateSessionRuntime(state, sessionId, (runtime) => ({
       ...runtime,
       interrupted: true,
+      pendingClarifications: [],
       streamStatus: "idle",
       statusMessage: "",
       statusKind: undefined,
@@ -1433,6 +1471,13 @@ export const removeApprovalAtom = atom(
     );
   },
 );
+
+export const removeClarificationAtom = atom(null, (_get, set, request: PendingClarification) => {
+  set(chatRuntimeBySessionAtom, (state) => updateSessionRuntime(state, request.sessionId, (runtime) => ({
+    ...runtime,
+    pendingClarifications: (runtime.pendingClarifications ?? []).filter((r) => r.requestId !== request.requestId),
+  })));
+});
 
 // ── Hydration ────────────────────────────────────────────────────────────────
 

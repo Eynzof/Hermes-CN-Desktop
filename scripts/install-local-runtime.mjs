@@ -77,9 +77,9 @@ function findPython() {
     const version = capture(candidate, ["-c", "import sys; print('.'.join(map(str, sys.version_info[:2])))"]);
     if (!version) continue;
     const [major, minor] = version.split(".").map(Number);
-    if (major > 3 || (major === 3 && minor >= 11)) return candidate;
+    if (major > 3 || (major === 3 && minor >= 14)) return candidate;
   }
-  throw new Error("Python 3.11+ was not found. Set PYTHON=/path/to/python3.11 and retry.");
+  throw new Error("Python 3.14+ was not found. Set PYTHON=/path/to/python3.14 and retry.");
 }
 
 function dataDir() {

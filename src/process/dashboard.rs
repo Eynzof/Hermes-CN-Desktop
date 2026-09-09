@@ -78,6 +78,8 @@ pub struct DashboardOwnershipMarker {
     pub hermes_home: String,
     pub runtime_root: String,
     pub gateway_runtime_dir: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gateway_lock_dir: Option<String>,
     pub started_at_ms: u128,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_version: Option<String>,
@@ -191,6 +193,7 @@ fn rewrite_ownership_marker_for_current_desktop(
         hermes_home: marker.hermes_home.clone(),
         runtime_root: marker.runtime_root.clone(),
         gateway_runtime_dir: marker.gateway_runtime_dir.clone(),
+        gateway_lock_dir: marker.gateway_lock_dir.clone(),
         started_at_ms: now_millis(),
         runtime_version: marker.runtime_version.clone(),
         claimed_ports: marker.claimed_ports.clone(),
@@ -1010,7 +1013,7 @@ fn spawn_dashboard(
     cmd.env("PATH", &effective_path);
     let session_token = session_token_for_spawn();
     let gateway_runtime_dir = crate::process::runtime::gateway_runtime_dir();
-    let gateway_lock_dir = gateway_runtime_dir.join("token-locks");
+    let gateway_lock_dir = crate::process::runtime::gateway_lock_dir();
     let _ = std::fs::create_dir_all(&gateway_lock_dir);
     let _ = std::fs::create_dir_all(&gateway_runtime_dir);
     if let Some(record) = crate::process::runtime::read_current_record() {
@@ -1184,6 +1187,7 @@ fn spawn_dashboard(
             .to_string_lossy()
             .to_string(),
         gateway_runtime_dir: gateway_runtime_dir.to_string_lossy().to_string(),
+        gateway_lock_dir: Some(gateway_lock_dir.to_string_lossy().to_string()),
         started_at_ms: now_millis(),
         runtime_version,
         claimed_ports: claimed_ports.clone(),
@@ -1465,10 +1469,11 @@ pub async fn ensure_hermes_dashboard(
                         Path::new(&options.hermes_home),
                     );
                     let gateway_runtime_dir = adopted_marker.gateway_runtime_dir.clone();
-                    let gateway_lock_dir = PathBuf::from(&gateway_runtime_dir)
-                        .join("token-locks")
-                        .to_string_lossy()
-                        .to_string();
+                    // Adopt the child's actual lock directory. Markers written
+                    // by older versions predate the shared token-lock path.
+                    let gateway_lock_dir = adopted_marker.gateway_lock_dir.clone()
+                        .unwrap_or_else(|| PathBuf::from(&gateway_runtime_dir)
+                            .join("token-locks").to_string_lossy().to_string());
                     return Ok(DashboardHandle {
                         api_base_url,
                         session_token: Some(session_token),
@@ -1855,6 +1860,7 @@ mod tests {
         hermes_home: &str,
     ) -> DashboardOwnershipMarker {
         DashboardOwnershipMarker {
+            gateway_lock_dir: None,
             schema_version: OWNERSHIP_MARKER_SCHEMA_VERSION,
             run_id: "test-run".to_string(),
             desktop_pid,
@@ -1978,6 +1984,7 @@ mod tests {
         let api_base_url = dashboard_base_url(&host, port);
 
         let marker = DashboardOwnershipMarker {
+            gateway_lock_dir: None,
             dashboard_pid: 0,
             gateway_runtime_dir: runtime
                 .path()
@@ -2031,6 +2038,7 @@ mod tests {
         let api_base_url = dashboard_base_url(&host, port);
 
         let marker = DashboardOwnershipMarker {
+            gateway_lock_dir: None,
             dashboard_pid: 0,
             gateway_runtime_dir: runtime
                 .path()

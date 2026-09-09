@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { createStore } from "jotai/vanilla";
 import type { HermesUIMessage } from "@hermes/protocol";
 import {
   createEmptyChatRuntime,
+  chatRuntimeBySessionAtom,
+  gwSessionIdAtom,
+  resetGatewaySessionsAtom,
   type ChatRuntimeBySession,
   type ChatSessionRuntime,
 } from "@/stores/chat";
@@ -34,6 +38,32 @@ function firstText(runtime: ChatSessionRuntime): string | undefined {
 describe("resolveSessionRuntime", () => {
   beforeEach(() => {
     __resetUiStoreForTests();
+  });
+
+  it("resumes old deep links after a profile round trip replaces the Core process", () => {
+    const store = createStore();
+    rememberSessionMapping("gw-default", "saved-default");
+    rememberSessionMapping("gw-other", "saved-other");
+    store.set(gwSessionIdAtom, "gw-other");
+    store.set(chatRuntimeBySessionAtom, {
+      "gw-default": runtimeWith("gw-default", "old default history"),
+      "gw-other": runtimeWith("gw-other", "other profile history"),
+    });
+
+    store.set(resetGatewaySessionsAtom);
+    const resolved = resolveSessionRuntime(
+      "gw-default", store.get(gwSessionIdAtom), store.get(chatRuntimeBySessionAtom),
+    );
+    expect(resolved.restSessionId).toBe("saved-default");
+    expect(resolved.activeMappedGatewaySessionId).toBeUndefined();
+    expect(resolved.isGatewayLinked).toBe(false);
+    expect(resolved.runtime.messages).toEqual([]);
+
+    rememberSessionMapping("gw-resumed", "saved-default");
+    store.set(gwSessionIdAtom, "gw-resumed");
+    expect(resolveSessionRuntime(
+      "gw-default", store.get(gwSessionIdAtom), store.get(chatRuntimeBySessionAtom),
+    ).activeMappedGatewaySessionId).toBe("gw-resumed");
   });
 
   it("reads the live runtime when the persisted map still holds a stale duplicate", () => {

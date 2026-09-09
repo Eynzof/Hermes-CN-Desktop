@@ -564,6 +564,31 @@ pub fn gateway_runtime_dir() -> PathBuf {
     runtime_root().join("gateway-runtime")
 }
 
+/// Token locks must be visible to both the managed runtime and a source CLI.
+/// Match Core gateway.status._get_lock_dir; process ownership files remain
+/// under the Desktop runtime directory.
+pub fn gateway_lock_dir() -> PathBuf {
+    resolve_gateway_lock_dir(
+        std::env::var_os("HERMES_GATEWAY_LOCK_DIR"),
+        std::env::var_os("XDG_STATE_HOME").map(PathBuf::from),
+        dirs::home_dir(),
+    )
+}
+
+fn resolve_gateway_lock_dir(
+    explicit: Option<std::ffi::OsString>,
+    state_home: Option<PathBuf>,
+    home: Option<PathBuf>,
+) -> PathBuf {
+    if let Some(path) = explicit.filter(|path| !path.is_empty()) {
+        return PathBuf::from(path);
+    }
+    state_home.unwrap_or_else(|| {
+        home.expect("无法确定用户主目录，请设置 HERMES_GATEWAY_LOCK_DIR")
+            .join(".local/state")
+    }).join("hermes/gateway-locks")
+}
+
 fn current_record_path() -> PathBuf {
     runtime_root().join(CURRENT_FILE)
 }
@@ -2981,6 +3006,19 @@ mod tests {
     use serial_test::serial;
     use std::io::Write;
     use tempfile::TempDir;
+
+    #[test]
+    fn gateway_token_locks_share_the_source_cli_directory() {
+        let home = PathBuf::from("test-home");
+        assert_eq!(resolve_gateway_lock_dir(None, None, Some(home.clone())),
+            home.join(".local/state/hermes/gateway-locks"));
+        assert_eq!(resolve_gateway_lock_dir(Some("".into()), None, Some(home.clone())),
+            home.join(".local/state/hermes/gateway-locks"));
+        assert_eq!(resolve_gateway_lock_dir(Some("isolated-locks".into()), None, None),
+            PathBuf::from("isolated-locks"));
+        assert_eq!(resolve_gateway_lock_dir(None, Some("xdg-state".into()), None),
+            PathBuf::from("xdg-state/hermes/gateway-locks"));
+    }
 
     #[test]
     fn format_rfc3339_utc_emits_parseable_timestamps() {
