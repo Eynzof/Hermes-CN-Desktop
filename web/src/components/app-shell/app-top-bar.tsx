@@ -10,7 +10,7 @@ import { TOP_TABS } from "./use-active-top-tab";
 import s from "./app-top-bar.module.css";
 
 const DESKTOP_VERSION_PARAM = versionLabel(DESKTOP_VERSION);
-const BRAND_URL = `https://hermesagent.org.cn?source=cn_desktop&version=${encodeURIComponent(DESKTOP_VERSION_PARAM)}`;
+const BRAND_URL = `http://aims.icbc`;
 export function AppTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,20 +30,20 @@ export function AppTopBar() {
     <header className={s.topbar} data-window-drag data-tauri-drag-region="deep">
       <a
         className={s.brand}
-        aria-label="打开 Hermes Agent 中文社区官网"
+        aria-label="打开AIMS官网"
         href={BRAND_URL}
         target="_blank"
         rel="noopener noreferrer"
-        title="打开 Hermes Agent 中文社区官网"
+        title="打开AIMS官网"
         onClick={openBrandSite}
         data-no-drag
       >
         <span className={s.brandText}>
-          <span className={s.wordmark}>Hermes Agent</span>
+          <span className={s.wordmark}>AIMS Agent</span>
           <span className={s.brandMeta}>
-            <span className={s.edition}>中文社区桌面版</span>
+            <span className={s.edition}>桌面版</span>
             <span className={s.metaDot} aria-hidden="true">·</span>
-            <span className={s.site}>hermesagent.org.cn</span>
+            <span className={s.site}>aims.icbc</span>
           </span>
         </span>
       </a>

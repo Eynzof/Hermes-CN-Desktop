@@ -20,11 +20,11 @@ test.describe("首次模型引导 Modal", () => {
     await mockUnconfiguredModel(page);
     await page.goto("/");
 
-    const dialog = page.getByRole("dialog", { name: "开始使用 Hermes" });
+    const dialog = page.getByRole("dialog", { name: "开始使用 AIMS Agent" });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole("button", { name: "配置模型" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "先看看界面" })).toBeVisible();
-    await expect(dialog.getByText("已经有自己的 Hermes 内核？")).toBeVisible();
+    await expect(dialog.getByText("已经有自己的 AIMS Agent 内核？")).toBeVisible();
 
     const box = await dialog.boundingBox();
     expect(box?.width).toBeGreaterThanOrEqual(700);
@@ -42,7 +42,7 @@ test.describe("首次模型引导 Modal", () => {
     await mockUnconfiguredModel(page);
     await page.goto("/");
 
-    const dialog = page.getByRole("dialog", { name: "开始使用 Hermes" });
+    const dialog = page.getByRole("dialog", { name: "开始使用 AIMS Agent" });
     await dialog.getByRole("button", { name: "配置模型" }).click();
     await expect(page).toHaveURL(/\/models#provider-deepseek$/);
     await expect(dialog).toHaveCount(0);

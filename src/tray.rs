@@ -56,7 +56,7 @@ pub fn install(app: &App) -> tauri::Result<()> {
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
-        .tooltip("Hermes Agent 中文社区桌面版")
+        .tooltip("AIMS Agent 桌面版")
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match action_for_menu_id(event.id().as_ref()) {
             Some(TrayMenuAction::OpenMainWindow) => show_main_window(app),
