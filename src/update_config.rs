@@ -72,8 +72,8 @@ pub struct UpdateConfig {
     /// Opaque installation/device identifier. The bearer token is deliberately
     /// kept out of this file and stored in the operating-system credential store.
     pub device_id: String,
-    /// Tauri dynamic updater endpoint. Empty by default so prototype builds
-    /// never contact or mutate the public stable update path accidentally.
+    /// Tauri dynamic updater endpoint. Release builds use the baked endpoint
+    /// or the community default; development builds require explicit setup.
     pub shell_updater_endpoint: String,
     /// Legacy unified-manifest field retained for migration and diagnostics.
     pub release_manifest_url: String,
@@ -91,13 +91,10 @@ impl Default for UpdateConfig {
         let baked_channel = option_env!("HERMES_BAKED_UPDATE_CHANNEL")
             .filter(|channel| ALLOWED_CHANNELS.contains(channel))
             .unwrap_or(DEFAULT_CHANNEL);
-        let baked_shell_endpoint = option_env!("HERMES_BAKED_SHELL_UPDATE_ENDPOINT")
-            .unwrap_or(if cfg!(debug_assertions) {
-                ""
-            } else {
-                DEFAULT_SHELL_UPDATE_ENDPOINT
-            })
-            .trim();
+        let baked_shell_endpoint = default_shell_update_endpoint(
+            option_env!("HERMES_BAKED_SHELL_UPDATE_ENDPOINT"),
+            cfg!(debug_assertions),
+        );
         Self {
             schema_version: UPDATE_CONFIG_SCHEMA_VERSION,
             channel: baked_channel.to_string(),
@@ -113,6 +110,17 @@ impl Default for UpdateConfig {
             mirrors: Vec::new(),
         }
     }
+}
+
+fn default_shell_update_endpoint(baked: Option<&str>, development: bool) -> &str {
+    baked
+        .map(str::trim)
+        .filter(|endpoint| !endpoint.is_empty())
+        .unwrap_or(if development {
+            ""
+        } else {
+            DEFAULT_SHELL_UPDATE_ENDPOINT
+        })
 }
 
 /// Result of loading the config file: always yields a usable [`UpdateConfig`]
@@ -539,6 +547,26 @@ mod tests {
         assert_eq!(cfg.timeout_seconds, 10);
         assert!(cfg.verify_sha256);
         assert!(cfg.verify_signature);
+    }
+
+    #[test]
+    fn empty_build_variable_does_not_disable_release_updates() {
+        for baked in [None, Some(""), Some(" \n ")] {
+            assert_eq!(
+                default_shell_update_endpoint(baked, false),
+                DEFAULT_SHELL_UPDATE_ENDPOINT
+            );
+            assert_eq!(default_shell_update_endpoint(baked, true), "");
+        }
+        let endpoint = "https://hot-update-staging.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}";
+        assert_eq!(
+            default_shell_update_endpoint(Some(endpoint), false),
+            endpoint
+        );
+        assert_eq!(
+            default_shell_update_endpoint(Some(&format!(" {endpoint} ")), true),
+            endpoint
+        );
     }
 
     #[test]
