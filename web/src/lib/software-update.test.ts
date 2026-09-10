@@ -7,8 +7,8 @@ import {
 } from "./software-update";
 
 const available = {
-  ...INITIAL_UPDATE_STATE, phase: "available" as const,
-  targets: [{ kind: "app" as const, version: "0.9.1", currentVersion: "0.9.0", notes: "修复问题", publishedAt: null, size: 1024 }],
+  ...INITIAL_UPDATE_STATE, phase: "available" as const, currentVersion: "0.9.0-rc.1",
+  targets: [{ kind: "app" as const, version: "0.9.1", currentVersion: "0.9.0-rc.1", notes: "修复问题", publishedAt: null, size: 1024 }],
 };
 
 describe("software update decisions", () => {
@@ -37,7 +37,7 @@ describe("software update decisions", () => {
   it("keeps component updates separate from the installed desktop version", () => {
     const ui = { ...available, targets: [{ ...available.targets[0], kind: "ui" as const }] };
     expect(applyUpdateLabel(ui)).toBe("刷新界面并应用");
-    expect(updateStatusLabel({ ...ui, phase: "completed" })).toBe("v0.9.0");
+    expect(updateStatusLabel({ ...ui, phase: "completed" })).toBe("v0.9.0-rc.1");
     expect(updateStatusLabel({ ...ui, phase: "downloading", progress: null })).toBe("更新下载中");
   });
 });
