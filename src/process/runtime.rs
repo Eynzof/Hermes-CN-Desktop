@@ -749,8 +749,8 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
 // the build environment. Cascade (highest first):
 //   1. Runtime env (HERMES_RUNTIME_UPDATE_*)
 //   2. Compile-time env override (HERMES_RUNTIME_UPDATE_*_DEFAULT)
-//   3. Hardcoded fallback below — points at the Eynzof/Hermes-CN-Core
-//      production release pipeline + its Ed25519 public key.
+//   3. Shared software-update defaults (source/channel), and the community
+//      Ed25519 public key below.
 // Forks rebuilding the desktop should set the compile-time env override
 // to point at their own release pipeline + key (or edit the constants
 // below).
@@ -759,8 +759,6 @@ const BAKED_MANIFEST_CHANNEL: Option<&str> = option_env!("HERMES_RUNTIME_UPDATE_
 const BAKED_PUBLIC_KEY_PEM: Option<&str> =
     option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
 
-const FALLBACK_MANIFEST_BASE_URL: &str =
-    "https://github.com/Eynzof/Hermes-CN-Core/releases/latest/download";
 const FALLBACK_PUBLIC_KEY_PEM: &str = concat!(
     "-----BEGIN PUBLIC KEY-----\n",
     "MCowBQYDK2VwAyEAqPkLQ4o67G2GMTgkQQQZXWwDBZM/4hqq5thSZSNhoC0=\n",
@@ -822,13 +820,17 @@ pub(crate) fn configured_manifest_url() -> Option<String> {
         return Some(url);
     }
 
-    // 2. Construct from base URL — runtime env wins, then compile-time
-    //    default, then the hardcoded production fallback.
+    // 2. Preserve legacy explicit overrides, then use the same fresh-install
+    //    defaults as the software-update page, before a config file is saved.
+    let defaults = crate::update_config::load().config;
+    if !defaults.runtime_manifest_url.trim().is_empty() {
+        return Some(defaults.runtime_manifest_url.trim().to_string());
+    }
     let base = std::env::var("HERMES_RUNTIME_UPDATE_BASE_URL")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .or_else(|| BAKED_MANIFEST_BASE_URL.map(|s| s.to_string()))
-        .unwrap_or_else(|| FALLBACK_MANIFEST_BASE_URL.to_string());
+        .unwrap_or(defaults.runtime_base_url);
     let base = base.trim();
     if base.is_empty() {
         return None;
@@ -837,7 +839,7 @@ pub(crate) fn configured_manifest_url() -> Option<String> {
         .ok()
         .filter(|s| !s.trim().is_empty())
         .or_else(|| BAKED_MANIFEST_CHANNEL.map(|s| s.to_string()))
-        .unwrap_or_else(|| DEFAULT_CHANNEL.to_string());
+        .unwrap_or(defaults.channel);
     // URL pattern: ${base}/${channel}-${platform}-${arch}.json
     // Flat (no path segments after base) so GitHub Releases hosting works
     // out of the box — Releases assets share a single directory per tag.
@@ -5040,11 +5042,62 @@ mod tests {
     #[serial]
     fn manifest_url_falls_back_when_env_unset() {
         clear_runtime_env();
-        // No env, no compile-time bake (BAKED_* are option_env! and unset in
-        // dev/test builds), so we get FALLBACK_MANIFEST_BASE_URL + default channel.
+        // A fresh install uses the same community source as the update page.
         let url = configured_manifest_url().unwrap();
-        assert!(url.contains("Eynzof/Hermes-CN-Core"));
+        assert!(url.starts_with(crate::update_config::DEFAULT_RUNTIME_BASE_URL));
         assert!(url.contains("stable-"));
+    }
+
+    #[test]
+    #[serial]
+    fn manifest_urls_share_the_channel_before_config_is_saved() {
+        let root = TempDir::new().unwrap();
+        let names = [
+            "HERMES_DESKTOP_RUNTIME_ROOT",
+            "HERMES_UPDATE_CHANNEL",
+            "HERMES_UPDATE_RUNTIME_BASE_URL",
+            "HERMES_UPDATE_RUNTIME_MANIFEST_URL",
+            "HERMES_RUNTIME_UPDATE_MANIFEST_URL",
+            "HERMES_RUNTIME_UPDATE_BASE_URL",
+            "HERMES_RUNTIME_UPDATE_CHANNEL",
+            "HERMES_UI_UPDATE_MANIFEST_URL",
+            "HERMES_UI_UPDATE_BASE_URL",
+            "HERMES_UI_UPDATE_CHANNEL",
+        ];
+        let previous: Vec<_> = names
+            .iter()
+            .map(|name| (*name, std::env::var_os(name)))
+            .collect();
+        for name in names {
+            std::env::remove_var(name);
+        }
+        std::env::set_var("HERMES_DESKTOP_RUNTIME_ROOT", root.path());
+        std::env::set_var("HERMES_UPDATE_CHANNEL", "canary");
+        let runtime_url = configured_manifest_url();
+        let ui_url = crate::process::ui_update::ui_manifest_url();
+        let persisted = crate::update_config::update_config_path().exists();
+        for (name, value) in previous {
+            if let Some(value) = value {
+                std::env::set_var(name, value);
+            } else {
+                std::env::remove_var(name);
+            }
+        }
+        assert!(!persisted);
+        assert_eq!(
+            runtime_url,
+            Some(format!(
+                "{}/canary-{}-{}.json",
+                crate::update_config::DEFAULT_RUNTIME_BASE_URL,
+                current_platform(),
+                current_arch()
+            ))
+        );
+        assert!(ui_url.unwrap().ends_with(&format!(
+            "/canary-{}-{}.json",
+            current_platform(),
+            current_arch()
+        )));
     }
 
     #[test]

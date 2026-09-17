@@ -34,7 +34,6 @@ use crate::process::runtime;
 const UI_SCHEMA_VERSION: u32 = 1;
 const UI_CURRENT_FILE: &str = "current.json";
 const UI_MANIFEST_FILE: &str = "manifest.json";
-const UI_DEFAULT_CHANNEL: &str = "stable";
 /// Hardcoded fallback base URL for the UI update channel (same host layout as
 /// the runtime channel, `/ui` sub-path). Overridable at runtime via
 /// `HERMES_UI_UPDATE_MANIFEST_URL` / `HERMES_UI_UPDATE_BASE_URL` and at build
@@ -266,7 +265,7 @@ pub(crate) fn ui_manifest_url() -> Option<String> {
         .filter(|s| !s.trim().is_empty())
         .or_else(|| crate::update_config::load_optional().map(|c| c.channel))
         .or_else(|| UI_BAKED_MANIFEST_CHANNEL.map(|s| s.to_string()))
-        .unwrap_or_else(|| UI_DEFAULT_CHANNEL.to_string());
+        .unwrap_or_else(|| crate::update_config::load().config.channel);
     let base = if base.ends_with('/') {
         base.trim_end_matches('/').to_string()
     } else {
