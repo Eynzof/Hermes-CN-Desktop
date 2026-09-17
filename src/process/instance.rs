@@ -38,7 +38,7 @@ const FOCUS_WATCH_INTERVAL: Duration = Duration::from_secs(1);
 const SINGLE_INSTANCE_ENV: &str = "HERMES_DESKTOP_SINGLE_INSTANCE";
 
 /// Holding this guard means holding the exclusive instance lock; keep it
-/// alive for the whole process (a `main()` local outliving `app.run()`).
+/// alive until the app exits, releasing it before spawning a restart.
 pub struct InstanceGuard {
     _file: std::fs::File,
 }

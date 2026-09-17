@@ -241,8 +241,9 @@ fn main() {
     // Single-instance guard per runtime root (issue #366): a second launch
     // against the SAME data root focuses the incumbent window and exits;
     // distinct roots (portable copies side by side) keep coexisting. The
-    // guard lives on main's stack so the lock is held until process exit.
-    let _instance_guard = match instance::try_acquire() {
+    // Release it in RunEvent::Exit, before Tauri spawns a replacement process.
+    // Holding it until process exit makes a restart look like a second launch.
+    let mut instance_guard = match instance::try_acquire() {
         instance::SingleInstance::Acquired(guard) => Some(guard),
         instance::SingleInstance::AlreadyRunning => {
             log::info!(
@@ -787,6 +788,7 @@ fn main() {
         }
         tauri::RunEvent::Exit => {
             shutdown_owned_runtime(app_handle, "app exit");
+            drop(instance_guard.take());
         }
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => {

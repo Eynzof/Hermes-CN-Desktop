@@ -92,7 +92,13 @@ pub(crate) async fn selected_candidate(app: &AppHandle) -> Result<Option<ShellCa
                 version: update.version,
                 metadata,
                 notes: update.body,
-                published_at: update.date.map(|date| date.to_string()),
+                // The updater already validates this RFC 3339 value. Preserve
+                // it: OffsetDateTime's Display output is not a WebView date.
+                published_at: update
+                    .raw_json
+                    .get("pub_date")
+                    .and_then(|date| date.as_str())
+                    .map(str::to_owned),
             })
         })
         .transpose()
