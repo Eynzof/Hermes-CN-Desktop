@@ -11,7 +11,7 @@ vi.mock("@/lib/runtime", () => ({ runtime: { isManaged: () => true } }));
 import { UpdatesRoute } from "./updates";
 import { SoftwareUpdateStatus } from "@/components/app-shell/software-update-status";
 let current: SoftwareUpdateState;
-const available = { ...INITIAL_UPDATE_STATE, phase: "available" as const, checkedAt: 1,
+const available = { ...INITIAL_UPDATE_STATE, currentVersion: "0.9.0", phase: "available" as const, checkedAt: 1,
   targets: [{ kind: "ui" as const, currentVersion: "0.9.0", version: "0.9.1", notes: "改进对话体验", publishedAt: null, size: 1024 }] };
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();

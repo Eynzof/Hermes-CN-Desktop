@@ -196,11 +196,21 @@ while($true) {
         if($control.Current.IsOffscreen -or -not $control.Current.IsEnabled){throw 'Shell control is not visible and enabled'}
         $bounds=$control.Current.BoundingRectangle
         if($bounds.Width -le 0 -or $bounds.Height -le 0){throw 'Shell control has no visible bounds'}
-        [NativeE2EWindow]::SetCursorPos([int]($bounds.X+$bounds.Width/2),[int]($bounds.Y+$bounds.Height/2)) | Out-Null
-        $down=if($request.button -eq 'right'){8}else{2}
-        $up=if($request.button -eq 'right'){16}else{4}
-        [NativeE2EWindow]::mouse_event($down,0,0,0,[UIntPtr]::Zero)
-        [NativeE2EWindow]::mouse_event($up,0,0,0,[UIntPtr]::Zero)
+        # The touch keyboard can cover the taskbar. Invoke the actual UIA
+        # button when available instead of clicking that unrelated overlay.
+        $invoke=$null
+        if($request.button -eq 'right') {
+          $control.SetFocus()
+          [System.Windows.Forms.SendKeys]::SendWait('+{F10}')
+        } elseif($control.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern,[ref]$invoke)) {
+          $invoke.Invoke()
+        } else {
+          [NativeE2EWindow]::SetCursorPos([int]($bounds.X+$bounds.Width/2),[int]($bounds.Y+$bounds.Height/2)) | Out-Null
+          $down=if($request.button -eq 'right'){8}else{2}
+          $up=if($request.button -eq 'right'){16}else{4}
+          [NativeE2EWindow]::mouse_event($down,0,0,0,[UIntPtr]::Zero)
+          [NativeE2EWindow]::mouse_event($up,0,0,0,[UIntPtr]::Zero)
+        }
         $result=@{ok=$true;control=(DescribeElement $control)}
       } elseif($request.action -eq 'shellSnapshot') {
         # Read only the shell surfaces needed for tray/notification acceptance.

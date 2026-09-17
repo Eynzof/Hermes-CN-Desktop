@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
-export const baseline = JSON.parse(readFileSync(fileURLToPath(new URL('./baseline.json', import.meta.url)), 'utf8'));
+export const baseline = JSON.parse(readFileSync(fileURLToPath(new URL('./baseline.json', import.meta.url)), 'utf8').replace(/^\uFEFF/, ''));
 const coverageCatalog = JSON.parse(readFileSync(fileURLToPath(new URL('./coverage-catalog.json', import.meta.url)), 'utf8'));
 export const root = process.env.HERMES_E2E_ROOT || 'C:\\HermesE2E';
 export const home = path.join(root, 'runtime', 'hermes-home');
@@ -67,11 +67,19 @@ export async function nativeDialog(title: string, destination?: string, submit =
 export async function quitFromTray() {
   let menu = (await native({ action: 'windows' })).windows.find((w: any) => w.class === '#32768');
   if (!menu) {
-    const shell = await native({ action: 'shellSnapshot' });
-    if (!shell.windows.some((w: any) => w.window.class === 'TopLevelWindowForOverflowXamlIsland' && !w.window.offscreen)) {
+    const findTray = (shell: any) => shell.windows.find((surface: any) =>
+      ['Shell_TrayWnd', 'NotifyIconOverflowWindow', 'TopLevelWindowForOverflowXamlIsland'].includes(surface.window.class)
+      && !surface.window.offscreen && surface.controls.some((control: any) =>
+        control.name === 'Hermes Agent 中文社区桌面版' && control.type === 'ControlType.Button' && !control.offscreen));
+    let tray = findTray(await native({ action: 'shellSnapshot' }));
+    if (!tray) {
       await native({ action: 'shellClick', shellClass: 'Shell_TrayWnd', controlName: '显示隐藏的图标' });
+      await expect.poll(async () => {
+        tray = findTray(await native({ action: 'shellSnapshot' }));
+        return Boolean(tray);
+      }, { message: 'Wait for the live Hermes tray button after the overflow animation' }).toBe(true);
     }
-    await native({ action: 'shellClick', shellClass: 'TopLevelWindowForOverflowXamlIsland', controlName: 'Hermes Agent 中文社区桌面版', button: 'right' });
+    await native({ action: 'shellClick', shellClass: tray.window.class, controlName: 'Hermes Agent 中文社区桌面版', button: 'right' });
     await expect.poll(async () => (await native({ action: 'windows' })).windows.some((w: any) => w.class === '#32768')).toBe(true);
     menu = (await native({ action: 'windows' })).windows.find((w: any) => w.class === '#32768');
   }

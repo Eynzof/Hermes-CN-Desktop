@@ -140,6 +140,26 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('ready');
     expect(hash(path.join(root, 'runtime', 'desktop-updater-cache', 'pending-update.exe'))).toBe(metadata.candidateInstallerSha256);
     expect((await bridge<any>(page, 'getRuntimeInfo')).process.pid).toBe(coreBefore);
+    const started = path.join(root, 'workspace', marker + '-start.txt');
+    const finished = path.join(root, 'workspace', marker + '-done.txt');
+    await route(page, '/');
+    const readyNotice = page.getByRole('dialog', { name: '更新已准备好', exact: true });
+    if (await readyNotice.isVisible()) await readyNotice.getByRole('button', { name: '稍后提醒', exact: true }).click();
+    const command = `powershell -NoProfile -Command "Set-Content -LiteralPath '${started.replaceAll('\\', '/')}' -Value START; Start-Sleep -Seconds 25; Set-Content -LiteralPath '${finished.replaceAll('\\', '/')}' -Value DONE"`;
+    await page.getByRole('textbox', { name: '输入消息', exact: true }).fill(`使用 terminal 同步执行下面命令，timeout=60，不要放到后台。成功后仅回复 UPDATE-TASK-DONE。命令：${command}`);
+    await page.getByRole('button', { name: '发送消息', exact: true }).click();
+    await expect(page).toHaveURL(/#\/tasks\//);
+    const protectedSession = decodeURIComponent(page.url().split('#/tasks/')[1].split('?')[0]);
+    await expect.poll(() => existsSync(started), { timeout: 90_000 }).toBe(true);
+    await route(page, '/updates');
+    await expect(page.getByRole('heading', { name: '等待任务结束', exact: true })).toBeVisible();
+    expect((await state()).activities.length).toBeGreaterThan(0);
+    expect(hash(originalProcess.appExe)).toBe(baseline.installedDesktopSha256);
+    await testInfo.attach('shell-update-waits-for-real-work', { body: JSON.stringify(await state()), contentType: 'application/json' });
+    await expect.poll(() => existsSync(finished), { timeout: 90_000 }).toBe(true);
+    await expect.poll(async () => (await state()).phase, { timeout: 90_000 }).toBe('ready');
+    expect(identify().pid).toBe(beforeRecord.pid);
+    await testInfo.attach('protected-real-model-session', { body: JSON.stringify(sessionEvidence(protectedSession)), contentType: 'application/json' });
     // Restart the real application before applying: native persistent state,
     // the fixed target and verified download must survive process replacement.
     await quitFromTray();

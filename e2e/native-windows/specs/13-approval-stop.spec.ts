@@ -7,7 +7,10 @@ test('CHAT-004 中止真实生成后在同一会话继续发送', async ({ app }
   await app.getByRole('textbox', { name: '输入消息', exact: true }).fill('请立即开始连续输出一千行简短的中文测试数据，逐行编号从 1 到 1000。不要调用工具，不要先解释。');
   await app.getByRole('button', { name: '发送消息', exact: true }).click();
   await expect(app).toHaveURL(/#\/tasks\//);
-  await expect(app.getByRole('log').locator('[data-role="assistant"]').last()).toContainText(/^\s*1/, { timeout: 60_000 });
+  // The live model can start its visible answer at a later number. Assert
+  // that numbered text is streaming, not that it follows the counting prompt.
+  await expect(app.getByRole('log').locator('[data-role="assistant"]').last()).toContainText(/\d+\s*[、.．)）]/, { timeout: 60_000 });
+  await expect(app.getByRole('button', { name: '中止响应', exact: true })).toBeVisible();
   await app.getByRole('button', { name: '中止响应', exact: true }).click();
   await expect(app.getByRole('button', { name: '中止响应', exact: true })).toHaveCount(0);
   const id = decodeURIComponent(app.url().split('#/tasks/')[1].split('?')[0]);
