@@ -11,20 +11,21 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
   const processFile = path.join(root, 'reports', 'desktop-process.json');
   const configFile = path.join(root, 'runtime', 'update-config.json');
   const pendingFile = path.join(root, 'runtime', 'desktop-updater-cache', 'pending.json');
-  const originalConfig = readFileSync(configFile);
+  const originalConfig = existsSync(configFile) ? readFileSync(configFile) : undefined;
+  const originalDeviceId = (await bridge<any>(app, 'getUpdateConfig')).config.deviceId;
   const stateFile = path.join(root, 'runtime', 'software-update.json');
   const originalState = existsSync(stateFile) ? readFileSync(stateFile) : undefined;
   const originalProcess = JSON.parse(readFileSync(processFile, 'utf8').replace(/^\uFEFF/, ''));
   const marker = `signed-update-${Date.now()}`;
-  const failInstaller = 'C:\\HermesV090\\fail-installer';
+  const failInstaller = baseline.shellUpdateCandidate.failureFlagPath || 'C:\\HermesV090\\fail-installer';
   expect(existsSync(failInstaller), 'The deterministic installer failure flag must start absent').toBe(false);
   const recovery = path.join(root, 'secrets', 'shell-cases', marker);
   mkdirSync(recovery, { recursive: true });
-  writeFileSync(path.join(recovery, 'update-config.json'), originalConfig);
+  if (originalConfig) writeFileSync(path.join(recovery, 'update-config.json'), originalConfig);
   writeFileSync(path.join(recovery, 'desktop-process.json'), JSON.stringify(originalProcess));
   const hash = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
   const ps = (script: string, timeout = 120_000) => execFileSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(`$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.UTF8Encoding]::new();${script}`, 'utf16le').toString('base64')], { encoding: 'utf8', windowsHide: true, timeout });
-  const script = (name: string, args = '') => ps(`& '${path.join(root, 'native-windows', 'scripts', name)}' -Root '${root}' ${args}`);
+  const script = (name: string, args = '') => ps(`& '${path.join(root, 'native-windows', 'scripts', name)}' -Root '${root}' ${['start.ps1', 'restore-shell-baseline.ps1'].includes(name) ? `-AppExe '${originalProcess.appExe}'` : ''} ${args}`);
   const browsers: Browser[] = [];
   let page: Page = app;
   let fixtureStarted = false;
@@ -64,7 +65,7 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     writeFileSync(processFile, JSON.stringify(record));
     return record;
   };
-  const mode = (manifest: string, authorized = true) => writeFileSync(path.join(fixture, 'mode.json'), JSON.stringify({ manifest, authorized, deviceId: marker }));
+  const mode = (manifest: string, authorized = true, chunkDelayMs = 0) => writeFileSync(path.join(fixture, 'mode.json'), JSON.stringify({ manifest, authorized, deviceId: marker, chunkDelayMs }));
   const requests = () => existsSync(path.join(fixture, 'requests.jsonl')) ? readFileSync(path.join(fixture, 'requests.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
   const downloadCount = () => requests().filter(item => item.host === 'dl-desktop.hermesagent.org.cn' && item.method === 'GET').length;
   const state = () => bridge<any>(page, 'softwareUpdateSnapshot');
@@ -95,7 +96,7 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     const coreBefore = (await bridge<any>(page, 'getRuntimeInfo')).process.pid;
     await route(page, '/updates?advanced=1');
     await page.getByRole('button', { name: '更新源设置', exact: true }).click();
-    await expect(page.getByLabel('deviceId（非密钥）', { exact: true })).toHaveValue(JSON.parse(originalConfig.toString('utf8').replace(/^\uFEFF/, '')).deviceId);
+    await expect(page.getByLabel('deviceId（非密钥）', { exact: true })).toHaveValue(originalDeviceId);
     const invitation = { schemaVersion: 1, channel: 'prototype', deviceId: marker, token: `local-fixture-${marker}`, endpoint: 'https://hot-update-staging.hermesagent.org.cn/v1/check/{{channel}}/{{target}}/{{arch}}/{{current_version}}' };
     await page.getByLabel(/^一次性邀请配置（JSON）/).fill('{invalid-json');
     await page.getByRole('button', { name: '导入邀请配置', exact: true }).click();
@@ -115,6 +116,14 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     if (await availableNotice.isVisible()) await availableNotice.getByRole('button', { name: '稍后提醒', exact: true }).click();
     await page.getByRole('button', { name: '查看软件更新', exact: true }).click();
     expect(downloadCount()).toBe(count);
+    mode('good.json', true, 80);
+    await begin();
+    await expect.poll(async () => (await state()).phase).toBe('downloading');
+    await page.getByRole('button', { name: '取消下载', exact: true }).click();
+    await expect.poll(async () => (await state()).phase).toBe('available');
+    expect(hash(originalProcess.appExe)).toBe(baseline.installedDesktopSha256);
+    expect((await bridge<any>(page, 'getRuntimeInfo')).process.pid).toBe(coreBefore);
+    await testInfo.attach('cancelled-real-download', { body: JSON.stringify(await state()), contentType: 'application/json' });
     for (const candidate of ['bad-signature.json', 'bad-hash.json']) {
       mode(candidate);
       await check();
@@ -151,25 +160,29 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
     await check();
     await begin();
     await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('ready');
-    // The acceptance-only NSIS hook fails before writing application files.
-    // Desktop itself must reopen the original installation and report failure.
-    writeFileSync(failInstaller, marker);
-    helperOffset = existsSync(helper) ? readFileSync(helper, 'utf8').length : 0;
-    const failedInstallClosed = page.waitForEvent('close', { timeout: 90_000 });
-    await page.getByRole('button', { name: '重启应用并安装', exact: true }).click();
-    await failedInstallClosed;
-    await expect.poll(helperOutput, { timeout: 120_000 }).toContain('installer-exit=exit code: 77');
-    await connect();
-    expect((await state()).phase).toBe('error');
-    expect((await state()).currentVersion).toBe(baseline.desktopVersion);
-    expect(hash(originalProcess.appExe)).toBe(baseline.installedDesktopSha256);
-    expect(hash(path.join(home, 'config.yaml'))).toBe(userConfigSha);
-    expect(hash(path.join(home, '.env'))).toBe(modelKeySha);
-    await testInfo.attach('failed-installer-original-restored', { body: JSON.stringify({ state: await state(), helper: helperOutput(), runtime: await bridge(page, 'getRuntimeInfo') }), contentType: 'application/json' });
-    unlinkSync(failInstaller);
-    await check();
-    await begin();
-    await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('ready');
+    if (baseline.shellUpdateCandidate.failureInjectionSupported !== false) {
+      // The acceptance-only NSIS hook fails before writing application files.
+      // Desktop itself must reopen the original installation and report failure.
+      writeFileSync(failInstaller, marker);
+      helperOffset = existsSync(helper) ? readFileSync(helper, 'utf8').length : 0;
+      const failedInstallClosed = page.waitForEvent('close', { timeout: 90_000 });
+      await page.getByRole('button', { name: '重启应用并安装', exact: true }).click();
+      await failedInstallClosed;
+      await expect.poll(helperOutput, { timeout: 120_000 }).toContain('installer-exit=exit code: 77');
+      await connect();
+      expect((await state()).phase).toBe('error');
+      expect((await state()).currentVersion).toBe(baseline.desktopVersion);
+      expect(hash(originalProcess.appExe)).toBe(baseline.installedDesktopSha256);
+      expect(hash(path.join(home, 'config.yaml'))).toBe(userConfigSha);
+      expect(hash(path.join(home, '.env'))).toBe(modelKeySha);
+      await testInfo.attach('failed-installer-original-restored', { body: JSON.stringify({ state: await state(), helper: helperOutput(), runtime: await bridge(page, 'getRuntimeInfo') }), contentType: 'application/json' });
+      unlinkSync(failInstaller);
+      await check();
+      await begin();
+      await expect.poll(async () => (await state()).phase, { timeout: 120_000 }).toBe('ready');
+    } else {
+      await testInfo.attach('installer-failure-injection-not-covered', { body: 'This candidate uses the normal NSIS hooks. Forced installer failure requires a separate fault-injection build and is not covered by this run.', contentType: 'text/plain' });
+    }
     helperOffset = existsSync(helper) ? readFileSync(helper, 'utf8').length : 0;
     installRequested = true;
     const closed = page.waitForEvent('close', { timeout: 90_000 });
@@ -220,7 +233,8 @@ test('RUNTIME-004 真实签名整包拒绝错误候选、取消和缓存、复�
           const listeners = JSON.parse(ps("@(Get-NetTCPConnection -LocalPort 19229 -State Listen -ErrorAction SilentlyContinue | Select-Object OwningProcess) | ConvertTo-Json -Compress") || '[]');
           if ((Array.isArray(listeners) ? listeners : [listeners]).length) { await connect(); identify(); await quitFromTray(); }
         }
-        writeFileSync(configFile, originalConfig);
+        if (originalConfig) writeFileSync(configFile, originalConfig);
+        else if (existsSync(configFile)) unlinkSync(configFile);
         if (originalState) writeFileSync(stateFile, originalState);
         else if (existsSync(stateFile)) unlinkSync(stateFile);
         // A deliberately cached test candidate otherwise opens a global modal

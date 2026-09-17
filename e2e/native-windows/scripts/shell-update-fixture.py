@@ -11,6 +11,7 @@ import http.server
 import json
 import shutil
 import ssl
+import time
 from pathlib import Path
 
 from cryptography import x509
@@ -43,22 +44,25 @@ def save(name, value):
 if args.prepare:
     if folder.exists():
         raise SystemExit('Existing fixture is retained; use its pinned metadata')
-    original = args.artifacts / baseline['desktopArtifactsDir'] / 'Hermes v090 Acceptance_0.9.0_x64-setup.exe'
-    candidate = args.artifacts / f'desktop-{version}/Hermes v090 Acceptance_{version}_x64-setup.exe'
-    exe = candidate.parent / 'hermes-agent-cn-desktop.exe'
+    original = (Path(baseline['desktopInstallerPath']) if baseline.get('desktopInstallerPath') else
+                args.artifacts / baseline['desktopArtifactsDir'] / 'Hermes v090 Acceptance_0.9.0_x64-setup.exe')
+    target = baseline['shellUpdateCandidate']
+    candidate = (Path(target['installerPath']) if target.get('installerPath') else
+                 args.artifacts / f'desktop-{version}/Hermes v090 Acceptance_{version}_x64-setup.exe')
+    exe = Path(target.get('exePath', candidate.parent / 'hermes-agent-cn-desktop.exe'))
     assert sha(original) == baseline['desktopInstallerSha256']
     assert sha(candidate) == baseline['shellUpdateCandidate']['installerSha256']
     assert sha(exe) == baseline['shellUpdateCandidate']['exeSha256']
     # Tauri's NSIS bundler changes this bundle-type marker before packaging.
     # Compute the expected installed bytes without modifying the signed asset.
     unpacked = exe.read_bytes()
-    assert unpacked.count(b'URI_BUNDLE_TYPE_VAR_UNK') == 1
+    assert unpacked.count(b'URI_BUNDLE_TYPE_VAR_UNK') + unpacked.count(b'URI_BUNDLE_TYPE_VAR_NSS') == 1
     installed_sha = hashlib.sha256(unpacked.replace(b'URI_BUNDLE_TYPE_VAR_UNK', b'URI_BUNDLE_TYPE_VAR_NSS')).hexdigest()
     folder.mkdir()
     private.mkdir(parents=True)
     shutil.copyfile(candidate, folder / 'update.exe')
     signature = candidate.with_suffix('.exe.sig').read_text().strip()
-    manifest = dict(version=version, notes='仅本机验收的真实签名安装包，不是正式发布', pub_date='2026-09-07T00:00:00Z',
+    manifest = dict(version=version, notes='仅本机验收的真实签名安装包，不是正式发布', pub_date=dt.datetime.now(dt.timezone.utc).isoformat(),
                     url=f'https://{hosts[1]}{asset_path}', signature=signature,
                     metadata=dict(schemaVersion=2, releaseId=f'desktop-{version}-windows-x86_64', channel='prototype',
                                 githubReleaseTag=f'v{version}', githubFallbackUrl=f'https://github.com/Eynzof/Hermes-CN-Desktop/releases/download/v{version}/update.exe',
@@ -140,6 +144,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             # The actual updater must strip control-plane authorization here.
             if self.headers.get('Authorization'):
                 return self.reply(400, b'{"error":"unexpected_asset_authorization"}')
+            if state.get('chunkDelayMs'):
+                file = folder / 'update.exe'
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/octet-stream')
+                self.send_header('Content-Length', str(file.stat().st_size))
+                self.end_headers()
+                try:
+                    with file.open('rb') as stream:
+                        while chunk := stream.read(1024 * 1024):
+                            self.wfile.write(chunk)
+                            time.sleep(state['chunkDelayMs'] / 1000)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass  # Expected when the user cancels the real download.
+                return
             return self.reply(200, (folder / 'update.exe').read_bytes(), 'application/octet-stream')
         self.reply(404)
 

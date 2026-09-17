@@ -112,7 +112,7 @@ export const test = base.extend<{ app: Page }>({
       let alive = true;
       try { process.kill(desktop.pid, 0); } catch { alive = false; }
       expect(alive, 'A living but unreachable Desktop must be diagnosed before any replacement is launched').toBe(false);
-      const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'native-windows', 'scripts', 'start.ps1'), '-Root', root];
+      const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'native-windows', 'scripts', 'start.ps1'), '-Root', root, '-AppExe', desktop.appExe];
       if (desktop.updateFixture) args.push('-UpdateFixture');
       const startup = execFileSync('powershell.exe', args, { windowsHide: true, encoding: 'utf8', timeout: 120_000 });
       await testInfo.attach('independent-case-startup-after-previous-exit', { body: JSON.stringify({ previous: desktop, startup }, null, 2), contentType: 'application/json' });
@@ -122,7 +122,7 @@ export const test = base.extend<{ app: Page }>({
       command('prepare-update-service.ps1');
       if (!desktop.updateFixture) {
         await quitFromTray();
-        const startup = command('start.ps1', '-UpdateFixture');
+        const startup = command('start.ps1', '-AppExe', desktop.appExe, '-UpdateFixture');
         await testInfo.attach('automatic-signed-update-environment', { body: startup, contentType: 'text/plain' });
       }
     }
