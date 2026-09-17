@@ -105,8 +105,10 @@ export APPLE_API_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm exec tauri build --target aarch64-apple-darwin --bundles dmg
+pnpm exec tauri build --target aarch64-apple-darwin --bundles app,dmg
 ```
+
+必须同时选择 `app,dmg`：`app` 目标保留应用并生成 `.app.tar.gz` 更新包及签名，`dmg` 目标生成安装镜像。仅选择 `dmg` 会缺少整包更新资产。
 
 构建产物通常在：
 

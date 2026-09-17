@@ -119,12 +119,12 @@ jobs:
             target: aarch64-apple-darwin
             runtime_platform: darwin
             runtime_arch: arm64
-            bundles: dmg
+            bundles: app,dmg
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             runtime_platform: darwin
             runtime_arch: x64
-            bundles: dmg
+            bundles: app,dmg
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             runtime_platform: linux
