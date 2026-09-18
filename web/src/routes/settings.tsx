@@ -440,6 +440,26 @@ const THEME_SKINS: Array<{
     text: "#cdd6f4",
     accent: "#cba6f7",
   },
+  {
+    value: "soft-green",
+    label: "护眼浅绿",
+    sub: "豆沙绿低刺激",
+    bg: "#c7edcc",
+    pane: "#d9f2dc",
+    soft: "#cfe8d3",
+    text: "#1e3b1e",
+    accent: "#2e7d32",
+  },
+  {
+    value: "soft-warm",
+    label: "护眼浅黄",
+    sub: "暖米黄低刺激",
+    bg: "#fdf6e3",
+    pane: "#fff9ec",
+    soft: "#f8f0d9",
+    text: "#4a3b2a",
+    accent: "#8a6d3b",
+  },
 ];
 
 function AppearanceRow({
