@@ -78,6 +78,7 @@ const SMOKE_SPAWN_RETRIES: u32 = 5;
 static RUNTIME_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .connect_timeout(RUNTIME_HTTP_CONNECT_TIMEOUT)
+        .user_agent("hermes-agent-cn-desktop-update-check")
         .build()
         .expect("valid runtime update HTTP client")
 });
@@ -1511,6 +1512,8 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
 
     match RUNTIME_HTTP_CLIENT
         .get(&url)
+        .header("X-Hermes-Desktop-Version", env!("CARGO_PKG_VERSION"))
+        .header(reqwest::header::ACCEPT, "application/json")
         .timeout(RUNTIME_MANIFEST_HTTP_TIMEOUT)
         .send()
         .await

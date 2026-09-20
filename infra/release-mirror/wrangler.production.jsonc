@@ -1,0 +1,19 @@
+{
+  "name": "hermes-desktop-release-mirror-production",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-23",
+  "cache": {
+    "enabled": true
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "hot-update-download.hermesagent.org.cn",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production"
+  }
+}

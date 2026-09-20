@@ -1,7 +1,17 @@
+<#
+.SYNOPSIS
+安装 Windows 热更新测试基线并保留用户数据。
+.EXAMPLE
+./scripts/windows-hot-update-prepare.ps1 -InstallerPath ./desktop-setup.exe -WindowsSigning none -ExpectedVersion 0.9.0 -RuntimeRoot C:\hermes-test\runtime -AppExe C:\hermes-test\desktop.exe
+.EXAMPLE
+./scripts/windows-hot-update-prepare.ps1 -InstallerPath ./prototype-setup.exe -WindowsSigning authenticode -TrustTestCertificate -CertificatePath ./staging-publisher.cer -ExpectedVersion 0.9.1-prototype.1 -RuntimeRoot C:\hermes-test\runtime -AppExe C:\hermes-test\desktop.exe
+#>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$InstallerPath,
-  [Parameter(Mandatory = $true)][string]$CertificatePath,
+  [string]$CertificatePath,
+  [ValidateSet("none", "authenticode")][string]$WindowsSigning = "none",
+  [switch]$TrustTestCertificate,
   [Parameter(Mandatory = $true)][string]$ExpectedVersion,
   [Parameter(Mandatory = $true)][string]$RuntimeRoot,
   [Parameter(Mandatory = $true)][string]$AppExe,
@@ -12,7 +22,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 $installer = (Resolve-Path -LiteralPath $InstallerPath).Path
-$certificate = (Resolve-Path -LiteralPath $CertificatePath).Path
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 $application = [IO.Path]::GetFullPath($AppExe)
 $runtimeRoots = @($runtime)
@@ -21,12 +30,19 @@ if ($ExistingRuntimeRoot) {
 }
 $stoppedProcesses = @()
 
-Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\LocalMachine\Root -Confirm:$false | Out-Null
-Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
-Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+if ($CertificatePath -or $TrustTestCertificate) {
+  if (-not $TrustTestCertificate -or -not $CertificatePath -or $WindowsSigning -ne "authenticode") {
+    throw "测试证书仅允许在 authenticode 模式下显式指定 -TrustTestCertificate 与 -CertificatePath"
+  }
+  $certificate = (Resolve-Path -LiteralPath $CertificatePath).Path
+  Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\LocalMachine\Root -Confirm:$false | Out-Null
+  Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
+  Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+}
 $installerSignature = Get-AuthenticodeSignature -FilePath $installer
-if ($installerSignature.Status -ne "Valid") {
-  throw "baseline Authenticode invalid: $($installerSignature.Status)"
+$expectedSignature = if ($WindowsSigning -eq "authenticode") { "Valid" } else { "NotSigned" }
+if ($installerSignature.Status.ToString() -ne $expectedSignature) {
+  throw "baseline Authenticode: $($installerSignature.Status), expected $expectedSignature"
 }
 
 Get-Process | ForEach-Object {
@@ -78,6 +94,8 @@ if (Test-Path -LiteralPath $sentinel) {
 [ordered]@{
   ok = $true
   installer = $installer
+  windowsSigning = $WindowsSigning
+  testCertificateTrusted = [bool]$TrustTestCertificate
   installerSignature = $installerSignature.Status.ToString()
   installedExe = $application
   installedVersion = $installedVersion

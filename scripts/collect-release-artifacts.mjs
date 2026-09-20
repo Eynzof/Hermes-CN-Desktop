@@ -37,7 +37,8 @@ const suffixes = {
   // Tauri v2 signs and distributes the final NSIS executable itself.
   win32: [".exe", ".exe.sig"],
   darwin: [".dmg", ".app.tar.gz", ".app.tar.gz.sig"],
-  linux: [".deb", ".AppImage", ".AppImage.tar.gz", ".AppImage.tar.gz.sig"],
+  // createUpdaterArtifacts=true uses the final AppImage and its Tauri v2 signature.
+  linux: [".deb", ".AppImage", ".AppImage.sig"],
 }[platform];
 if (!suffixes) throw new Error(`不支持 release platform：${platform}`);
 
@@ -64,7 +65,7 @@ for (const source of candidates) {
 const updaterSuffix = {
   win32: ".exe",
   darwin: ".app.tar.gz",
-  linux: ".AppImage.tar.gz",
+  linux: ".AppImage",
 }[platform];
 const updater = readdirSync(output).find((name) => name.endsWith(updaterSuffix));
 if (!updater || !readdirSync(output).includes(`${updater}.sig`)) {

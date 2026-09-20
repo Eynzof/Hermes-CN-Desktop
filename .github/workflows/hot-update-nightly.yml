@@ -15,6 +15,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
+    environment: hot-update-staging
     outputs:
       changed: ${{ steps.nightly.outputs.changed }}
       desktop_sha: ${{ steps.nightly.outputs.desktop_sha }}
@@ -25,11 +26,12 @@ jobs:
       tag: ${{ steps.nightly.outputs.tag }}
     env:
       GH_TOKEN: ${{ github.token }}
-      NIGHTLY_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.20.0-cn.9' }}
-      NIGHTLY_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.8.1' }}
+      NIGHTLY_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.21.0-cn.15' }}
+      NIGHTLY_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.9.1' }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ vars.NIGHTLY_DESKTOP_REF || github.ref }}
           fetch-depth: 0
           persist-credentials: false
       - name: Resolve Desktop/Core SHA and skip unchanged inputs
@@ -63,18 +65,21 @@ jobs:
             --jq "[.[] | select(.tagName | contains(\"-prototype.nightly.$day.\"))] | length")"
           sequence=$((count + 1))
           version="$NIGHTLY_BASE_VERSION-prototype.nightly.$day.$sequence"
-          echo "changed=$changed" >> "$GITHUB_OUTPUT"
-          echo "desktop_sha=$desktop_sha" >> "$GITHUB_OUTPUT"
-          echo "core_sha=$core_sha" >> "$GITHUB_OUTPUT"
-          echo "runtime_tag=$NIGHTLY_RUNTIME_TAG" >> "$GITHUB_OUTPUT"
-          echo "core_version=$core_version" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "changed=$changed"
+            echo "desktop_sha=$desktop_sha"
+            echo "core_sha=$core_sha"
+            echo "runtime_tag=$NIGHTLY_RUNTIME_TAG"
+            echo "core_version=$core_version"
+            echo "version=$version"
+            echo "tag=v$version"
+          } >> "$GITHUB_OUTPUT"
 
   build-windows:
     needs: prepare
     if: needs.prepare.outputs.changed == 'true'
     runs-on: windows-latest
+    environment: hot-update-staging
     steps:
       - uses: actions/checkout@v4
         with:
@@ -135,7 +140,7 @@ jobs:
           Export-Certificate -Cert $cert -FilePath $cer | Out-Null
           # Nightly uses a deliberately self-signed staging identity. Trust it
           # only inside this disposable hosted runner so Authenticode can be
-          # verified as Valid; canary/beta/stable use the public CA identity.
+          # verified as Valid. This fixture identity is independent of updater signing.
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root -Confirm:$false | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
@@ -149,8 +154,8 @@ jobs:
       - name: Build signed nightly updater
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_STAGING_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_STAGING_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           HERMES_BAKED_UPDATE_CHANNEL: prototype
           HERMES_BAKED_SHELL_UPDATE_ENDPOINT: ${{ vars.HOT_UPDATE_STAGING_ENDPOINT }}
         run: |
@@ -320,6 +325,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare.outputs.desktop_sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:

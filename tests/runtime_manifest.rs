@@ -9,7 +9,7 @@
 
 use hermes_agent_cn::process::runtime::check_runtime_update;
 use serial_test::serial;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn host_platform() -> &'static str {
@@ -58,6 +58,31 @@ fn clear_env() {
     ] {
         std::env::remove_var(var);
     }
+}
+
+#[tokio::test]
+#[serial]
+async fn manifest_request_identifies_desktop_for_compatible_distribution() {
+    clear_env();
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/manifest.json"))
+        .and(header("user-agent", "hermes-agent-cn-desktop-update-check"))
+        .and(header("x-hermes-desktop-version", env!("CARGO_PKG_VERSION")))
+        .and(header("accept", "application/json"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    std::env::set_var(
+        "HERMES_RUNTIME_UPDATE_MANIFEST_URL",
+        format!("{}/manifest.json", server.uri()),
+    );
+    let result = check_runtime_update().await;
+    clear_env();
+    assert!(result.ok, "unexpected error: {:?}", result.error);
+    assert!(!result.update_available);
+    server.verify().await;
 }
 
 #[tokio::test]

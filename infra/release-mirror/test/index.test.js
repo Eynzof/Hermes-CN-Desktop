@@ -27,6 +27,20 @@ test("builds only the fixed GitHub repository URL", () => {
   );
 });
 
+test("runtime tags route signed manifests and archives to the fixed Core repository", () => {
+  for (const asset of ["stable-darwin-arm64.json", "hermes-agent-cn-runtime-darwin-arm64.zip"]) {
+    const route = parseMirrorRoute(`/runtime-v0.21.0-cn.14/${asset}`);
+    assert.deepEqual(route, { tag: "runtime-v0.21.0-cn.14", asset, immutable: true });
+    assert.equal(
+      githubAssetUrl(route),
+      `https://github.com/Eynzof/Hermes-CN-Core/releases/download/runtime-v0.21.0-cn.14/${asset}`,
+    );
+  }
+  assert.equal(parseMirrorRoute("/runtime-latest/stable-darwin-arm64.json"), null);
+  assert.equal(parseMirrorRoute("/runtime-v0.21.0-cn.14/../secret"), null);
+  assert.equal(parseMirrorRoute("/other-v0.21.0-cn.14/asset.zip"), null);
+});
+
 test("reads full object size from a range response", () => {
   assert.equal(responseSize(new Headers({ "content-range": "bytes 0-99/12345" })), 12345);
   assert.equal(responseSize(new Headers({ "content-length": "99" })), 99);

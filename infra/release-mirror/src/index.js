@@ -1,9 +1,10 @@
-const REPOSITORY = "Eynzof/Hermes-CN-Desktop";
+const DESKTOP_REPOSITORY = "Eynzof/Hermes-CN-Desktop";
+const CORE_REPOSITORY = "Eynzof/Hermes-CN-Core";
 export const MAX_ASSET_BYTES = 480 * 1024 * 1024;
 const VERSION_TTL = 30 * 24 * 60 * 60;
 const LATEST_TTL = 5 * 60;
 const ASSET_NAME = /^[0-9A-Za-z][0-9A-Za-z._-]{0,254}$/;
-const VERSION_TAG = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const VERSION_TAG = /^(?:runtime-)?v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const STAGING_FAULT_STATUSES = new Set([404, 429, 503]);
 
 function json(body, status = 200) {
@@ -36,7 +37,8 @@ export function parseMirrorRoute(pathname) {
 
 export function githubAssetUrl(route) {
   const tag = route.tag === "latest" ? "latest/download" : `download/${route.tag}`;
-  return `https://github.com/${REPOSITORY}/releases/${tag}/${encodeURIComponent(route.asset)}`;
+  const repository = route.tag.startsWith("runtime-") ? CORE_REPOSITORY : DESKTOP_REPOSITORY;
+  return `https://github.com/${repository}/releases/${tag}/${encodeURIComponent(route.asset)}`;
 }
 
 function upstreamHeaders() {

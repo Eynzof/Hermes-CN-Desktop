@@ -1,33 +1,52 @@
-# Build a pinned, signed Hermes CN Desktop release. Platform jobs only upload
-# Actions artifacts. A draft GitHub Release is created after every platform is
-# complete; D1 registration is a separate 0%-rollout staging step.
+# Three explicit stages: build a private draft, publish exact accepted bytes
+# with latest=false, then promote GitHub latest. D1 rollout uses hot-update:control.
 
 name: release-desktop
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
+      action:
+        description: "build 只生成草稿；publish 公开但不设 latest；promote 设为 latest"
+        type: choice
+        options: [build, publish, promote]
+        default: build
+        required: true
       tag:
-        description: "已存在且指向本次 Desktop SHA 的 tag（例如 v0.8.1）"
+        description: "目标版本 tag；build 可尚不存在（例如 v0.9.0）"
         required: true
       bundled_runtime_tag:
         description: "要内置的 Hermes-CN-Core runtime 固定 tag；禁止 latest"
-        default: "runtime-v0.21.0-cn.14"
+        default: "runtime-v0.21.0-cn.15"
         required: true
       bundled_runtime_channel:
         description: "固定 runtime tag 中的 manifest 渠道"
         type: choice
         options: [stable, canary, beta, prototype]
-        default: canary
+        default: stable
         required: true
       channel:
-        description: "D1 注册渠道；注册后仍为 draft / 0%"
+        description: "更新渠道；D1 注册与投放通过 hot-update:control 单独执行"
         type: choice
         options: [prototype, canary, beta, stable]
-        default: canary
+        default: stable
         required: true
+
+      release_environment:
+        description: "正式环境或测试环境；stable 必须 production"
+        type: choice
+        options: [production, staging]
+        default: production
+        required: true
+      windows_signing:
+        description: "Windows 系统签名；所有模式均保留 Tauri 更新签名"
+        type: choice
+        options: [none, authenticode]
+        default: none
+        required: true
+      candidate_sha256:
+        description: "publish / promote 必填：已验收草稿 checksums.txt 的 SHA256"
+        required: false
 
 permissions:
   contents: write
@@ -38,8 +57,11 @@ concurrency:
 
 jobs:
   preflight:
+    if: inputs.action == 'build'
     runs-on: ubuntu-latest
+    environment: hot-update-${{ inputs.release_environment }}
     outputs:
+      source_sha: ${{ steps.meta.outputs.source_sha }}
       tag: ${{ steps.meta.outputs.tag }}
       channel: ${{ steps.meta.outputs.channel }}
       runtime_tag: ${{ steps.meta.outputs.runtime_tag }}
@@ -48,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -63,9 +85,13 @@ jobs:
         shell: bash
         env:
           INPUT_TAG: ${{ github.event.inputs.tag || github.ref_name }}
-          INPUT_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.21.0-cn.14' }}
-          INPUT_RUNTIME_CHANNEL: ${{ github.event.inputs.bundled_runtime_channel || 'canary' }}
-          INPUT_CHANNEL: ${{ github.event.inputs.channel }}
+          INPUT_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.21.0-cn.15' }}
+          INPUT_RUNTIME_CHANNEL: ${{ inputs.bundled_runtime_channel }}
+          INPUT_CHANNEL: ${{ inputs.channel }}
+          RELEASE_ENVIRONMENT: ${{ inputs.release_environment }}
+          WINDOWS_SIGNING: ${{ inputs.windows_signing }}
+          HOT_UPDATE_CONTROL_ENDPOINT: ${{ vars.HOT_UPDATE_CONTROL_ENDPOINT }}
+          HOT_UPDATE_MIRROR_ORIGIN: ${{ vars.HOT_UPDATE_MIRROR_ORIGIN }}
         run: |
           set -euo pipefail
           tag="$INPUT_TAG"
@@ -85,27 +111,32 @@ jobs:
           fi
           version="$(node -p "require('./package.json').version")"
           test "$tag" = "v$version"
-          test "$(git rev-parse HEAD)" = "$(git rev-parse "$tag^{commit}")"
+          source_sha="$(git rev-parse HEAD)"
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            test "$source_sha" = "$(git rev-parse "$tag^{commit}")"
+          fi
+          node scripts/desktop-release-policy.mjs validate
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
           test "$(node -p "require('./tauri.conf.json').identifier")" = "cn.org.hermesagent.desktop"
           node scripts/check-desktop-core-compatibility.mjs --runtime-schema 2
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "runtime_tag=$runtime_tag" >> "$GITHUB_OUTPUT"
-          echo "runtime_channel=$INPUT_RUNTIME_CHANNEL" >> "$GITHUB_OUTPUT"
-          if [ "$channel" = stable ]; then
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          fi
+          {
+            echo "tag=$tag"
+            echo "channel=$channel"
+            echo "runtime_tag=$runtime_tag"
+            echo "runtime_channel=$INPUT_RUNTIME_CHANNEL"
+            if [ "$channel" = stable ]; then echo "prerelease=false"; else echo "prerelease=true"; fi
+          } >> "$GITHUB_OUTPUT"
       - name: Validate version, compatibility matrix and generated files
         run: |
           pnpm typecheck
           pnpm hot-update:control:test
+          node --test scripts/desktop-release-policy.test.mjs
           pnpm --dir infra/hot-update-staging test
           pnpm --dir infra/release-mirror test
 
   build:
     needs: preflight
+    environment: hot-update-${{ inputs.release_environment }}
     strategy:
       fail-fast: false
       matrix:
@@ -134,7 +165,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.preflight.outputs.tag }}
+          ref: ${{ needs.preflight.outputs.source_sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -218,17 +249,18 @@ jobs:
         if: matrix.runtime_platform == 'win32'
         shell: pwsh
         env:
-          RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
+          WINDOWS_SIGNING: ${{ inputs.windows_signing }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }}
         run: |
-          if (-not $env:WINDOWS_CERTIFICATE) {
-            if ($env:RELEASE_CHANNEL -ne "prototype") {
-              throw "canary/beta/stable 必须配置 Windows Authenticode 证书"
-            }
-            '{}' | Set-Content -Encoding utf8 windows-signing-config.json
+          if ($env:WINDOWS_SIGNING -eq "none") {
+            @{ bundle = @{ windows = @{ certificateThumbprint = $null; signCommand = $null } } } |
+              ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 windows-signing-config.json
             exit 0
+          }
+          if ($env:WINDOWS_SIGNING -ne "authenticode" -or -not $env:WINDOWS_CERTIFICATE) {
+            throw "authenticode 模式必须配置 Windows 签名证书"
           }
           $pfx = Join-Path $env:RUNNER_TEMP "hermes-windows-signing.pfx"
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
@@ -268,7 +300,11 @@ jobs:
           printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate"
           security import "$certificate" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          existing_keychains=()
+          while IFS= read -r existing_keychain; do
+            existing_keychains+=("$existing_keychain")
+          done < <(security list-keychains -d user | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')
+          security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
           security find-identity -v -p codesigning "$keychain"
       - name: Verify bundled macOS Runtime signatures
         if: matrix.runtime_platform == 'darwin'
@@ -298,16 +334,17 @@ jobs:
         if: matrix.runtime_platform == 'win32'
         shell: pwsh
         env:
-          RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_SIGNING: ${{ inputs.windows_signing }}
         run: |
           $installers = Get-ChildItem "target/${{ matrix.target }}/release/bundle/nsis/*.exe"
           if (-not $installers) { throw "缺少 NSIS installer" }
-          if ($env:RELEASE_CHANNEL -ne "prototype" -or $env:WINDOWS_CERTIFICATE) {
-            foreach ($installer in $installers) {
-              $signature = Get-AuthenticodeSignature $installer.FullName
-              if ($signature.Status -ne "Valid") { throw "$($installer.Name) Authenticode: $($signature.Status)" }
+          foreach ($installer in $installers) {
+            $signature = Get-AuthenticodeSignature $installer.FullName
+            $expected = if ($env:WINDOWS_SIGNING -eq "authenticode") { "Valid" } else { "NotSigned" }
+            if ($signature.Status.ToString() -ne $expected) {
+              throw "$($installer.Name) Authenticode: $($signature.Status), expected $expected"
             }
+            Write-Host "$($installer.Name): Authenticode=$($signature.Status); Tauri signature required"
           }
       - name: Package Windows portable build
         if: matrix.runtime_platform == 'win32'
@@ -351,6 +388,37 @@ jobs:
           pnpm exec tauri signer sign "$updater"
           node scripts/package-portable-macos.mjs --target ${{ matrix.target }}
 
+      - name: Smoke test the Core inside the final macOS app
+        if: matrix.runtime_platform == 'darwin'
+        shell: bash
+        run: |
+          python3 scripts/release-runtime-smoke.py \
+            --app-root "target/${{ matrix.target }}/release/bundle/macos/Hermes Agent CN Desktop.app" \
+            --platform darwin --arch "${{ matrix.runtime_arch }}" \
+            --output "release-smoke/${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.json"
+      - name: Smoke test the Core inside the final Linux AppImage
+        if: matrix.runtime_platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          appimages=("$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/bundle/appimage/"*.AppImage)
+          test ${#appimages[@]} -eq 1
+          mkdir -p "$RUNNER_TEMP/desktop-appimage"
+          cd "$RUNNER_TEMP/desktop-appimage"
+          "${appimages[0]}" --appimage-extract > appimage-extract.log
+          python3 "$GITHUB_WORKSPACE/scripts/release-runtime-smoke.py" \
+            --app-root "$RUNNER_TEMP/desktop-appimage/squashfs-root" \
+            --platform linux --arch "${{ matrix.runtime_arch }}" \
+            --output "$GITHUB_WORKSPACE/release-smoke/${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.json"
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.runtime_platform != 'win32'
+        with:
+          name: runtime-smoke-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}
+          path: release-smoke/*
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Collect final platform assets and release provenance
         shell: bash
         run: |
@@ -368,19 +436,24 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  publish-github:
+  prepare-draft:
     needs: [preflight, build]
     runs-on: ubuntu-latest
-    outputs:
-      mirror_origin: ${{ steps.meta.outputs.mirror_origin }}
+    environment: hot-update-${{ inputs.release_environment }}
     env:
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.source_sha }}
       PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+      RELEASE_ENVIRONMENT: ${{ inputs.release_environment }}
+      INPUT_CHANNEL: ${{ inputs.channel }}
+      WINDOWS_SIGNING: ${{ inputs.windows_signing }}
+      HOT_UPDATE_CONTROL_ENDPOINT: ${{ vars.HOT_UPDATE_CONTROL_ENDPOINT }}
+      HOT_UPDATE_MIRROR_ORIGIN: ${{ vars.HOT_UPDATE_MIRROR_ORIGIN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.preflight.outputs.tag }}
+          ref: ${{ needs.preflight.outputs.source_sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -390,94 +463,97 @@ jobs:
           pattern: release-*
           path: release-assets
           merge-multiple: true
-      - name: Build release record, size gate and checksums
+      - name: Build release record and verify final updater signatures
         run: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends minisign
           node scripts/finalize-release-record.mjs release-assets
-          find release-assets -maxdepth 1 -type f \( -name '*.exe' -o -name '*.app.tar.gz' -o -name '*.AppImage.tar.gz' \) \
-            -size +480M -print -quit | grep -q . && { echo "updater asset exceeds 480 MiB" >&2; exit 1; } || true
-          rm -f release-assets/checksums.txt
-          cd release-assets
-          find . -maxdepth 1 -type f ! -name 'release-fragment-*' ! -name 'checksums.txt' -print0 \
-            | sort -z | xargs -0 sha256sum > checksums.txt
-      - name: Create draft only after all platforms pass
+          node scripts/desktop-release-policy.mjs finalize release-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-candidate
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Create private draft from the pinned source SHA
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft >/tmp/release.json 2>/dev/null; then
-            test "$(node -p "JSON.parse(require('fs').readFileSync('/tmp/release.json')).isDraft")" = true
-          else
-            args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
-              --title "Hermes Agent 中文社区桌面版 $RELEASE_TAG" \
-              --notes "固定 Desktop/Core/Runtime 输入构建；自动更新由 Cloudflare/D1 另行灰度。")
-            if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
-            gh "${args[@]}"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft > "$RUNNER_TEMP/release.json" 2>/dev/null; then
+            # Never overwrite an accepted candidate. Delete an obsolete draft explicitly before rebuilding.
+            echo "Release already exists; refusing to replace its accepted bytes" >&2
+            exit 1
           fi
-          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f ! -name 'release-fragment-*' -print0)
-          gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
-      - name: Re-download draft assets and verify exact bytes
-        run: |
-          mkdir verify-github
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir verify-github
-          cd verify-github
-          sha256sum -c checksums.txt
-      - name: Publish; prerelease never becomes GitHub latest
-        run: |
-          latest=false
-          if [ "$PRERELEASE" = false ]; then latest=true; fi
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-            --draft=false --prerelease="$PRERELEASE" --latest="$latest"
-      - name: Verify GitHub and Cloudflare full downloads, SHA and Range
-        id: meta
-        env:
-          MIRROR_ORIGIN: ${{ vars.HOT_UPDATE_MIRROR_ORIGIN || 'https://hot-update-download-staging.hermesagent.org.cn' }}
+          args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" --draft --latest=false \
+            --title "Hermes Agent 中文社区桌面版 $RELEASE_TAG" \
+            --notes "固定 Desktop/Core/Runtime 输入构建。Windows 系统签名模式：$WINDOWS_SIGNING；所有更新包采用 Tauri 签名。")
+          if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
+          gh "${args[@]}"
+          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0)
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY"
+      - name: Re-download every draft asset and verify exact bytes
         run: |
           set -euo pipefail
-          echo "mirror_origin=$MIRROR_ORIGIN" >> "$GITHUB_OUTPUT"
-          node - <<'NODE' > /tmp/updater-assets.txt
-          const record = require(process.cwd() + "/release-assets/release-record.json");
-          for (const asset of record.assets) console.log(asset.fileName);
-          NODE
-          while IFS= read -r asset; do
-            expected="$(awk -v name="./$asset" '$2 == name { print $1 }' release-assets/checksums.txt)"
-            test -n "$expected"
-            curl --fail --location --retry 3 \
-              "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$asset" \
-              --output "/tmp/github-$asset"
-            test "$(sha256sum "/tmp/github-$asset" | awk '{print $1}')" = "$expected"
-            curl --fail --location --retry 3 "$MIRROR_ORIGIN/$RELEASE_TAG/$asset" \
-              --output "/tmp/mirror-$asset" --dump-header "/tmp/mirror-$asset.headers"
-            test "$(sha256sum "/tmp/mirror-$asset" | awk '{print $1}')" = "$expected"
-            grep -qi '^x-mirror-upstream: github' "/tmp/mirror-$asset.headers"
-            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              --range 0-1023 "$MIRROR_ORIGIN/$RELEASE_TAG/$asset")"
-            test "$status" = 206
-          done < /tmp/updater-assets.txt
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir verify-github
+          CANDIDATE_SHA256="$(sha256sum release-assets/checksums.txt | cut -d ' ' -f 1)"
+          export CANDIDATE_SHA256
+          node scripts/desktop-release-policy.mjs verify verify-github
+          {
+            echo "### Candidate fingerprint"
+            echo "candidate_sha256=$CANDIDATE_SHA256"
+            echo "Draft only. Next: publish after final-package acceptance; no latest or rollout changed."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-  register-staging-draft:
-    needs: [preflight, publish-github]
+  release:
+    if: inputs.action == 'publish' || inputs.action == 'promote'
     runs-on: ubuntu-latest
-    environment: hot-update-staging
+    environment: hot-update-${{ inputs.release_environment }}
     env:
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_ACTION: ${{ inputs.action }}
+      RELEASE_ENVIRONMENT: ${{ inputs.release_environment }}
+      INPUT_CHANNEL: ${{ inputs.channel }}
+      WINDOWS_SIGNING: ${{ inputs.windows_signing }}
+      CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+      HOT_UPDATE_CONTROL_ENDPOINT: ${{ vars.HOT_UPDATE_CONTROL_ENDPOINT }}
+      HOT_UPDATE_MIRROR_ORIGIN: ${{ vars.HOT_UPDATE_MIRROR_ORIGIN }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.preflight.outputs.tag }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22.22.0"
-      - uses: pnpm/action-setup@v3
-        with:
-          version: "9"
-      - run: pnpm install --frozen-lockfile
-      - name: Register from real GitHub assets as draft / 0%
+      - name: Verify the exact accepted candidate and immutable source
         run: |
-          pnpm hot-update:control release register-draft \
-            --database "${{ vars.HOT_UPDATE_STAGING_D1 || 'hermes-desktop-hot-update-staging' }}" \
-            --remote \
-            --tag "${{ needs.preflight.outputs.tag }}" \
-            --channel "${{ needs.preflight.outputs.channel }}" \
-            --mirror-origin "${{ needs.publish-github.outputs.mirror_origin }}"
+          set -euo pipefail
+          node scripts/desktop-release-policy.mjs validate
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
+          node scripts/desktop-release-policy.mjs verify release-assets
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,targetCommitish > "$RUNNER_TEMP/release.json"
+          node scripts/desktop-release-policy.mjs verify-stage release-assets "$RUNNER_TEMP/release.json"
+          source_sha="$(node -p "require('./release-assets/release-record.json').desktopSha")"
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            test "$(git rev-parse "$RELEASE_TAG^{commit}")" = "$source_sha"
+          fi
+      - name: Publish accepted assets without making latest
+        if: inputs.action == 'publish'
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+      - name: Verify public origin and mirror before registration or promotion
+        run: node scripts/desktop-release-policy.mjs verify-downloads release-assets
+      - name: Record the separate rollout step
+        if: inputs.action == 'publish'
+        run: |
+          {
+            echo "Public assets verified; GitHub latest is unchanged."
+            echo "Next: register-draft and controlled rollout using scripts/hot-update-control.mjs against the selected D1 database."
+            echo "After final acceptance, dispatch action=promote with the same candidate_sha256."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Promote the verified stable release to GitHub latest
+        if: inputs.action == 'promote'
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --latest=true

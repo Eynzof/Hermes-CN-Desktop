@@ -31,8 +31,8 @@ jobs:
       candidate_tag: ${{ steps.pair.outputs.candidate_tag }}
       badsig_tag: ${{ steps.pair.outputs.badsig_tag }}
     env:
-      PAIR_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.8.1' }}
-      PAIR_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.20.0-cn.9' }}
+      PAIR_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.9.1' }}
+      PAIR_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.21.0-cn.15' }}
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +55,7 @@ jobs:
           baseline_version="$prefix.1"
           candidate_version="$prefix.2"
           badsig_version="$prefix.3.badsig"
+          # shellcheck disable=SC2016 # JavaScript template literals must reach Node unchanged.
           matrix="$(node -e '
             const prefix = process.argv[1];
             process.stdout.write(JSON.stringify({ include: [
@@ -149,6 +150,8 @@ jobs:
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
           @{
+            # Pair fault fixtures keep the staging trust root out of production builds.
+            plugins = @{ updater = @{ pubkey = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQxQjlERjcxMTg4ODhBRkYKUldUL2lvZ1ljZCs1MFdDSUM3d0NXRlJzVUVSNk9IQWZ6TEwrbmJueWVqcEhHMmh3T3c1elMrOFUK" }}
             bundle = @{ windows = @{
               certificateThumbprint = $cert.Thumbprint
               digestAlgorithm = "sha256"

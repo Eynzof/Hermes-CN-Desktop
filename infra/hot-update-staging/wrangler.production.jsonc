@@ -1,0 +1,25 @@
+{
+  "name": "hermes-desktop-hot-update-production",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "hot-update.hermesagent.org.cn",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "MIRROR_ORIGIN": "https://hot-update-download.hermesagent.org.cn"
+  },
+  "d1_databases": [
+    {
+      "binding": "UPDATES",
+      "database_name": "hermes-desktop-hot-update-production",
+      "database_id": "2709a341-5bbc-45f8-8917-dfcdfc3f59b8",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

@@ -493,6 +493,8 @@ pub async fn check_ui_update() -> UiUpdateCheckResult {
 
     match UI_HTTP_CLIENT
         .get(&url)
+        .header("X-Hermes-Desktop-Version", env!("CARGO_PKG_VERSION"))
+        .header(reqwest::header::ACCEPT, "application/json")
         .timeout(UI_MANIFEST_HTTP_TIMEOUT)
         .send()
         .await
