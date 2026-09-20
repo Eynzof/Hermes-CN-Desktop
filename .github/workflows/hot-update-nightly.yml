@@ -26,7 +26,7 @@ jobs:
       tag: ${{ steps.nightly.outputs.tag }}
     env:
       GH_TOKEN: ${{ github.token }}
-      NIGHTLY_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.21.0-cn.16' }}
+      NIGHTLY_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.21.0-cn.17' }}
       NIGHTLY_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.9.1' }}
     steps:
       - uses: actions/checkout@v4
