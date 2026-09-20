@@ -32,7 +32,7 @@ jobs:
       badsig_tag: ${{ steps.pair.outputs.badsig_tag }}
     env:
       PAIR_BASE_VERSION: ${{ vars.NIGHTLY_BASE_VERSION || '0.9.1' }}
-      PAIR_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.21.0-cn.17' }}
+      PAIR_RUNTIME_TAG: ${{ vars.NIGHTLY_RUNTIME_TAG || 'runtime-v0.21.0-cn.18' }}
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@v4
