@@ -32,7 +32,7 @@ if (first.runtimeManifestSchemaVersion !== 2) {
 }
 const assets = fragments.flatMap((fragment) => fragment.assets);
 const keys = new Set(assets.map((asset) => `${asset.target}/${asset.arch}`));
-for (const required of ["windows/x86_64", "darwin/aarch64", "darwin/x86_64", "linux/x86_64"]) {
+for (const required of ["windows/x86_64", "darwin/aarch64", "darwin/x86_64", "linux/x86_64", "linux-deb/x86_64"]) {
   if (!keys.has(required)) throw new Error(`release record 缺少 ${required}`);
 }
 const assetNames = new Set();

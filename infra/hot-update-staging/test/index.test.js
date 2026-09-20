@@ -102,7 +102,7 @@ test("release origin validation prevents an open proxy", () => {
   );
 });
 
-function fakeD1({ tokenHash, device, candidate }) {
+function fakeD1({ tokenHash, device, candidate, candidates }) {
   const writes = [];
   return {
     writes,
@@ -117,7 +117,13 @@ function fakeD1({ tokenHash, device, candidate }) {
           if (sql.includes("FROM devices")) {
             return this.values[0] === tokenHash ? device : null;
           }
-          if (sql.includes("FROM releases")) return candidate;
+          if (sql.includes("FROM releases")) {
+            if (!candidates) return candidate;
+            assert.match(sql, /channel = \?1 AND target = \?2 AND arch = \?3 AND status = 'published'/);
+            const [channel, target, arch] = this.values;
+            return candidates.find((row) => row.channel === channel && row.target === target
+              && row.arch === arch && row.status === "published") ?? null;
+          }
           throw new Error(`unexpected first SQL: ${sql}`);
         },
         async run() {
@@ -217,6 +223,40 @@ test("stable uses an installation id instead of bearer credentials", async () =>
     ctx,
   );
   assert.equal(response.status, 200);
+});
+
+test("Linux AppImage and Debian clients receive only their matching signed installer", async () => {
+  assert.deepEqual(parseCheckRoute("/v1/check/stable/linux-deb/x86_64/0.8.0"), {
+    channel: "stable", target: "linux-deb", arch: "x86_64", currentVersion: "0.8.0",
+  });
+  const mirror = "https://hot-update-download.hermesagent.org.cn";
+  const candidates = [["linux", "AppImage"], ["linux-deb", "deb"]].map(([target, suffix]) => {
+    const fileName = `Hermes_0.9.0_amd64.${suffix}`;
+    return release({
+      id: `desktop-0.9.0-${target}-x86_64`, version: "0.9.0", channel: "stable",
+      target, arch: "x86_64", status: "published", rollout_percent: 100,
+      file_name: fileName, github_release_tag: "v0.9.0",
+      github_asset_url: `https://github.com/Eynzof/Hermes-CN-Desktop/releases/download/v0.9.0/${fileName}`,
+      mirror_url: `${mirror}/v0.9.0/${fileName}`, signature: `signed-${suffix}`,
+      bundled_core_version: "0.21.0", bundled_runtime_version: "0.21.0-cn.18", runtime_revision: 18,
+    });
+  });
+  for (const candidate of candidates) {
+    const request = () => new Request(`https://control.example/v1/check/stable/${candidate.target}/x86_64/0.8.0`, {
+      headers: { "x-installation-id": "installation-0123456789abcdef" },
+    });
+    const env = (rows) => ({ ...testEnv(fakeD1({ candidates: rows })), MIRROR_ORIGIN: mirror });
+    const response = await worker.fetch(request(), env(candidates), ctx);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.metadata.releaseId, candidate.id);
+    assert.equal(body.url, candidate.mirror_url);
+    assert.equal(body.signature, candidate.signature);
+
+    const onlyOtherFormat = candidates.filter((row) => row.target !== candidate.target);
+    const unavailable = await worker.fetch(request(), env(onlyOtherFormat), ctx);
+    assert.equal(unavailable.status, 204);
+  }
 });
 
 test("client events authenticate and store only the hashed identity", async () => {

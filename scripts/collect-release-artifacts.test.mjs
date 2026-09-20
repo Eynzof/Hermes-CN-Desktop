@@ -65,7 +65,7 @@ test("collects the signed NSIS executable as the Windows updater asset", () => {
   }
 });
 
-test("collects the Tauri v2 AppImage bytes and requires its matching signature", () => {
+test("collects separate signed AppImage and Debian updater bytes", () => {
   const root = mkdtempSync(path.join(tmpdir(), "hermes-collect-release-linux-"));
   try {
     const target = "x86_64-unknown-linux-gnu";
@@ -73,11 +73,14 @@ test("collects the Tauri v2 AppImage bytes and requires its matching signature",
     const runtime = path.join(root, "static", "bundled-runtime");
     const output = path.join(root, "release-assets");
     const fileName = "Hermes Agent CN Desktop_0.9.0_amd64.AppImage";
+    const debName = "Hermes Agent CN Desktop_0.9.0_amd64.deb";
     mkdirSync(bundle, { recursive: true });
     mkdirSync(runtime, { recursive: true });
     writeFileSync(path.join(root, "package.json"), JSON.stringify({ version: "0.9.0" }));
     writeFileSync(path.join(bundle, fileName), "final-appimage-bytes");
     writeFileSync(path.join(bundle, `${fileName}.sig`), "tauri-appimage-signature");
+    writeFileSync(path.join(bundle, debName), "final-deb-bytes");
+    writeFileSync(path.join(bundle, `${debName}.sig`), "tauri-deb-signature");
     writeFileSync(path.join(runtime, "stable-linux-x64.json"), JSON.stringify({
       schemaVersion: 2,
       sourceCommit: "core-sha",
@@ -90,18 +93,33 @@ test("collects the Tauri v2 AppImage bytes and requires its matching signature",
     const result = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8" });
     assert.equal(result.status, 0, result.stderr);
     const fragment = JSON.parse(readFileSync(path.join(output, "release-fragment-linux-x64.json"), "utf8"));
+    assert.equal(fragment.assets.length, 2);
     const asset = fragment.assets[0];
+    assert.equal(asset.target, "linux");
+    assert.equal(asset.releaseId, "desktop-0.9.0-linux-x86_64");
     assert.equal(asset.bundleType, "appimage");
     assert.equal(asset.fileName, "Hermes_Agent_CN_Desktop_0.9.0_amd64.AppImage");
     assert.equal(asset.signatureFile, `${asset.fileName}.sig`);
     assert.equal(readFileSync(path.join(output, asset.fileName), "utf8"), "final-appimage-bytes");
     assert.equal(readFileSync(path.join(output, asset.signatureFile), "utf8"), "tauri-appimage-signature");
+    const deb = fragment.assets[1];
+    assert.equal(deb.target, "linux-deb");
+    assert.equal(deb.releaseId, "desktop-0.9.0-linux-deb-x86_64");
+    assert.equal(deb.bundleType, "deb");
+    assert.equal(deb.fileName, "Hermes_Agent_CN_Desktop_0.9.0_amd64.deb");
+    assert.equal(readFileSync(path.join(output, deb.fileName), "utf8"), "final-deb-bytes");
+    assert.equal(readFileSync(path.join(output, deb.signatureFile), "utf8"), "tauri-deb-signature");
 
-    rmSync(output, { recursive: true });
-    rmSync(path.join(bundle, `${fileName}.sig`));
-    const unsigned = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8" });
-    assert.notEqual(unsigned.status, 0);
-    assert.match(unsigned.stderr, /缺少 linux\/x64 updater 包或 \.sig/);
+    for (const name of [fileName, debName]) {
+      rmSync(output, { recursive: true });
+      const signaturePath = path.join(bundle, `${name}.sig`);
+      const signature = readFileSync(signaturePath);
+      rmSync(signaturePath);
+      const unsigned = spawnSync(process.execPath, args, { cwd: root, encoding: "utf8" });
+      assert.notEqual(unsigned.status, 0);
+      assert.match(unsigned.stderr, /缺少 linux\/x64 (appimage|deb) updater 包或 \.sig/);
+      writeFileSync(signaturePath, signature);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -132,6 +150,10 @@ test("keeps both signed Mac architectures distinct when merging all four release
       const signature = `signed-${platform}-${arch}-bytes`;
       writeFileSync(path.join(bundle, updater), payload);
       writeFileSync(path.join(bundle, `${updater}.sig`), signature);
+      if (platform === "linux") {
+        writeFileSync(path.join(bundle, "Hermes_0.9.0_amd64.deb"), "final-deb-bytes");
+        writeFileSync(path.join(bundle, "Hermes_0.9.0_amd64.deb.sig"), "tauri-deb-signature");
+      }
       const result = spawnSync(process.execPath, [collector,
         "--platform", platform, "--arch", arch, "--target", target,
         "--runtime-tag", "runtime-v0.21.0-cn.15", "--desktop-sha", "desktop-sha",
@@ -153,10 +175,22 @@ test("keeps both signed Mac architectures distinct when merging all four release
     const finalized = spawnSync(process.execPath, [finalizer, merged], { encoding: "utf8" });
     assert.equal(finalized.status, 0, finalized.stderr);
     const record = JSON.parse(readFileSync(path.join(merged, "release-record.json"), "utf8"));
-    assert.equal(new Set(record.assets.map((asset) => asset.fileName)).size, 4);
+    assert.equal(record.assets.length, 5);
+    assert.equal(new Set(record.assets.map((asset) => asset.fileName)).size, 5);
+    assert.ok(record.assets.some((asset) => asset.target === "linux-deb" && asset.bundleType === "deb"));
     for (const arch of ["arm64", "x64"]) {
       assert.equal(readFileSync(path.join(merged, `Hermes_Agent_CN_Desktop_0.9.0_${arch}.app.tar.gz`), "utf8"), `final-darwin-${arch}-bytes`);
     }
+
+    const linuxFragmentPath = path.join(merged, "release-fragment-linux-x64.json");
+    const linuxFragment = readFileSync(linuxFragmentPath, "utf8");
+    const missingDeb = JSON.parse(linuxFragment);
+    missingDeb.assets = missingDeb.assets.filter((asset) => asset.target !== "linux-deb");
+    writeFileSync(linuxFragmentPath, JSON.stringify(missingDeb));
+    const incomplete = spawnSync(process.execPath, [finalizer, merged], { encoding: "utf8" });
+    assert.notEqual(incomplete.status, 0);
+    assert.match(incomplete.stderr, /release record 缺少 linux-deb\/x86_64/);
+    writeFileSync(linuxFragmentPath, linuxFragment);
 
     const fragmentPath = path.join(merged, "release-fragment-darwin-x64.json");
     const duplicate = JSON.parse(readFileSync(fragmentPath, "utf8"));

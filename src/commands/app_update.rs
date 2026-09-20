@@ -17,7 +17,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{utils::config::BundleType, AppHandle, Emitter, State};
 use tauri_plugin_updater::{Error as UpdaterError, Update, Updater, UpdaterExt};
 use url::Url;
 
@@ -33,6 +33,7 @@ const MANIFEST_SOURCE: &str = "cloudflare-control";
 const PRIMARY_DOWNLOAD_SOURCE: &str = "cloudflare-cache";
 const FALLBACK_DOWNLOAD_SOURCE: &str = "github-release";
 const PRIMARY_DOWNLOAD_HOSTS: &[&str] = &[
+    "hot-update-download.hermesagent.org.cn",
     "hot-update-download-staging.hermesagent.org.cn",
     "dl-desktop.hermesagent.org.cn",
 ];
@@ -278,14 +279,24 @@ fn resolved_device_token(device_id: &str) -> Result<String, String> {
     }
 }
 
-fn expected_release_id(version: &str) -> Result<String, String> {
-    let target = match std::env::consts::OS {
-        "windows" => "windows",
-        "macos" => "darwin",
-        "linux" => "linux",
-        other => return Err(format!("当前系统不支持 Desktop updater：{other}")),
-    };
-    let arch = match std::env::consts::ARCH {
+fn updater_target(os: &str, bundle: Option<BundleType>) -> Result<&'static str, String> {
+    match (os, bundle) {
+        ("windows", _) => Ok("windows"),
+        ("macos", _) => Ok("darwin"),
+        ("linux", Some(BundleType::Deb)) => Ok("linux-deb"),
+        ("linux", _) => Ok("linux"),
+        (other, _) => Err(format!("当前系统不支持 Desktop updater：{other}")),
+    }
+}
+
+fn expected_release_id_for_platform(
+    version: &str,
+    os: &str,
+    arch: &str,
+    bundle: Option<BundleType>,
+) -> Result<String, String> {
+    let target = updater_target(os, bundle)?;
+    let arch = match arch {
         "x86" => "i686",
         "x86_64" => "x86_64",
         "arm" => "armv7",
@@ -293,6 +304,15 @@ fn expected_release_id(version: &str) -> Result<String, String> {
         other => return Err(format!("当前架构不支持 Desktop updater：{other}")),
     };
     Ok(format!("desktop-{version}-{target}-{arch}"))
+}
+
+fn expected_release_id(version: &str) -> Result<String, String> {
+    expected_release_id_for_platform(
+        version,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        tauri::utils::platform::bundle_type(),
+    )
 }
 
 fn random_installation_id() -> Result<String, String> {
@@ -417,6 +437,10 @@ fn build_updater(app: &AppHandle) -> Result<(Updater, UpdateConfig), String> {
     let (endpoint, timeout) = updater_endpoint(&config)?;
     let mut builder = app
         .updater_builder()
+        .target(updater_target(
+            std::env::consts::OS,
+            tauri::utils::platform::bundle_type(),
+        )?)
         .endpoints(vec![endpoint])
         .map_err(|error| format!("更新端点配置失败：{error}"))?
         .timeout(timeout);
@@ -1163,9 +1187,7 @@ async fn perform_install(
     );
     match launch_verified_update(&update, bytes) {
         Ok(()) => {
-            #[cfg(target_os = "macos")]
-            app.restart();
-            #[allow(unreachable_code)]
+            restart_after_install(std::env::consts::OS, || app.restart());
             AppUpdateInstallResult {
                 ok: true,
                 install_started: true,
@@ -1176,6 +1198,14 @@ async fn perform_install(
             }
         }
         Err(error) => install_failure(error),
+    }
+}
+
+fn restart_after_install(os: &str, restart: impl FnOnce()) {
+    // The synchronous macOS/Linux installers replace files but do not relaunch
+    // the app. Windows uses the detached updater helper below.
+    if matches!(os, "macos" | "linux") {
+        restart();
     }
 }
 
@@ -1589,6 +1619,38 @@ mod tests {
     }
 
     #[test]
+    fn linux_bundle_type_selects_matching_target_and_release_id() {
+        for (bundle, target) in [
+            (Some(BundleType::Deb), "linux-deb"),
+            (Some(BundleType::AppImage), "linux"),
+            (None, "linux"),
+        ] {
+            assert_eq!(updater_target("linux", bundle.clone()).unwrap(), target);
+            assert_eq!(
+                expected_release_id_for_platform("0.9.0", "linux", "x86_64", bundle).unwrap(),
+                format!("desktop-0.9.0-{target}-x86_64")
+            );
+        }
+        assert_eq!(
+            updater_target("macos", Some(BundleType::App)).unwrap(),
+            "darwin"
+        );
+        assert_eq!(
+            updater_target("windows", Some(BundleType::Nsis)).unwrap(),
+            "windows"
+        );
+    }
+
+    #[test]
+    fn successful_synchronous_install_restarts_macos_and_linux() {
+        for (os, expected) in [("macos", true), ("linux", true), ("windows", false)] {
+            let mut restarted = false;
+            restart_after_install(os, || restarted = true);
+            assert_eq!(restarted, expected, "restart after install on {os}");
+        }
+    }
+
+    #[test]
     fn fallback_url_is_closed_to_the_fixed_repository() {
         let mut metadata = parse_update_metadata(&raw_update("0.20.0", "0.20.0-cn.9")).unwrap();
         metadata.github_fallback_url =
@@ -1600,16 +1662,23 @@ mod tests {
     #[test]
     fn primary_url_is_closed_to_the_matching_cloudflare_asset() {
         let metadata = parse_update_metadata(&raw_update("0.20.0", "0.20.0-cn.9")).unwrap();
-        let valid =
-            Url::parse("https://dl-desktop.hermesagent.org.cn/v0.8.1-hotupdate.1/update.exe")
-                .unwrap();
-        validate_primary_download_url(&valid, &metadata).unwrap();
+        for host in [
+            "hot-update-download.hermesagent.org.cn",
+            "hot-update-download-staging.hermesagent.org.cn",
+            "dl-desktop.hermesagent.org.cn",
+        ] {
+            let valid = Url::parse(&format!("https://{host}/v0.8.1-hotupdate.1/update.exe")).unwrap();
+            validate_primary_download_url(&valid, &metadata).unwrap();
+        }
         let external = Url::parse("https://example.com/v0.8.1-hotupdate.1/update.exe").unwrap();
         assert!(validate_primary_download_url(&external, &metadata).is_err());
         let other_asset =
-            Url::parse("https://dl-desktop.hermesagent.org.cn/v0.8.1-hotupdate.1/other.exe")
+            Url::parse("https://hot-update-download.hermesagent.org.cn/v0.8.1-hotupdate.1/other.exe")
                 .unwrap();
         assert!(validate_primary_download_url(&other_asset, &metadata).is_err());
+        let other_tag =
+            Url::parse("https://hot-update-download.hermesagent.org.cn/v0.9.0/update.exe").unwrap();
+        assert!(validate_primary_download_url(&other_tag, &metadata).is_err());
     }
 
     #[test]

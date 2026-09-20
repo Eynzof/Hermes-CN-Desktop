@@ -37,8 +37,8 @@ const suffixes = {
   // Tauri v2 signs and distributes the final NSIS executable itself.
   win32: [".exe", ".exe.sig"],
   darwin: [".dmg", ".app.tar.gz", ".app.tar.gz.sig"],
-  // createUpdaterArtifacts=true uses the final AppImage and its Tauri v2 signature.
-  linux: [".deb", ".AppImage", ".AppImage.sig"],
+  // Tauri selects the installer by the running Linux bundle type.
+  linux: [".deb", ".deb.sig", ".AppImage", ".AppImage.sig"],
 }[platform];
 if (!suffixes) throw new Error(`不支持 release platform：${platform}`);
 
@@ -68,19 +68,30 @@ for (const source of candidates) {
   cpSync(source, destination);
 }
 
-const updaterSuffix = {
-  win32: ".exe",
-  darwin: ".app.tar.gz",
-  linux: ".AppImage",
+const updaterFormats = {
+  win32: [{ suffix: ".exe", target: "windows", bundleType: "nsis" }],
+  darwin: [{ suffix: ".app.tar.gz", target: "darwin", bundleType: "app" }],
+  linux: [
+    { suffix: ".AppImage", target: "linux", bundleType: "appimage" },
+    { suffix: ".deb", target: "linux-deb", bundleType: "deb" },
+  ],
 }[platform];
-const updater = readdirSync(output).find((name) => name.endsWith(updaterSuffix));
-if (!updater || !readdirSync(output).includes(`${updater}.sig`)) {
-  throw new Error(`缺少 ${platform}/${arch} updater 包或 .sig`);
-}
-
-const updaterTarget = { win32: "windows", darwin: "darwin", linux: "linux" }[platform];
 const updaterArch = arch === "arm64" ? "aarch64" : "x86_64";
-const bundleType = { win32: "nsis", darwin: "app", linux: "appimage" }[platform];
+const collectedNames = readdirSync(output);
+const assets = updaterFormats.map(({ suffix, target: updaterTarget, bundleType }) => {
+  const updater = collectedNames.find((name) => name.endsWith(suffix));
+  if (!updater || !collectedNames.includes(`${updater}.sig`)) {
+    throw new Error(`缺少 ${platform}/${arch} ${bundleType} updater 包或 .sig`);
+  }
+  return {
+    releaseId: `desktop-${desktopPackage.version}-${updaterTarget}-${updaterArch}`,
+    target: updaterTarget,
+    arch: updaterArch,
+    bundleType,
+    fileName: updater,
+    signatureFile: `${updater}.sig`,
+  };
+});
 const fragment = {
   schemaVersion: 1,
   desktopVersion: desktopPackage.version,
@@ -92,16 +103,7 @@ const fragment = {
   bundledRuntimeVersion: runtimeManifest.runtimeVersion,
   runtimeRevision: runtimeManifest.runtimeRevision,
   runtimeManifestSchemaVersion: runtimeManifest.schemaVersion,
-  assets: [
-    {
-      releaseId: `desktop-${desktopPackage.version}-${updaterTarget}-${updaterArch}`,
-      target: updaterTarget,
-      arch: updaterArch,
-      bundleType,
-      fileName: updater,
-      signatureFile: `${updater}.sig`,
-    },
-  ],
+  assets,
 };
 writeFileSync(
   path.join(output, `release-fragment-${platform}-${arch}.json`),
