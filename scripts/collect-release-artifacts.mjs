@@ -54,7 +54,13 @@ try {
 mkdirSync(output, { recursive: true });
 const destinations = new Set();
 for (const source of candidates) {
-  const fileName = safeReleaseAssetName(path.basename(source));
+  const sourceName = path.basename(source);
+  // Tauri names both Mac architectures <product>.app.tar.gz. Keep signed bytes
+  // intact while giving each archive/signature a distinct GitHub asset name.
+  const releaseName = platform === "darwin"
+    ? sourceName.replace(/\.app\.tar\.gz(\.sig)?$/, `_${desktopPackage.version}_${arch}.app.tar.gz$1`)
+    : sourceName;
+  const fileName = safeReleaseAssetName(releaseName);
   if (destinations.has(fileName)) throw new Error(`release asset 规范化后重名：${fileName}`);
   destinations.add(fileName);
   const destination = path.join(output, fileName);

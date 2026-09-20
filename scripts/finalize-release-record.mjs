@@ -35,8 +35,11 @@ const keys = new Set(assets.map((asset) => `${asset.target}/${asset.arch}`));
 for (const required of ["windows/x86_64", "darwin/aarch64", "darwin/x86_64", "linux/x86_64"]) {
   if (!keys.has(required)) throw new Error(`release record 缺少 ${required}`);
 }
+const assetNames = new Set();
 for (const asset of assets) {
   for (const name of [asset.fileName, asset.signatureFile]) {
+    if (assetNames.has(name)) throw new Error(`release asset 文件名重复：${name}`);
+    assetNames.add(name);
     if (!readdirSync(root).includes(name)) throw new Error(`release asset 缺少 ${name}`);
   }
 }
