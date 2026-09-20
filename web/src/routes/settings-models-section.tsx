@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, SetStateAction } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   closestCenter,
   DndContext,
@@ -621,6 +621,7 @@ export function ModelsSection() {
   const revealEnv = useRevealEnv();
   const { probeProvider, listProviderModels, setRuntimeModel } = useGateway();
   const navigate = useNavigate();
+  const { hash: routeHash } = useLocation();
   const { catalog, message: catalogMessage, refresh: refreshCatalog } = useProviderCatalog();
   const resolvedEnvVars = envVars ?? EMPTY_ENV_VARS;
   const [activeModelTab, setActiveModelTab] = useState<ModelSettingsTab>("main");
@@ -1030,10 +1031,10 @@ export function ModelsSection() {
 
   // Deep-link from the picker's "去设置" CTA: /models#provider-<slug> selects
   // and scrolls to that provider so the user lands on the right key field.
+  // HashRouter keeps the route itself in window.location.hash; use its parsed anchor.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const hash = window.location.hash;
-    const match = hash.match(/^#provider-(.+)$/);
+    const match = routeHash.match(/^#provider-(.+)$/);
     if (!match) return;
     const targetId = decodeURIComponent(match[1]);
     if (!allProviders.some((p) => p.id === targetId)) return;
@@ -1048,9 +1049,9 @@ export function ModelsSection() {
       }
     });
     return () => window.cancelAnimationFrame(handle);
-    // intentionally only on mount + when catalog finishes loading
+    // Revisit the target when navigation changes or the catalog finishes loading.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allProviders.length]);
+  }, [allProviders.length, routeHash]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
