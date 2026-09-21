@@ -1165,7 +1165,7 @@ export const recoverCompletedTurnFromStoredMessagesAtom = atom(
 
 export const startPromptAtom = atom(
   null,
-  (_get, set, params: { sessionId: string; text: string; images?: ImageEntry[]; now?: number }) => {
+  (_get, set, params: { sessionId: string; text: string; images?: ImageEntry[]; now?: number; historyBoundaryId?: string | null }) => {
     const now = params.now ?? Date.now();
     const assistantId = assistantClientId(now);
     const userParts: HermesMessagePart[] = [];
@@ -1188,6 +1188,7 @@ export const startPromptAtom = atom(
             createdAt: now,
             status: "complete",
             parts: userParts.length ? userParts : [{ type: "text", text: params.text }],
+            ...(params.historyBoundaryId !== undefined ? { metadata: { historyBoundaryId: params.historyBoundaryId } } : {}),
           },
           {
             id: assistantId,

@@ -553,7 +553,11 @@ const tauriBridge = {
   },
 
   async switchProfile(input: SwitchProfileInput): Promise<SwitchProfileResult> {
-    return invokeCommand("switch_profile", { input });
+    const result = await invokeCommand<SwitchProfileResult>("switch_profile", { input });
+    // Reconnects can observe backendReady=false while the old Core is stopped.
+    // Publish the actual final state, including failed or recovered switches.
+    await tauriBridge.refreshGatewayUrl();
+    return result;
   },
 
   async getConnectionConfig(): Promise<ConnectionConfigView> {

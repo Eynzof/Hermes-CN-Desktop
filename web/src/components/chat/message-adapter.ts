@@ -1068,6 +1068,7 @@ function isCorruptedLiveCompletionSupersededByStored(
 function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage): boolean {
   if (stored.id === live.id || hasSamePersistedId(stored, live)) return true;
   if (stored.role !== live.role) return false;
+  if (stored.metadata?.persistedId !== undefined && live.metadata?.persistedId !== undefined) return false;
 
   // Older Core runtimes could interleave a token batch with message.complete.
   // The reducer then appended the authoritative final text behind the corrupt
@@ -1200,13 +1201,79 @@ export function mergeHermesUIMessages(
 
   const consolidatedLive = consolidateAssistantMessages(live);
 
+  const userTurns = (messages: HermesUIMessage[]) => {
+    let userIndex = -1;
+    return messages.map((message, index) => {
+      if (message.role === "user") userIndex = index;
+      return userIndex;
+    });
+  };
+  const storedTurns = userTurns(stored);
+  const liveTurns = userTurns(consolidatedLive);
+  const storedTurnByLiveTurn = new Map<number, number>();
+  // Older live snapshots have no submission boundary. Preserve their suffix
+  // matching, but never use text alone to cross a known history boundary.
+  let beforeStoredIndex = stored.length;
+  for (let index = consolidatedLive.length - 1; index >= 0; index--) {
+    const liveMessage = consolidatedLive[index]!;
+    if (liveMessage.role !== "user") continue;
+    const boundaryId = liveMessage.metadata?.historyBoundaryId;
+    if (boundaryId !== undefined) {
+      // A first prompt can precede the initial history fetch. Its legacy
+      // match must stay before the next prompt's known submission boundary.
+      const boundaryIndex = boundaryId === null ? -1 : stored.findIndex((message) => message.id === boundaryId);
+      beforeStoredIndex = Math.min(beforeStoredIndex, boundaryIndex + 1);
+      continue;
+    }
+    for (let storedIndex = beforeStoredIndex - 1; storedIndex >= 0; storedIndex--) {
+      const storedMessage = stored[storedIndex]!;
+      if (storedMessage.role !== "user" || !isSameCanonicalMessage(storedMessage, liveMessage)) continue;
+      storedTurnByLiveTurn.set(index, storedIndex);
+      beforeStoredIndex = storedIndex;
+      break;
+    }
+  }
+
+  // New prompts retain the last persisted message visible before submission.
+  // Walk forwards so several queued/repeated prompts sharing a stale cache
+  // boundary consume distinct user turns, including while only some are saved.
+  let afterStoredIndex = -1;
+  for (const [index, liveMessage] of consolidatedLive.entries()) {
+    if (liveMessage.role !== "user") continue;
+    const boundaryId = liveMessage.metadata?.historyBoundaryId;
+    if (boundaryId === undefined) {
+      afterStoredIndex = storedTurnByLiveTurn.get(index) ?? afterStoredIndex;
+      continue;
+    }
+    const boundaryIndex = boundaryId === null ? -1 : stored.findIndex((message) => message.id === boundaryId);
+    // A partial history without the boundary cannot prove a text match.
+    if (boundaryId !== null && boundaryIndex < 0) continue;
+    const userIndex = stored.findIndex((message, storedIndex) =>
+      storedIndex > Math.max(afterStoredIndex, boundaryIndex) && message.role === "user" &&
+      isSameCanonicalMessage(message, liveMessage),
+    );
+    if (userIndex < 0) continue;
+    storedTurnByLiveTurn.set(index, userIndex);
+    afterStoredIndex = userIndex;
+  }
+
   const usedLiveIndexes = new Set<number>();
   const merged: HermesUIMessage[] = [];
 
-  for (const storedMessage of stored) {
+  for (const [storedIndex, storedMessage] of stored.entries()) {
     const liveIndex = consolidatedLive.findIndex(
-      (liveMessage, index) =>
-        !usedLiveIndexes.has(index) && isSameCanonicalMessage(storedMessage, liveMessage),
+      (liveMessage, index) => {
+        if (usedLiveIndexes.has(index)) return false;
+        if (storedMessage.id === liveMessage.id || hasSamePersistedId(storedMessage, liveMessage)) return true;
+        if (liveMessage.role === "user" && storedTurnByLiveTurn.get(index) !== storedIndex) return false;
+        // Legacy partial snapshots may begin with an assistant. New prompts
+        // with a known boundary must never fall back to cross-turn text matching.
+        const liveTurn = liveTurns[index]!;
+        const hasBoundary = consolidatedLive[liveTurn]?.metadata?.historyBoundaryId !== undefined;
+        if (liveMessage.role === "assistant" && liveTurn >= 0 && (storedTurns[storedIndex]! >= 0 || hasBoundary)
+          && storedTurnByLiveTurn.get(liveTurn) !== storedTurns[storedIndex]) return false;
+        return isSameCanonicalMessage(storedMessage, liveMessage);
+      },
     );
 
     if (liveIndex === -1) {

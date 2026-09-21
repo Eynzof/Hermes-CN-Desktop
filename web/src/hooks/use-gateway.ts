@@ -20,7 +20,9 @@ import {
   SessionUsageResult,
   SessionCompressResult,
   type GatewayEvent,
+  type MessagesResponse,
 } from "@hermes/protocol";
+import { messagesResponseToHermesUIMessages } from "@/components/chat/message-adapter";
 import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
 import { getGatewayClient } from "@/lib/gateway-client";
 import {
@@ -320,7 +322,18 @@ export function useGateway() {
   const resetChatSession = useSetAtom(resetChatSessionAtom);
   const resetStreamState = useSetAtom(resetStreamStateAtom);
   const markSessionInterrupted = useSetAtom(markSessionInterruptedAtom);
-  const startPrompt = useSetAtom(startPromptAtom);
+  const startPromptInStore = useSetAtom(startPromptAtom);
+  const activeProfile = useAtomValue(activeProfileAtom);
+  const startPrompt = useCallback((params: Parameters<typeof startPromptInStore>[0]) => {
+    const persistentId = resolvePersistentSessionId(params.sessionId) ?? params.sessionId;
+    const history = queryClient.getQueryData<MessagesResponse>(["session-messages", activeProfile, persistentId]);
+    startPromptInStore({
+      ...params,
+      // Capture at submission, before a refetch can include this new turn.
+      // Keep the boundary local to this profile and persistent conversation.
+      historyBoundaryId: history ? messagesResponseToHermesUIMessages(history).at(-1)?.id ?? null : undefined,
+    });
+  }, [activeProfile, queryClient, startPromptInStore]);
   const setSessionError = useSetAtom(setSessionErrorAtom);
   const setSessionTipRedirect = useSetAtom(sessionTipRedirectAtom);
   const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);

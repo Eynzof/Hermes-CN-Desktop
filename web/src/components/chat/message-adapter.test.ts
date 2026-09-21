@@ -681,6 +681,62 @@ describe("message adapter", () => {
     expect(merged[0]?.id).toBe("live-assistant-10");
   });
 
+  it.each([false, true])("keeps identical replies in their own user turns (same prompt: %s)", (samePrompt) => {
+    const oldPrompt = "Remember PROFILE070-MAC and number 942";
+    const newPrompt = samePrompt ? oldPrompt : "Recall the token and number after upgrading";
+    const stored = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({ id: 1, role: "user", content: oldPrompt, timestamp: 1789902394.091031 }),
+      sessionMessage({ id: 2, role: "assistant", content: "PROFILE070-MAC 942", timestamp: 1789902395.505761 }),
+      sessionMessage({ id: 3, role: "user", content: newPrompt, timestamp: 1789957064.578698 }),
+      sessionMessage({ id: 4, role: "assistant", content: "PROFILE070-MAC 942", timestamp: 1789957066.286207 }),
+    ]);
+    const live = [
+      uiMessage({ id: "live-user", role: "user", createdAt: 1789957064500, parts: [{ type: "text", text: newPrompt }] }),
+      uiMessage({ id: "live-assistant", createdAt: 1789957065000, parts: [{ type: "text", text: "PROFILE070-MAC 942" }] }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged.map((message) => message.id)).toEqual(["stored-1", "stored-2", "live-user", "live-assistant"]);
+    expect(merged.slice(0, 2)).toEqual(stored.slice(0, 2));
+    expect(merged[3]?.metadata?.persistedId).toBe(4);
+    expect(hermesUIMessagesToChatMessages(merged).map((message) => message.text)).toEqual([
+      oldPrompt, "PROFILE070-MAC 942", newPrompt, "PROFILE070-MAC 942",
+    ]);
+  });
+
+  it.each([false, true])("does not replace an older reply before the new user turn is persisted (same prompt: %s)", (samePrompt) => {
+    const stored = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({ id: 1, role: "user", content: "Old question", timestamp: 100 }),
+      sessionMessage({ id: 2, role: "assistant", content: "Same answer", timestamp: 101 }),
+    ]);
+    const live = [
+      uiMessage({ id: "live-user", role: "user", createdAt: 200_000, parts: [{ type: "text", text: samePrompt ? "Old question" : "New question" }], metadata: { historyBoundaryId: "stored-2" } }),
+      uiMessage({ id: "live-assistant", createdAt: 201_000, parts: [{ type: "text", text: "Same answer" }], status: "streaming" }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toEqual([...stored, ...live]);
+  });
+
+  it("uses persisted identity to distinguish identical replies without live user anchors", () => {
+    const stored = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({ id: 2, role: "assistant", content: "Same answer", timestamp: 100 }),
+      sessionMessage({ id: 3, role: "user", content: "Another question", timestamp: 200 }),
+      sessionMessage({ id: 4, role: "assistant", content: "Same answer", timestamp: 201 }),
+    ]);
+    const live = [uiMessage({
+      id: "live-assistant", createdAt: 200_000,
+      parts: [{ type: "text", text: "Same answer" }], metadata: { persistedId: 4 },
+    })];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged.map((message) => message.id)).toEqual(["stored-2", "stored-3", "live-assistant"]);
+    expect(merged[0]).toEqual(stored[0]);
+  });
+
   it("dedups an interrupted live assistant against the stored tool transcript", () => {
     const stored = [
       uiMessage({
