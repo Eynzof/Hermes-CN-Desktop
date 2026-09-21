@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import zipfile
 
 
 def digest(file):
@@ -35,19 +36,23 @@ def main(args):
     assert tag == 'v0.9.0'
     assert subprocess.check_output(['git', '-C', str(args.source), 'rev-parse', 'HEAD'], text=True).strip() == source_sha
     run = gh_json(f'repos/{repository}/actions/runs/{run_id}')
-    assert run['conclusion'] == 'success' and run['head_sha'] == source_sha
+    assert run['conclusion'] == 'success' and run['head_sha'] == source_sha and run['event'] == 'workflow_dispatch'
     assert run['path'].split('@')[0] == '.github/workflows/release-desktop.yml'
-    # The tag REST endpoint does not resolve a draft's pending tag; read its exact ID.
-    pages = json.loads(subprocess.check_output(
-        ['gh', 'api', '--paginate', '--slurp', f'repos/{repository}/releases?per_page=100'], text=True))
-    releases = [release for page in pages for release in page if release['tag_name'] == tag]
-    assert len(releases) == 1, 'Expected exactly one release for the pinned tag'
-    release = gh_json(f'repos/{repository}/releases/{releases[0]["id"]}')
-    assert release['tag_name'] == tag
-    assert release['target_commitish'] == source_sha
+    # Read-only GITHUB_TOKEN cannot see drafts; the same successful run retains original bytes.
+    artifacts = gh_json(f'repos/{repository}/actions/runs/{run_id}/artifacts?per_page=100')['artifacts']
+    candidates = [a for a in artifacts if a['name'] == 'desktop-release-candidate' and not a['expired']]
+    assert len(candidates) == 1, 'Expected one original candidate artifact from the pinned run'
+    artifact = candidates[0]
+    assert artifact['workflow_run']['id'] == int(run_id) and artifact['workflow_run']['head_sha'] == source_sha
     args.assets.mkdir(parents=True)
-    subprocess.run(['gh', 'release', 'download', tag, '--repo', repository, '--dir', str(args.assets),
-                    '--pattern', 'checksums.txt', '--pattern', 'release-record.json'], check=True)
+    archive = args.assets.parent / f'ci-candidate-{run_id}.zip'
+    with archive.open('xb') as stream:
+        subprocess.run(['gh', 'api', f'repos/{repository}/actions/artifacts/{artifact["id"]}/zip'], stdout=stream, check=True)
+    assert archive.stat().st_size == artifact['size_in_bytes']
+    assert 'sha256:' + digest(archive) == artifact['digest'], 'Original Actions archive digest changed'
+    with zipfile.ZipFile(archive) as bundle:
+        for name in ['checksums.txt', 'release-record.json']:
+            bundle.extract(name, args.assets)
     assert digest(args.assets / 'checksums.txt') == fingerprint, 'Candidate fingerprint changed'
     checksums = {}
     for line in (args.assets / 'checksums.txt').read_text().splitlines():
@@ -78,8 +83,9 @@ def main(args):
             filename, signature = asset['fileName'], asset['signatureFile']
             assert filename.endswith(extension) and signature == filename + '.sig'
             assert filename in checksums and signature in checksums
-            subprocess.run(['gh', 'release', 'download', tag, '--repo', repository, '--dir', str(args.assets),
-                            '--pattern', filename, '--pattern', signature], check=True)
+            with zipfile.ZipFile(archive) as bundle:
+                for name in [filename, signature]:
+                    bundle.extract(name, args.assets)
             for name in [filename, signature]:
                 assert digest(args.assets / name) == checksums[name], f'Original bytes changed: {name}'
             detached = temporary / 'updater.sig'
@@ -89,7 +95,10 @@ def main(args):
                              'signatureFile': signature, 'target': target, 'signatureVerified': True}
     for filename in ['checksums.txt', 'release-record.json']:
         (args.output.parent / filename).write_bytes((args.assets / filename).read_bytes())
-    return {'ok': True, 'repository': repository, 'acceptanceCommit': os.environ['GITHUB_SHA'], 'releaseUrl': release['html_url'], 'isDraft': release['draft'],
+    archive.unlink()
+    return {'ok': True, 'repository': repository, 'acceptanceCommit': os.environ['GITHUB_SHA'],
+            'source': 'github-actions-original-artifact', 'artifactId': artifact['id'],
+            'artifactArchiveDigest': artifact['digest'], 'artifactSize': artifact['size_in_bytes'],
             'runUrl': run['html_url'], 'candidateSha256': fingerprint, 'desktopSha': source_sha,
             'desktopVersion': record['desktopVersion'], 'runtimeVersion': record['bundledRuntimeVersion'],
             'coreSha': record['coreSha'], 'formats': formats}

@@ -4,7 +4,7 @@
 
 执行前由发布负责人通知视觉验收，并填写四个确定输入：最终 Desktop 完整 SHA、成功的 release-desktop CI run ID、已验收原始 `checksums.txt` 的 SHA256、`v0.9.0` tag。不在脚本中绑定已作废的 Desktop SHA；独立 checkout 输入中的最终源码，仅读取公钥与版本。Runtime 目标固定 cn18 / `b9f82a21fd9268bd499051e23b614ecb06d5b888`。
 
-脚本下载 CI 创建的同一 draft/public release 中的 `checksums.txt`、`release-record.json` 及两个 Linux updater 资产；只有候选指纹、record 源码 SHA、release 目标提交和成功 CI 来源全部匹配才能继续。按 record 的 `linux-deb/x86_64` 和 `linux/x86_64` 选择 `.deb` 与 AppImage，分别核对 SHA 和 `.sig`，用最终源码中的生产公钥执行 minisign 验签。
+脚本下载指定成功 CI 的原始 `desktop-release-candidate` Actions ZIP，先核对 GitHub REST 记录的完整摘要、大小和运行来源，再抽取 `checksums.txt`、`release-record.json` 及两个 Linux updater 资产；只有候选指纹、record 源码 SHA、发行 tag 和成功 CI 来源全部匹配才能继续。这样无需为了读取草稿增加发布写权限。按 record 的 `linux-deb/x86_64` 和 `linux/x86_64` 选择 `.deb` 与 AppImage，分别核对 SHA 和 `.sig`，用最终源码中的生产公钥执行 minisign 验签。
 
 在真正 `ubuntu-22.04` runner 上用 apt 安装原 `.deb`，比对安装后的 EXE 与已验签 deb payload 相同。AppImage 原字节验签后解包，用原 AppRun 启动。两个真实 Desktop 在 Xvfb + dbus 会话内依次使用不同的新 HOME/runtime；实际 `/proc/<pid>/exe` 必须对应包内二进制，实际 Core PID 必须位于本轮 `runtime/versions/0.21.0-cn.18`，且 Core 可执行文件 hash 与 ZIP 原件一致。再比对 current.json、source、包内 ZIP、真实 `/api/health`、`/api/version`、空闲状态与 HOME。
 
