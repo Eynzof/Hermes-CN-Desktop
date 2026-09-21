@@ -2608,8 +2608,8 @@ const MAX_ZIP_ENTRIES: usize = 20_000;
 // over 5,300 files. Keep a bounded allowance for the supported release.
 const MAX_ZIP_FILES: usize = 10_000;
 const MAX_ZIP_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
-                                                    // The v0.21 Windows runtime with local voice dependencies expands to over 500 MiB.
-                                                    // Runtime bundles need more room than the separately updated UI bundle.
+// The v0.21 runtime with local voice dependencies expands to over 500 MiB.
+// Runtime bundles need more room than the separately updated UI bundle.
 const MAX_RUNTIME_ZIP_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 fn validate_zip_entry_counts(
@@ -4056,7 +4056,7 @@ mod tests {
             .expect("HERMES_RELEASE_RUNTIME_ZIP must point to the staged runtime archive");
         let dest = TempDir::new().unwrap();
 
-        extract_zip(&zip_path, dest.path()).unwrap();
+        extract_zip_with_limit(&zip_path, dest.path(), MAX_RUNTIME_ZIP_TOTAL_BYTES).unwrap();
         assert!(
             find_executable_in(dest.path(), 2).is_some(),
             "runtime executable missing after extraction"
