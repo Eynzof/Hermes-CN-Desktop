@@ -65,7 +65,7 @@ jobs:
       - name: Install Ubuntu desktop test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xauth dbus-x11 imagemagick xdotool libfuse2
+          sudo apt-get install -y --no-install-recommends xvfb xauth dbus-x11 imagemagick xdotool libfuse2 fonts-noto-cjk
       - name: Install the pinned official Minisign binary for Ubuntu 22.04
         shell: bash
         run: |
