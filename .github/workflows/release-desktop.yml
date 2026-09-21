@@ -476,6 +476,14 @@ jobs:
           path: release-assets/*
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-fingerprint
+          path: |
+            release-assets/checksums.txt
+            release-assets/release-record.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Create private draft from the pinned source SHA
         run: |
           set -euo pipefail
