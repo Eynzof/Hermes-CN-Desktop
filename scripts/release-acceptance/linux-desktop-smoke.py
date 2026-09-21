@@ -9,6 +9,7 @@ import re
 import signal
 import subprocess
 import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -124,7 +125,8 @@ def smoke_format(kind, candidate, output, temp_root):
                 'XDG_CACHE_HOME': str(root / 'cache'), 'HERMES_DESKTOP_RUNTIME_ROOT': str(runtime_root),
                 'HERMES_HOME': str(runtime_root / 'hermes-home'), 'HERMES_DESKTOP_API_PORT': '9120',
                 'HERMES_NO_ANALYTICS': '1', 'HERMES_DISABLE_LAZY_INSTALLS': '1', 'PYTHONUTF8': '1',
-                'LIBGL_ALWAYS_SOFTWARE': '1', 'WEBKIT_DISABLE_DMABUF_RENDERER': '1', 'RUST_LOG': 'warn'})
+                'LIBGL_ALWAYS_SOFTWARE': '1', 'WEBKIT_DISABLE_DMABUF_RENDERER': '1',
+                'RUST_LOG': 'warn,hermes_agent_cn_desktop::process::dashboard=info'})
     for key in ['HOME', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME']:
         Path(env[key]).mkdir()
     process = None
@@ -156,9 +158,21 @@ def smoke_format(kind, candidate, output, temp_root):
             assert current['sourceCommit'] == candidate['coreSha'] and current['artifactSha256'] == manifest['sha256']
             assert Path(current['executablePath']).resolve() == Path(core['executablePath'])
             assert owner['apiBaseUrl'] == 'http://127.0.0.1:9120'
+            report.update({'desktopProcess': desktop, 'coreProcess': core, 'current': current,
+                           'manifestSha256': digest(manifest_path), 'runtimeArchiveSha256': manifest['sha256']})
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open(owner['apiBaseUrl'] + '/', timeout=30) as response:
-                html = response.read().decode()
+            def ready_dashboard_page():
+                assert json.loads(owner_file.read_text())['dashboardPid'] == core_pid, 'Owned Core PID changed during startup'
+                assert (Path('/proc') / str(core_pid) / 'exe').resolve(strict=True) == Path(core['executablePath'])
+                try:
+                    with opener.open(owner['apiBaseUrl'] + '/', timeout=5) as response:
+                        return response.read().decode()
+                except urllib.error.URLError as error:
+                    if not isinstance(error.reason, ConnectionRefusedError):
+                        raise
+                    return None
+            html = wait_until(ready_dashboard_page, 'same owned Core serving its dashboard page', process,
+                              allow_wrapper_exit=kind == 'appimage')
             token = re.search(r'__HERMES_SESSION_TOKEN__\s*=\s*"([^"]+)"', html)[1]
             apis = {}
             for endpoint in ['health', 'version', 'status']:
