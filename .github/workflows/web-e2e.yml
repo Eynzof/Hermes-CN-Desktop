@@ -65,7 +65,18 @@ jobs:
       - name: Install Ubuntu desktop test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends minisign xvfb xauth dbus-x11 imagemagick xdotool libfuse2
+          sudo apt-get install -y --no-install-recommends xvfb xauth dbus-x11 imagemagick xdotool libfuse2
+      - name: Install the pinned official Minisign binary for Ubuntu 22.04
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/hermes-minisign"
+          mkdir -p "$tool_dir"
+          curl --fail --location --retry 3 https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz --output "$tool_dir/minisign.tar.gz"
+          printf '%s  %s\n' '9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73' "$tool_dir/minisign.tar.gz" | sha256sum --check
+          tar -xzf "$tool_dir/minisign.tar.gz" -C "$tool_dir" minisign-linux/x86_64/minisign
+          echo "$tool_dir/minisign-linux/x86_64" >> "$GITHUB_PATH"
+          "$tool_dir/minisign-linux/x86_64/minisign" -v
       - name: Fetch original candidate and verify both Linux updater signatures
         env:
           GH_TOKEN: ${{ github.token }}
