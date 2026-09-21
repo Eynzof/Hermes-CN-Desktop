@@ -222,6 +222,38 @@ jobs:
           set -euo pipefail
           node scripts/prepare-single-platform-release.mjs --root release-assets
           echo "release_id=$(node -p "require('./release-assets/release-record.json').assets[0].releaseId")" >> "$GITHUB_OUTPUT"
+      - name: Verify original updater signatures with the client public key
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes minisign
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+          import { tmpdir } from "node:os";
+          import path from "node:path";
+          import { spawnSync } from "node:child_process";
+
+          const record = JSON.parse(readFileSync("release-assets/release-record.json", "utf8"));
+          const config = JSON.parse(readFileSync("tauri.conf.json", "utf8"));
+          assert(record.assets.length > 0, "Nightly record must contain an updater asset");
+          const temp = mkdtempSync(path.join(tmpdir(), "hermes-nightly-signature-"));
+          try {
+            const publicKey = path.join(temp, "updater.pub");
+            writeFileSync(publicKey, Buffer.from(config.plugins.updater.pubkey, "base64"));
+            for (const asset of record.assets) {
+              const file = path.join("release-assets", asset.fileName);
+              const signature = path.join(temp, "updater.sig");
+              writeFileSync(signature, Buffer.from(readFileSync(path.join("release-assets", asset.signatureFile), "utf8").trim(), "base64"));
+              const result = spawnSync("minisign", ["-V", "-p", publicKey, "-m", file, "-x", signature], { encoding: "utf8" });
+              assert.equal(result.status, 0, `${asset.fileName}: updater signature does not match the client public key: ${result.stderr || result.error || ""}`);
+              console.log(`Verified original updater signature: ${asset.fileName}`);
+            }
+          } finally {
+            rmSync(temp, { recursive: true, force: true });
+          }
+          NODE
       - name: Create public prerelease, never latest
         shell: bash
         run: |
