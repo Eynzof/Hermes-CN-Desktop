@@ -37,7 +37,13 @@ def main(args):
     run = gh_json(f'repos/{repository}/actions/runs/{run_id}')
     assert run['conclusion'] == 'success' and run['head_sha'] == source_sha
     assert run['path'].split('@')[0] == '.github/workflows/release-desktop.yml'
-    release = gh_json(f'repos/{repository}/releases/tags/{tag}')
+    # The tag REST endpoint does not resolve a draft's pending tag; read its exact ID.
+    pages = json.loads(subprocess.check_output(
+        ['gh', 'api', '--paginate', '--slurp', f'repos/{repository}/releases?per_page=100'], text=True))
+    releases = [release for page in pages for release in page if release['tag_name'] == tag]
+    assert len(releases) == 1, 'Expected exactly one release for the pinned tag'
+    release = gh_json(f'repos/{repository}/releases/{releases[0]["id"]}')
+    assert release['tag_name'] == tag
     assert release['target_commitish'] == source_sha
     args.assets.mkdir(parents=True)
     subprocess.run(['gh', 'release', 'download', tag, '--repo', repository, '--dir', str(args.assets),
