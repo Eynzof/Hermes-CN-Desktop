@@ -67,9 +67,7 @@ import {
 } from "@/lib/voice";
 import {
   normalizeWorkspacePath,
-  readWorkspacePath,
   rememberWorkspaceProject,
-  writeWorkspacePath,
 } from "@/lib/workspaces";
 import {
   ComposerAttachmentError,
@@ -245,8 +243,12 @@ export function GooseComposer({
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [selectionStart, setSelectionStart] = useState(initial.length);
   const [selectionEnd, setSelectionEnd] = useState(initial.length);
+  // 只用会话自己的工作区初始化，不再回退到"上次使用的全局工作区"：那个
+  // 隐式 fallback 会把上一个会话的目录静默显示/写到毫不相干的新会话上
+  // （issue #365/#372）。没有工作区就显示空，让用户显式选择（最近项目
+  // 列表仍在工作区选择器里一键可选）。
   const [workspacePath, setWorkspacePath] = useState(
-    () => normalizeWorkspacePath(initialWorkspacePath) || readWorkspacePath(),
+    () => normalizeWorkspacePath(initialWorkspacePath),
   );
   const [submitError, setSubmitError] = useState("");
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
@@ -514,7 +516,6 @@ export function GooseComposer({
     const nextPath = normalizeWorkspacePath(initialWorkspacePath);
     if (!nextPath) return;
     setWorkspacePath(nextPath);
-    writeWorkspacePath(nextPath);
     rememberWorkspaceProject(nextPath);
   }, [initialWorkspacePath]);
 
@@ -732,7 +733,6 @@ export function GooseComposer({
     const nextPath = normalizeWorkspacePath(path);
     if (!nextPath) return;
     setWorkspacePath(nextPath);
-    writeWorkspacePath(nextPath);
     rememberWorkspaceProject(nextPath);
   };
 
@@ -740,7 +740,6 @@ export function GooseComposer({
     if (controlsDisabled) return;
     setSubmitError("");
     setWorkspacePath("");
-    writeWorkspacePath("");
     setWorkspacePickerOpen(false);
   };
 
