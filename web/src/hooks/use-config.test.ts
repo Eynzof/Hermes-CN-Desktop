@@ -8,4 +8,19 @@ describe("buildConfigUpdateRequest", () => {
         config: { model: "qwen", approval: { mode: "manual" } },
       });
   });
+
+  it("carries deleted paths as deleted_paths on the wire (#370/#188, Core P-042)", () => {
+    expect(
+      buildConfigUpdateRequest({ providers: {} }, ["providers.custom:local"]),
+    ).toEqual({
+      config: { providers: {} },
+      deleted_paths: ["providers.custom:local"],
+    });
+  });
+
+  it("omits deleted_paths when there is nothing to delete", () => {
+    expect(buildConfigUpdateRequest({ providers: {} }, [])).toEqual({
+      config: { providers: {} },
+    });
+  });
 });

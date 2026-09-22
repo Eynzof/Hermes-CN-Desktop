@@ -438,6 +438,10 @@ export type ConfigResponse = z.infer<typeof ConfigResponse>;
 
 export const ConfigUpdateRequest = z.object({
   config: z.record(z.unknown()),
+  // 客户端已删除的点分配置路径（如 providers.custom:foo）。后端深合并只会
+  // 覆盖、不会删除，被删的 key 会在磁盘上存活复生（#370/#188）；内核 P-042
+  // 在合并后按这些路径显式删除。旧内核忽略未知字段，行为与不传一致。
+  deleted_paths: z.array(z.string()).optional(),
 });
 export type ConfigUpdateRequest = z.infer<typeof ConfigUpdateRequest>;
 
