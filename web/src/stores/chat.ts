@@ -56,12 +56,27 @@ export interface PendingApproval {
   reason?: string;
 }
 
+export interface PendingClarificationQuestion {
+  qid: string;
+  question: string;
+  choices: string[];
+  multiSelect: boolean;
+}
+
 export interface PendingClarification {
   requestId: string;
   sessionId: string;
   question: string;
   choices: string[];
   multiSelect: boolean;
+  /**
+   * Batch form: the gateway emits `{questions: [{qid, question, choices,
+   * multi_select}], request_id}` for multi-question clarifies. The single-question
+   * fields above stay empty in that case.
+   */
+  questions?: PendingClarificationQuestion[];
+  /** Per-qid answers collected while working through a batch, in order. */
+  answers?: Record<string, string>;
 }
 
 export type StreamStatus = "idle" | "connecting" | "streaming" | "complete" | "error";
@@ -926,14 +941,46 @@ function reduceGatewayEventInner(
     }
 
     case "clarify.request": {
-      if (typeof payload.request_id !== "string" || typeof payload.question !== "string") return runtime;
-      const request: PendingClarification = {
-        requestId: payload.request_id,
-        sessionId,
-        question: payload.question,
-        choices: Array.isArray(payload.choices) ? payload.choices.filter((c: unknown): c is string => typeof c === "string") : [],
-        multiSelect: payload.multi_select === true,
-      };
+      if (typeof payload.request_id !== "string" || !payload.request_id) return runtime;
+      const toChoices = (value: unknown): string[] =>
+        Array.isArray(value) ? value.filter((c: unknown): c is string => typeof c === "string") : [];
+      // Batch form: the gateway sends `{questions: [{qid, question, choices,
+      // multi_select}], request_id}` for multi-question clarifies. The
+      // single-question fields live under `question`/`choices` instead; handle
+      // both or the prompt is dropped and the agent waits for nothing.
+      const rawQuestions = Array.isArray(payload.questions) ? payload.questions : [];
+      const batch = rawQuestions
+        .filter(
+          (q: any) =>
+            q && typeof q.qid === "string" && q.qid && typeof q.question === "string" && q.question.trim(),
+        )
+        .map((q: any) => ({
+          qid: q.qid as string,
+          question: String(q.question).trim(),
+          choices: toChoices(q.choices),
+          multiSelect: q.multi_select === true,
+        }));
+      let request: PendingClarification;
+      if (batch.length > 0) {
+        request = {
+          requestId: payload.request_id,
+          sessionId,
+          question: "",
+          choices: [],
+          multiSelect: false,
+          questions: batch,
+          answers: {},
+        };
+      } else {
+        if (typeof payload.question !== "string") return runtime;
+        request = {
+          requestId: payload.request_id,
+          sessionId,
+          question: payload.question,
+          choices: toChoices(payload.choices),
+          multiSelect: payload.multi_select === true,
+        };
+      }
       return {
         ...runtime,
         pendingClarifications: [...(runtime.pendingClarifications ?? []).filter((r) => r.requestId !== request.requestId), request],
@@ -1479,6 +1526,26 @@ export const removeClarificationAtom = atom(null, (_get, set, request: PendingCl
     pendingClarifications: (runtime.pendingClarifications ?? []).filter((r) => r.requestId !== request.requestId),
   })));
 });
+
+/**
+ * Record one answered question of a batch clarify (the dialog asks them in
+ * order and the entry stays mounted until the gateway reports no `remaining`).
+ */
+export const recordClarificationAnswerAtom = atom(
+  null,
+  (_get, set, params: { sessionId: string; requestId: string; qid: string; answer: string }) => {
+    set(chatRuntimeBySessionAtom, (state) =>
+      updateSessionRuntime(state, params.sessionId, (runtime) => ({
+        ...runtime,
+        pendingClarifications: (runtime.pendingClarifications ?? []).map((r) =>
+          r.requestId === params.requestId
+            ? { ...r, answers: { ...(r.answers ?? {}), [params.qid]: params.answer } }
+            : r,
+        ),
+      })),
+    );
+  },
+);
 
 // ── Hydration ────────────────────────────────────────────────────────────────
 
