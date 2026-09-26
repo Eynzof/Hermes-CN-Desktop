@@ -160,6 +160,22 @@ fn record_looks_like_gateway(record: &GatewayRuntimeRecord) -> bool {
     command_line_looks_like_gateway(&record.argv.join(" "))
 }
 
+/// GUI processes have no console of their own, so Windows allocates a new visible
+/// console window for every console child process spawned here. Rust's
+/// std::process::Command does not pass CREATE_NO_WINDOW on its own.
+fn hide_console_window(command: &mut Command) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = command;
+    }
+}
+
 #[cfg(unix)]
 fn pid_is_running(pid: u32) -> bool {
     if pid == 0 {
@@ -175,10 +191,10 @@ fn pid_is_running(pid: u32) -> bool {
         return false;
     }
     let filter = format!("PID eq {}", pid);
-    let Ok(output) = Command::new("tasklist")
-        .args(["/FI", &filter, "/FO", "CSV", "/NH"])
-        .output()
-    else {
+    let mut command = Command::new("tasklist");
+    command.args(["/FI", &filter, "/FO", "CSV", "/NH"]);
+    hide_console_window(&mut command);
+    let Ok(output) = command.output() else {
         return false;
     };
     String::from_utf8_lossy(&output.stdout).contains(&pid.to_string())
@@ -208,10 +224,10 @@ fn process_command_line(pid: u32) -> Option<String> {
         "$p = Get-CimInstance Win32_Process -Filter \"ProcessId = {}\"; if ($p) {{ $p.CommandLine }}",
         pid
     );
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .output()
-        .ok()?;
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-Command", &script]);
+    hide_console_window(&mut command);
+    let output = command.output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -498,11 +514,13 @@ fn terminate_pid(pid: u32, force: bool) {
     if force {
         args.push("/F");
     }
-    let _ = Command::new("taskkill")
+    let mut command = Command::new("taskkill");
+    command
         .args(args)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+        .stderr(Stdio::null());
+    hide_console_window(&mut command);
+    let _ = command.status();
 }
 
 #[cfg(not(any(unix, windows)))]
