@@ -235,12 +235,72 @@
   --rust: #f38ba8;
 }
 
+[data-theme="soft-green"] {
+  /* Eye-friendly green: classic bean-green canvas, dark green text. */
+  --h-bg-app: #c7edcc;
+  --h-bg-pane: #d9f2dc;
+  --h-bg-soft: #cfe8d3;
+  --h-bg-input: #eaf7eb;
+  --h-bg-chip: #bde4c2;
+  --h-bg-code: #d2ecd6;
+  --h-line: #9dcba3;
+  --h-line-soft: #b4dcb9;
+  --h-text: #1e3b1e;
+  --h-text-2: #365736;
+  --h-text-3: #557455;
+  --h-text-4: #7c9a7c;
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
+  --h-sidebar-stripe: #c7edcc;
+  --h-accent: #2e7d32;
+  --h-accent-contrast: #ffffff;
+  --h-accent-soft: rgba(46, 125, 50, 0.14);
+  --h-accent-border: #7cb882;
+  --sky: #4c7a9c;
+  --plum: #8e44ad;
+  --amber: #9d6b00;
+  --moss: #2e7d32;
+  --rust: #c4554d;
+}
+
+[data-theme="soft-warm"] {
+  /* Eye-friendly warm: solarized-style cream canvas, warm brown text. */
+  --h-bg-app: #fdf6e3;
+  --h-bg-pane: #fff9ec;
+  --h-bg-soft: #f8f0d9;
+  --h-bg-input: #fefbf2;
+  --h-bg-chip: #f0e6c9;
+  --h-bg-code: #f7eed6;
+  --h-line: #e0d3b6;
+  --h-line-soft: #ebe0c6;
+  --h-text: #4a3b2a;
+  --h-text-2: #66533d;
+  --h-text-3: #87745c;
+  --h-text-4: #a6967f;
+  --h-shadow: none;
+  --h-shadow-l: none;
+  --h-shadow-soft: none;
+  --h-sidebar-stripe: #fdf6e3;
+  --h-accent: #8a6d3b;
+  --h-accent-contrast: #ffffff;
+  --h-accent-soft: rgba(138, 109, 59, 0.14);
+  --h-accent-border: #c4ab7d;
+  --sky: #4c7a9c;
+  --plum: #8e44ad;
+  --amber: #b58900;
+  --moss: #6b8e5a;
+  --rust: #c4554d;
+}
+
 /* ── PrimeAPP tri-state status palette
    Black / white / grey remain the structural palette. Operational states use
    only PrimeAPP green, yellow and red across every theme. */
 :root,
 [data-theme="light"],
-[data-theme="light-modern"] {
+[data-theme="light-modern"],
+[data-theme="soft-green"],
+[data-theme="soft-warm"] {
   --h-ok: var(--h-palette-success-light-fg);
   --h-ok-soft: var(--h-palette-success-light-surface);
   --h-ok-border: var(--h-palette-success-light-border);

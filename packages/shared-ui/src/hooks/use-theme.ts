@@ -6,7 +6,9 @@ export type ThemeVariant =
   | "dark"
   | "dark-modern"
   | "dracula"
-  | "catppuccin-mocha";
+  | "catppuccin-mocha"
+  | "soft-green"
+  | "soft-warm";
 export type DensityVariant = "comfortable" | "compact";
 /** Global interface scale steps. Maps to a single CSS `zoom` on the document
  *  root so text, spacing and icons enlarge together — see {@link SCALE_FACTORS}. */
@@ -46,6 +48,8 @@ const THEME_VARIANTS = new Set<ThemeVariant>([
   "dark-modern",
   "dracula",
   "catppuccin-mocha",
+  "soft-green",
+  "soft-warm",
 ]);
 const SCALE_VARIANTS = new Set<ScaleVariant>(["sm", "md", "lg", "xl", "2xl"]);
 
