@@ -34,7 +34,7 @@ describe("ModelOnboardingDialog accessibility", () => {
       </MemoryRouter>,
     );
 
-    const dialog = screen.getByRole("dialog", { name: "开始使用 Hermes" });
+    const dialog = screen.getByRole("dialog", { name: "开始使用 AIMS Agent" });
     const descriptionId = dialog.getAttribute("aria-describedby");
     expect(descriptionId).toBeTruthy();
     expect(document.getElementById(descriptionId ?? "")?.textContent).toContain(

@@ -95,8 +95,8 @@ export function GuideRoute() {
           }
         />
         <div>
-          <p>Hermes Agent 中文社区桌面版</p>
-          <h1>你想怎么开始使用 Hermes？</h1>
+          <p>AIMS Agent 桌面版</p>
+          <h1>你想怎么开始使用 AIMS Agent？</h1>
           <span>不确定怎么选？直接选择“开箱即用”，适合绝大多数用户。</span>
         </div>
       </header>
@@ -131,7 +131,7 @@ export function GuideRoute() {
               </span>
               <span className={s.choiceAction}>
                 {preparing ? <LoadingIndicator size="sm" /> : <ArrowRight size={16} />}
-                {preparing ? "正在为你准备 Hermes…" : "选择开箱即用"}
+                {preparing ? "正在为你准备 AIMS Agent…" : "选择开箱即用"}
               </span>
             </button>
 
@@ -149,16 +149,16 @@ export function GuideRoute() {
                 <span className={s.choiceIcon}><Globe2 size={24} /></span>
                 <span className={s.advancedBadge}>已有用户</span>
               </span>
-              <strong>连接已有 Hermes</strong>
-              <span className={s.choiceLead}>仅当你已经在本机另一套环境或服务器上运行 Hermes 时选择。</span>
+              <strong>连接已有 AIMS Agent</strong>
+              <span className={s.choiceLead}>仅当你已经在本机另一套环境或服务器上运行 AIMS Agent 时选择。</span>
               <span className={s.choiceDetail}>
-                <CheckCircle2 size={16} /> 你知道现有 Hermes 的访问地址
+                <CheckCircle2 size={16} /> 你知道现有 AIMS Agent 的访问地址
               </span>
               <span className={s.choiceDetail}>
                 <CheckCircle2 size={16} /> 你持有连接所需的 Token，或知道如何完成登录
               </span>
               <span className={s.choiceAction}>
-                <ArrowRight size={16} /> 填写已有 Hermes 的连接信息
+                <ArrowRight size={16} /> 填写已有 AIMS Agent 的连接信息
               </span>
             </button>
           </div>
@@ -174,8 +174,8 @@ export function GuideRoute() {
           >
             <div className={s.externalHeader}>
               <div>
-                <span className={s.stepLabel}>适合已经部署过 Hermes 的用户</span>
-                <h2 id="external-setup-title">连接你已有的 Hermes</h2>
+                <span className={s.stepLabel}>适合已经部署过 AIMS Agent 的用户</span>
+                <h2 id="external-setup-title">连接你已有的 AIMS Agent</h2>
                 <p>选择它是在这台电脑上运行，还是在另一台电脑或服务器上运行。</p>
               </div>
               <Button variant="ghost" onClick={() => setChoice(null)}>
@@ -194,10 +194,10 @@ export function GuideRoute() {
           <img src={wechatCommunityQr} alt="Hermes Agent 中文社区微信群二维码" />
           <HeartHandshake size={24} />
           <div>
-            <strong>不确定怎么选，也可以来中文社区问我们</strong>
-            <span>扫码加入微信群；二维码失效时可从官网获取最新联系方式。</span>
+            <strong>不确定怎么选，请联系AIMS支持</strong>
+            <span>OA查看联系方式。</span>
           </div>
-          <button type="button" onClick={() => void openExternalUrl("https://hermesagent.org.cn")}>
+          <button type="button" onClick={() => void openExternalUrl("http://aims.icbc")}>
             <ExternalLink size={12} /> 打开官网
           </button>
         </aside>

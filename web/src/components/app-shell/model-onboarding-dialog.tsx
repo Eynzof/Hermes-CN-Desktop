@@ -95,9 +95,9 @@ export function ModelOnboardingDialog() {
             </span>
             <div>
               <p className={s.kicker}>首次使用</p>
-              <Dialog.Title className={s.title}>开始使用 Hermes</Dialog.Title>
+              <Dialog.Title className={s.title}>开始使用 AIMS Agent</Dialog.Title>
               <Dialog.Description className={s.description}>
-                内置 Hermes 已经准备好。配置一个模型后即可开始任务；你也可以先浏览工作台，
+                内置 agent 已经准备好。配置一个模型后即可开始任务；你也可以先浏览工作台，
                 稍后再完成设置。
               </Dialog.Description>
             </div>
@@ -140,8 +140,8 @@ export function ModelOnboardingDialog() {
             </span>
             <div>
               <span className={s.advancedLabel}>高级选项</span>
-              <strong>已经有自己的 Hermes 内核？</strong>
-              <p>可以连接本机其他 Hermes，或连接部署在服务器上的 Hermes。</p>
+              <strong> </strong>
+              <p>可以连接本机其他 Agent，或连接部署在服务器上的 Agent。</p>
             </div>
             <Button
               variant="outline"

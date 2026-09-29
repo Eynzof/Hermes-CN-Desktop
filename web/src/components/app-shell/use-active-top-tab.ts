@@ -79,7 +79,7 @@ export const TOP_TABS: readonly TopTabDef[] = [
   {
     id: "hermesMemory",
     num: "05",
-    label: "Hermes 记忆",
+    label: "记忆",
     href: "/memory",
     matches: (path) => ["/memory", "/memconfig", "/openviking", "/hindsight"].some((route) => isRoute(path, route)),
   },

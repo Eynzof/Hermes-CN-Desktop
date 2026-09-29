@@ -1,4 +1,4 @@
-import hermesLogo from "@/assets/hermes-default-avatar.png";
+import aimsLogo from "@/assets/aims.png";
 
 interface HermesLogoMarkProps {
   size?: number;
@@ -12,7 +12,7 @@ interface HermesLogoMarkProps {
 export function HermesLogoMark({ size = 22, className, title }: HermesLogoMarkProps) {
   return (
     <img
-      src={hermesLogo}
+      src={aimsLogo}
       width={size}
       height={size}
       className={className}

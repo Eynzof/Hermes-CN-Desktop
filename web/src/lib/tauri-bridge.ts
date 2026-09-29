@@ -91,7 +91,7 @@ import {
   verifyBackendVersion,
   type BackendRecoveryReason,
 } from "./version-check";
-import hermesLogo from "@/assets/hermes-default-avatar.png";
+import aimsLogo from "@/assets/aims.png";
 
 let invoke: typeof import("@tauri-apps/api/core").invoke;
 
@@ -819,7 +819,7 @@ function showBootstrapOverlay(initialMessage: string): {
   );
 
   const mark = document.createElement("img");
-  mark.src = hermesLogo;
+  mark.src = aimsLogo;
   mark.alt = "Hermes Agent Logo";
   mark.setAttribute(
     "style",
@@ -832,7 +832,7 @@ function showBootstrapOverlay(initialMessage: string): {
     "style",
     "font-size:16px;font-weight:700;letter-spacing:0.02em;color:#fbfaf6;",
   );
-  title.textContent = "Hermes Agent 中文社区桌面版";
+  title.textContent = "AIMS Agent 桌面版";
   panel.appendChild(title);
 
   const brand = document.createElement("div");
@@ -841,7 +841,7 @@ function showBootstrapOverlay(initialMessage: string): {
     "margin-top:-12px;font-size:12px;font-weight:600;color:rgba(251,250,246,0.54);" +
       "letter-spacing:0.08em;text-transform:uppercase;",
   );
-  brand.textContent = "Hermes Agent 中文社区 · hermesagent.org.cn";
+  brand.textContent = "AIMS Agent";
   panel.appendChild(brand);
 
   const message = document.createElement("div");
@@ -931,7 +931,7 @@ function showBootstrapOverlay(initialMessage: string): {
     "font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;" +
       "color:rgba(255,255,255,0.45);letter-spacing:0.06em;text-transform:uppercase;",
   );
-  sub.textContent = "Hermes Agent 中文社区桌面版 · 启动中";
+  sub.textContent = "AIMS Agent 桌面版 · 启动中";
   panel.appendChild(sub);
 
   root.appendChild(panel);
@@ -969,7 +969,7 @@ function showBootstrapOverlay(initialMessage: string): {
         lastErrorMessage = msg || "未知启动错误";
         root.setAttribute("role", "alert");
         panel.setAttribute("aria-live", "assertive");
-        message.textContent = "启动 Hermes Agent 内核时遇到问题，请复制下方完整错误信息用于排查。";
+        message.textContent = "启动 AIMS Agent 内核时遇到问题，请复制下方完整错误信息用于排查。";
         errorText.textContent = lastErrorMessage;
         detail.style.display = "block";
         copyButton.disabled = false;
@@ -1151,7 +1151,7 @@ export async function installTauriBridge(): Promise<void> {
   // the React app from racing the managed dashboard startup.
   if (shouldWaitForManagedRuntimeConfig(config)) {
     const result = await waitForBootstrap(
-      "正在唤醒Hermes...",
+      "正在唤醒AIMS agent...",
       () => invokeCommand("get_runtime_config"),
       () => invokeCommand("runtime_info"),
     );
