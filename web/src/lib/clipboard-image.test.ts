@@ -45,6 +45,38 @@ describe("clipboard image helpers", () => {
     expect(filesFromClipboardData(clipboardDataWithFile(file))).toEqual([file]);
   });
 
+  it("does not attach the same pasted image twice when files and items disagree on lastModified", () => {
+    // Real shape of one Ctrl+V of a screenshot: `files[0]` and
+    // `items[0].getAsFile()` are the same image, but the synthesised File
+    // objects differ by a millisecond in `lastModified`.
+    const fromFiles = new File(["png"], "image.png", {
+      type: "image/png",
+      lastModified: 1791025498901,
+    });
+    const fromItems = new File(["png"], "image.png", {
+      type: "image/png",
+      lastModified: 1791025498902,
+    });
+    expect(fromFiles.size).toBe(fromItems.size);
+    expect(fromFiles.lastModified).not.toBe(fromItems.lastModified);
+
+    const data = {
+      files: [fromFiles],
+      items: [{ kind: "file", type: "image/png", getAsFile: () => fromItems }],
+    } as unknown as DataTransfer;
+
+    // One clipboard entry in, one attachment out.
+    const result = filesFromClipboardData(data);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.name).toBe("image.png");
+  });
+
+  it("falls back to clipboardData.files when items carries no file", () => {
+    const file = new File(["png"], "only-files.png", { type: "image/png" });
+    const data = { files: [file], items: [] } as unknown as DataTransfer;
+    expect(filesFromClipboardData(data)).toEqual([file]);
+  });
+
   it("falls back to native clipboard image when paste data has no image", async () => {
     const nativeImage: NativeClipboardImage = {
       size: vi.fn(async () => ({ width: 1, height: 1 })),

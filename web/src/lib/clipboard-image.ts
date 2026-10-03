@@ -33,19 +33,28 @@ export function filesFromClipboardData(clipboardData?: DataTransfer | null): Fil
   const seen = new Set<string>();
   const add = (file: File | null) => {
     if (!file) return;
-    const key = `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+    // Identify a clipboard entry by its content shape only. `lastModified` is
+    // NOT stable here: `files[i]` and `items[i].getAsFile()` describe the same
+    // pasted image, but the File object synthesised for the second one carries
+    // a timestamp up to a millisecond later. A key that included it therefore
+    // failed to dedupe and the same image attached twice.
+    const key = `${file.name}:${file.size}:${file.type}`;
     if (seen.has(key)) return;
     seen.add(key);
     files.push(file);
   };
 
-  for (const file of Array.from(clipboardData.files ?? [])) {
-    add(file);
-  }
-
+  // `items` and `files` are two views of the same clipboard payload. Read one
+  // of them — preferring `items`, which also exposes the non-file kinds we
+  // skip — and fall back to `files` only when `items` yields nothing.
   for (const item of Array.from(clipboardData.items ?? [])) {
     if (item.kind !== "file") continue;
     add(item.getAsFile());
+  }
+  if (!files.length) {
+    for (const file of Array.from(clipboardData.files ?? [])) {
+      add(file);
+    }
   }
 
   return files;
