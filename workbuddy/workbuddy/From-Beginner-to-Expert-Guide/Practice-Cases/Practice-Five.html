@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实践五：每日自动推送资讯简报 ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Practice-Cases_Practice-Five" data-v-bd9b7757><div><h1 id="实践五-每日自动推送资讯简报" tabindex="-1">实践五：每日自动推送资讯简报 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five#实践五-每日自动推送资讯简报" aria-label="Permalink to &quot;实践五：每日自动推送资讯简报&quot;">​</a></h1><h2 id="一、文档说明" tabindex="-1">一、文档说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five#一、文档说明" aria-label="Permalink to &quot;一、文档说明&quot;">​</a></h2><p>本文介绍如何使用 <code>WorkBuddy</code> 配置资讯简报的发送能力，并创建每日自动推送任务。适用于希望固定时间接收天气、新闻、行业动态与个人待办摘要的场景。</p><h2 id="二、连接-qq-邮箱" tabindex="-1">二、连接 QQ 邮箱 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five#二、连接-qq-邮箱" aria-label="Permalink to &quot;二、连接 QQ 邮箱&quot;">​</a></h2><p>在发送邮件之前，需要先通过连接器将 QQ 邮箱与 WorkBuddy 对接。</p><p>👉 请参考 <a href="../Function-Description/Connector.html#三、连接-qq-邮箱">连接器指南 - 连接 QQ 邮箱</a> 完成配置。</p><h2 id="三、手动触发第一条简报" tabindex="-1">三、手动触发第一条简报 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five#三、手动触发第一条简报" aria-label="Permalink to &quot;三、手动触发第一条简报&quot;">​</a></h2><p>建议先手动执行一次，确认消息内容、发送流程与邮箱接收是否正常。</p><p><strong>示例指令</strong>：</p><blockquote><p>请生成今天的资讯简报，包含本地天气、<code>AI</code> 行业动态、重点新闻和我的任务摘要，并发送到我的 <code>QQ</code> 邮箱。</p></blockquote><p>执行过程中，<code>WorkBuddy</code> 通常会完成搜索、整理、生成和发送等步骤，整体耗时约 <code>2</code> 到 <code>3</code> 分钟。</p><img src="../../../assets/image-7.DB88Cppa.png" width="800px"><img src="../../../assets/image-8.Cwga7sex.jpeg" width="300px"><h2 id="四、设置每日定时发送" tabindex="-1">四、设置每日定时发送 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five#四、设置每日定时发送" aria-label="Permalink to &quot;四、设置每日定时发送&quot;">​</a></h2><p>手动跑通后，可继续创建自动化任务，让简报按固定时间自动发送。</p><p><strong>示例指令</strong>：</p><blockquote><p>请创建一个自动化任务，每天早上 <code>8</code> 点 <code>30</code> 分为我生成资讯简报并发送到 <code>QQ</code> 邮箱，内容包括天气、行业资讯和任务摘要。</p></blockquote><p>创建成功后，可在左侧边栏的自动化目录中统一管理所有定时任务。</p><img src="../../../assets/image-9.27UIKvuI.png" width="800px"><img src="../../../assets/image-10.1KKJP4Aa.png" width="800px"><h2 id="五、个性化调整" tabindex="-1">五、个性化调整 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five#五、个性化调整" aria-label="Permalink to &quot;五、个性化调整&quot;">​</a></h2><p>简报内容可以通过自然语言持续调整，常见方向包括：</p><ul><li><strong>新增数据源</strong>：增加微博、知乎等平台的热榜内容。</li><li><strong>调整资讯范围</strong>：仅保留 <code>A</code> 股、财经或 <code>AI</code> 新闻。</li><li><strong>调整写作风格</strong>：改为更正式、轻松或摘要式的表达。</li><li><strong>限制发送日期</strong>：只在工作日执行，法定节假日不发送。</li></ul><p><strong>示例指令</strong>：</p><blockquote><p>请把简报改成只发送工作日版本，保留财经资讯和 <code>AI</code> 新闻，并将整体语气调整为简洁专业。</p></blockquote><h2 id="六、使用建议" tabindex="-1">六、使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five#六、使用建议" aria-label="Permalink to &quot;六、使用建议&quot;">​</a></h2><ul><li><strong>先验证发送链路</strong>：务必先手动发送成功，再开启自动化。</li><li><strong>控制内容长度</strong>：简报内容越聚焦，越适合长期阅读。</li><li><strong>逐步细化规则</strong>：建议先跑通基础版本，再补充节假日、频道来源等个性化要求。</li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Five</a></div>
+</body>
+</html>

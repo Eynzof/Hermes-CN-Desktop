@@ -17,6 +17,7 @@ import type {
   ConfigMigrationScanResult,
   ConnectionConfigInput,
   ConnectionConfigView,
+  DesktopInstallUpdateResult,
   DesktopUpdateManifestFetchResult,
   CodingAgentsCheckResult,
   EnvironmentCheckResult,
@@ -77,6 +78,20 @@ import type {
   UiEventInput,
   UiStoreSnapshot,
   UiTurnStats,
+  AccountLoginInput,
+  AccountUser,
+  AccountStatusResult,
+  AccountSavedCredentialsInfo,
+  AccountSetupResult,
+  AccountTokenInfo,
+  AccountBalanceInfo,
+  AccountTransactionsInfo,
+  CreditPackage,
+  RechargePayment,
+  RechargeStatus,
+  AccountSaveModelsInput,
+  AccountTestModelResult,
+  UserProviderInput,
   WatchPreviewFileResult,
   WriteWorkspaceFileInput,
   WriteWorkspaceFileResult,
@@ -115,6 +130,18 @@ interface BootstrapVersionLine {
   label: "界面";
   version: string;
   commit: string;
+}
+
+interface RuntimeBootstrapConfig {
+  apiBaseUrl?: string;
+  connectionMode?: "managed" | "local" | "remote";
+  managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
+}
+
+export function shouldWaitForRuntimeBootstrap(config: RuntimeBootstrapConfig): boolean {
+  if (config.apiBaseUrl || (config.connectionMode ?? "managed") !== "managed") return false;
+  return config.managedRuntimeDesiredState !== "stopped"
+    && config.managedRuntimeDesiredState !== "uninstalled";
 }
 
 function shortBootstrapCommit(commit: string | undefined): string {
@@ -252,6 +279,10 @@ function normalizeFileDropPayload(payload: TauriFileDropEventPayload): DesktopFi
 const tauriBridge = {
   windowType: "tauri" as const,
 
+  async quitApp(): Promise<void> {
+    return invokeCommand("quit_app");
+  },
+
   async fatalErrorAndExit(input: { title: string; message: string }): Promise<never> {
     return invokeCommand("fatal_error_and_exit", { input });
   },
@@ -262,6 +293,76 @@ const tauriBridge = {
 
   async externalRequest(input: ApiRequestInput): Promise<ApiRequestResult> {
     return invokeCommand("external_request", { input });
+  },
+
+  async accountRegister(input: { baseUrl: string; contact: string; password: string; verificationCode: string; inviteCode?: string }): Promise<AccountUser> {
+    return invokeCommand("account_register", { input });
+  },
+  async accountSendVerificationCode(input: { contact: string; codeType: "login" | "register"; challengeKey?: string; inviteCode?: string }): Promise<void> {
+    return invokeCommand("account_send_verification_code", input);
+  },
+  async accountLoginWithVerificationCode(input: { baseUrl: string; username: string; verificationCode: string; challengeKey: string }): Promise<AccountUser> {
+    return invokeCommand("account_login_with_verification_code", { input });
+  },
+  async accountLogin(input: AccountLoginInput): Promise<AccountUser> {
+    return invokeCommand("account_login", { input });
+  },
+  async accountStatus(): Promise<AccountStatusResult> {
+    return invokeCommand("account_status");
+  },
+  async accountFetchSetup(): Promise<AccountSetupResult> {
+    return invokeCommand("account_fetch_setup");
+  },
+  async accountListTokens(): Promise<AccountTokenInfo[]> {
+    return invokeCommand("account_list_tokens");
+  },
+  async accountBalance(): Promise<AccountBalanceInfo> {
+    return invokeCommand("account_balance");
+  },
+  async accountTransactions(input?: { limit?: number; offset?: number }): Promise<AccountTransactionsInfo> {
+    return invokeCommand("account_transactions", { limit: input?.limit, offset: input?.offset });
+  },
+  async accountCreditPackages(): Promise<CreditPackage[]> {
+    const value = await invokeCommand<CreditPackage[] | { packages?: CreditPackage[] }>("account_credit_packages");
+    return Array.isArray(value) ? value : value.packages ?? [];
+  },
+  async accountCreateRecharge(input: { packageId: string; paymentMethod: "alipay" | "wechat" }): Promise<RechargePayment> {
+    const value = await invokeCommand<{ order_no: string; amount: string | number; credits_amount?: number; qr_code?: string; expired_at?: string }>("account_create_recharge", { packageId: input.packageId, paymentMethod: input.paymentMethod });
+    return { orderNo: value.order_no, amount: value.amount, creditsAmount: value.credits_amount, qrCode: value.qr_code, expiredAt: value.expired_at };
+  },
+  async accountRechargeStatus(orderNo: string): Promise<RechargeStatus> {
+    const value = await invokeCommand<{ order_no: string; status: string; expired_at?: string; status_reason?: string | null }>("account_recharge_status", { orderNo });
+    return { orderNo: value.order_no, status: value.status, expiredAt: value.expired_at, statusReason: value.status_reason };
+  },
+  async accountCancelRecharge(orderNo: string): Promise<void> {
+    await invokeCommand("account_cancel_recharge", { orderNo });
+  },
+  async accountSaveModels(input: AccountSaveModelsInput): Promise<AccountStatusResult> {
+    return invokeCommand("account_save_models", { input });
+  },
+  async accountTestModel(modelId: string): Promise<AccountTestModelResult> {
+    return invokeCommand("account_test_model", { modelId });
+  },
+  async accountLogout(): Promise<AccountStatusResult> {
+    return invokeCommand("account_logout");
+  },
+  async accountSaveCredentials(input: AccountLoginInput): Promise<void> {
+    return invokeCommand("account_save_credentials", { input });
+  },
+  async accountHasSavedCredentials(): Promise<AccountSavedCredentialsInfo> {
+    return invokeCommand("account_has_saved_credentials");
+  },
+  async accountLoginSaved(): Promise<AccountUser> {
+    return invokeCommand("account_login_saved");
+  },
+  async accountClearCredentials(): Promise<void> {
+    return invokeCommand("account_clear_credentials");
+  },
+  async saveUserProvider(input: UserProviderInput): Promise<string> {
+    return invokeCommand("save_user_provider", { input });
+  },
+  async deleteUserProvider(providerId: string): Promise<void> {
+    return invokeCommand("delete_user_provider", { providerId });
   },
 
   async uploadFile(input: FileUploadInput): Promise<ApiRequestResult> {
@@ -357,6 +458,10 @@ const tauriBridge = {
 
   async checkDesktopUpdate(): Promise<DesktopUpdateManifestFetchResult> {
     return invokeCommand("desktop_check_update");
+  },
+
+  async installDesktopUpdate(): Promise<DesktopInstallUpdateResult> {
+    return invokeCommand("desktop_install_update");
   },
 
   async getUpdateConfig(): Promise<UpdateConfigSnapshot> {
@@ -1149,7 +1254,7 @@ export async function installTauriBridge(): Promise<void> {
   // the populated apiBaseUrl/sessionToken. In Vite dev we still avoid writing
   // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
   // the React app from racing the managed dashboard startup.
-  if (shouldWaitForManagedRuntimeConfig(config)) {
+  if (shouldWaitForRuntimeBootstrap(config)) {
     const result = await waitForBootstrap(
       "正在唤醒Hermes...",
       () => invokeCommand("get_runtime_config"),

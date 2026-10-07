@@ -1,0 +1,174 @@
+聊天框选了 deepseek 实际调用 claude，API key 频繁失效，新用户重新登录后 apikey 不刷新。
+
+ 排查后确认这不是三个独立 bug，而是模型来源没有统一所有者导致的连锁故障。当前 workbuddy 分支上有 4 个已证实的根因：
+
+ R1 —内置模型完全没有写入方。
+ custom:<BRAND.providerKey> provider 在本分支上没有任何代码创建或刷新。做这件事的 src/commands/account.rs（8
+ 个命令：登录 newapi →/api/token 取 sk- key →写 provider，key 存 keyring）只存在于 huanxing
+ 分支（665024c），从未合入。commit 48b54c7 把 huanxing-auth.ts 删掉 196 行后，登录只剩 auth-dialog.tsx:48 的
+ setAccount(account) →写进 ui-store，再无下文。
+ ensureBrandProviderModelDeclared（provider-catalog.ts:1356）自身注释就写着 "never creates a provider or invents
+ credentials"，缺条目时直接返回原 config。src/brand_generated.rs:8 的 BRAND_PROVIDER_KEY 在整个 src/ 里零消费者。
+ →用户 config.yaml 里的 custom:fengchihermes 只可能是旧版 huanxing 构建残留的遗留条目，里面的 api_key 属于上一个用户 /
+ 上一次装机，登录、换账号、登出都不会碰它。这就是「api key 失效」和「新用户登录后 apikey 没刷新」的完整解释。
+
+ R2 —team_sync.rs 用裸字符串覆写整个 model: 映射。
+ src/team_sync.rs:180-195 执行 map.insert("model", format!("custom:team-{}", default).into()) ——插入的是 YAML
+ 标量字符串，且值是一个 provider id 而非模型名。
+ Core 的 _get_model_config()（hermes_cli/runtime_provider.py:298）对标量走 return {"default": model_cfg.strip()}，丢弃
+ provider / base_url / api_key。
+ 于是企业同步后全局默认模型变成字面量 "custom:team-glm-5-2"，provider
+ 上下文全失。任何回落到全局默认的会话都会拿这个垃圾值进 Core 的猜测链路 →落到能找到凭证的 provider（通常是
+ anthropic/claude）。这是「选 deepseek 实际调用 claude」最直接的一条路径。
+
+ R3 —provider 标识三套不一致，含点的 id round-trip 必然失败。
+ - Core model.options 对 providers: map 条目发配置键原样（model_switch.py:2553），对 custom_providers:
+ 列表条目发显示名派生的 slug（custom_provider_slug，providers.py:683）。
+ - 桌面端 normalizeProviderIdForGateway（web/src/lib/provider-id.ts:7）在 slug 剥掉 custom: 后含点时把前缀丢掉。
+ - resolve_user_provider（providers.py:657）按精确配置键查，raw 已被 lower（providers.py:785）但 Core 发出的键没有
+ lower。
+
+ 结果：custom:team-glm-5.2、custom:team-kimi-k2.6 这类含点 id 发出去变成 team-glm-5.2，Core 精确键查不到 →走
+ resolve_custom_provider 显示名匹配 →也不中 →pdef is None。同理配置键含大写时必挂。
+
+ R4 —企业模型有两个互不清理的写入方。
+ src/team_sync.rs:125 写 custom_providers: 列表（按 team_managed: true 清理，硬编码 api_mode:
+ chat_completions）；web/src/lib/enterprise-sync.ts:149 写 providers: map（按 custom:team- 键前缀清理，区分
+ anthropic/openai）。两者清理条件不相交，互留残骸 →重复条目 + 陈旧 base_url/token 长期存活。
+
+ 另需堵死的静默路径：ComposerModelSelection.provider 是可选的（composer-types.ts:32）。为空时
+ buildGatewayModelConfigValue 发出裸模型名，Core 走 PATH B 静默猜 provider（DIRECT_ALIASES 按 model id 反查 →
+ model_switch.py:745，命中后 1580-1588 还会用 alias 的 base_url 覆盖端点并把 api_key 置成 "no-key-required"）。PATH A
+ 的 pdef is None 是唯一硬失败，PATH B 没有对应保护。
+
+ 目标：三类模型（内置=serviceUrl 账号 / 自定义=用户自填 baseUrl / 企业=设备令牌下发）收敛到一套 provider
+ 标识、一个写入方、一条凭证刷新路径，且模型切换不再可能静默改道。
+
+ 已确认的设计决策
+
+ 1. 内置模型 →移植回 Rust account.rs，sk- key 存 OS keyring，只有 masked 值过 IPC。
+ 2. 标识统一 →只改桌面端，不动 Core。因此必须迁就 Core 现有解析规则，而非期待 Core 变。
+ 3. 范围 →统一抽象，一次做完三类模型。
+
+ 设计
+
+ канонprovider id 规则（唯一）
+
+ 因为只改桌面端，必须让三个标识函数对同一个值产生相同结果。做法是让配置键落在 Core 三条解析路径的交集里：
+
+ - 一律写进 providers: map，永不写 custom_providers:（这样 Core Section 3 原样回发配置键，resolve_user_provider
+ 精确命中）。
+ - 键格式：custom:<ns>-<slug>，其中 ns ∈{acct, team, user}。
+ - slug 规范化：转小写 →[^a-z0-9_-]（含 .）替换为 - →合并连续 - →去首尾 -。
+
+ 这条规则同时满足：不与 Core 内建 slug 撞（custom: 前缀）、不触发 normalizeProviderIdForGateway
+ 的剥点逻辑（无点）、大小写安全（全小写）。
+
+ 命名空间：
+
+ ┌────────┬──────────────────────────────────────────────────────────────────────────┐
+ │  类别  │                               provider id                                │
+ ├────────┼──────────────────────────────────────────────────────────────────────────┤
+ │ 内置   │ custom:acct-<brandProviderKey> / custom:acct-<brandProviderKey>-messages │
+ ├────────┼──────────────────────────────────────────────────────────────────────────┤
+ │ 企业   │ custom:team-<sanitized model id>                                         │
+ ├────────┼──────────────────────────────────────────────────────────────────────────┤
+ │ 自定义 │ custom:user-<sanitized host 或名称>                                      │
+ └────────┴──────────────────────────────────────────────────────────────────────────┘
+
+ 分类从此是纯前缀判断，取代 model-provider-visibility.ts 现有的三路启发式（team_managed / token_id / 品牌 id 集合）。
+
+ 单一写入方：src/model_registry.rs（新增）
+
+ Rust 独占所有 managed provider 的 config 写入。理由：内置的 key 不能过 IPC（keyring 在 Rust）、企业同步已在
+ Rust、避免两套 merge 实现再次漂移。
+
+ 核心函数 apply_managed_providers(config, desired: &[ManagedProvider]) -> Config：
+ - 只接管匹配 ^custom:(acct|team|user)- 的键；不在 desired 里的删除，在的upsert。
+ - 不触碰任何其他 provider（用户手写的、Core 内建的）。
+ - 迁移：把 custom_providers: 列表里带 team_managed: true 或旧 custom:team-* 的条目移出并转成 map 条目。
+ - model: 只写映射，永不写标量，且 model.default 只放模型名、model.provider 只放 provider id。
+
+ 复用现有 src/team_sync.rs 的 atomic_write（team_sync.rs:86）做落盘。
+
+ 三类模型接线
+
+ 内置（src/commands/account.rs，从 665024c 移植）
+ - 保留原有 8 个命令与 keyring 设计（account_login / account_status / account_fetch_setup / account_list_tokens /
+ account_balance / account_save_models / account_test_model / account_logout），注册进 src/main.rs 的 generate_handler!
+ 与 src/commands/mod.rs。
+ - Linux 无 Secret Service →沿用原有 #[cfg] 门控 + 内存兜底（CI 跑 ubuntu）。
+ - 改动点（相对 665024c 原版）：provider id 改用新的 custom:acct-* 规则；写入改走
+ model_registry::apply_managed_providers 而非自己 merge。
+ - 凭证刷新（修 R1）：登录成功后必定重写 provider 的 api_key；检测到 userId 与已存 key 归属不同则先清除旧 key 与旧
+ provider 条目；登出清除。
+ - 前端恢复 web/src/hooks/use-account.ts，auth-dialog.tsx 登录成功后调用 provisioning，不再只 setAccount。
+
+ 企业（改造 src/team_sync.rs）
+ - merge_config 重写为构造 ManagedProvider 列表后交给 apply_managed_providers。
+ - 删掉 map.insert("model", <string>) 这段（R2），改为写 model: 映射的 provider + default 两个字段。
+ - api_mode 从 manifest 的 useCustomProtocol 推导，与 enterprise-sync.ts:90 现有逻辑对齐（含 anthropic base_url 去 /v1
+ 的处理，enterprise-sync.ts:98）。
+ - web/src/lib/enterprise-sync.ts 保留网络拉取（syncEnterpriseModels）与类型，删除 applyEnterpriseSync
+ 写入路径（R4），custom-models-pane.tsx:324 改调 Rust 命令。
+
+ 自定义
+ - custom-models-pane.tsx 与 settings-models-section.tsx 的保存路径改调新 Tauri 命令，id 走 custom:user-* 规则。
+ - provider-catalog.ts 的 buildProviderSettingsUpdate 保留用于表单预览，不再直接落盘。
+
+ 堵死静默改道
+
+ 1. ComposerModelSelection.provider
+ 由可选改为必填（composer-types.ts:30）；buildGatewayModelConfigValue（provider-id.ts:14）在 provider
+ 缺失时抛错而非发裸模型名。
+ 2. 删除 normalizeProviderIdForGateway 的剥点逻辑（R3）——发回model.options 原样给出的
+ slug。保留函数签名以免测试大改，但退化为恒等 + 校验。
+ 3. 切换后校验：setSessionModel（use-gateway.ts:552）拿到 config.set 返回的 value 后与请求的模型比对，不一致则抛错并在
+ composer 显示（goose-composer.tsx:1145 已有 setModelError
+ 通路）。这条独立于其他修复，能把任何残余的改道从静默变成可见。
+ 4. 删除 goose-composer-model-picker.tsx:246-261 用 all.find(...) 猜品牌 provider 再克隆到全部
+ BRAND.accountDefaultModels 的逻辑——provide由数组顺序决定，会把 deepseek 挂到 -messages（Anthropic）通道上。改为只列
+ provider 真实声明的模型。
+
+ 一次性迁移
+
+ 启动时幂等执行：旧 custom:<brandProviderKey>[-messages] →custom:acct-*；custom_providers: 里的 team 条目 →providers:
+ map；标量 model: →映射。迁移后写 marker 避免重复执行，复用 src/commands/config_migration.rs 现有模式。
+
+ 关键文件
+
+ 新增：src/model_registry.rs、src/commands/account.rs（移植）、web/src/hooks/use-account.ts（恢复）
+ 重写：src/team_sync.rs（merge_config）、web/src/lib/provider-id.ts
+ 改动：src/main.rs、src/commands/mod.rs、web/src/lib/enterprise-sync.ts、web/src/lib/model-provider-visibility.ts、web/
+ src/lib/provider-catalog.ts、web/src/components/chat/goose-composer-model-picker.tsx、web/src/components/chat/composer
+ -types.ts、web/src/hooks/use-gateway.ts、web/src/components/auth/auth-dialog.tsx、web/src/components/settings/custom-m
+ odels-pane.tsx、web/src/routes/settings-models-section.tsx
+
+ 前置：worktree
+
+ 按 CLAUDE.md，Desktop 与 Core 均先 git fetch origin 确认 main 与远端一致，再开 worktree。本次只改 Desktop：
+ git -C . worktree add ../wt/hermes-model-registry -b refactor/model-registry origin/main
+
+ ⚠️注意：当前分支是 workbuddy，且工作区有未提交改动（enterprise-sync.ts 的 anthropic 协议支持、brand_generated 的
+ fengchi 品牌同步）。需先确认这些改动的归属，再决定新分支基于 origin/main 还是当前 workbuddy。
+
+ 验证
+
+ 单测
+ - Rust：model_registry 的 id 规范化（含点/大写/中文名）、apply_managed_providers 的接管边界（不动用户
+ provider）、model: 恒为映射、迁移幂等性。按 CLAUDE.md 用 tempfile::TempDir + pretty_assertions，env 依赖测试加
+ #[serial_test::serial]。
+ - TS：buildGatewayModelConfigValue 缺 provider 抛错、含点 slug 原样透传、切换后校验命中不一致时抛错。
+
+ 命令
+ pnpm typecheck && pnpm test:unit && cargo check && cargo test --all-features
+
+ 端到端（pnpm tauri:dev） ——逐条对应根因：
+ 1. R1：登录账号 A →确认 config.yaml 出现 custom:acct-* 且 api_key 有值 →登出换账号 B →确认 api_key 已被改写为 B 的
+ key，A 的条目不残留。
+ 2. R2：绑定设备令牌同步企业模型 →确认 model: 仍是映射、model.default 是模型名而非 custom:team-*。
+ 3. R3：选一个含点的模型（glm-5.2 / kimi-k2.6）→确认实际调用的 provider 与所选一致。
+ 4. 主诉：选 deepseek 发一条消息，用 /api/model/info 或会话日志确认实际调用的是 deepseek 而非 claude。
+ 5. 三类模型在 picker 里分组正确，自定义模型保存后不被 managed 写入方清掉。
+
+ 收尾：commit →push →开 PR →盯 rust-test.yml / web-test.yml 全绿。

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HuanXing-Hermes × WorkBuddy 风格界面改造设计文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; --warn:#d46b08; --ok:#237804; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.8; background:#fff; }
+main { max-width:960px; margin:0 auto; padding:40px 32px 120px; }
+h1 { font-size:30px; line-height:1.4; margin:0 0 8px; }
+.meta { color:var(--muted); font-size:14px; margin-bottom:32px; padding-bottom:16px; border-bottom:1px solid var(--line); }
+h2 { font-size:23px; margin:48px 0 16px; padding-top:16px; border-top:2px solid var(--fg); }
+h3 { font-size:18px; margin:32px 0 12px; }
+h4 { font-size:16px; margin:20px 0 8px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14px; }
+th, td { border:1px solid var(--line); padding:8px 12px; text-align:left; vertical-align:top; }
+th { background:var(--bg-soft); white-space:nowrap; }
+code { background:var(--bg-soft); border-radius:4px; padding:1px 6px; font-size:0.9em; font-family:"SFMono-Regular",Consolas,monospace; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+blockquote { margin:14px 0; padding:6px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+figure { margin:20px 0; }
+figure img { max-width:100%; border:1px solid var(--line); border-radius:8px; }
+figcaption { color:var(--muted); font-size:13px; text-align:center; margin-top:6px; }
+.tag { display:inline-block; border-radius:4px; padding:0 8px; font-size:12px; font-weight:600; margin-right:4px; white-space:nowrap; }
+.tag.keep { background:#e6f4ff; color:#0958d9; }
+.tag.rework { background:#fff7e6; color:#d46b08; }
+.tag.merge { background:#f6ffed; color:#389e0d; }
+.tag.drop { background:#fff1f0; color:#cf1322; }
+.tag.new { background:#f9f0ff; color:#722ed1; }
+.tag.be { background:#fff0f6; color:#c41d7f; }
+.note { background:#fffbe6; border:1px solid #ffe58f; border-radius:8px; padding:12px 16px; margin:16px 0; font-size:14px; }
+/* ---- 线框图 ---- */
+.wire { border:1px solid var(--line); border-radius:10px; overflow:hidden; background:#fafbfc; margin:20px 0; font-size:12px; }
+.wire-bar { background:#eceef1; padding:6px 12px; color:var(--muted); border-bottom:1px solid var(--line); }
+.wire-body { display:flex; height:460px; }
+.wire-rail { width:150px; background:#f2f3f5; border-right:1px solid var(--line); padding:10px 8px; flex-shrink:0; }
+.wire-rail .brand { font-weight:700; font-size:13px; margin-bottom:10px; }
+.wire-item { border-radius:6px; padding:5px 8px; margin:2px 0; color:#333; }
+.wire-item.active { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.12); font-weight:600; }
+.wire-sec { color:var(--muted); margin:10px 0 4px; }
+.wire-task { background:#fff; border:1px solid var(--line); border-radius:6px; padding:4px 8px; margin:4px 0; }
+.wire-center { flex:1; display:flex; flex-direction:column; min-width:0; }
+.wire-title { padding:8px 14px; border-bottom:1px solid var(--line); background:#fff; font-weight:600; }
+.wire-msgs { flex:1; padding:14px; overflow:hidden; }
+.wire-msg { background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin:8px 0; color:#444; }
+.wire-msg.ai { background:var(--bg-soft); }
+.wire-composer { margin:10px 14px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:10px 12px; }
+.wire-composer .input { color:#9aa0a6; margin-bottom:8px; }
+.wire-composer .tools { display:flex; gap:6px; }
+.wire-tool { border:1px solid var(--line); border-radius:5px; padding:1px 8px; background:#fff; color:#555; }
+.wire-right { width:200px; border-left:1px solid var(--line); background:#fff; padding:10px; flex-shrink:0; }
+.wire-tab { display:inline-block; border:1px solid var(--line); border-radius:5px; padding:1px 8px; margin:2px 2px 6px 0; background:#fff; color:#555; }
+.wire-tab.on { background:var(--brand); color:#fff; border-color:var(--brand); }
+.wire-card { border:1px solid var(--line); border-radius:6px; padding:8px; margin:8px 0; background:#fafbfc; color:#555; }
+.footer { max-width:960px; margin:0 auto; padding:0 32px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+<h1>HuanXing-Hermes × WorkBuddy 风格界面改造设计文档</h1>
+<div class="meta">版本：v1.0（草案） · 日期：2026-07-19 · 状态：待评审 · 项目：Hermes Agent CN 桌面端（Tauri v2 + React）</div>
+
+<h2>1. 背景与目标</h2>
+<p>HuanXing-Hermes 当前界面是"工程仪表盘"范式：顶部 4 个编号 Tab（01 工作台 / 02 配置 / 03 消息接入 / 04 高级）+ 随 Tab 切换的左侧栏 + 底部状态栏，首页为五段编号 Section 的仪表盘，整体风格偏终端/工程感（§编号、占位计数、状态网格）。</p>
+<p>本设计的目标是把整个界面改造为 <strong>WorkBuddy（腾讯 AI 办公工作台）范式</strong>：</p>
+<ul>
+<li><strong>任务导向</strong>：一句话创建任务，AI 自主规划执行，交付可验收的产物；而不是"配置先行、会话为辅"。</li>
+<li><strong>三栏布局</strong>：左侧任务列表 / 中间对话区 / 右侧结果区（产物·文件·变更·预览），所有工作在同一界面闭环。</li>
+<li><strong>功能归位</strong>：技能、连接器、专家、自动化、灵感、助理、项目等能力有统一、低门槛的入口。</li>
+</ul>
+<p>参考素材：腾讯 CodeBuddy 官方文档本地镜像（<code>workbuddy/</code> 目录，93 页含界面截图）。</p>
+
+<h2>2. WorkBuddy 界面范式分析</h2>
+<h3>2.1 整体布局</h3>
+<figure>
+<img src="../workbuddy/assets/quickstart-1.DGnw1yR0.png" alt="WorkBuddy 主界面">
+<figcaption>WorkBuddy 主界面：左侧导航与任务列表 · 中间对话区 · 右侧结果区（概览/产物）</figcaption>
+</figure>
+<figure>
+<img src="../workbuddy/assets/createtask-1.CJulLJlb.png" alt="WorkBuddy 任务执行中">
+<figcaption>任务执行中：对话流内嵌产物卡片（查看所有产物/变更），右侧内置浏览器实时预览结果</figcaption>
+</figure>
+<p><strong>左侧栏</strong>（约 240px，浅色）：品牌+版本号 → 折叠/搜索/筛选 → 固定导航项（新建任务、助理、项目、专家、自动化、更多［技能·连接器 / 资料库·灵感］）→ 任务分组（任务 N、空间 N，按工作空间分组）→ 底部用户头像、通知、链接。</p>
+<p><strong>中间对话区</strong>：顶部任务标题栏（对话内搜索、分享、历史提问、详情面板开关）→ 消息流（AI 回复、阶段说明、可展开中间步骤、内嵌产物卡片）→ 底部 Composer。</p>
+<p><strong>Composer 工具条</strong>（核心交互密度集中在这里）：</p>
+<ul>
+<li><strong>工作模式</strong>：问一问 Ask（只读问答）/ 做一做 Craft（直接执行改文件）/ 想一想 Plan（先出计划再执行）</li>
+<li><strong>模型选择</strong>：Auto 自动 + 内置模型 + 自定义模型</li>
+<li><strong>技能</strong>：下拉选择已安装技能（/ 斜杠调用）</li>
+<li><strong>工作空间</strong>：选择任务目录，未指定则自动创建独立目录</li>
+<li><strong>权限</strong>：默认权限（高风险操作二次确认）/ 完全访问权限（免确认，谨慎）</li>
+<li>＋附件（上传/拖拽/粘贴截图，@ 引用文件）、语音输入、发送/停止</li>
+</ul>
+<p><strong>右侧结果区</strong>（可从标题栏开合）：概览（工作空间文件树+文件内容）、<strong>产物</strong>（任务交付物：文档/表格/PPT/网页，支持预览与分享）、<strong>变更</strong>（文件修改差异对比）、<strong>浏览器</strong>（内置预览生成的网页）。</p>
+<h3>2.2 功能地图（来自官方文档功能说明）</h3>
+<table>
+<tr><th>功能</th><th>要点</th><th>入口</th></tr>
+<tr><td>任务管理</td><td>任务/空间两板块；状态：进行中·已完成·失败·待处理·规划中·已归档；置顶/重命名/归档/删除/打开文件夹/分享</td><td>左侧栏</td></tr>
+<tr><td>工作模式</td><td>Ask / Craft / Plan 三档</td><td>Composer</td></tr>
+<tr><td>技能 Skill</td><td>技能市场（一键安装）+ 已安装（启用/关闭/卸载）；支持上传技能包、描述查找、自然语言创建</td><td>侧栏"更多" / Composer</td></tr>
+<tr><td>连接器</td><td>QQ邮箱·腾讯文档·乐享·TAPD·网盘等卡片式授权管理；自定义连接器（MCP）</td><td>侧栏"更多"</td></tr>
+<tr><td>专家/专家团</td><td>角色化专家（人设+方法论），专家团自动拆解并行协作</td><td>侧栏</td></tr>
+<tr><td>自动化</td><td>定时任务（prompt+频率+工作目录+模型技能），执行记录，模板</td><td>侧栏</td></tr>
+<tr><td>灵感</td><td>精选案例"做同款"，自动预填 Prompt/Skill/专家</td><td>侧栏"更多"</td></tr>
+<tr><td>助理</td><td>IM 远程控制（微信/企微/QQ/钉钉/飞书/元宝），远程任务记录</td><td>侧栏</td></tr>
+<tr><td>项目</td><td>团队协作：指令/连接器/专家/技能共享注入，资产库（RAG），任务流转</td><td>侧栏</td></tr>
+<tr><td>记忆</td><td>每晚从会话抽取偏好事实，可查看/编辑/删除/导入</td><td>头像-设置</td></tr>
+<tr><td>模型配置</td><td>Auto 自动模式 + 内置模型 + 自定义模型（可视化增删改，API Key 仅本地）</td><td>Composer / 设置</td></tr>
+<tr><td>权限模式</td><td>默认权限（敏感路径/删除/脚本/网络 二次确认 + 沙箱/删除保护/文件备份）/ 完全访问</td><td>Composer</td></tr>
+<tr><td>数据管理</td><td>我分享的文件、已归档任务</td><td>设置</td></tr>
+<tr><td>系统设置</td><td>语言/字体/显示模式/简洁模式/防休眠</td><td>头像-设置</td></tr>
+</table>
+
+<h2>3. 现状与差距分析</h2>
+<h3>3.1 本项目现状（关键事实）</h3>
+<table>
+<tr><th>层</th><th>现状</th><th>位置</th></tr>
+<tr><td>布局壳</td><td>四区网格：AppTopBar（4 编号 Tab + ⌘K + ProfileSelector + 主题）/ AppSidebar（随 Tab 切换 4 套）/ 主区 / AppStatusBar（端口·模型·上下文·错误数）</td><td><code>web/src/components/app-shell/</code></td></tr>
+<tr><td>首页</td><td>仪表盘：统计横幅 + §01 新任务 Composer + 健康网格 + 运行中卡片 + 最近会话 + 模板</td><td><code>web/src/routes/panel.tsx</code></td></tr>
+<tr><td>会话页</td><td>MessageTimeline + GooseComposer（模型/技能/图片）+ PreviewRail（文件/日志/终端/web/git review 5 tab）+ SubagentPanel + ApprovalDialog</td><td><code>web/src/routes/detail.tsx</code></td></tr>
+<tr><td>任务抽象</td><td>有 session（对话）无"任务"：无状态机、无产物概念、无归档/置顶元数据</td><td><code>stores/chat.ts</code>、gateway <code>session.*</code></td></tr>
+<tr><td>设置</td><td>路由式设置（/common /config /connection /kernel /env /about …），表单式 Section</td><td><code>web/src/routes/advanced.tsx</code></td></tr>
+<tr><td>已有能力</td><td>skills、memory（MEMORY.md）、terminal、cron、backup、notify、preview、im_onboarding（飞书/钉钉/企微/微信）、profiles、runtime_manager、git worktree/review、yolo（免确认）、mcp、analytics</td><td><code>src/commands/</code> 60 个 command</td></tr>
+<tr><td>设计体系</td><td>shared-ui tokens（6 套主题 + 密度 + HarmonyOS Sans）+ CSS Modules</td><td><code>packages/shared-ui/tokens/</code></td></tr>
+</table>
+<h3>3.2 能力映射与差距矩阵</h3>
+<table>
+<tr><th>WorkBuddy 概念</th><th>本项目对应能力</th><th>差距 / 策略</th></tr>
+<tr><td>任务（状态机/置顶/归档/重命名）</td><td>session（创建/恢复/改名/压缩）+ session_archive.rs</td><td><span class="tag new">新增</span>任务元数据层（status/pinned/archived/workspacePath），存 ui_store，P2 起可由 Core 承担</td></tr>
+<tr><td>三栏布局</td><td>会话页已有 PreviewRail（5 tab）</td><td><span class="tag rework">改造</span>PreviewRail → 结果区（产物/工作空间文件/变更/浏览器 4 tab），去掉日志/终端 tab（移入 /console）</td></tr>
+<tr><td>产物</td><td>无。有 preview watch、git review、工作区文件读写 IPC</td><td><span class="tag new">新增</span>产物收集：从 gateway 事件提取写文件记录 + 工作目录新文件监听</td></tr>
+<tr><td>工作模式 Ask/Craft/Plan</td><td>无显式模式；有 ApprovalDialog 确认流</td><td><span class="tag new">新增</span>模式选择器：Ask=禁用写工具，Plan=先出计划确认后执行（依赖 Core 支持），Craft=现状</td></tr>
+<tr><td>权限模式（默认/完全访问）</td><td>yolo-mode（免确认开关）</td><td><span class="tag rework">改造</span>yolo 提升为 Composer 级"权限下拉"（默认权限↔完全访问），文案与交互对齐</td></tr>
+<tr><td>技能（市场+已安装）</td><td>/skills 页 + bundled-skills + Composer 斜杠</td><td><span class="tag rework">改造</span>分两 Tab：技能市场 / 已安装；补"上传技能包/描述创建"入口</td></tr>
+<tr><td>连接器</td><td>/mcp 页 + bundled-plugins</td><td><span class="tag rework">改造</span>卡片化（连接状态绿点+授权开关+解绑），自定义连接器=MCP 配置</td></tr>
+<tr><td>自动化</td><td>/cron 页 + cron_runs.rs</td><td><span class="tag rework">改造</span>更名"自动化"，补模板与执行记录视图（cron_runs 已有数据）</td></tr>
+<tr><td>记忆</td><td>/memory 页（MEMORY.md 读写）</td><td><span class="tag rework">改造</span>移入设置中心；编辑改为"对话式编辑"可后置</td></tr>
+<tr><td>模型配置（Auto+自定义）</td><td>/models 页</td><td><span class="tag rework">改造</span>加 Auto 档（若无后端支持则前端映射默认模型）；入口收进设置中心+Composer 联动</td></tr>
+<tr><td>助理（IM 远程）</td><td>im_onboarding（飞书/钉钉/企微/微信向导）</td><td><span class="tag rework">改造</span>更名"助理"，收进设置中心"助理设置"+ 侧栏入口</td></tr>
+<tr><td>空间（按工作目录分组任务）</td><td>/projects 项目列表（workspacePath 维度）</td><td><span class="tag merge">合并</span>项目页保留为"空间"分组数据源，任务列表按空间分组</td></tr>
+<tr><td>灵感 / 专家 / 项目协作 / 分享链接 / 云端网盘</td><td>无（soul/subagents 可近似专家）</td><td><span class="tag be">后端依赖</span>需 Hermes-CN-Core 提供对应 API，P4 再议</td></tr>
+</table>
+<div class="note"><strong>结论：</strong>WorkBuddy 范式的核心三件套（任务列表 + 对话 + 结果区）在本项目已有 70% 构件（session、MessageTimeline、GooseComposer、PreviewRail、ApprovalDialog、yolo、skills、cron、memory、im_onboarding）。改造以<strong>前端重组为主</strong>，少量新能力（任务元数据、产物收集、Ask/Plan 模式）需要 Core 配合。</div>
+<h2>4. 目标信息架构</h2>
+<h3>4.1 布局壳：从"Tab 仪表盘"到"工作台三栏"</h3>
+<p>取消 AppTopBar 的 4 个编号 Tab 和 AppStatusBar，改为 WorkBuddy 式固定左栏 + 主区。状态信息（网关端口/模型/连接状态）下沉到"设置-关于"和 Composer 模型选择器。</p>
+<div class="wire">
+<div class="wire-bar">目标布局线框（任务对话页 = 主界面）</div>
+<div class="wire-body">
+<div class="wire-rail">
+<div class="brand">Hermes<span style="color:#646a73;font-weight:400;font-size:11px"> v0.5.4</span></div>
+<div class="wire-item active">＋ 新建任务</div>
+<div class="wire-item">助理</div>
+<div class="wire-item">自动化</div>
+<div class="wire-item">技能 · 连接器</div>
+<div class="wire-item">灵感 <span style="color:#c41d7f">*</span></div>
+<div class="wire-sec">任务 (12) ⌄</div>
+<div class="wire-task">周报整理<span style="float:right;color:#389e0d">●进行中</span></div>
+<div class="wire-task">发票归档<span style="float:right;color:#999">已完成</span></div>
+<div class="wire-sec">空间 (3) ⌄</div>
+<div class="wire-task">HuanXing-Hermes</div>
+<div style="position:absolute;bottom:10px"></div>
+</div>
+<div class="wire-center">
+<div class="wire-title">周报整理 <span style="float:right;font-weight:400">🔍 搜索 · 分享 · 🕘 历史 · ▣ 结果面板</span></div>
+<div class="wire-msgs">
+<div class="wire-msg ai"><b>Hermes</b>：正在分析 Downloads/周报 目录下的 6 个文件…<span style="color:#999">（可展开中间步骤）</span></div>
+<div class="wire-msg ai">已生成结果摘要 ✓<br>┌─────────────────────┐<br>│ 📄 周报汇总-7月第3周.docx ↗ │<br>└─────────────────────┘<br><span style="color:#335cff">查看所有产物 (2) · 查看所有变更 (3)</span></div>
+</div>
+<div class="wire-composer">
+<div class="input">今天帮你做些什么？　@ 引用文件，/ 调用技能</div>
+<div class="tools"><span class="wire-tool">Craft ⌄</span><span class="wire-tool">Auto ⌄</span><span class="wire-tool">技能 ⌄</span><span class="wire-tool">工作空间 ⌄</span><span class="wire-tool">默认权限 ⌄</span><span style="flex:1"></span><span class="wire-tool">＋</span><span class="wire-tool">➤</span></div>
+</div>
+</div>
+<div class="wire-right">
+<span class="wire-tab on">产物</span><span class="wire-tab">文件</span><span class="wire-tab">变更</span><span class="wire-tab">浏览器</span>
+<div class="wire-card">📄 周报汇总-7月第3周.docx<br><span style="color:#999">预览 · 打开所在文件夹</span></div>
+<div class="wire-card">📊 销售数据透视.xlsx</div>
+</div>
+</div>
+</div>
+<p style="color:#646a73;font-size:13px">* 灵感/专家/项目等依赖后端的能力以灰显入口或"敬请期待"方式预留。</p>
+<h3>4.2 目标路由表</h3>
+<table>
+<tr><th>新路由</th><th>页面</th><th>来源 / 说明</th></tr>
+<tr><td><code>/</code></td><td>新建任务首页（Hero 大标题 + 模式 Tab + 场景入口 + 大 Composer）</td><td>由 panel.tsx 简化：砍掉统计横幅/健康网格/§编号，见 5.2</td></tr>
+<tr><td><code>/tasks/:taskId</code></td><td>任务对话页（三栏）</td><td>由 detail.tsx 改造，右侧 PreviewRail → 结果区</td></tr>
+<tr><td><code>/assistant</code></td><td>助理（远程任务记录 + 接入引导入口）</td><td>im-onboarding 更名归位；记录视图后续依赖 Core</td></tr>
+<tr><td><code>/automation</code></td><td>自动化（定时任务 + 模板 + 执行记录）</td><td>cron.tsx 改造，cron_runs 数据已有</td></tr>
+<tr><td><code>/skills</code></td><td>技能（技能市场 / 已安装 两 Tab）</td><td>skills.tsx 改造</td></tr>
+<tr><td><code>/connectors</code></td><td>连接器（卡片 + 授权状态 + 自定义=MCP）</td><td>mcp.tsx 改造</td></tr>
+<tr><td><code>/console</code></td><td>终端（保留，入口收进设置-高级）</td><td>现状保留</td></tr>
+<tr><td><code>/settings/&lt;pane&gt;</code></td><td><strong>设置弹窗</strong>（模态对话框，非独立页面）：深链仅用于打开主界面并自动弹出对应面板，兼容旧书签</td><td>advanced.tsx 重组为弹窗面板，见 5.8</td></tr>
+<tr><td><code>/guide</code></td><td>首次启动引导</td><td>保留，视觉对齐新风格</td></tr>
+</table>
+<h3>4.3 页面映射（旧 → 新）</h3>
+<table>
+<tr><th>旧路由/模块</th><th>处置</th><th>去向</th></tr>
+<tr><td><code>/</code> panel 仪表盘（§01–§05）</td><td><span class="tag rework">改造</span></td><td>新建任务首页（保留 PanelComposer + 模板段）</td></tr>
+<tr><td><code>/tasks/:taskId</code> detail 会话页</td><td><span class="tag rework">改造</span></td><td>三栏任务对话页</td></tr>
+<tr><td><code>/history</code></td><td><span class="tag merge">合并</span></td><td>左栏任务列表（搜索/筛选/置顶/归档）；批量管理进设置-数据管理</td></tr>
+<tr><td><code>/kanban</code></td><td><span class="tag drop">下线</span></td><td>任务状态由列表状态标签承担；如需看板视图 P4 再议</td></tr>
+<tr><td><code>/projects</code></td><td><span class="tag merge">合并</span></td><td>左栏"空间"分组；项目详情保留为空间详情（P2）</td></tr>
+<tr><td>顶部 4 Tab + AppStatusBar</td><td><span class="tag drop">下线</span></td><td>固定左栏导航；状态信息进账号弹窗状态卡（5.7）与设置弹窗-帮助与反馈</td></tr>
+<tr><td>顶部 02 配置 Tab 全部（<code>/skills /models /voice /mcp /profiles /memory /soul</code>）</td><td><span class="tag rework">改造</span></td><td>技能/连接器保留为左栏"更多"页面；模型/记忆/语音/人格/Profile 全部收进<strong>设置弹窗</strong>对应面板（5.8）</td></tr>
+<tr><td>顶部 04 高级 Tab 全部（<code>/health /analytics /logs /debug /env /coding-agents /backup /config-migration /common /notifications /theme /config /connection /kernel /about /console</code>）</td><td><span class="tag keep">保留</span></td><td>收进<strong>设置弹窗</strong>的"高级 / 可观测 / 帮助与反馈"分区，不对普通用户外露（5.8）</td></tr>
+<tr><td>灵感 / 专家 / 项目协作 / 分享</td><td><span class="tag be">后端依赖</span></td><td>P4：需 Hermes-CN-Core 提供 API</td></tr>
+</table>
+
+<h2>5. 详细设计</h2>
+<h3>5.1 布局壳 AppShell 重写</h3>
+<ul>
+<li><code>app-shell.tsx</code>：四区网格 → 两区（固定左栏 240px + 主区）。删除 <code>app-top-bar.tsx</code>、<code>app-status-bar.tsx</code>、<code>use-active-top-tab.ts</code>。</li>
+<li>新 <code>TaskRail</code>（左栏）：品牌区、折叠/搜索/筛选、固定导航（新建任务/助理/自动化/技能/连接器/灵感*）、任务分组列表（任务 / 空间）、<strong>底部账号区域（头像+名称，点击弹出账号弹窗，见 5.7）</strong>。</li>
+<li>任务列表数据源：复用 <code>use-sessions</code>（TanStack Query）+ 新任务元数据 atom（见 6.1）；分组规则：进行中置顶 → 按更新时间倒序；"空间"按 workspacePath 聚合（数据来自 projects 现有接口）。</li>
+<li>列表项操作（右键/hover 菜单）：置顶、重命名（gateway <code>setSessionTitle</code> 已有）、归档、删除、打开文件夹（<code>hermesDesktop.openWorkspace</code> 已有）。</li>
+<li>搜索/筛选：标题关键词 + 状态下拉（进行中/已完成/失败/待处理/规划中/已归档），状态来源见 6.2。</li>
+</ul>
+<h3>5.2 新建任务首页（/）</h3>
+<ul>
+<li>结构对齐 WorkBuddy 实拍首页（5.7 图）：<strong>Hero 大标题（产品名+一句话主张）→ 模式 Tab → 场景入口 → 居中大 Composer</strong>。</li>
+<li><strong>模式 Tab</strong>：日常办公 / 代码开发 / 设计创意*。本质是新任务的"预置包"：日常办公=Craft 模式+办公技能组；代码开发=Craft 模式+编程 Agent 上下文（复用 /coding-agents 配置）；设计创意=预留（<span class="tag be">后端依赖</span>，灰显）。选中态写入 Composer 预填（<code>composerPrefill</code> atom 已有）。</li>
+<li><strong>场景入口</strong>：文档处理 / 数据分析及可视化 / 更多…（chip 形式，点击=预填 prompt 模板，沿用 §05 模板数据，去掉 §编号）。</li>
+<li><strong>Composer</strong>：复用 <code>PanelComposer</code> 提交逻辑，占位文案"今天帮你做些什么？"；工具条同 5.3（模式/模型/技能/工作空间/权限）。</li>
+<li>发送后创建 session → 跳转 <code>/tasks/:id</code>；未选工作空间时使用"系统设置-默认工作空间存储路径"（5.8），未配置则由 Core 自动建任务目录（现状行为保留）。</li>
+<li>页面不再显示健康网格/统计横幅；这些信息移入设置弹窗"帮助与反馈/可观测"。</li>
+</ul>
+<h3>5.3 任务对话页（/tasks/:taskId，三栏）</h3>
+<ul>
+<li><strong>中栏</strong>：标题栏（任务名可点击重命名 + 对话内搜索 + 历史提问 + 结果面板开关 ⌘B 保留）→ <code>MessageTimeline</code>（保留；简洁模式：折叠工具调用过程，默认开，对齐 WorkBuddy"简洁模式"）→ <code>GooseComposer</code> 扩展工具条。</li>
+<li><strong>Composer 工具条</strong>（在 GooseComposer 上加一行选择器，数据均有来源）：
+<ul>
+<li>模式：Ask / Craft / Plan（6.3）</li>
+<li>模型：现有模型选择器 + Auto 档</li>
+<li>技能：现有斜杠/技能入口改下拉</li>
+<li>工作空间：接入现有 workspace 选择（projects 数据 + 目录对话框）</li>
+<li>权限：默认权限 ↔ 完全访问（映射 yolo；切换时二次确认弹窗，文案对齐 6.4）</li>
+</ul></li>
+<li><strong>右栏结果区</strong>（PreviewRail 改造）：
+<table>
+<tr><th>新 Tab</th><th>来源</th><th>工作</th></tr>
+<tr><td>产物</td><td>新增（6.5）</td><td>产物卡片列表：预览、打开所在文件夹、（分享留后端占位）</td></tr>
+<tr><td>工作空间文件</td><td>PreviewRail files tab</td><td>保留文件树+内容查看</td></tr>
+<tr><td>变更</td><td>PreviewRail git review tab</td><td>保留 diff 视图；无 git 的工作目录用"任务内新增/修改文件清单"兜底</td></tr>
+<tr><td>浏览器</td><td>PreviewRail web tab</td><td>保留网页预览</td></tr>
+</table>
+日志/终端 tab 从右栏移除（仍在 /console 可达）。</li>
+<li><strong>消息流增强</strong>：产物内嵌卡片（文件名+图标+打开/预览）、阶段说明折叠条、"查看所有产物 (N) / 查看所有变更 (N)" 跳转链接（点击打开右栏对应 Tab）。</li>
+<li>SubagentPanel、ApprovalDialog 保留，视觉对齐新风格。</li>
+</ul>
+<h3>5.4 技能页（/skills）</h3>
+<ul>
+<li>两 Tab：<strong>技能市场</strong>（bundled-skills 列表卡片化 + 一键安装/启用）/ <strong>已安装</strong>（启用开关、卸载、批量卸载）。</li>
+<li>头部操作：上传技能包（文件对话框→bundled-skills 目录，复用现有 IPC）、查找技能、创建技能（后两者先以"描述→预填 Composer"实现，自然语言创建技能依赖 Core 时标注）。</li>
+</ul>
+<h3>5.5 连接器页（/connectors）</h3>
+<ul>
+<li>mcp.tsx 卡片化：每个连接器一张卡（图标、简介、连接状态绿点、启用开关、解绑）；右上角"自定义连接器"= 现有 MCP 配置弹窗。</li>
+<li>内置卡片数据来自 bundled-plugins 清单 + mcp 状态接口；授权流程保持现状（外部浏览器 OAuth）。</li>
+</ul>
+<h3>5.6 自动化页（/automation）</h3>
+<ul>
+<li>cron.tsx 更名改造：任务列表（名称/频率/工作目录/下次执行/启用开关）+ 执行记录（cron_runs.rs 已有）+ 模板（每日简报/周报汇总等预填 prompt）。</li>
+</ul>
+<h3>5.7 账号区域弹窗（AccountPopup）</h3>
+<p>左栏底部为账号区域（头像 + 当前 Profile 名），点击后弹出账号面板。它是<strong>原顶部 02 配置 / 04 高级两个 Tab 全部功能的总入口</strong>，同时承接原状态栏的"一眼可见"诉求。结构对齐 WorkBuddy 真实应用（下图），按本项目情况裁剪。</p>
+<figure>
+<img src="../workbuddy/ScreenShot_2026-07-19_231501_467.png" alt="WorkBuddy 账号弹窗实拍">
+<figcaption>WorkBuddy v5.2.5 账号弹窗实拍：账号卡 → 套餐/积分区（云账号商业化体系，本项目不引入）→ 设置 / 外观分段开关 / 帮助与反馈 / 检查更新 / 退出登录；背景首页为 Hero 大标题 + 模式 Tab + 场景入口 + Composer（见 5.2）</figcaption>
+</figure>
+<div class="wire">
+<div class="wire-bar">账号弹窗线框（本项目版：裁剪积分/套餐区，保留 Profile 与网关状态两个本地特有项）</div>
+<div style="display:flex;gap:24px;padding:20px;align-items:flex-end;background:#fafbfc">
+<div style="width:150px;background:#f2f3f5;border:1px solid #dee0e3;border-radius:8px;padding:10px 8px;font-size:12px;flex-shrink:0">
+<div class="wire-item">＋ 新建任务</div>
+<div class="wire-item">助理</div>
+<div class="wire-item">自动化</div>
+<div class="wire-sec">任务 (12) ⌄</div>
+<div class="wire-task">周报整理</div>
+<div style="margin-top:26px;background:#fff;border:1px solid #335cff;border-radius:8px;padding:6px 8px;font-weight:600">👤 个人 Profile</div>
+</div>
+<div style="width:280px;background:#fff;border:1px solid #dee0e3;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.14);padding:8px;font-size:13px">
+<div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #eee">
+<div style="width:36px;height:36px;border-radius:50%;background:#335cff;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">H</div>
+<div><div style="font-weight:600">个人 Profile</div><div style="color:#646a73;font-size:12px">● 网关已连接 · 端口 9120 · Auto</div></div>
+</div>
+<div style="padding:4px 0">
+<div class="wire-item">⚙️ 设置</div>
+<div class="wire-item">🎨 外观　<span style="display:inline-block;border:1px solid #dee0e3;border-radius:6px;overflow:hidden;font-size:12px"><span style="background:#335cff;color:#fff;padding:1px 10px">浅色</span><span style="padding:1px 10px;color:#666">深色</span></span></div>
+<div class="wire-item">👥 切换 Profile<span style="float:right;color:#999">›</span></div>
+<div class="wire-item">⌘K 命令面板</div>
+<div class="wire-item">❓ 帮助与反馈<span style="float:right;color:#999">文档 · 调试包 ›</span></div>
+<div class="wire-item">⬆️ 检查更新<span style="float:right;color:#389e0d;font-size:12px">v0.5.4</span></div>
+<div class="wire-item" style="border-top:1px solid #eee;margin-top:4px;padding-top:8px">↻ 重启应用　　⏻ 退出</div>
+</div>
+</div>
+</div>
+</div>
+<ul>
+<li><strong>结构</strong>（自上而下，对齐实拍）：账号卡（头像、Profile 名、<strong>网关连接状态点 + 端口 + 当前模型</strong>——原 AppStatusBar 核心信息在此保留）→ 菜单列表。</li>
+<li><strong>菜单项</strong>：设置（打开设置弹窗，5.8）、<strong>外观（浅色/深色分段开关，与实拍一致；完整 6 主题在设置弹窗"个性化"面板选）</strong>、切换 Profile（子菜单，原顶栏 ProfileSelector 迁入）、命令面板 ⌘K（原顶栏入口迁入）、帮助与反馈（文档链接、导出日志/调试包 log_export/debug_bundle）、检查更新（desktop_update）、重启/退出。</li>
+<li><strong>不引入项</strong>：实拍的套餐/升级、积分余额、成长计划、Buddy 加油站均为云账号商业化体系，本项目为本地应用，不引入；对应位置由 Profile 卡与网关状态替代。</li>
+<li><strong>交互</strong>：面板向上弹出覆盖任务列表区，点击外部或 Esc 关闭；复用 <code>packages/shared-ui</code> 的 <code>composites/popover</code>。</li>
+</ul>
+<h3>5.8 设置弹窗（SettingsDialog）</h3>
+<p>对齐 WorkBuddy 的设置形态（下图实拍）：<strong>模态覆盖层对话框</strong>（约 960×640，浅灰左菜单 200px + 白色内容区，右上角 ✕，Esc 关闭），不再是路由页面。<code>/settings/&lt;pane&gt;</code> 深链保留——命中时打开主界面并自动弹出对应面板，兼容旧书签与通知点击跳转。</p>
+<figure>
+<img src="../workbuddy/ScreenShot_2026-07-19_231530_002.png" alt="WorkBuddy 设置弹窗实拍">
+<figcaption>WorkBuddy v5.2.5 设置弹窗实拍：左菜单含账户管理/系统设置/智能体设置/快捷键/记忆/模型/助理设置/个性化/数据管理/安全中心/帮助与反馈；系统设置面板含语言、字体大小、技能自动更新、工作空间默认路径等</figcaption>
+</figure>
+<div class="wire">
+<div class="wire-bar">设置弹窗线框（左菜单 13 项 = 实拍 11 项对齐 + 本项目特有"高级/可观测"，原"配置+高级"全部功能归位）</div>
+<div style="display:flex;height:440px;font-size:12px">
+<div style="width:170px;background:#f2f3f5;border-right:1px solid #dee0e3;padding:12px 8px;flex-shrink:0">
+<div class="wire-item">👤 账户管理</div>
+<div class="wire-item active">⚙️ 系统设置</div>
+<div class="wire-item">🤖 智能体设置</div>
+<div class="wire-item">⌨️ 快捷键</div>
+<div class="wire-item">💡 记忆</div>
+<div class="wire-item">🧊 模型</div>
+<div class="wire-item">📱 助理设置</div>
+<div class="wire-item">🎨 个性化</div>
+<div class="wire-item">🗄️ 数据管理</div>
+<div class="wire-item">🛡️ 安全中心</div>
+<div class="wire-item">🧩 高级</div>
+<div class="wire-item">📊 可观测</div>
+<div class="wire-item">❓ 帮助与反馈</div>
+</div>
+<div style="flex:1;background:#fff;padding:18px 22px">
+<div style="font-size:16px;font-weight:700;margin-bottom:12px">系统设置</div>
+<div style="border:1px solid #eee;border-radius:8px;padding:10px 14px;margin:8px 0">显示语言<span style="float:right;color:#666">中文(简体) ⌄</span></div>
+<div style="border:1px solid #eee;border-radius:8px;padding:10px 14px;margin:8px 0">字体大小<span style="float:right;color:#666">────●────────</span></div>
+<div style="border:1px solid #eee;border-radius:8px;padding:10px 14px;margin:8px 0">技能自动更新<span style="float:right;color:#389e0d">●开</span></div>
+<div style="border:1px solid #eee;border-radius:8px;padding:10px 14px;margin:8px 0">默认工作空间存储路径<span style="float:right;color:#666">C:\Users\…\Hermes ⌄更改</span></div>
+<div style="border:1px solid #eee;border-radius:8px;padding:10px 14px;margin:8px 0">防休眠（保障远程/自动化任务）<span style="float:right;color:#999">○关</span></div>
+</div>
+</div>
+</div>
+<p><strong>左菜单与原功能的完整映射</strong>（22 个现有路由/模块全量覆盖，无一丢失）：</p>
+<table>
+<tr><th>弹窗菜单</th><th>收纳的现有功能</th><th>内容来源</th></tr>
+<tr><td>账户管理</td><td>当前 Profile、切换/新建 Profile（/profiles）、连接与登录（/connection 的 OAuth 区）</td><td>profiles.tsx + connection 部分</td></tr>
+<tr><td>系统设置</td><td>语言（预留）、字体大小、通知 5 开关（/notifications）、防休眠（prevent_sleep，对应实拍"锁屏远程"）、UI 缩放（setUiZoom）、默认工作空间存储路径（对齐实拍；需 Core 支持配置默认任务目录）、技能自动更新（bundled-skills 更新策略）</td><td>common/notifications + ui atoms</td></tr>
+<tr><td>智能体设置</td><td>人格（/soul SOUL.md）、编程 Agent（/coding-agents）、语音（/voice）</td><td>soul/coding-agents/voice.tsx</td></tr>
+<tr><td>快捷键</td><td>全局/页面快捷键清单（⌘K 命令面板、⌘B 结果面板、发送/中断等），只读展示起步，预留自定义</td><td>新增（汇总现有快捷键）</td></tr>
+<tr><td>记忆</td><td>MEMORY.md 查看/编辑</td><td>memory.tsx</td></tr>
+<tr><td>模型</td><td>内置模型 + Auto 档 + 自定义模型增删改</td><td>models.tsx</td></tr>
+<tr><td>助理设置</td><td>飞书/钉钉/企微/微信 接入向导</td><td>im-onboarding.tsx</td></tr>
+<tr><td>个性化</td><td>显示模式（/theme 6 套主题 + 浅色/深色/跟随系统）、简洁模式（默认开）、对话宽度、密度</td><td>theme + ui atoms</td></tr>
+<tr><td>数据管理</td><td>归档任务管理、分享占位（后端依赖）、备份（/backup）、配置迁移（/config-migration）</td><td>backup/config-migration.tsx</td></tr>
+<tr><td>安全中心</td><td>yolo 全局默认值、高危确认规则说明（Composer 会话级权限的覆盖关系）</td><td>common 页 yolo 区</td></tr>
+<tr><td>高级</td><td>内核 Runtime（/kernel + runtime_manager）、环境（/env）、配置编辑（/config）、连接高级区（/connection）、终端入口（跳转 /console）</td><td>kernel/env/config/connection.tsx</td></tr>
+<tr><td>可观测</td><td>健康（/health）、用量（/analytics）、日志（/logs）、调试事件（/debug）</td><td>四页原样迁入</td></tr>
+<tr><td>帮助与反馈</td><td>关于（版本/端口/运行状态）、桌面更新与 runtime 更新、文档链接、导出日志/调试包</td><td>about.tsx + 更新组件</td></tr>
+</table>
+<ul>
+<li><strong>实现</strong>：弹窗骨架新建 <code>components/settings/settings-dialog.tsx</code>（左菜单 + 面板路由状态用 Jotai atom）；现有 <code>routes/advanced.tsx</code> 与各 settings Section 组件拆分为 pane 组件<strong>原样复用</strong>，只是宿主从路由页变成弹窗。</li>
+<li><strong>模型页</strong>加 Auto 档；自定义模型增删改沿用现有实现；添加模型沿用 WorkBuddy 式二级弹窗（弹窗上叠弹窗，dialog 组件支持）。</li>
+<li><strong>安全中心</strong>：yolo 全局默认值在此；Composer"权限"下拉为会话级覆盖（6.4），面板内说明两者关系。</li>
+</ul>
+<h3>5.9 视觉语言</h3>
+<ul>
+<li>沿用 shared-ui tokens，不另起色板；默认主题从当前默认切到 <code>light-modern</code>，圆角/留白按 tokens 的较大档（radius、spacing 语义变量，<strong>禁止硬编码</strong>）。</li>
+<li>去除 §编号、占位计数、终端风装饰；导航文案用自然语言（"技能"而非"§021 技能"）。</li>
+<li>密度 <code>data-density</code> 默认 comfortable；对话宽度沿用现有档位。</li>
+<li>暗色主题继续由 <code>data-theme</code> 支持，入口移到头像弹出菜单。</li>
+</ul>
+
+<h2>6. 功能对齐与技术方案</h2>
+<h3>6.1 任务元数据（TaskMeta）</h3>
+<ul>
+<li>结构：<code>{ sessionId, workspacePath?, status, pinned, archived, createdAt, updatedAt, title }</code>。</li>
+<li>存储：前端 ui_store（<code>lib/ui-store.ts</code> 已有 KV 持久化，Rust 端 ui_store.rs）；以 sessionId 为主键。后续 Core 提供任务 API 后迁移，前端读写收敛在 <code>stores/tasks.ts</code>（新增），换后端只改这一层。</li>
+<li>协议类型放 <code>packages/protocol</code>。</li>
+</ul>
+<h3>6.2 任务状态机映射</h3>
+<table>
+<tr><th>界面状态</th><th>判定来源（现状可及）</th></tr>
+<tr><td>规划中</td><td>session 已创建、首条回复未返回</td></tr>
+<tr><td>进行中</td><td>gateway 事件流活跃（chatRuntimeBySessionAtom 已有运行标记）</td></tr>
+<tr><td>待处理</td><td>ApprovalDialog 挂起 / 等待用户输入</td></tr>
+<tr><td>已完成</td><td>本轮执行结束且无错误</td></tr>
+<tr><td>失败</td><td>gateway 错误事件 / RPC 超时</td></tr>
+<tr><td>已归档</td><td>TaskMeta.archived</td></tr>
+</table>
+<h3>6.3 工作模式 Ask / Craft / Plan</h3>
+<ul>
+<li>Craft = 现状（工具全开，按权限模式确认）。</li>
+<li>Ask = 会话级只读：发送时附带模式标记，Core 侧禁用写/执行类工具（<span class="tag be">后端依赖</span>；前端先禁用附件写入类入口并标注）。</li>
+<li>Plan = 先产出执行计划，用户确认后转入执行（<span class="tag be">后端依赖</span>；与 Core 的 plan 模式对齐后接入）。</li>
+<li>模式标记随 <code>sendPrompt</code> 传递（use-gateway.ts 增加参数，协议层加字段）。</li>
+</ul>
+<h3>6.4 权限模式</h3>
+<ul>
+<li>Composer"权限"下拉：默认权限 / 完全访问。会话级覆盖，写入 TaskMeta。</li>
+<li>完全访问 = 现有 yolo（跳过 ApprovalDialog）；切换开启时弹二次确认（风险说明 + 勾选确认），文案对齐 WorkBuddy 的谨慎引导。</li>
+<li>发送时随模式一起传给 Core。</li>
+</ul>
+<h3>6.5 产物收集</h3>
+<ul>
+<li>来源 A（首选）：gateway 事件中的文件写入/编辑记录 → 前端聚合为产物清单（按 sessionId）。</li>
+<li>来源 B（兜底）：任务工作目录的新增/修改文件监听（preview watch IPC 已有文件监听能力）。</li>
+<li>产物操作：预览（右栏/系统打开）、打开所在文件夹（已有 IPC）；分享（上传云端/复制公开链接）标注 <span class="tag be">后端依赖</span>。</li>
+</ul>
+<h3>6.6 改造点文件清单（前端为主）</h3>
+<table>
+<tr><th>文件</th><th>改动</th></tr>
+<tr><td><code>web/src/components/app-shell/app-shell.tsx</code></td><td>重写为"左栏+主区"；删除 top-bar/status-bar 引用</td></tr>
+<tr><td><code>app-top-bar.tsx / app-status-bar.tsx / use-active-top-tab.ts</code></td><td>删除（⌘K 命令面板与主题切换迁入左栏）</td></tr>
+<tr><td><code>app-sidebar.tsx</code> → 新 <code>task-rail.tsx</code></td><td>固定导航 + 任务/空间分组列表（复用 WorkbenchSidebar 会话分组逻辑）</td></tr>
+<tr><td><code>web/src/app.tsx</code></td><td>路由表按 4.2 重组；保留 OfflineShell/ErrorBoundary/guide 逻辑</td></tr>
+<tr><td><code>routes/panel.tsx</code></td><td>简化为新建任务首页（留 PanelComposer+模板）</td></tr>
+<tr><td><code>routes/detail.tsx</code></td><td>三栏化：标题栏扩展、Composer 工具条、简洁模式折叠</td></tr>
+<tr><td><code>components/chat/preview-rail.tsx</code></td><td>改四 Tab（产物/文件/变更/浏览器），移除日志/终端</td></tr>
+<tr><td><code>components/chat/goose-composer.tsx</code></td><td>工具条：模式/模型/技能/工作空间/权限 选择器</td></tr>
+<tr><td><code>stores/tasks.ts</code>（新）+ <code>stores/ui.ts</code></td><td>TaskMeta atoms + ui_store 持久化</td></tr>
+<tr><td><code>hooks/use-gateway.ts / lib/gateway-client.ts</code></td><td>sendPrompt 增加 mode/permission 参数</td></tr>
+<tr><td><code>components/settings/settings-dialog.tsx</code>（新）+ <code>account-popup.tsx</code>（新）</td><td>设置弹窗骨架（左菜单+pane 路由 atom）与账号弹窗；复用 shared-ui dialog/popover</td></tr>
+<tr><td><code>routes/skills.tsx / mcp.tsx / cron.tsx / im-onboarding.tsx</code></td><td>按 5.4–5.6、5.8 改造（im-onboarding 改为设置弹窗"助理设置"面板）</td></tr>
+<tr><td><code>routes/advanced.tsx</code> + 各 settings Section</td><td>宿主从路由页拆分为设置弹窗 pane 组件，内容原样复用</td></tr>
+<tr><td><code>packages/protocol</code></td><td>TaskMeta、产物、mode/permission 类型</td></tr>
+<tr><td><code>src/commands/</code>（Rust）</td><td>基本不动；产物监听如需新 command 再补（沿用 preview watch 模式）</td></tr>
+</table>
+<h3>6.7 需要 Hermes-CN-Core 配合的项</h3>
+<ul>
+<li>Ask/Plan 模式的工具禁用与计划确认流；</li>
+<li>任务元数据与状态的后端化（替代前端 ui_store 过渡方案）；</li>
+<li>产物分享（公开链接/云端上传）；</li>
+<li>灵感、专家/专家团、项目协作（P4）。</li>
+</ul>
+
+<h2>7. 分期实施计划</h2>
+<table>
+<tr><th>阶段</th><th>范围</th><th>验收标准</th></tr>
+<tr><td><b>P1 骨架与三栏</b><br>（纯前端，1–2 周）</td><td>AppShell 重写、TaskRail（任务列表+搜索+置顶/归档/重命名/打开文件夹）、新建任务首页、任务对话页三栏化、路由重组与旧路由重定向</td><td>全流程可走通：建任务→对话→右栏四 Tab；旧功能入口均可在设置弹窗找到；<code>pnpm typecheck && pnpm test:unit</code> 全绿</td></tr>
+<tr><td><b>P2 Composer 与产物</b><br>（前端为主，1–2 周）</td><td>Composer 工具条五选择器（Auto 模型、权限=yolo 会话级、工作空间）、产物收集与内嵌卡片、变更 Tab 兜底清单、简洁模式</td><td>权限切换有二次确认；产物可预览/打开所在文件夹；e2e 冒烟过</td></tr>
+<tr><td><b>P3 功能页归位</b><br>（纯前端，1 周）</td><td>技能两 Tab、连接器卡片化、自动化（模板+执行记录）、<strong>账号弹窗 + 设置弹窗（原"配置/高级"两 Tab 全量迁入 11 个面板）</strong>、助理更名归位、主题/密度默认档</td><td>五个功能页新样式上线；无 §编号残留；设置弹窗 11 面板与原功能逐项核对无丢失；视觉走查过</td></tr>
+<tr><td><b>P4 新概念</b><br>（依赖 Core，排期另议）</td><td>Ask/Plan 模式接入、任务元数据后端化、分享、灵感、专家、项目协作</td><td>依赖 Core 版本能力逐项验收</td></tr>
+</table>
+<h2>8. 风险与开放问题</h2>
+<ul>
+<li><strong>双仓联动</strong>：Ask/Plan、任务后端化、分享均需 Hermes-CN-Core 排期；前端过渡方案（ui_store 元数据）要保证后续可平滑迁移（读写收敛在 stores/tasks.ts）。</li>
+<li><strong>看板下线</strong>：/kanban 有既有用户，下线前在 P1 保留路由别名+P3 后评估是否以"任务视图"复活。</li>
+<li><strong>Profile 体系</strong>：WorkBuddy 无 profile 概念；本项目 ProfileSelector 迁入账号弹窗子菜单与设置弹窗"账户管理"，普通路径不感知。</li>
+<li><strong>旧路由兼容</strong>：/history、/kanban、/models 等旧地址做 301 重定向；/settings/* 旧链接命中时自动弹出设置弹窗对应面板，避免用户书签失效。</li>
+<li><strong>E2E</strong>：P1 完成后需补一轮 Playwright 用例（三栏布局、任务列表操作、权限切换确认弹窗）。</li>
+</ul>
+</main>
+<div class="footer">HuanXing-Hermes 设计文档 · 参考素材：腾讯 CodeBuddy 官方文档本地镜像（workbuddy/ 目录） · 本文档为改造设计草案，接口与排期以评审结论为准。</div>
+</body>
+</html>

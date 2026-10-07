@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实践三：数据分析并可视化 ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Practice-Cases_Practice-Three" data-v-bd9b7757><div><h1 id="实践三-数据分析并可视化" tabindex="-1">实践三：数据分析并可视化 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#实践三-数据分析并可视化" aria-label="Permalink to &quot;实践三：数据分析并可视化&quot;">​</a></h1><h2 id="一、文档说明" tabindex="-1">一、文档说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#一、文档说明" aria-label="Permalink to &quot;一、文档说明&quot;">​</a></h2><p>本文介绍如何使用 <code>WorkBuddy</code> 完成表格可视化、数据搜集与报告生成，适用于经营分析、项目汇报、市场调研与业务复盘等场景。</p><h2 id="二、将-excel-表格转为可视化图表" tabindex="-1">二、将 <code>Excel</code> 表格转为可视化图表 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#二、将-excel-表格转为可视化图表" aria-label="Permalink to &quot;二、将 `Excel` 表格转为可视化图表&quot;">​</a></h2><h3 id="_1-导入数据文件" tabindex="-1">1）导入数据文件 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#_1-导入数据文件" aria-label="Permalink to &quot;1）导入数据文件&quot;">​</a></h3><p>当你已经拥有 <code>Excel</code>、<code>CSV</code> 等数据文件时，可直接将文件拖入对话，或明确告诉 <code>WorkBuddy</code> 文件所在路径。</p><img src="../../../assets/image-3.0L6YKmy5.png" width="800px"><h3 id="_2-描述分析需求" tabindex="-1">2）描述分析需求 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#_2-描述分析需求" aria-label="Permalink to &quot;2）描述分析需求&quot;">​</a></h3><p>建议一次说明以下信息：</p><ul><li>需要分析的指标</li><li>想看的图表类型</li><li>统计维度或时间范围</li><li>是否需要输出报告</li></ul><p><strong>示例指令</strong>：</p><blockquote><p>请读取这份销售数据，按月份统计各产品线的销售额和利润，分别生成柱状图与折线图，并补充一段结论说明。</p></blockquote><h3 id="_3-预览结果" tabindex="-1">3）预览结果 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#_3-预览结果" aria-label="Permalink to &quot;3）预览结果&quot;">​</a></h3><p><code>WorkBuddy</code> 会根据你的要求读取数据、完成统计并生成图表。</p><img src="../../../assets/image-4.XNjLoI4M.png" width="800px"><img src="../../../assets/image-5.CQWn-zB2.png" width="800px"><h2 id="三、搜集数据并生成可视化报告" tabindex="-1">三、搜集数据并生成可视化报告 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#三、搜集数据并生成可视化报告" aria-label="Permalink to &quot;三、搜集数据并生成可视化报告&quot;">​</a></h2><h3 id="_1-描述数据需求" tabindex="-1">1）描述数据需求 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#_1-描述数据需求" aria-label="Permalink to &quot;1）描述数据需求&quot;">​</a></h3><p>当数据尚未整理成文件，或需要从网络、多个来源搜集信息时，可直接描述数据主题、范围和来源偏好。</p><p><strong>示例指令</strong>：</p><blockquote><p>请帮我搜集近 <code>1</code> 年国内 <code>AI</code> 办公工具相关的市场信息，重点关注用户规模、应用场景和代表产品，并整理成结构化数据。</p></blockquote><h3 id="_2-描述报告要求" tabindex="-1">2）描述报告要求 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#_2-描述报告要求" aria-label="Permalink to &quot;2）描述报告要求&quot;">​</a></h3><p>建议同时说明报告格式、章节结构、图表偏好与汇报对象。</p><p><strong>示例指令</strong>：</p><blockquote><p>请基于搜集到的数据生成一份可视化分析报告，包含核心结论、关键数据图表、趋势判断和行动建议，适合管理层阅读。</p></blockquote><h3 id="_3-输出结果" tabindex="-1">3）输出结果 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#_3-输出结果" aria-label="Permalink to &quot;3）输出结果&quot;">​</a></h3><p><code>WorkBuddy</code> 会完成数据搜集、分析、绘图与报告排版，输出完整结果文件。</p><h2 id="四、使用建议" tabindex="-1">四、使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three#四、使用建议" aria-label="Permalink to &quot;四、使用建议&quot;">​</a></h2><ul><li><strong>先明确分析问题</strong>：先说清要回答什么业务问题，再决定图表形式。</li><li><strong>避免一次提过多要求</strong>：建议先产出基础版本，再逐轮补充图表与结论。</li><li><strong>说明数据可信度要求</strong>：如需公开来源、出处链接或时间范围，建议提前写明。</li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Three</a></div>
+</body>
+</html>

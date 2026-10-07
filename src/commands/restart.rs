@@ -11,11 +11,19 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::error::AppError;
 use crate::process::dashboard;
 use crate::state::AppState;
+
+/// Exit from an explicit renderer command. Window close remains mapped to
+/// "hide to tray"; the account menu's 退出 action must not pretend that those
+/// two operations are the same.
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
 
 /// Default host/port the desktop binds its managed dashboard to. Honors the
 /// `HERMES_DESKTOP_API_HOST` / `HERMES_DESKTOP_API_PORT` overrides.

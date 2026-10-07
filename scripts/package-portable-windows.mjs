@@ -11,6 +11,7 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { windowsPortableName } from "./windows-artifact-names.mjs";
 
 function usage() {
   console.log(`Usage: node scripts/package-portable-windows.mjs [options]
@@ -51,9 +52,12 @@ if (hasFlag("--help") || hasFlag("-h")) {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 const tauriConf = JSON.parse(readFileSync(join(repoRoot, "tauri.conf.json"), "utf8"));
+const brandId = process.env.BRAND || "huanxingcomhermes";
+const brand = JSON.parse(readFileSync(join(repoRoot, "brands", `${brandId}.json`), "utf8"));
 
 const version = pkg.version;
 const productName = tauriConf.productName;
+const mainBinaryName = tauriConf.mainBinaryName || pkg.name;
 const target = argValue("--target", null);
 const releaseDir = target
   ? join(repoRoot, "target", target, "release")
@@ -64,9 +68,9 @@ if (!existsSync(releaseDir)) {
   throw new Error(`release dir not found (build first): ${releaseDir}`);
 }
 
-// The Tauri CLI may leave the executable under its cargo name or rename it to
-// the product name depending on version — probe both.
-const exeCandidates = [`${productName}.exe`, `${pkg.name}.exe`];
+// Prefer the configured installed binary name. Keep legacy candidates so an
+// older build directory can still be repackaged during a tooling upgrade.
+const exeCandidates = [`${mainBinaryName}.exe`, `${productName}.exe`, `${pkg.name}.exe`];
 const exeName = exeCandidates.find((name) => existsSync(join(releaseDir, name)));
 if (!exeName) {
   const listing = readdirSync(releaseDir).join("\n  ");
@@ -87,13 +91,17 @@ const resourceDests = Object.values(tauriConf.bundle.resources).map((dest) =>
 const archLabel = (target ?? "x86_64").startsWith("aarch64") ? "arm64" : "x64";
 const stagingName = `${productName} Portable`;
 const stagingDir = join(outRoot, stagingName);
-const zipName = `${productName.replaceAll(" ", ".")}_${version}_${archLabel}-windows-portable.zip`;
+const zipName = windowsPortableName({
+  artifactBrandName: brand.artifactBrandName,
+  version,
+  arch: archLabel,
+});
 const zipPath = join(outRoot, zipName);
 
 rmSync(outRoot, { recursive: true, force: true });
 mkdirSync(stagingDir, { recursive: true });
 
-cpSync(join(releaseDir, exeName), join(stagingDir, `${productName}.exe`));
+cpSync(join(releaseDir, exeName), join(stagingDir, `${mainBinaryName}.exe`));
 // Some Tauri/wry versions link WebView2Loader statically, others ship the DLL.
 const webview2Loader = join(releaseDir, "WebView2Loader.dll");
 if (existsSync(webview2Loader)) {
@@ -124,7 +132,7 @@ writeFileSync(
     `Hermes Agent 中文社区桌面版 免安装版 v${version} (Windows ${archLabel})`,
     "",
     "使用方法：",
-    `  双击 ${productName}.exe 直接运行，无需安装。`,
+    `  双击 ${mainBinaryName}.exe 直接运行，无需安装。`,
     "  全部数据（会话、配置、内核、缓存）都保存在本目录的 data\\ 文件夹。",
     "",
     "升级：",

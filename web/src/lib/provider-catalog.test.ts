@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchExternalJSON } from "./transport";
+import { BRAND } from "./brand.generated";
 import {
   BUILTIN_PROVIDER_CATALOG,
   BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -13,6 +14,7 @@ import {
   chatEndpointPreviewUrl,
   customProviderPresetsFromConfig,
   detectCustomApiModeFromUrl,
+  ensureBrandProviderModelDeclared,
   fetchRemoteProviderCatalog,
   mergeProviderCatalog,
   getProviderCredentialPreview,
@@ -37,6 +39,40 @@ const mockedFetchExternalJSON = vi.mocked(fetchExternalJSON);
 
 beforeEach(() => {
   mockedFetchExternalJSON.mockReset();
+});
+
+describe("ensureBrandProviderModelDeclared", () => {
+  it("pins a hidden brand alias and disables live discovery", () => {
+    const providerId = `custom:${BRAND.providerKey}`;
+    const config = {
+      providers: {
+        [providerId]: {
+          name: BRAND.appName,
+          base_url: `${BRAND.serviceUrl}v1`,
+          api_key: "sk-test",
+          models: { "deepseek-v4-flash": {} },
+        },
+      },
+    };
+
+    const next = ensureBrandProviderModelDeclared(config, providerId, "claude-opus-5");
+    expect(next?.providers[providerId]).toMatchObject({
+      discover_models: false,
+      models: {
+        "deepseek-v4-flash": {},
+        "claude-opus-5": {},
+      },
+    });
+  });
+
+  it("does not create or modify unrelated providers", () => {
+    const config = {
+      providers: {
+        "custom:other": { base_url: "https://example.com/v1", models: {} },
+      },
+    };
+    expect(ensureBrandProviderModelDeclared(config, "custom:other", "claude-opus-5")).toBe(config);
+  });
 });
 
 describe("builtin provider catalog", () => {
@@ -195,6 +231,39 @@ describe("provider catalog config updates", () => {
     const removed = buildCustomProviderDeleteUpdate(updated, "custom:zijian");
     expect(removed.custom_providers).toEqual([]);
     expect(removed.providers).toEqual({});
+  });
+
+  // Core replaces the whole `providers` map when the desktop saves config, so
+  // deleting the account provider also drops every ccwork model sharing that
+  // map — leaving the picker empty until the next account refresh.
+  it("refuses to delete the account-provisioned provider", () => {
+    const config = {
+      model: { provider: "deepseek", default: "deepseek-v4-pro" },
+      providers: {
+        [`custom:acct-${BRAND.providerKey}`]: { base_url: "http://127.0.0.1:1/v1" },
+        [`custom:acct-${BRAND.providerKey}-messages`]: { base_url: "http://127.0.0.1:1/v1" },
+        [`custom:${BRAND.providerKey}`]: { base_url: "https://account.example/v1" },
+        "custom:user-mine": { base_url: "http://localhost:3000/v1" },
+      },
+    };
+
+    for (const id of [
+      `custom:acct-${BRAND.providerKey}`,
+      `custom:acct-${BRAND.providerKey}-messages`,
+      `custom:${BRAND.providerKey}`,
+    ]) {
+      expect(() => buildCustomProviderDeleteUpdate(config, id)).toThrow(
+        /ccwork 统一管理/,
+      );
+    }
+
+    // The user's own saved model stays deletable.
+    expect(buildCustomProviderDeleteUpdate(config, "custom:user-mine").providers)
+      .toEqual({
+        [`custom:acct-${BRAND.providerKey}`]: { base_url: "http://127.0.0.1:1/v1" },
+        [`custom:acct-${BRAND.providerKey}-messages`]: { base_url: "http://127.0.0.1:1/v1" },
+        [`custom:${BRAND.providerKey}`]: { base_url: "https://account.example/v1" },
+      });
   });
 
   it("writes catalog providers as canonical providers instead of custom slugs", () => {

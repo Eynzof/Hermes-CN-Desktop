@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>新建任务栏（本地 AI 工作台） ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Function-Description_Task-Bar" data-v-bd9b7757><div><h1 id="新建任务栏-本地-ai-工作台" tabindex="-1">新建任务栏（本地 AI 工作台） <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#新建任务栏-本地-ai-工作台" aria-label="Permalink to &quot;新建任务栏（本地 AI 工作台）&quot;">​</a></h1><p>本地任务的统一入口如下：</p><img src="../../../assets/task-1.H0Sit-qs.png" width="800px"><h2 id="一、界面介绍" tabindex="-1">一、界面介绍 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#一、界面介绍" aria-label="Permalink to &quot;一、界面介绍&quot;">​</a></h2><h3 id="工作模式" tabindex="-1">工作模式 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#工作模式" aria-label="Permalink to &quot;工作模式&quot;">​</a></h3><p>WorkBuddy 提供三种工作模式，对应不同的执行权限与交互方式：</p><img src="../../../assets/image-1.EgVh8HI9.png" width="800px"><table tabindex="0"><thead><tr><th>模式</th><th>说明</th><th>适用场景</th><th>图片示例</th></tr></thead><tbody><tr><td><strong>问一问（Ask）</strong></td><td>仅问答与信息查看，不修改文件</td><td>了解内容、确认需求</td><td><img src="../../../assets/image-2.C-gnnvPF.png" width="400px"></td></tr><tr><td><strong>做一做（Craft）</strong></td><td>直接执行任务并修改文件</td><td>文档生成、表格处理、文件整理</td><td><img src="../../../assets/image-3.CHcjfxwi.png" width="400px"></td></tr><tr><td><strong>想一想（Plan）</strong></td><td>先生成执行计划，确认后再操作</td><td>多步骤任务、需审阅改动范围</td><td><img src="../../../assets/image-4.BJkeZ-JN.png" width="400px"></td></tr></tbody></table><div class="tip custom-block"><p class="custom-block-title">建议</p><p>首次使用优先选择 <strong>Ask</strong> 模式；熟悉后再按任务复杂度切换至 <strong>Plan</strong> 或 <strong>Craft</strong> 模式。处理重要文件前请先备份。</p></div><h3 id="切换模型" tabindex="-1">切换模型 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#切换模型" aria-label="Permalink to &quot;切换模型&quot;">​</a></h3><p>WorkBuddy 内置多个主流模型，可按需灵活切换：</p><table tabindex="0"><thead><tr><th>模型</th><th>适用场景</th></tr></thead><tbody><tr><td><strong>MiniMax</strong></td><td>Excel 处理、数据分析、PPT 生成，执行速度快</td></tr><tr><td><strong>智谱 GLM</strong></td><td>多步骤、长流程的复杂任务</td></tr><tr><td><strong>Kimi</strong></td><td>截图分析、图片转文档等视觉类任务</td></tr><tr><td><strong>DeepSeek</strong></td><td>日常问答、文案撰写，响应快、成本低</td></tr><tr><td><strong>腾讯混元</strong></td><td>中文写作、会议纪要、中文文档处理</td></tr></tbody></table><h3 id="设置工作空间" tabindex="-1">设置工作空间 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#设置工作空间" aria-label="Permalink to &quot;设置工作空间&quot;">​</a></h3><p><strong>使用前建议先设置工作空间。</strong> WorkBuddy 将在该空间中读取和保存文件，未指定路径的任务也会优先在此空间内执行。</p><img src="../../../assets/image-6.CGRDyKxH.png" width="300px"><div class="info custom-block"><p class="custom-block-title">什么是文件路径？</p><p>路径即文件或文件夹在电脑中的位置，示例：</p><ul><li><strong>Windows</strong>：<code>C:\Users\你的用户名\Desktop\工作资料</code></li><li><strong>Mac</strong>：<code>/Users/你的用户名/Desktop/工作资料</code></li></ul><p>无需手动输入——设置时直接在文件选择器中定位并选中目标文件夹即可。若未提前指定，WorkBuddy 会在新建任务时自动创建独立空间。</p></div><div class="info custom-block"><p class="custom-block-title">如何选择合适的工作空间？</p><p>建议按任务类型分别建立空间，例如 <code>发票整理</code>、<code>周报</code>、<code>待处理照片</code> 等，便于管理并降低误操作风险。</p></div><h3 id="选择技能" tabindex="-1">选择技能 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#选择技能" aria-label="Permalink to &quot;选择技能&quot;">​</a></h3><p><strong>技能（Skills）</strong> 用于扩展 WorkBuddy 的任务能力。启用对应技能后，系统可完成更多特定类型的工作。</p><img src="../../../assets/image-7.C15-_p58.png" width="800px"><p>在对话框中选择已安装技能，WorkBuddy 执行任务时将自动调用对应能力：</p><img src="../../../assets/image-8.CcNU1SIQ.png" width="400px"><table tabindex="0"><thead><tr><th>技能示例</th><th>效果</th></tr></thead><tbody><tr><td><strong>PPT 制作</strong></td><td>根据数据生成汇报演示文稿</td></tr><tr><td><strong>海报生成</strong></td><td>根据需求生成活动海报</td></tr><tr><td><strong>自动化报表</strong></td><td>合并多份 Excel 并输出图表报告</td></tr></tbody></table><div class="tip custom-block"><p class="custom-block-title">提示</p><p>WorkBuddy 内置 <strong>20+</strong> 技能包，覆盖文档处理、数据报表、海报设计、文件整理等场景，同时兼容 <strong>OpenClaw</strong> 社区技能导入，也支持通过自然语言创建自定义技能。</p></div><h3 id="连接第三方应用" tabindex="-1">连接第三方应用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#连接第三方应用" aria-label="Permalink to &quot;连接第三方应用&quot;">​</a></h3><p>快捷管理连接器，连接外部服务，扩展 AI 能力。</p><img src="../../../assets/task-2.tDwz7B76.png" width="800px"><h3 id="权限管理" tabindex="-1">权限管理 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#权限管理" aria-label="Permalink to &quot;权限管理&quot;">​</a></h3><ul><li><strong>默认权限：</strong> 涉及敏感操作，如文件修改或工作空间外执行时，需要用户确认执行或自行操作。</li><li><strong>完全访问权限：</strong> 减少确认步骤，允许<strong>WorkBuddy</strong>直接执行更多操作。可能涉及敏感操作、文件修改或外部执行。仅建议在用户信任当前任务时使用。</li></ul><div class="info custom-block"><p class="custom-block-title">说明</p><p>前往<a href="Permission-Modes.html">两个权限模式</a>了解详情。</p></div><img src="../../../assets/task-3.cefGJHYz.png" width="800px"><h2 id="二、新建任务" tabindex="-1">二、新建任务 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar#二、新建任务" aria-label="Permalink to &quot;二、新建任务&quot;">​</a></h2><p>每个对话对应一个 <strong>独立任务</strong>，任务之间互不影响，各自维护独立的工作空间与上下文。</p><ol><li>在主界面点击 <strong>新建任务</strong>（若未提前指定目录，系统自动创建独立工作目录）；</li><li>输入任务内容、选择工作目录与模型后发送，即可开始执行。</li></ol><p>执行中的任务显示在左侧边栏，可随时切换查看进度。WorkBuddy 支持 <strong>多任务并行处理</strong>。</p></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Task-Bar</a></div>
+</body>
+</html>

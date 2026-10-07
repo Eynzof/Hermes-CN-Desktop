@@ -3,8 +3,6 @@
 ## 项目概述
 
 Hermes Agent CN 桌面端 — 用 Tauri v2 + React 构建的独立桌面应用，替代原 Electron 壳。
-对接后端是 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)（CN 核心 runtime，原名 hermes-agent-cn）内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。当前版本 **0.5.4**，bundle identifier `cn.org.hermesagent.desktop`（升级承重标识，勿改）。
-
 ## 项目结构
 
 ```
@@ -31,7 +29,7 @@ Hermes-CN-Desktop/
 │   └── process/
 │       ├── dashboard.rs         dashboard 子进程管理（probe/spawn/port fallback）
 │       ├── gateway.rs           gateway 子进程 / 冲突检测
-│       └── runtime.rs           managed runtime 安装/签名验证
+│       └── runtime.rs           managed runtime 安装/SHA-256 校验
 ├── web/                    React 前端（Vite + TanStack Query + Jotai）
 │   ├── src/
 │   │   ├── lib/tauri-bridge.ts    Tauri invoke 包装 + hermesDesktop shim
@@ -54,9 +52,7 @@ Hermes-CN-Desktop/
 
 ## 后端事实来源
 
-UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**。
-
-`pnpm tauri:dev` 默认使用同级的 `../Hermes-CN-Core`，可用 `--source` 或 `HERMES_AGENT_CN_SOURCE` 覆盖；`run.py` 还会依次探测 `HERMES_CN_CORE`、本仓库内可选的 `hermes_backend/` 检出和同级 Core。查：
+后端源码在同级的 `../Hermes-CN-Core`（`pnpm tauri:dev` 默认从这里把 backend 装进桌面 dev-runtime，可用 `--source` 覆盖）。查：
 - REST 路由：`hermes_cli/web_server.py`
 - Gateway 事件：`tui_gateway/server.py`
 - 上游 Web 实现：`web/src/lib/api.ts`、`gatewayClient.ts`
@@ -67,30 +63,6 @@ UI 对接的是 hermes-agent Dashboard。**不要凭参数名猜后端行为**�
 
 ## 开发流程
 
-### Git 工作流
-
-Git 操作必须限定在当前任务的独立分支 / worktree，避免破坏性重置或覆盖其它工作区。双仓同步、收尾 commit → push → PR、Commit 风格、发版 tag 与 Landing 同步的完整流程见 `docs/agents/git-workflow.md`。
-
-### 开发前准备
-
-- 确认当前工作目录位于已同步的任务分支 / worktree。
-- 需求同时横跨 Desktop 与 Core 时，使用独立 worktree 隔离两仓改动。
-- 若发现工作区状态异常（意外脏树、分支不对或落后远端），先核对差异与归属，禁止破坏性重置或覆盖他人改动。
-
-### 仓库技能
-
-开始任何工作前，必须先阅读项目结构技能：`.codex/skills/project-structure/SKILL.md`。
-
-双仓库（Desktop + Core）最新分支启动、dev 冒烟或打包态补验，必须使用：
-`.codex/skills/desktop-dual-repo-test/SKILL.md`。
-
-发版、版本号更新、安装包发布或 GitHub Release 相关任务必须按顺序使用仓库内技能：**先过** `.codex/skills/desktop-release-preflight/SKILL.md`（发版前安全闸门：防内核静默降级 / 防 schema 重置 / identifier 不变 / 公证签名 / 国内镜像先有 artifactUrl 再发清单 / 先发 canary），**再做** `.codex/skills/desktop-release-sync-landing/SKILL.md`（版本同步与官网清单）。
-只要桌面端 **stable/正式公开版本** 发生变化，就必须同步处理 `Eynzof/hermes-agent-cn-desktop-landing`，
-更新官网版本与 `https://desktop.hermesagent.org.cn/latest.json` 清单；如果 release 资产尚未生成，
-需要明确说明 Landing 同步被阻塞，不能把正式发版任务当作已经完整结束（见 `docs/agents/git-workflow.md` §5）。
-**RC / beta / alpha / canary 等预发布或内测版本禁止修改 Landing 仓库，禁止更新官网版本，
-禁止让 `https://desktop.hermesagent.org.cn/latest.json` 指向预发布版本。** 预发布版本只能通过
-GitHub Release、手工分发或明确的内测渠道验证，不能暴露给全量用户的官网入口和自动更新清单。
 
 ### 启动顺序
 
@@ -190,5 +162,5 @@ gateway-client.ts 负责协议层与重连编排：1→15s 指数退避、唤醒
 - **HTTP 测试**：用 `wiremock::MockServer`，禁止打真实网络
 - **真实后端测试（opt-in）**：`tests/real_backend.rs` 是 wiremock 套件的真实后端版，默认跳过（无 `HERMES_REAL_BACKEND_URL` 且找不到 `../Hermes-CN-Core` 时静默通过），CI 保持封闭；配置 `HERMES_REAL_BACKEND_URL`（外部后端）或 `HERMES_CORE_DIR`（自动起 Core venv dashboard）后跑 `cargo test --test real_backend`
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
-- **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `Eynzof/Hermes-CN-Core` 真实后端 + fake model）、`release-desktop.yml`（发布构建）
-- **本地**：常规改动跑 `cargo test`；嵌入式改动另用真实 Core payload 跑 `cargo test --features embedded-python --test embedded_python -- --test-threads=1`，确保进程级 CPython 解释器始终由同一测试线程驱动。dashboard 常规测试不需要预先启动后端，均走 mock
+- **CI**（PR / push 到 main）：`rust-test.yml`（`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`）、`web-test.yml`（typecheck + vitest）、`web-e2e.yml`（Playwright E2E，checkout `nevermorewish/Hermes-CN-Core` 真实后端 + fake model）、`release-desktop.yml`（发布构建）
+- **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock

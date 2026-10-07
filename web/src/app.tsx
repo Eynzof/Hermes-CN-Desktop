@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { DEFAULT_THEME_CONFIG, hydrateThemeAtom, usePlatform, type ThemeConfig } from "@hermes/shared-ui";
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { useSetAtom } from "jotai";
@@ -13,6 +13,12 @@ import { ConnectionAuthBanner } from "@/components/connection-auth-banner";
 import { WanderMemoryRouteLifecycle } from "@/components/wander-memory/route-lifecycle";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CommandPalette } from "@/components/command-palette";
+import { BootSplash } from "@/components/boot-splash";
+import { useBackendGate } from "@/hooks/use-backend-gate";
+import {
+  normalizeSettingsPane,
+  openSettingsDialogAtom,
+} from "@/stores/settings-dialog";
 import { runtime } from "@/lib/runtime";
 
 // ---------------------------------------------------------------------------
@@ -58,17 +64,27 @@ const ImOnboardingRoute = lazy(() => import("@/routes/im-onboarding").then((m) =
 const ConsoleRoute = lazy(() => import("@/routes/console").then((m) => ({ default: m.ConsoleRoute })));
 const HealthRoute = lazy(() => import("@/routes/health").then((m) => ({ default: m.HealthRoute })));
 const AnalyticsRoute = lazy(() => import("@/routes/analytics").then((m) => ({ default: m.AnalyticsRoute })));
+const UsageRoute = lazy(() => import("@/routes/usage").then((m) => ({ default: m.UsageRoute })));
 const LogsRoute = lazy(() => import("@/routes/logs").then((m) => ({ default: m.LogsRoute })));
 const DebugRoute = lazy(() => import("@/routes/debug").then((m) => ({ default: m.DebugRoute })));
 const ThemeRoute = lazy(() => import("@/routes/advanced").then((m) => ({ default: m.ThemeRoute })));
 const AdvancedRoute = lazy(() => import("@/routes/advanced").then((m) => ({ default: m.AdvancedRoute })));
 const CodingAgentsRoute = lazy(() => import("@/routes/coding-agents").then((m) => ({ default: m.CodingAgentsRoute })));
-const GuideRoute = lazy(() => import("@/routes/guide").then((m) => ({ default: m.GuideRoute })));
 const OfflineShell = lazy(() => import("@/routes/offline-shell").then((m) => ({ default: m.OfflineShell })));
 
 function NewTaskRedirect() {
   const { search } = useLocation();
   return <Navigate to={{ pathname: "/", search }} replace />;
+}
+
+// /settings/<pane> 深链：打开主界面并自动弹出设置弹窗对应面板（兼容旧书签）。
+function SettingsDeepLink() {
+  const { pane } = useParams();
+  const openSettings = useSetAtom(openSettingsDialogAtom);
+  useEffect(() => {
+    openSettings(normalizeSettingsPane(pane));
+  }, [openSettings, pane]);
+  return <Navigate to="/" replace />;
 }
 
 // Wrap each route's content in a local ErrorBoundary so a single page crash
@@ -129,10 +145,12 @@ function BackendApp() {
             <Route path="/wander-memory/*" element={<Navigate to="/wander-memory/memories" replace />} />
             <Route path="/soul" element={withBoundary(<SoulRoute />)} />
             <Route path="/cron" element={withBoundary(<CronRoute />)} />
+            <Route path="/assistant/*" element={withBoundary(<ImOnboardingRoute />)} />
             <Route path="/im/*" element={withBoundary(<ImOnboardingRoute />)} />
             <Route path="/console" element={withBoundary(<ConsoleRoute />)} />
             <Route path="/health" element={withBoundary(<HealthRoute />)} />
             <Route path="/analytics" element={withBoundary(<AnalyticsRoute />)} />
+            <Route path="/usage" element={withBoundary(<UsageRoute />)} />
             <Route path="/logs" element={withBoundary(<LogsRoute />)} />
             <Route path="/debug" element={withBoundary(<DebugRoute />)} />
             <Route path="/theme" element={withBoundary(<ThemeRoute />)} />
@@ -145,7 +163,8 @@ function BackendApp() {
             <Route path="/coding-agents" element={withBoundary(<CodingAgentsRoute />)} />
             <Route path="/about" element={withBoundary(<AdvancedRoute />)} />
             <Route path="/advanced/*" element={withBoundary(<AdvancedRoute />)} />
-            <Route path="/settings" element={<Navigate to="/common" replace />} />
+            <Route path="/settings" element={<Navigate to="/settings/system" replace />} />
+            <Route path="/settings/:pane" element={<SettingsDeepLink />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -162,7 +181,7 @@ function BackendApp() {
 export function App() {
   const platform = usePlatform();
   const hydrateTheme = useSetAtom(hydrateThemeAtom);
-  const location = useLocation();
+  const gate = useBackendGate();
   useEffect(() => {
     hydrateTheme(readUiValue<Partial<ThemeConfig>>("hermes-theme", DEFAULT_THEME_CONFIG));
   }, [hydrateTheme]);
@@ -171,11 +190,10 @@ export function App() {
     if (runtime.isBackendReady()) void sendTokenUsageTelemetryIfDue();
   }, []);
 
-  const isGuide = location.pathname === "/guide";
   let content: ReactNode;
-  if (isGuide) {
-    content = withSuspense(withBoundary(<GuideRoute />));
-  } else if (!runtime.isBackendReady()) {
+  if (gate === "booting") {
+    content = <BootSplash />;
+  } else if (gate === "offline") {
     content = withSuspense(<OfflineShell />);
   } else {
     content = <BackendApp />;

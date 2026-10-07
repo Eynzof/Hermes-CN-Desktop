@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>设计创意（WorkBuddy × Ardot） ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Function-Description_Design-Idea" data-v-bd9b7757><div><h1 id="设计创意-workbuddy-×-ardot" tabindex="-1">设计创意（WorkBuddy × Ardot） <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#设计创意-workbuddy-×-ardot" aria-label="Permalink to &quot;设计创意（WorkBuddy × Ardot）&quot;">​</a></h1><p>腾讯设计 Ardot 是腾讯自研的 AI 设计智能体协作平台。WorkBuddy 在「设计创意模式」中深度集成了 Ardot 画布——支持在对话中一句话生成 UI、PPT、海报等设计稿，实时对话修改、云端同步，可随时跳转到 Ardot 进行精细化编辑，满意后一键生成应用代码，实现从创意到落地的丝滑闭环。</p><p>本篇教程将带你学习 WorkBuddy × Ardot 的基础操作。</p><h2 id="一、连接" tabindex="-1">一、连接 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#一、连接" aria-label="Permalink to &quot;一、连接&quot;">​</a></h2><ol><li>打开 WorkBuddy 首页，点击「新建任务」，选择最右侧的 <strong>设计创意</strong> Tab。</li></ol><img src="../../../assets/ardot-02.bprgeS8Q.png" width="800px"><ol start="2"><li>首次使用时，系统会弹出授权确认窗口。WorkBuddy 通过登录手机号自动完成与 Ardot 的身份关联，无需单独注册腾讯设计账号，点击确认后即可使用。</li></ol><p><strong>权限详情：</strong></p><ul><li><strong>读取画布内容：</strong> 读取设计稿中的元素、样式、布局信息</li><li><strong>编辑画布：</strong> 代表您在 Ardot 画布上执行新增、修改、删除等设计操作</li><li><strong>云端同步：</strong> 与 Ardot 浏览器端保持实时双向同步</li></ul><p>连接后，WorkBuddy 获得当前登录用户的 Ardot 画布操作权限，所有设计稿存储在云端，换电脑、重新登录均不会丢失。</p><h2 id="二、使用" tabindex="-1">二、使用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#二、使用" aria-label="Permalink to &quot;二、使用&quot;">​</a></h2><h3 id="对话生成设计稿" tabindex="-1">对话生成设计稿 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#对话生成设计稿" aria-label="Permalink to &quot;对话生成设计稿&quot;">​</a></h3><p>进入设计创意模式后，在对话框中用自然语言描述你想要的设计，AI 将实时在 Ardot 画布上生成。</p><p><strong>示例指令：</strong></p><ul><li>「帮我设计一个移动端登录页」</li><li>「帮我设计一张产品发布会的宣传海报，主题是 XX」</li><li>「帮我制作一份 AI 硬件产品发布会 PPT，风格是XX」</li></ul><img src="../../../assets/ardot-01.bMnnRA1n.png" width="400px"><p>支持的设计类型包括：移动端 App 界面、网站页面/Landing Page、品牌 Logo、海报/Banner、PPT 演示文稿等。</p><h3 id="对话驱动修改" tabindex="-1">对话驱动修改 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#对话驱动修改" aria-label="Permalink to &quot;对话驱动修改&quot;">​</a></h3><p>生成设计稿后，可以继续通过对话精准调整，三种修改方式任选：</p><table tabindex="0"><thead><tr><th>方式</th><th>操作</th><th>适用场景</th></tr></thead><tbody><tr><td>智能框选 + 对话</td><td>在画布中选中想要调整的位置，描述修改，点击发送</td><td>针对局部位置精准调整</td></tr><tr><td>纯语言指挥</td><td>直接在对话框中描述修改需求，无需选中</td><td>全局调整或不确定位置时</td></tr><tr><td>粘贴参考</td><td>粘贴网页链接或上传参考图片</td><td>参考其他设计风格</td></tr></tbody></table><p><strong>示例指令：</strong></p><ul><li>「把这个按钮整体放大」</li><li>「首页背景改成渐变蓝色」</li><li>「参考这个网页链接的视觉风格进行优化」</li></ul><img src="../../../assets/ardot-04.BZk9STbI.png" width="400px"><p>每轮修改后，Agent 会告知本轮具体改动内容，过程可追溯。</p><h3 id="跳转-ardot-精细化编辑" tabindex="-1">跳转 Ardot 精细化编辑 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#跳转-ardot-精细化编辑" aria-label="Permalink to &quot;跳转 Ardot 精细化编辑&quot;">​</a></h3><p>对话生成帮你从 0 到 80 分，Ardot 编辑器帮你从 80 分到 100 分。</p><p>AI 对话擅长快速出稿和批量调整，但设计落地的&quot;最后一公里&quot;往往需要精确的人工把控。Ardot 编辑器正是为此而生——它不是另一个需要学习的工具，而是你在对话出稿之后，让作品真正可交付的关键一步。</p><p><strong>为什么要跳转到 Ardot？</strong></p><table tabindex="0"><thead><tr><th>你的身份</th><th>对话生成后常遇到的问题</th><th>Ardot 编辑器帮你解决</th></tr></thead><tbody><tr><td>非专业设计师（产品经理、开发、运营）</td><td>AI 出的稿大方向对了，但间距不均匀、字号层级不够清晰、颜色搭配想微调，靠对话一轮轮说不清楚</td><td>所见即所得的拖拽调整，不用学 Figma/PS，点选就能改颜色、拖动就能调间距，零设计基础也能出专业效果</td></tr><tr><td>专业设计师</td><td>AI 生成的初稿结构不错，但细节达不到交付标准——图层命名混乱、对齐有偏差、缺少状态变体、无法导出规范切图</td><td>完整的专业编辑能力：精确到像素的对齐、图层管理、组件化编辑、多格式导出（PNG/SVG/PDF），满足设计交付规范</td></tr></tbody></table><p><strong>Ardot 编辑器的核心优势：</strong></p><ul><li><strong>所见即所得：</strong> 直接拖拽、点选修改，不需要用语言描述&quot;往左移 3 像素&quot;</li><li><strong>像素级精确：</strong> 对齐参考线、间距标注、精确数值输入，交付级精度</li><li><strong>组件化编辑：</strong> 复用组件、批量修改样式，保持设计一致性</li><li><strong>专业导出：</strong> PNG/SVG/PDF 多格式导出，支持切图标注，可直接交付开发</li><li><strong>实时双向同步：</strong> 在 Ardot 里的任何改动实时回流 WorkBuddy，两边始终一致</li></ul><p><strong>如何跳转：</strong></p><ol><li>点击画布 Tab 顶部的「用浏览器打开进行编辑」按钮</li></ol><img src="../../../assets/ardot-05.D2s06LTu.png" width="400px"><ol start="2"><li>跳转后进入 Ardot 完整编辑器，体验专业设计工具的编辑能力</li></ol><img src="../../../assets/ardot-06.Didz9awO.png" width="400px"><p>双向实时同步：在 Ardot 浏览器端做的任何修改会实时回流 WorkBuddy 画布 Tab，无需手动刷新。回到 WorkBuddy 后 Agent 也能读取浏览器端的最新状态继续对话修改。改完回来继续对话，Agent 能接着你的最新版本往下走。</p><p><strong>推荐工作流：</strong> 对话快速出稿（3 分钟）→ 跳转 Ardot 精修交付（5 分钟）→ 回到 WorkBuddy 生成代码（1 分钟）</p><p>这是效率最高的组合打法：用 AI 跳过从零开始的痛苦，用 Ardot 保证最终品质，用代码生成打通落地。三步走完，一个能用的产品页面就出来了。</p><h3 id="从设计稿生成应用代码" tabindex="-1">从设计稿生成应用代码 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#从设计稿生成应用代码" aria-label="Permalink to &quot;从设计稿生成应用代码&quot;">​</a></h3><p>设计稿修改满意后，可以一键生成可运行的应用代码。</p><p><strong>两种触发方式：</strong></p><ul><li>在对话中说「将当前画布中的设计稿生成应用」</li><li>或点击画布 Tab 顶部的「生成应用」按钮</li></ul><img src="../../../assets/ardot-07.BOVE09ca.png" width="800px"><p>生成后可继续用对话调整代码细节：「用 React 重写」「加一个 dark mode」「改成 Tailwind 样式」等。</p><h2 id="三、注意事项" tabindex="-1">三、注意事项 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea#三、注意事项" aria-label="Permalink to &quot;三、注意事项&quot;">​</a></h2><ul><li>使用设计创意模式需要先完成 Ardot 授权连接</li><li>设计稿存储在云端，换设备登录后可继续编辑</li><li>跳转 Ardot 编辑器需要浏览器环境</li><li>生成应用代码的功能依赖当前画布中的设计稿状态</li><li>使用 Ardot 服务需遵守 <a href="https://ardot.tencent.com/drive/policy" target="_blank" rel="noreferrer">用户协议</a> 和 <a href="https://ardot.tencent.com/drive/privacy" target="_blank" rel="noreferrer">隐私协议</a></li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Design-Idea</a></div>
+</body>
+</html>

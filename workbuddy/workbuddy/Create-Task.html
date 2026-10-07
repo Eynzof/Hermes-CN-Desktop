@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>创建任务 ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/Create-Task" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_Create-Task" data-v-bd9b7757><div><h1 id="创建任务" tabindex="-1">创建任务 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Create-Task#创建任务" aria-label="Permalink to &quot;创建任务&quot;">​</a></h1><h2 id="描述任务" tabindex="-1">描述任务 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Create-Task#描述任务" aria-label="Permalink to &quot;描述任务&quot;">​</a></h2><p>WorkBuddy 的核心优势是理解自然语言。您只需用一句话描述需求，它就能自主规划和执行。</p><p><strong>示例</strong>：</p><ul><li>&quot;帮我把这份销售数据生成一个分析报告，包含图表&quot;</li><li>&quot;整理 Downloads 文件夹里的图片，按日期分类&quot;</li><li>&quot;根据这份会议纪要生成一个 PPT&quot;</li><li>&quot;分析这份简历，提取关键信息生成表格&quot;</li><li>&quot;调研一下 2024 年 AI 行业趋势，写一份报告&quot;</li></ul><h2 id="选择工作空间" tabindex="-1">选择工作空间 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Create-Task#选择工作空间" aria-label="Permalink to &quot;选择工作空间&quot;">​</a></h2><p>您可以为任务指定工作目录：</p><ul><li>点击输入框左下角的 <strong>选择工作空间</strong>，选择当前任务要使用的目录</li><li>选择完成后，WorkBuddy 会基于该目录读取和处理文件</li><li>也可以直接开始任务，WorkBuddy 会在默认目录中生成结果</li></ul><h2 id="添加上下文" tabindex="-1">添加上下文 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Create-Task#添加上下文" aria-label="Permalink to &quot;添加上下文&quot;">​</a></h2><p>在创建任务时，您可以补充上下文，让 WorkBuddy 更快理解需求：</p><table tabindex="0"><thead><tr><th>方式</th><th>说明</th></tr></thead><tbody><tr><td><strong>引用上下文</strong></td><td>通过 <code>@</code> 引用文件、文档、规则等信息</td></tr><tr><td><strong>粘贴截图</strong></td><td>使用 <code>Ctrl/Cmd + V</code> 直接粘贴剪贴板中的图片</td></tr><tr><td><strong>上传文件</strong></td><td>点击上传按钮或拖拽文件到输入框</td></tr><tr><td><strong>补充说明</strong></td><td>在任务描述中明确目标、范围、约束和预期输出</td></tr></tbody></table><p>建议优先补充以下信息：</p><ul><li><strong>目标是什么</strong>：要生成什么内容，或要处理什么文件</li><li><strong>输入是什么</strong>：需要分析的数据、参考的文档</li><li><strong>输出格式</strong>：希望得到 Word、Excel、PPT 还是其他格式</li><li><strong>约束条件</strong>：风格要求、字数限制、截止时间等</li></ul><h2 id="任务创建成功" tabindex="-1">任务创建成功 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/Create-Task#任务创建成功" aria-label="Permalink to &quot;任务创建成功&quot;">​</a></h2><p>任务创建成功后：</p><ol><li>新任务会出现在左侧任务列表中</li><li>对话区会持续展示 WorkBuddy 的执行过程和输出内容</li><li>右侧结果区会根据任务类型展示产物、全部文件、变更和预览等结果</li><li>您可以继续补充消息，或同时创建其他任务并行推进</li></ol><img src="../assets/createtask-1.CJulLJlb.png" width="800px"></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/Create-Task">https://www.codebuddy.cn/docs/workbuddy/Create-Task</a></div>
+</body>
+</html>

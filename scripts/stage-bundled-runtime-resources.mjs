@@ -1,0 +1,172 @@
+#!/usr/bin/env node
+
+import { spawnSync } from "node:child_process";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  containsPluginManifest,
+  isDirectory,
+  validateBundledPluginTree,
+} from "./bundled-plugin-tree.mjs";
+
+function usage() {
+  console.log(`Usage: node scripts/stage-bundled-runtime-resources.mjs [options]
+
+Extracts Dashboard web_dist from an already staged, prebuilt Hermes-CN-Core
+runtime zip and stages a validated bundled plugins tree. This never builds
+Hermes-CN-Core.
+
+Options:
+  --runtime-dir <dir>    Staged runtime directory (default: static/bundled-runtime)
+  --dashboard-out <dir> Dashboard output (default: static/dashboard/web_dist)
+  --plugins-out <dir>   Plugins output (default: static/bundled-plugins)
+  --plugins-source <dir> Complete Core plugins tree. Defaults to
+                         HERMES_BUNDLED_PLUGINS_SOURCE, then ../Hermes-CN-Core/plugins
+`);
+}
+
+function argValue(flag, fallback) {
+  const index = process.argv.indexOf(flag);
+  if (index === -1) return fallback;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${flag} requires a value`);
+  }
+  return value;
+}
+
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  usage();
+  process.exit(0);
+}
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const runtimeDir = resolve(repoRoot, argValue("--runtime-dir", "static/bundled-runtime"));
+const dashboardOut = resolve(
+  repoRoot,
+  argValue("--dashboard-out", "static/dashboard/web_dist"),
+);
+const pluginsOut = resolve(
+  repoRoot,
+  argValue("--plugins-out", "static/bundled-plugins"),
+);
+const siblingPlugins = resolve(repoRoot, "../Hermes-CN-Core/plugins");
+const configuredPluginsSource = argValue(
+  "--plugins-source",
+  process.env.HERMES_BUNDLED_PLUGINS_SOURCE ?? null,
+);
+const pluginsSource = configuredPluginsSource
+  ? resolve(repoRoot, configuredPluginsSource)
+  : isDirectory(siblingPlugins)
+    ? siblingPlugins
+    : null;
+
+function findDirectory(root, predicate) {
+  const entries = readdirSync(root, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const path = join(root, entry.name);
+    if (predicate(path)) return path;
+    const nested = findDirectory(path, predicate);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function copyClean(source, destination) {
+  rmSync(destination, { recursive: true, force: true });
+  mkdirSync(dirname(destination), { recursive: true });
+  cpSync(source, destination, {
+    recursive: true,
+    filter: (path) => !isGeneratedTestPath(path),
+  });
+}
+
+function isGeneratedTestPath(path) {
+  const normalized = path.replaceAll("\\", "/");
+  return /\/tests\/(?:target|trybuild)(?:\/|$)/u.test(normalized);
+}
+
+function readRuntimeManifest() {
+  const manifestName = readdirSync(runtimeDir).find((name) =>
+    /^stable-[^-]+-[^.]+\.json$/u.test(name),
+  );
+  if (!manifestName) {
+    throw new Error(`runtime manifest is missing under ${runtimeDir}`);
+  }
+  return JSON.parse(readFileSync(join(runtimeDir, manifestName), "utf8"));
+}
+
+const zipNames = readdirSync(runtimeDir).filter((name) =>
+  /^hermes-agent-cn-runtime-.+\.zip$/u.test(name),
+);
+if (zipNames.length !== 1) {
+  throw new Error(`expected exactly one prebuilt runtime zip under ${runtimeDir}, got ${zipNames.length}`);
+}
+
+const manifest = readRuntimeManifest();
+const extractRoot = mkdtempSync(join(tmpdir(), "hermes-runtime-resources-"));
+try {
+  const archivePath = join(runtimeDir, zipNames[0]);
+  const extraction = spawnSync("tar", ["-xf", archivePath, "-C", extractRoot], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  if (extraction.status !== 0) {
+    throw new Error(
+      `runtime zip extraction failed with exit code ${extraction.status}: ${extraction.stderr || extraction.stdout}`,
+    );
+  }
+
+  const webDist = findDirectory(extractRoot, (path) =>
+    basename(path) === "web_dist"
+      && basename(dirname(path)) === "hermes_cli"
+      && existsSync(join(path, "index.html"))
+      && isDirectory(join(path, "assets")),
+  );
+  if (!webDist) {
+    throw new Error("prebuilt runtime does not contain hermes_cli/web_dist");
+  }
+
+  const runtimePlugins = findDirectory(extractRoot, (path) =>
+    basename(path) === "plugins" && containsPluginManifest(path),
+  );
+  const plugins = pluginsSource ?? runtimePlugins;
+  if (!plugins) {
+    throw new Error("prebuilt runtime does not contain bundled plugins");
+  }
+  validateBundledPluginTree(plugins);
+
+  copyClean(webDist, dashboardOut);
+  copyClean(plugins, pluginsOut);
+  writeFileSync(join(pluginsOut, ".gitkeep"), "\n");
+
+  const provenance = [
+    "Generated by scripts/stage-bundled-runtime-resources.mjs.",
+    `runtimeVersion=${manifest.runtimeVersion ?? ""}`,
+    `sourceRepo=${manifest.sourceRepo ?? ""}`,
+    `sourceCommit=${manifest.sourceCommit ?? ""}`,
+    `runtimeSha256=${manifest.sha256 ?? ""}`,
+    "source=prebuilt-runtime-zip",
+    `pluginsSource=${pluginsSource ? "core-source-tree" : "prebuilt-runtime-zip"}`,
+    "",
+  ].join("\n");
+  writeFileSync(join(dirname(dashboardOut), "README.generated.txt"), provenance);
+  writeFileSync(join(pluginsOut, "README.generated.txt"), provenance);
+
+  console.log(`staged Dashboard from prebuilt runtime at ${dashboardOut}`);
+  console.log(`staged plugins from prebuilt runtime at ${pluginsOut}`);
+} finally {
+  rmSync(extractRoot, { recursive: true, force: true });
+}

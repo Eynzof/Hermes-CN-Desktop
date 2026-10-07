@@ -1,0 +1,18 @@
+{
+  "version": "v0.6.8",
+  "semver": "0.6.8",
+  "publishedAt": "2026-08-01T15:07:13.126Z",
+  "channel": "stable",
+  "updatedAt": "2026-08-01T15:07:13.126Z",
+  "assets": {
+    "windows": {
+      "label": "Windows installer",
+      "platform": "windows",
+      "fileName": "HuanxingHermes.Desktop_0.6.8_x64-setup.exe",
+      "size": 157850986,
+      "sha256": "1d2a04f290a64f3b4508482bbdf18a98d847995b51902db234e3d7241e917955",
+      "url": "https://huanxing.ai/downloads/huanxingcomhermes/releases/v0.6.8/HuanxingHermes.Desktop_0.6.8_x64-setup.exe",
+      "versionedUrl": "https://huanxing.ai/downloads/huanxingcomhermes/releases/v0.6.8/HuanxingHermes.Desktop_0.6.8_x64-setup.exe"
+    }
+  }
+}

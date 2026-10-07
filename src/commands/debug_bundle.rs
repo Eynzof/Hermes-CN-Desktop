@@ -10,6 +10,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 use zip::write::SimpleFileOptions;
 
+use crate::brand_generated::BRAND_APP_NAME;
 use crate::error::{AppError, AppResult};
 use crate::process::runtime;
 use crate::state::AppState;
@@ -288,7 +289,7 @@ fn build_debug_bundle(
 
     bundle.add_text(
         "README.txt",
-        "Hermes Agent 中文社区桌面版 debug 包。\n\n这个压缩包包含桌面端运行态、内核 runtime 信息、前端 Debug 面板快照、已脱敏配置摘要，以及 HERMES_HOME / gateway runtime 下的日志文件。\n请直接把整个 zip 发给开发者用于排查问题。\n",
+        &format!("{} debug 包。\n\n这个压缩包包含桌面端运行态、内核 runtime 信息、前端 Debug 面板快照、已脱敏配置摘要，以及 HERMES_HOME / gateway runtime 下的日志文件。\n请直接把整个 zip 发给开发者用于排查问题。\n", BRAND_APP_NAME),
     )?;
 
     bundle.add_json(
@@ -649,7 +650,7 @@ fn debug_output_dir() -> PathBuf {
         .or_else(dirs::document_dir)
         .or_else(dirs::home_dir)
         .unwrap_or_else(std::env::temp_dir)
-        .join("Hermes Debug Reports")
+        .join(format!("{} Debug Reports", BRAND_APP_NAME))
 }
 
 fn unique_debug_zip_path(output_dir: &Path, unix_ms: u128) -> PathBuf {

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实践七：零代码制作本地应用 ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Practice-Cases_Practice-Seven" data-v-bd9b7757><div><h1 id="实践七-零代码制作本地应用" tabindex="-1">实践七：零代码制作本地应用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#实践七-零代码制作本地应用" aria-label="Permalink to &quot;实践七：零代码制作本地应用&quot;">​</a></h1><h2 id="一、文档说明" tabindex="-1">一、文档说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#一、文档说明" aria-label="Permalink to &quot;一、文档说明&quot;">​</a></h2><p>本文介绍如何通过 <code>WorkBuddy</code> 以自然语言方式设计、生成、调试并持续升级本地应用，适用于无代码基础或希望快速验证想法的用户。</p><h2 id="二、让-ai-帮你设计应用" tabindex="-1">二、让 <code>AI</code> 帮你设计应用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#二、让-ai-帮你设计应用" aria-label="Permalink to &quot;二、让 `AI` 帮你设计应用&quot;">​</a></h2><h3 id="_1-操作说明" tabindex="-1">1）操作说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#_1-操作说明" aria-label="Permalink to &quot;1）操作说明&quot;">​</a></h3><p>为了让 <code>AI</code> 更好地完成应用开发工作，建议在新建任务时，选择代码开发模式开启新的对话。</p><img src="../../../assets/image-11.DHE-MbN5.png" width="800px"><h3 id="_2-示例指令" tabindex="-1">2）示例指令 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#_2-示例指令" aria-label="Permalink to &quot;2）示例指令&quot;">​</a></h3><blockquote><p>请帮我设计一个本地可运行的知识管理小工具，支持新增、搜索、编辑和分类，界面简洁，适合个人日常记录使用，并直接生成可运行的代码。</p></blockquote><h3 id="_3-预期结果" tabindex="-1">3）预期结果 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#_3-预期结果" aria-label="Permalink to &quot;3）预期结果&quot;">​</a></h3><p><code>WorkBuddy</code> 会理解需求，自动生成完整代码并尝试运行，最终效果如下：</p><img src="../../../assets/image-12.ebzuuDIW.png" width="800px"><h2 id="三、让-ai-帮你解决报错" tabindex="-1">三、让 <code>AI</code> 帮你解决报错 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#三、让-ai-帮你解决报错" aria-label="Permalink to &quot;三、让 `AI` 帮你解决报错&quot;">​</a></h2><h3 id="_1-操作说明-1" tabindex="-1">1）操作说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#_1-操作说明-1" aria-label="Permalink to &quot;1）操作说明&quot;">​</a></h3><p>项目运行过程中出现异常时，只需在对话中描述观察到的现象，<code>WorkBuddy</code> 会继续基于当前上下文进行排查。</p><h3 id="_2-示例指令-1" tabindex="-1">2）示例指令 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#_2-示例指令-1" aria-label="Permalink to &quot;2）示例指令&quot;">​</a></h3><blockquote><p>点击保存按钮后页面白屏，控制台提示 <code>TypeError</code>，请帮我定位原因并修复。</p></blockquote><h3 id="_3-提升修复效率的建议" tabindex="-1">3）提升修复效率的建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#_3-提升修复效率的建议" aria-label="Permalink to &quot;3）提升修复效率的建议&quot;">​</a></h3><ul><li><strong>描述具体现象</strong>：例如按钮名称、报错位置、触发步骤。</li><li><strong>支持多轮排查</strong>：首次修复未完全解决时，可继续补充最新现象。</li><li><strong>善用截图</strong>：报错界面、控制台信息和日志截图都能帮助定位问题。</li></ul><h2 id="四、让-ai-帮你持续升级系统" tabindex="-1">四、让 <code>AI</code> 帮你持续升级系统 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#四、让-ai-帮你持续升级系统" aria-label="Permalink to &quot;四、让 `AI` 帮你持续升级系统&quot;">​</a></h2><p><code>WorkBuddy</code> 不仅可以生成初版应用，还可以在后续使用中持续扩展系统能力。</p><h3 id="_1-常见升级场景" tabindex="-1">1）常见升级场景 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#_1-常见升级场景" aria-label="Permalink to &quot;1）常见升级场景&quot;">​</a></h3><table tabindex="0"><thead><tr><th>需求描述</th><th><code>AI</code> 可能执行的动作</th></tr></thead><tbody><tr><td>希望支持模糊搜索，不依赖精确关键词</td><td>接入本地向量或语义检索能力</td></tr><tr><td>每天早上自动推送待处理任务</td><td>配置自动化任务并汇总待办</td></tr><tr><td>通过 <code>QQ</code> 或微信随时录入内容</td><td>对接消息平台并增加移动端输入通道</td></tr><tr><td>新增内容时自动关联已有记录</td><td>增加关联分析与知识整理能力</td></tr></tbody></table><h2 id="五、使用建议" tabindex="-1">五、使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven#五、使用建议" aria-label="Permalink to &quot;五、使用建议&quot;">​</a></h2><ul><li><strong>先做最小可用版本</strong>：先完成核心功能，再逐步增加复杂能力。</li><li><strong>问题描述尽量具体</strong>：越具体，<code>AI</code> 越容易快速修复。</li><li><strong>把升级需求拆开提</strong>：一次只增加一类能力，更利于稳定迭代。</li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Seven</a></div>
+</body>
+</html>

@@ -1029,8 +1029,9 @@ mod tests {
     fn floor_gate_accepts_packages_below_or_equal_desktop() {
         // The current package version and older floors are servable.
         assert!(desktop_ge(env!("CARGO_PKG_VERSION")));
-        assert!(desktop_ge("0.7.0"));
-        assert!(desktop_ge("0.6.3"));
+        let (major, minor, patch) = semver_parts(env!("CARGO_PKG_VERSION")).unwrap();
+        let previous_patch = format!("{major}.{minor}.{}", patch.saturating_sub(1));
+        assert!(desktop_ge(&previous_patch));
         assert!(desktop_ge("0.0.1"));
         assert!(desktop_ge("")); // no floor declared → any shell
     }

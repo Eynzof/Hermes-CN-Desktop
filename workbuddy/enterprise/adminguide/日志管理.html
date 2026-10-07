@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>腾讯云代码助手 CodeBuddy – AI 代码编辑器 - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_enterprise_adminguide_%E6%97%A5%E5%BF%97%E7%AE%A1%E7%90%86" data-v-bd9b7757><div><p>腾讯云代码助手支持企业管理员在企业后台查看企业成员的操作日志，包括操作人、操作内容、操作时间等等，帮助企业管理员统一管理日志，实现企业成员的操作可查看可追溯，可用于团队协作追溯、问题排查与安全合规。</p><h2 id="登录企业后台" tabindex="-1">登录企业后台 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理#登录企业后台" aria-label="Permalink to &quot;登录企业后台&quot;">​</a></h2><p>企业管理员可以登录<a href="https://copilot.tencent.com/admin/overview" target="_blank" rel="noreferrer">企业后台</a>进行日志管理。</p><p><img src="../../assets/063df2305b1211f094cd52540099c741.png" alt="" data-zoomable="true"></p><h2 id="操作日志" tabindex="-1">操作日志 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理#操作日志" aria-label="Permalink to &quot;操作日志&quot;">​</a></h2><h3 id="日期筛选" tabindex="-1">日期筛选 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理#日期筛选" aria-label="Permalink to &quot;日期筛选&quot;">​</a></h3><p>支持按昨日、今日、本周、本月、近7天、近30天这些日期筛选项进行快捷筛选，以及支持手动选择日期进行筛选。通过快捷筛选，您可以快速查看操作日志。</p><p><img src="../../assets/972904735b1211f094cd52540099c741.png" alt="" data-zoomable="true"></p><h3 id="搜索" tabindex="-1">搜索 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理#搜索" aria-label="Permalink to &quot;搜索&quot;">​</a></h3><p>除了日期筛选外，您还可以通过搜索操作内容，根据操作内容文本来模糊匹配，进行快速筛选操作日志。</p><p><img src="../../assets/7f334faf5b1311f09c7652540044a08e.png" alt="" data-zoomable="true"></p><h3 id="刷新" tabindex="-1">刷新 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理#刷新" aria-label="Permalink to &quot;刷新&quot;">​</a></h3><p>点击<strong>刷新</strong>按钮，可以对当前页面进行刷新，同步最新的操作日志数据。</p><p><img src="../../assets/c99717075b1311f0ba94525400454e06.png" alt="" data-zoomable="true"></p><h3 id="操作日志列表内容" tabindex="-1">操作日志列表内容 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理#操作日志列表内容" aria-label="Permalink to &quot;操作日志列表内容&quot;">​</a></h3><p>列表内容包括操作、操作内容、操作端、操作人、IP 地址、操作时间的列表字段，按时间顺序进行排列展示，最新的数据在前。</p><p><img src="../../assets/3f71f0135b1411f0922d5254007c27c5.png" alt="" data-zoomable="true"></p><ul><li><p>操作</p><p>指操作类型，包括后台登录、插件登录、网页对话登录、邀请成员、审批成员、添加成员等等，并且支持点击<strong>筛选</strong>按钮进行筛选，支持输入搜索，如下图所示。</p><p><img src="../../assets/b987b9da5b1411f0857a525400e889b2.png" alt="" data-zoomable="true"></p></li><li><p>操作内容</p><p>指记录企业成员具体的操作内容，例如记录成员导出数据、登录企业后台的操作。</p></li><li><p>操作端</p><p>操作端包括企业管理后台、IDE 插件、网页对话、API，记录企业成员在哪个操作端进行操作，并且支持点击<strong>筛选</strong>按钮进行筛选，支持输入搜索。</p><p><img src="../../assets/a9a5daca5b1511f095485254005ef0f7.png" alt="" data-zoomable="true"></p></li><li><p>操作人</p><p>记录了操作日志的所属人，包括企业内的所有成员，以及已删除的成员。支持点击<strong>筛选</strong>按钮进行快速筛选，并且支持输入搜索。</p><p><img src="../../assets/bd9a45fa5b1711f09fd0525400bf7822.png" alt="" data-zoomable="true"></p></li><li><p>IP 地址</p><p>记录了企业成员在操作端进行操作的 IP 地址。</p></li><li><p>操作时间</p><p>记录了操作人操作的时间戳，目前仅精确到秒。</p></li></ul><h3 id="导出操作日志" tabindex="-1">导出操作日志 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理#导出操作日志" aria-label="Permalink to &quot;导出操作日志&quot;">​</a></h3><p>支持点击<strong>下载</strong>按钮导出操作日志的 Excel 文件，文件中除了操作列表中的字段外，还包括了企业名称和数据的统计时间。</p><p><img src="../../assets/c2a606645b1811f09c7652540044a08e.png" alt="" data-zoomable="true"></p></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理">https://www.codebuddy.cn/docs/enterprise/adminguide/日志管理</a></div>
+</body>
+</html>

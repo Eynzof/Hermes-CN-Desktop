@@ -34,7 +34,7 @@ describe("session-model-override", () => {
   });
 
   it("ignores selections without a model", () => {
-    rememberSessionModelOverride("s1", { model: "" });
+    rememberSessionModelOverride("s1", { model: "", provider: "deepseek" });
     expect(readSessionModelOverride("s1")).toBeNull();
   });
 
@@ -45,7 +45,7 @@ describe("session-model-override", () => {
   });
 
   it("no-ops on empty session id", () => {
-    rememberSessionModelOverride("", { model: "A" });
+    rememberSessionModelOverride("", { model: "A", provider: "deepseek" });
     expect(readSessionModelOverride("")).toBeNull();
   });
 });

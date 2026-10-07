@@ -29,7 +29,7 @@ import {
   getCachedModelOptions,
   invalidateModelOptionsCache,
 } from "@/lib/model-options-cache";
-import { buildGatewayModelConfigValue } from "@/lib/provider-id";
+import { assertGatewayModelConfigResult, buildGatewayModelConfigValue } from "@/lib/provider-id";
 import type { ReasoningEffort } from "@/lib/reasoning-effort";
 import {
   rememberSessionMapping,
@@ -668,7 +668,7 @@ export function useGateway() {
     async (
       sessionId: string,
       model: string,
-      provider?: string,
+      provider: string,
     ): Promise<ConfigSetResult> => {
       ensureSubscribed();
       const value = buildGatewayModelConfigValue(model, provider);
@@ -681,6 +681,7 @@ export function useGateway() {
         }),
         "config.set",
       );
+      assertGatewayModelConfigResult(value, result.value);
       invalidateModelOptionsCache(sessionId);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["sessions"] }),
@@ -695,17 +696,19 @@ export function useGateway() {
   const setRuntimeModel = useCallback(
     async (
       model: string,
-      provider?: string,
+      provider: string,
     ): Promise<ConfigSetResult> => {
       ensureSubscribed();
+      const value = buildGatewayModelConfigValue(model, provider);
       const result = parseGatewayResult(
         ConfigSetResult,
         await getGatewayClient().request("config.set", {
           key: "model",
-          value: buildGatewayModelConfigValue(model, provider),
+          value,
         }),
         "config.set",
       );
+      assertGatewayModelConfigResult(value, result.value);
       invalidateModelOptionsCache();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["sessions"] }),

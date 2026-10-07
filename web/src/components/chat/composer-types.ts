@@ -29,7 +29,7 @@ export interface ComposerAttachment {
 
 export interface ComposerModelSelection {
   model: string;
-  provider?: string;
+  provider: string;
   providerName?: string;
   contextWindow?: number;
 }

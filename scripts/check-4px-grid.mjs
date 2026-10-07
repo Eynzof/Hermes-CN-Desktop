@@ -101,6 +101,10 @@ function checkPixels(file, source, index, property, value, excerpt) {
 
 function checkRadius(file, source, index, property, value, excerpt, selector = "") {
   const parts = String(value).trim().split(/\s+/);
+  // The shared radius tiers all resolve to zero in the square design system.
+  // Fork components can keep using these tokens instead of literal radii.
+  if (/^var\(--h-radius-(?:xs|sm|md|lg|xl|pill)\)$/.test(String(value).trim())) return;
+  if (String(value).trim() === "inherit") return;
   if (parts.length > 0 && parts.every((part) => /^(?:0|0px)$/.test(part))) return;
   if (parts.length === 1 && parts[0] === "50%" && circularSelector.test(selector)) return;
   addViolation(file, source, index, property, String(value).trim(), excerpt);

@@ -1,4 +1,5 @@
 pub mod bootstrap;
+pub mod brand_generated;
 pub mod coding_agents;
 pub mod commands;
 pub mod connection;
@@ -8,6 +9,7 @@ pub mod embedded;
 pub mod env_file;
 pub mod environment;
 pub mod error;
+pub mod model_registry;
 pub mod oauth_session;
 pub mod path_resolver;
 pub mod prevent_sleep;
