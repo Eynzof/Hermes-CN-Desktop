@@ -19,6 +19,7 @@ import {
   buildVoiceEnvUpdates,
   buildVoiceSaveConfig,
   envConfigured,
+  MINIMAX_TTS_ENDPOINTS,
   getVoiceConfigValue,
   voiceProviderEnvKey,
   voiceProviderOptions,
@@ -71,11 +72,17 @@ function fieldOptions(
   // select options. Fall back to the hardcoded snapshot only when the
   // schema declares no options (older backends / free-form fields).
   const schemaOptions = schema.fields[key]?.options;
+  if (key === "tts.minimax.model") {
+    return Array.from(new Set([...VOICE_SELECT_OPTIONS[key], ...(schemaOptions ?? [])]));
+  }
   if (schemaOptions && schemaOptions.length > 0) return schemaOptions;
   return VOICE_SELECT_OPTIONS[key];
 }
 
 function fieldOptionLabel(key: string, value: string, elevenLabsVoices?: ElevenLabsVoicesResponse | null): string {
+  if (key === "tts.minimax.region" && MINIMAX_TTS_ENDPOINTS[value]) {
+    return `${value === "cn" ? "China" : "Global"} (default: ${MINIMAX_TTS_ENDPOINTS[value]})`;
+  }
   if (key === "tts.elevenlabs.voice_id" && elevenLabsVoices?.voices.length) {
     return elevenLabsVoices.voices.find((voice) => voice.voice_id === value)?.label ?? value;
   }
@@ -98,11 +105,13 @@ function ProviderPicker({
   value,
   providers,
   envVars,
+  values,
   onChange,
 }: {
   kind: "stt" | "tts";
   value: string;
   providers: VoiceProviderMeta[];
+  values?: VoiceSettingsDraft["values"];
   envVars?: Record<string, EnvVarInfo>;
   onChange?: (provider: string) => void;
 }) {
@@ -119,7 +128,7 @@ function ProviderPicker({
         >
           <span className={s.providerName}>
             <span>{provider.label}</span>
-            <EnvBadge envVars={envVars} envKey={provider.envKey} />
+            <EnvBadge envVars={envVars} envKey={voiceProviderEnvKey(kind, provider.id, values)} />
           </span>
           <p>{provider.description}</p>
         </button>
@@ -147,6 +156,7 @@ function ProviderFields({
     onDraftChange?.({
       ...draft,
       values: { ...draft.values, [key]: value },
+      ttsApiKey: key === "tts.minimax.region" ? "" : draft.ttsApiKey,
     });
   };
 
@@ -156,6 +166,9 @@ function ProviderFields({
         const field = schema.fields[key];
         const value = fieldValue(draft, key);
         const options = fieldOptions(key, schema, elevenLabsVoices);
+        if (key === "tts.minimax.model" && value && options && !options.includes(String(value))) {
+          options.push(String(value));
+        }
         const label = VOICE_FIELD_LABELS[key] ?? key;
         if (field?.type === "boolean") {
           return (
@@ -232,7 +245,7 @@ export function VoiceSettingsView({
   const sttProvider = selectedProvider(sttProviders, draft.sttProvider);
   const ttsProvider = selectedProvider(ttsProviders, draft.ttsProvider);
   const sttEnvKey = voiceProviderEnvKey("stt", draft.sttProvider);
-  const ttsEnvKey = voiceProviderEnvKey("tts", draft.ttsProvider);
+  const ttsEnvKey = voiceProviderEnvKey("tts", draft.ttsProvider, draft.values);
 
   return (
     <div className={s.page}>
@@ -316,6 +329,7 @@ export function VoiceSettingsView({
             kind="tts"
             value={draft.ttsProvider}
             providers={ttsProviders}
+            values={draft.values}
             envVars={envVars}
             onChange={(provider) => onDraftChange?.({ ...draft, ttsProvider: provider })}
           />

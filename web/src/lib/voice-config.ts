@@ -113,9 +113,9 @@ const TTS_PROVIDER_META: Record<string, VoiceProviderMeta> = {
   minimax: {
     id: "minimax",
     label: "MiniMax TTS",
-    description: "MiniMax 语音合成，需要 MINIMAX_API_KEY。",
+    description: "MiniMax speech synthesis. Global uses MINIMAX_API_KEY; China uses MINIMAX_CN_API_KEY.",
     envKey: "MINIMAX_API_KEY",
-    configKeys: ["tts.minimax.model", "tts.minimax.voice_id"],
+    configKeys: ["tts.minimax.region", "tts.minimax.model", "tts.minimax.voice_id"],
   },
   mistral: {
     id: "mistral",
@@ -165,6 +165,7 @@ export const VOICE_FIELD_LABELS: Record<string, string> = {
   "tts.xai.language": "xAI 语言",
   "tts.xai.speed": "xAI 语速",
   "tts.xai.auto_speech_tags": "xAI 自动语音标签",
+  "tts.minimax.region": "MiniMax region",
   "tts.minimax.model": "MiniMax 模型",
   "tts.minimax.voice_id": "MiniMax 语音",
   "tts.mistral.model": "Mistral 模型",
@@ -194,7 +195,7 @@ export const VOICE_FIELD_PLACEHOLDERS: Record<string, string> = {
   "tts.xai.voice_id": "eve",
   "tts.xai.language": "en",
   "tts.xai.speed": "1.0",
-  "tts.minimax.model": "speech-02-hd",
+  "tts.minimax.model": "speech-2.8-hd",
   "tts.minimax.voice_id": "English_expressive_narrator",
   "tts.mistral.model": "voxtral-mini-tts-2603",
   "tts.mistral.voice_id": "c69964a6-ab8b-4f8a-9465-ec0925096ec8",
@@ -206,7 +207,14 @@ export const VOICE_FIELD_PLACEHOLDERS: Record<string, string> = {
   "tts.neutts.device": "cpu",
 };
 
+export const MINIMAX_TTS_ENDPOINTS: Record<string, string> = {
+  global: "https://api.minimax.io/v1/t2a_v2",
+  cn: "https://api.minimaxi.com/v1/t2a_v2",
+};
+
 export const VOICE_SELECT_OPTIONS: Record<string, string[]> = {
+  "tts.minimax.region": ["global", "cn"],
+  "tts.minimax.model": ["speech-2.8-hd", "speech-2.8-turbo", "speech-2.6-hd", "speech-2.6-turbo", "speech-02-hd", "speech-02-turbo", "speech-01-hd", "speech-01-turbo"],
   "stt.local.model": ["tiny", "base", "small", "medium", "large-v3"],
   "stt.openai.model": ["whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe", "gpt-transcribe"],
   "stt.elevenlabs.model_id": ["scribe_v2", "scribe_v1"],
@@ -245,7 +253,14 @@ function providerMeta(kind: VoiceConfigKind, id: string): VoiceProviderMeta {
   };
 }
 
-export function voiceProviderEnvKey(kind: VoiceConfigKind, provider: string): string | undefined {
+export function voiceProviderEnvKey(
+  kind: VoiceConfigKind,
+  provider: string,
+  values: VoiceSettingsDraft["values"] = {},
+): string | undefined {
+  if (kind === "tts" && provider === "minimax" && values["tts.minimax.region"] === "cn") {
+    return "MINIMAX_CN_API_KEY";
+  }
   return providerMeta(kind, provider).envKey;
 }
 
@@ -336,7 +351,11 @@ export function buildVoiceSaveConfig(
 
   for (const key of [...sttMeta.configKeys, ...ttsMeta.configKeys]) {
     const value = draft.values[key];
-    if (shouldPersistValue(value)) patches.push(buildNestedConfigUpdate(key, value));
+    if (key === "tts.minimax.region" && value === "") {
+      patches.push(buildNestedConfigUpdate(key, ""));
+    } else if (shouldPersistValue(value)) {
+      patches.push(buildNestedConfigUpdate(key, value));
+    }
   }
 
   return patches.reduce((next, patch) => mergeConfigUpdate(next, patch), current);
@@ -345,7 +364,7 @@ export function buildVoiceSaveConfig(
 export function buildVoiceEnvUpdates(draft: VoiceSettingsDraft): VoiceEnvUpdate[] {
   const updates = new Map<string, string>();
   const sttEnv = voiceProviderEnvKey("stt", draft.sttProvider);
-  const ttsEnv = voiceProviderEnvKey("tts", draft.ttsProvider);
+  const ttsEnv = voiceProviderEnvKey("tts", draft.ttsProvider, draft.values);
   const sttKey = draft.sttApiKey.trim();
   const ttsKey = draft.ttsApiKey.trim();
   if (sttEnv && sttKey) updates.set(sttEnv, sttKey);
