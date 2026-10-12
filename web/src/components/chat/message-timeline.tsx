@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, WheelEvent } from "react";
 import { useAtomValue } from "jotai";
 import { AlertTriangle, ChevronRight, Info, Volume2, VolumeX } from "lucide-react";
@@ -781,7 +781,12 @@ interface MessageBubbleProps {
   speech?: SpeechPlaybackControls;
 }
 
-function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
+// memo：流式响应时每个 token 都会让 `messages` 数组引用变化，导致
+// MessageTimeline 重渲染整个列表。历史消息的 message 对象引用不变（store 的
+// flatMap 只重建被更新的那一条），memo 让它们跳过重渲染，只有流式中的最后一条
+// 会随 delta 更新。turnStartedAt / sessionUsage / progressModel 只对最后一条非
+// undefined，历史消息恒为 undefined，浅比较稳定命中。
+const MessageBubble = memo(function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, speech }: MessageBubbleProps) {
   const showReasoning = useAtomValue(showReasoningAtom);
   const assistantDisplayName = useAtomValue(assistantDisplayNameAtom);
   const assistantAvatarDataUrl = useAtomValue(assistantAvatarEffectiveAtom);
@@ -959,7 +964,7 @@ function MessageBubble({ message, turnStartedAt, sessionUsage, progressModel, sp
       </div>
     </div>
   );
-}
+});
 
 export function MessageTimeline({
   messages,
