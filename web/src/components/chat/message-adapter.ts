@@ -1151,26 +1151,6 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
   return false;
 }
 
-function consolidateAssistantMessages(messages: HermesUIMessage[]): HermesUIMessage[] {
-  const result: HermesUIMessage[] = [];
-  for (const msg of messages) {
-    const last = result[result.length - 1];
-    if (msg.role === "assistant" && last?.role === "assistant") {
-      result[result.length - 1] = {
-        ...last,
-        status: msg.status === "error" || last.status === "error" ? "error" : msg.status,
-        parts: mergeParts(last.parts, msg.parts),
-        metadata: mergeMessageMetadata(last.metadata, msg.metadata, {
-          persistedId: last.metadata?.persistedId ?? msg.metadata?.persistedId,
-        }),
-      };
-    } else {
-      result.push(msg);
-    }
-  }
-  return result;
-}
-
 function mergeMatchedMessage(storedMessage: HermesUIMessage, liveMessage: HermesUIMessage): HermesUIMessage {
   const storedCompletionWins = isCorruptedLiveCompletionSupersededByStored(
     storedMessage,
@@ -1198,13 +1178,15 @@ export function mergeHermesUIMessages(
   if (live.length === 0) return stored;
   if (stored.length === 0) return live;
 
-  const consolidatedLive = consolidateAssistantMessages(live);
-
+  // The gateway reducer already assembles each live assistant turn under its
+  // own client id. Async delegation follow-ups can start without an optimistic
+  // user message, so adjacent assistant messages are not necessarily one turn.
+  // Keep their ids, tool calls, status and timing separate during reconciliation.
   const usedLiveIndexes = new Set<number>();
   const merged: HermesUIMessage[] = [];
 
   for (const storedMessage of stored) {
-    const liveIndex = consolidatedLive.findIndex(
+    const liveIndex = live.findIndex(
       (liveMessage, index) =>
         !usedLiveIndexes.has(index) && isSameCanonicalMessage(storedMessage, liveMessage),
     );
@@ -1215,11 +1197,11 @@ export function mergeHermesUIMessages(
     }
 
     usedLiveIndexes.add(liveIndex);
-    const liveMessage = consolidatedLive[liveIndex]!;
+    const liveMessage = live[liveIndex]!;
     merged.push(mergeMatchedMessage(storedMessage, liveMessage));
   }
 
-  consolidatedLive.forEach((liveMessage, index) => {
+  live.forEach((liveMessage, index) => {
     if (usedLiveIndexes.has(index)) return;
     if (isStaleInterruptedLiveMessage(liveMessage, stored)) return;
     if (isReplayDuplicateLiveMessage(liveMessage, stored)) return;

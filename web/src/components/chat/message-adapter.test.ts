@@ -17,6 +17,7 @@ import {
   storedMessagesToChatMessages,
 } from "./message-adapter";
 import { stableTextHash } from "@/lib/ui-store";
+import { createEmptyChatRuntime, reduceGatewayEvent } from "@/stores/chat";
 
 function sessionMessage(overrides: Partial<SessionMessage>): SessionMessage {
   return {
@@ -1125,6 +1126,68 @@ describe("message adapter", () => {
     // Live wins because it carries richer metadata (the same reason
     // mergeHermesUIMessages prefers consolidated live entries elsewhere).
     expect(merged[0]?.id).toBe("live-1");
+  });
+});
+
+describe("assistant turns started by async delegation", () => {
+  function asyncFollowup(status: "streaming" | "complete", previousError = false) {
+    let runtime = createEmptyChatRuntime(1);
+    const apply = (type: string, payload: Record<string, unknown>, now: number) => {
+      runtime = reduceGatewayEvent(runtime, { type, session_id: "s1", payload }, now);
+    };
+    apply("message.start", {}, 1_000);
+    apply("tool.start", { tool_id: "old-tool", name: "delegate_task" }, 1_010);
+    apply("tool.complete", { tool_id: "old-tool", output: "delegated" }, 1_020);
+    apply("message.complete", { text: "Parallel work started", status: previousError ? "error" : "complete" }, 1_100);
+    const previous = structuredClone(runtime.messages[0]!);
+    // Async delegation completion starts another turn without startPromptAtom
+    // inserting an optimistic user row between the two assistant messages.
+    apply("message.start", {}, 2_000);
+    apply("tool.start", { tool_id: "new-tool", name: "terminal" }, 2_010);
+    apply("message.delta", { text: "Checking the result" }, 2_020);
+    if (status === "complete") {
+      apply("tool.complete", { tool_id: "new-tool", output: "verified" }, 2_030);
+      apply("message.complete", { text: "Checking the result", status: "complete" }, 2_100);
+    }
+    return { previous, runtime };
+  }
+
+  it.each(["streaming", "complete"] as const)("keeps a %s async follow-up separate from the persisted prior turn", (status) => {
+    const { previous, runtime } = asyncFollowup(status);
+    const stored = { ...previous, id: "stored-previous", metadata: { persistedId: 100 } };
+    const merged = mergeHermesUIMessages([stored], runtime.messages);
+    const chat = hermesUIMessagesToChatMessages(merged);
+    expect(chat).toHaveLength(2);
+    expect(chat.filter((message) => message.text?.includes("Parallel work started"))).toHaveLength(1);
+    expect(chat[0]?.status).toBe("complete");
+    expect(chat[0]?.tools?.map((tool) => tool.tool_id)).toEqual(["old-tool"]);
+    expect(chat[1]?.id).toBe("live-assistant-2000");
+    expect(chat[1]?.text).toBe("Checking the result");
+    expect(chat[1]?.status).toBe(status);
+    expect(chat[1]?.tools?.map((tool) => tool.tool_id)).toEqual(["new-tool"]);
+    expect(chat[1]?.createdAt).toBe(2_000);
+    if (status === "complete") expect(merged[1]?.metadata?.timing?.startedAt).toBe(2_000);
+  });
+
+  it("reconciles both completed async turns without producing a combined third bubble", () => {
+    const { runtime } = asyncFollowup("complete");
+    const stored = runtime.messages.map((message, index) => ({
+      ...structuredClone(message), id: `stored-${index}`, metadata: { persistedId: 100 + index },
+    }));
+    const merged = mergeHermesUIMessages(stored, runtime.messages);
+    expect(merged).toHaveLength(2);
+    expect(merged.map((message) => hermesUIMessageToChatMessage(message)?.text)).toEqual([
+      "Parallel work started", "Checking the result",
+    ]);
+  });
+
+  it("does not carry an earlier turn's error into the next streaming turn", () => {
+    const { previous, runtime } = asyncFollowup("streaming", true);
+    const merged = mergeHermesUIMessages([{ ...previous, id: "stored-error" }], runtime.messages);
+    const assistants = hermesUIMessagesToChatMessages(merged).filter((message) => message.role === "assistant");
+    expect(assistants).toHaveLength(2);
+    expect(assistants[1]?.status).toBe("streaming");
+    expect(assistants[1]?.error).toBe(false);
   });
 });
 
