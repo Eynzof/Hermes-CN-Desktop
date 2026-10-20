@@ -41,7 +41,7 @@ beforeEach(() => {
 
 describe("builtin provider catalog", () => {
   it("ships the current Kimi and SiliconFlow coding models", () => {
-    expect(BUILTIN_PROVIDER_CATALOG_VERSION).toBe("2026.07.26.1");
+    expect(BUILTIN_PROVIDER_CATALOG_VERSION).toBe("2026.10.20.1");
 
     const kimi = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "kimi-for-coding");
     expect(kimi).toMatchObject({
@@ -516,16 +516,16 @@ describe("provider catalog config updates", () => {
     });
 
     expect(byId.get("minimax-cn")).toMatchObject({
-      name: "MiniMax · Token Plan",
+      name: "MiniMax · API",
       baseUrl: "https://api.minimaxi.com/anthropic",
       apiMode: "anthropic_messages",
       transport: "anthropic_messages",
-      defaultModel: "MiniMax-M3",
+      defaultModel: "MiniMax-M3.1-Flash",
       supportsModelListing: false,
     });
   });
 
-  it("ships MiniMax-M3 in the Token Plan preset with a 1M context window", () => {
+  it("ships Flash first and M3 in the API preset with a 1M context window", () => {
     const preset = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "minimax-cn");
     expect(preset).toBeTruthy();
 
@@ -535,7 +535,8 @@ describe("provider catalog config updates", () => {
       supportsTools: true,
       supportsReasoning: true,
     });
-    expect(preset!.models[0]?.id).toBe("MiniMax-M3");
+    expect(preset!.models.map((model) => model.id)).toEqual(["MiniMax-M3.1-Flash", "MiniMax-M3"]);
+    expect(preset!.models[0]).toMatchObject({ contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true });
 
     const config = buildProviderSettingsUpdate(
       {},
