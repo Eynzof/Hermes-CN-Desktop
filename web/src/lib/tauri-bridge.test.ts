@@ -73,6 +73,29 @@ afterEach(() => {
 });
 
 describe("isTauriDevMode", () => {
+  it.each([
+    { version: "0.21.6", ready: true },
+    { version: "0.22.0", ready: true },
+    { version: "0.23.0", ready: false },
+  ])("finishes bootstrap against official $version without a version route", async ({ version, ready }) => {
+    (globalThis as any).window = { __TAURI_INTERNALS__: {} };
+    mockInvoke.mockImplementation(async (command: string, args?: { input?: { path?: string } }) => {
+      if (command === "get_runtime_config") return {
+        apiBaseUrl: "http://gateway.test:9119", gatewayUrl: "ws://gateway.test:9119/api/ws",
+        sessionToken: "remote-token", connectionMode: "remote", backendReady: true,
+      };
+      if (command === "api_request") {
+        const found = args?.input?.path === "/api/status";
+        return { ok: found, status: found ? 200 : 404, headers: {}, body: JSON.stringify(found ? { version } : { detail: "No such API endpoint" }) };
+      }
+      return {};
+    });
+    await expect(installTauriBridge()).resolves.toBeUndefined();
+    expect(window.__HERMES_RUNTIME__).toMatchObject({ connectionMode: "remote", backendReady: ready });
+    if (!ready) expect(window.__HERMES_RUNTIME__).toMatchObject({ backendRecoveryReason: "external-backend-incompatible", backendRecoveryDetail: expect.stringContaining(version) });
+    expect(window.hermesDesktop?.softwareUpdateCheck).toBeTypeOf("function");
+    expect(mockInvoke.mock.calls.some(([command]) => command === "fatal_error_and_exit")).toBe(false);
+  });
   it("refreshes offline UI readiness and credentials after the supervisor adopts a new Core", async () => {
     await installTauriBridge();
     window.__HERMES_RUNTIME__!.backendReady = false;

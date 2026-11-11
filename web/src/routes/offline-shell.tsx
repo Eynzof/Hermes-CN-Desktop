@@ -52,6 +52,24 @@ function OfflineHome() {
     );
   }
 
+  if (recoveryReason === "external-backend-incompatible" || recoveryReason === "external-backend-version-unavailable") {
+    const incompatible = recoveryReason === "external-backend-incompatible";
+    return (
+      <OfflinePage title={incompatible ? "外部 Hermes 版本暂不兼容" : "无法确认外部 Hermes 版本"} sub={externalTarget}>
+        <div className={s.empty}>
+          <Globe2 size={32} />
+          <h2>{incompatible ? "请检查版本与更新" : "后端返回了无法使用的版本信息"}</h2>
+          <p>{runtimeConfig?.backendRecoveryDetail}</p>
+          <p>可以检查连接、切换内置内核，或更新桌面界面后重试。</p>
+          <div>
+            <Button variant="solid" tone="accent" onClick={() => { window.location.hash = "#/connection"; }}>检查连接</Button>
+            <Button variant="outline" onClick={() => { window.location.hash = "#/updates"; }}>软件更新</Button>
+          </div>
+        </div>
+      </OfflinePage>
+    );
+  }
+
   return (
     <OfflinePage title="当前没有正在使用的 Hermes 后端" sub="内置内核已停止或卸载。你仍然可以连接外部 Hermes，或恢复内置内核。">
       <div className={s.empty}>

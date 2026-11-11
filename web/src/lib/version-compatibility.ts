@@ -3,6 +3,8 @@ import matrixJson from "../../../compatibility/desktop-core.json";
 export interface DesktopCoreCompatibilityRule {
   desktopSeries: string;
   coreSeries: string[];
+  /** Attached servers only; never expands the managed runtime upgrade contract. */
+  externalCoreSeries?: string[];
   runtimeManifestSchemas: number[];
   status: "current" | "historical" | string;
 }
@@ -48,4 +50,9 @@ export function isDesktopCoreCompatible(
   const coreSeries = versionSeries(coreVersion);
   return coreSeries !== null
     && compatibleCoreSeriesForDesktop(desktopVersion).includes(coreSeries);
+}
+
+export function externalCoreSeriesForDesktop(desktopVersion: string): string[] {
+  const rule = compatibilityRuleForDesktop(desktopVersion);
+  return rule?.externalCoreSeries ?? rule?.coreSeries ?? [];
 }

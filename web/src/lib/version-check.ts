@@ -2,6 +2,7 @@ import { runtime } from "./runtime";
 import { DESKTOP_VERSION, EXPECTED_BACKEND_VERSION } from "./build-info";
 import {
   expectedCoreSeriesLabel,
+  externalCoreSeriesForDesktop,
   isDesktopCoreCompatible,
 } from "./version-compatibility";
 import type { ConnectionMode } from "@hermes/protocol";
@@ -14,11 +15,13 @@ export interface BackendVersionInfo {
 export type BackendRecoveryReason =
   | "managed-runtime-offline"
   | "external-backend-unreachable"
-  | "external-backend-auth-required";
+  | "external-backend-auth-required"
+  | "external-backend-incompatible"
+  | "external-backend-version-unavailable";
 
 export type VersionCheckState =
   | { kind: "unchecked" }
-  | { kind: "deferred"; reason: BackendRecoveryReason }
+  | { kind: "deferred"; reason: BackendRecoveryReason; detail?: string }
   | { kind: "ok"; backendVersion: string }
   | { kind: "mismatch"; backendVersion: string; expectedVersion: string }
   | { kind: "unavailable"; reason: string };
@@ -99,13 +102,13 @@ function isExternalConnection(mode: ConnectionMode | undefined): boolean {
   return mode === "local" || mode === "remote";
 }
 
-function isCompatibleExternalPatch(actual: string, expected: string): boolean {
-  const actualParts = /^(\d+)\.(\d+)\.(\d+)$/.exec(actual);
-  const expectedParts = /^(\d+)\.(\d+)\.(\d+)$/.exec(expected);
-  return actualParts !== null && expectedParts !== null
-    && actualParts[1] === expectedParts[1]
-    && actualParts[2] === expectedParts[2]
-    && Number(actualParts[3]) >= Number(expectedParts[3]);
+function isCompatibleExternalVersion(actual: string): boolean {
+  // Preserve versions already accepted by the original Core matrix, including
+  // community build suffixes; only the newly added external series is strict.
+  if (isDesktopCoreCompatible(DESKTOP_VERSION, actual)) return true;
+  const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(actual);
+  return parts !== null
+    && externalCoreSeriesForDesktop(DESKTOP_VERSION).includes(`${Number(parts[1])}.${Number(parts[2])}`);
 }
 
 function ipcErrorCode(error: unknown): string | undefined {
@@ -133,13 +136,13 @@ function isExternalBackendUnreachable(error: unknown): boolean {
  * `http://hermesui.localhost` on Windows), so a native browser fetch would be
  * rejected by the dashboard's intentionally narrow localhost CORS policy.
  */
-async function fetchBackendVersion(apiBaseUrl?: string): Promise<BackendVersionInfo> {
+async function fetchVersionEndpoint(path: string, apiBaseUrl?: string): Promise<BackendVersionInfo> {
   if (runtime.platform === "tauri") {
     const request = window.hermesDesktop?.request;
     if (!request) {
       throw new Error("desktop IPC bridge unavailable");
     }
-    const response = await request({ path: "/api/version", method: "GET" });
+    const response = await request({ path, method: "GET" });
     if (!response.ok) {
       throw new BackendVersionHttpError(response.status, response.body);
     }
@@ -147,13 +150,27 @@ async function fetchBackendVersion(apiBaseUrl?: string): Promise<BackendVersionI
   }
 
   const url = apiBaseUrl
-    ? `${apiBaseUrl.replace(/\/$/, "")}/api/version`
-    : runtime.getApiUrl("/api/version");
+    ? `${apiBaseUrl.replace(/\/$/, "")}${path}`
+    : runtime.getApiUrl(path);
   const response = await fetch(url);
   if (!response.ok) {
     throw new BackendVersionHttpError(response.status, await response.text());
   }
   return parseBackendVersion(await response.json());
+}
+
+async function fetchBackendVersion(apiBaseUrl: string | undefined, external: boolean): Promise<BackendVersionInfo> {
+  try {
+    return await fetchVersionEndpoint("/api/version", apiBaseUrl);
+  } catch (error) {
+    // Official CLI 0.21/0.22 exposes version on /api/status instead. Only a
+    // missing route on an attached server selects this documented contract;
+    // authentication errors and managed runtime integrity failures stay strict.
+    if (external && error instanceof BackendVersionHttpError && error.status === 404) {
+      return fetchVersionEndpoint("/api/status", apiBaseUrl);
+    }
+    throw error;
+  }
 }
 
 async function checkBackendVersion(
@@ -166,7 +183,9 @@ async function checkBackendVersion(
   const exactExpected = options.expectedVersion
     ?? (external ? null : runtimeKernelVersion);
   const expected = exactExpected
-    ?? expectedCoreSeriesLabel(DESKTOP_VERSION)
+    ?? (external
+      ? externalCoreSeriesForDesktop(DESKTOP_VERSION).map((series) => `${series}.x`).join(" / ")
+      : expectedCoreSeriesLabel(DESKTOP_VERSION))
     ?? EXPECTED_BACKEND_VERSION;
   if (runtime.platform === "web") {
     // Web/browser-companion mode: no managed runtime; skip the gate.
@@ -180,12 +199,21 @@ async function checkBackendVersion(
   }
 
   try {
-    const info = await fetchBackendVersion(apiBaseUrl);
+    const info = await fetchBackendVersion(apiBaseUrl, external);
     const versionMismatch = exactExpected !== null
       ? info.version !== exactExpected
-      : external && !isCompatibleExternalPatch(info.version, EXPECTED_BACKEND_VERSION);
-    const seriesMismatch = !isDesktopCoreCompatible(DESKTOP_VERSION, info.version);
+      : false;
+    const seriesMismatch = external
+      ? !isCompatibleExternalVersion(info.version)
+      : !isDesktopCoreCompatible(DESKTOP_VERSION, info.version);
     if (versionMismatch || seriesMismatch) {
+      if (external) {
+        return {
+          kind: "deferred",
+          reason: "external-backend-incompatible",
+          detail: `后端版本为 ${info.version}，当前界面支持 ${expected}。`,
+        };
+      }
       state = {
         kind: "mismatch",
         backendVersion: info.version,
@@ -205,6 +233,11 @@ async function checkBackendVersion(
         state = { kind: "deferred", reason: "external-backend-unreachable" };
         return state;
       }
+      return {
+        kind: "deferred",
+        reason: "external-backend-version-unavailable",
+        detail: error instanceof Error ? error.message : String(error),
+      };
     }
     state = {
       kind: "unavailable",

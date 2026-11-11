@@ -1235,8 +1235,8 @@ export async function installTauriBridge(): Promise<void> {
   (window as any).hermesDesktop = tauriBridge;
 
   // Reset any stale version check state, then verify before we let the React
-  // app run against this backend. A mismatch or unreachable /api/version
-  // triggers a fatal dialog and force-quits. We pass the config's apiBaseUrl
+  // app run against this backend. Managed runtime failures remain fatal;
+  // external connection failures mount the recovery UI. Pass apiBaseUrl
   // explicitly because window.__HERMES_RUNTIME__ is not populated yet.
   resetVersionCheck();
   recordRuntimeKernelVersion(config.kernelVersion);
@@ -1247,6 +1247,7 @@ export async function installTauriBridge(): Promise<void> {
     !config.apiBaseUrl &&
     (config.managedRuntimeDesiredState ?? "running") !== "running";
   let backendRecoveryReason: BackendRecoveryReason | undefined;
+  let backendRecoveryDetail: string | undefined;
   if (managedRuntimeIntentionallyOffline) {
     deferBackendVersionCheckForOfflineRuntime();
     backendRecoveryReason = "managed-runtime-offline";
@@ -1254,6 +1255,7 @@ export async function installTauriBridge(): Promise<void> {
     const versionState = await verifyBackendVersion(config.apiBaseUrl, { connectionMode });
     if (versionState.kind === "deferred") {
       backendRecoveryReason = versionState.reason;
+      backendRecoveryDetail = versionState.detail;
     } else if (versionState.kind !== "ok") {
       assertCompatible();
       throw new Error("version check failed during bridge installation");
@@ -1280,6 +1282,7 @@ export async function installTauriBridge(): Promise<void> {
       ? false
       : config.backendReady ?? Boolean(config.apiBaseUrl),
     backendRecoveryReason,
+    backendRecoveryDetail,
     guideState: config.guideState ?? "completed",
     managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
     managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",

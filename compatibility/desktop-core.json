@@ -6,6 +6,10 @@
       "coreSeries": [
         "0.21"
       ],
+      "externalCoreSeries": [
+        "0.21",
+        "0.22"
+      ],
       "runtimeManifestSchemas": [
         2
       ],

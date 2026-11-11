@@ -87,15 +87,15 @@ describe("version-check", () => {
       expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it("returns mismatch when backend version differs", async () => {
+    it("defers to recovery when the external backend version is unsupported", async () => {
       stubDesktopRequest({ version: "0.18.0", name: "hermes-agent" });
 
       const state = await verifyBackendVersion(undefined, { connectionMode: "remote" });
 
-      expect(state.kind).toBe("mismatch");
       expect(state).toMatchObject({
-        backendVersion: "0.18.0",
-        expectedVersion: "0.21.x",
+        kind: "deferred",
+        reason: "external-backend-incompatible",
+        detail: expect.stringContaining("0.18.0"),
       });
     });
 
@@ -133,7 +133,7 @@ describe("version-check", () => {
 
     it("keeps an explicit external version expectation exact", async () => {
       stubDesktopRequest({ version: "0.21.5" });
-      expect((await verifyBackendVersion(undefined, { connectionMode: "remote", expectedVersion: "0.21.0" })).kind).toBe("mismatch");
+      expect((await verifyBackendVersion(undefined, { connectionMode: "remote", expectedVersion: "0.21.0" })).kind).toBe("deferred");
     });
 
     it("returns unavailable when /api/version is missing or unreachable", async () => {
@@ -188,12 +188,12 @@ describe("version-check", () => {
       });
     });
 
-    it("keeps a reachable external backend without /api/version fatal", async () => {
+    it("keeps recovery available when both external version endpoints are missing", async () => {
       stubDesktopRequest({ detail: "not found" }, 404);
 
       const state = await verifyBackendVersion(undefined, { connectionMode: "remote" });
 
-      expect(state).toMatchObject({ kind: "unavailable", reason: expect.stringContaining("HTTP 404") });
+      expect(state).toMatchObject({ kind: "deferred", reason: "external-backend-version-unavailable", detail: expect.stringContaining("HTTP 404") });
     });
 
     it("preserves external recovery semantics when an unchecked request triggers revalidation", async () => {
