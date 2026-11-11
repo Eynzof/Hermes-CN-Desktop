@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use sysinfo::{Pid, System};
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,8 +50,21 @@ fn lock() -> Result<File, String> {
 
 fn alive(system: &System, pid: u32, started: Option<f64>) -> bool {
     system
-        .process(Pid::from_u32(pid))
+        .process(sysinfo::Pid::from_u32(pid))
         .is_some_and(|p| started.is_none_or(|start| p.start_time().abs_diff(start as u64) <= 1))
+}
+
+// Refresh only the pids referenced by the registry; a full System::new_all()
+// scan scales with total system processes and blocked the UI on every poll.
+fn refresh_known_pids(pids: &[u32]) -> System {
+    let mut system = System::new();
+    let known: Vec<sysinfo::Pid> = pids.iter().copied().map(sysinfo::Pid::from_u32).collect();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&known),
+        true,
+        ProcessRefreshKind::nothing().without_tasks(),
+    );
+    system
 }
 
 fn now() -> u64 {
@@ -68,15 +81,21 @@ fn read() -> Result<Registry, String> {
             .map_err(|_| "当前内核尚未提供任务状态，请先停止内核再应用更新".to_string())?,
     )
     .map_err(|e| format!("无法读取内核任务状态：{e}"))?;
-    let system = System::new_all();
+    let mut pids: Vec<u32> = registry.entries.iter().map(|e| e.pid).collect();
+    if let Some(m) = registry.maintenance.as_ref() {
+        pids.push(m.pid);
+    }
+    let system = if pids.is_empty() {
+        None
+    } else {
+        Some(refresh_known_pids(&pids))
+    };
     registry
         .entries
-        .retain(|e| alive(&system, e.pid, e.started));
-    if registry
-        .maintenance
-        .as_ref()
-        .is_some_and(|m| m.expires <= now() || !alive(&system, m.pid, m.started))
-    {
+        .retain(|e| system.as_ref().is_some_and(|s| alive(s, e.pid, e.started)));
+    if registry.maintenance.as_ref().is_some_and(|m| {
+        m.expires <= now() || !system.as_ref().is_some_and(|s| alive(s, m.pid, m.started))
+    }) {
         registry.maintenance = None;
     }
     Ok(registry)

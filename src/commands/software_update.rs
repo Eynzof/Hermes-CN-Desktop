@@ -309,16 +309,21 @@ pub fn app_progress(_percent: u8, source: Option<&str>) {
 }
 
 #[tauri::command]
-pub fn software_update_snapshot(app: AppHandle, state: State<'_, AppState>) -> SoftwareUpdateState {
+pub async fn software_update_snapshot(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<SoftwareUpdateState, String> {
     let _ = APP.set(app);
     let fingerprint = source_fingerprint();
     let config = crate::update_config::load().config;
     let activity = if managed_running(&state).unwrap_or(false) {
-        crate::update_activity::snapshot()
+        tokio::task::spawn_blocking(crate::update_activity::snapshot)
+            .await
+            .unwrap_or_else(|err| Err(err.to_string()))
     } else {
         Ok(vec![])
     };
-    change(false, |r| {
+    let snapshot = change(false, |r| {
         if !crate::update_operation::busy()
             && !r.fingerprint.is_empty()
             && r.fingerprint != fingerprint
@@ -351,7 +356,8 @@ pub fn software_update_snapshot(app: AppHandle, state: State<'_, AppState>) -> S
         {
             r.state.phase = "waiting".into();
         }
-    })
+    });
+    Ok(snapshot)
 }
 
 #[tauri::command]
