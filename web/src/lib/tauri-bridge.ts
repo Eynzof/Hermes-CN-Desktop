@@ -5,6 +5,9 @@
 // existing call sites (settings.tsx, projects.tsx, goose-composer.tsx, etc.)
 // work without any changes.
 
+import { closeExistingGateway, forceExistingGatewayReconnect } from "./gateway-client";
+import { flushUiStore } from "./ui-store";
+
 import type {
   ApiRequestInput,
   ApiRequestResult,
@@ -569,7 +572,19 @@ const tauriBridge = {
   },
 
   async applyConnectionConfig(input: ConnectionConfigInput): Promise<ApplyConnectionResult> {
-    return invokeCommand("apply_connection_config", { input });
+    await flushUiStore();
+    // Stop the old socket before native IPC changes the HTTP/WS destination.
+    // Otherwise its reconnect can resume an old session on the new backend
+    // during the short interval before the caller reloads the renderer.
+    closeExistingGateway();
+    try {
+      const result = await invokeCommand<ApplyConnectionResult>("apply_connection_config", { input });
+      if (!result.ok) forceExistingGatewayReconnect("connection-switch-failed");
+      return result;
+    } catch (error) {
+      forceExistingGatewayReconnect("connection-switch-failed");
+      throw error;
+    }
   },
 
   async testConnectionConfig(input: ConnectionConfigInput): Promise<TestConnectionResult> {

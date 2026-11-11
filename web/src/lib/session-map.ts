@@ -1,4 +1,5 @@
 import { readUiValue, writeUiValue } from "@/lib/ui-store";
+import { sessionStorageKey } from "@/lib/connection-scope";
 
 const STORAGE_KEY = "hermes:gateway-session-map";
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -14,12 +15,12 @@ type SessionMap = Record<string, SessionEntry>;
 // Persisted aliases identify history, but do not prove a handle exists in the
 // current Core process. Revalidate after every transport disconnect.
 const attachedSessions = new Set<string>();
-export function isGatewaySessionAttached(id: string): boolean { return attachedSessions.has(id); }
+export function isGatewaySessionAttached(id: string): boolean { return attachedSessions.has(sessionStorageKey(id)); }
 export function invalidateAttachedSessions(): void { attachedSessions.clear(); }
 
 
 function readMap(): SessionMap {
-  const parsed = readUiValue<unknown>(STORAGE_KEY, {});
+  const parsed = readUiValue<unknown>(sessionStorageKey(STORAGE_KEY), {});
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return {};
   }
@@ -47,7 +48,7 @@ function readMap(): SessionMap {
 }
 
 function writeMap(map: SessionMap) {
-  writeUiValue(STORAGE_KEY, map);
+  writeUiValue(sessionStorageKey(STORAGE_KEY), map);
 }
 
 function pruneExpired(map: SessionMap): SessionMap {
@@ -66,7 +67,7 @@ function pruneExpired(map: SessionMap): SessionMap {
 
 export function rememberSessionMapping(gatewaySessionId: string, persistentSessionId: string) {
   if (!gatewaySessionId || !persistentSessionId) return;
-  attachedSessions.add(gatewaySessionId);
+  attachedSessions.add(sessionStorageKey(gatewaySessionId));
   if (gatewaySessionId === persistentSessionId) return;
   const map = pruneExpired(readMap());
   map[gatewaySessionId] = { persistentId: persistentSessionId, ts: Date.now() };

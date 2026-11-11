@@ -1,7 +1,8 @@
 import { useRuntimeInfo } from "@/hooks/use-runtime-update";
 import { useStatus } from "@/hooks/use-status";
 import { BUILD_COMMIT, DESKTOP_VERSION, UNKNOWN_VALUE, versionLabel } from "@/lib/build-info";
-import type { RuntimeInfo, StatusResponse } from "@hermes/protocol";
+import { runtime } from "@/lib/runtime";
+import type { ConnectionMode, RuntimeInfo, StatusResponse } from "@hermes/protocol";
 import s from "./app-shell.module.css";
 
 
@@ -14,6 +15,7 @@ function shortCommit(commit: string | undefined): string {
 export interface SidebarVersionRowsInput {
   status?: Pick<StatusResponse, "version" | "release_date">;
   runtimeInfo?: RuntimeInfo;
+  connectionMode?: ConnectionMode;
   buildCommit?: string;
   desktopVersion?: string;
 }
@@ -35,11 +37,13 @@ export interface SidebarVersionRows {
 export function buildSidebarVersionRows({
   status,
   runtimeInfo,
+  connectionMode = "managed",
   buildCommit = BUILD_COMMIT,
   desktopVersion = DESKTOP_VERSION,
 }: SidebarVersionRowsInput): SidebarVersionRows {
-  const kernelVersion = versionLabel(runtimeInfo?.current?.kernelVersion ?? status?.version);
-  const kernelCommit = shortCommit(runtimeInfo?.current?.sourceCommit);
+  const managed = connectionMode === "managed";
+  const kernelVersion = versionLabel(managed ? runtimeInfo?.current?.kernelVersion ?? status?.version : status?.version);
+  const kernelCommit = shortCommit(managed ? runtimeInfo?.current?.sourceCommit : undefined);
   const uiVersion = versionLabel(desktopVersion);
   const uiCommit = shortCommit(buildCommit);
 
@@ -85,7 +89,7 @@ function VersionLine({
 export function SidebarVersionTag() {
   const { data: status } = useStatus();
   const { data: runtimeInfo } = useRuntimeInfo();
-  const rows = buildSidebarVersionRows({ status, runtimeInfo });
+  const rows = buildSidebarVersionRows({ status, runtimeInfo, connectionMode: runtime.getConnectionMode() });
   return (
     <div
       className={s.sidebarInfoPanel}
