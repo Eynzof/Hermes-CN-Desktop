@@ -7,6 +7,13 @@ import {
   shouldWaitForManagedRuntimeConfig,
 } from "./tauri-bridge";
 import { EXPECTED_BACKEND_VERSION } from "./build-info";
+import { __resetUiStoreForTests, writeUiValue } from "./ui-store";
+
+const gatewaySwitchMocks = vi.hoisted(() => ({ close: vi.fn(), reconnect: vi.fn() }));
+vi.mock("./gateway-client", () => ({
+  closeExistingGateway: gatewaySwitchMocks.close,
+  forceExistingGatewayReconnect: gatewaySwitchMocks.reconnect,
+}));
 
 const mockInvoke = vi.fn();
 const mockFileDropUnlisten = vi.fn();
@@ -40,6 +47,9 @@ vi.mock("@tauri-apps/api/webview", () => ({
 }));
 
 beforeEach(() => {
+  gatewaySwitchMocks.close.mockReset();
+  gatewaySwitchMocks.reconnect.mockReset();
+  __resetUiStoreForTests();
   managedRuntimeChangedHandler = undefined;
   mockInvoke.mockReset();
   mockFileDropUnlisten.mockReset();
@@ -73,6 +83,63 @@ afterEach(() => {
 });
 
 describe("isTauriDevMode", () => {
+  it("flushes session state and closes the old gateway before changing the backend", async () => {
+    await installTauriBridge();
+    let persist!: () => void;
+    const pendingWrite = new Promise<void>((resolve) => { persist = resolve; });
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === "ui_store_set_kv") return pendingWrite;
+      if (command === "apply_connection_config") {
+        expect(gatewaySwitchMocks.close).toHaveBeenCalledTimes(1);
+        return { ok: true, mode: "remote" };
+      }
+      return {};
+    });
+    writeUiValue("hermes.gateway-session-id", "old-session");
+    const switching = window.hermesDesktop!.applyConnectionConfig!({ mode: "remote", remoteUrl: "https://gateway.test" });
+    await Promise.resolve();
+    expect(gatewaySwitchMocks.close).not.toHaveBeenCalled();
+    persist();
+    await expect(switching).resolves.toMatchObject({ ok: true });
+    expect(gatewaySwitchMocks.reconnect).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("restores the old connection after a rejected switch (throws=%s)", async (throws) => {
+    await installTauriBridge();
+    mockInvoke.mockImplementation(async () => {
+      if (throws) throw new Error("unreachable");
+      return { ok: false, error: "unreachable" };
+    });
+    const switching = window.hermesDesktop!.applyConnectionConfig!({ mode: "remote", remoteUrl: "https://gateway.test" });
+    if (throws) await expect(switching).rejects.toThrow("unreachable");
+    else await expect(switching).resolves.toMatchObject({ ok: false });
+    expect(gatewaySwitchMocks.close).toHaveBeenCalledOnce();
+    expect(gatewaySwitchMocks.reconnect).toHaveBeenCalledWith("connection-switch-failed");
+  });
+
+  it.each([
+    { version: "0.21.6", ready: true },
+    { version: "0.22.0", ready: true },
+    { version: "0.23.0", ready: false },
+  ])("finishes bootstrap against official $version without a version route", async ({ version, ready }) => {
+    (globalThis as any).window = { __TAURI_INTERNALS__: {} };
+    mockInvoke.mockImplementation(async (command: string, args?: { input?: { path?: string } }) => {
+      if (command === "get_runtime_config") return {
+        apiBaseUrl: "http://gateway.test:9119", gatewayUrl: "ws://gateway.test:9119/api/ws",
+        sessionToken: "remote-token", connectionMode: "remote", backendReady: true,
+      };
+      if (command === "api_request") {
+        const found = args?.input?.path === "/api/status";
+        return { ok: found, status: found ? 200 : 404, headers: {}, body: JSON.stringify(found ? { version } : { detail: "No such API endpoint" }) };
+      }
+      return {};
+    });
+    await expect(installTauriBridge()).resolves.toBeUndefined();
+    expect(window.__HERMES_RUNTIME__).toMatchObject({ connectionMode: "remote", backendReady: ready });
+    if (!ready) expect(window.__HERMES_RUNTIME__).toMatchObject({ backendRecoveryReason: "external-backend-incompatible", backendRecoveryDetail: expect.stringContaining(version) });
+    expect(window.hermesDesktop?.softwareUpdateCheck).toBeTypeOf("function");
+    expect(mockInvoke.mock.calls.some(([command]) => command === "fatal_error_and_exit")).toBe(false);
+  });
   it("refreshes offline UI readiness and credentials after the supervisor adopts a new Core", async () => {
     await installTauriBridge();
     window.__HERMES_RUNTIME__!.backendReady = false;

@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { sessionStorageKey } from "@/lib/connection-scope";
 import type { ComposerSubmitShortcut } from "@/lib/composer-submit-shortcut";
 import { readUiValue, removeUiValue, subscribeUiStore, writeUiValue } from "@/lib/ui-store";
 import hermesDefaultAvatar from "@/assets/hermes-default-avatar.png";
@@ -16,7 +17,7 @@ function persistedUiBaseAtom<T>(read: () => T) {
 const ACTIVE_SESSION_ID_KEY = "hermes.active-session-id";
 
 const activeSessionIdBaseAtom = persistedUiBaseAtom<string | null>(
-  () => readUiValue<string | null>(ACTIVE_SESSION_ID_KEY, null),
+  () => readUiValue<string | null>(sessionStorageKey(ACTIVE_SESSION_ID_KEY), null),
 );
 
 /**
@@ -37,9 +38,9 @@ export const activeSessionIdAtom = atom(
   (_get, set, next: string | null) => {
     set(activeSessionIdBaseAtom, next);
     if (next) {
-      writeUiValue(ACTIVE_SESSION_ID_KEY, next);
+      writeUiValue(sessionStorageKey(ACTIVE_SESSION_ID_KEY), next);
     } else {
-      removeUiValue(ACTIVE_SESSION_ID_KEY);
+      removeUiValue(sessionStorageKey(ACTIVE_SESSION_ID_KEY));
     }
   },
 );
@@ -442,15 +443,10 @@ export function hydratePersistedUiAtoms(store: ReturnType<typeof import("jotai/v
   }
 
   // 10. Active session ID — use exported atom (write handler handles set/null)
-  const activeSessionId = readUiValue<string | null | undefined>(ACTIVE_SESSION_ID_KEY, undefined);
-  // We read the store's current value from the exported atom's getter, not
-  // the private base atom, because the exported atom layers on top of the base.
-  // For null comparison we check if the stored value is explicitly null vs absent.
-  if (activeSessionId !== undefined) {
-    const current = store.get(activeSessionIdAtom);
-    if (current !== activeSessionId) {
-      store.set(activeSessionIdAtom, activeSessionId);
-    }
+  const activeSessionId = readUiValue<string | null>(sessionStorageKey(ACTIVE_SESSION_ID_KEY), null);
+  // A target with no saved session must clear the previous target's selection.
+  if (store.get(activeSessionIdAtom) !== activeSessionId) {
+    store.set(activeSessionIdAtom, activeSessionId);
   }
 
   // 11-15. Notification flags — use exported atoms (write handler is idempotent)

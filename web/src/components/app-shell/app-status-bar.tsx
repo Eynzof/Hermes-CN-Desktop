@@ -61,7 +61,7 @@ export function AppStatusBar() {
   const contextLabel = formatContext(
     modelInfo?.effective_context_length ?? modelInfo?.auto_context_length,
   );
-  const versionRows = buildSidebarVersionRows({ status, runtimeInfo });
+  const versionRows = buildSidebarVersionRows({ status, runtimeInfo, connectionMode: runtime.getConnectionMode() });
 
   const runningCount = useMemo(() => {
     const merged = mergeLiveRuntimeSessions(sessions?.sessions ?? [], runtimeBySession);

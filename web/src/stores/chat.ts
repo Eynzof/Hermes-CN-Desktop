@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { sessionStorageKey } from "@/lib/connection-scope";
 import type {
   GatewayEvent,
   GatewayMessageUsageT,
@@ -97,7 +98,7 @@ export const gwConnectionAtom = atom<ConnectionState>("idle");
 const GW_SESSION_ID_KEY = "hermes.gateway-session-id";
 
 const gwSessionIdBaseAtom = atom<string | null>(
-  readUiValue<string | null>(GW_SESSION_ID_KEY, null),
+  readUiValue<string | null>(sessionStorageKey(GW_SESSION_ID_KEY), null),
 );
 
 /**
@@ -113,9 +114,9 @@ export const gwSessionIdAtom = atom(
   (_get, set, next: string | null) => {
     set(gwSessionIdBaseAtom, next);
     if (next) {
-      writeUiValue(GW_SESSION_ID_KEY, next);
+      writeUiValue(sessionStorageKey(GW_SESSION_ID_KEY), next);
     } else {
-      removeUiValue(GW_SESSION_ID_KEY);
+      removeUiValue(sessionStorageKey(GW_SESSION_ID_KEY));
     }
   },
 );
@@ -1497,11 +1498,8 @@ export function hydratePersistedChatAtoms(
   store: ReturnType<typeof import("jotai/vanilla")["createStore"]>,
 ): void {
   // Gateway session ID
-  const gwId = readUiValue<string | null | undefined>(GW_SESSION_ID_KEY, undefined);
-  if (gwId !== undefined) {
-    const current = store.get(gwSessionIdAtom);
-    if (current !== gwId) {
-      store.set(gwSessionIdAtom, gwId);
-    }
+  const gwId = readUiValue<string | null>(sessionStorageKey(GW_SESSION_ID_KEY), null);
+  if (store.get(gwSessionIdAtom) !== gwId) {
+    store.set(gwSessionIdAtom, gwId);
   }
 }

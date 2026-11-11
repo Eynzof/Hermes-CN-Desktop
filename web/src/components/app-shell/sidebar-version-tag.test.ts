@@ -53,6 +53,21 @@ function runtimeInfo(overrides: Partial<RuntimeInfo> = {}): RuntimeInfo {
 }
 
 describe("buildSidebarVersionRows", () => {
+  it.each(["local", "remote"] as const)("shows the connected %s kernel, never the bundled runtime", (connectionMode) => {
+    const rows = buildSidebarVersionRows({
+      connectionMode,
+      runtimeInfo: runtimeInfo(),
+      status: { version: "0.22.0", release_date: "" },
+    });
+    expect(rows.kernel).toBe("内核 v0.22.0 · —");
+    expect(rows.kernel).not.toContain("8820");
+  });
+
+  it("does not label an unavailable external backend with the bundled kernel version", () => {
+    expect(buildSidebarVersionRows({ connectionMode: "remote", runtimeInfo: runtimeInfo() }).kernel)
+      .toBe("内核 v— · —");
+  });
+
   it("shows kernel and UI versions with short commits only", () => {
     const rows = buildSidebarVersionRows({
       runtimeInfo: runtimeInfo(),

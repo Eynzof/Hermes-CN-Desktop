@@ -563,3 +563,7 @@ export function getGatewayClient(): GatewayClientLike {
 export function forceExistingGatewayReconnect(reason = "runtime-restart"): void {
   instance?.forceReconnect(reason);
 }
+
+export function closeExistingGateway(): void {
+  instance?.close();
+}

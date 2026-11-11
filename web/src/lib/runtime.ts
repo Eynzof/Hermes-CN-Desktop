@@ -451,6 +451,7 @@ declare global {
       backendReady?: boolean;
       /** Why only the offline repair shell is mounted instead of the backend UI. */
       backendRecoveryReason?: BackendRecoveryReason;
+      backendRecoveryDetail?: string;
       guideState?: import("@hermes/protocol").GuideState;
       managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
       managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;

@@ -5,6 +5,9 @@
 // existing call sites (settings.tsx, projects.tsx, goose-composer.tsx, etc.)
 // work without any changes.
 
+import { closeExistingGateway, forceExistingGatewayReconnect } from "./gateway-client";
+import { flushUiStore } from "./ui-store";
+
 import type {
   ApiRequestInput,
   ApiRequestResult,
@@ -569,7 +572,19 @@ const tauriBridge = {
   },
 
   async applyConnectionConfig(input: ConnectionConfigInput): Promise<ApplyConnectionResult> {
-    return invokeCommand("apply_connection_config", { input });
+    await flushUiStore();
+    // Stop the old socket before native IPC changes the HTTP/WS destination.
+    // Otherwise its reconnect can resume an old session on the new backend
+    // during the short interval before the caller reloads the renderer.
+    closeExistingGateway();
+    try {
+      const result = await invokeCommand<ApplyConnectionResult>("apply_connection_config", { input });
+      if (!result.ok) forceExistingGatewayReconnect("connection-switch-failed");
+      return result;
+    } catch (error) {
+      forceExistingGatewayReconnect("connection-switch-failed");
+      throw error;
+    }
   },
 
   async testConnectionConfig(input: ConnectionConfigInput): Promise<TestConnectionResult> {
@@ -1235,8 +1250,8 @@ export async function installTauriBridge(): Promise<void> {
   (window as any).hermesDesktop = tauriBridge;
 
   // Reset any stale version check state, then verify before we let the React
-  // app run against this backend. A mismatch or unreachable /api/version
-  // triggers a fatal dialog and force-quits. We pass the config's apiBaseUrl
+  // app run against this backend. Managed runtime failures remain fatal;
+  // external connection failures mount the recovery UI. Pass apiBaseUrl
   // explicitly because window.__HERMES_RUNTIME__ is not populated yet.
   resetVersionCheck();
   recordRuntimeKernelVersion(config.kernelVersion);
@@ -1247,6 +1262,7 @@ export async function installTauriBridge(): Promise<void> {
     !config.apiBaseUrl &&
     (config.managedRuntimeDesiredState ?? "running") !== "running";
   let backendRecoveryReason: BackendRecoveryReason | undefined;
+  let backendRecoveryDetail: string | undefined;
   if (managedRuntimeIntentionallyOffline) {
     deferBackendVersionCheckForOfflineRuntime();
     backendRecoveryReason = "managed-runtime-offline";
@@ -1254,6 +1270,7 @@ export async function installTauriBridge(): Promise<void> {
     const versionState = await verifyBackendVersion(config.apiBaseUrl, { connectionMode });
     if (versionState.kind === "deferred") {
       backendRecoveryReason = versionState.reason;
+      backendRecoveryDetail = versionState.detail;
     } else if (versionState.kind !== "ok") {
       assertCompatible();
       throw new Error("version check failed during bridge installation");
@@ -1280,6 +1297,7 @@ export async function installTauriBridge(): Promise<void> {
       ? false
       : config.backendReady ?? Boolean(config.apiBaseUrl),
     backendRecoveryReason,
+    backendRecoveryDetail,
     guideState: config.guideState ?? "completed",
     managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
     managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",
