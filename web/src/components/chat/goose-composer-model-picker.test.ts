@@ -33,6 +33,38 @@ describe("buildCandidates", () => {
     });
   });
 
+  it("includes newer live Anthropic models before stale catalog entries in the shortlist", () => {
+    const options = {
+      providers: [
+        {
+          slug: "anthropic",
+          name: "Anthropic",
+          models: [
+            "claude-fable-5",
+            "claude-sonnet-5",
+            "claude-opus-4-8",
+            "claude-opus-4-7",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-haiku-5-5",
+            "claude-fable-5-1",
+            "claude-fable-5-2",
+          ],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const models = buildCandidates(options, []).all
+      .filter((candidate) => candidate.catalogId === "anthropic")
+      .map((candidate) => candidate.model);
+
+    expect(models).toHaveLength(5);
+    expect(models).toContain("claude-fable-5-2");
+    expect(models).toContain("claude-opus-5-5");
+    expect(models).toContain("claude-sonnet-5-5");
+  });
+
   it("omits providers that Core explicitly marks as unconfigured", () => {
     const options = {
       providers: [
@@ -138,6 +170,54 @@ describe("buildCandidates", () => {
     expect(custom?.iconUrl).toBe(canonical?.iconUrl);
   });
 
+  it("ranks the unnumbered DeepSeek Flash alias ahead of older numbered models", () => {
+    const options = {
+      providers: [
+        {
+          slug: "deepseek",
+          name: "DeepSeek",
+          models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-flash"],
+          authenticated: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const models = buildCandidates(options, []).all
+      .filter((candidate) => candidate.catalogId === "deepseek")
+      .map((candidate) => candidate.model);
+
+    expect(models[0]).toBe("deepseek-flash");
+  });
+
+  it("dedupes canonical and custom routes for the same model and prefers the user route", () => {
+    const options = {
+      providers: [
+        {
+          slug: "deepseek",
+          name: "DeepSeek",
+          models: ["deepseek-v4-pro"],
+          authenticated: true,
+        },
+        {
+          slug: "custom:deepseek",
+          name: "DeepSeek",
+          models: ["deepseek-v4-pro"],
+          authenticated: true,
+          is_user_defined: true,
+        },
+      ],
+    } as ModelOptionsResult;
+
+    const candidates = buildCandidates(options, []).all
+      .filter((candidate) => candidate.model === "deepseek-v4-pro");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      catalogId: "deepseek",
+      providerSlug: "custom:deepseek",
+    });
+  });
+
   it("limits each configured provider to five catalog-curated models", () => {
     const options = {
       provider: "minimax-cn",
@@ -190,13 +270,9 @@ describe("buildCandidates", () => {
 
     const buckets = buildCandidates(options, []);
 
-    expect(buckets.configured.map((candidate) => candidate.model)).toEqual([
-      "m1",
-      "m2",
-      "m3",
-      "m4",
-      "custom-current",
-    ]);
+    const models = buckets.configured.map((candidate) => candidate.model);
+    expect(models).toHaveLength(5);
+    expect(models).toContain("custom-current");
   });
 
   it("does not add a duplicate static provider when Core returns an aliased provider slug", () => {

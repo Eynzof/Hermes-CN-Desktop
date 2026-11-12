@@ -102,6 +102,7 @@ interface Candidate {
   apiKeyLabel?: string;
   iconUrl?: string;
   configured: boolean;
+  userDefined?: boolean;
   caps: ProviderCatalogModel | null;
   warning?: string;
 }
@@ -194,6 +195,42 @@ function mergeModelIds(...lists: Array<readonly string[] | undefined>): string[]
   return out;
 }
 
+function modelVersionParts(modelId: string): number[] {
+  return Array.from(modelId.matchAll(/\d+/g))
+    .map((match) => match[0])
+    .filter((part) => part.length === 1 || !part.startsWith("0"))
+    .map(Number);
+}
+
+function compareModelIdsNewestFirst(a: string, b: string): number {
+  const aParts = modelVersionParts(a);
+  const bParts = modelVersionParts(b);
+  const sharedLength = Math.min(aParts.length, bParts.length);
+  for (let index = 0; index < sharedLength; index += 1) {
+    if (aParts[index] !== bParts[index]) return bParts[index] - aParts[index];
+  }
+  // A more specific version is newer: 5.3 > 5, 3.1 > 3. Equal versions keep
+  // the catalog/API order so base and highspeed variants remain stable.
+  return bParts.length - aParts.length;
+}
+
+// Aliases without a version number cannot be ranked by numeric comparison.
+const PROVIDER_MODEL_PRIORITY: Record<string, string[]> = {
+  deepseek: ["deepseek-flash"],
+};
+
+function compareProviderModelIdsNewestFirst(providerId: string, a: string, b: string): number {
+  const priority = PROVIDER_MODEL_PRIORITY[providerId] ?? [];
+  const aRank = priority.indexOf(a);
+  const bRank = priority.indexOf(b);
+  if (aRank >= 0 || bRank >= 0) {
+    if (aRank < 0) return 1;
+    if (bRank < 0) return -1;
+    return aRank - bRank;
+  }
+  return compareModelIdsNewestFirst(a, b);
+}
+
 function findModelCaps(preset: ProviderPreset | undefined, modelId: string): ProviderCatalogModel | null {
   return preset?.models.find((m) => m.id === modelId) ?? null;
 }
@@ -252,6 +289,7 @@ function featuredModelIds(
   const candidates = preset
     ? mergeModelIds(catalogModels, provider.models)
     : mergeModelIds(provider.models);
+  candidates.sort((a, b) => compareProviderModelIdsNewestFirst(preset?.id ?? provider.slug, a, b));
   const activeModel = provider.slug === currentProvider ? currentModel : undefined;
 
   if (activeModel && !candidates.includes(activeModel)) candidates.unshift(activeModel);
@@ -324,20 +362,37 @@ export function buildCandidates(
         apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
         iconUrl: getProviderIconUrl(preset?.icon),
         configured: authenticated,
+        userDefined: extras.is_user_defined === true,
         caps: resolveModelCaps(provider, preset, modelId),
         warning,
       });
     }
   }
 
+  // The same backend can appear as a built-in provider and a custom provider.
+  // Show one card per canonical provider + model, preferring the user's route.
+  const byCanonicalModel = new Map<string, Candidate>();
+  for (const candidate of all) {
+    const key = `${candidate.catalogId}:${candidate.model}`;
+    const existing = byCanonicalModel.get(key);
+    if (!existing || (candidate.userDefined && !existing.userDefined)) {
+      byCanonicalModel.set(key, candidate);
+    }
+  }
+  const available = Array.from(byCanonicalModel.values());
+
   const usageRanked = rankRecentModels(usageEntries, { limit: 3 });
 
   const recent: Candidate[] = usageRanked
-    .map((e) => all.find((c) => c.key === e.key))
+    .map((e) => {
+      const canonicalProvider = findCatalog(e.provider)?.id ?? e.provider;
+      return available.find((c) => c.key === e.key)
+        ?? available.find((c) => c.catalogId === canonicalProvider && c.model === e.model);
+    })
     .filter((c): c is Candidate => Boolean(c));
 
   const topSet = new Set<string>(TOP5_PROVIDER_IDS);
-  const configured: Candidate[] = all
+  const configured: Candidate[] = available
     .filter((c) => c.configured)
     .sort((a, b) => {
       const aTop = topSet.has(a.catalogId) ? 0 : 1;
@@ -346,7 +401,7 @@ export function buildCandidates(
       return a.providerName.localeCompare(b.providerName, "zh-Hans-CN");
     });
 
-  return { all, recent, configured, moa };
+  return { all: available, recent, configured, moa };
 }
 
 function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
