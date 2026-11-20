@@ -671,7 +671,8 @@ describe("provider catalog config updates", () => {
       },
     };
 
-    const next = buildCustomProviderDeleteUpdate(config, "custom:local");
+    const update = buildCustomProviderDeleteUpdate(config, "custom:local");
+    const next = update.config;
 
     expect(next.providers).not.toHaveProperty("custom:local");
     expect(next.desktop.models.provider_order).toEqual(["deepseek"]);
@@ -685,6 +686,9 @@ describe("provider catalog config updates", () => {
     });
     expect(next.auxiliary.vision).not.toHaveProperty("api_key");
     expect(next.auxiliary.compression).toEqual(config.auxiliary.compression);
+    // 深合并落盘不会删除缺失 key（#370/#188）：删除必须显式声明路径，
+    // 由内核 P-042 在合并后执行。
+    expect(update.deletedPaths).toEqual(["providers.custom:local"]);
   });
 
   it("blocks deleting non-custom or current custom providers", () => {
