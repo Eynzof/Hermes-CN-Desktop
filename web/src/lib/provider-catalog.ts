@@ -1,4 +1,5 @@
 import { fetchExternalJSON } from "./transport";
+import { currentTextModelChoices, isDirectMiniMaxProvider, MINIMAX_TEXT_MODELS } from "./minimax-models";
 
 export type ProviderTransport = "openai_chat" | "anthropic_messages" | "codex_responses";
 export type ProviderApiMode = "chat_completions" | "anthropic_messages" | "codex_responses";
@@ -325,7 +326,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.26.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.10.20.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -612,7 +613,6 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
         { id: "doubao-seed-2.0-pro", supportsTools: true },
         { id: "doubao-seed-2.0-lite", supportsTools: true },
         { id: "doubao-seed-code", supportsTools: true },
-        { id: "minimax-m2.5", supportsTools: true },
         { id: "glm-4.7", supportsTools: true, supportsReasoning: true },
         { id: "deepseek-v3.2", supportsTools: true, supportsReasoning: true },
         { id: "kimi-k2.5", supportsTools: true },
@@ -621,7 +621,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
     },
     {
       id: "minimax-cn",
-      name: "MiniMax · Token Plan",
+      name: "MiniMax · API",
       vendor: "MiniMax",
       region: "cn",
       baseUrl: "https://api.minimaxi.com/anthropic",
@@ -631,16 +631,10 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       icon: "minimax",
       websiteUrl: "https://platform.minimaxi.com",
       docsUrl: "https://platform.minimaxi.com/document",
-      defaultModel: "MiniMax-M3",
+      defaultModel: "MiniMax-M3.1-Flash",
       models: [
+        { id: "MiniMax-M3.1-Flash", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true },
         { id: "MiniMax-M3", contextWindow: 1_000_000, supportsTools: true, supportsReasoning: true },
-        { id: "MiniMax-M2.7", contextWindow: 204_800, supportsTools: true, supportsReasoning: true },
-        { id: "MiniMax-M2.7-highspeed", contextWindow: 204_800, supportsTools: true, supportsReasoning: true },
-        { id: "MiniMax-M2.5", contextWindow: 204_800, supportsTools: true },
-        { id: "MiniMax-M2.5-highspeed", contextWindow: 204_800, supportsTools: true },
-        { id: "MiniMax-M2.1", contextWindow: 204_800, supportsTools: true },
-        { id: "MiniMax-M2.1-highspeed", contextWindow: 204_800, supportsTools: true },
-        { id: "MiniMax-M2", contextWindow: 204_800, supportsTools: true },
       ],
       supportsModelListing: false,
     },
@@ -1449,7 +1443,9 @@ export function buildProviderSettingsUpdate(
     input.apiKey.trim() ||
     String(existingProvider.api_key || existingModel.api_key || "");
   const baseUrl = input.baseUrl.trim() || preset.baseUrl;
-  const model = input.model.trim() || preset.defaultModel;
+  const model = input.model.trim()
+    || (isDirectMiniMaxProvider(preset.id) ? String(existingProvider.model || "") : "")
+    || preset.defaultModel;
   const providerEntry: Record<string, any> = {
     ...existingProvider,
     name: preset.name,
@@ -1457,7 +1453,14 @@ export function buildProviderSettingsUpdate(
     api_mode: preset.apiMode,
     transport: preset.transport,
     model,
-    models: cleanModels(preset.models),
+    models: isDirectMiniMaxProvider(preset.id)
+      ? {
+        ...asRecord(existingProvider.models),
+        ...Object.fromEntries(Object.entries(cleanModels(preset.models)).map(([id, metadata]) => [
+          id, { ...asRecord(asRecord(existingProvider.models)[id]), ...metadata },
+        ])),
+      }
+      : cleanModels(preset.models),
   };
 
   if (nextApiKey) providerEntry.api_key = nextApiKey;
@@ -1578,7 +1581,23 @@ export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCata
   }
   return {
     version: remote.version || base.version,
-    providers: Array.from(byId.values()),
+    providers: Array.from(byId.values()).map((provider) => {
+      if (provider.isCustom) return provider;
+      const ids = currentTextModelChoices(provider.id, provider.models.map((model) => model.id));
+      if (!isDirectMiniMaxProvider(provider.id)
+        && ids.length === provider.models.length
+        && ids.every((id, index) => id === provider.models[index]?.id)) return provider;
+      const models = ids.map((id) => provider.models.find((model) => model.id === id)
+        ?? base.providers.find((entry) => entry.id === provider.id)?.models.find((model) => model.id === id)
+        ?? { id });
+      return {
+        ...provider,
+        defaultModel: isDirectMiniMaxProvider(provider.id)
+          ? MINIMAX_TEXT_MODELS[0]
+          : ids.includes(provider.defaultModel) ? provider.defaultModel : ids[0] ?? "",
+        models,
+      };
+    }),
   };
 }
 

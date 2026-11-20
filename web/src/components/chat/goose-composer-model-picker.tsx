@@ -42,6 +42,7 @@ import {
   type ModelUsageEntry,
 } from "@/lib/model-usage-log";
 import { expandSearchQuery } from "@/lib/model-search-aliases";
+import { currentTextModelChoices } from "@/lib/minimax-models";
 import { getProviderIconUrl } from "@/lib/provider-icons";
 import type { ComposerModelPickerProps, ComposerModelSelection } from "./composer-types";
 import s from "./goose-composer.module.css";
@@ -249,9 +250,10 @@ function featuredModelIds(
   currentModel: string | undefined,
 ): string[] {
   const catalogModels = preset?.models.map((model) => model.id) ?? [];
-  const candidates = preset
-    ? mergeModelIds(catalogModels, provider.models)
-    : mergeModelIds(provider.models);
+  const candidates = currentTextModelChoices(
+    provider.slug,
+    preset ? mergeModelIds(catalogModels, provider.models) : mergeModelIds(provider.models),
+  );
   const activeModel = provider.slug === currentProvider ? currentModel : undefined;
 
   if (activeModel && !candidates.includes(activeModel)) candidates.unshift(activeModel);

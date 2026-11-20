@@ -50,6 +50,7 @@ import {
   probeGeminiProvider,
 } from "@/lib/provider-probe";
 import { getProviderIconUrl } from "@/lib/provider-icons";
+import { currentTextModelChoices } from "@/lib/minimax-models";
 import { useProviderCatalog } from "@/hooks/use-provider-catalog";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { ModelCombobox } from "@/components/settings/model-combobox";
@@ -873,8 +874,9 @@ export function ModelsSection() {
     const set = new Set<string>();
     for (const id of liveModelIds) set.add(id);
     if (selectedProvider) for (const m of selectedProvider.models) set.add(m.id);
-    if (providerForm.model) set.add(providerForm.model);
-    return Array.from(set);
+    return currentTextModelChoices(
+      selectedProvider?.id ?? "", Array.from(set), providerForm.model, selectedProvider?.isCustom,
+    );
   }, [liveModelIds, selectedProvider, providerForm.model]);
   const customModelOptions = useMemo(() => {
     const set = new Set(customModelsQuery.data?.models ?? []);
