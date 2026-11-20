@@ -38,12 +38,17 @@ pub struct SimpleApiResult {
     pub message: Option<String>,
 }
 
+/// Open the native file picker for chat attachments.
+///
+/// Allowed in remote mode: the dialog itself is local UI, and the picked local
+/// paths are consumed by the remote-aware attach pipeline
+/// (`prepareComposerPrompt`), which reads the local bytes
+/// (`read_file_data_url` / `readImageBytes`) and uploads them to the gateway
+/// via `file.attach` / `image.attach_bytes`, returning a gateway-readable ref
+/// path — matching the official desktop's remote-attach behavior. The path is
+/// never handed to the remote agent as-is.
 #[tauri::command]
-pub async fn pick_files(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> AppResult<FilePickerResult> {
-    require_local_filesystem(&state, "本机文件选择")?;
+pub async fn pick_files(app: tauri::AppHandle) -> AppResult<FilePickerResult> {
     use tauri_plugin_dialog::DialogExt;
 
     let (tx, rx) = tokio::sync::oneshot::channel();
