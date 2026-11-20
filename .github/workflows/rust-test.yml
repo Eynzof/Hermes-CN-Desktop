@@ -101,12 +101,20 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version-file: Hermes-CN-Core/.python-version
 
-      - name: Install Core (Python) deps into the job interpreter
-        # The pyo3 backend links THIS interpreter, so the merged
-        # hermes_embedded package must be importable from it (no venv).
-        run: pip install -e "./Hermes-CN-Core"
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "0.13.5"
+          cache-dependency-glob: Hermes-CN-Core/uv.lock
+
+      - name: Install Core from its lockfile
+        working-directory: Hermes-CN-Core
+        run: |
+          uv sync --locked --extra all --python "$(command -v python)"
+          echo "PYO3_PYTHON=$PWD/.venv/bin/python" >> "$GITHUB_ENV"
+          # An embedded interpreter does not automatically load the virtual environment's packages.
+          echo "PYTHONPATH=$(.venv/bin/python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" >> "$GITHUB_ENV"
 
       - name: Install Linux build deps + Python dev headers
         run: |
@@ -132,17 +140,15 @@ jobs:
 
       - name: Python embedded selftest
         working-directory: Hermes-CN-Core
-        run: python3 -m hermes_embedded.selftest
+        run: .venv/bin/python -m hermes_embedded.selftest
 
       - name: cargo check (embedded-python feature)
         env:
-          PYO3_PYTHON: python3
           HERMES_DESKTOP_EMBEDDED_PAYLOAD: ${{ github.workspace }}/Hermes-CN-Core
         run: cargo check --features embedded-python
 
       - name: cargo test (embedded-python feature)
         env:
-          PYO3_PYTHON: python3
           PYTHONFAULTHANDLER: "1"
           HERMES_DESKTOP_EMBEDDED_PAYLOAD: ${{ github.workspace }}/Hermes-CN-Core
         run: cargo test --features embedded-python --test embedded_python --no-fail-fast -- --test-threads=1
