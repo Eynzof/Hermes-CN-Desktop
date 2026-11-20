@@ -211,7 +211,9 @@ export function DetailRoute() {
 
   // Workspace bound to *this* session (#216): prefer the backend's stored cwd
   // (source of truth), then the client-side session→workspace map. Empty string
-  // lets the composer fall back to its own default (last-used global workspace).
+  // means "no workspace" and renders as such — the composer no longer falls
+  // back to the last-used global workspace (#365/#372: that silently painted
+  // another session's folder onto this one).
   const sessionWorkspace = useMemo(
     () => resolveSessionWorkspace(sessionData?.cwd ?? sessionSummary?.cwd, [restSessionId, taskId]),
     [sessionData?.cwd, sessionSummary?.cwd, restSessionId, taskId],

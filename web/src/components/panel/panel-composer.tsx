@@ -26,7 +26,6 @@ import { shouldPrewarmDraftSession } from "@/lib/draft-session-prewarm";
 import {
   normalizeWorkspacePath,
   rememberWorkspaceProject,
-  writeWorkspacePath,
 } from "@/lib/workspaces";
 import { composerPrefillAtom } from "@/stores/panel";
 import { composerSubmitShortcutAtom } from "@/stores/ui";
@@ -88,7 +87,6 @@ export function PanelComposer() {
 
   useEffect(() => {
     if (!initialWorkspacePath) return;
-    writeWorkspacePath(initialWorkspacePath);
     rememberWorkspaceProject(initialWorkspacePath);
   }, [initialWorkspacePath]);
 
