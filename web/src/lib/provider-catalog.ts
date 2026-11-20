@@ -536,7 +536,7 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       baseUrl: "https://api.stepfun.com/v1",
       apiMode: "chat_completions",
       transport: "openai_chat",
-      apiKeyLabel: "STEP_API_KEY",
+      apiKeyLabel: "STEPFUN_API_KEY",
       icon: "stepfun",
       websiteUrl: "https://platform.stepfun.com",
       docsUrl: "https://platform.stepfun.com/docs/zh/guides/developer/openai",
