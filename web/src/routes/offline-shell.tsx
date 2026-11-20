@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { DebugRoute } from "./debug";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { CircleOff, Compass, ExternalLink, Globe2, HardDrive, Palette } from "lucide-react";
 import { Button } from "@hermes/shared-ui";
@@ -19,12 +21,45 @@ function OfflinePage({ title, sub, children }: { title: string; sub: string; chi
   );
 }
 
+function ManagedStartupRecovery() {
+  const [restarting, setRestarting] = useState(false);
+  const [error, setError] = useState("");
+  async function restart() {
+    setRestarting(true);
+    setError("");
+    try {
+      const result = await window.hermesDesktop!.startManagedRuntime!();
+      if (!result.ok || !result.backendReady) setError(result.error || "内置内核尚未就绪");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRestarting(false);
+    }
+  }
+  return (
+    <OfflinePage title="无法连接内置内核" sub="可以重新启动内核，或导出启动日志以排查原因。">
+      <div className={s.empty}>
+        <HardDrive size={32} />
+        <div>
+          <Button variant="solid" tone="accent" disabled={restarting} onClick={() => void restart()}>
+            {restarting ? "正在启动内核…" : "重新启动内核"}
+          </Button>
+          <Link to="/debug">查看诊断日志</Link>
+        </div>
+        {error && <p role="alert">{error}</p>}
+      </div>
+    </OfflinePage>
+  );
+}
+
 function OfflineHome() {
   const runtimeConfig = window.__HERMES_RUNTIME__;
   const recoveryReason = runtimeConfig?.backendRecoveryReason;
   const externalTarget = runtimeConfig?.dashboardApiBaseUrl
     ?? runtimeConfig?.apiBaseUrl
     ?? "已保存的外部目标";
+
+  if (recoveryReason === "managed-backend-unreachable") return <ManagedStartupRecovery />;
 
   if (recoveryReason === "external-backend-auth-required") {
     return (
@@ -116,6 +151,7 @@ export function OfflineShell() {
           <Route path="/theme" element={<OfflinePage title="主题" sub="调整桌面界面的外观。"><ThemeSection showHeading={false} /></OfflinePage>} />
           <Route path="/updates" element={<UpdatesRoute />} />
           <Route path="/about" element={<OfflineAbout />} />
+          <Route path="/debug" element={<DebugRoute />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <footer className={s.updateFooter}><SoftwareUpdateStatus /></footer>

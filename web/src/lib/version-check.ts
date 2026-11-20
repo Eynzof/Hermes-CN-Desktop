@@ -1,4 +1,5 @@
 import { runtime } from "./runtime";
+import { isLoopbackHttpOrigin } from "./browser-companion";
 import { DESKTOP_VERSION, EXPECTED_BACKEND_VERSION } from "./build-info";
 import {
   expectedCoreSeriesLabel,
@@ -14,6 +15,7 @@ export interface BackendVersionInfo {
 
 export type BackendRecoveryReason =
   | "managed-runtime-offline"
+  | "managed-backend-unreachable"
   | "external-backend-unreachable"
   | "external-backend-auth-required"
   | "external-backend-incompatible"
@@ -29,6 +31,7 @@ export type VersionCheckState =
 export interface VersionCheckOptions {
   connectionMode?: ConnectionMode;
   expectedVersion?: string;
+  startup?: boolean;
 }
 
 let state: VersionCheckState = { kind: "unchecked" };
@@ -238,6 +241,13 @@ async function checkBackendVersion(
         reason: "external-backend-version-unavailable",
         detail: error instanceof Error ? error.message : String(error),
       };
+    }
+    if (options.startup && apiBaseUrl && isLoopbackHttpOrigin(apiBaseUrl)) {
+      const code = ipcErrorCode(error);
+      const details = (error as { details?: { timeout?: boolean } } | null)?.details;
+      if (code === "dashboard_unreachable" || (code === "proxy_error" && details?.timeout === true)) {
+        return { kind: "deferred", reason: "managed-backend-unreachable" };
+      }
     }
     state = {
       kind: "unavailable",
