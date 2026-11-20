@@ -73,6 +73,16 @@ describe("clarification lifecycle", () => {
     expect(pending[0].answers).toEqual({});
   });
 
+  it("keeps a single question delivered in the batch format", () => {
+    const store = createStore();
+    store.set(applyGatewayEventAtom, parseGatewayEvent({
+      type: "clarify.request", session_id: "a",
+      payload: { request_id: "only", questions: [{ qid: "q0", question: "继续吗？" }] },
+    }));
+    expect(store.get(chatRuntimeBySessionAtom).a.pendingClarifications?.[0].questions)
+      .toEqual([{ qid: "q0", question: "继续吗？", choices: [], multiSelect: false }]);
+  });
+
   it("records batch answers per qid and clears with the request", () => {
     const store = createStore();
     store.set(applyGatewayEventAtom, batchRequest("a", "b1"));

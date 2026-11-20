@@ -179,7 +179,13 @@ async def chat_completions(request: Request):
     last_user = next((m for m in reversed(messages) if m.get("role") == "user"), {})
     user_text = _text_of(last_user.get("content")).strip()
     after_tool = messages and messages[-1].get("role") == "tool"
-    if user_text == "v090-subagent-control" and not after_tool:
+    if user_text == "clarify-batch-e2e" and not after_tool:
+        tool_name = "clarify"
+        delegate_args = {"questions": [
+            {"question": "选择平台", "choices": ["Mac", "Windows"]},
+            {"question": "填写验收标记"},
+        ]}
+    elif user_text == "v090-subagent-control" and not after_tool:
         tool_name = "delegate_task"
         delegate_args = {"tasks": [{"goal": "v090-child-wait: 验证桌面子任务控制。", "toolsets": ["terminal"]}]}
     elif user_text.startswith("v090-child-wait:") and not after_tool:
@@ -228,7 +234,9 @@ async def chat_completions(request: Request):
             }
         )
 
-    if messages and messages[-1].get("role") == "tool":
+    if after_tool and user_text == "clarify-batch-e2e":
+        reply = "Clarify result: " + _text_of(messages[-1].get("content"))
+    elif messages and messages[-1].get("role") == "tool":
         reply = "DELEGATION-E2E-DONE：外部编码代理已完成任务。"
     else:
         reply = _reply_for(messages)

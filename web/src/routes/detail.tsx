@@ -454,6 +454,9 @@ export function DetailRoute() {
     });
   }, [attachFile, attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
 
+  const pendingClarification = runtime.pendingClarifications?.[0];
+  const removeClarification = useSetAtom(removeClarificationAtom);
+
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
     controls: ComposerSubmitControls,
@@ -465,14 +468,26 @@ export function DetailRoute() {
       void runManualCompress(sessionId, builtin.arg);
       return;
     }
-    // Park the submission while the agent is busy; the composer clears on resolve
-    // and the queue drains (auto on settle, or manually) when it frees up.
+    // Queue before releasing the tool: the turn can settle as soon as the
+    // gateway processes the skip, and that transition drains the queue.
     if (runtimeIsBusy) {
       enqueueQueuedPrompt(taskId, { text: payload.text, attachments: payload.attachments }, Date.now());
-      return;
     }
-    await submitPayload(payload, controls.updateAttachment);
-  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+    if (pendingClarification) {
+      const skip = getGatewayClient().request("clarify.respond", {
+        session_id: pendingClarification.sessionId,
+        request_id: pendingClarification.requestId,
+        answer: "",
+      }).then(() => removeClarification(pendingClarification));
+      if (runtimeIsBusy) {
+        // The queue already owns this draft. Leave the card available on error.
+        void skip.catch((error) => console.error("Failed to skip pending clarification:", error));
+      } else {
+        await skip;
+      }
+    }
+    if (!runtimeIsBusy) await submitPayload(payload, controls.updateAttachment);
+  }, [ensureGatewaySession, pendingClarification, removeClarification, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
 
   // ---- Send queue (drain on settle, send-now / edit / delete) --------------
   const queuedPrompts = useQueuedPrompts(taskId);
@@ -622,7 +637,6 @@ export function DetailRoute() {
     [config, contextSelection],
   );
   const pendingApproval = runtime.pendingApprovals[0] ?? null;
-  const pendingClarification = runtime.pendingClarifications?.[0];
 
   const composerTick = useComposerTimer(runtimeIsBusy, runtime.turnStartedAt);
   // Task-level stall watchdog: detects a turn wedged on a dead provider call
@@ -775,6 +789,7 @@ export function DetailRoute() {
               loadingPlaceholder={composerLoadingPlaceholder}
               showMeta={false}
               loading={runtimeIsBusy}
+              allowFollowUp={Boolean(pendingClarification)}
               onStop={onStop}
               voiceConfig={config ?? null}
               modelPicker={{
