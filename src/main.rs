@@ -301,7 +301,7 @@ fn main() {
                 ),
             };
             let window_builder = tauri::WebviewWindowBuilder::new(app, tray::MAIN_WINDOW_LABEL, window_url)
-                .title("Hermes Agent 中文社区桌面版")
+                .title("AIMS Agent 桌面版")
                 .inner_size(1240.0, 820.0)
                 .min_inner_size(960.0, 680.0);
             #[cfg(target_os = "macos")]
