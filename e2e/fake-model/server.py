@@ -182,7 +182,7 @@ async def chat_completions(request: Request):
     if user_text == "clarify-batch-e2e" and not after_tool:
         tool_name = "clarify"
         delegate_args = {"questions": [
-            {"question": "选择平台", "choices": ["Mac", "Windows"]},
+            {"question": "选择平台", "choices": ["Mac", "Windows"], "multi_select": True},
             {"question": "填写验收标记"},
         ]}
     elif user_text == "v090-subagent-control" and not after_tool:

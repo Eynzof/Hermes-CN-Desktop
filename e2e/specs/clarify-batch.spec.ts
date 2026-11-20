@@ -14,13 +14,15 @@ for (const action of ["answer", "follow-up"] as const) {
       await page.getByRole("button", { name: "发送消息" }).click();
       await expect(replies.last()).toContainText("PONG: 收到「继续处理下一项」");
     } else {
-      await card.getByRole("radio", { name: /Mac/ }).check();
+      await card.getByRole("checkbox", { name: /Mac/ }).check();
+      await card.getByRole("checkbox", { name: /Windows/ }).check();
       await card.getByRole("button", { name: "提交回答" }).click();
       await expect(card).toContainText("填写验收标记");
       await card.getByRole("textbox").fill("通过 K42");
       await card.getByRole("button", { name: "提交回答" }).click();
       await expect(replies.last()).toContainText("Clarify result:");
       await expect(replies.last()).toContainText("Mac");
+      await expect(replies.last()).toContainText("Windows");
       await expect(replies.last()).toContainText("通过 K42");
     }
     await expect(card).toHaveCount(0);
