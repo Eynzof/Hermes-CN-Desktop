@@ -14,6 +14,7 @@ import type {
   ConnectionConfigInput,
   ConnectionConfigView,
   ConnectionMode,
+  DesktopInstallUpdateResult,
   DesktopUpdateManifestFetchResult,
   CodingAgentsCheckResult,
   EnvironmentCheckResult,
@@ -426,6 +427,33 @@ export interface HermesGitBridge {
   repoStatus(input: { repoPath: string }): Promise<RepoStatus | null>;
 }
 
+export interface AccountLoginInput { baseUrl: string; username: string; password: string; }
+export interface AccountUser { id: number | string; username: string; displayName: string; role: number; status: number; group: string; }
+export interface AccountStatusResult { loggedIn: boolean; user?: AccountUser; serverUrl?: string; hasKey: boolean; maskedKey?: string; }
+export interface AccountSavedCredentialsInfo { hasSaved: boolean; username?: string; baseUrl?: string; }
+export interface AccountSetupResult { user: AccountUser; baseUrl: string; models: string[]; modelEndpointTypes?: Record<string, string[]>; modelNames?: Record<string, string>; hasKey: boolean; maskedKey?: string; }
+export interface AccountTokenInfo { id: number; name: string; group: string; status: number; }
+export interface AccountBalanceInfo { quota: number; usedQuota: number; quotaPerUnit: number; displayInCurrency: boolean; topUpUrl: string; availableCredits?: string; frozenCredits?: string; monthlyConsumedCredits?: string; todayConsumedCredits?: string; }
+export interface AccountTransactionInfo { id: string; description: string; amountPrecise: string; createdAt: string; transactionType: string; modelName?: string; providerKey?: string; meterKey?: string; quantity?: string; unit?: string; }
+export interface AccountTransactionsInfo { total: number; transactions: AccountTransactionInfo[]; }
+export interface CreditPackage { id: string; name: string; description: string; price: string | number; total_credits: number; bonus_credits: number; }
+export interface RechargePayment { orderNo: string; amount: string | number; creditsAmount?: number; qrCode?: string; expiredAt?: string; }
+export interface RechargeStatus { orderNo: string; status: string; expiredAt?: string; statusReason?: string | null; }
+export interface AccountSaveModelsInput { models: string[]; modelEndpointTypes?: Record<string, string[]>; primaryModelId?: string; tokenId?: number; }
+export interface AccountTestModelResult { ok: boolean; latencyMs?: number; reply?: string; error?: string; }
+export interface UserProviderInput {
+  previousId?: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  anthropicMessages?: boolean;
+  contextLength?: number;
+  supportsTools?: boolean;
+  supportsVision?: boolean;
+  supportsReasoning?: boolean;
+}
+
 declare global {
   interface Window {
     __HERMES_SESSION_TOKEN__?: string;
@@ -459,10 +487,33 @@ declare global {
     };
     hermesDesktop?: {
       windowType: "electron" | "tauri";
+      quitApp?(): Promise<void>;
       /** Fatal compatibility/error dialog + force-quit the app. */
       fatalErrorAndExit?(input: { title: string; message: string }): Promise<never>;
       request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
+      accountRegister?(input: { baseUrl: string; contact: string; password: string; verificationCode: string; inviteCode?: string }): Promise<AccountUser>;
+      accountSendVerificationCode?(input: { contact: string; codeType: "login" | "register"; challengeKey?: string; inviteCode?: string }): Promise<void>;
+      accountLoginWithVerificationCode?(input: { baseUrl: string; username: string; verificationCode: string; challengeKey: string }): Promise<AccountUser>;
+      accountLogin?(input: AccountLoginInput): Promise<AccountUser>;
+      accountStatus?(): Promise<AccountStatusResult>;
+      accountFetchSetup?(): Promise<AccountSetupResult>;
+      accountListTokens?(): Promise<AccountTokenInfo[]>;
+      accountBalance?(): Promise<AccountBalanceInfo>;
+      accountTransactions?(input?: { limit?: number; offset?: number }): Promise<AccountTransactionsInfo>;
+      accountCreditPackages?(): Promise<CreditPackage[]>;
+      accountCreateRecharge?(input: { packageId: string; paymentMethod: "alipay" | "wechat" }): Promise<RechargePayment>;
+      accountRechargeStatus?(orderNo: string): Promise<RechargeStatus>;
+      accountCancelRecharge?(orderNo: string): Promise<void>;
+      accountSaveModels?(input: AccountSaveModelsInput): Promise<AccountStatusResult>;
+      accountTestModel?(modelId: string): Promise<AccountTestModelResult>;
+      accountLogout?(): Promise<AccountStatusResult>;
+      accountSaveCredentials?(input: AccountLoginInput): Promise<void>;
+      accountHasSavedCredentials?(): Promise<AccountSavedCredentialsInfo>;
+      accountLoginSaved?(): Promise<AccountUser>;
+      accountClearCredentials?(): Promise<void>;
+      saveUserProvider?(input: UserProviderInput): Promise<string>;
+      deleteUserProvider?(providerId: string): Promise<void>;
       uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
       downloadExternalImage?(input: DownloadExternalImageInput): Promise<DownloadedImageResult>;
       pickFiles?(): Promise<ElectronFilePickerResult>;
@@ -478,6 +529,7 @@ declare global {
       environmentCheck?(): Promise<EnvironmentCheckResult>;
       codingAgentsCheck?(): Promise<CodingAgentsCheckResult>;
       checkDesktopUpdate?(): Promise<DesktopUpdateManifestFetchResult>;
+      installDesktopUpdate?(): Promise<DesktopInstallUpdateResult>;
       getUpdateConfig?(): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
       setUpdateConfig?(config: import("@hermes/protocol").UpdateConfig): Promise<import("@hermes/protocol").UpdateConfigSnapshot>;
       appUpdateCheck?(): Promise<import("@hermes/protocol").AppUpdateCheckResult>;
@@ -627,6 +679,14 @@ export const runtime = {
 
   isBackendReady(): boolean {
     return window.__HERMES_RUNTIME__?.backendReady ?? true;
+  },
+
+  getManagedRuntimeDesiredState(): import("@hermes/protocol").ManagedRuntimeDesiredState | undefined {
+    return window.__HERMES_RUNTIME__?.managedRuntimeDesiredState;
+  },
+
+  getManagedRuntimeLifecycleState(): import("@hermes/protocol").ManagedRuntimeLifecycleState | undefined {
+    return window.__HERMES_RUNTIME__?.managedRuntimeLifecycleState;
   },
 
   getGuideState(): import("@hermes/protocol").GuideState {

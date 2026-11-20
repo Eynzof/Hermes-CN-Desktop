@@ -1,0 +1,23 @@
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
+import { CheckCircle2, LoaderCircle, Wallet } from "lucide-react";
+import { Dialog } from "@hermes/shared-ui";
+function bridge() { if (!window.hermesDesktop) throw new Error("桌面桥接不可用"); return window.hermesDesktop; }
+import { useAccountBalance } from "@/hooks/use-account";
+import s from "./recharge-dialog.module.css";
+
+type Package = { id: string; name: string; description: string; price: string | number; totalCredits: number; bonusCredits: number };
+type Payment = { orderNo: string; amount: string | number; creditsAmount?: number; qrCode?: string; expiredAt?: string };
+type Status = { status: string };
+
+export function RechargeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const balance = useAccountBalance(false);
+  const [packages, setPackages] = useState<Package[]>([]); const [selected, setSelected] = useState(""); const [method, setMethod] = useState<"alipay" | "wechat">("alipay"); const [payment, setPayment] = useState<Payment | null>(null); const [status, setStatus] = useState<Status | null>(null); const [qr, setQr] = useState<string | null>(null); const [error, setError] = useState("");
+  useEffect(() => { if (!open) return; setError(""); void bridge().accountCreditPackages!().then((rows) => setPackages(rows.map((item) => ({ id: item.id, name: item.name, description: item.description, price: item.price, totalCredits: item.total_credits, bonusCredits: item.bonus_credits })))).then(() => setPackages((rows) => { if (!payment) setSelected(rows[0]?.id ?? ""); return rows; })).catch((e) => setError(e instanceof Error ? e.message : "无法加载充值套餐")); }, [open, payment]);
+  useEffect(() => { if (!payment?.qrCode) { setQr(null); return; } if (payment.qrCode.startsWith("data:image/")) { setQr(payment.qrCode); return; } void QRCode.toDataURL(payment.qrCode, { width: 260, margin: 4 }).then(setQr).catch(() => setQr(null)); }, [payment?.qrCode]);
+  useEffect(() => { if (status?.status === "paid" || status?.status === "completed") void balance.refetch(); }, [status?.status, balance]);
+  useEffect(() => { if (!open || !payment?.orderNo || status?.status === "paid" || status?.status === "completed" || status?.status === "failed" || status?.status === "expired" || status?.status === "cancelled") return; let cancelled = false; const poll = async () => { try { const next = await bridge().accountRechargeStatus!(payment.orderNo); if (!cancelled) setStatus(next); } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : "无法查询支付状态"); } }; void poll(); const timer = window.setInterval(() => void poll(), 3000); return () => { cancelled = true; window.clearInterval(timer); }; }, [open, payment?.orderNo, status?.status]);
+  const paid = status?.status === "paid" || status?.status === "completed";
+  const finish = () => { setPayment(null); setStatus(null); setQr(null); onOpenChange(false); };
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className={s.overlay} /><Dialog.Content className={s.dialog}><Dialog.Title className={s.title}>充值代币</Dialog.Title><Dialog.Description className={s.description}>充值完成后，余额会自动刷新。</Dialog.Description>{error && <p className={s.error}>{error}</p>}{paid ? <div className={s.success}><CheckCircle2 size={40} /><strong>充值成功</strong><span>代币余额已更新。</span><button type="button" onClick={finish}>完成</button></div> : payment ? <div className={s.qrState}>{qr ? <img src={qr} alt="支付二维码" /> : <LoaderCircle className={s.spin} /> }<span>请扫码完成支付，页面会自动查询状态。</span><small>订单状态：{status?.status === "expired" ? "已过期" : status?.status === "failed" ? "支付失败" : "等待支付"}</small><button type="button" onClick={() => onOpenChange(false)}>关闭</button></div> : <div className={s.body}><div className={s.packages}>{packages.map((item) => <button type="button" key={item.id} data-selected={selected === item.id} onClick={() => setSelected(item.id)}><strong>{item.name}</strong><span>{item.description}</span><small>¥{item.price} · {item.totalCredits} 代币</small></button>)}</div><div className={s.methods}><button type="button" data-selected={method === "alipay"} onClick={() => setMethod("alipay")}>支付宝</button><button type="button" data-selected={method === "wechat"} onClick={() => setMethod("wechat")}>微信支付</button></div><button type="button" className={s.confirm} disabled={!selected} onClick={async () => { try { setError(""); const next = await bridge().accountCreateRecharge!({ packageId: selected, paymentMethod: method }); setPayment(next); setStatus({ status: "paying" }); } catch (e) { setError(e instanceof Error ? e.message : "创建充值订单失败"); } }}><Wallet size={16} />确认充值</button></div>}</Dialog.Content></Dialog.Portal></Dialog.Root>;
+}

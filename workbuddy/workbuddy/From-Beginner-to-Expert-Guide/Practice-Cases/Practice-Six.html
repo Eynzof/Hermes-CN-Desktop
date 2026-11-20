@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实践六：远程遥控 WorkBuddy ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Practice-Cases_Practice-Six" data-v-bd9b7757><div><h1 id="实践六-远程遥控-workbuddy" tabindex="-1">实践六：远程遥控 WorkBuddy <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six#实践六-远程遥控-workbuddy" aria-label="Permalink to &quot;实践六：远程遥控 WorkBuddy&quot;">​</a></h1><h2 id="一、文档说明" tabindex="-1">一、文档说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six#一、文档说明" aria-label="Permalink to &quot;一、文档说明&quot;">​</a></h2><p>本文介绍如何通过移动端与远程对话能力，让 <code>WorkBuddy</code> 在不坐在电脑前的情况下继续协助处理任务，适用于通勤、出差和跨设备办公场景。</p><h2 id="二、手机远程完成电脑文件跨端传输" tabindex="-1">二、手机远程完成电脑文件跨端传输 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six#二、手机远程完成电脑文件跨端传输" aria-label="Permalink to &quot;二、手机远程完成电脑文件跨端传输&quot;">​</a></h2><ul><li><strong>适用场景</strong>：临时需要把电脑中的 <code>PPT</code>、文档或资料发送到手机或其他设备。</li><li><strong>推荐做法</strong>：在移动端明确说明文件名称、所在目录与目标动作。</li><li><strong>示例指令</strong>：</li></ul><blockquote><p>请帮我查找电脑里名为 项目汇报 的 <code>PPT</code> 文件，确认版本后整理到一个便于发送的目录，并告诉我下一步如何完成跨端传输。</p></blockquote><h2 id="三、通勤时用手机继续远程对话编程" tabindex="-1">三、通勤时用手机继续远程对话编程 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six#三、通勤时用手机继续远程对话编程" aria-label="Permalink to &quot;三、通勤时用手机继续远程对话编程&quot;">​</a></h2><ul><li><strong>适用场景</strong>：不在工位时，希望继续推进调试、修复或文档整理任务。</li><li><strong>推荐做法</strong>：用自然语言描述当前问题、预期目标和可接受的处理范围。</li><li><strong>示例指令</strong>：</li></ul><blockquote><p>我现在不在电脑前，请继续排查这个项目的报错问题，优先查看最近一次运行日志，并先告诉我原因和处理建议，再决定是否修改代码。</p></blockquote><h2 id="四、使用建议" tabindex="-1">四、使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six#四、使用建议" aria-label="Permalink to &quot;四、使用建议&quot;">​</a></h2><ul><li><strong>先给清晰目标</strong>：远程场景下应避免模糊指令。</li><li><strong>减少高风险操作</strong>：涉及删除、覆盖、批量移动时，建议先要求预览。</li><li><strong>保留关键文件名</strong>：跨端操作时，明确文件名和目录能显著提升成功率。</li></ul><h2 id="五、参考阅读" tabindex="-1">五、参考阅读 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six#五、参考阅读" aria-label="Permalink to &quot;五、参考阅读&quot;">​</a></h2><p>远程助理功能使用指引及注意事项可见<a href="../Function-Description/Assistant.html">助理</a>。</p></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Six</a></div>
+</body>
+</html>

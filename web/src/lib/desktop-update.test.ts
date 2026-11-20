@@ -3,10 +3,8 @@ import type { DesktopUpdateManifestFetchResult } from "@hermes/protocol";
 import {
   buildDesktopUpdateCheckResult,
   compareDesktopVersions,
-  desktopUpdateDateKey,
   latestDesktopVersionFromManifest,
   normalizeDesktopVersion,
-  shouldRunAutoDesktopUpdateCheck,
   shouldShowDesktopUpdateNotice,
 } from "./desktop-update";
 
@@ -69,17 +67,10 @@ describe("desktop update manifest handling", () => {
 });
 
 describe("desktop update notification policy", () => {
-  it("checks at most once per local day", () => {
-    const now = new Date(2026, 5, 8, 10, 0, 0);
-    expect(desktopUpdateDateKey(now)).toBe("2026-06-08");
-    expect(shouldRunAutoDesktopUpdateCheck("2026-06-07", now)).toBe(true);
-    expect(shouldRunAutoDesktopUpdateCheck("2026-06-08", now)).toBe(false);
-  });
-
-  it("does not show an auto notice again for a dismissed version", () => {
+  it("shows an auto notice whenever a newer version is available", () => {
     const result = buildDesktopUpdateCheckResult(fetchResult({ manifest: { semver: "0.3.1" } }), "0.3.0");
-    expect(shouldShowDesktopUpdateNotice(result, null)).toBe(true);
-    expect(shouldShowDesktopUpdateNotice(result, "0.3.1")).toBe(false);
-    expect(shouldShowDesktopUpdateNotice({ ...result, latestVersion: "0.3.2" }, "0.3.1")).toBe(true);
+    expect(shouldShowDesktopUpdateNotice(result)).toBe(true);
+    expect(shouldShowDesktopUpdateNotice({ ...result, latestVersion: undefined })).toBe(false);
+    expect(shouldShowDesktopUpdateNotice({ ...result, updateAvailable: false })).toBe(false);
   });
 });

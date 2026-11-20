@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>腾讯云代码助手 CodeBuddy – AI 代码编辑器 - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_enterprise_adminguide_%E8%B4%A6%E5%8F%B7%E7%AE%A1%E7%90%86_%E4%BC%81%E4%B8%9A%E5%BE%AE%E4%BF%A1%E9%9B%86%E6%88%90" data-v-bd9b7757><div><p>腾讯云代码助手支持配置 SSO（单点登录）企微认证源，以实现使用企微账号进行统一身份认证。通过本文档，您将了解到配置企微认证源的具体步骤，包括在企微和腾讯云代码助手平台上所需进行的配置。</p><blockquote><p><strong>说明：</strong></p></blockquote><blockquote><p>CodeBuddy 旗舰版使用腾讯统一身份进行登录认证管理，如需配置请参见<a href="https://identity.tencent.com/docs/guides/IDPconfig/idp/" target="_blank" rel="noreferrer">腾讯统一身份-企业级登录</a>。</p></blockquote><h2 id="操作步骤" tabindex="-1">操作步骤 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成#操作步骤" aria-label="Permalink to &quot;操作步骤&quot;">​</a></h2><h3 id="步骤一-创建企业自建应用" tabindex="-1">步骤一：创建企业自建应用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成#步骤一-创建企业自建应用" aria-label="Permalink to &quot;步骤一：创建企业自建应用&quot;">​</a></h3><p>配置企微认证源需要在 <a href="https://work.weixin.qq.com/wework_admin/frame#apps" target="_blank" rel="noreferrer">企业微信管理后台/应用管理</a> 上通过自建应用来完成，您可以按下图指引操作，或参见 <a href="https://open.work.weixin.qq.com/help2/pc/16892" target="_blank" rel="noreferrer">企微-如何创建企业自建应用</a>。</p><p><img src="../../../assets/de5c8fdb112c11f0a9cd5254007c27c5.png" alt="" data-zoomable="true"></p><p>填写表单并完成应用创建。</p><p><img src="../../../assets/88a1be2a112d11f0aaa3525400e889b2.png" alt="" data-zoomable="true"></p><h3 id="步骤二-配置自建应用权限" tabindex="-1">步骤二：配置自建应用权限 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成#步骤二-配置自建应用权限" aria-label="Permalink to &quot;步骤二：配置自建应用权限&quot;">​</a></h3><blockquote><p><strong>注意：</strong></p></blockquote><blockquote><p>根据企微 <a href="https://open.work.weixin.qq.com/wwopen/common/readDocument/40782" target="_blank" rel="noreferrer">企业自建应用安全性升级公告</a>，请务必完成下图中的三项配置<strong>1.可信域名</strong>、<strong>2.企业可信 IP</strong>、<strong>3.网页应用授权回调</strong>，否则无法正常登录。</p></blockquote><p><img src="../../../assets/68b081fbc43611efae995254001c06ec.png" alt="" data-zoomable="true"></p><ol><li><p>可信域名填写企业自有域名即可，需注意备案主体与企微主体相同或有关联关系。 <img src="../../../assets/00eb60e0abe211ef897b52540075b605.png" alt="" data-zoomable="true"></p></li><li><p>获取企业可信 IP，获取方式如下：</p></li></ol><table tabindex="0"><thead><tr><th>版本</th><th>可信 IP 填写内容</th></tr></thead><tbody><tr><td>旗舰版</td><td>暂不支持</td></tr><tr><td>专享版</td><td><a href="https://www.codebuddy.cn/docs/联系我们">请联系技术人员获取</a></td></tr><tr><td>企业版</td><td><a href="https://www.codebuddy.cn/docs/联系我们">请联系技术人员获取</a></td></tr></tbody></table><p>填写到下图红框当中：</p><p><img src="../../../assets/345d39a7abe211ef9b4c525400bdab9d.png" alt="" data-zoomable="true"></p><h3 id="步骤三-配置认证源信息" tabindex="-1">步骤三：配置认证源信息 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成#步骤三-配置认证源信息" aria-label="Permalink to &quot;步骤三：配置认证源信息&quot;">​</a></h3><blockquote><p><strong>注意：</strong></p></blockquote><blockquote><p>认证源集成需选择<strong>企业专属认证账号</strong>，当前仅新建企业支持该类账号模式，选择后无法更改，请谨慎操作。</p></blockquote><p><img src="../../../assets/3883349c113011f09b3252540044a08e.png" alt="" data-zoomable="true"></p><ol><li><p>进入 <a href="https://copilot.tencent.com/admin/setting/base" target="_blank" rel="noreferrer">腾讯云代码助手管理端</a>，选择<strong>企业设置</strong> &gt; <strong>登录认证</strong>，单击<strong>添加认证源。</strong><br><img src="../../../assets/6fd023dd113011f09b3252540044a08e.png" alt="" data-zoomable="true"></p></li><li><p>选择<strong>企业微信</strong>并添加。 <img src="../../../assets/02413d84abe311efba3e5254002693fd.png" alt="" data-zoomable="true"></p></li><li><p>进入认证源配置流程，将企微企业 ID、企微自建应用的的 Agent ID 和 Secret 填入输入框，并复制回调地址，填写至企微自建应用的<strong>企业微信授权登录</strong>处。 <img src="../../../assets/4dff6b2dabe311ef9b4c525400bdab9d.png" alt="" data-zoomable="true"></p></li></ol><blockquote><p><strong>说明：</strong></p></blockquote><blockquote><p>回调链接只需要填写<strong>企业域名</strong>即可，例如：</p></blockquote><p><img src="../../../assets/ad558776113011f09b3252540044a08e.png" alt="" data-zoomable="true"></p><ul><li><p>企微 ID 获取位置如图： <img src="../../../assets/7db1da5eabe311ef9ec3525400f69702.png" alt="" data-zoomable="true"></p></li><li><p>企微自建应用 Agent ID、Secret 获取位置如图：<br><img src="../../../assets/2e7d0786113111f0a63e5254005ef0f7.png" alt="" data-zoomable="true"></p></li><li><p>企微自建应用重定向 URL 填写位置如图： <img src="../../../assets/f1731e1fabe311efa09d525400d5f8ef.png" alt="" data-zoomable="true"></p></li></ul><ol start="4"><li><p>单击<strong>企业微信授权登录</strong>，进入配置详情页，在 Web 网页处填写回调链接。 <img src="../../../assets/f4ee5718abe311ef9b4c525400bdab9d.png" alt="" data-zoomable="true"></p></li><li><p>配置完成后，单击<strong>下一步</strong>，进行关联规则配置，暂不支持配置字段匹配逻辑，可配置以下内容：</p></li></ol><blockquote><p><strong>说明：</strong></p><ul><li>每次登录成功时，更新用户信息：<strong>建议开启</strong>，每次用户登录时，系统将自动从认证源获取用户信息更新到代码助手当中。</li><li>未匹配成功时，则执行以下逻辑：<strong>建议开启“新建用户”</strong>，若拒绝登录，则首次登录代码助手的用户将无法成功登录。</li></ul></blockquote><p><img src="../../../assets/caeac087146a11f09b3252540044a08e.png" alt="" data-zoomable="true"></p><ol start="6"><li>完成配置后，单击<strong>保存</strong>即可。</li></ol><h3 id="步骤四-启用认证源登录" tabindex="-1">步骤四：启用认证源登录 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成#步骤四-启用认证源登录" aria-label="Permalink to &quot;步骤四：启用认证源登录&quot;">​</a></h3><p>进入<a href="https://copilot.tencent.com/admin" target="_blank" rel="noreferrer">企业管理后台</a>的<strong>成员授权-成员与部门</strong>版块，点击<strong>前往 腾讯统一身份/通讯录</strong>跳转至「腾讯统一身份」平台：</p><img src="../../../assets/login-1.CAoW5mjy.png" alt="企业后台" width="800"><p>在侧边栏打开<strong>登录-认证源</strong>，在<strong>我的认证源</strong>中将企微打开即可。若不需要其它认证源则将其关闭，仅保留企微认证源。</p><img src="../../../assets/login-2.GkkK9E8i.png" alt="企业后台" width="800"><h2 id="用户登录" tabindex="-1">用户登录 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成#用户登录" aria-label="Permalink to &quot;用户登录&quot;">​</a></h2><p>企业用户可通过 SSO 登录，选择企微登录方式，即可登录至企业账号，详情请参见 <a href="../../Login.html">登录及更新</a>。</p></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成">https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/企业微信集成</a></div>
+</body>
+</html>

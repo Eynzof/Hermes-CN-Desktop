@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>腾讯云代码助手 CodeBuddy – AI 代码编辑器 - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_enterprise_adminguide_%E8%B4%A6%E5%8F%B7%E7%AE%A1%E7%90%86_%E9%A3%9E%E4%B9%A6%E9%9B%86%E6%88%90" data-v-bd9b7757><div><p>腾讯云代码助手支持配置 SSO（单点登录）飞书认证源，以实现使用飞书账号进行统一身份认证。通过本文档，您将了解到配置飞书认证源的具体步骤，包括在飞书和腾讯云代码助手平台上所需进行的配置。</p><h2 id="操作步骤" tabindex="-1">操作步骤 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成#操作步骤" aria-label="Permalink to &quot;操作步骤&quot;">​</a></h2><h3 id="步骤一-创建企业自建应用" tabindex="-1">步骤一：创建企业自建应用 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成#步骤一-创建企业自建应用" aria-label="Permalink to &quot;步骤一：创建企业自建应用&quot;">​</a></h3><p>配置飞书认证源需要在 <a href="https://open.feishu.cn/app" target="_blank" rel="noreferrer">飞书开放平台</a> 上通过自建应用来完成，您可以按下图指引操作，或参见 <a href="https://open.feishu.cn/document/home/introduction-to-custom-app-development/self-built-application-development-process" target="_blank" rel="noreferrer">飞书-企业自建应用开发流程</a>。</p><p><img src="../../../assets/c5d39995146011f09fca52540099c741.png" alt="" data-zoomable="true"></p><p>填写表单并完成应用创建。</p><p><img src="../../../assets/db6c2cb9146011f08c275254001c06ec.png" alt="" data-zoomable="true"></p><h3 id="步骤二-配置自建应用权限" tabindex="-1">步骤二：配置自建应用权限 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成#步骤二-配置自建应用权限" aria-label="Permalink to &quot;步骤二：配置自建应用权限&quot;">​</a></h3><p>为了同步飞书成员信息、通过飞书登录，需要为自建应用配置以下权限：</p><blockquote><p><strong>注意：</strong></p></blockquote><blockquote><p>请保证权限配置完整，如权限缺失，会导致服务无法正常使用。</p></blockquote><table tabindex="0"><thead><tr><th>权限分类</th><th>权限名称</th><th>备注</th></tr></thead><tbody><tr><td>通讯录</td><td>获取用户基本信息<br>contact:user.base:readonly</td><td>必要权限，未授权会影响正常使用。</td></tr><tr><td></td><td>获取用户 user ID<br>contact:user.employee_id:readonly</td><td>必要权限，未授权会影响正常使用。</td></tr><tr><td></td><td>获取用户邮箱信息<br>contact:user.email:readonly</td><td>建议授权，未授权会无法同步用户邮箱信息。</td></tr><tr><td></td><td>获取用户手机号<br>contact:user.phone:readonly</td><td>建议授权，未授权会无法同步用户手机号信息。</td></tr></tbody></table><p>权限开通流程见下图，在飞书开放平台中，进入<strong>权限管理</strong>，在 API 权限中，搜索权限信息并开通。</p><p><img src="../../../assets/fb7d20d4146711f0a63e5254005ef0f7.png" alt="" data-zoomable="true"></p><h3 id="步骤三-配置自建应用可用范围" tabindex="-1">步骤三：配置自建应用可用范围 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成#步骤三-配置自建应用可用范围" aria-label="Permalink to &quot;步骤三：配置自建应用可用范围&quot;">​</a></h3><p>飞书企业自建应用存在可用范围限制，仅有可用范围内的成员，可通过应用完成单点登录（SSO），配置方式如下：</p><p>在飞书开放平台中，选择<strong>版本管理与发布</strong>菜单，单击<strong>创建版本。</strong></p><p><img src="../../../assets/1b345d83146811f0854e525400454e06.png" alt="" data-zoomable="true"></p><p>在版本详情中，编辑<strong>可用范围</strong>字段。</p><p><img src="../../../assets/6a08cff0146811f08c275254001c06ec.png" alt="" data-zoomable="true"></p><p>若希望飞书企业中所有成员均可使用腾讯云代码助手，则选择<strong>全部成员</strong>即可，若仅允许部分成员使用，则可选择<strong>部分成员</strong>，并添加对应的部门或成员。</p><p><img src="../../../assets/682b93e894d211ef9dcd525400f69702.png" alt="" data-zoomable="true"></p><h3 id="步骤四-配置认证源信息" tabindex="-1">步骤四：配置认证源信息 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成#步骤四-配置认证源信息" aria-label="Permalink to &quot;步骤四：配置认证源信息&quot;">​</a></h3><blockquote><p><strong>注意：</strong></p></blockquote><blockquote><p>认证源集成需选择<strong>企业专属认证账号</strong>，当前仅新建企业支持该类账号模式，选择后无法更改，请谨慎操作。</p></blockquote><p><img src="../../../assets/d4a57d8b113111f09b3252540044a08e.png" alt="" data-zoomable="true"></p><ol><li><p>进入 <a href="https://copilot.tencent.com/admin/setting/base" target="_blank" rel="noreferrer">腾讯云代码助手管理端</a>，选择<strong>企业设置</strong> &gt; <strong>登录认证</strong>，单击<strong>添加认证源。</strong><br><img src="../../../assets/8bd3ce91146911f0ae09525400bf7822.png" alt="" data-zoomable="true"></p></li><li><p>选择<strong>飞书</strong>并添加。<br><img src="../../../assets/9f7bfa54146911f09b3252540044a08e.png" alt="" data-zoomable="true"></p></li><li><p>进入认证源配置流程，将飞书自建应用的 App ID 和 App Secret 填入输入框，并复制回调地址，填写至飞书自建应用的“安全设置-重定向 URL”处。 <img src="../../../assets/9b9cc56794d211ef8a1b525400bdab9d.png" alt="" data-zoomable="true"> 飞书自建应用 App ID、App Secret 获取位置如图： <img src="../../../assets/daca358e146811f09b3252540044a08e.png" alt="" data-zoomable="true"> 飞书自建应用重定向 URL 填写位置如图： <img src="../../../assets/0f9ab887146911f0a63e5254005ef0f7.png" alt="" data-zoomable="true"></p></li><li><p>配置完成后，单击<strong>下一步</strong>，进行关联规则配置，暂不支持配置字段匹配逻辑，可配置以下内容：</p></li></ol><blockquote><p><strong>说明：</strong></p><ul><li>每次登录成功时，更新用户信息：<strong>建议开启</strong>，每次用户登录时，系统将自动从认证源获取用户信息更新到代码助手当中。</li><li>未匹配成功时，则执行以下逻辑：<strong>建议开启“新建用户”</strong>，若拒绝登录，则首次通过飞书尝试单点登录代码助手的用户将无法成功登录。</li></ul></blockquote><p><img src="../../../assets/1367d7a3146a11f0ae09525400bf7822.png" alt="" data-zoomable="true"></p><ol start="5"><li>完成配置后，单击<strong>保存</strong>即可。</li></ol><h3 id="步骤五-启用认证源登录" tabindex="-1">步骤五：启用认证源登录 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成#步骤五-启用认证源登录" aria-label="Permalink to &quot;步骤五：启用认证源登录&quot;">​</a></h3><p>进入<a href="https://copilot.tencent.com/admin" target="_blank" rel="noreferrer">企业管理后台</a>的<strong>成员授权-成员与部门</strong>版块，点击<strong>前往 腾讯统一身份/通讯录</strong>跳转至「腾讯统一身份」平台：</p><img src="../../../assets/login-1.CAoW5mjy.png" alt="企业后台" width="800"><p>在侧边栏打开<strong>登录-认证源</strong>，在<strong>我的认证源</strong>中将飞书打开即可。若不需要其它认证源则将其关闭，仅保留飞书认证源。</p><img src="../../../assets/login-2.GkkK9E8i.png" alt="企业后台" width="800"><h2 id="用户登录" tabindex="-1">用户登录 <a class="header-anchor" href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成#用户登录" aria-label="Permalink to &quot;用户登录&quot;">​</a></h2><p>企业用户可通过 SSO 登录，选择飞书登录方式，即可登录至企业账号，详情请参见 <a href="../../Login.html">登录及更新</a>。</p></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成">https://www.codebuddy.cn/docs/enterprise/adminguide/账号管理/飞书集成</a></div>
+</body>
+</html>

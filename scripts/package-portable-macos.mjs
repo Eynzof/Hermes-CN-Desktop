@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { macosArchLabel, macosPortableName } from "./windows-artifact-names.mjs";
 
 function usage() {
   console.log(`Usage: node scripts/package-portable-macos.mjs [options]
@@ -18,6 +19,7 @@ The DMG pipeline is untouched; this only adds an extra artifact.
 Options:
   --target <triple>   Cargo target triple (aarch64-apple-darwin or
                       x86_64-apple-darwin). Default: no triple (target/release).
+  --brand <id>        Brand config id used for the release artifact name.
   --out <dir>         Output dir for staging + zip (default: target/portable)
 `);
 }
@@ -48,6 +50,8 @@ const tauriConf = JSON.parse(readFileSync(join(repoRoot, "tauri.conf.json"), "ut
 const version = pkg.version;
 const productName = tauriConf.productName;
 const target = argValue("--target", null);
+const brandId = argValue("--brand", process.env.BRAND || "huanxingcomhermes");
+const brand = JSON.parse(readFileSync(join(repoRoot, "brands", `${brandId}.json`), "utf8"));
 const bundleMacosDir = target
   ? join(repoRoot, "target", target, "release", "bundle", "macos")
   : join(repoRoot, "target", "release", "bundle", "macos");
@@ -58,10 +62,14 @@ if (!existsSync(appPath)) {
   throw new Error(`.app bundle not found (build first): ${appPath}`);
 }
 
-const archLabel = (target ?? "aarch64").startsWith("x86_64") ? "x64" : "aarch64";
+const archLabel = macosArchLabel(target || "aarch64-apple-darwin");
 const stagingName = `${productName} Portable`;
 const stagingDir = join(outRoot, stagingName);
-const zipName = `${productName.replaceAll(" ", ".")}_${version}_${archLabel}-macos-portable.zip`;
+const zipName = macosPortableName({
+  artifactBrandName: brand.artifactBrandName,
+  version,
+  arch: archLabel,
+});
 const zipPath = join(outRoot, zipName);
 
 function ditto(args) {

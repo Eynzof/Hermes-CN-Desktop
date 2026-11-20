@@ -1,4 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { fetchJSON, putJSON } from "@/lib/transport";
 import { invalidateModelOptionsCache } from "@/lib/model-options-cache";
 import { useActiveProfileName } from "@/hooks/use-profiles";
@@ -13,6 +18,15 @@ import {
 
 export function buildConfigUpdateRequest(config: Record<string, any>): ConfigUpdateRequest {
   return ConfigUpdateRequest.parse({ config });
+}
+
+export async function invalidateModelConfigurationQueries(qc: QueryClient): Promise<void> {
+  invalidateModelOptionsCache();
+  await Promise.all([
+    qc.invalidateQueries({ queryKey: ["config"] }),
+    qc.invalidateQueries({ queryKey: ["model-info"] }),
+    qc.invalidateQueries({ queryKey: ["model-options"] }),
+  ]);
 }
 
 export function useConfig() {
@@ -58,13 +72,11 @@ export function useSaveConfig() {
     mutationFn: (config: Record<string, any>) =>
       putJSON("/api/config", buildConfigUpdateRequest(config), MutationOkResponse),
     onSuccess: () => {
-      invalidateModelOptionsCache();
-      qc.invalidateQueries({ queryKey: ["config"] });
-      qc.invalidateQueries({ queryKey: ["model-info"] });
-      // 配置保存会改变已配置供应商集合（新增/删除/改密钥），工作台
-      // 「切换模型」的列表来自 /api/model/options（React Query 缓存 5 分钟），
-      // 必须在这里一并失效，否则保存后工作台仍展示旧的（甚至已失效的）配置。
-      qc.invalidateQueries({ queryKey: ["model-options"] });
+      // The chat picker keeps model.options in a shared React Query cache.
+      // Config saves (including Team enterprise sync) change the provider
+      // list, so invalidate that query as well instead of waiting five
+      // minutes for its staleTime to expire.
+      void invalidateModelConfigurationQueries(qc);
     },
   });
 }

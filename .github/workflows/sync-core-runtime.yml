@@ -1,0 +1,162 @@
+# Verify the production Linux runtime feed used by desktop clients.
+# Hermes-CN-Core release-runtime.yml uploads the manifests and ZIPs directly
+# to this feed. This workflow never downloads Core assets from GitHub.
+
+name: verify-core-runtime-feed
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_runtime_version:
+        description: "Expected runtime version, without runtime-v (empty accepts current stable)"
+        default: ""
+        required: false
+      channel:
+        description: "Runtime manifest channel"
+        default: "stable"
+        required: false
+      platforms:
+        description: "Comma-separated platform-arch list"
+        default: "win32-x64,darwin-arm64,darwin-x64,linux-x64"
+        required: false
+  schedule:
+    - cron: "17 20 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-core-runtime-feed-${{ github.event.inputs.channel || 'stable' }}
+  cancel-in-progress: false
+
+env:
+  RUNTIME_FEED_BASE_URL: https://huanxing.ai/downloads/Hermes-CN-Core/runtime
+  EXPECTED_SOURCE_REPO: nevermorewish/Hermes-CN-Core
+
+jobs:
+  verify:
+    name: Verify Linux runtime feed
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify manifests and runtime ZIPs
+        env:
+          EXPECTED_RUNTIME_VERSION: ${{ github.event.inputs.expected_runtime_version || '' }}
+          CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
+          PLATFORMS: ${{ github.event.inputs.platforms || 'win32-x64,darwin-arm64,darwin-x64,linux-x64' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node --input-type=commonjs - <<'NODE'
+          const crypto = require("node:crypto");
+
+          const feedBaseUrl = String(process.env.RUNTIME_FEED_BASE_URL || "").replace(/\/+$/u, "");
+          const expectedRepo = process.env.EXPECTED_SOURCE_REPO || "nevermorewish/Hermes-CN-Core";
+          const expectedVersion = (process.env.EXPECTED_RUNTIME_VERSION || "")
+            .trim()
+            .replace(/^runtime-v/u, "");
+          const channel = (process.env.CHANNEL || "stable").trim() || "stable";
+          const platforms = (process.env.PLATFORMS || "")
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+          if (!feedBaseUrl.startsWith("https://")) {
+            throw new Error("RUNTIME_FEED_BASE_URL must use HTTPS");
+          }
+          if (platforms.length === 0) {
+            throw new Error("No platforms requested");
+          }
+
+          async function fetchOk(url) {
+            const response = await fetch(url, {
+              headers: {
+                "Cache-Control": "no-cache",
+                "User-Agent": "hermes-agent-cn-desktop-runtime-feed-verifier",
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`${url} -> HTTP ${response.status}`);
+            }
+            return response;
+          }
+
+          function splitPlatformArch(value) {
+            const index = value.lastIndexOf("-");
+            if (index <= 0 || index === value.length - 1) {
+              throw new Error(`Invalid platform-arch entry: ${value}`);
+            }
+            return { platform: value.slice(0, index), arch: value.slice(index + 1) };
+          }
+
+          async function main() {
+            const records = [];
+            for (const platformArch of platforms) {
+              const { platform, arch } = splitPlatformArch(platformArch);
+              const manifestName = `${channel}-${platform}-${arch}.json`;
+              const stableManifestUrl = `${feedBaseUrl}/${encodeURIComponent(channel)}/${manifestName}`;
+              const manifestBytes = Buffer.from(await (await fetchOk(stableManifestUrl)).arrayBuffer());
+              const manifest = JSON.parse(manifestBytes.toString("utf8"));
+
+              if (manifest.schemaVersion !== 2) {
+                throw new Error(`${manifestName}: expected schemaVersion 2`);
+              }
+              if (manifest.channel !== channel || manifest.platform !== platform || manifest.arch !== arch) {
+                throw new Error(`${manifestName}: manifest identity mismatch`);
+              }
+              if (!manifest.runtimeVersion || !manifest.sha256 || !manifest.sourceCommit) {
+                throw new Error(`${manifestName}: missing required release metadata`);
+              }
+              if (expectedVersion && manifest.runtimeVersion !== expectedVersion) {
+                throw new Error(`${manifestName}: expected ${expectedVersion}, got ${manifest.runtimeVersion}`);
+              }
+              if (manifest.sourceRepo !== expectedRepo) {
+                throw new Error(`${manifestName}: expected sourceRepo ${expectedRepo}, got ${manifest.sourceRepo}`);
+              }
+
+              const releaseBaseUrl = `${feedBaseUrl}/releases/${encodeURIComponent(manifest.runtimeVersion)}`;
+              const expectedArtifactUrl = `${releaseBaseUrl}/hermes-agent-cn-runtime-${platform}-${arch}.zip`;
+              if (manifest.artifactUrl !== expectedArtifactUrl || manifest.artifactUrl.includes("github.com")) {
+                throw new Error(`${manifestName}: artifactUrl must point to the immutable Linux feed URL`);
+              }
+
+              const immutableManifestUrl = `${releaseBaseUrl}/${manifestName}`;
+              const immutableManifestBytes = Buffer.from(
+                await (await fetchOk(immutableManifestUrl)).arrayBuffer(),
+              );
+              if (!crypto.timingSafeEqual(
+                crypto.createHash("sha256").update(manifestBytes).digest(),
+                crypto.createHash("sha256").update(immutableManifestBytes).digest(),
+              )) {
+                throw new Error(`${manifestName}: stable and immutable manifests differ`);
+              }
+
+              const zipBytes = Buffer.from(await (await fetchOk(manifest.artifactUrl)).arrayBuffer());
+              const actualSha = crypto.createHash("sha256").update(zipBytes).digest("hex");
+              if (actualSha !== String(manifest.sha256).toLowerCase()) {
+                throw new Error(`${manifestName}: ZIP SHA-256 mismatch`);
+              }
+
+              records.push({
+                platform,
+                arch,
+                runtimeVersion: manifest.runtimeVersion,
+                sourceCommit: manifest.sourceCommit,
+                artifactUrl: manifest.artifactUrl,
+                bytes: zipBytes.length,
+              });
+            }
+
+            console.log(JSON.stringify({ feedBaseUrl, sourceRepo: expectedRepo, records }, null, 2));
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE

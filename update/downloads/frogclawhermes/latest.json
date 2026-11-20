@@ -1,0 +1,18 @@
+{
+  "version": "v0.6.8",
+  "semver": "0.6.8",
+  "publishedAt": "2026-08-01T15:07:13.126Z",
+  "channel": "stable",
+  "updatedAt": "2026-08-01T15:07:13.126Z",
+  "assets": {
+    "windows": {
+      "label": "Windows installer",
+      "platform": "windows",
+      "fileName": "Hermes-FrogClaw-0.6.8_x64-setup.exe",
+      "size": 157855332,
+      "sha256": "4cab1ff53bfbb2483956f98a0f1570cc6e24d1ae73c24f37c8b137079881724d",
+      "url": "https://huanxing.ai/downloads/frogclawhermes/releases/v0.6.8/Hermes-FrogClaw-0.6.8_x64-setup.exe",
+      "versionedUrl": "https://huanxing.ai/downloads/frogclawhermes/releases/v0.6.8/Hermes-FrogClaw-0.6.8_x64-setup.exe"
+    }
+  }
+}

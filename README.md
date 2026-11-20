@@ -1,6 +1,6 @@
 # Hermes Agent CN Desktop
 
-简体中文 · [English](./README.en-US.md)
+简体中文
 
 [![web-test](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/web-test.yml)
 [![rust-test](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/Hermes-CN-Desktop/actions/workflows/rust-test.yml)
@@ -8,42 +8,12 @@
 [![License: PolyForm NC 1.0.0](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-orange.svg)](./LICENSE)
 [![Hermes Agent 中文社区](https://img.shields.io/badge/Hermes%20Agent-%E4%B8%AD%E6%96%87%E7%A4%BE%E5%8C%BA-7c3aed)](https://hermesagent.org.cn)
 
-Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，原生支持 Windows 与 macOS 系统。项目基于 [Tauri v2](https://v2.tauri.app/)、Rust、React 和 TypeScript 构建，包含 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core) 中文社区修改版的 Hermes Agent 内核。
+Hermes Agent CN Desktop 是 Hermes Agent 中文社区推出的桌面客户端，原生支持 Windows 与 macOS 系统。项目基于 [Tauri v2](https://v2.tauri.app/)、Rust、React 和 TypeScript 构建，包含 [Hermes-CN-Core](https://github.com/nevermorewish/Hermes-CN-Core) 中文社区修改版的 Hermes Agent 内核。
 
 官网与下载页见 [desktop.hermesagent.org.cn](https://desktop.hermesagent.org.cn)。桌面端隶属于 [Hermes Agent 中文社区](https://hermesagent.org.cn) 生态，社区主站提供中文文档、实践指南、社群入口和更多生态项目。
 
-> 当前版本是 `v0.8.0-rc8`。项目仍在快速迭代，API、打包流程、运行时分发策略和界面细节都可能继续调整。
+> 当前版本是 `v0.6.14`。项目仍在快速迭代，API、打包流程、运行时分发策略和界面细节都可能继续调整。
 
-## ❤️赞助商
-
-<table>
-<tr>
-<td width="180"><a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn"><img src="./docs/assets/compshare.png" alt="优云智算" width="150"></a></td>
-<td>感谢优云智算赞助了本项目！优云智算是UCloud旗下AI云平台，提供稳定、全面的国内外模型API，仅一个key即可调用。主打包月、按次的高性价比 国模Coding Plan套餐，同时提供官转稳定海外模型。支持接入 Claude Code、Codex 及 API 调用。支持企业高并发、7*24技术支持、自助开票。通过<a href="https://passport.compshare.cn/register?referral_code=K50gMvv85OmEJ5T9ZDUtDE&ytag=GPU_YY_YX_hermesagent.org.cn">此链接</a>注册的用户，可得免费5元平台体验金！</td>
-</tr>
-</table>
-
-## Hermes Agent 中文社区
-
-Hermes Agent CN Desktop 由 Hermes Agent 中文社区维护。你可以访问 [Hermes Agent 中文社区主站](https://hermesagent.org.cn) 了解项目动态，通过 [中文文档](https://hermesagent.org.cn/docs) 学习使用方式，在 [实践指南](https://hermesagent.org.cn/practice-guides) 查看落地案例，也可以进入 [社群入口](https://hermesagent.org.cn/community) 加入更多讨论渠道。
-
-扫码加入 Hermes Agent 中文社区微信群；如果二维码过期，请访问 [最新微信群入口](https://hermesagent.org.cn/qr-entrance)。
-
-[<img src="./docs/assets/community/wechat-qr.png" alt="Hermes Agent 中文社区微信群二维码" width="260">](https://hermesagent.org.cn/qr-entrance)
-
-## 演示
-
-### 原型图预览
-
-可以在 [hermes-cn-ui-prototypes-sans.vercel.app](https://hermes-cn-ui-prototypes-sans.vercel.app/) 浏览高保真 UI 原型图。
-
-### 演示视频
-
-点击下方预览图，或直接打开 [MP4 演示视频](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)。README 渲染器对本地视频内嵌播放支持不稳定，因此这里用可点击预览图链接到视频文件。
-
-[<img src="./docs/assets/demo/screenshots/workbench-light.png" alt="Hermes Agent 中文社区桌面版演示视频预览" width="100%">](./docs/assets/demo/hermes-agent-cn-desktop-demo.mp4)
-
-### 界面截图
 
 下面的截图同步自官网 landing 仓库，覆盖工作台、归档、对话、LaTeX/Markdown、任务控制台、飞书接入、用量统计、健康状态、Skills、Memory、模型服务商配置、运行时诊断和日志等页面。
 
@@ -87,27 +57,23 @@ Hermes Agent CN Desktop 由 Hermes Agent 中文社区维护。你可以访问 [H
 
 Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外的桌面体验：原生窗口、本地进程管理、文件对话框、托管运行时安装、运行时诊断，以及生产模式下更安全的 REST 代理层与必要时的 WS 中继。
 
-本仓库是桌面端外壳。Agent runtime 和 Dashboard 源码位于 [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core)。
+本仓库是桌面端外壳。Agent runtime 和 Dashboard 源码位于 [Hermes-CN-Core](https://github.com/nevermorewish/Hermes-CN-Core)。
 
 ## 亮点
 
 - **一键安装，使用门槛极低**：针对 Windows 和 macOS 用户适配，下载安装后配置 API Key 或本地模型端点即可使用。
 - **轻量，跨平台**：Tauri 使用系统 WebView，不需要随应用打包 Chromium，安装包体积小，支持 Windows 及 macOS。
-- **内置独立 Hermes Agent 内核**：桌面端支持安装、更新、签名校验、健康检查和回滚本地 Hermes Agent 内核。
+- **内置独立 Hermes Agent 内核**：桌面端支持从 Linux feed 安装、更新、SHA-256 校验、健康检查和回滚本地 Hermes Agent 内核。
 - **面向 Agent 的完整 UI**：支持聊天、流式输出、附件、MCP 工具、Skills、Memory、Profiles、定时任务、LaTeX/Mermaid 渲染和运行时健康面板。
 - **中文模型与平台生态**：覆盖主流云端模型服务商和 Ollama、vLLM、LM Studio、llama.cpp 等本地部署方案，并提供飞书等平台接入配置；更多中文生态内容见 [Hermes Agent 中文社区](https://hermesagent.org.cn)。
 - **生产级传输桥**：生产模式下通过 Rust command 代理 REST 与上传；Gateway 使用官方 `/api/ws`，打包态必要时通过 Rust WS 中继绕过 WebView 限制，并集中处理鉴权。
 - **YOLO 模式开关**：「设置 → 常规」底部独立的「高风险操作」区提供开关，开启需二次确认，自动批准危险命令（对应后端 `HERMES_YOLO_MODE`），切换后自动重启内核生效，详见 [docs/yolo-mode.md](./docs/yolo-mode.md)。
 
-## 下载
 
-安装包可以从 [桌面端官网](https://desktop.hermesagent.org.cn) 下载，也会同步发布在 [GitHub Releases](https://github.com/Eynzof/Hermes-CN-Desktop/releases) 页面。
 
-当前版本包含：
-
-- macOS Apple Silicon DMG：`Hermes.Agent.CN.Desktop_0.8.0-rc8_aarch64.dmg`
-- macOS Intel DMG：`Hermes.Agent.CN.Desktop_0.8.0-rc8_x64.dmg`
-- Windows x64 安装器：`Hermes.Agent.CN.Desktop_0.8.0-rc8_x64-setup.exe`
+- macOS Apple Silicon DMG：`Hermes-Huanxing-0.6.14_aarch64.dmg`
+- macOS Intel DMG：`Hermes-Huanxing-0.6.14_x64.dmg`
+- Windows x64 安装器：`Hermes-Huanxing-0.6.14_x64-setup.exe`
 
 当前 Windows 与 macOS 安装包都会预置 `Hermes-CN-Core` runtime，安装后优先从包内 runtime 完成本地内核初始化；托管 runtime 下载与更新流程只作为升级或兜底路径使用。
 
@@ -116,7 +82,7 @@ Hermes Agent 已经提供本地 Dashboard。本仓库专注于 Dashboard 之外�
 - [Rust](https://rustup.rs/) stable
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 9+
-- [Hermes-CN-Core](https://github.com/Eynzof/Hermes-CN-Core) 或本机已安装的 Hermes CLI，用于本地 Dashboard 开发
+- [Hermes-CN-Core](https://github.com/nevermorewish/Hermes-CN-Core) 或本机已安装的 Hermes CLI，用于本地 Dashboard 开发
 
 macOS 还需要安装 Xcode Command Line Tools：
 
@@ -234,23 +200,3 @@ v0.1.1
 - 扩展 Dashboard、gateway、MCP、skills 和模型配置诊断；
 - 打磨 macOS 与 Windows 的打包和安装行为；
 - 完善桌面端与 runtime 边界文档，降低贡献门槛。
-
-## Star History
-
-<a href="https://www.star-history.com/?type=date&repos=Eynzof%2FHermes-CN-Desktop">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&theme=dark&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Eynzof/Hermes-CN-Desktop&type=date&legend=top-left&sealed_token=1yWT1YhOm_nQRCzqz4de_7wD5ywAiitmzgl3f_7gbSrJ0IMKbRxWPWKm1b5tColqNfKlW-bbWgi_ie7K7W9Q5XkQZm-qZBxDh5PykgvrQMP1Fx9wQYhSBKEyDwxGbi_DsogupN-z_1_Hwt2tZJC8dkq1l4fEH_U8onywopylj5X6qGAwwVBXnT9MTBHP" />
- </picture>
-</a>
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request。参与贡献前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。如果你想先了解中文社区动态、文档和实践案例，可以访问 [Hermes Agent 中文社区](https://hermesagent.org.cn)、[中文文档](https://hermesagent.org.cn/docs) 与 [实践指南](https://hermesagent.org.cn/practice-guides)。
-
-如果要报告安全问题，请遵循 [SECURITY.md](./SECURITY.md)，不要直接创建公开 Issue。
-
-## 许可
-
-本项目的非商业使用遵守 [PolyForm Noncommercial License 1.0.0](./LICENSE)。商业使用、商业分发、商业集成、托管销售或作为商业产品组成部分使用，需提前获得青岛万德缦思网络科技有限公司的单独商业授权；授权联系邮箱：lijiale@wanderminds.cn。

@@ -69,7 +69,6 @@ LF_REQUIRED_FILES = [
     "packages/shared-ui/package.json",
     "legal/EULA.zh-CN.rtf",
     "README.md",
-    "README.en-US.md",
 ]
 
 
@@ -98,6 +97,12 @@ def get_desktop_version() -> str:
 def get_product_name() -> str:
     """Read the product name from tauri.conf.json."""
     return str(load_json(TAURI_CONF_PATH)["productName"])
+
+
+def get_main_binary_name() -> str:
+    """Read the installed executable name from tauri.conf.json."""
+    config = load_json(TAURI_CONF_PATH)
+    return str(config.get("mainBinaryName") or get_cargo_package_name())
 
 
 def get_cargo_package_name() -> str:
@@ -569,6 +574,8 @@ def build_tauri_bundle(bundle: str) -> None:
             print("[WARN] NSIS (makensis) not found. Skipping NSIS bundle.")
             return
     run([resolve_tool("pnpm"), "exec", "tauri", "build", "--bundles", bundle])
+    if bundle == "nsis":
+        run([resolve_tool("node"), "scripts/rename-windows-artifacts.mjs"])
 
 
 def expected_msi_filename() -> str:
@@ -586,7 +593,7 @@ def verify_artifacts(bundle: str) -> list[Path]:
     """Verify expected build artifacts exist."""
     print("\n=== Verifying artifacts ===")
     release_dir = REPO_ROOT / "target" / "release"
-    exe_name = f"{get_cargo_package_name()}.exe"
+    exe_name = f"{get_main_binary_name()}.exe"
     exe = release_dir / exe_name
     artifacts: list[Path] = []
 

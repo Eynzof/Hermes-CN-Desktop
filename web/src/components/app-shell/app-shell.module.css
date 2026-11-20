@@ -1,165 +1,28 @@
-/* App shell — CSS Grid: topbar / [sidebar + main] / statusbar
-   Mirrors prototypes' `.app .app--two` layout. */
+/* App shell — WorkBuddy 范式两区布局：固定左栏 + 主区 */
 
 .shell {
   width: 100vw;
   height: 100vh;
-  position: relative;
   display: grid;
-  grid-template-rows: calc(var(--h-topbar-h) + var(--h-window-control-safe-top, 0px)) 1fr var(--h-statusbar-h);
   grid-template-columns: var(--h-sidebar-w) 1fr;
+  grid-template-rows: 1fr;
   overflow: hidden;
   background: var(--h-bg-app);
   color: var(--h-text);
   font-family: var(--h-font-ui);
-  transition: grid-template-columns var(--h-duration-normal) var(--h-ease-standard);
 }
 
-.shell[data-sidebar-visible="false"] {
-  grid-template-columns: 0 1fr;
-}
-
-.topbarSlot {
-  grid-column: 1 / -1;
-  grid-row: 1;
-}
-
-.sidebarSlot {
+.railSlot {
   grid-column: 1;
-  grid-row: 2;
-  width: var(--h-sidebar-w);
+  grid-row: 1;
   min-height: 0;
   overflow: hidden;
   position: relative;
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(0);
-  transition:
-    transform var(--h-duration-normal) var(--h-ease-standard),
-    opacity var(--h-duration-fast) var(--h-ease-standard),
-    visibility 0s linear 0s;
-}
-
-.shell[data-sidebar-visible="false"] .sidebarSlot {
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(-100%);
-  pointer-events: none;
-  transition:
-    transform var(--h-duration-normal) var(--h-ease-standard),
-    opacity var(--h-duration-fast) var(--h-ease-standard),
-    visibility 0s linear var(--h-duration-normal);
-}
-
-.sidebarSlot > aside {
-  padding-bottom: 32px;
-}
-
-.sidebarToggle,
-.sidebarRestoreButton {
-  position: absolute;
-  z-index: 20;
-  background: var(--h-bg-pane);
-}
-
-.sidebarToggle {
-  right: 4px;
-  bottom: 4px;
-}
-
-.sidebarRestoreButton {
-  left: 4px;
-  bottom: calc(var(--h-statusbar-h) + 4px);
-  opacity: 0;
-  visibility: hidden;
-  translate: -8px 0;
-  pointer-events: none;
-  transition:
-    opacity var(--h-duration-fast) var(--h-ease-standard),
-    translate var(--h-duration-normal) var(--h-ease-standard),
-    transform var(--h-duration-fast) var(--h-ease-standard),
-    visibility 0s linear var(--h-duration-normal);
-}
-
-.sidebarRestoreButton[data-visible="true"] {
-  opacity: 1;
-  visibility: visible;
-  translate: 0 0;
-  pointer-events: auto;
-  transition-delay: var(--h-duration-fast), var(--h-duration-fast), 0s, 0s;
-}
-
-.sidebarRestoreButton[data-visible="true"]:active:not(:disabled) {
-  transform: translateY(4px);
-}
-
-.sidebarInfoPanel {
-  position: absolute;
-  left: 16px;
-  right: 8px;
-  bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-  color: var(--h-text-3);
-  font-family: var(--h-font-mono);
-  font-size: 10px;
-  font-style: normal;
-  letter-spacing: 0.06em;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.sidebarInfoMeta {
-  display: grid;
-  gap: 4px;
-  max-width: 100%;
-}
-
-.sidebarInfoRow {
-  display: grid;
-  grid-template-columns: 2.4em 8.7ch 2.2ch 5ch 2.2ch max-content;
-  column-gap: 0;
-  align-items: baseline;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  font-variant-numeric: tabular-nums;
-}
-
-.sidebarInfoCell {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebarInfoDot {
-  text-align: center;
-  color: var(--h-text-4);
-}
-
-.sidebarInfoVersion {
-  color: var(--h-text-2);
-}
-
-.sidebarInfoNote {
-  max-width: 100%;
-  color: var(--h-text-4);
-  font-family: var(--h-font-cn);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .mainSlot {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 1;
   position: relative;
   min-height: 0;
   min-width: 0;
@@ -167,18 +30,4 @@
   display: flex;
   flex-direction: column;
   background: var(--h-bg-app);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell,
-  .sidebarSlot,
-  .sidebarRestoreButton {
-    transition-duration: 0.01ms;
-    transition-delay: 0s;
-  }
-}
-
-.statusbarSlot {
-  grid-column: 1 / -1;
-  grid-row: 3;
 }

@@ -20,6 +20,7 @@ import { StatusDot, usePlatform } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { useStatus } from "@/hooks/use-status";
 import { useModelInfo } from "@/hooks/use-config";
+import { BRAND } from "@/lib/brand.generated";
 import {
   readWorkspaceProjects,
   subscribeWorkspaceChanges,
@@ -265,8 +266,8 @@ export function Sidebar() {
       <div className={s.brandStrip}>
         <HermesLogoMark className={s.brandMark} size={24} />
         <div className={s.brandText}>
-          <div className={s.brandName}>Hermes Agent</div>
-          <div className={s.brandSub}>中文社区桌面版</div>
+          <div className={s.brandName}>{BRAND.appName}</div>
+          <div className={s.brandSub}>{BRAND.edition}</div>
         </div>
       </div>
 

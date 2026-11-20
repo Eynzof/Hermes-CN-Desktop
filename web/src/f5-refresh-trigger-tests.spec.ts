@@ -972,8 +972,10 @@ describe("Bug #8: Preview rail panel tab selection", () => {
     const { normalizePreviewPanel } = await import("@/lib/preview-rail");
 
     expect(normalizePreviewPanel("files")).toBe("files");
-    expect(normalizePreviewPanel("terminal")).toBe("terminal");
-    expect(normalizePreviewPanel("logs")).toBe("logs");
+    expect(normalizePreviewPanel("review")).toBe("review");
+    expect(normalizePreviewPanel("web")).toBe("web");
+    expect(normalizePreviewPanel("terminal")).toBe("files");
+    expect(normalizePreviewPanel("logs")).toBe("files");
     // Invalid values fall back to default
     expect(normalizePreviewPanel("invalid")).toBe("files");
     expect(normalizePreviewPanel(null)).toBe("files");

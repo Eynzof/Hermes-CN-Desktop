@@ -1,0 +1,23 @@
+.overlay { background: color-mix(in srgb, var(--h-bg-app) 82%, transparent); backdrop-filter: blur(8px); }
+.dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; border: 1px solid var(--h-line); border-radius: 0; background: var(--h-bg-pane); padding: 24px; }
+.title { margin: 0; color: var(--h-text); font-size: 20px; font-weight: 700; }
+.description { margin: 8px 0 0; color: var(--h-text-3); font-size: 12px; }
+.error { margin: 12px 0 0; color: var(--h-err); font-size: 12px; }
+.body { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
+.packages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.packages button, .methods button, .confirm, .success button, .qrState button { border: 1px solid var(--h-line-soft); border-radius: 0; background: transparent; color: var(--h-text-2); cursor: pointer; padding: 12px 16px; text-align: left; }
+.packages button[data-selected="true"], .methods button[data-selected="true"] { border-color: var(--h-accent); background: color-mix(in srgb, var(--h-accent) 10%, transparent); }
+.packages strong, .packages span, .packages small { display: block; }
+.packages span, .packages small { margin-top: 4px; color: var(--h-text-3); font-size: 11px; }
+.methods { display: flex; gap: 8px; }
+.confirm { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--h-accent); color: var(--h-accent-contrast); text-align: center; }
+.confirm:disabled { cursor: not-allowed; opacity: .5; }
+.qrState, .success { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px 0 4px; color: var(--h-text-2); text-align: center; }
+.qrState img { width: 260px; height: 260px; padding: 12px; background: white; }
+.qrState small { color: var(--h-text-3); }
+.qrState button, .success button { text-align: center; }
+.success { color: var(--h-ok); }
+.success span { color: var(--h-text-3); font-size: 12px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 560px) { .packages { grid-template-columns: 1fr; } }

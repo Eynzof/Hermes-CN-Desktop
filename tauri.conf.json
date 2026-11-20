@@ -1,7 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
-  "productName": "Hermes Agent CN Desktop",
-  "version": "0.8.0-rc8",
+  "productName": "ccworkhermes Desktop",
+  "mainBinaryName": "hermesagent",
+  "version": "0.6.14",
   "identifier": "cn.org.hermesagent.desktop",
   "build": {
     "beforeDevCommand": "pnpm --filter @hermes/web dev",
@@ -30,12 +31,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "Hermes Agent CN Contributors",
-    "homepage": "https://hermesagent.org.cn",
-    "copyright": "Copyright © 2026 Hermes Agent CN Contributors",
+    "publisher": "ccworkhermes",
+    "homepage": "https://ccwork.site/",
+    "copyright": "Copyright © 2026 ccworkhermes",
     "category": "DeveloperTool",
-    "shortDescription": "Hermes Agent Chinese Community Desktop",
-    "longDescription": "Desktop app for Hermes Agent Chinese Community Edition.",
+    "shortDescription": "ccworkhermes AI Assistant Desktop",
+    "longDescription": "Hermes desktop with ccwork accounts, models and billing.",
     "licenseFile": "legal/EULA.zh-CN.rtf",
     "resources": {
       "static/bundled-runtime/": "bundled-runtime/",

@@ -35,7 +35,7 @@ jobs:
       - name: Checkout Core backend
         uses: actions/checkout@v4
         with:
-          repository: Eynzof/Hermes-CN-Core
+          repository: nevermorewish/Hermes-CN-Core
           ref: main
           path: Hermes-CN-Core
 
@@ -45,8 +45,8 @@ jobs:
           WANDER_MEMORY_DEPLOY_KEY: ${{ secrets.WANDER_MEMORY_DEPLOY_KEY }}
         run: |
           if [ -z "$WANDER_MEMORY_DEPLOY_KEY" ]; then
-            echo "::error::WANDER_MEMORY_DEPLOY_KEY is not configured"
-            exit 1
+            echo "::notice::Wander-Memory integration skipped: deploy key is not configured"
+            echo "WANDER_MEMORY_E2E=false" >> "$GITHUB_ENV"
           fi
 
       # Canonical private MemOS backend. Keep the full SHA paired with the
@@ -75,6 +75,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
+          # Hermes-CN-Core main currently declares requires-python >=3.14.
           python-version: "3.14"
 
       - name: Install Core (Python) into .venv

@@ -26,6 +26,7 @@ vi.mock("@/lib/build-info", () => ({
 }));
 
 vi.mock("@/lib/runtime", () => ({
+  detectHostOS: () => "windows",
   runtime: {
     platform: "tauri",
     isPortable: () => false,
@@ -72,6 +73,23 @@ afterEach(() => {
 });
 
 describe("DesktopUpdateNotifier — unified update CTA", () => {
+  it("keeps the branded desktop installer when both update bridges are available", async () => {
+    vi.mocked(hasAppUpdateBridge).mockReturnValue(true);
+    const installDesktopUpdate = vi.fn(async () => ({ ok: true, filePath: "Hermes-Huanxing.exe" }));
+    Object.defineProperty(window, "hermesDesktop", {
+      configurable: true,
+      value: { checkDesktopUpdate: vi.fn(), installDesktopUpdate },
+    });
+    stubUpdateAvailable();
+
+    render(<DesktopUpdateNotifier />);
+    const button = await screen.findByText("下载并重启安装");
+    button.click();
+    await waitFor(() => expect(installDesktopUpdate).toHaveBeenCalledTimes(1));
+    expect(installAppUpdate).not.toHaveBeenCalled();
+    expect(openExternalUrl).not.toHaveBeenCalled();
+  });
+
   it("offers 立即更新 when the unified update bridge is available", async () => {
     vi.mocked(hasAppUpdateBridge).mockReturnValue(true);
     stubUpdateAvailable();

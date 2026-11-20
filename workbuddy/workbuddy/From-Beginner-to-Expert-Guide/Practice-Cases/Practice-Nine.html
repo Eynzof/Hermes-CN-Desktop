@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实践九：AI自驱动 ​ - CodeBuddy 文档</title>
+<style>
+:root { --fg:#1f2329; --muted:#646a73; --line:#dee0e3; --brand:#335cff; --bg-soft:#f5f6f7; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; color:var(--fg); line-height:1.75; background:#fff; }
+.topbar { position:sticky; top:0; background:#fff; border-bottom:1px solid var(--line); padding:10px 24px; font-size:14px; z-index:10; }
+.topbar a { color:var(--brand); text-decoration:none; margin-right:16px; }
+.topbar a:hover { text-decoration:underline; }
+.topbar .src { color:var(--muted); }
+main { max-width:860px; margin:0 auto; padding:32px 24px 96px; }
+h1 { font-size:30px; line-height:1.4; margin:8px 0 24px; padding-bottom:12px; border-bottom:1px solid var(--line); }
+h2 { font-size:22px; margin:36px 0 14px; padding-top:8px; border-top:1px solid var(--line); }
+h3 { font-size:18px; margin:28px 0 12px; }
+h4 { font-size:16px; margin:22px 0 10px; }
+p { margin:12px 0; }
+a { color:var(--brand); text-decoration:none; }
+a:hover { text-decoration:underline; }
+img, video { max-width:100%; height:auto; border-radius:6px; display:block; margin:12px auto; }
+table { border-collapse:collapse; width:100%; margin:16px 0; font-size:14.5px; display:block; overflow-x:auto; }
+th, td { border:1px solid var(--line); padding:8px 14px; text-align:left; }
+th { background:var(--bg-soft); }
+code { background:var(--bg-soft); border-radius:4px; padding:2px 6px; font-size:0.92em; font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace; }
+pre { background:var(--bg-soft); border-radius:8px; padding:14px 16px; overflow-x:auto; }
+pre code { background:none; padding:0; }
+blockquote { margin:14px 0; padding:4px 16px; border-left:3px solid var(--brand); color:var(--muted); background:var(--bg-soft); border-radius:0 6px 6px 0; }
+ul, ol { padding-left:1.6em; }
+li { margin:4px 0; }
+.header-anchor { visibility:hidden; }
+hr { border:none; border-top:1px solid var(--line); margin:28px 0; }
+.footer { max-width:860px; margin:0 auto; padding:0 24px 48px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../../index.html">文档首页</a><a class="src" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine" target="_blank" rel="noopener">查看原始页面 ↗</a></div>
+<main>
+<div style="position:relative;" class="vp-doc _docs_workbuddy_From-Beginner-to-Expert-Guide_Practice-Cases_Practice-Nine" data-v-bd9b7757><div><h1 id="实践九-ai自驱动" tabindex="-1">实践九：AI自驱动 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#实践九-ai自驱动" aria-label="Permalink to &quot;实践九：AI自驱动&quot;">​</a></h1><h2 id="一、文档说明" tabindex="-1">一、文档说明 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#一、文档说明" aria-label="Permalink to &quot;一、文档说明&quot;">​</a></h2><p>本文介绍 <code>WorkBuddy</code> 的 <code>AI</code> 自驱动使用方式，即让系统在明确目标后自主拆解任务、执行步骤、检查结果并持续推进，适用于需要减少人工介入的复杂任务场景。</p><h2 id="二、适用场景" tabindex="-1">二、适用场景 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#二、适用场景" aria-label="Permalink to &quot;二、适用场景&quot;">​</a></h2><ul><li>需要从目标出发，自动拆分多个执行步骤。</li><li>需要连续完成搜索、整理、生成、校验等一整套流程。</li><li>需要在较少人工干预的情况下推进任务。</li></ul><h2 id="三、推荐使用方式" tabindex="-1">三、推荐使用方式 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#三、推荐使用方式" aria-label="Permalink to &quot;三、推荐使用方式&quot;">​</a></h2><h3 id="_1-先说清任务目标" tabindex="-1">1）先说清任务目标 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#_1-先说清任务目标" aria-label="Permalink to &quot;1）先说清任务目标&quot;">​</a></h3><p>建议一次性说明目标结果、约束条件、输出格式和完成标准。</p><p><strong>示例指令</strong>：</p><blockquote><p>请自主完成这项任务：搜集近 <code>1</code> 周 <code>AI</code> 办公领域的重要动态，整理为一份简报，附上来源链接，并在输出前自行检查是否有重复信息。</p></blockquote><h3 id="_2-允许其自行拆解步骤" tabindex="-1">2）允许其自行拆解步骤 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#_2-允许其自行拆解步骤" aria-label="Permalink to &quot;2）允许其自行拆解步骤&quot;">​</a></h3><p><code>WorkBuddy</code> 会根据目标自动规划执行顺序，例如先搜集信息、再筛选重点、最后整理输出。</p><h3 id="_3-要求其自检后再交付" tabindex="-1">3）要求其自检后再交付 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#_3-要求其自检后再交付" aria-label="Permalink to &quot;3）要求其自检后再交付&quot;">​</a></h3><p>如任务质量要求较高，建议明确提出复核要求。</p><p><strong>示例补充</strong>：</p><blockquote><p>输出前请自检一遍，确认结构完整、信息无重复、结论简洁明确。</p></blockquote><h2 id="四、使用建议" tabindex="-1">四、使用建议 <a class="header-anchor" href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine#四、使用建议" aria-label="Permalink to &quot;四、使用建议&quot;">​</a></h2><ul><li><strong>目标越清楚，自驱效果越好</strong>：请尽量说明完成标准。</li><li><strong>复杂任务先给边界</strong>：例如时间范围、数据来源、文件格式。</li><li><strong>涉及高风险操作时先预览</strong>：删除、覆盖、迁移类动作建议先确认方案。</li></ul></div></div>
+</main>
+<div class="footer">内容抓取自腾讯云代码助手 CodeBuddy 官方文档，仅供离线查阅。原始出处：<a href="https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine">https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Practice-Cases/Practice-Nine</a></div>
+</body>
+</html>
