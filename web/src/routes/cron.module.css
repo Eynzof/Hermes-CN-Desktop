@@ -1,7 +1,7 @@
 .pageGrid {
   min-height: calc(100vh - 120px);
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(420px, 1fr) minmax(320px, 380px);
+  grid-template-columns: minmax(240px, 280px) minmax(460px, 1fr) minmax(300px, 340px);
   gap: 16px;
 }
 
@@ -252,7 +252,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .titleBlock {
@@ -617,7 +618,7 @@
 
 @media (max-width: 1280px) {
   .pageGrid {
-    grid-template-columns: minmax(240px, 300px) minmax(420px, 1fr);
+    grid-template-columns: minmax(220px, 260px) minmax(440px, 1fr);
   }
 
   .historyPane {
