@@ -35,6 +35,48 @@ describe("clipboard image helpers", () => {
     expect(imageFileFromClipboardData(clipboardDataWithItem(file))).toBe(file);
   });
 
+  it("keeps distinct pasted files but ignores their duplicate item view", () => {
+    const fromFiles = new File(["same-image"], "image.png", {
+      type: "image/png",
+      lastModified: 100,
+    });
+    const secondFile = new File(["other-file"], "notes.pdf", {
+      type: "application/pdf",
+      lastModified: 100,
+    });
+    const fromItems = new File(["same-image"], "image.png", {
+      type: "image/png",
+      lastModified: 101,
+    });
+    const clipboardData = {
+      files: [fromFiles, secondFile],
+      items: [{
+        kind: "file",
+        type: fromItems.type,
+        getAsFile: () => fromItems,
+      }],
+    } as unknown as DataTransfer;
+
+    expect(filesFromClipboardData(clipboardData)).toEqual([fromFiles, secondFile]);
+  });
+
+  it("returns the single Snipping Tool file when its item timestamp differs by 1 ms", () => {
+    const image = new File(["png"], "image.png", { type: "image/png", lastModified: 100 });
+    const itemImage = new File(["png"], "image.png", { type: "image/png", lastModified: 101 });
+    const clipboard = { files: [image], items: clipboardDataWithItem(itemImage).items } as unknown as DataTransfer;
+
+    expect(filesFromClipboardData(clipboard)).toEqual([image]);
+  });
+
+  it("preserves same-name and same-size files with different modification times", () => {
+    const metadata = { type: "image/png", lastModified: 100 };
+    const first = new File(["red"], "image.png", metadata);
+    const second = new File(["tan"], "image.png", { ...metadata, lastModified: 101 });
+    const clipboard = { files: [first, second], items: [] } as unknown as DataTransfer;
+
+    expect(filesFromClipboardData(clipboard)).toEqual([first, second]);
+  });
+
   it("ignores non-image paste files", () => {
     const file = new File(["txt"], "note.txt", { type: "text/plain" });
     expect(imageFileFromClipboardData(clipboardDataWithFile(file))).toBeNull();

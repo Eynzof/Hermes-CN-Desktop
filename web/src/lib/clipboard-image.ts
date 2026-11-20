@@ -39,9 +39,14 @@ export function filesFromClipboardData(clipboardData?: DataTransfer | null): Fil
     files.push(file);
   };
 
-  for (const file of Array.from(clipboardData.files ?? [])) {
+  const pastedFiles = Array.from(clipboardData.files ?? []);
+  for (const file of pastedFiles) {
     add(file);
   }
+
+  // WebView2 can expose one clipboard image in both collections with different
+  // lastModified values. Only consult items when files has no paste payload.
+  if (pastedFiles.length) return files;
 
   for (const item of Array.from(clipboardData.items ?? [])) {
     if (item.kind !== "file") continue;
