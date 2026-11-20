@@ -534,6 +534,7 @@ describe("provider catalog config updates", () => {
       contextWindow: 1_000_000,
       supportsTools: true,
       supportsReasoning: true,
+      supportsVision: true,
     });
     expect(preset!.models[0]?.id).toBe("MiniMax-M3");
 
@@ -551,6 +552,7 @@ describe("provider catalog config updates", () => {
       context_length: 1_000_000,
       supports_tools: true,
       supports_reasoning: true,
+      supports_vision: true,
     });
   });
 
