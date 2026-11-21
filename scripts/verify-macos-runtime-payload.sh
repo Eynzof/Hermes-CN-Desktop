@@ -26,7 +26,7 @@ if [[ -f "$payload" ]]; then
     fi
   fi
 elif [[ -d "$payload" ]]; then
-  runtime_dir="$payload"
+  runtime_dir="${payload%/}"
 else
   echo "Bundled macOS runtime payload not found: $payload" >&2
   exit 1
@@ -55,9 +55,13 @@ echo "Verifying bundled macOS runtime payload signatures."
 echo "Runtime payload: $payload"
 
 framework_count=0
+interpreter_count=0
 while IFS= read -r -d '' framework; do
   verify_signature "$framework"
   framework_count=$((framework_count + 1))
+  if [[ "$framework" == "$runtime_dir/_internal/Python.framework" ]]; then
+    interpreter_count=$((interpreter_count + 1))
+  fi
 done < <(find "$runtime_dir" -type d -name '*.framework' -print0)
 
 macho_count=0
@@ -65,16 +69,19 @@ while IFS= read -r -d '' path; do
   if is_macho "$path"; then
     verify_signature "$path"
     macho_count=$((macho_count + 1))
+    if [[ "${path%/*}" == "$runtime_dir/_internal" && "${path##*/}" == libpython3.*.dylib ]]; then
+      interpreter_count=$((interpreter_count + 1))
+    fi
   fi
 done < <(find "$runtime_dir" -type f -print0)
 
-if [[ "$framework_count" -eq 0 ]]; then
-  echo "No framework bundle found in bundled macOS runtime payload." >&2
+if [[ "$macho_count" -eq 0 ]]; then
+  echo "No Mach-O file found in bundled macOS runtime payload." >&2
   exit 1
 fi
 
-if [[ "$macho_count" -eq 0 ]]; then
-  echo "No Mach-O file found in bundled macOS runtime payload." >&2
+if [[ "$interpreter_count" -eq 0 ]]; then
+  echo "Missing signed Python.framework or standalone libpython in bundled macOS runtime." >&2
   exit 1
 fi
 
