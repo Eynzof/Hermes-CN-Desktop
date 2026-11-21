@@ -9,7 +9,7 @@ interface BrowserCompanionLocation {
   search: string;
 }
 
-function isLoopbackHttpOrigin(value: string): boolean {
+export function isLoopbackHttpOrigin(value: string): boolean {
   try {
     const url = new URL(value);
     if (url.protocol !== "http:") return false;

@@ -77,6 +77,9 @@ pub enum AppError {
     #[error("API proxy error: {0}")]
     ProxyError(String),
 
+    #[error("API proxy error: Request timed out: {0}")]
+    ProxyTimeout(String),
+
     #[error("Request outside allowed origin: {0}")]
     OriginViolation(String),
 
@@ -139,7 +142,7 @@ impl AppError {
             AppError::ProfileNotOwner => "profile_not_owner",
             AppError::ProfileSwitchFailed(_) => "profile_switch_failed",
             AppError::InvalidRequest(_) => "invalid_request",
-            AppError::ProxyError(_) => "proxy_error",
+            AppError::ProxyError(_) | AppError::ProxyTimeout(_) => "proxy_error",
             AppError::OriginViolation(_) => "origin_violation",
             AppError::AuthSessionExpired(_) => "auth_session_expired",
             AppError::FileError(_) => "file_error",
@@ -173,6 +176,7 @@ impl AppError {
             | AppError::ProfileSwitchFailed(_) => "profile",
             AppError::InvalidRequest(_)
             | AppError::ProxyError(_)
+            | AppError::ProxyTimeout(_)
             | AppError::OriginViolation(_) => "api_proxy",
             AppError::AuthSessionExpired(_) => "auth",
             AppError::FileError(_) => "file",
@@ -187,6 +191,7 @@ impl AppError {
             AppError::RuntimeChecksumMismatch { expected, actual } => {
                 Some(serde_json::json!({ "expected": expected, "actual": actual }))
             }
+            AppError::ProxyTimeout(_) => Some(serde_json::json!({ "timeout": true })),
             _ => None,
         }
     }
@@ -218,7 +223,7 @@ impl<T> From<std::sync::PoisonError<T>> for AppError {
 impl From<reqwest::Error> for AppError {
     fn from(e: reqwest::Error) -> Self {
         if e.is_timeout() {
-            AppError::ProxyError(format!("Request timed out: {}", e))
+            AppError::ProxyTimeout(e.to_string())
         } else if e.is_connect() {
             AppError::DashboardUnreachable(e.to_string())
         } else {
@@ -248,6 +253,15 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use std::sync::{Mutex, PoisonError};
+
+    #[test]
+    fn proxy_timeout_preserves_its_ipc_code_and_exposes_a_typed_detail() {
+        let timeout = serde_json::to_value(AppError::ProxyTimeout("probe".into())).unwrap();
+        assert_eq!(timeout["code"], "proxy_error");
+        assert_eq!(timeout["details"]["timeout"], true);
+        let other = serde_json::to_value(AppError::ProxyError("probe".into())).unwrap();
+        assert!(other["details"].is_null());
+    }
 
     #[test]
     fn from_io_error_maps_to_file_error() {

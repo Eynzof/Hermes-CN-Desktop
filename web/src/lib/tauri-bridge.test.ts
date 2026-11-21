@@ -363,6 +363,43 @@ describe("isTauriDevMode", () => {
     expect(mockInvoke).not.toHaveBeenCalledWith("api_request", expect.anything());
   });
 
+  it.each([
+    { code: "dashboard_unreachable" },
+    { code: "proxy_error", details: { timeout: true } },
+  ])("keeps managed startup in recovery until the restarted Core responds ($code)", async (error) => {
+    window.__TAURI_INTERNALS__ = {} as never;
+    window.dispatchEvent = vi.fn();
+    let reachable = false;
+    const config = {
+      apiBaseUrl: "http://127.0.0.1:9120", gatewayUrl: "ws://127.0.0.1:9120/api/ws",
+      kernelVersion: EXPECTED_BACKEND_VERSION, currentProfile: "default",
+      connectionMode: "managed", backendReady: true,
+    };
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === "get_runtime_config") return config;
+      if (command === "api_request") {
+        if (!reachable) throw { ...error, message: "transport failure" };
+        return { ok: true, body: JSON.stringify({ version: EXPECTED_BACKEND_VERSION }) };
+      }
+      if (command === "managed_runtime_stop") return { ok: true, backendReady: false };
+      if (command === "managed_runtime_start") {
+        reachable = true;
+        return { ok: true, backendReady: true };
+      }
+      return {};
+    });
+
+    await installTauriBridge();
+    expect(window.__HERMES_RUNTIME__).toMatchObject({ backendReady: false, backendRecoveryReason: "managed-backend-unreachable" });
+    await expect(window.hermesDesktop!.refreshGatewayUrl!()).rejects.toThrow();
+    expect(window.__HERMES_RUNTIME__?.backendReady).toBe(false);
+    await window.hermesDesktop!.startManagedRuntime!();
+    const commands = mockInvoke.mock.calls.map(([command]) => command);
+    expect(commands.indexOf("managed_runtime_stop")).toBeLessThan(commands.indexOf("managed_runtime_start"));
+    expect(window.__HERMES_RUNTIME__?.backendReady).toBe(true);
+    expect(window.__HERMES_RUNTIME__?.backendRecoveryReason).toBeUndefined();
+  });
+
   it("mounts the offline repair shell when an attached backend is unreachable", async () => {
     (globalThis as any).window.__TAURI_INTERNALS__ = {};
     mockInvoke.mockImplementation((command: string) => {

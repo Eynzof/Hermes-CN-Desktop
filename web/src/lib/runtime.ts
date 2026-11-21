@@ -653,7 +653,9 @@ export const runtime = {
     // backend's readiness/recovery gate. For managed mode, preserve the
     // intentional-offline exemption after stop/uninstall refreshes.
     if (window.__HERMES_RUNTIME__.connectionMode !== "local"
-      && window.__HERMES_RUNTIME__.connectionMode !== "remote") {
+      && window.__HERMES_RUNTIME__.connectionMode !== "remote"
+      && !(window.__HERMES_RUNTIME__.backendRecoveryReason === "managed-backend-unreachable"
+        && result.desiredState === "running")) {
       if (window.__HERMES_RUNTIME__.backendReady !== result.backendReady) resetVersionCheck();
       window.__HERMES_RUNTIME__.backendReady = result.backendReady;
       if (!result.backendReady && result.desiredState !== "running") {

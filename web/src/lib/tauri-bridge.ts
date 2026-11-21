@@ -523,7 +523,17 @@ const tauriBridge = {
     const result = await invokeCommand<{ gatewayUrl: string; sessionToken?: string }>("refresh_gateway_url");
     const config = await invokeCommand<Partial<NonNullable<Window["__HERMES_RUNTIME__"]>>>("get_runtime_config");
     if (window.__HERMES_RUNTIME__) {
-      Object.assign(window.__HERMES_RUNTIME__, config);
+      const active = window.__HERMES_RUNTIME__;
+      if (active.backendRecoveryReason === "managed-backend-unreachable" && config.backendReady) {
+        // The native snapshot may still say ready after a child exits. Only
+        // expose the workspace after probing the current process and version.
+        const checked = await verifyBackendVersion(config.apiBaseUrl, {
+          connectionMode: "managed", expectedVersion: config.kernelVersion ?? active.kernelVersion,
+        });
+        if (checked.kind !== "ok") assertCompatible();
+        active.backendRecoveryReason = undefined;
+      }
+      Object.assign(active, config);
       window.dispatchEvent(new Event("hermes-runtime-changed"));
     }
     return result;
@@ -604,7 +614,16 @@ const tauriBridge = {
   },
 
   async startManagedRuntime(): Promise<RuntimeControlResult> {
-    return invokeCommand("managed_runtime_start");
+    const recovering = window.__HERMES_RUNTIME__?.backendRecoveryReason === "managed-backend-unreachable";
+    if (recovering) {
+      // A dead Dashboard can still have a native handle. Clear it before
+      // starting, otherwise managed_runtime_start may reuse the stale handle.
+      const stopped = await invokeCommand<RuntimeControlResult>("managed_runtime_stop");
+      if (!stopped.ok) return stopped;
+    }
+    const result = await invokeCommand<RuntimeControlResult>("managed_runtime_start");
+    if (recovering && result.ok && result.backendReady) await tauriBridge.refreshGatewayUrl();
+    return result;
   },
 
   async stopManagedRuntime(): Promise<RuntimeControlResult> {
@@ -1267,7 +1286,7 @@ export async function installTauriBridge(): Promise<void> {
     deferBackendVersionCheckForOfflineRuntime();
     backendRecoveryReason = "managed-runtime-offline";
   } else {
-    const versionState = await verifyBackendVersion(config.apiBaseUrl, { connectionMode });
+    const versionState = await verifyBackendVersion(config.apiBaseUrl, { connectionMode, startup: true });
     if (versionState.kind === "deferred") {
       backendRecoveryReason = versionState.reason;
       backendRecoveryDetail = versionState.detail;
