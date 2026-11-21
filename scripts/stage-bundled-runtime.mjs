@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -27,6 +27,10 @@ Options:
   --platform <name>       Runtime platform (default: win32)
   --arch <name>           Runtime arch (default: x64)
   --out <dir>             Output dir (default: static/bundled-runtime)
+  --local-manifest <file> Signed local manifest (HERMES_RUNTIME_LOCAL_MANIFEST)
+  --local-artifact <file> Matching local zip (HERMES_RUNTIME_LOCAL_ARTIFACT)
+                          Set HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT to the
+                          public key also built into the local candidate shell.
   --expand-artifact       Extract the zip into a runtime tree and do not stage the zip
   --keep-existing         Do not delete old staged runtime files first
 `);
@@ -60,6 +64,12 @@ const arch = argValue("--arch", process.env.HERMES_RUNTIME_ARCH ?? "x64");
 const outDir = resolve(repoRoot, argValue("--out", "static/bundled-runtime"));
 const expandArtifact = hasFlag("--expand-artifact");
 const keepExisting = hasFlag("--keep-existing");
+
+const localManifest = argValue("--local-manifest", process.env.HERMES_RUNTIME_LOCAL_MANIFEST);
+const localArtifact = argValue("--local-artifact", process.env.HERMES_RUNTIME_LOCAL_ARTIFACT);
+if (Boolean(localManifest) !== Boolean(localArtifact)) {
+  throw new Error("local staging requires both a manifest and an artifact");
+}
 
 const runtimeName = `hermes-agent-cn-runtime-${platform}-${arch}`;
 const manifestName = `${channel}-${platform}-${arch}.json`;
@@ -175,8 +185,27 @@ function expandRuntimeZip(zipBytes) {
   return expandedRuntimeDir;
 }
 
-cleanOutputDir();
-const manifestBytes = await download(`${baseUrl}/${manifestName}`, 120_000);
+// Match the schema-v2 payload in Core's sign_runtime_manifest.py and the
+// desktop runtime verifier. The installed app verifies these same bytes again.
+function verifyLocalManifest(manifest) {
+  const pem = process.env.HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT;
+  if (!pem) throw new Error("local staging requires the candidate shell's public key");
+  const key = createPublicKey(pem);
+  const fields = [
+    "schemaVersion", "channel", "runtimeVersion", "kernelVersion", "runtimeFlavor",
+    "runtimeRevision", "platform", "arch", "artifactUrl", "sha256", "sourceRepo", "sourceCommit",
+  ];
+  const payload = Buffer.from(fields.map((name) => manifest[name]).join("\n"));
+  if (key.asymmetricKeyType !== "ed25519"
+      || !verify(null, payload, key, Buffer.from(manifest.signature, "base64"))) {
+    throw new Error("invalid local runtime signature");
+  }
+  if (manifest.sourceRepo !== repo || (tag !== "latest" && tag !== `runtime-v${manifest.runtimeVersion}`)) {
+    throw new Error("local runtime manifest does not match the requested repository or tag");
+  }
+}
+
+const manifestBytes = localManifest ? readFileSync(localManifest) : await download(`${baseUrl}/${manifestName}`, 120_000);
 const manifest = JSON.parse(manifestBytes.toString("utf8"));
 
 if (manifest.schemaVersion !== 2) {
@@ -189,12 +218,14 @@ if (manifest.channel !== channel) {
   throw new Error(`manifest channel is ${manifest.channel}, expected ${channel}`);
 }
 
-const zipBytes = await download(`${baseUrl}/${zipName}`, 15 * 60_000);
+if (localManifest) verifyLocalManifest(manifest);
+const zipBytes = localArtifact ? readFileSync(localArtifact) : await download(`${baseUrl}/${zipName}`, 15 * 60_000);
 const actualSha = sha256(zipBytes);
 if (actualSha !== String(manifest.sha256).toLowerCase()) {
   throw new Error(`sha256 mismatch for ${zipName}: expected ${manifest.sha256}, got ${actualSha}`);
 }
 
+cleanOutputDir();
 writeFileSync(join(outDir, bundledManifestName), manifestBytes);
 const artifactPath = expandArtifact
   ? expandRuntimeZip(zipBytes)
