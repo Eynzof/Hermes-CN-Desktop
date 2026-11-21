@@ -123,9 +123,11 @@ jobs:
               echo "::error::Recovery requires the original v0.9.2 tag commit and the accepted stable cn.19 runtime."
               exit 1
             fi
+            test "$source_sha" = 60f126eddb43ecaa476e6278291a04fca81e54b9
             test "$(git rev-parse --verify "refs/tags/$tag^{commit}")" = "$source_sha"
             git diff --exit-code "$source_sha" "$GITHUB_SHA" -- . \
               ':(exclude).github/workflows/release-desktop.yml' \
+              ':(exclude)scripts/package-portable-windows.mjs' \
               ':(exclude)scripts/verify-macos-runtime-payload.sh'
           fi
           if git show-ref --verify --quiet "refs/tags/$tag"; then
@@ -340,21 +342,23 @@ jobs:
           done < <(security list-keychains -d user | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')
           security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
           security find-identity -v -p codesigning "$keychain"
-      - name: Check out the reviewed runtime verifier for recovery
-        if: matrix.runtime_platform == 'darwin' && inputs.recovery_source_sha
+      - name: Check out reviewed packaging tools for recovery
+        if: inputs.recovery_source_sha && (matrix.runtime_platform == 'darwin' || matrix.runtime_platform == 'win32')
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          path: recovery-verifier
-          sparse-checkout: scripts/verify-macos-runtime-payload.sh
+          path: recovery-tools
+          sparse-checkout: |
+            /scripts/verify-macos-runtime-payload.sh
+            /scripts/package-portable-windows.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Verify bundled macOS Runtime signatures
         if: matrix.runtime_platform == 'darwin'
         shell: bash
         env:
-          VERIFIER_ROOT: ${{ inputs.recovery_source_sha && 'recovery-verifier' || '.' }}
-        run: '"$VERIFIER_ROOT/scripts/verify-macos-runtime-payload.sh" "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"'
+          TOOLS_ROOT: ${{ inputs.recovery_source_sha && 'recovery-tools' || '.' }}
+        run: '"$TOOLS_ROOT/scripts/verify-macos-runtime-payload.sh" "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"'
 
       - name: Build signed Tauri bundles
         shell: bash
@@ -417,7 +421,10 @@ jobs:
           }
       - name: Package Windows portable build
         if: matrix.runtime_platform == 'win32'
-        run: node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
+        shell: bash
+        env:
+          TOOLS_ROOT: ${{ inputs.recovery_source_sha && 'recovery-tools' || '.' }}
+        run: node "$TOOLS_ROOT/scripts/package-portable-windows.mjs" --project-root "$GITHUB_WORKSPACE" --target "${{ matrix.target }}"
 
       - name: Notarize/staple macOS and regenerate final updater package
         if: matrix.runtime_platform == 'darwin'

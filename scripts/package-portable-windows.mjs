@@ -15,17 +15,18 @@ import { spawnSync } from "node:child_process";
 function usage() {
   console.log(`Usage: node scripts/package-portable-windows.mjs [options]
 
-Collects the built Windows executable and its Tauri resources from the cargo
-target directory into a self-contained portable folder (with portable.marker
-so the app anchors all data to <unzip dir>\\data), then zips it.
+Collects the built Windows executable and the resources mapped in tauri.conf.json
+into a self-contained portable folder (with portable.marker so the app anchors
+all data to <unzip dir>\\data), then zips it.
 
 Run after \`pnpm tauri:build:bundled-windows\` (or tauri-action) on Windows.
 The installer (NSIS) pipeline is untouched; this only adds an extra artifact.
 
 Options:
-  --target <triple>   Cargo target triple (e.g. x86_64-pc-windows-msvc).
-                      Default: no triple (target/release).
-  --out <dir>         Output dir for staging + zip (default: target/portable)
+  --project-root <dir>  Product checkout (default: the parent of scripts/)
+  --target <triple>     Cargo target triple (e.g. x86_64-pc-windows-msvc).
+                        Default: no triple (target/release).
+  --out <dir>           Output dir for staging + zip (default: target/portable)
 `);
 }
 
@@ -48,7 +49,8 @@ if (hasFlag("--help") || hasFlag("-h")) {
   process.exit(0);
 }
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const defaultRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = resolve(argValue("--project-root", defaultRoot));
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 const tauriConf = JSON.parse(readFileSync(join(repoRoot, "tauri.conf.json"), "utf8"));
 
@@ -76,14 +78,6 @@ if (!exeName) {
   );
 }
 
-// Resource layout mirrors tauri.conf.json bundle.resources: tauri-build copies
-// each mapping's destination into the cargo target dir, and on Windows
-// resource_dir() == the exe's directory, so the portable folder reproduces the
-// NSIS install layout exactly.
-const resourceDests = Object.values(tauriConf.bundle.resources).map((dest) =>
-  dest.replace(/\/+$/, ""),
-);
-
 const archLabel = (target ?? "x86_64").startsWith("aarch64") ? "arm64" : "x64";
 const stagingName = `${productName} Portable`;
 const stagingDir = join(outRoot, stagingName);
@@ -100,12 +94,10 @@ if (existsSync(webview2Loader)) {
   cpSync(webview2Loader, join(stagingDir, "WebView2Loader.dll"));
 }
 
-for (const dest of resourceDests) {
-  const source = join(releaseDir, dest);
-  if (!existsSync(source)) {
-    throw new Error(`bundled resource missing from target dir: ${source}`);
-  }
-  cpSync(source, join(stagingDir, dest), { recursive: true });
+// NSIS uses this same source-to-destination mapping. Cargo's build-script
+// outputs can live separately from the release executable.
+for (const [source, dest] of Object.entries(tauriConf.bundle.resources)) {
+  cpSync(join(repoRoot, source), join(stagingDir, dest), { recursive: true });
 }
 
 writeFileSync(
