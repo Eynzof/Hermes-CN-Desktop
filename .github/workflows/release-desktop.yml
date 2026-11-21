@@ -47,6 +47,10 @@ on:
       candidate_sha256:
         description: "publish / promote 必填：已验收草稿 checksums.txt 的 SHA256"
         required: false
+      recovery_source_sha:
+        description: "补建 0.9.2 草稿时填写原桌面标签的完整提交 SHA"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -70,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.recovery_source_sha && format('refs/tags/{0}', inputs.tag) || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -87,6 +91,7 @@ jobs:
           INPUT_TAG: ${{ github.event.inputs.tag || github.ref_name }}
           INPUT_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.21.0-cn.19' }}
           INPUT_RUNTIME_CHANNEL: ${{ inputs.bundled_runtime_channel }}
+          RECOVERY_SOURCE_SHA: ${{ inputs.recovery_source_sha }}
           INPUT_CHANNEL: ${{ inputs.channel }}
           RELEASE_ENVIRONMENT: ${{ inputs.release_environment }}
           WINDOWS_SIGNING: ${{ inputs.windows_signing }}
@@ -112,6 +117,19 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           test "$tag" = "v$version"
           source_sha="$(git rev-parse HEAD)"
+          if [[ -n "$RECOVERY_SOURCE_SHA" ]]; then
+            if [[ "$GITHUB_REF_TYPE" != branch || "$tag" != v0.9.2 || "$runtime_tag" != runtime-v0.21.0-cn.19 ||
+                  "$channel" != stable || "$INPUT_RUNTIME_CHANNEL" != stable || "$source_sha" != "$RECOVERY_SOURCE_SHA" ]]; then
+              echo "::error::Recovery requires the original v0.9.2 tag commit and the accepted stable cn.19 runtime."
+              exit 1
+            fi
+            test "$source_sha" = 60f126eddb43ecaa476e6278291a04fca81e54b9
+            test "$(git rev-parse --verify "refs/tags/$tag^{commit}")" = "$source_sha"
+            git diff --exit-code "$source_sha" "$GITHUB_SHA" -- . \
+              ':(exclude).github/workflows/release-desktop.yml' \
+              ':(exclude)scripts/package-portable-windows.mjs' \
+              ':(exclude)scripts/verify-macos-runtime-payload.sh'
+          fi
           if git show-ref --verify --quiet "refs/tags/$tag"; then
             test "$source_sha" = "$(git rev-parse "$tag^{commit}")"
           fi
@@ -142,21 +160,25 @@ jobs:
       matrix:
         include:
           - runner: windows-latest
+            cn19_manifest_sha256: 8ba08d226db250a0c8fb37ce232474eb693ca2ae9b0a4749eb1eeb416d05e526
             target: x86_64-pc-windows-msvc
             runtime_platform: win32
             runtime_arch: x64
             bundles: nsis
           - runner: macos-15
+            cn19_manifest_sha256: d2e4f0f3c850dd3296c3af3b2908b0d360b89e7f87508937b7e88f643a7e91ab
             target: aarch64-apple-darwin
             runtime_platform: darwin
             runtime_arch: arm64
             bundles: app,dmg
           - runner: macos-15-intel
+            cn19_manifest_sha256: fa892b7370f9e798945b6b1cc1788468a4e22fda16d5700fba521466df42e2ef
             target: x86_64-apple-darwin
             runtime_platform: darwin
             runtime_arch: x64
             bundles: app,dmg
           - runner: ubuntu-22.04
+            cn19_manifest_sha256: b555cf96b2ae67f5b984b0676245c3917b53eb78369216f902ab3d739f3028f9
             target: x86_64-unknown-linux-gnu
             runtime_platform: linux
             runtime_arch: x64
@@ -201,6 +223,7 @@ jobs:
           RUNTIME_CHANNEL: ${{ needs.preflight.outputs.runtime_channel }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
+          EXPECTED_MANIFEST_SHA256: ${{ inputs.recovery_source_sha && matrix.cn19_manifest_sha256 || '' }}
         run: |
           node - <<'NODE'
           const fs = require("node:fs");
@@ -210,7 +233,13 @@ jobs:
             const url = `https://github.com/Eynzof/Hermes-CN-Core/releases/download/${encodeURIComponent(tag)}/${process.env.RUNTIME_CHANNEL}-${process.env.RUNTIME_PLATFORM}-${process.env.RUNTIME_ARCH}.json`;
             const response = await fetch(url, { headers: { "User-Agent": "hermes-desktop-release" } });
             if (!response.ok) throw new Error(`runtime manifest HTTP ${response.status}`);
-            const manifest = await response.json();
+            const bytes = Buffer.from(await response.arrayBuffer());
+            if (process.env.EXPECTED_MANIFEST_SHA256) {
+              const digest = require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+              if (digest !== process.env.EXPECTED_MANIFEST_SHA256) throw new Error("Recovery runtime manifest differs from the accepted cn.19 release");
+              fs.writeFileSync(require("node:path").join(process.env.RUNNER_TEMP, "accepted-runtime-manifest.json"), bytes);
+            }
+            const manifest = JSON.parse(bytes);
             for (const field of ["sourceRepo", "sourceCommit", "runtimeVersion", "kernelVersion", "runtimeRevision"]) {
               if (manifest[field] === undefined || manifest[field] === "") throw new Error(`runtime manifest missing ${field}`);
             }
@@ -242,6 +271,10 @@ jobs:
             --channel "${{ needs.preflight.outputs.runtime_channel }}" \
             --platform "${{ matrix.runtime_platform }}" \
             --arch "${{ matrix.runtime_arch }}"
+      - name: Check staged runtime manifest against the accepted recovery input
+        if: inputs.recovery_source_sha
+        shell: bash
+        run: cmp "$RUNNER_TEMP/accepted-runtime-manifest.json" "static/bundled-runtime/stable-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.json"
       - name: Verify bundled runtime extraction and anti-downgrade contract
         shell: bash
         env:
@@ -309,10 +342,23 @@ jobs:
           done < <(security list-keychains -d user | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')
           security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
           security find-identity -v -p codesigning "$keychain"
+      - name: Check out reviewed packaging tools for recovery
+        if: inputs.recovery_source_sha && (matrix.runtime_platform == 'darwin' || matrix.runtime_platform == 'win32')
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: recovery-tools
+          sparse-checkout: |
+            /scripts/verify-macos-runtime-payload.sh
+            /scripts/package-portable-windows.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Verify bundled macOS Runtime signatures
         if: matrix.runtime_platform == 'darwin'
         shell: bash
-        run: scripts/verify-macos-runtime-payload.sh "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"
+        env:
+          TOOLS_ROOT: ${{ inputs.recovery_source_sha && 'recovery-tools' || '.' }}
+        run: '"$TOOLS_ROOT/scripts/verify-macos-runtime-payload.sh" "static/bundled-runtime/hermes-agent-cn-runtime-${{ matrix.runtime_platform }}-${{ matrix.runtime_arch }}.zip"'
 
       - name: Build signed Tauri bundles
         shell: bash
@@ -375,7 +421,10 @@ jobs:
           }
       - name: Package Windows portable build
         if: matrix.runtime_platform == 'win32'
-        run: node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
+        shell: bash
+        env:
+          TOOLS_ROOT: ${{ inputs.recovery_source_sha && 'recovery-tools' || '.' }}
+        run: node "$TOOLS_ROOT/scripts/package-portable-windows.mjs" --project-root "$GITHUB_WORKSPACE" --target "${{ matrix.target }}"
 
       - name: Notarize/staple macOS and regenerate final updater package
         if: matrix.runtime_platform == 'darwin'
@@ -518,6 +567,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Create private draft from the pinned source SHA
+        env:
+          RECOVERY_SOURCE_SHA: ${{ inputs.recovery_source_sha }}
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft > "$RUNNER_TEMP/release.json" 2>/dev/null; then
@@ -528,6 +579,10 @@ jobs:
           args=(release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" --draft --latest=false \
             --title "Hermes Agent 中文社区桌面版 $RELEASE_TAG" \
             --notes "固定 Desktop/Core/Runtime 输入构建。Windows 系统签名模式：$WINDOWS_SIGNING；所有更新包采用 Tauri 签名。")
+          if [[ -n "$RECOVERY_SOURCE_SHA" ]]; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)" = "$RECOVERY_SOURCE_SHA"
+            args+=(--verify-tag)
+          fi
           if [ "$PRERELEASE" = true ]; then args+=(--prerelease); fi
           gh "${args[@]}"
           mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0)
@@ -546,7 +601,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   release:
-    if: inputs.action == 'publish' || inputs.action == 'promote'
+    if: (inputs.action == 'publish' || inputs.action == 'promote') && !inputs.recovery_source_sha
     runs-on: ubuntu-latest
     environment: hot-update-${{ inputs.release_environment }}
     env:
