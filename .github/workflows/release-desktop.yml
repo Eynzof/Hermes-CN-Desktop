@@ -146,7 +146,7 @@ jobs:
             runtime_platform: win32
             runtime_arch: x64
             bundles: nsis
-          - runner: macos-14
+          - runner: macos-15
             target: aarch64-apple-darwin
             runtime_platform: darwin
             runtime_arch: arm64
@@ -168,6 +168,9 @@ jobs:
           ref: ${{ needs.preflight.outputs.source_sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Set macOS deployment target
+        if: matrix.runtime_platform == 'darwin'
+        run: echo 'MACOSX_DEPLOYMENT_TARGET=14.0' >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: "22.22.0"
@@ -330,6 +333,30 @@ jobs:
           fi
           pnpm exec tauri build "${args[@]}"
 
+      - name: Check out the macOS deployment audit from Core cn.19
+        if: matrix.runtime_platform == 'darwin'
+        uses: actions/checkout@v4
+        with:
+          repository: Eynzof/Hermes-CN-Core
+          ref: 4d017f3cfb5c63342613859b021364b97e114360
+          path: core-deployment-audit
+          sparse-checkout: scripts/audit_macos_deployment_targets.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Check the macOS 14 minimum for the app and its embedded runtime
+        if: matrix.runtime_platform == 'darwin'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="target/${{ matrix.target }}/release/bundle/macos/Hermes Agent CN Desktop.app"
+          audit="core-deployment-audit/scripts/audit_macos_deployment_targets.py"
+          python3 "$audit" "$app" --max-minimum 14.0 --output release-smoke/macos-app-minimum.json
+          runtime_zip="$app/Contents/Resources/bundled-runtime/hermes-agent-cn-runtime-darwin-${{ matrix.runtime_arch }}.zip"
+          runtime_dir="$(mktemp -d)"
+          trap 'rm -rf "$runtime_dir"' EXIT
+          unzip -q "$runtime_zip" -d "$runtime_dir"
+          python3 "$audit" "$runtime_dir" --max-minimum 14.0 --output release-smoke/macos-runtime-minimum.json
+
       - name: Verify Windows Authenticode
         if: matrix.runtime_platform == 'win32'
         shell: pwsh
@@ -407,6 +434,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/desktop-appimage"
           cd "$RUNNER_TEMP/desktop-appimage"
           "${appimages[0]}" --appimage-extract > appimage-extract.log
+          shell_binary="squashfs-root/usr/bin/hermes-agent-cn-desktop"
+          max_glibc=$(LC_ALL=C readelf --wide --version-info "$shell_binary" |
+            sed -nE 's/.*Name: GLIBC_([0-9]+(\.[0-9]+)+).*/\1/p' | sort -V | tail -n 1)
+          test -n "$max_glibc"
+          echo "Highest glibc version required by the desktop executable: $max_glibc (maximum allowed: 2.35)"
+          dpkg --compare-versions "$max_glibc" le 2.35
           python3 "$GITHUB_WORKSPACE/scripts/release-runtime-smoke.py" \
             --app-root "$RUNNER_TEMP/desktop-appimage/squashfs-root" \
             --platform linux --arch "${{ matrix.runtime_arch }}" \
