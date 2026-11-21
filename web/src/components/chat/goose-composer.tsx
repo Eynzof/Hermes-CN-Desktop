@@ -135,6 +135,7 @@ interface GooseComposerProps {
   autoFocus?: boolean;
   disabled?: boolean;
   loading?: boolean;
+  allowFollowUp?: boolean;
   showMeta?: boolean;
   compact?: boolean;
   /** Remove the lower corner radius when the composer sits flush with a page edge. */
@@ -218,6 +219,7 @@ export function GooseComposer({
   autoFocus = false,
   disabled = false,
   loading = false,
+  allowFollowUp = false,
   showMeta = true,
   compact = false,
   flushBottom = false,
@@ -296,7 +298,7 @@ export function GooseComposer({
   const displayedTextLength = value.length;
   const canSend =
     (submitText.length > 0 || attachments.length > 0) &&
-    !controlsDisabled &&
+    !disabled && (!loading || allowFollowUp) &&
     !hasProcessingAttachment;
   // Two-tier slash palette: typing "/" lists top-level commands (/skill,
   // /compress) via slashToken (command mode); typing "/skill <name>" lists the
@@ -1579,7 +1581,7 @@ export function GooseComposer({
             ) : loading ? (
               <span className={s.liveDot} aria-hidden="true" />
             ) : null}
-            {loading && onStop ? (
+            {loading && onStop && !canSend ? (
               <button
                 className={s.sendButton}
                 type="button"

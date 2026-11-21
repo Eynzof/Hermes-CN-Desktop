@@ -19,6 +19,7 @@ import {
   recoverCompletedTurnFromStoredMessagesAtom,
   removeApprovalAtom,
   removeClarificationAtom,
+  recordClarificationAnswerAtom,
   type PendingClarification,
 } from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
@@ -453,6 +454,9 @@ export function DetailRoute() {
     });
   }, [attachFile, attachImage, attachImageBytes, detectDroppedPath, dispatchCommand, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
 
+  const pendingClarification = runtime.pendingClarifications?.[0];
+  const removeClarification = useSetAtom(removeClarificationAtom);
+
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
     controls: ComposerSubmitControls,
@@ -464,14 +468,26 @@ export function DetailRoute() {
       void runManualCompress(sessionId, builtin.arg);
       return;
     }
-    // Park the submission while the agent is busy; the composer clears on resolve
-    // and the queue drains (auto on settle, or manually) when it frees up.
+    // Queue before releasing the tool: the turn can settle as soon as the
+    // gateway processes the skip, and that transition drains the queue.
     if (runtimeIsBusy) {
       enqueueQueuedPrompt(taskId, { text: payload.text, attachments: payload.attachments }, Date.now());
-      return;
     }
-    await submitPayload(payload, controls.updateAttachment);
-  }, [ensureGatewaySession, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+    if (pendingClarification) {
+      const skip = getGatewayClient().request("clarify.respond", {
+        session_id: pendingClarification.sessionId,
+        request_id: pendingClarification.requestId,
+        answer: "",
+      }).then(() => removeClarification(pendingClarification));
+      if (runtimeIsBusy) {
+        // The queue already owns this draft. Leave the card available on error.
+        void skip.catch((error) => console.error("Failed to skip pending clarification:", error));
+      } else {
+        await skip;
+      }
+    }
+    if (!runtimeIsBusy) await submitPayload(payload, controls.updateAttachment);
+  }, [ensureGatewaySession, pendingClarification, removeClarification, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
 
   // ---- Send queue (drain on settle, send-now / edit / delete) --------------
   const queuedPrompts = useQueuedPrompts(taskId);
@@ -621,7 +637,6 @@ export function DetailRoute() {
     [config, contextSelection],
   );
   const pendingApproval = runtime.pendingApprovals[0] ?? null;
-  const pendingClarification = runtime.pendingClarifications?.[0];
 
   const composerTick = useComposerTimer(runtimeIsBusy, runtime.turnStartedAt);
   // Task-level stall watchdog: detects a turn wedged on a dead provider call
@@ -774,6 +789,7 @@ export function DetailRoute() {
               loadingPlaceholder={composerLoadingPlaceholder}
               showMeta={false}
               loading={runtimeIsBusy}
+              allowFollowUp={Boolean(pendingClarification)}
               onStop={onStop}
               voiceConfig={config ?? null}
               modelPicker={{
@@ -838,21 +854,42 @@ export function DetailRoute() {
 
 function ClarificationDialog({ request }: { request: PendingClarification }) {
   const remove = useSetAtom(removeClarificationAtom);
+  const recordAnswer = useSetAtom(recordClarificationAnswerAtom);
   const [selected, setSelected] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const answer = text.trim() || (request.multiSelect ? JSON.stringify(selected) : selected[0] ?? "");
+  // Batch clarifies arrive as `questions` (the gateway's native shape) and are
+  // answered one question at a time: each `clarify.respond` reply carries the
+  // `remaining` qids until every question has an answer.
+  const batch = request.questions ?? [];
+  const answers = request.answers ?? {};
+  const current = batch.length > 0 ? batch.find((q) => !(q.qid in answers)) : undefined;
+  const choices = current ? current.choices : request.choices;
+  const multiSelect = current ? current.multiSelect : request.multiSelect;
+  const question = current ? current.question : request.question;
+  const answer = text.trim() || (multiSelect ? JSON.stringify(selected) : selected[0] ?? "");
   const canSend = Boolean(text.trim() || selected.length);
+  const progress = batch.length > 1 ? `（第 ${Object.keys(answers).length + 1}/${batch.length} 题）` : "";
   const respond = async () => {
     if (sending || !canSend) return;
     setSending(true);
     setError("");
     try {
-      await getGatewayClient().request("clarify.respond", {
-        session_id: request.sessionId, request_id: request.requestId, answer,
-      });
-      remove(request);
+      const result = (await getGatewayClient().request("clarify.respond", {
+        session_id: request.sessionId,
+        request_id: request.requestId,
+        answer,
+        ...(current ? { question_id: current.qid } : {}),
+      })) as { remaining?: unknown } | undefined;
+      const remaining = Array.isArray(result?.remaining) ? result.remaining : [];
+      if (current && remaining.length > 0) {
+        recordAnswer({ sessionId: request.sessionId, requestId: request.requestId, qid: current.qid, answer });
+        setSelected([]);
+        setText("");
+      } else {
+        remove(request);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -861,13 +898,13 @@ function ClarificationDialog({ request }: { request: PendingClarification }) {
   };
   return (
     <form className={s.approvalCard} aria-label="补充信息" onSubmit={(event) => { event.preventDefault(); void respond(); }}>
-      <div className={s.approvalHeader}>{request.question}</div>
+      <div className={s.approvalHeader}>{question}{progress}</div>
       <div className={s.clarificationChoices}>
-        {request.choices.map((choice) => (
+        {choices.map((choice) => (
           <label key={choice}>
-            <input type={request.multiSelect ? "checkbox" : "radio"} name={request.requestId}
+            <input type={multiSelect ? "checkbox" : "radio"} name={request.requestId}
               checked={selected.includes(choice)} disabled={sending}
-              onChange={(event) => setSelected(request.multiSelect
+              onChange={(event) => setSelected(multiSelect
                 ? event.target.checked ? [...selected, choice] : selected.filter((item) => item !== choice)
                 : [choice])} />
             {choice}
