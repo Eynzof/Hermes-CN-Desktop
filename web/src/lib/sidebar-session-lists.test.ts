@@ -68,4 +68,19 @@ describe("deriveSidebarSessionLists", () => {
     expect(lists.active.map((item) => item.id)).toEqual(["running"]);
     expect(lists.recent.map((item) => item.id)).toEqual(["done"]);
   });
+
+  it("orders recent by last_active when the backend provides it", () => {
+    const lists = deriveSidebarSessionLists(
+      [
+        // Started long ago but used most recently.
+        { ...session("old-but-active", 1, 2), last_active: 999 },
+        // Started recently but idle since.
+        session("new-but-idle", 100, 101),
+      ],
+      [],
+      () => false,
+    );
+
+    expect(lists.recent.map((item) => item.id)).toEqual(["old-but-active", "new-but-idle"]);
+  });
 });

@@ -109,10 +109,10 @@ describe("fetchSessionsList", () => {
 
   it("keeps requests within the Core page-size cap", async () => {
     mockFetchJSON.mockImplementation(async (path: string) => {
-      if (path === "/api/sessions?limit=100&offset=0&include_archived=true") {
+      if (path === "/api/sessions?limit=100&offset=0&order=recent&include_archived=true") {
         return sessionsPage(Array.from({ length: 100 }, (_, i) => `s${i}`), 150, 100, 0);
       }
-      if (path === "/api/sessions?limit=50&offset=100&include_archived=true") {
+      if (path === "/api/sessions?limit=50&offset=100&order=recent&include_archived=true") {
         return sessionsPage(Array.from({ length: 50 }, (_, i) => `s${i + 100}`), 150, 50, 100);
       }
       throw new Error(`unexpected ${path}`);
@@ -127,17 +127,17 @@ describe("fetchSessionsList", () => {
     expect(result.limit).toBe(200);
     expect(result.offset).toBe(0);
     expect(mockFetchJSON.mock.calls.map((call) => call[0])).toEqual([
-      "/api/sessions?limit=100&offset=0&include_archived=true",
-      "/api/sessions?limit=50&offset=100&include_archived=true",
+      "/api/sessions?limit=100&offset=0&order=recent&include_archived=true",
+      "/api/sessions?limit=50&offset=100&order=recent&include_archived=true",
     ]);
   });
 
   it("preserves requested offset when aggregating multiple pages", async () => {
     mockFetchJSON.mockImplementation(async (path: string) => {
-      if (path === "/api/sessions?limit=100&offset=20") {
+      if (path === "/api/sessions?limit=100&offset=20&order=recent") {
         return sessionsPage(Array.from({ length: 100 }, (_, i) => `s${i + 20}`), 300, 100, 20);
       }
-      if (path === "/api/sessions?limit=50&offset=120") {
+      if (path === "/api/sessions?limit=50&offset=120&order=recent") {
         return sessionsPage(Array.from({ length: 50 }, (_, i) => `s${i + 120}`), 300, 50, 120);
       }
       throw new Error(`unexpected ${path}`);
@@ -160,7 +160,7 @@ describe("fetchSessionsList", () => {
 
     expect(result.sessions.map((item) => item.id)).toEqual(["s1", "s2"]);
     expect(mockFetchJSON.mock.calls.map((call) => call[0])).toEqual([
-      "/api/sessions?limit=50&offset=0",
+      "/api/sessions?limit=50&offset=0&order=recent",
     ]);
   });
 });

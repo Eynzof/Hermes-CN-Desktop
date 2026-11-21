@@ -89,7 +89,10 @@ function shortId(id: string): string {
 }
 
 function lastActivitySec(session: SessionSummary): number {
-  return session.ended_at ?? session.started_at;
+  // `ended_at` is null for sessions that were never explicitly finished, so the
+  // previous `ended_at ?? started_at` fallback degraded to the first-touch
+  // date. Prefer the backend's real last-activity time when it is available.
+  return session.last_active ?? session.ended_at ?? session.started_at;
 }
 
 interface SessionStatus {

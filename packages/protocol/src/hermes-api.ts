@@ -178,6 +178,12 @@ export const SessionSummary = z.object({
   cwd: z.string().nullable().optional(),
   started_at: z.number(),
   ended_at: z.number().nullable(),
+  // Real last-activity time (unix seconds) as computed by the Core session
+  // list. It follows the compression chain, so a long conversation keeps a
+  // fresh value even after it rotates onto a new continuation id. `/api/sessions`
+  // already returns this key (it is not part of _SESSION_LIST_HEAVY_FIELDS);
+  // older cores may omit it, hence optional.
+  last_active: z.number().nullable().optional(),
   end_reason: z.string().nullable().optional(),
   message_count: z.number(),
   tool_call_count: z.number().optional(),

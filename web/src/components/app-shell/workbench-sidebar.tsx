@@ -27,7 +27,7 @@ import {
   subscribeSessionUiStateChanges,
   unpinSessions,
 } from "@/lib/session-ui-state";
-import { deriveSidebarSessionLists } from "@/lib/sidebar-session-lists";
+import { deriveSidebarSessionLists, lastActivitySec } from "@/lib/sidebar-session-lists";
 import {
   SessionDeleteModal,
   SessionBranchErrorModal,
@@ -55,6 +55,15 @@ function relTime(unixSec: number, now: Date) {
     return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   }
   return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+// Display both ends of a conversation: first-touch date and last-touch date.
+// Collapses to a single value when they fall on the same day, so short-lived
+// sessions keep the old compact look.
+function sessionTimeMeta(session: SessionSummary, now: Date) {
+  const first = relTime(session.started_at, now);
+  const last = relTime(lastActivitySec(session), now);
+  return first === last ? last : `${first} → ${last}`;
 }
 
 function elapsed(unixSec: number, now: Date) {
@@ -424,14 +433,13 @@ export function WorkbenchSidebar() {
                   : sess.end_reason === "error" || sess.end_reason === "interrupted"
                     ? "err"
                     : "ok";
-              const ts = sess.ended_at ?? sess.started_at;
               return (
                 <SessionRow
                   key={sess.id}
                   session={sess}
                   state={state}
                   active={sessionIdMatches(sess.id, activeSessionId)}
-                  meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : relTime(ts, now)}
+                  meta={running ? `${modelShort(sess.model)} · ${elapsed(sess.started_at, now)}` : sessionTimeMeta(sess, now)}
                   projectName={projectNameBySessionId.get(sess.id)}
                   pinned={pinnedSessionIds.has(sess.id)}
                   menuDisabled={running}
@@ -495,7 +503,7 @@ export function WorkbenchSidebar() {
             recent.map((sess) => {
               const state: "ok" | "err" =
                 sess.end_reason === "error" || sess.end_reason === "interrupted" ? "err" : "ok";
-              const meta = relTime(sess.ended_at ?? sess.started_at, now);
+              const meta = sessionTimeMeta(sess, now);
               return (
                 <SessionRow
                   key={sess.id}

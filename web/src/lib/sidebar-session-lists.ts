@@ -3,7 +3,12 @@ import type { SessionSummary } from "@hermes/protocol";
 export const RECENT_SESSION_LIMIT = 8;
 
 export function lastActivitySec(session: SessionSummary): number {
-  return session.ended_at ?? session.started_at;
+  // Prefer the backend's real last-activity time. `ended_at` is only set for
+  // explicitly finished sessions and is null for most of them, so the previous
+  // `ended_at ?? started_at` fallback silently degraded to the first-touch
+  // date — "recent" was ordered by when a conversation started, not when it
+  // was last used.
+  return session.last_active ?? session.ended_at ?? session.started_at;
 }
 
 export interface SidebarSessionLists {

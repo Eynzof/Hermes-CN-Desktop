@@ -82,7 +82,11 @@ interface FetchSessionsOptions extends UseSessionsOptions {
 }
 
 function sessionsPath(limit: number, offset: number, includeArchived: boolean): string {
-  return `/api/sessions?limit=${limit}&offset=${offset}${includeArchived ? "&include_archived=true" : ""}`;
+  // `order=recent` makes the Core page by last activity instead of creation
+  // time. Without it a long-running conversation that rotates onto a fresh
+  // continuation id sinks to the back of the list even though it is the most
+  // recently used one.
+  return `/api/sessions?limit=${limit}&offset=${offset}&order=recent${includeArchived ? "&include_archived=true" : ""}`;
 }
 
 function normalizePageNumber(value: number, fallback: number): number {
