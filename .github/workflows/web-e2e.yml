@@ -73,18 +73,20 @@ jobs:
           cache: pnpm
           cache-dependency-path: Hermes-CN-Desktop/pnpm-lock.yaml
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python for Wander-Memory
+        if: env.WANDER_MEMORY_E2E == 'true'
+        uses: actions/setup-python@v5
         with:
           python-version: "3.14"
 
-      - name: Install Core (Python) into .venv
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "0.13.5"
+          cache-dependency-glob: Hermes-CN-Core/uv.lock
+
+      - name: Install Core from its lockfile
         working-directory: Hermes-CN-Core
-        # [all] mirrors the documented dev install; trim to the minimal extras
-        # that still run `hermes dashboard` + a turn if you want a faster job.
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install -U pip
-          .venv/bin/pip install -e ".[all]"
+        run: uv sync --locked --extra all
 
       - name: Install Wander-Memory (Python) into .venv
         if: env.WANDER_MEMORY_E2E == 'true'
@@ -108,7 +110,7 @@ jobs:
       - name: Protocol smoke
         run: |
           nohup node e2e/harness/start-backend.mjs > /tmp/e2e-backend.log 2>&1 &
-          for i in $(seq 1 120); do
+          for _ in $(seq 1 120); do
             grep -q BACKEND_READY /tmp/e2e-backend.log && break
             grep -qiE "failed to start|exited unexpectedly" /tmp/e2e-backend.log && { cat /tmp/e2e-backend.log; exit 1; }
             sleep 1
