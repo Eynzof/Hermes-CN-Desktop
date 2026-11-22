@@ -120,9 +120,10 @@ function fakeD1({ tokenHash, device, candidate, candidates }) {
           if (sql.includes("FROM releases")) {
             if (!candidates) return candidate;
             assert.match(sql, /channel = \?1 AND target = \?2 AND arch = \?3 AND status = 'published'/);
-            const [channel, target, arch] = this.values;
+            const [channel, target, arch, releaseId] = this.values;
             return candidates.find((row) => row.channel === channel && row.target === target
-              && row.arch === arch && row.status === "published") ?? null;
+              && row.arch === arch && row.status === "published"
+              && (!releaseId || row.id === releaseId)) ?? null;
           }
           throw new Error(`unexpected first SQL: ${sql}`);
         },
@@ -279,4 +280,47 @@ test("client events authenticate and store only the hashed identity", async () =
   assert.ok(insert);
   assert.equal(insert.values[0], await sha256Hex("device-1"));
   assert.ok(!insert.values.includes(token));
+});
+
+
+test("registered 0.9.3 bridges route both legacy versions before 1.0 on every platform", async () => {
+  for (const [target, arch] of [["windows", "x86_64"], ["darwin", "aarch64"], ["darwin", "x86_64"], ["linux", "x86_64"], ["linux-deb", "x86_64"]]) {
+    const make = (id, version, core, runtime) => release({
+      id, version, target, arch, channel: "stable", status: "published", rollout_percent: 100,
+      github_release_tag: `v${version}`,
+      github_asset_url: `https://github.com/Eynzof/Hermes-CN-Desktop/releases/download/v${version}/update.exe`,
+      mirror_url: `https://hot-update-download-staging.hermesagent.org.cn/v${version}/update.exe`,
+      file_name: "update.exe", bundled_core_version: core, bundled_runtime_version: runtime,
+    });
+    const bridge = make("bridge", "0.9.3", "0.21.0", "0.21.0-cn.19");
+    const latest = make("latest", "1.0.0", "0.23.0", "0.23.0-cn.20");
+    const route = `${target}/${arch}`;
+    const mapping = JSON.stringify({ [`stable/${route}`]: bridge.id });
+    const check = (version, rows, map = mapping) => worker.fetch(
+      new Request(`https://control.example/v1/check/stable/${route}/${version}`, {
+        headers: { "x-installation-id": "installation-0123456789abcdef" },
+      }), { ...testEnv(fakeD1({ candidates: rows })), DESKTOP_093_BRIDGE_RELEASE_IDS: map }, ctx,
+    );
+    for (const version of ["0.9.0", "0.9.1"]) {
+      const first = await check(version, [latest, bridge]);
+      assert.equal(first.status, 200);
+      assert.equal((await first.json()).metadata.releaseId, bridge.id);
+      for (const unavailable of [null, {status: "paused"}, {status: "revoked"}, {rollout_percent: 0},
+        {channel: "canary"}, {target: "other"}, {arch: "other"}, {version: "1.0.0"},
+        {bundled_core_version: "0.23.0"}, {bundled_runtime_version: "0.23.0-cn.20"}]) {
+        const rows = unavailable ? [latest, {...bridge, ...unavailable}] : [latest];
+        assert.equal((await check(version, rows)).status, 204);
+      }
+      assert.equal((await check(version, [latest, bridge], "{}")).status, 204);
+      const bucket = await rolloutBucket("installation-0123456789abcdef", bridge.id);
+      assert.equal((await check(version, [latest, {...bridge, rollout_percent: bucket}])).status, 204);
+      assert.equal((await check(version, [latest, {...bridge, rollout_percent: bucket + 1}])).status, 200);
+    }
+    assert.equal((await (await check("0.9.3", [latest, bridge])).json()).metadata.releaseId, latest.id);
+    assert.equal((await check("1.0.0", [latest, bridge])).status, 204);
+    const disabled = await worker.fetch(new Request(`https://control.example/v1/check/stable/${route}/0.9.0`, {
+      headers: { "x-installation-id": "installation-0123456789abcdef" },
+    }), testEnv(fakeD1({candidates: [latest, bridge]})), ctx);
+    assert.equal((await disabled.json()).metadata.releaseId, latest.id);
+  }
 });
