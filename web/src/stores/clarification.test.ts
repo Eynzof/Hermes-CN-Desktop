@@ -159,6 +159,17 @@ describe("resuming a waiting clarification", () => {
     expect(isRuntimeRunning(store.get(chatRuntimeBySessionAtom)[session])).toBe(false);
   });
 
+  it("releases a restored question when the turn fails", () => {
+    const store = createStore();
+    store.set(restorePendingClarificationAtom, session, batch);
+    store.set(applyGatewayEventAtom, parseGatewayEvent({
+      type: "error", session_id: session, payload: { message: "provider unavailable" },
+    }));
+    const runtime = store.get(chatRuntimeBySessionAtom)[session];
+    expect(runtime.pendingClarifications).toEqual([]);
+    expect(isRuntimeRunning(runtime)).toBe(false);
+  });
+
   it("closes a batch whose last answer has already been accepted", () => {
     const store = createStore();
     store.set(restorePendingClarificationAtom, session, batch);
