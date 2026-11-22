@@ -58,6 +58,7 @@ import {
   markSessionInterruptedAtom,
   markStreamsReconnectingAtom,
   resetChatSessionAtom,
+  restorePendingClarificationAtom,
   resetStreamStateAtom,
   setSessionErrorAtom,
   startPromptAtom,
@@ -132,10 +133,11 @@ async function reattachActiveSessionAfterReconnect(): Promise<void> {
             { timeoutMs: 300_000 },
           ),
         ),
-      onResumed: (gatewaySessionId, persistentId) => {
+      onResumed: (gatewaySessionId, persistentId, pendingClarify) => {
         rememberSessionMapping(gatewaySessionId, persistentId);
         mirrorSessionWorkspaceMapping(gatewaySessionId, persistentId);
         store.set(gwSessionIdAtom, gatewaySessionId);
+        store.set(restorePendingClarificationAtom, gatewaySessionId, pendingClarify);
       },
       onResumeFailed: (error) => {
         // A timeout or temporarily wedged backend does not mean the persistent
@@ -320,6 +322,7 @@ export function useGateway() {
   const applyGatewayEvent = useSetAtom(applyGatewayEventAtom);
   const ensureChatSession = useSetAtom(ensureChatSessionAtom);
   const resetChatSession = useSetAtom(resetChatSessionAtom);
+  const restorePendingClarification = useSetAtom(restorePendingClarificationAtom);
   const resetStreamState = useSetAtom(resetStreamStateAtom);
   const markSessionInterrupted = useSetAtom(markSessionInterruptedAtom);
   const startPromptInStore = useSetAtom(startPromptAtom);
@@ -461,6 +464,7 @@ export function useGateway() {
     mirrorSessionWorkspaceMapping(result.session_id, resumed);
     setGwSessionId(result.session_id);
     resetChatSession(result.session_id);
+    restorePendingClarification(result.session_id, result.pending_clarify);
     // Compression rotated the conversation onto a new continuation: the backend
     // followed the chain and resumed a different persistent id than we asked
     // for. Record it so the detail route can project onto the live tip instead
@@ -468,7 +472,7 @@ export function useGateway() {
     setSessionTipRedirect((prev) => recordTipRedirect(prev, persistentSessionId, result.resumed));
     void invalidateSessionListQueries(queryClient);
     return result.session_id;
-  }, [ensureSubscribed, queryClient, resetChatSession, setGwSessionId, setSessionTipRedirect]);
+  }, [ensureSubscribed, queryClient, resetChatSession, restorePendingClarification, setGwSessionId, setSessionTipRedirect]);
 
   const sendPrompt = useCallback(
     async (

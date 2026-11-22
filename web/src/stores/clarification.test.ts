@@ -1,9 +1,10 @@
 import { createStore } from "jotai/vanilla";
 import { describe, expect, it } from "vitest";
 import { parseGatewayEvent } from "@hermes/protocol";
+import { isRuntimeRunning, streamSilenceMs } from "@/lib/session-activity";
 import {
   applyGatewayEventAtom, chatRuntimeBySessionAtom, markSessionInterruptedAtom,
-  recordClarificationAnswerAtom, removeClarificationAtom,
+  recordClarificationAnswerAtom, removeClarificationAtom, restorePendingClarificationAtom,
 } from "./chat";
 
 const request = (sid: string, rid: string) => parseGatewayEvent({
@@ -92,5 +93,85 @@ describe("clarification lifecycle", () => {
     expect(entry.answers).toEqual({ q0: "结论", q1: "短一点" });
     store.set(removeClarificationAtom, entry);
     expect(store.get(chatRuntimeBySessionAtom).a.pendingClarifications).toEqual([]);
+  });
+});
+
+describe("resuming a waiting clarification", () => {
+  const session = "live-session";
+  const batch = {
+    request_id: "original-id",
+    questions: [
+      { qid: "q0", question: "颜色", choices: ["红", "绿"] },
+      { qid: "q1", question: "形状", choices: ["圆", "方"] },
+    ],
+    answers: { q0: "绿" },
+  };
+
+  it("restores a single choice and its original reply address", () => {
+    const store = createStore();
+    store.set(restorePendingClarificationAtom, session, {
+      request_id: "single-id", question: "饮料", choices: ["茶", "水"],
+    });
+    expect(store.get(chatRuntimeBySessionAtom)[session].pendingClarifications).toMatchObject([
+      { sessionId: session, requestId: "single-id", question: "饮料", choices: ["茶", "水"] },
+    ]);
+  });
+
+  it("restores acknowledged batch answers even when the live request is replayed", () => {
+    const store = createStore();
+    store.set(restorePendingClarificationAtom, session, batch);
+    store.set(applyGatewayEventAtom, parseGatewayEvent({
+      type: "clarify.request", session_id: session, payload: { ...batch, answers: undefined },
+    }));
+    const cards = store.get(chatRuntimeBySessionAtom)[session].pendingClarifications!;
+    expect(isRuntimeRunning(store.get(chatRuntimeBySessionAtom)[session])).toBe(true);
+    expect(streamSilenceMs(store.get(chatRuntimeBySessionAtom)[session])).toBeNull();
+    expect(cards).toHaveLength(1);
+    expect(cards[0].answers).toEqual({ q0: "绿" });
+    expect(cards[0].questions!.find(q => !(q.qid in cards[0].answers!))?.qid).toBe("q1");
+  });
+
+  it("refreshes the same live request without duplicating it", () => {
+    const store = createStore();
+    store.set(applyGatewayEventAtom, parseGatewayEvent({
+      type: "clarify.request", session_id: session, payload: { ...batch, answers: undefined },
+    }));
+    store.set(restorePendingClarificationAtom, session, batch);
+    expect(store.get(chatRuntimeBySessionAtom)[session].pendingClarifications).toMatchObject([
+      { requestId: "original-id", answers: { q0: "绿" } },
+    ]);
+  });
+
+  it("replaces a question resolved elsewhere with the one now waiting", () => {
+    const store = createStore();
+    store.set(applyGatewayEventAtom, request(session, "already-resolved"));
+    store.set(restorePendingClarificationAtom, session, batch);
+    expect(store.get(chatRuntimeBySessionAtom)[session].pendingClarifications?.map(card => card.requestId))
+      .toEqual(["original-id"]);
+  });
+
+  it("stops displaying a restored idle session as busy after its request expires", () => {
+    const store = createStore();
+    store.set(restorePendingClarificationAtom, session, batch);
+    store.set(applyGatewayEventAtom, parseGatewayEvent({
+      type: "clarify.expire", session_id: session, payload: { request_id: "original-id" },
+    }));
+    expect(isRuntimeRunning(store.get(chatRuntimeBySessionAtom)[session])).toBe(false);
+  });
+
+  it("closes a batch whose last answer has already been accepted", () => {
+    const store = createStore();
+    store.set(restorePendingClarificationAtom, session, batch);
+    store.set(restorePendingClarificationAtom, session, { ...batch, answers: { q0: "绿", q1: "圆" } });
+    expect(store.get(chatRuntimeBySessionAtom)[session].pendingClarifications).toEqual([]);
+  });
+
+  it("clears a resolved prompt only in the resumed session", () => {
+    const store = createStore();
+    store.set(applyGatewayEventAtom, request(session, "expired"));
+    store.set(applyGatewayEventAtom, request("other", "still-waiting"));
+    store.set(restorePendingClarificationAtom, session, undefined);
+    expect(store.get(chatRuntimeBySessionAtom)[session].pendingClarifications).toEqual([]);
+    expect(store.get(chatRuntimeBySessionAtom).other.pendingClarifications).toHaveLength(1);
   });
 });

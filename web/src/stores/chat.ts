@@ -961,8 +961,19 @@ function reduceGatewayEventInner(
           choices: toChoices(q.choices),
           multiSelect: q.multi_select === true,
         }));
+      const pending = runtime.pendingClarifications ?? [];
+      const existing = pending.find((card) => card.requestId === payload.request_id);
+      if (existing && !payload.answers) return runtime;
       let request: PendingClarification;
       if (batch.length > 0) {
+        const answers = { ...existing?.answers };
+        for (const { qid } of batch) {
+          const answer = payload.answers?.[qid];
+          if (typeof answer === "string") answers[qid] = answer;
+        }
+        if (batch.every(({ qid }) => qid in answers)) {
+          return { ...runtime, pendingClarifications: pending.filter(card => card !== existing) };
+        }
         request = {
           requestId: payload.request_id,
           sessionId,
@@ -970,7 +981,7 @@ function reduceGatewayEventInner(
           choices: [],
           multiSelect: false,
           questions: batch,
-          answers: {},
+          answers,
         };
       } else {
         if (typeof payload.question !== "string") return runtime;
@@ -984,7 +995,7 @@ function reduceGatewayEventInner(
       }
       return {
         ...runtime,
-        pendingClarifications: [...(runtime.pendingClarifications ?? []).filter((r) => r.requestId !== request.requestId), request],
+        pendingClarifications: existing ? pending.map((card) => card === existing ? request : card) : [...pending, request],
         updatedAt: now,
       };
     }
@@ -1520,6 +1531,22 @@ export const removeApprovalAtom = atom(
     );
   },
 );
+
+// A resumed session returns a snapshot instead of replaying clarify.request.
+export const restorePendingClarificationAtom = atom(null, (_get, set, sessionId: string, pending: unknown) => {
+  set(chatRuntimeBySessionAtom, (state) => updateSessionRuntime(state, sessionId, (runtime) => {
+    const cards = runtime.pendingClarifications ?? [];
+    if (!pending) return cards.length ? { ...runtime, pendingClarifications: [] } : runtime;
+    if (typeof pending !== "object" || !("request_id" in pending)) return runtime;
+    // Core returns its oldest unresolved request. Earlier cards in our queue
+    // may have expired while the transport was detached.
+    const index = cards.findIndex(card => card.requestId === pending.request_id);
+    const current = cards.length && index !== 0
+      ? { ...runtime, pendingClarifications: index < 0 ? [] : cards.slice(index) }
+      : runtime;
+    return reduceGatewayEvent(current, { type: "clarify.request", session_id: sessionId, payload: pending });
+  }));
+});
 
 export const removeClarificationAtom = atom(null, (_get, set, request: PendingClarification) => {
   set(chatRuntimeBySessionAtom, (state) => updateSessionRuntime(state, request.sessionId, (runtime) => ({
