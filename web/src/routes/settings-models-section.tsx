@@ -35,6 +35,7 @@ import {
   detectCustomApiModeFromUrl,
   getProviderCredentialPreview,
   getProviderEntry,
+  modelLifecycleNotice,
   parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
@@ -883,6 +884,7 @@ export function ModelsSection() {
     return Array.from(set);
   }, [customModelsQuery.data?.models, customForm.model]);
 
+  const lifecycleNotice = selectedProvider && modelLifecycleNotice(selectedProvider.id, providerForm.model);
   const refreshLabel = modelsQuery.isError
       ? "刷新失败 重试"
       : modelsQuery.data
@@ -1816,6 +1818,7 @@ export function ModelsSection() {
                           ) : null}
                         </div>
                       </div>
+                      {lifecycleNotice && <div className={s.modelPickerHint}>{lifecycleNotice}</div>}
                       {!supportsModelListing && (
                         <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
                       )}
