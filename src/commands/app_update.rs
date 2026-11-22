@@ -602,6 +602,16 @@ fn validate_update_target(
     if (core.major, core.minor, core.patch) != (runtime.major, runtime.minor, runtime.patch) {
         return Err("整包更新中的 Core 与 runtime 基础版本不一致".to_string());
     }
+    let matrix = CompatibilityMatrix::parse_embedded()?;
+    let bundled_series = matrix
+        .rule_for_desktop(env!("CARGO_PKG_VERSION"))
+        .and_then(|rule| rule.core_series.first())
+        .ok_or("当前外壳缺少随附 Core 的兼容声明")?;
+    let floor = semver::Version::parse(&format!("{bundled_series}.0"))
+        .map_err(|error| format!("当前 Core 版本下限无效：{error}"))?;
+    if (core.major, core.minor) < (floor.major, floor.minor) {
+        return Err(format!("整包更新中的 Core 不能低于当前 {bundled_series}.x 系列"));
+    }
     Ok(metadata)
 }
 
@@ -1588,14 +1598,14 @@ mod tests {
     }
 
     #[test]
-    fn accepts_desktop_08_with_core_020() {
+    fn accepts_full_installer_with_matching_supported_core() {
         let metadata = validate_update_target(
             "0.8.1-hotupdate.1",
-            &raw_update("0.20.0", "0.20.0-cn.9"),
+            &raw_update("0.23.0", "0.23.0-cn.20"),
             "prototype",
         )
         .unwrap();
-        assert_eq!(metadata.bundled_runtime_version, "0.20.0-cn.9");
+        assert_eq!(metadata.bundled_runtime_version, "0.23.0-cn.20");
     }
 
     #[test]
@@ -1630,6 +1640,13 @@ mod tests {
 
         let metadata = validate_update_target(target, &raw, "stable").unwrap();
         assert_eq!(metadata.bundled_runtime_version, "0.23.0-cn.20");
+        raw["metadata"]["bundledCoreVersion"] = serde_json::json!("0.19.9");
+        raw["metadata"]["bundledRuntimeVersion"] = serde_json::json!("0.19.9-cn.7");
+        raw["metadata"]["runtimeRevision"] = serde_json::json!(7);
+        assert!(validate_update_target(target, &raw, "stable")
+            .unwrap_err()
+            .contains("不能低于"));
+
         assert!(CompatibilityMatrix::parse_embedded()
             .unwrap()
             .check(env!("CARGO_PKG_VERSION"), "0.23.0-cn.20")
