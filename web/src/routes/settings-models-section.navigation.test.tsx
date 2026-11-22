@@ -23,7 +23,10 @@ vi.mock("@/hooks/use-env", () => ({
   useRevealEnv: () => ({}),
 }));
 vi.mock("@/hooks/use-gateway", () => ({ useGateway: () => ({}) }));
-vi.mock("@/hooks/use-provider-models", () => ({ useProviderModels: () => ({}) }));
+vi.mock("@/hooks/use-provider-models", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/hooks/use-provider-models")>(),
+  useProviderModels: () => ({}),
+}));
 vi.mock("@/hooks/use-provider-catalog", () => ({
   useProviderCatalog: () => ({ catalog: BUILTIN_PROVIDER_CATALOG, message: "" }),
 }));

@@ -496,13 +496,17 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       websiteUrl: "https://open.bigmodel.cn",
       docsUrl: "https://docs.bigmodel.cn/cn/api/introduction",
       defaultModel: "glm-5.1",
+      // Coding Plan, 2026-11-22: docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash.md
+      // FlashX is exposed on some live lists but is not a documented plan entitlement.
       models: [
+        { id: "glm-5.3", supportsTools: true, supportsReasoning: true },
+        { id: "glm-5.3-flash", supportsVision: true, supportsTools: true, supportsReasoning: true },
         { id: "glm-5.2", supportsTools: true, supportsReasoning: true },
         { id: "glm-5.1", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.7", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.6", supportsTools: true, supportsReasoning: true },
       ],
-      supportsModelListing: false,
+      supportsModelListing: true,
     },
     {
       id: "kimi-for-coding",
@@ -1595,6 +1599,7 @@ export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCata
         ...provider,
         ...(olderModels ? { models: builtin.models, defaultModel: builtin.defaultModel } : {}),
         baseUrl: builtin.baseUrl,
+        ...(builtin.id === "zai-coding-cn" ? { supportsModelListing: builtin.supportsModelListing } : {}),
         apiMode: builtin.apiMode,
         transport: builtin.transport,
         apiKeyLabel: builtin.apiKeyLabel,

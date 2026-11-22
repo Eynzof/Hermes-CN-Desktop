@@ -9,6 +9,7 @@ export interface ModelComboboxProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onOpen?: () => void;
   options: string[];
   placeholder?: string;
   disabled?: boolean;
@@ -24,6 +25,7 @@ export function ModelCombobox({
   label,
   value,
   onChange,
+  onOpen,
   options,
   placeholder,
   disabled,
@@ -59,6 +61,7 @@ export function ModelCombobox({
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (next) {
+      onOpen?.();
       setQuery("");
     } else {
       setQuery(value);
@@ -96,7 +99,10 @@ export function ModelCombobox({
             value={query}
             onValueChange={(next) => {
               setQuery(next);
-              if (!open) setOpen(true);
+              if (!open) {
+                onOpen?.();
+                setOpen(true);
+              }
             }}
             onClick={() => {
               if (!open) handleOpenChange(true);

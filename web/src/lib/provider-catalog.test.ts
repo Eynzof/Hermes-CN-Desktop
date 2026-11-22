@@ -514,7 +514,7 @@ describe("provider catalog config updates", () => {
       name: "智谱 GLM · Coding Plan",
       baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
       defaultModel: "glm-5.1",
-      supportsModelListing: false,
+      supportsModelListing: true,
     });
 
     expect(byId.get("volcengine-ark")).toMatchObject({

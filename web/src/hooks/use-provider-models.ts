@@ -27,6 +27,13 @@ export function selectProviderModelIds(result: ProviderModelsListResult): string
   return Array.from(new Set(ids)).sort();
 }
 
+/** A successful discovery, including an empty list, describes this account. */
+export function codingPlanModelOptions(
+  presetIds: string[], liveIds: string[] | undefined, savedId: string, editedId: string,
+): string[] {
+  return Array.from(new Set([...(liveIds ?? presetIds), savedId, editedId].filter(Boolean)));
+}
+
 export function providerModelsErrorText(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/\b404\b|not found/i.test(message)) return "此服务商未提供 /models 端点";
@@ -50,9 +57,10 @@ export function useProviderModels(
   apiKey: string | undefined,
   listModels: ListProviderModelsFn,
   apiMode?: string,
+  credentialRevision?: string,
 ) {
   return useQuery<UseProviderModelsResult>({
-    queryKey: ["provider-models", provider, baseUrl, apiMode ?? ""],
+    queryKey: ["provider-models", provider, baseUrl, apiMode ?? "", credentialRevision],
     queryFn: async () => {
       const result = await listModels({ provider, base_url: baseUrl, api_key: apiKey, api_mode: apiMode });
       return { models: selectProviderModelIds(result), fetchedAt: Date.now() };
