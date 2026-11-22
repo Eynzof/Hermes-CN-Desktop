@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -103,6 +104,10 @@ interface Candidate {
   iconUrl?: string;
   configured: boolean;
   caps: ProviderCatalogModel | null;
+  unlistedCurrent?: boolean;
+  routeConflict?: boolean;
+  routeKey?: string;
+  active?: boolean;
   warning?: string;
 }
 
@@ -145,7 +150,7 @@ type GroupKey = "recent" | "configured" | "moa";
 
 const GROUP_LABELS: Record<GroupKey, { name: string; subtitle: string }> = {
   recent: { name: "最近", subtitle: "近 7 日使用过的模型" },
-  configured: { name: "已配置", subtitle: "已配置供应商的精选模型" },
+  configured: { name: "已配置", subtitle: "已配置供应商可用的模型" },
   moa: { name: "MoA", subtitle: "多模型协作预设" },
 };
 
@@ -242,38 +247,36 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function featuredModelIds(
-  provider: GatewayModelProvider,
-  preset: ProviderPreset | undefined,
-  currentProvider: string | undefined,
-  currentModel: string | undefined,
-): string[] {
-  const catalogModels = preset?.models.map((model) => model.id) ?? [];
-  const candidates = preset
-    ? mergeModelIds(catalogModels, provider.models)
-    : mergeModelIds(provider.models);
-  const activeModel = provider.slug === currentProvider ? currentModel : undefined;
-
-  if (activeModel && !candidates.includes(activeModel)) candidates.unshift(activeModel);
-  const featured = candidates.slice(0, MAX_MODELS_PER_PROVIDER);
-  if (activeModel && !featured.includes(activeModel)) {
-    featured[featured.length - 1] = activeModel;
-  }
-  return featured;
-}
-
 export function buildCandidates(
   modelOptions: ModelOptionsResult | null,
   usageEntries: ModelUsageEntry[],
-): { all: Candidate[]; recent: Candidate[]; configured: Candidate[]; moa: Candidate[] } {
+  selected?: ComposerModelSelection | null,
+) {
   const all: Candidate[] = [];
   const moa: Candidate[] = [];
+  const unavailable: GatewayModelProvider[] = [];
   const seenKeys = new Set<string>();
+  const currentModel = selected?.model ?? modelOptions?.model;
+  const currentProvider = selected?.provider ?? modelOptions?.provider;
+  const recentUsage = rankRecentModels(usageEntries, { limit: usageEntries.length });
+  const providers = [...(modelOptions?.providers ?? [])];
+  const currentRoute = providers.find(p => p.slug === currentProvider)
+    ?? (currentProvider === modelOptions?.provider ? providers.find(p => p.is_current) : undefined);
+  if (currentProvider && currentModel && !currentRoute) {
+    providers.push({ slug: currentProvider, is_current: true, authenticated: true });
+  }
+
+  const slugs = new Set<string>();
+  const conflicting = new Set<string>();
+  for (const { slug } of providers) {
+    if (slugs.has(slug)) conflicting.add(slug);
+    slugs.add(slug);
+  }
 
   // model.options 默认只返回已经完成鉴权的供应商。兼容旧版 Core 时，
   // 没有 authenticated 字段但返回了模型的供应商仍视为可用；显式 false
   // 则必须排除，不能再把内置目录补成「去配置」占位卡片。
-  for (const provider of modelOptions?.providers ?? []) {
+  for (const [index, provider] of providers.entries()) {
     // MoA 预设走独立分组，不进常规分桶（对齐官方桌面端把 moa 行从
     // pickerProviders 里拆出的做法）。
     if (provider.slug.toLowerCase() === MOA_PROVIDER_SLUG) {
@@ -294,47 +297,48 @@ export function buildCandidates(
     }
     const preset = findCatalog(provider.slug);
     const extras = asRecord(provider);
-    const advertisedModels = provider.models ?? [];
-    const authHint = extras.authenticated;
-    const authenticated = authHint === true || (
-      typeof authHint !== "boolean" && advertisedModels.length > 0
-    );
-    if (!authenticated) continue;
-
+    const advertised = new Set((provider.models ?? []).filter(Boolean));
+    const activeModel = (provider === currentRoute || provider.slug === currentProvider) ? currentModel : undefined;
+    if (extras.authenticated === false || (!activeModel && !advertised.size && extras.authenticated !== true)) continue;
+    const routeConflict = conflicting.has(provider.slug);
+    const routeKey = routeConflict ? JSON.stringify([provider.slug, index]) : provider.slug;
     const keyEnv = typeof extras.key_env === "string" ? extras.key_env : undefined;
     const warning = typeof extras.warning === "string" ? extras.warning : undefined;
-    const models = featuredModelIds(
-      provider,
-      preset,
-      modelOptions?.provider,
-      modelOptions?.model,
+    if (!advertised.size && !routeConflict) unavailable.push(provider);
+    const recent = recentUsage.filter(e => e.provider === provider.slug && advertised.has(e.model));
+    const models = mergeModelIds(
+      activeModel ? [activeModel] : [],
+      recent.map(e => e.model),
+      advertised.size ? [...advertised] : preset?.models.map(m => m.id),
     );
     for (const modelId of models) {
-      const key = `${provider.slug}:${modelId}`;
+      const key = `${routeKey}:${modelId}`;
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
       all.push({
         key,
+        routeKey,
+        routeConflict,
+        active: !routeConflict && modelId === activeModel,
         catalogId: preset?.id ?? provider.slug,
         providerSlug: provider.slug,
         providerName: preset?.name ?? providerLabel(provider),
         vendor: preset?.vendor ?? "",
         model: modelId,
-        baseUrl: preset?.baseUrl,
+        baseUrl: typeof provider.api_url === "string" ? provider.api_url : preset?.baseUrl,
         apiKeyLabel: preset?.apiKeyLabel ?? keyEnv,
         iconUrl: getProviderIconUrl(preset?.icon),
-        configured: authenticated,
+        configured: true,
+        unlistedCurrent: modelId === activeModel && advertised.size > 0 && !advertised.has(modelId),
         caps: resolveModelCaps(provider, preset, modelId),
         warning,
       });
     }
   }
 
-  const usageRanked = rankRecentModels(usageEntries, { limit: 3 });
-
-  const recent: Candidate[] = usageRanked
-    .map((e) => all.find((c) => c.key === e.key))
-    .filter((c): c is Candidate => Boolean(c));
+  const unavailableSlugs = new Set(unavailable.map(p => p.slug));
+  const listedByKey = new Map(all.filter(c => !c.unlistedCurrent && !unavailableSlugs.has(c.providerSlug)).map(c => [c.key, c]));
+  const recent = recentUsage.flatMap(e => listedByKey.get(e.key) ?? []).slice(0, 3);
 
   const topSet = new Set<string>(TOP5_PROVIDER_IDS);
   const configured: Candidate[] = all
@@ -346,7 +350,23 @@ export function buildCandidates(
       return a.providerName.localeCompare(b.providerName, "zh-Hans-CN");
     });
 
-  return { all, recent, configured, moa };
+  return { all, recent, configured, moa, unavailable, conflicting };
+}
+
+// Only the default presentation is limited. Search and capability filters use the entire inventory.
+export function groupPickerRows(candidates: Candidate[], expanded: ReadonlySet<string>, filtering: boolean) {
+  const byRoute = new Map<string, Candidate[]>();
+  for (const candidate of candidates) {
+    const route = candidate.routeKey ?? candidate.providerSlug;
+    const rows = byRoute.get(route);
+    if (rows) rows.push(candidate);
+    else byRoute.set(route, [candidate]);
+  }
+  return Array.from(byRoute, ([slug, models]) => ({
+    slug,
+    total: models.length,
+    rows: filtering || expanded.has(slug) ? models : models.slice(0, MAX_MODELS_PER_PROVIDER),
+  }));
 }
 
 function candidateMatchesQuery(c: Candidate, expandedQuery: string): boolean {
@@ -436,6 +456,7 @@ interface ModelPickerViewProps {
   onSearchChange: (value: string) => void;
   loading: boolean;
   error: string;
+  failedProvider?: string;
   modelOptions: ModelOptionsResult | null;
   /** Caller's currently-selected model (typically session-scoped). Used to
    * mark the "当前" badge inside the picker. Falls back to modelOptions
@@ -466,9 +487,11 @@ function ModelPickerBody({
   onSearchChange,
   loading,
   error,
+  failedProvider,
   modelOptions,
   selected,
   switchingModel,
+  onConfigureProvider,
   onSelectModel,
   onSelectAndSetDefault,
   searchInputRef,
@@ -481,14 +504,16 @@ function ModelPickerBody({
   const [activeGroup, setActiveGroup] = useState<"all" | GroupKey>("all");
   const [activeCaps, setActiveCaps] = useState<Set<CapabilityKey>>(new Set());
 
+  const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     return subscribeModelUsage(() => setUsageEntries(readModelUsageLog()));
   }, []);
 
   const buckets = useMemo(
-    () => buildCandidates(modelOptions, usageEntries),
-    [modelOptions, usageEntries],
+    () => buildCandidates(modelOptions, usageEntries, selected),
+    [modelOptions, usageEntries, selected],
   );
 
   const query = expandSearchQuery(modelSearch);
@@ -538,9 +563,8 @@ function ModelPickerBody({
     () => new Set(visible.recent.map((candidate) => candidate.key)),
     [visible.recent],
   );
-  const configuredForDisplay = activeGroup === "all"
-    ? visible.configured.filter((candidate) => !recentVisibleKeys.has(candidate.key))
-    : visible.configured;
+  const filtering = Boolean(query || activeCaps.size);
+  const providerGroups = groupPickerRows(visible.configured, expandedProviders, filtering);
   const totalVisible = useMemo(() => new Set([
     ...visible.recent,
     ...visible.configured,
@@ -582,10 +606,10 @@ function ModelPickerBody({
   }
 
   function renderRow(candidate: Candidate) {
-    const isCurrent = candidate.key === currentSelection?.key;
+    const isCurrent = candidate.active ?? (candidate.key === currentSelection?.key);
     const usage = usageByKey.get(candidate.key);
     const caps = capabilityChips(candidate.caps);
-    const baseUrlHost = candidate.baseUrl ? candidate.baseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : "";
+    const baseUrlHost = candidate.baseUrl && URL.canParse(candidate.baseUrl) ? new URL(candidate.baseUrl).host : "";
 
     return (
       <button
@@ -593,7 +617,7 @@ function ModelPickerBody({
         type="button"
         className={s.mpRow}
         data-current={isCurrent ? "true" : undefined}
-        disabled={switchingModel}
+        disabled={switchingModel || candidate.routeConflict}
         aria-label={`切换到 ${candidate.providerName} 的 ${candidate.model}`}
         title="单击切换当前会话 · 按住 ⌘ 单击同时设为全局默认"
         onClick={(event) => {
@@ -615,7 +639,7 @@ function ModelPickerBody({
         <div className={s.mpRowIdentity}>
           <div className={s.mpRowTitle}>
             <span>{candidate.model}</span>
-            {isCurrent && <span className={s.mpCurrentBadge}><Check aria-hidden="true" />当前</span>}
+            {isCurrent && <span className={s.mpCurrentBadge}><Check aria-hidden="true" />{candidate.unlistedCurrent ? "当前，未在服务端列表中" : "当前"}</span>}
           </div>
           <div className={s.mpRowMeta}>
             <span>{candidate.providerName}</span>
@@ -636,7 +660,7 @@ function ModelPickerBody({
           </div>
         )}
         <span className={s.mpRowAction}>
-          {isCurrent ? "使用中" : "切换"}
+          {candidate.routeConflict ? "配置冲突" : isCurrent ? "使用中" : "切换"}
           {!isCurrent && <ArrowRight aria-hidden="true" />}
         </span>
       </button>
@@ -645,6 +669,7 @@ function ModelPickerBody({
 
   function renderSection(group: GroupKey, candidates: Candidate[]) {
     if (!showGroup(group) || candidates.length === 0) return null;
+    if (group === "configured" && activeGroup === "all" && candidates.every(c => recentVisibleKeys.has(c.key))) return null;
     return (
       <section className={s.mpGroup} key={group}>
         <header className={s.mpGroupHeader}>
@@ -652,7 +677,29 @@ function ModelPickerBody({
           <span className={s.mpGroupCount}>{candidates.length}</span>
           <span className={s.mpGroupSub}>{GROUP_LABELS[group].subtitle}</span>
         </header>
-        <div className={s.mpRows}>{candidates.map(renderRow)}</div>
+        <div className={s.mpRows}>
+          {group === "configured" ? providerGroups.map(({ slug, total, rows }) => (
+            <Fragment key={slug}>
+              {rows.filter(c => activeGroup !== "all" || !recentVisibleKeys.has(c.key)).map(renderRow)}
+              {!filtering && total > MAX_MODELS_PER_PROVIDER && (
+                <button
+                  type="button"
+                  className={s.mpExpand}
+                  aria-expanded={expandedProviders.has(slug)}
+                  aria-label={`${rows[0].providerName} ${expandedProviders.has(slug) ? "收起" : "显示全部"}（${total}）`}
+                  onClick={() => setExpandedProviders(prev => {
+                    const next = new Set(prev);
+                    if (next.has(slug)) next.delete(slug);
+                    else next.add(slug);
+                    return next;
+                  })}
+                >
+                  {expandedProviders.has(slug) ? "收起" : `显示全部（${total}）`}
+                </button>
+              )}
+            </Fragment>
+          )) : candidates.map(renderRow)}
+        </div>
       </section>
     );
   }
@@ -688,8 +735,6 @@ function ModelPickerBody({
 
       {loading ? (
         <LoadingState variant="block" label="正在加载模型…" />
-      ) : error ? (
-        <div className={s.modelError}>{error}</div>
       ) : (
         <div className={s.mpLayout}>
           <div className={s.mpFilterBar}>
@@ -728,6 +773,36 @@ function ModelPickerBody({
           </div>
 
           <div className={s.mpCandidates}>
+            {error && (
+              <div role="alert" className={s.modelError}>
+                {error}
+                {failedProvider && onConfigureProvider && (
+                  <button type="button" onClick={() => onConfigureProvider(failedProvider)}>模型设置</button>
+                )}
+              </div>
+            )}
+            {buckets.conflicting.size > 0 && (
+              <div className={s.mpWarnings}>
+                {Array.from(buckets.conflicting, slug => (
+                  <div key={slug}>
+                    <CircleAlert aria-hidden="true" />
+                    {slug} 配置冲突，请为同名服务设置不同的名称或 provider_key。
+                    {onConfigureProvider && <button type="button" onClick={() => onConfigureProvider(slug)}>模型设置</button>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {buckets.unavailable.length > 0 && (
+              <div className={s.mpWarnings}>
+                {buckets.unavailable.map(p => (
+                  <div key={p.slug}>
+                    <CircleAlert aria-hidden="true" />
+                    {providerLabel(p)} · {findCatalog(p.slug)?.models.length ? "内置目录，可能已过期" : "未获取到模型列表"}
+                    {onConfigureProvider && <button type="button" onClick={() => onConfigureProvider(p.slug)}>模型设置</button>}
+                  </div>
+                ))}
+              </div>
+            )}
             {warnings.length > 0 && (
               <div className={s.mpWarnings}>
                 {warnings.map((warning) => <div key={warning}><CircleAlert aria-hidden="true" />{warning}</div>)}
@@ -745,7 +820,7 @@ function ModelPickerBody({
             ) : (
               <>
                 {renderSection("recent", visible.recent)}
-                {renderSection("configured", configuredForDisplay)}
+                {renderSection("configured", visible.configured)}
                 {renderSection("moa", visible.moa)}
               </>
             )}

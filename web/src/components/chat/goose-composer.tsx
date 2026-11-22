@@ -259,6 +259,7 @@ export function GooseComposer({
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState("");
   const [modelSearch, setModelSearch] = useState("");
+  const [failedProvider, setFailedProvider] = useState<string>();
   const [switchingModel, setSwitchingModel] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<ComposerSkillCandidate | null>(null);
   const [skillActiveIndex, setSkillActiveIndex] = useState(0);
@@ -1143,20 +1144,30 @@ export function GooseComposer({
     if (!modelPicker || modelPickerDisabled) return;
     const next = !modelOpen;
     setModelOpen(next);
-    if (next) void loadModelOptions();
+    if (next) {
+      if (failedProvider) {
+        setFailedProvider(undefined);
+        setModelError("");
+      }
+      void loadModelOptions();
+    }
   };
 
-  const selectModel = async (selection: ComposerModelSelection) => {
-    if (!modelPicker?.onSelect || modelPickerDisabled) return;
-    selectedModelRef.current = selection;
+  const selectModel = async (selection: ComposerModelSelection, asDefault = false) => {
+    const select = asDefault ? modelPicker?.onSelectAndSetDefault : modelPicker?.onSelect;
+    if (!select || modelPickerDisabled) return;
     setSwitchingModel(true);
+    setFailedProvider(undefined);
     setModelError("");
     try {
-      await modelPicker.onSelect(selection);
+      await select(selection);
+      selectedModelRef.current = selection;
       setModelOpen(false);
     } catch (error) {
-      selectedModelRef.current = modelPicker.selected ?? null;
-      setModelError(messageFromError(error));
+      const message = messageFromError(error);
+      setFailedProvider(selection.provider);
+      const unknownRoute = /unknown provider|provider.{0,50}not (?:found|configured|recognized)|(?:unable|failed) to resolve.{0,30}provider|找不到.{0,16}(?:服务商|供应商)|未知(?:服务商|供应商)/i.test(message);
+      setModelError(unknownRoute ? `配置冲突，请在模型设置中核对服务名称或 provider_key。内核提示：${message}` : message);
     } finally {
       setSwitchingModel(false);
     }
@@ -1617,22 +1628,14 @@ export function GooseComposer({
           onClose={() => setModelOpen(false)}
           loading={modelLoading}
           error={modelError}
+          failedProvider={failedProvider}
           modelOptions={modelOptions}
           selected={modelPicker?.selected}
           switchingModel={switchingModel}
           onSelectModel={(selection) => void selectModel(selection)}
-          onSelectAndSetDefault={
-            modelPicker?.onSelectAndSetDefault
-              ? (selection) => {
-                  selectedModelRef.current = selection;
-                  void Promise.resolve(modelPicker.onSelectAndSetDefault?.(selection))
-                    .then(() => setModelOpen(false))
-                    .catch(() => {
-                      selectedModelRef.current = modelPicker.selected ?? null;
-                    });
-                }
-              : undefined
-          }
+          onSelectAndSetDefault={modelPicker?.onSelectAndSetDefault
+            ? selection => void selectModel(selection, true)
+            : undefined}
           onConfigureProvider={(providerId) => {
             setModelOpen(false);
             modelPicker?.onConfigureProvider?.(providerId);
