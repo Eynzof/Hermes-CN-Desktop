@@ -758,7 +758,12 @@ export function DetailRoute() {
             pendingApproval={
               pendingApproval || pendingClarification ? <>
                 {pendingApproval && <ApprovalDialog approval={pendingApproval} />}
-                {pendingClarification && <ClarificationDialog key={pendingClarification.requestId} request={pendingClarification} />}
+                {pendingClarification && (
+                  <ClarificationDialog
+                    key={`${pendingClarification.requestId}:${Object.keys(pendingClarification.answers ?? {}).length}`}
+                    request={pendingClarification}
+                  />
+                )}
               </> : undefined
             }
             turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
