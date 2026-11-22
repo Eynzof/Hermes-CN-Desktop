@@ -133,3 +133,25 @@ describe("VoiceSettingsView", () => {
     expect(html).toContain("edge-tts");
   });
 });
+
+
+it("shows current MiniMax speech choices alongside runtime and saved custom models", () => {
+  const speechSchema: ConfigSchemaResponse = {
+    category_order: ["tts"], fields: {
+      "tts.provider": { type: "select", category: "tts", description: "Speech provider", options: ["minimax"] },
+      "tts.minimax.model": { type: "select", category: "tts", description: "Speech model", options: ["runtime-speech-model"] },
+    },
+  };
+  const draft = voiceSettingsDraftFromConfig({ tts: { provider: "minimax", minimax: { region: "cn", model: "saved-speech-model" } } });
+  const html = ReactDOMServer.renderToStaticMarkup(<VoiceSettingsView
+    draft={draft} schema={speechSchema} sttProviders={[]}
+    ttsProviders={voiceProviderOptions("tts", speechSchema, "minimax")}
+  />);
+  expect(html).toContain('value="speech-2.8-hd"');
+  expect(html).toContain('value="speech-2.8-turbo"');
+  expect(html).toContain('value="runtime-speech-model"');
+  expect(html).toContain('value="saved-speech-model"');
+  expect(html).toContain("MINIMAX_CN_API_KEY");
+  expect(html).toContain("https://api.minimax.io/v1/t2a_v2");
+  expect(html).toContain("https://api.minimaxi.com/v1/t2a_v2");
+});

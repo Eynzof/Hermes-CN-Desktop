@@ -146,3 +146,25 @@ describe("voice save helpers", () => {
   });
 });
 
+
+describe("MiniMax regional speech settings", () => {
+  it("round trips regional settings and keeps existing endpoint overrides", () => {
+    const current = { tts: { provider: "minimax", minimax: {
+      region: "cn", model: "custom-speech-model", voice_id: "voice-1",
+      base_url: "https://speech.example.test/v1/t2a_v2",
+    } } };
+    const loaded = voiceSettingsDraftFromConfig(current);
+    expect(loaded.values["tts.minimax.region"]).toBe("cn");
+    expect(buildVoiceSaveConfig(current, loaded)).toMatchObject(current);
+    loaded.values["tts.minimax.region"] = "";
+    expect(buildVoiceSaveConfig(current, loaded)).toMatchObject({ tts: { minimax: { region: "" } } });
+  });
+
+  it("saves speech credentials for the explicitly selected region", () => {
+    const settings = draft({ ttsProvider: "minimax", ttsApiKey: "test-key",
+      values: { "tts.minimax.region": "cn" } });
+    expect(buildVoiceEnvUpdates(settings)).toEqual([{ key: "MINIMAX_CN_API_KEY", value: "test-key" }]);
+    settings.values["tts.minimax.region"] = "global";
+    expect(buildVoiceEnvUpdates(settings)).toEqual([{ key: "MINIMAX_API_KEY", value: "test-key" }]);
+  });
+});
