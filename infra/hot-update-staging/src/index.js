@@ -148,11 +148,21 @@ async function authenticateChannel(request, env, ctx, channel) {
 async function releaseForIdentity(env, identity, channel, target, arch, currentVersion) {
   // Enable only after registering signed 0.9.3 assets for every supported route.
   const needsBridge = env.DESKTOP_093_BRIDGE_RELEASE_IDS !== undefined
-    && ["0.9.0", "0.9.1"].some((version) => compareSemver(currentVersion, version) === 0);
-  const bridgeId = needsBridge
-    ? JSON.parse(env.DESKTOP_093_BRIDGE_RELEASE_IDS)[`${channel}/${target}/${arch}`]
-    : null;
-  if (needsBridge && !bridgeId) return null;
+    && compareSemver(currentVersion, "0.9.3") < 0;
+  let bridgeId;
+  if (needsBridge) {
+    try {
+      const routes = JSON.parse(env.DESKTOP_093_BRIDGE_RELEASE_IDS);
+      if (!routes || typeof routes !== "object" || Array.isArray(routes)) {
+        throw new Error("bridge mapping must be an object");
+      }
+      bridgeId = routes[`${channel}/${target}/${arch}`];
+      if (typeof bridgeId !== "string" || !bridgeId.trim()) return null;
+    } catch (error) {
+      console.error("invalid 0.9.3 bridge mapping", error);
+      return null;
+    }
+  }
   const release = await env.UPDATES.prepare(
     `SELECT * FROM releases
        WHERE channel = ?1 AND target = ?2 AND arch = ?3 AND status = 'published'

@@ -283,7 +283,7 @@ test("client events authenticate and store only the hashed identity", async () =
 });
 
 
-test("registered 0.9.3 bridges route both legacy versions before 1.0 on every platform", async () => {
+test("registered 0.9.3 bridges route older versions before 1.0 on every platform", async () => {
   for (const [target, arch] of [["windows", "x86_64"], ["darwin", "aarch64"], ["darwin", "x86_64"], ["linux", "x86_64"], ["linux-deb", "x86_64"]]) {
     const make = (id, version, core, runtime) => release({
       id, version, target, arch, channel: "stable", status: "published", rollout_percent: 100,
@@ -301,7 +301,7 @@ test("registered 0.9.3 bridges route both legacy versions before 1.0 on every pl
         headers: { "x-installation-id": "installation-0123456789abcdef" },
       }), { ...testEnv(fakeD1({ candidates: rows })), DESKTOP_093_BRIDGE_RELEASE_IDS: map }, ctx,
     );
-    for (const version of ["0.9.0", "0.9.1"]) {
+    for (const version of ["0.8.0", "0.9.0", "0.9.1", "0.9.1-prototype.1", "0.9.2+hotfix.1", "0.9.3-rc.1"]) {
       const first = await check(version, [latest, bridge]);
       assert.equal(first.status, 200);
       assert.equal((await first.json()).metadata.releaseId, bridge.id);
@@ -311,7 +311,9 @@ test("registered 0.9.3 bridges route both legacy versions before 1.0 on every pl
         const rows = unavailable ? [latest, {...bridge, ...unavailable}] : [latest];
         assert.equal((await check(version, rows)).status, 204);
       }
-      assert.equal((await check(version, [latest, bridge], "{}")).status, 204);
+      for (const malformed of ["{}", "{", "null", "[]", "true", '"bridge"', JSON.stringify({[`stable/${route}`]: 1})]) {
+        assert.equal((await check(version, [latest, bridge], malformed)).status, 204);
+      }
       const bucket = await rolloutBucket("installation-0123456789abcdef", bridge.id);
       assert.equal((await check(version, [latest, {...bridge, rollout_percent: bucket}])).status, 204);
       assert.equal((await check(version, [latest, {...bridge, rollout_percent: bucket + 1}])).status, 200);
