@@ -18,6 +18,11 @@ describe("buildCandidates", () => {
     } as ModelOptionsResult;
 
     const buckets = buildCandidates(options, []);
+    expect(buckets.all.map((candidate) => candidate.model)).toEqual([
+      "MiniMax-M2.7", "MiniMax-M3.1-Flash", "MiniMax-M3",
+    ]);
+    expect(buildCandidates({ ...options, model: "MiniMax-M3.1-Flash" }, []).all
+      .map((candidate) => candidate.model)).toEqual(["MiniMax-M3.1-Flash", "MiniMax-M3"]);
     const m3 = buckets.all.find((candidate) =>
       candidate.providerSlug === "minimax-cn" && candidate.model === "MiniMax-M3");
 
