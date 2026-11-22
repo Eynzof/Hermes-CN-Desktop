@@ -1051,6 +1051,7 @@ function reduceGatewayEventInner(
       const next = appendNoticeMessage(erroredActive, sessionId, now, text, "error");
       return {
         ...next,
+        pendingClarifications: [],
         streamStatus: "error",
         statusMessage: text,
         statusKind: "error",
