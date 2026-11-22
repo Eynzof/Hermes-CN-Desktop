@@ -241,8 +241,9 @@ export function rememberSessionWorkspace(sessionId: string | null | undefined, p
  *      (gateway / persistent), for sessions the backend has no explicit cwd for
  *      (legacy sessions, or ones where the user never picked a folder).
  *
- * Returns "" when no workspace is known for the session, so the caller can fall
- * back to its own default (e.g. the last-used global workspace).
+ * Returns "" when no workspace is known for the session. Callers must treat
+ * that as "no workspace" — NOT substitute the last-used global workspace,
+ * which silently attributed another session's folder to this one (#365/#372).
  */
 export function resolveSessionWorkspace(
   backendCwd: string | null | undefined,
