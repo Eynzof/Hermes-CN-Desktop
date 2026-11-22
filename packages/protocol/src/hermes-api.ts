@@ -1420,6 +1420,7 @@ export const GatewayModelProvider = z.object({
   is_user_defined: z.boolean().optional(),
   source: z.string().optional(),
   warning: z.string().optional(),
+  route_conflict: z.boolean().optional(),
   capabilities: z.record(z.string(), GatewayModelCapabilities).optional(),
 }).passthrough();
 export type GatewayModelProvider = z.infer<typeof GatewayModelProvider>;

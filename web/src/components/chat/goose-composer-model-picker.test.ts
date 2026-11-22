@@ -159,6 +159,17 @@ describe("buildCandidates", () => {
     expect(groupPickerRows(result.configured, new Set(), false)).toHaveLength(2);
   });
 
+  it("keeps a saved route current when Core blocks selecting its ambiguous name", () => {
+    const options = { provider: "custom:twin", model: "shared", providers: [
+      { slug: "custom:twin", models: ["shared"], route_conflict: true, is_current: true },
+      { slug: "map", models: ["shared"] },
+    ] };
+    const { configured, conflicting } = buildCandidates(options, []);
+    expect([...conflicting]).toEqual(["custom:twin"]);
+    expect(configured.find(c => c.providerSlug === "custom:twin")).toMatchObject({ routeConflict: true, active: true });
+    expect(configured.find(c => c.providerSlug === "map")).toMatchObject({ routeConflict: false, active: false });
+  });
+
   it("does not add a duplicate static provider when Core returns an aliased provider slug", () => {
     const options = {
       providers: [
