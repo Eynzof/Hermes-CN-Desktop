@@ -268,8 +268,8 @@ export function buildCandidates(
 
   const slugs = new Set<string>();
   const conflicting = new Set<string>();
-  for (const { slug } of providers) {
-    if (slugs.has(slug)) conflicting.add(slug);
+  for (const { slug, route_conflict } of providers) {
+    if (slugs.has(slug) || route_conflict) conflicting.add(slug);
     slugs.add(slug);
   }
 
@@ -319,7 +319,7 @@ export function buildCandidates(
         key,
         routeKey,
         routeConflict,
-        active: !routeConflict && modelId === activeModel,
+        active: modelId === activeModel && (!routeConflict || (provider.route_conflict === true && provider.is_current === true)),
         catalogId: preset?.id ?? provider.slug,
         providerSlug: provider.slug,
         providerName: preset?.name ?? providerLabel(provider),
