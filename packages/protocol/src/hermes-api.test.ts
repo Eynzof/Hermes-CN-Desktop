@@ -622,6 +622,13 @@ describe("SessionSummary cwd (#216)", () => {
     estimated_cost_usd: null,
   };
 
+  it("读取内核保存的数字归档状态", () => {
+    for (const archived of [false, true, 0, 1]) {
+      expect(SessionSummary.parse({ ...baseSession, archived }).archived).toBe(Boolean(archived));
+    }
+    expect(SessionSummary.safeParse({ ...baseSession, archived: 2 }).success).toBe(false);
+  });
+
   it("carries the backend per-session cwd", () => {
     const parsed = SessionSummary.parse({ ...baseSession, cwd: "/Users/claw/project-a" });
     expect(parsed.cwd).toBe("/Users/claw/project-a");

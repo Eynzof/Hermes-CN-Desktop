@@ -192,7 +192,7 @@ export const SessionSummary = z.object({
   // Desktop-only UI state injected by the Rust proxy when a request carries
   // ?include_archived=true. Absent on the default (active) list — the proxy
   // strips archived sessions there. See src/session_archive.rs.
-  archived: z.boolean().optional(),
+  archived: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(Boolean).optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummary>;
 
