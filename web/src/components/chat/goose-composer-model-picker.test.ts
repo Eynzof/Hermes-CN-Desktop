@@ -1,36 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ModelOptionsResult } from "@hermes/protocol";
-import { buildCandidates } from "./goose-composer-model-picker";
+import { buildCandidates, groupPickerRows } from "./goose-composer-model-picker";
 
 describe("buildCandidates", () => {
-  it("augments a stale MiniMax gateway model list with MiniMax-M3 from the desktop catalog", () => {
-    const options = {
-      provider: "minimax-cn",
-      model: "MiniMax-M2.7",
-      providers: [
-        {
-          slug: "minimax-cn",
-          name: "MiniMax",
-          models: ["MiniMax-M2.7"],
-          authenticated: true,
-        },
-      ],
-    } as ModelOptionsResult;
-
-    const buckets = buildCandidates(options, []);
-    const m3 = buckets.all.find((candidate) =>
-      candidate.providerSlug === "minimax-cn" && candidate.model === "MiniMax-M3");
-
-    expect(m3).toMatchObject({
-      configured: true,
-      model: "MiniMax-M3",
-      providerSlug: "minimax-cn",
-    });
-    expect(m3?.caps).toMatchObject({
-      contextWindow: 1_000_000,
-      supportsTools: true,
-      supportsReasoning: true,
-    });
+  it("uses the advertised catalog and order even when an older desktop catalog is available", () => {
+    const result = buildCandidates({ providers: [{ slug: "xiaomi", models: ["mimo-new", "mimo-next"] }] }, []);
+    expect(result.all.map(c => c.model)).toEqual(["mimo-new", "mimo-next"]);
   });
 
   it("omits providers that Core explicitly marks as unconfigured", () => {
@@ -138,65 +113,50 @@ describe("buildCandidates", () => {
     expect(custom?.iconUrl).toBe(canonical?.iconUrl);
   });
 
-  it("limits each configured provider to five catalog-curated models", () => {
-    const options = {
-      provider: "minimax-cn",
-      model: "MiniMax-M3",
-      providers: [
-        {
-          slug: "minimax-cn",
-          name: "MiniMax",
-          models: [
-            "MiniMax-M3",
-            "MiniMax-M2.7",
-            "MiniMax-M2.7-highspeed",
-            "MiniMax-M2.5",
-            "MiniMax-M2.5-highspeed",
-            "MiniMax-M2.1",
-          ],
-          authenticated: true,
-        },
-      ],
-    } as ModelOptionsResult;
-
-    const buckets = buildCandidates(options, []);
-    const minimaxModels = buckets.configured
-      .filter((candidate) => candidate.providerSlug === "minimax-cn")
-      .map((candidate) => candidate.model);
-
-    expect(minimaxModels).toEqual([
-      "MiniMax-M3",
-      "MiniMax-M2.7",
-      "MiniMax-M2.7-highspeed",
-      "MiniMax-M2.5",
-      "MiniMax-M2.5-highspeed",
-    ]);
+  it("limits the preview while preserving every advertised model for search and expansion", () => {
+    const models = Array.from({ length: 19 }, (_, i) => `model-${i + 1}`);
+    const options = { providers: [{ slug: "example", models }] };
+    const { configured } = buildCandidates(options, []);
+    expect(configured.map(c => c.model)).toEqual(models);
+    expect(groupPickerRows(configured, new Set(), false)[0].rows).toHaveLength(5);
+    expect(groupPickerRows(configured, new Set(["example"]), false)[0].rows).toHaveLength(19);
+    expect(groupPickerRows(configured, new Set(), true)[0].rows.at(-1)?.model).toBe("model-19");
   });
 
-  it("keeps the current custom model inside the five-model shortlist", () => {
-    const options = {
-      provider: "my-provider",
-      model: "custom-current",
-      providers: [
-        {
-          slug: "my-provider",
-          name: "My Provider",
-          models: ["m1", "m2", "m3", "m4", "m5", "custom-current"],
-          authenticated: true,
-          is_user_defined: true,
-        },
-      ],
-    } as ModelOptionsResult;
+  it("pins the current model ahead of advertised recent choices without restoring retired ones", () => {
+    const options = { provider: "example", model: "current", providers: [{ slug: "example", models: ["a", "b", "c"] }] };
+    const usage = ["retired", "c"].map(model => ({ key: `example:${model}`, provider: "example", model, count: 1, lastUsedAt: Date.now() }));
+    const result = buildCandidates(options, usage);
+    expect(result.configured.map(c => c.model)).toEqual(["current", "c", "a", "b"]);
+    expect(result.configured[0].unlistedCurrent).toBe(true);
+    expect(result.recent.map(c => c.model)).toEqual(["c"]);
+  });
 
-    const buckets = buildCandidates(options, []);
+  it("retains the active route and marks a built-in fallback when options are unavailable", () => {
+    for (const response of [null, { provider: "xiaomi", model: "active", providers: [{ slug: "xiaomi", authenticated: true, models: [] }] }]) {
+      const result = buildCandidates(response, [], { provider: "xiaomi", model: "active" });
+      expect(result.configured[0].model).toBe("active");
+      expect(result.configured.length).toBeGreaterThan(1);
+      expect(result.unavailable.map(p => p.slug)).toEqual(["xiaomi"]);
+    }
+  });
 
-    expect(buckets.configured.map((candidate) => candidate.model)).toEqual([
-      "m1",
-      "m2",
-      "m3",
-      "m4",
-      "custom-current",
-    ]);
+  it("preserves separately addressable routes with the same display name and model", () => {
+    const providers = ["a", "b"].map((id, i) => ({ slug: `custom:twin-${id}`, name: "Twin", api_url: `http://127.0.0.1:${19318 + i}/v1`, models: ["shared"] }));
+    const { configured } = buildCandidates({ providers }, []);
+    expect(configured.map(c => [c.providerSlug, c.baseUrl])).toEqual(providers.map(p => [p.slug, p.api_url]));
+    expect(groupPickerRows(configured, new Set(), false)).toHaveLength(2);
+  });
+
+  it("keeps ambiguous backend rows visible but unavailable for selection", () => {
+    const providers = ["http://127.0.0.1:9911/v1", "http://127.0.0.1:9912/v1"].map(api_url => ({
+      slug: "custom:twin", name: "Twin", api_url, models: ["shared"],
+    }));
+    const result = buildCandidates({ provider: "custom:twin", model: "shared", providers }, []);
+    expect(result.conflicting.has("custom:twin")).toBe(true);
+    expect(result.configured.map(c => c.baseUrl)).toEqual(providers.map(p => p.api_url));
+    expect(result.configured.every(c => c.routeConflict && !c.active)).toBe(true);
+    expect(groupPickerRows(result.configured, new Set(), false)).toHaveLength(2);
   });
 
   it("does not add a duplicate static provider when Core returns an aliased provider slug", () => {

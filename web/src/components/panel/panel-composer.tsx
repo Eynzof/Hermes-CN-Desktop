@@ -171,10 +171,9 @@ export function PanelComposer() {
     setReasoningEffortOverride(effort);
   }, []);
 
-  const onSelectAndSetDefault = useCallback((selection: ComposerModelSelection) => {
-    onModelSelect(selection);
-    if (!config) return;
-    saveConfig.mutate({
+  const onSelectAndSetDefault = useCallback(async (selection: ComposerModelSelection) => {
+    if (!config) throw new Error("配置尚未加载，请稍后重试");
+    await saveConfig.mutateAsync({
       ...config,
       model: {
         ...(typeof config.model === "object" && config.model !== null && !Array.isArray(config.model)
@@ -184,6 +183,7 @@ export function PanelComposer() {
         default: selection.model,
       },
     });
+    onModelSelect(selection);
   }, [config, onModelSelect, saveConfig]);
 
   const onSend = useCallback(async (
