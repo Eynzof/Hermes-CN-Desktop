@@ -1218,17 +1218,21 @@ function recoverableAssistantId(
   // cannot distinguish two prompts. Background follow-ups need an explicit ID.
   if (!user || boundary === undefined ||
       runtime.messages.slice(userIndex + 1, liveIndex).some(message => message.role === "assistant")) return undefined;
+  // An empty snapshot starts at the beginning, even when the first
+  // submission ran before any history query existed.
   const submitted = runtime.messages.slice(0, userIndex + 1)
-    .filter(message => message.role === "user" && message.metadata?.historyBoundaryId === boundary).length;
+    .filter(message => message.role === "user" && (boundary === null || message.metadata?.historyBoundaryId === boundary)).length;
   let users = 0;
+  let reply: HermesUIMessage | undefined;
   for (const row of history) {
-    if (row.role === "user") users++;
-    if (users > submitted) break;
-    if (users === submitted && row.role === "assistant") {
-      return isRecoverableStoredAssistant(liveAssistant, row) ? liveAssistant.id : undefined;
+    if (row.role === "user") {
+      users++;
+      if (users > submitted) return undefined;
+    } else if (users === submitted && row.role === "assistant" && !reply) {
+      reply = row;
     }
   }
-  return undefined;
+  return reply && isRecoverableStoredAssistant(liveAssistant, reply) ? liveAssistant.id : undefined;
 }
 
 export const recoverCompletedTurnFromStoredMessagesAtom = atom(

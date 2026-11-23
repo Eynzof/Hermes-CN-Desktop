@@ -965,6 +965,31 @@ describe("startPromptAtom", () => {
     }
   });
 
+  it("counts an uncached first submission before a follow-up with an empty cached boundary", () => {
+    const store = createStore();
+    const submit = { sessionId: "s1", text: "再试一次" };
+    store.set(startPromptAtom, { ...submit, now: 1000 });
+    store.set(applyGatewayEventAtom, { session_id: "s1", type: "message.complete", payload: { text: "上一次的回答" } });
+    store.set(startPromptAtom, { ...submit, now: 1100, historyBoundaryId: null });
+    const first = [runtimeMessage({ id: "u1", role: "user" }), runtimeMessage({ id: "a1" })];
+    const waiting = [...first, runtimeMessage({ id: "u2", role: "user" })];
+    for (const history of [first, waiting]) {
+      store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: history });
+      expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("streaming");
+    }
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: [...waiting, runtimeMessage({ id: "a2" })] });
+    expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("complete");
+  });
+
+  it("does not use an older positional reply once a later stored user is visible", () => {
+    const store = createStore();
+    const anchor = runtimeMessage({ id: "anchor" });
+    store.set(startPromptAtom, { sessionId: "s1", text: "继续", now: 1100, historyBoundaryId: anchor.id });
+    const history = [anchor, runtimeMessage({ id: "u1", role: "user" }), runtimeMessage({ id: "a1" }), runtimeMessage({ id: "u2", role: "user" })];
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: history });
+    expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("streaming");
+  });
+
   it("recovers an identified background turn only from its own saved completion", () => {
     const store = createStore();
     store.set(startPromptAtom, { sessionId: "s1", text: "开始", historyBoundaryId: null });
