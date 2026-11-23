@@ -1,6 +1,7 @@
+import { beginStoppingTurnAtom, stoppingTurnsAtom } from "@/stores/stopping-turn";
 import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getDefaultStore, useAtomValue, useSetAtom } from "jotai";
+import { getDefaultStore, useAtomValue, useSetAtom, useStore } from "jotai";
 import {
   ConfigSetResult,
   SubagentSteerResult,
@@ -312,6 +313,7 @@ export interface CreatedBranchSession {
 }
 
 export function useGateway() {
+  const store = useStore();
   const queryClient = useQueryClient();
   const connectionState = useAtomValue(gwConnectionAtom);
   const gwSessionId = useAtomValue(gwSessionIdAtom);
@@ -483,11 +485,17 @@ export function useGateway() {
         images?: string[];
         displayImages?: ImageEntry[];
         skipOptimisticStart?: boolean;
+        afterStop?: boolean;
       },
     ) => {
       ensureSubscribed();
       ensureChatSession(sessionId);
-      if (!options?.skipOptimisticStart) {
+      const stop = store.get(stoppingTurnsAtom)[sessionId];
+      const outcome = stop ? await stop.done : undefined;
+      if (outcome === "failed") throw new Error("停止上一轮失败，请重新发送");
+      // If Core never reported a terminal frame, let its queue own the prompt.
+      // Starting an optimistic bubble here could let A's late completion close B.
+      if (!options?.skipOptimisticStart && outcome !== "timed-out") {
         startPrompt({
           sessionId,
           text: options?.displayText ?? text,
@@ -499,13 +507,14 @@ export function useGateway() {
         const params = PromptSubmitParams.parse({
           session_id: sessionId,
           text,
+          ...((stop || options?.afterStop) ? { queued: true } : {}),
           ...(options?.images?.length ? { images: options.images } : {}),
         });
 
         try {
           await getGatewayClient().request("prompt.submit", params);
         } catch (err) {
-          if (isSessionBusyError(err)) {
+          if (!params.queued && isSessionBusyError(err)) {
             await getGatewayClient().request(
               "session.interrupt",
               { session_id: sessionId },
@@ -527,7 +536,7 @@ export function useGateway() {
         throw error;
       }
     },
-    [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt],
+    [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt, store],
   );
 
   const getSessionUsage = useCallback(
@@ -843,6 +852,10 @@ export function useGateway() {
       const gatewaySessionId = resolveGatewaySessionId(sessionId) ?? sessionId;
       if (!gatewaySessionId) return;
       ensureSubscribed();
+      const stop = store.set(beginStoppingTurnAtom, gatewaySessionId);
+      void stop.done.then(outcome => {
+        if (outcome === "timed-out") markSessionInterrupted(gatewaySessionId);
+      });
 
       try {
         await getGatewayClient().request(
@@ -851,13 +864,16 @@ export function useGateway() {
           { timeoutMs: 10_000 },
         );
       } catch (error) {
+        stop.finish("failed");
         setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
         throw error;
       }
 
-      markSessionInterrupted(gatewaySessionId);
+      if (store.get(stoppingTurnsAtom)[gatewaySessionId]?.done === stop.done) {
+        markSessionInterrupted(gatewaySessionId);
+      }
     },
-    [ensureSubscribed, markSessionInterrupted, setSessionError],
+    [ensureSubscribed, markSessionInterrupted, setSessionError, store],
   );
 
   const setSessionTitle = useCallback(

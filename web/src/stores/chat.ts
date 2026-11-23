@@ -1,3 +1,4 @@
+import { stoppingTurnsAtom } from "./stopping-turn";
 import { atom } from "jotai";
 import { sessionStorageKey } from "@/lib/connection-scope";
 import type {
@@ -1123,16 +1124,17 @@ export const resetStreamStateAtom = atom(null, (_get, set, sessionId: string) =>
   );
 });
 
-// 手动终止：立即把会话标记为非运行态，并屏蔽旧回合迟到的流式事件。
+// 手动终止后屏蔽旧回合迟到的流式事件，等待该回合真正结束。
 // 故意保留 activeAssistantId / turnStartedAt，迟到的 message.complete 才能收尾正确的消息。
-export const markSessionInterruptedAtom = atom(null, (_get, set, sessionId: string) => {
+export const markSessionInterruptedAtom = atom(null, (get, set, sessionId: string) => {
+  const waiting = get(stoppingTurnsAtom)[sessionId]?.waiting;
   const now = Date.now();
   set(chatRuntimeBySessionAtom, (state) =>
     updateSessionRuntime(state, sessionId, (runtime) => ({
       ...runtime,
       interrupted: true,
       pendingClarifications: [],
-      streamStatus: "idle",
+      streamStatus: waiting ? runtime.streamStatus : "idle",
       statusMessage: "",
       statusKind: undefined,
       statusUpdatedAt: undefined,
@@ -1371,6 +1373,10 @@ function persistCompletedTurnStats(runtime: ChatSessionRuntime, event: GatewayEv
 
 export const applyGatewayEventAtom = atom(null, (get, set, event: GatewayEvent) => {
   if (!event.session_id) return;
+  const stop = get(stoppingTurnsAtom)[event.session_id];
+  if (stop && (event.type === "message.complete" || event.type === "error" || (!stop.waiting && event.type === "message.start"))) {
+    stop.finish("finished");
+  }
   // 通知决策需要 reduce 前的快照（pendingApprovals / activeAssistantId 是
   // 防重放依据），在 set 之外读取——jotai 不承诺 updater 恰好执行一次。
   // 副作用本身 fire-and-forget，绝不影响 reducer。

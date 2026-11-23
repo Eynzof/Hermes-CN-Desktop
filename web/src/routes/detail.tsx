@@ -1,3 +1,4 @@
+import { stoppingTurnsAtom } from "@/stores/stopping-turn";
 import { isGatewaySessionAttached, resolveGatewaySessionId } from "@/lib/session-map";
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
@@ -163,6 +164,7 @@ export function DetailRoute() {
     runtimeIsBusy,
     isLiveSession,
   } = useSessionResolution(taskId);
+  const stop = useAtomValue(stoppingTurnsAtom)[runtimeSessionId ?? taskId ?? ""];
   const [sessionUsage, setSessionUsage] = useSessionUsagePolling({
     gatewaySessionId: usageGatewaySessionId,
     restSessionId,
@@ -417,6 +419,7 @@ export function DetailRoute() {
   const submitPayload = useCallback(async (
     payload: ComposerSubmitPayload,
     updateAttachment: ComposerSubmitControls["updateAttachment"] = () => {},
+    afterStop = false,
   ) => {
     if (!taskId) return;
     const gatewaySessionId = await ensureGatewaySession();
@@ -453,6 +456,7 @@ export function DetailRoute() {
       onAttachmentUpdate: updateAttachment,
     }, { transportText });
     await sendPrompt(gatewaySessionId, prepared.promptText, {
+      afterStop,
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
@@ -466,6 +470,10 @@ export function DetailRoute() {
     controls: ComposerSubmitControls,
   ) => {
     if (!taskId) return;
+    if (stop) {
+      await submitPayload(payload, controls.updateAttachment, true);
+      return;
+    }
     const builtin = parseBuiltinComposerCommand(payload.text);
     if (builtin?.name === "compress") {
       const sessionId = await ensureGatewaySession();
@@ -491,7 +499,7 @@ export function DetailRoute() {
       }
     }
     if (!runtimeIsBusy) await submitPayload(payload, controls.updateAttachment);
-  }, [ensureGatewaySession, pendingClarification, removeClarification, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+  }, [ensureGatewaySession, pendingClarification, removeClarification, runManualCompress, runtimeIsBusy, stop, submitPayload, taskId]);
 
   // ---- Send queue (drain on settle, send-now / edit / delete) --------------
   const queuedPrompts = useQueuedPrompts(taskId);
@@ -787,6 +795,7 @@ export function DetailRoute() {
               onEdit={onQueueEdit}
               onDelete={onQueueDelete}
             />
+            {stop?.waiting && <div role="status">正在停止…</div>}
             <GooseComposer
               key={`${taskId}:${composerDraftKey ?? "draft"}`}
               flushBottom
@@ -797,7 +806,7 @@ export function DetailRoute() {
               onSend={onSend}
               loadingPlaceholder={composerLoadingPlaceholder}
               showMeta={false}
-              loading={runtimeIsBusy}
+              loading={runtimeIsBusy && !stop}
               allowFollowUp={Boolean(pendingClarification)}
               onStop={onStop}
               voiceConfig={config ?? null}

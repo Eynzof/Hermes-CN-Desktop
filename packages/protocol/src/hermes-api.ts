@@ -1321,6 +1321,7 @@ export const SessionTitleResult = z.object({
 export type SessionTitleResult = z.infer<typeof SessionTitleResult>;
 
 export const PromptSubmitParams = z.object({
+  queued: z.boolean().optional(),
   session_id: z.string(),
   text: z.string(),
   images: z.array(z.string()).optional(),
