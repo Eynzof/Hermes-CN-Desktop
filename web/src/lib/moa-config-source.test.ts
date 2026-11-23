@@ -27,6 +27,18 @@ describe("旧混合模型配置", () => {
     expect(conflictsWithLegacy(source, {...config, presets: {default: {...source.preset, aggregator: {provider: "other", model: "other"}}}})).toBe(true);
   });
 
+  it("解析旧组合的 YAML 别名，保留由合并键引入的命名映射", async () => {
+    const slots = "advisor: &advisor {provider: local, model: ref}\nacting: &acting {provider: local, model: final}\n";
+    const raw = slots + "old: &old {reference_models: [*advisor], aggregator: *acting}\nmoa: *old";
+    const legacy = await inspectMoaYaml(raw);
+    expect(legacy).toMatchObject({kind: "legacy", preset: {
+      reference_models: [{provider: "local", model: "ref"}], aggregator: {provider: "local", model: "final"},
+    }});
+    const named = "base: &base {presets: {my-team: {}}}\nmoa: {<<: *base, enabled: false}";
+    expect(await inspectMoaYaml(named)).toEqual({kind: "named", names: ["my-team"]});
+    expect(await inspectMoaYaml("moa: *missing")).toBeNull();
+  });
+
   it("尊重命名映射，无法确认的配置不显示警告", async () => {
     expect(await inspectMoaYaml("moa: {presets: {}, enabled: false}")).toEqual({kind: "named", names: []});
     expect(await inspectMoaYaml("moa: {presets: {team: {}}, enabled: false}")).toEqual({kind: "named", names: ["team"]});
