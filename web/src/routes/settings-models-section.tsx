@@ -20,7 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useDeleteEnv, useEnvVars, useRevealEnv, useSetEnv } from "@/hooks/use-env";
 import { useGateway } from "@/hooks/use-gateway";
-import { providerModelsErrorText, useProviderModels } from "@/hooks/use-provider-models";
+import { codingPlanModelOptions, providerModelsErrorText, useProviderModels } from "@/hooks/use-provider-models";
 import type { ModelInfo, ProviderProbeResult } from "@hermes/protocol";
 import {
   apiModeBadgeLabel,
@@ -35,6 +35,7 @@ import {
   detectCustomApiModeFromUrl,
   getProviderCredentialPreview,
   getProviderEntry,
+  modelLifecycleNotice,
   parseContextWindowInput,
   providerApiKeyLabels,
   providerHasSavedCredentials,
@@ -852,8 +853,16 @@ export function ModelsSection() {
       .filter((g) => g.entries.length > 0);
   }, [resolvedEnvVars]);
 
+  const codingPlan = selectedProvider?.id === "zai-coding-cn";
+  const discoveryFormId = useId();
+  const [keyRevision, setKeyRevision] = useState(0);
+  const savedProviderModel = selectedProviderEntry.model || selectedProviderEntry.default_model;
+  const savedBaseUrl = String(selectedProviderEntry.base_url || selectedProviderEntry.api || selectedProvider?.baseUrl || "");
+  const usingSavedEndpoint = providerForm.baseUrl.trim().replace(/\/+$/, "") === savedBaseUrl.trim().replace(/\/+$/, "");
   const liveApiKey = providerForm.apiKey.trim() ||
-    (typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
+    (!codingPlan && typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
+  const canListCodingModels = /^https:\/\//i.test(providerForm.baseUrl.trim()) &&
+    Boolean(liveApiKey || (usingSavedEndpoint && selectedHasCredentials));
   const supportsModelListing = selectedProvider?.supportsModelListing !== false;
   const modelsQuery = useProviderModels(
     selectedProvider?.id ?? "",
@@ -861,6 +870,7 @@ export function ModelsSection() {
     liveApiKey || undefined,
     listProviderModels,
     selectedProvider?.apiMode,
+    codingPlan ? `${discoveryFormId}-${keyRevision}` : undefined,
   );
   const customModelsQuery = useProviderModels(
     "custom-draft",
@@ -870,19 +880,28 @@ export function ModelsSection() {
     customProviderMode === "local" ? "chat_completions" : customForm.apiMode,
   );
   const liveModelIds = supportsModelListing ? modelsQuery.data?.models ?? [] : [];
+  const hasLiveCodingList = codingPlan && canListCodingModels && modelsQuery.isSuccess && !modelsQuery.isFetching;
   const mergedModelOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const id of liveModelIds) set.add(id);
+    if (codingPlan && selectedProvider) {
+      const savedId = String(savedProviderModel || (currentProviderId === selectedProvider.id ? modelInfo?.model ?? "" : ""));
+      const editedId = providerForm.model === selectedProvider.defaultModel && !savedId ? "" : providerForm.model;
+      return codingPlanModelOptions(
+        selectedProvider.models.map((model) => model.id),
+        hasLiveCodingList ? liveModelIds : undefined, savedId, editedId,
+      );
+    }
+    const set = new Set(liveModelIds);
     if (selectedProvider) for (const m of selectedProvider.models) set.add(m.id);
     if (providerForm.model) set.add(providerForm.model);
     return Array.from(set);
-  }, [liveModelIds, selectedProvider, providerForm.model]);
+  }, [codingPlan, hasLiveCodingList, liveModelIds, selectedProvider, savedProviderModel, currentProviderId, modelInfo?.model, providerForm.model]);
   const customModelOptions = useMemo(() => {
     const set = new Set(customModelsQuery.data?.models ?? []);
     if (customForm.model) set.add(customForm.model);
     return Array.from(set);
   }, [customModelsQuery.data?.models, customForm.model]);
 
+  const lifecycleNotice = selectedProvider && modelLifecycleNotice(selectedProvider.id, providerForm.model);
   const refreshLabel = modelsQuery.isError
       ? "刷新失败 重试"
       : modelsQuery.data
@@ -905,12 +924,10 @@ export function ModelsSection() {
 
   useEffect(() => {
     if (!selectedProvider) return;
-    const model = typeof selectedProviderEntry.model === "string"
-      ? selectedProviderEntry.model
+    const model = typeof savedProviderModel === "string"
+      ? savedProviderModel
       : selectedProvider.defaultModel;
-    const baseUrl = typeof selectedProviderEntry.base_url === "string"
-      ? selectedProviderEntry.base_url
-      : selectedProvider.baseUrl;
+    const baseUrl = String(selectedProviderEntry.base_url || selectedProviderEntry.api || selectedProvider.baseUrl);
     // The context-window override lives in a single top-level config field tied
     // to the *current* model. Only backfill it when this provider's model is the
     // active one; otherwise the field stays empty (it applies on set-current).
@@ -926,7 +943,8 @@ export function ModelsSection() {
   }, [
     selectedProvider,
     selectedProviderEntry.base_url,
-    selectedProviderEntry.model,
+    selectedProviderEntry.api,
+    savedProviderModel,
     config?.model_context_length,
     currentProviderId,
     modelInfo?.model,
@@ -947,8 +965,7 @@ export function ModelsSection() {
 
   const handleProbe = useCallback(async () => {
     if (!selectedProvider) return;
-    const apiKey = providerForm.apiKey.trim() ||
-      (typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
+    const apiKey = liveApiKey;
     const baseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     setProbeState({ providerId: selectedProvider.id, status: "pending" });
     try {
@@ -995,7 +1012,7 @@ export function ModelsSection() {
         message: error instanceof Error ? error.message : String(error),
       });
     }
-  }, [probeProvider, providerForm.apiKey, providerForm.baseUrl, providerForm.model, selectedProvider, selectedProviderEntry.api_key]);
+  }, [probeProvider, liveApiKey, providerForm.baseUrl, providerForm.model, selectedProvider]);
 
   const probeForSelected = probeState && selectedProvider && probeState.providerId === selectedProvider.id
     ? probeState
@@ -1200,7 +1217,8 @@ export function ModelsSection() {
     // canonical env var so chat requests actually find credentials. Xiaomi used
     // to be saved as MIMO_API_KEY in the desktop catalog; keep that alias
     // readable and migrate it to XIAOMI_API_KEY when the user saves again.
-    const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
+    const savedProviderModel = selectedProviderEntry.model || selectedProviderEntry.default_model;
+  const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
     const providerName = selectedProvider.name;
@@ -1270,7 +1288,8 @@ export function ModelsSection() {
     if (!config || !selectedProvider) return;
     const pendingStartedAt = performance.now();
     const newApiKey = providerForm.apiKey.trim();
-    const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
+    const savedProviderModel = selectedProviderEntry.model || selectedProviderEntry.default_model;
+  const savedBaseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
     const savedModel = providerForm.model.trim() || selectedProvider.defaultModel;
     const providerId = selectedProvider.id;
     const providerName = selectedProvider.name;
@@ -1778,7 +1797,10 @@ export function ModelsSection() {
                                 ? "本地服务一般可留空"
                                 : "粘贴 API Key"
                           }
-                          onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
+                          onChange={(event) => {
+                            setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }));
+                            if (codingPlan) setKeyRevision((revision) => revision + 1);
+                          }}
                         />
                       </Field>
                       <Field label="Base URL" className={s.fieldRow}>
@@ -1802,12 +1824,14 @@ export function ModelsSection() {
                             value={providerForm.model}
                             onChange={(next) => setProviderForm((prev) => ({ ...prev, model: next }))}
                             options={mergedModelOptions}
+                            onOpen={codingPlan && canListCodingModels ? () => { void modelsQuery.refetch(); } : undefined}
                           />
                           {supportsModelListing ? (
                             <Button
                               type="button"
                               variant="outline"
                               loading={modelsQuery.isFetching}
+                              disabled={codingPlan && !canListCodingModels}
                               onClick={() => modelsQuery.refetch()}
                               title={`从 ${providerForm.baseUrl}/models 拉取`}
                             >
@@ -1816,6 +1840,13 @@ export function ModelsSection() {
                           ) : null}
                         </div>
                       </div>
+                      {codingPlan && !hasLiveCodingList && !modelsQuery.isFetching && (
+                        <div className={s.modelPickerHint}>当前显示预设模型，可能未包含最新型号。</div>
+                      )}
+                      {hasLiveCodingList && liveModelIds.length === 0 && (
+                        <div className={s.modelPickerHint}>服务商返回了空模型列表，也可以手动输入模型 ID。</div>
+                      )}
+                      {lifecycleNotice && <div className={s.modelPickerHint}>{lifecycleNotice}</div>}
                       {!supportsModelListing && (
                         <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
                       )}
@@ -1917,7 +1948,7 @@ export function ModelsSection() {
                         loading={probeForSelected?.status === "pending"}
                         disabled={
                           providerDeletePending ||
-                          (!selectedHasCredentials && !providerForm.apiKey.trim() && !selectedProviderCanOmitApiKey)
+                          (codingPlan ? !canListCodingModels : !selectedHasCredentials && !providerForm.apiKey.trim() && !selectedProviderCanOmitApiKey)
                         }
                         onClick={() => void handleProbe()}
                         title={

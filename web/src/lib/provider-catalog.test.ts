@@ -15,6 +15,7 @@ import {
   detectCustomApiModeFromUrl,
   fetchRemoteProviderCatalog,
   mergeProviderCatalog,
+  modelLifecycleNotice,
   getProviderCredentialPreview,
   getProviderEntry,
   getProviderOrder,
@@ -40,8 +41,33 @@ beforeEach(() => {
 });
 
 describe("builtin provider catalog", () => {
+  it("keeps current direct API presets when a client receives an older catalog", () => {
+    for (const [id, models] of [
+      ["gemini", ["gemini-4-carbon", "gemini-4-neon", "gemini-4-hydrogen", "gemini-4-argon", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]],
+      ["anthropic", ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-2"]],
+    ] as const) {
+      const preset = BUILTIN_PROVIDER_CATALOG.providers.find(p => p.id === id)!;
+      const remote = { ...preset, name: "远程名称", models: [{ id: preset.defaultModel }] };
+      const merged = mergeProviderCatalog(BUILTIN_PROVIDER_CATALOG, { version: "2026.07.26.1", providers: [remote] });
+      const result = merged.providers.find(p => p.id === id)!;
+      expect(result.name).toBe(remote.name);
+      expect(result.models.map(m => m.id)).toEqual(expect.arrayContaining([...models]));
+      expect(mergeProviderCatalog(BUILTIN_PROVIDER_CATALOG, { version: "2026.12.01.1", providers: [remote] })
+        .providers.find(p => p.id === id)?.models).toEqual(remote.models);
+    }
+  });
+
+  it("keeps a saved deprecated Gemini ID selectable without suggesting it to new users", () => {
+    const preset = BUILTIN_PROVIDER_CATALOG.providers.find(p => p.id === "gemini")!;
+    const model = "gemini-2.5-pro";
+    expect(preset.models.some(m => m.id === model)).toBe(false);
+    expect(modelLifecycleNotice(preset.id, model)).toContain("gemini-3.8-flash");
+    const updated = buildProviderConfigUpdate({}, preset, { model, baseUrl: preset.baseUrl, apiKey: "", contextWindow: "" });
+    expect(updated.model).toMatchObject({ default: model });
+  });
+
   it("ships the current Kimi and SiliconFlow coding models", () => {
-    expect(BUILTIN_PROVIDER_CATALOG_VERSION).toBe("2026.07.26.1");
+    expect(BUILTIN_PROVIDER_CATALOG_VERSION).toBe("2026.11.22.1");
 
     const kimi = BUILTIN_PROVIDER_CATALOG.providers.find((provider) => provider.id === "kimi-for-coding");
     expect(kimi).toMatchObject({
@@ -488,7 +514,7 @@ describe("provider catalog config updates", () => {
       name: "智谱 GLM · Coding Plan",
       baseUrl: "https://open.bigmodel.cn/api/coding/paas/v4",
       defaultModel: "glm-5.1",
-      supportsModelListing: false,
+      supportsModelListing: true,
     });
 
     expect(byId.get("volcengine-ark")).toMatchObject({

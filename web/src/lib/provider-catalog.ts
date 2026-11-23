@@ -325,7 +325,7 @@ export function parseContextWindowInput(raw: string | undefined): number {
   return Math.floor(parsed);
 }
 
-export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.07.26.1";
+export const BUILTIN_PROVIDER_CATALOG_VERSION = "2026.11.22.1";
 
 export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
   version: BUILTIN_PROVIDER_CATALOG_VERSION,
@@ -496,13 +496,17 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       websiteUrl: "https://open.bigmodel.cn",
       docsUrl: "https://docs.bigmodel.cn/cn/api/introduction",
       defaultModel: "glm-5.1",
+      // Coding Plan, 2026-11-22: docs.bigmodel.cn/cn/guide/models/vlm/glm-5.3-flash.md
+      // FlashX is exposed on some live lists but is not a documented plan entitlement.
       models: [
+        { id: "glm-5.3", supportsTools: true, supportsReasoning: true },
+        { id: "glm-5.3-flash", supportsVision: true, supportsTools: true, supportsReasoning: true },
         { id: "glm-5.2", supportsTools: true, supportsReasoning: true },
         { id: "glm-5.1", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.7", supportsTools: true, supportsReasoning: true },
         { id: "glm-4.6", supportsTools: true, supportsReasoning: true },
       ],
-      supportsModelListing: false,
+      supportsModelListing: true,
     },
     {
       id: "kimi-for-coding",
@@ -797,12 +801,18 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       docsUrl: "https://ai.google.dev/gemini-api/docs/text-generation",
       defaultModel: "gemini-3.5-flash",
       models: [
+        // 2026-11-22 核对官方 API 型号和能力：https://aistudio.google.com/docs/models
+        { id: "gemini-4-carbon", label: "Gemini 4 Carbon", contextWindow: 1_048_576, supportsTools: true, supportsVision: true, supportsPdf: true, supportsAudio: true, supportsVideo: true, supportsReasoning: true },
+        { id: "gemini-4-neon", label: "Gemini 4 Neon", contextWindow: 1_048_576, supportsTools: true, supportsVision: true, supportsPdf: true, supportsAudio: true, supportsVideo: true, supportsReasoning: true },
+        { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", contextWindow: 1_048_576, supportsTools: true, supportsVision: true, supportsPdf: true, supportsAudio: true, supportsVideo: true, supportsReasoning: true },
+        { id: "gemini-4-argon", label: "Gemini 4 Argon", contextWindow: 1_048_576, supportsTools: true, supportsVision: true, supportsPdf: true, supportsAudio: true, supportsVideo: true, supportsReasoning: true },
+        { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", contextWindow: 1_048_576, supportsTools: true, supportsVision: true, supportsPdf: true, supportsAudio: true, supportsVideo: true, supportsReasoning: true },
+        { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash", contextWindow: 1_048_576, supportsTools: true, supportsVision: true, supportsPdf: true, supportsAudio: true, supportsVideo: true, supportsReasoning: true },
+        { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", contextWindow: 1_048_576, supportsTools: true, supportsVision: true, supportsPdf: true, supportsAudio: true, supportsVideo: true, supportsReasoning: true },
         { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash-Lite", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "gemini-3-flash-preview", label: "Gemini 3 Flash Preview", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
-        { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
-        { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
       ],
       supportsModelListing: false,
     },
@@ -843,6 +853,11 @@ export const BUILTIN_PROVIDER_CATALOG: ProviderCatalog = {
       docsUrl: "https://platform.claude.com/docs/en/about-claude/models/overview",
       defaultModel: "claude-opus-4-8",
       models: [
+        // 2026-11-22 核对官方 API 型号和能力：https://platform.claude.com/docs/en/models/overview
+        { id: "claude-opus-5-5", label: "Claude Opus 5.5", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsPdf: true, supportsReasoning: true },
+        { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsPdf: true, supportsReasoning: true },
+        { id: "claude-haiku-5-5", label: "Claude Haiku 5.5", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsPdf: true, supportsReasoning: true },
+        { id: "claude-fable-5-2", label: "Claude Fable 5.2", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsPdf: true, supportsReasoning: true },
         { id: "claude-fable-5", label: "Claude Fable 5", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "claude-opus-4-8", label: "Claude Opus 4.8", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
         { id: "claude-sonnet-5", label: "Claude Sonnet 5", contextWindow: 1_000_000, supportsTools: true, supportsVision: true, supportsReasoning: true },
@@ -1556,7 +1571,20 @@ export function shouldUpdateDefaultModelOnSave(params: {
   );
 }
 
+export function modelLifecycleNotice(providerId: string, model: string): string | undefined {
+  if (providerId !== "gemini") return;
+  if (model === "gemini-2.5-pro" || model === "gemini-2.5-flash") {
+    const replacement = model === "gemini-2.5-pro" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite";
+    return `Google 已弃用此型号。自 2026 年 12 月 1 日起，使用此 ID 的请求将转至 ${replacement}。`;
+  }
+  if (model === "gemini-3.5-flash") return "Google 已将此型号的 API 请求转至 gemini-3.6-flash。";
+}
+
 export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCatalog): ProviderCatalog {
+  // 旧网站目录仍可更新推广信息，不能把新版客户端的内置型号换回旧清单。
+  const datedVersion = /^\d{4}\.\d{2}\.\d{2}\.\d+$/;
+  const olderModels = datedVersion.test(base.version) && datedVersion.test(remote.version)
+    && remote.version.localeCompare(base.version, "en", { numeric: true }) < 0;
   const byId = new Map(base.providers.map((provider) => [provider.id, provider]));
   for (const provider of remote.providers) {
     const builtin = byId.get(provider.id);
@@ -1569,7 +1597,9 @@ export function mergeProviderCatalog(base: ProviderCatalog, remote: ProviderCata
     byId.set(provider.id, builtin
       ? {
         ...provider,
+        ...(olderModels ? { models: builtin.models, defaultModel: builtin.defaultModel } : {}),
         baseUrl: builtin.baseUrl,
+        ...(builtin.id === "zai-coding-cn" ? { supportsModelListing: builtin.supportsModelListing } : {}),
         apiMode: builtin.apiMode,
         transport: builtin.transport,
         apiKeyLabel: builtin.apiKeyLabel,

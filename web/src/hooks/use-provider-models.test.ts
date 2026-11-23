@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { providerModelsErrorText, selectProviderModelIds } from "./use-provider-models";
+import { codingPlanModelOptions, providerModelsErrorText, selectProviderModelIds } from "./use-provider-models";
 
 describe("selectProviderModelIds", () => {
   it("sorts and de-dupes the returned ids", () => {
@@ -65,5 +65,18 @@ describe("providerModelsErrorText", () => {
 
   it("keeps an unknown backend error intact", () => {
     expect(providerModelsErrorText(new Error("upstream unavailable"))).toBe("upstream unavailable");
+  });
+});
+
+describe("Coding Plan settings model options", () => {
+  const preset = ["glm-5.3", "glm-5.1"];
+  it("uses the account list, retaining the saved and edited values once", () => {
+    expect(codingPlanModelOptions(preset, ["glm-5.3-flashx"], "saved", "glm-5.3-flashx"))
+      .toEqual(["glm-5.3-flashx", "saved"]);
+  });
+
+  it("uses the preset before discovery or on error and preserves an empty live response", () => {
+    expect(codingPlanModelOptions(preset, undefined, "saved", "")).toEqual([...preset, "saved"]);
+    expect(codingPlanModelOptions(preset, [], "saved", "saved")).toEqual(["saved"]);
   });
 });
