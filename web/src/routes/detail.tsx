@@ -1,3 +1,4 @@
+import { stoppingTurnsAtom } from "@/stores/stopping-turn";
 import { isGatewaySessionAttached, resolveGatewaySessionId } from "@/lib/session-map";
 import { useEffect, useMemo, useCallback, useRef, useState, type CSSProperties } from "react";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
@@ -163,6 +164,7 @@ export function DetailRoute() {
     runtimeIsBusy,
     isLiveSession,
   } = useSessionResolution(taskId);
+  const stop = useAtomValue(stoppingTurnsAtom)[runtimeSessionId ?? taskId ?? ""];
   const [sessionUsage, setSessionUsage] = useSessionUsagePolling({
     gatewaySessionId: usageGatewaySessionId,
     restSessionId,
@@ -348,11 +350,15 @@ export function DetailRoute() {
   // route reaches the tip this is a no-op (no navigation loop).
   const tipRedirects = useAtomValue(sessionTipRedirectAtom);
   useEffect(() => {
+    // A new URL can commit before its selection catches up. Only redirect the
+    // conversation still named by the URL.
+    if (urlTaskId !== taskId) return;
     const tip = pickTipRedirect(tipRedirects, { taskId, restSessionId, activeSessionId });
     if (!tip) return;
-    setActiveId(tip);
+    // The URL effect selects the tip after navigation. Selecting it early lets
+    // the previous URL restore the old session while the navigation is pending.
     navigate(`/tasks/${tip}`, { replace: true });
-  }, [tipRedirects, taskId, restSessionId, activeSessionId, setActiveId, navigate]);
+  }, [tipRedirects, urlTaskId, taskId, restSessionId, activeSessionId, navigate]);
 
   const storedMessages = useMemo(
     () => attachTurnStatsMetadata(messagesResponseToHermesUIMessages(messagesData), turnStats),
@@ -413,6 +419,7 @@ export function DetailRoute() {
   const submitPayload = useCallback(async (
     payload: ComposerSubmitPayload,
     updateAttachment: ComposerSubmitControls["updateAttachment"] = () => {},
+    afterStop = false,
   ) => {
     if (!taskId) return;
     const gatewaySessionId = await ensureGatewaySession();
@@ -449,6 +456,7 @@ export function DetailRoute() {
       onAttachmentUpdate: updateAttachment,
     }, { transportText });
     await sendPrompt(gatewaySessionId, prepared.promptText, {
+      afterStop,
       displayText: prepared.displayText,
       displayImages: prepared.displayImages,
     });
@@ -462,6 +470,10 @@ export function DetailRoute() {
     controls: ComposerSubmitControls,
   ) => {
     if (!taskId) return;
+    if (stop) {
+      await submitPayload(payload, controls.updateAttachment, true);
+      return;
+    }
     const builtin = parseBuiltinComposerCommand(payload.text);
     if (builtin?.name === "compress") {
       const sessionId = await ensureGatewaySession();
@@ -487,7 +499,7 @@ export function DetailRoute() {
       }
     }
     if (!runtimeIsBusy) await submitPayload(payload, controls.updateAttachment);
-  }, [ensureGatewaySession, pendingClarification, removeClarification, runManualCompress, runtimeIsBusy, submitPayload, taskId]);
+  }, [ensureGatewaySession, pendingClarification, removeClarification, runManualCompress, runtimeIsBusy, stop, submitPayload, taskId]);
 
   // ---- Send queue (drain on settle, send-now / edit / delete) --------------
   const queuedPrompts = useQueuedPrompts(taskId);
@@ -758,7 +770,12 @@ export function DetailRoute() {
             pendingApproval={
               pendingApproval || pendingClarification ? <>
                 {pendingApproval && <ApprovalDialog approval={pendingApproval} />}
-                {pendingClarification && <ClarificationDialog key={pendingClarification.requestId} request={pendingClarification} />}
+                {pendingClarification && (
+                  <ClarificationDialog
+                    key={`${pendingClarification.requestId}:${Object.keys(pendingClarification.answers ?? {}).length}`}
+                    request={pendingClarification}
+                  />
+                )}
               </> : undefined
             }
             turnStartedAt={runtimeIsBusy ? runtime.turnStartedAt : undefined}
@@ -778,6 +795,7 @@ export function DetailRoute() {
               onEdit={onQueueEdit}
               onDelete={onQueueDelete}
             />
+            {stop?.waiting && <div role="status">正在停止…</div>}
             <GooseComposer
               key={`${taskId}:${composerDraftKey ?? "draft"}`}
               flushBottom
@@ -788,7 +806,7 @@ export function DetailRoute() {
               onSend={onSend}
               loadingPlaceholder={composerLoadingPlaceholder}
               showMeta={false}
-              loading={runtimeIsBusy}
+              loading={runtimeIsBusy && !stop}
               allowFollowUp={Boolean(pendingClarification)}
               onStop={onStop}
               voiceConfig={config ?? null}

@@ -592,9 +592,26 @@ fn validate_update_target(
             metadata.release_id
         ));
     }
+    // A full installer replaces the shell AND its bundled Core. The running
+    // shell's matrix only governs runtime-only updates; applying it here makes
+    // every new Core series unreachable even with a valid signed installer.
+    let core = semver::Version::parse(&metadata.bundled_core_version)
+        .map_err(|error| format!("更新 bundledCoreVersion 无效：{error}"))?;
+    let runtime = semver::Version::parse(&metadata.bundled_runtime_version)
+        .map_err(|error| format!("更新 bundledRuntimeVersion 无效：{error}"))?;
+    if (core.major, core.minor, core.patch) != (runtime.major, runtime.minor, runtime.patch) {
+        return Err("整包更新中的 Core 与 runtime 基础版本不一致".to_string());
+    }
     let matrix = CompatibilityMatrix::parse_embedded()?;
-    matrix.check(target_desktop_version, &metadata.bundled_core_version)?;
-    matrix.check(target_desktop_version, &metadata.bundled_runtime_version)?;
+    let bundled_series = matrix
+        .rule_for_desktop(env!("CARGO_PKG_VERSION"))
+        .and_then(|rule| rule.core_series.first())
+        .ok_or("当前外壳缺少随附 Core 的兼容声明")?;
+    let floor = semver::Version::parse(&format!("{bundled_series}.0"))
+        .map_err(|error| format!("当前 Core 版本下限无效：{error}"))?;
+    if (core.major, core.minor) < (floor.major, floor.minor) {
+        return Err(format!("整包更新中的 Core 不能低于当前 {bundled_series}.x 系列"));
+    }
     Ok(metadata)
 }
 
@@ -640,7 +657,10 @@ fn checked_update_result(update: &Update, channel: &str) -> AppUpdateCheckResult
             latest_version: Some(update.version.clone()),
             update_available: true,
             compatible: true,
-            expected_core_series,
+            expected_core_series: crate::version_compatibility::version_series(
+                &metadata.bundled_core_version,
+            )
+            .map(|series| format!("{series}.x")),
             target_core_version: Some(metadata.bundled_core_version),
             target_runtime_version: Some(metadata.bundled_runtime_version),
             release_id: Some(metadata.release_id),
@@ -1578,25 +1598,76 @@ mod tests {
     }
 
     #[test]
-    fn accepts_desktop_08_with_core_020() {
+    fn accepts_full_installer_with_matching_supported_core() {
         let metadata = validate_update_target(
             "0.8.1-hotupdate.1",
-            &raw_update("0.20.0", "0.20.0-cn.9"),
+            &raw_update("0.23.0", "0.23.0-cn.20"),
             "prototype",
         )
         .unwrap();
-        assert_eq!(metadata.bundled_runtime_version, "0.20.0-cn.9");
+        assert_eq!(metadata.bundled_runtime_version, "0.23.0-cn.20");
     }
 
     #[test]
-    fn rejects_target_with_incompatible_core() {
-        let error = validate_update_target(
+    fn full_installer_can_replace_the_shell_and_core_together() {
+        let metadata = validate_update_target(
             "0.8.1-hotupdate.1",
-            &raw_update("0.19.9", "0.19.9-cn.7"),
+            &raw_update("0.23.0", "0.23.0-cn.19"),
             "prototype",
         )
-        .unwrap_err();
-        assert!(error.contains("仅兼容 Core 0.20.x"));
+        .unwrap();
+        assert_eq!(metadata.bundled_core_version, "0.23.0");
+        // Runtime-only updates still use the installed shell's matrix.
+        assert!(CompatibilityMatrix::parse_embedded()
+            .unwrap()
+            .check("0.8.1-hotupdate.1", "0.23.0")
+            .is_err());
+    }
+
+    #[test]
+    fn bridge_accepts_desktop_10_with_core_023_but_rejects_runtime_only_upgrade() {
+        let mut raw = raw_update("0.23.0", "0.23.0-cn.20");
+        let target = "1.0.0";
+        raw["version"] = serde_json::json!(target);
+        raw["metadata"]["releaseId"] = serde_json::json!(expected_release_id(target).unwrap());
+        raw["metadata"]["githubReleaseTag"] = serde_json::json!("v1.0.0");
+        raw["url"] = serde_json::json!("https://dl-desktop.hermesagent.org.cn/v1.0.0/update.exe");
+        raw["metadata"]["githubFallbackUrl"] = serde_json::json!(
+            "https://github.com/Eynzof/Hermes-CN-Desktop/releases/download/v1.0.0/update.exe"
+        );
+        raw["metadata"]["channel"] = serde_json::json!("stable");
+        raw["metadata"]["runtimeRevision"] = serde_json::json!(20);
+
+        let metadata = validate_update_target(target, &raw, "stable").unwrap();
+        assert_eq!(metadata.bundled_runtime_version, "0.23.0-cn.20");
+        raw["metadata"]["bundledCoreVersion"] = serde_json::json!("0.19.9");
+        raw["metadata"]["bundledRuntimeVersion"] = serde_json::json!("0.19.9-cn.7");
+        raw["metadata"]["runtimeRevision"] = serde_json::json!(7);
+        assert!(validate_update_target(target, &raw, "stable")
+            .unwrap_err()
+            .contains("不能低于"));
+
+        assert!(CompatibilityMatrix::parse_embedded()
+            .unwrap()
+            .check(env!("CARGO_PKG_VERSION"), "0.23.0-cn.20")
+            .is_err());
+    }
+
+    #[test]
+    fn rejects_full_installer_with_inconsistent_or_invalid_core_versions() {
+        for (core, runtime) in [
+            ("0.23.0", "0.21.0-cn.19"),
+            ("0.23.1", "0.23.0-cn.19"),
+            ("not-a-version", "0.23.0-cn.19"),
+            ("0.23.0", "not-a-version"),
+        ] {
+            assert!(validate_update_target(
+                "0.8.1-hotupdate.1",
+                &raw_update(core, runtime),
+                "prototype",
+            )
+            .is_err());
+        }
     }
 
     #[test]

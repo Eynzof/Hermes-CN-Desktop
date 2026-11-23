@@ -886,8 +886,10 @@ export function GooseComposer({
     });
   };
 
+  const submitting = useRef(false);
   const send = async () => {
-    if (!canSend) return;
+    if (!canSend || submitting.current) return;
+    submitting.current = true;
     const payload: ComposerSubmitPayload = {
       text: submitText,
       attachments,
@@ -901,18 +903,25 @@ export function GooseComposer({
     markAttachmentsProcessing();
     try {
       await onSend?.(payload, { updateAttachment });
-      onDraftChange?.("");
-      setValue("");
-      setSelectedSkill(null);
-      setSelectionStart(0);
-      setSelectionEnd(0);
-      setDismissedSlashToken("");
-      setAttachments((current) => {
-        current.forEach(revokeAttachmentPreview);
-        return [];
-      });
+      // The previous turn can take a few seconds to stop. Keep any newer draft.
+      if (valueRef.current === value) {
+        onDraftChange?.("");
+        setValue("");
+        setSelectedSkill(null);
+        setSelectionStart(0);
+        setSelectionEnd(0);
+        setDismissedSlashToken("");
+      }
+      const sentIds = new Set(attachments.map(item => item.id));
+      setAttachments(current => current.filter(item => {
+        if (!sentIds.has(item.id)) return true;
+        revokeAttachmentPreview(item);
+        return false;
+      }));
     } catch (error) {
       restoreAttachmentState(error);
+    } finally {
+      submitting.current = false;
     }
   };
 

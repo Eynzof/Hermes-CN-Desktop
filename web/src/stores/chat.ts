@@ -1,3 +1,4 @@
+import { stoppingTurnsAtom } from "./stopping-turn";
 import { atom } from "jotai";
 import { sessionStorageKey } from "@/lib/connection-scope";
 import type {
@@ -961,8 +962,19 @@ function reduceGatewayEventInner(
           choices: toChoices(q.choices),
           multiSelect: q.multi_select === true,
         }));
+      const pending = runtime.pendingClarifications ?? [];
+      const existing = pending.find((card) => card.requestId === payload.request_id);
+      if (existing && !payload.answers) return runtime;
       let request: PendingClarification;
       if (batch.length > 0) {
+        const answers = { ...existing?.answers };
+        for (const { qid } of batch) {
+          const answer = payload.answers?.[qid];
+          if (typeof answer === "string") answers[qid] = answer;
+        }
+        if (batch.every(({ qid }) => qid in answers)) {
+          return { ...runtime, pendingClarifications: pending.filter(card => card !== existing) };
+        }
         request = {
           requestId: payload.request_id,
           sessionId,
@@ -970,7 +982,7 @@ function reduceGatewayEventInner(
           choices: [],
           multiSelect: false,
           questions: batch,
-          answers: {},
+          answers,
         };
       } else {
         if (typeof payload.question !== "string") return runtime;
@@ -984,7 +996,7 @@ function reduceGatewayEventInner(
       }
       return {
         ...runtime,
-        pendingClarifications: [...(runtime.pendingClarifications ?? []).filter((r) => r.requestId !== request.requestId), request],
+        pendingClarifications: existing ? pending.map((card) => card === existing ? request : card) : [...pending, request],
         updatedAt: now,
       };
     }
@@ -1040,6 +1052,7 @@ function reduceGatewayEventInner(
       const next = appendNoticeMessage(erroredActive, sessionId, now, text, "error");
       return {
         ...next,
+        pendingClarifications: [],
         streamStatus: "error",
         statusMessage: text,
         statusKind: "error",
@@ -1111,16 +1124,17 @@ export const resetStreamStateAtom = atom(null, (_get, set, sessionId: string) =>
   );
 });
 
-// 手动终止：立即把会话标记为非运行态，并屏蔽旧回合迟到的流式事件。
+// 手动终止后屏蔽旧回合迟到的流式事件，等待该回合真正结束。
 // 故意保留 activeAssistantId / turnStartedAt，迟到的 message.complete 才能收尾正确的消息。
-export const markSessionInterruptedAtom = atom(null, (_get, set, sessionId: string) => {
+export const markSessionInterruptedAtom = atom(null, (get, set, sessionId: string) => {
+  const waiting = get(stoppingTurnsAtom)[sessionId]?.waiting;
   const now = Date.now();
   set(chatRuntimeBySessionAtom, (state) =>
     updateSessionRuntime(state, sessionId, (runtime) => ({
       ...runtime,
       interrupted: true,
       pendingClarifications: [],
-      streamStatus: "idle",
+      streamStatus: waiting ? runtime.streamStatus : "idle",
       statusMessage: "",
       statusKind: undefined,
       statusUpdatedAt: undefined,
@@ -1359,6 +1373,10 @@ function persistCompletedTurnStats(runtime: ChatSessionRuntime, event: GatewayEv
 
 export const applyGatewayEventAtom = atom(null, (get, set, event: GatewayEvent) => {
   if (!event.session_id) return;
+  const stop = get(stoppingTurnsAtom)[event.session_id];
+  if (stop && (event.type === "message.complete" || event.type === "error" || (!stop.waiting && event.type === "message.start"))) {
+    stop.finish("finished");
+  }
   // 通知决策需要 reduce 前的快照（pendingApprovals / activeAssistantId 是
   // 防重放依据），在 set 之外读取——jotai 不承诺 updater 恰好执行一次。
   // 副作用本身 fire-and-forget，绝不影响 reducer。
@@ -1520,6 +1538,22 @@ export const removeApprovalAtom = atom(
     );
   },
 );
+
+// A resumed session returns a snapshot instead of replaying clarify.request.
+export const restorePendingClarificationAtom = atom(null, (_get, set, sessionId: string, pending: unknown) => {
+  set(chatRuntimeBySessionAtom, (state) => updateSessionRuntime(state, sessionId, (runtime) => {
+    const cards = runtime.pendingClarifications ?? [];
+    if (!pending) return cards.length ? { ...runtime, pendingClarifications: [] } : runtime;
+    if (typeof pending !== "object" || !("request_id" in pending)) return runtime;
+    // Core returns its oldest unresolved request. Earlier cards in our queue
+    // may have expired while the transport was detached.
+    const index = cards.findIndex(card => card.requestId === pending.request_id);
+    const current = cards.length && index !== 0
+      ? { ...runtime, pendingClarifications: index < 0 ? [] : cards.slice(index) }
+      : runtime;
+    return reduceGatewayEvent(current, { type: "clarify.request", session_id: sessionId, payload: pending });
+  }));
+});
 
 export const removeClarificationAtom = atom(null, (_get, set, request: PendingClarification) => {
   set(chatRuntimeBySessionAtom, (state) => updateSessionRuntime(state, request.sessionId, (runtime) => ({

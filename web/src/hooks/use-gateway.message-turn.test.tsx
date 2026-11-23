@@ -9,13 +9,16 @@ import { mergeHermesUIMessages } from "@/components/chat/message-adapter";
 import { rememberSessionMapping } from "@/lib/session-map";
 import { activeProfileAtom } from "@/stores/ui";
 import { applyGatewayEventAtom, chatRuntimeBySessionAtom, markSessionInterruptedAtom } from "@/stores/chat";
+import { STOP_WAIT_MS, stoppingTurnsAtom } from "@/stores/stopping-turn";
 import { useGateway } from "./use-gateway";
+
+const request = vi.hoisted(() => vi.fn().mockResolvedValue({}));
 
 vi.mock("@/lib/gateway-client", () => ({
   getGatewayClient: () => ({
     state: "idle", enableAutoReconnect: vi.fn(), disableAutoReconnect: vi.fn(),
     onState: () => () => {}, onAny: () => () => {}, on: () => () => {},
-    request: vi.fn().mockResolvedValue({}),
+    request,
   }),
 }));
 
@@ -110,5 +113,44 @@ describe("submitted prompt history boundary", () => {
     await act(async () => { await result.current.sendPrompt(gatewayId, "Same question"); });
     const users = messages().filter((message) => message.role === "user");
     expect(users.map((message) => message.metadata?.historyBoundaryId)).toEqual(["stored-2", "stored-4"]);
+  });
+});
+
+describe("停止后发送", () => {
+  it.each(["message.complete", "error"] as const)("等待同一会话的 %s 后只发一次排队请求", async (type) => {
+    const { result, store } = setup();
+    await act(async () => { await result.current.interruptSession(gatewayId); });
+    request.mockClear();
+    let sending!: Promise<void>;
+    act(() => { sending = result.current.sendPrompt(gatewayId, "下一条"); });
+    act(() => { store.set(applyGatewayEventAtom, { type, session_id: "other", payload: {} }); });
+    expect(request).not.toHaveBeenCalled();
+    await act(async () => {
+      store.set(applyGatewayEventAtom, { type, session_id: gatewayId, payload: {} });
+      await sending;
+    });
+    expect(request.mock.calls.filter(([method]) => method === "prompt.submit")).toEqual([
+      ["prompt.submit", { session_id: gatewayId, text: "下一条", queued: true }],
+    ]);
+    expect(request.mock.calls.some(([method]) => method === "session.steer")).toBe(false);
+    expect(store.get(stoppingTurnsAtom)[gatewayId]).toBeUndefined();
+  });
+
+  it("缺少结束事件时有界等待，新回合开始后恢复常规发送", async () => {
+    vi.useFakeTimers();
+    try {
+      const { store, result } = setup();
+      await act(async () => { await result.current.interruptSession(gatewayId); });
+      await act(async () => {
+        const sending = result.current.sendPrompt(gatewayId, "超时后排队");
+        await vi.advanceTimersByTimeAsync(STOP_WAIT_MS);
+        await sending;
+      });
+      expect(request).toHaveBeenCalledWith("prompt.submit", { session_id: gatewayId, text: "超时后排队", queued: true });
+      act(() => { store.set(applyGatewayEventAtom, { type: "message.start", session_id: gatewayId, payload: {} }); });
+      expect(store.get(stoppingTurnsAtom)[gatewayId]).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

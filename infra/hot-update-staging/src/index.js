@@ -145,16 +145,41 @@ async function authenticateChannel(request, env, ctx, channel) {
   return restrictedIdentity(request, env, ctx, channel);
 }
 
-async function releaseForIdentity(env, identity, channel, target, arch) {
+async function releaseForIdentity(env, identity, channel, target, arch, currentVersion) {
+  // Enable only after registering signed 0.9.3 assets for every supported route.
+  const needsBridge = env.DESKTOP_093_BRIDGE_RELEASE_IDS !== undefined
+    && compareSemver(currentVersion, "0.9.3") < 0;
+  let bridgeId;
+  if (needsBridge) {
+    try {
+      const routes = JSON.parse(env.DESKTOP_093_BRIDGE_RELEASE_IDS);
+      if (!routes || typeof routes !== "object" || Array.isArray(routes)) {
+        throw new Error("bridge mapping must be an object");
+      }
+      bridgeId = routes[`${channel}/${target}/${arch}`];
+      if (typeof bridgeId !== "string" || !bridgeId.trim()) return null;
+    } catch (error) {
+      console.error("invalid 0.9.3 bridge mapping", error);
+      return null;
+    }
+  }
   const release = await env.UPDATES.prepare(
     `SELECT * FROM releases
        WHERE channel = ?1 AND target = ?2 AND arch = ?3 AND status = 'published'
+       ${needsBridge ? 'AND id = ?4' : ''}
        ORDER BY sequence DESC
        LIMIT 1`,
   )
-    .bind(channel, target, arch)
+    .bind(...(needsBridge ? [channel, target, arch, bridgeId] : [channel, target, arch]))
     .first();
   if (!release || release.rollout_percent <= 0) return null;
+  if (needsBridge) {
+    const core = parseSemver(release.bundled_core_version);
+    const runtime = parseSemver(release.bundled_runtime_version);
+    if (release.version !== "0.9.3" || !core || !runtime
+      || core.core[0] !== 0 || core.core[1] !== 21
+      || core.core.some((part, index) => part !== runtime.core[index])) return null;
+  }
   const bucket = await rolloutBucket(identity, release.id);
   return bucket < release.rollout_percent ? release : null;
 }
@@ -222,6 +247,7 @@ async function handleCheck(request, env, identity, route) {
     route.channel,
     route.target,
     route.arch,
+    route.currentVersion,
   );
   if (!release) return noContent();
   if (compareSemver(release.version, route.currentVersion) <= 0) return noContent();

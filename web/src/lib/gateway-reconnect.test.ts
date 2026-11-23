@@ -40,16 +40,16 @@ describe("reattachAfterReconnect", () => {
     const { deps, resume, onResumed, onResumeFailed } = makeDeps();
     await reattachAfterReconnect(deps);
     expect(resume).toHaveBeenCalledWith("sess-1");
-    expect(onResumed).toHaveBeenCalledWith("gw-sess-1", "sess-1");
+    expect(onResumed).toHaveBeenCalledWith("gw-sess-1", "sess-1", undefined);
     expect(onResumeFailed).not.toHaveBeenCalled();
   });
 
   it("prefers the server-reported resumed persistent id when present", async () => {
     const { deps, onResumed } = makeDeps({
-      resume: vi.fn(async () => ({ session_id: "gw-new", resumed: "sess-canonical" })),
+      resume: vi.fn(async () => ({ session_id: "gw-new", resumed: "sess-canonical", pending_clarify: { request_id: "waiting" } })),
     });
     await reattachAfterReconnect(deps);
-    expect(onResumed).toHaveBeenCalledWith("gw-new", "sess-canonical");
+    expect(onResumed).toHaveBeenCalledWith("gw-new", "sess-canonical", { request_id: "waiting" });
   });
 
   it("escalates to onResumeFailed when resume rejects (session gone)", async () => {

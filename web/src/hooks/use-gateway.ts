@@ -1,6 +1,7 @@
+import { beginStoppingTurnAtom, stoppingTurnsAtom } from "@/stores/stopping-turn";
 import { useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getDefaultStore, useAtomValue, useSetAtom } from "jotai";
+import { getDefaultStore, useAtomValue, useSetAtom, useStore } from "jotai";
 import {
   ConfigSetResult,
   SubagentSteerResult,
@@ -58,6 +59,7 @@ import {
   markSessionInterruptedAtom,
   markStreamsReconnectingAtom,
   resetChatSessionAtom,
+  restorePendingClarificationAtom,
   resetStreamStateAtom,
   setSessionErrorAtom,
   startPromptAtom,
@@ -132,10 +134,11 @@ async function reattachActiveSessionAfterReconnect(): Promise<void> {
             { timeoutMs: 300_000 },
           ),
         ),
-      onResumed: (gatewaySessionId, persistentId) => {
+      onResumed: (gatewaySessionId, persistentId, pendingClarify) => {
         rememberSessionMapping(gatewaySessionId, persistentId);
         mirrorSessionWorkspaceMapping(gatewaySessionId, persistentId);
         store.set(gwSessionIdAtom, gatewaySessionId);
+        store.set(restorePendingClarificationAtom, gatewaySessionId, pendingClarify);
       },
       onResumeFailed: (error) => {
         // A timeout or temporarily wedged backend does not mean the persistent
@@ -310,6 +313,7 @@ export interface CreatedBranchSession {
 }
 
 export function useGateway() {
+  const store = useStore();
   const queryClient = useQueryClient();
   const connectionState = useAtomValue(gwConnectionAtom);
   const gwSessionId = useAtomValue(gwSessionIdAtom);
@@ -320,6 +324,7 @@ export function useGateway() {
   const applyGatewayEvent = useSetAtom(applyGatewayEventAtom);
   const ensureChatSession = useSetAtom(ensureChatSessionAtom);
   const resetChatSession = useSetAtom(resetChatSessionAtom);
+  const restorePendingClarification = useSetAtom(restorePendingClarificationAtom);
   const resetStreamState = useSetAtom(resetStreamStateAtom);
   const markSessionInterrupted = useSetAtom(markSessionInterruptedAtom);
   const startPromptInStore = useSetAtom(startPromptAtom);
@@ -461,6 +466,7 @@ export function useGateway() {
     mirrorSessionWorkspaceMapping(result.session_id, resumed);
     setGwSessionId(result.session_id);
     resetChatSession(result.session_id);
+    restorePendingClarification(result.session_id, result.pending_clarify);
     // Compression rotated the conversation onto a new continuation: the backend
     // followed the chain and resumed a different persistent id than we asked
     // for. Record it so the detail route can project onto the live tip instead
@@ -468,7 +474,7 @@ export function useGateway() {
     setSessionTipRedirect((prev) => recordTipRedirect(prev, persistentSessionId, result.resumed));
     void invalidateSessionListQueries(queryClient);
     return result.session_id;
-  }, [ensureSubscribed, queryClient, resetChatSession, setGwSessionId, setSessionTipRedirect]);
+  }, [ensureSubscribed, queryClient, resetChatSession, restorePendingClarification, setGwSessionId, setSessionTipRedirect]);
 
   const sendPrompt = useCallback(
     async (
@@ -479,11 +485,17 @@ export function useGateway() {
         images?: string[];
         displayImages?: ImageEntry[];
         skipOptimisticStart?: boolean;
+        afterStop?: boolean;
       },
     ) => {
       ensureSubscribed();
       ensureChatSession(sessionId);
-      if (!options?.skipOptimisticStart) {
+      const stop = store.get(stoppingTurnsAtom)[sessionId];
+      const outcome = stop ? await stop.done : undefined;
+      if (outcome === "failed") throw new Error("停止上一轮失败，请重新发送");
+      // If Core never reported a terminal frame, let its queue own the prompt.
+      // Starting an optimistic bubble here could let A's late completion close B.
+      if (!options?.skipOptimisticStart && outcome !== "timed-out") {
         startPrompt({
           sessionId,
           text: options?.displayText ?? text,
@@ -495,13 +507,14 @@ export function useGateway() {
         const params = PromptSubmitParams.parse({
           session_id: sessionId,
           text,
+          ...((stop || options?.afterStop) ? { queued: true } : {}),
           ...(options?.images?.length ? { images: options.images } : {}),
         });
 
         try {
           await getGatewayClient().request("prompt.submit", params);
         } catch (err) {
-          if (isSessionBusyError(err)) {
+          if (!params.queued && isSessionBusyError(err)) {
             await getGatewayClient().request(
               "session.interrupt",
               { session_id: sessionId },
@@ -523,7 +536,7 @@ export function useGateway() {
         throw error;
       }
     },
-    [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt],
+    [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt, store],
   );
 
   const getSessionUsage = useCallback(
@@ -839,6 +852,10 @@ export function useGateway() {
       const gatewaySessionId = resolveGatewaySessionId(sessionId) ?? sessionId;
       if (!gatewaySessionId) return;
       ensureSubscribed();
+      const stop = store.set(beginStoppingTurnAtom, gatewaySessionId);
+      void stop.done.then(outcome => {
+        if (outcome === "timed-out") markSessionInterrupted(gatewaySessionId);
+      });
 
       try {
         await getGatewayClient().request(
@@ -847,13 +864,16 @@ export function useGateway() {
           { timeoutMs: 10_000 },
         );
       } catch (error) {
+        stop.finish("failed");
         setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
         throw error;
       }
 
-      markSessionInterrupted(gatewaySessionId);
+      if (store.get(stoppingTurnsAtom)[gatewaySessionId]?.done === stop.done) {
+        markSessionInterrupted(gatewaySessionId);
+      }
     },
-    [ensureSubscribed, markSessionInterrupted, setSessionError],
+    [ensureSubscribed, markSessionInterrupted, setSessionError, store],
   );
 
   const setSessionTitle = useCallback(

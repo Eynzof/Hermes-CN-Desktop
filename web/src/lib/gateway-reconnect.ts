@@ -20,6 +20,7 @@
 export interface ReconnectResumeResult {
   session_id: string;
   resumed?: string;
+  pending_clarify?: unknown;
 }
 
 export interface ReattachAfterReconnectDeps {
@@ -30,7 +31,7 @@ export interface ReattachAfterReconnectDeps {
   /** Issue `session.resume` for the given persistent id. */
   resume: (persistentId: string) => Promise<ReconnectResumeResult>;
   /** Called on success with the (possibly new) gateway id + the persistent id. */
-  onResumed: (gatewaySessionId: string, persistentId: string) => void;
+  onResumed: (gatewaySessionId: string, persistentId: string, pendingClarify: unknown) => void;
   /** Called when resume rejects or yields no session (session gone) so the caller can surface an error. */
   onResumeFailed: (error: unknown) => void;
 }
@@ -56,7 +57,7 @@ export async function reattachAfterReconnect(deps: ReattachAfterReconnectDeps): 
       deps.onResumeFailed(new Error("session.resume returned no session_id"));
       return;
     }
-    deps.onResumed(result.session_id, result.resumed ?? persistentId);
+    deps.onResumed(result.session_id, result.resumed ?? persistentId, result.pending_clarify);
   } catch (error) {
     if (deps.getActiveSessionId() !== activeSessionId) return;
     deps.onResumeFailed(error);

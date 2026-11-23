@@ -4,6 +4,7 @@ import type { ChatRuntimeBySession, ChatSessionRuntime } from "@/stores/chat";
 
 export function isRuntimeRunning(runtime: ChatSessionRuntime | undefined): boolean {
   if (!runtime) return false;
+  if (runtime.pendingClarifications?.length) return true;
   if (
     runtime.streamStatus === "error" ||
     runtime.streamStatus === "complete" ||
@@ -65,7 +66,7 @@ export function streamSilenceMs(
   now: number = Date.now(),
 ): number | null {
   if (!runtime || !isRuntimeRunning(runtime)) return null;
-  if (runtime.pendingApprovals.length > 0) return null;
+  if (runtime.pendingApprovals.length > 0 || runtime.pendingClarifications?.length) return null;
   if (hasRunningTool(runtime)) return null;
   const last = runtime.lastActivityAt ?? runtime.turnStartedAt ?? runtime.updatedAt;
   if (typeof last !== "number" || !Number.isFinite(last)) return null;
