@@ -348,11 +348,15 @@ export function DetailRoute() {
   // route reaches the tip this is a no-op (no navigation loop).
   const tipRedirects = useAtomValue(sessionTipRedirectAtom);
   useEffect(() => {
+    // A new URL can commit before its selection catches up. Only redirect the
+    // conversation still named by the URL.
+    if (urlTaskId !== taskId) return;
     const tip = pickTipRedirect(tipRedirects, { taskId, restSessionId, activeSessionId });
     if (!tip) return;
-    setActiveId(tip);
+    // The URL effect selects the tip after navigation. Selecting it early lets
+    // the previous URL restore the old session while the navigation is pending.
     navigate(`/tasks/${tip}`, { replace: true });
-  }, [tipRedirects, taskId, restSessionId, activeSessionId, setActiveId, navigate]);
+  }, [tipRedirects, urlTaskId, taskId, restSessionId, activeSessionId, navigate]);
 
   const storedMessages = useMemo(
     () => attachTurnStatsMetadata(messagesResponseToHermesUIMessages(messagesData), turnStats),
