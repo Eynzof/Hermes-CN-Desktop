@@ -43,6 +43,10 @@ import {
 } from "@/lib/model-usage-log";
 import { expandSearchQuery } from "@/lib/model-search-aliases";
 import { getProviderIconUrl } from "@/lib/provider-icons";
+import { Link } from "react-router-dom";
+import { useMoaConfig, useMoaSource } from "@/hooks/use-moa-config";
+import { conflictsWithLegacy } from "@/lib/moa-config-source";
+import { useConfirm } from "@/lib/use-confirm";
 import type { ComposerModelPickerProps, ComposerModelSelection } from "./composer-types";
 import s from "./goose-composer.module.css";
 
@@ -474,6 +478,11 @@ function ModelPickerBody({
   searchInputRef,
   closeControl,
 }: ModelPickerBodyProps) {
+  const hasMoa = Boolean(modelOptions?.providers.some(provider => provider.slug === "moa"));
+  const source = useMoaSource(hasMoa);
+  const effective = useMoaConfig(hasMoa && Boolean(source.data));
+  const legacy = conflictsWithLegacy(source.data, effective.data);
+  const { confirm } = useConfirm();
   const [usageEntries, setUsageEntries] = useState<ModelUsageEntry[]>(() => {
     if (typeof window === "undefined") return [];
     return readModelUsageLog();
@@ -584,6 +593,12 @@ function ModelPickerBody({
   function renderRow(candidate: Candidate) {
     const isCurrent = candidate.key === currentSelection?.key;
     const usage = usageByKey.get(candidate.key);
+    const isMoa = candidate.providerSlug === "moa";
+    const preset = isMoa && source.data?.kind === "named" && source.data.names.includes(candidate.model)
+      ? effective.data?.presets[candidate.model] : undefined;
+    const moaHint = preset
+      ? (preset.enabled ? `${preset.reference_models.filter(slot => slot.enabled !== false).length} 个参考模型 + 1 个汇总模型` : "协作已关闭 · 仅汇总模型")
+      : (isMoa && legacy ? "旧版配置 · 当前生效的组合与配置不同" : "");
     const caps = capabilityChips(candidate.caps);
     const baseUrlHost = candidate.baseUrl ? candidate.baseUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : "";
 
@@ -593,17 +608,24 @@ function ModelPickerBody({
         type="button"
         className={s.mpRow}
         data-current={isCurrent ? "true" : undefined}
-        disabled={switchingModel}
+        disabled={switchingModel || (isMoa && (source.isFetching || effective.isLoading))}
         aria-label={`切换到 ${candidate.providerName} 的 ${candidate.model}`}
         title="单击切换当前会话 · 按住 ⌘ 单击同时设为全局默认"
-        onClick={(event) => {
+        onClick={async (event) => {
+          const setAsDefault = event.metaKey || event.ctrlKey;
+          const acting = effective.data?.presets[candidate.model]?.aggregator;
+          if (isMoa && legacy && acting && !await confirm({
+            title: "使用当前内核生效的组合？",
+            body: `当前聚合模型为 ${acting.provider} / ${acting.model}，组合与旧配置不同。你可以返回重建旧组合，或选择其他模型。`,
+            confirmLabel: "继续使用该组合",
+            cancelLabel: "返回模型列表",
+          })) return;
           const selection = {
             model: candidate.model,
             provider: candidate.providerSlug,
             providerName: candidate.providerName,
             contextWindow: candidate.caps?.contextWindow,
           };
-          const setAsDefault = event.metaKey || event.ctrlKey;
           if (setAsDefault && onSelectAndSetDefault) {
             onSelectAndSetDefault(selection);
           } else {
@@ -618,6 +640,7 @@ function ModelPickerBody({
             {isCurrent && <span className={s.mpCurrentBadge}><Check aria-hidden="true" />当前</span>}
           </div>
           <div className={s.mpRowMeta}>
+            {moaHint && <span>{moaHint} · </span>}
             <span>{candidate.providerName}</span>
             <span className={s.mpMetaDot}>·</span>
             <span>{candidate.providerSlug}</span>
@@ -728,6 +751,11 @@ function ModelPickerBody({
           </div>
 
           <div className={s.mpCandidates}>
+            {legacy && (activeGroup === "moa" || (activeGroup === "all" && visible.moa.length > 0)) && (
+              <div className={s.mpWarnings}>
+                <div><CircleAlert aria-hidden="true" />旧版混合模型配置与生效的组合不同。<Link to="/models#moa">打开混合模型设置</Link></div>
+              </div>
+            )}
             {warnings.length > 0 && (
               <div className={s.mpWarnings}>
                 {warnings.map((warning) => <div key={warning}><CircleAlert aria-hidden="true" />{warning}</div>)}

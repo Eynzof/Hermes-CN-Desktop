@@ -40,7 +40,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.5
-        version: 4.1.6(@types/node@25.9.1)(jsdom@26.1.0)(vite@6.4.2(@types/node@25.9.1))
+        version: 4.1.6(@types/node@25.9.1)(jsdom@26.1.0)(vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1))
 
   packages/shared-ui:
     dependencies:
@@ -80,7 +80,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^6.3.0
-        version: 6.4.2(@types/node@25.9.1)
+        version: 6.4.2(@types/node@25.9.1)(yaml@2.9.1)
 
   web:
     dependencies:
@@ -171,6 +171,9 @@ importers:
       streamdown:
         specifier: ^2.5.0
         version: 2.5.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      yaml:
+        specifier: ^2.8.3
+        version: 2.9.1
     devDependencies:
       '@tauri-apps/api':
         specifier: ^2.11.0
@@ -189,7 +192,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
         specifier: ^4.5.2
-        version: 4.7.0(vite@6.4.2(@types/node@25.9.1))
+        version: 4.7.0(vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1))
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
@@ -198,10 +201,10 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^6.3.0
-        version: 6.4.2(@types/node@25.9.1)
+        version: 6.4.2(@types/node@25.9.1)(yaml@2.9.1)
       vitest:
         specifier: ^4.1.5
-        version: 4.1.6(@types/node@25.9.1)(jsdom@26.1.0)(vite@6.4.2(@types/node@25.9.1))
+        version: 4.1.6(@types/node@25.9.1)(jsdom@26.1.0)(vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1))
 
 packages:
 
@@ -3173,6 +3176,11 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yargs-parser@18.1.3:
     resolution: {integrity: sha512-o50j0JeToy/4K6OZcaQmW6lyXXKhq7csREXcDwk2omFPJEwUNOVtJKvmDr9EI1fAJZUyZcRF7kxGBWmRXudrCQ==}
     engines: {node: '>=6'}
@@ -4441,7 +4449,7 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-react@4.7.0(vite@6.4.2(@types/node@25.9.1))':
+  '@vitejs/plugin-react@4.7.0(vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1))':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
@@ -4449,7 +4457,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 6.4.2(@types/node@25.9.1)
+      vite: 6.4.2(@types/node@25.9.1)(yaml@2.9.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -4462,13 +4470,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.6(vite@6.4.2(@types/node@25.9.1))':
+  '@vitest/mocker@4.1.6(vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1))':
     dependencies:
       '@vitest/spy': 4.1.6
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 6.4.2(@types/node@25.9.1)
+      vite: 6.4.2(@types/node@25.9.1)(yaml@2.9.1)
 
   '@vitest/pretty-format@4.1.6':
     dependencies:
@@ -6204,7 +6212,7 @@ snapshots:
       d3-time: 3.1.0
       d3-timer: 3.0.1
 
-  vite@6.4.2(@types/node@25.9.1):
+  vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -6215,11 +6223,12 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.1
       fsevents: 2.3.3
+      yaml: 2.9.1
 
-  vitest@4.1.6(@types/node@25.9.1)(jsdom@26.1.0)(vite@6.4.2(@types/node@25.9.1)):
+  vitest@4.1.6(@types/node@25.9.1)(jsdom@26.1.0)(vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.6
-      '@vitest/mocker': 4.1.6(vite@6.4.2(@types/node@25.9.1))
+      '@vitest/mocker': 4.1.6(vite@6.4.2(@types/node@25.9.1)(yaml@2.9.1))
       '@vitest/pretty-format': 4.1.6
       '@vitest/runner': 4.1.6
       '@vitest/snapshot': 4.1.6
@@ -6236,7 +6245,7 @@ snapshots:
       tinyexec: 1.1.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 6.4.2(@types/node@25.9.1)
+      vite: 6.4.2(@types/node@25.9.1)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 25.9.1
@@ -6311,6 +6320,8 @@ snapshots:
   y18n@4.0.3: {}
 
   yallist@3.1.1: {}
+
+  yaml@2.9.1: {}
 
   yargs-parser@18.1.3:
     dependencies:

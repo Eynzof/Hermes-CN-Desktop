@@ -1029,6 +1029,10 @@ export function ModelsSection() {
     effectiveContextLength: selectedProviderIsCurrent ? modelInfo?.effective_context_length : undefined,
   });
 
+  useEffect(() => {
+    if (routeHash === "#moa") setActiveModelTab("moa");
+  }, [routeHash]);
+
   // Deep-link from the picker's "去设置" CTA: /models#provider-<slug> selects
   // and scrolls to that provider so the user lands on the right key field.
   // HashRouter keeps the route itself in window.location.hash; use its parsed anchor.

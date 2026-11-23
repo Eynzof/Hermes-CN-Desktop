@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Field, Input, LoadingState, Select } from "@hermes/shared-ui";
 import type { MoaConfigResponse, MoaModelSlot, MoaPresetConfig } from "@hermes/protocol";
-import { useMoaConfig, useSaveMoaConfig } from "@/hooks/use-moa-config";
+import { useMoaConfig, useMoaSource, useSaveMoaConfig } from "@/hooks/use-moa-config";
 import { useModelOptions } from "@/hooks/use-model-options";
+import { conflictsWithLegacy, type MoaConfigSource } from "@/lib/moa-config-source";
+import { useActiveProfileName } from "@/hooks/use-profiles";
 import { ModelCombobox } from "@/components/settings/model-combobox";
 import s from "./settings.module.css";
 
@@ -73,6 +75,7 @@ function SlotEditor({
             value={slot.provider}
             onChange={(event) => onChange({ provider: event.target.value, model: "" })}
           >
+            {!slot.provider && <option value="">选择服务商</option>}
             {options.map((provider) => (
               <option key={provider.slug} value={provider.slug}>
                 {provider.name} · {provider.slug}
@@ -96,7 +99,15 @@ function SlotEditor({
 }
 
 export function MoaPanel() {
+  const profile = useActiveProfileName();
+  return <MoaEditor key={profile} />;
+}
+
+function MoaEditor() {
   const { data: moaData, isLoading, isError, refetch } = useMoaConfig();
+  const source = useMoaSource();
+  const [rebuild, setRebuild] = useState<Extract<MoaConfigSource, { kind: "legacy" }> | null>(null);
+  const legacy = source.data?.kind === "legacy" && conflictsWithLegacy(source.data, moaData) ? source.data : null;
   const saveMoaConfig = useSaveMoaConfig();
   const { data: modelOptions } = useModelOptions();
 
@@ -109,10 +120,10 @@ export function MoaPanel() {
   const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
-    if (!moaData) return;
+    if (!moaData || rebuild) return;
     setMoa(moaData);
     setSelectedPreset((prev) => (prev && moaData.presets[prev] ? prev : moaData.default_preset));
-  }, [moaData]);
+  }, [moaData, rebuild]);
 
   useEffect(() => {
     if (!savedFlash) return;
@@ -144,9 +155,16 @@ export function MoaPanel() {
     setError("");
     setMoa(next);
     try {
-      if (JSON.stringify(next) !== JSON.stringify(moaData)) {
+      if (rebuild) {
+        const latest = await source.refetch();
+        if (latest.isError || JSON.stringify(latest.data) !== JSON.stringify(rebuild)) {
+          throw new Error("旧配置已变化或暂时无法核对。请返回并重新载入旧组合。");
+        }
+      }
+      if (rebuild || JSON.stringify(next) !== JSON.stringify(moaData)) {
         await saveMoaConfig.mutateAsync(next);
       }
+      setRebuild(null);
       setSavedFlash(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -218,7 +236,7 @@ export function MoaPanel() {
     updateCurrentPreset((preset) => ({ ...preset, aggregator: { ...preset.aggregator, ...patch } }));
   };
 
-  if (isLoading) {
+  if (isLoading || source.isLoading) {
     return <LoadingState variant="block" label="正在加载 MoA 配置…" />;
   }
   if (isError || !moa || !currentPreset) {
@@ -229,6 +247,23 @@ export function MoaPanel() {
         actions={<Button variant="outline" tone="warning" onClick={() => void refetch()}>重试</Button>}
       >
         <p>读取 /api/model/moa 失败。当前后端内核可能低于 0.18（不支持 Mixture of Agents），或 Dashboard 暂时不可达。</p>
+      </Alert>
+    );
+  }
+
+  if (legacy && !rebuild && moaData) {
+    const acting = moaData.presets[moaData.default_preset].aggregator;
+    return (
+      <Alert tone="warning" title="检测到旧版混合模型配置" actions={
+        <Button variant="outline" onClick={() => {
+          setRebuild(legacy);
+          setSelectedPreset("default");
+          setMoa({ default_preset: "default", active_preset: "", presets: { default: clonePreset(legacy.preset) } });
+          setError("");
+          setSavedFlash(false);
+        }}>从旧配置重建</Button>
+      }>
+        <p>当前内核实际使用的组合与旧配置不同，聚合模型为 <code>{acting.provider} / {acting.model}</code>。你可以重建组合，或在对话中选择其他模型。</p>
       </Alert>
     );
   }
@@ -249,7 +284,13 @@ export function MoaPanel() {
         </div>
       </div>
 
-      <div className={s.auxToolbar}>
+      {rebuild && (
+        <Alert tone="warning" title="核对旧配置中的模型">
+          <p>以下内容来自当前档案的旧配置。保存后将作为名为 default 的组合使用。</p>
+          {rebuild.privacy && <p>当前稳定版内核保存时会清空隐私过滤设置（privacy_filter）。如需保留过滤，请取消并选择其他模型。</p>}
+        </Alert>
+      )}
+      {!rebuild && <div className={s.auxToolbar}>
         <div className={s.providerFormGrid}>
           <Field label="预设" className={s.fieldRow}>
             <Select value={presetName} onChange={(event) => setSelectedPreset(event.target.value)}>
@@ -301,7 +342,7 @@ export function MoaPanel() {
             新建预设（克隆当前）
           </Button>
         </div>
-      </div>
+      </div>}
 
       {currentPreset.reference_models.map((slot, index) => (
         <SlotEditor
@@ -345,14 +386,17 @@ export function MoaPanel() {
           type="button"
           variant="solid"
           tone="accent"
-          loading={saveMoaConfig.isPending}
+          loading={saveMoaConfig.isPending || Boolean(rebuild && source.isFetching)}
           onClick={() => void saveNow(moa)}
         >
-          保存 MoA 配置
+          {rebuild ? "保存重建的组合" : "保存 MoA 配置"}
         </Button>
-        <div className={s.modelPickerHint}>
+        {rebuild ? <Button variant="outline" disabled={saveMoaConfig.isPending || source.isFetching} onClick={() => {
+          setError("");
+          setRebuild(null);
+        }}>取消重建</Button> : <div className={s.modelPickerHint}>
           预设的新建 / 删除 / 设为默认会立即保存；参考模型与聚合器的修改需点击「保存 MoA 配置」。
-        </div>
+        </div>}
       </div>
     </div>
   );
