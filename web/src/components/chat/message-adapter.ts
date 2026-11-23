@@ -309,6 +309,7 @@ function legacyMetadata(msg: SessionMessage): HermesMessageMetadata | undefined 
   const metadata: HermesMessageMetadata = {
     persistedId: msg.id,
   };
+  if (typeof msg.turn_id === "string" && msg.turn_id) metadata.gatewayTurnId = msg.turn_id;
   if (typeof msg.finish_reason === "string" && msg.finish_reason) {
     metadata.finishReason = msg.finish_reason;
   }

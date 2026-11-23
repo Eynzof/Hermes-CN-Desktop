@@ -868,10 +868,22 @@ describe("startPromptAtom", () => {
   });
 
 
+  it("keeps the active assistant when a refreshed tool stage already contains its streamed text", () => {
+    const store = createStore();
+    store.set(startPromptAtom, { sessionId: "s1", text: "开始", now: 1000, historyBoundaryId: null });
+    store.set(applyGatewayEventAtom, { type: "message.delta", session_id: "s1", payload: { text: "第二步" } });
+    store.set(applyGatewayEventAtom, { type: "tool.start", session_id: "s1", payload: { tool_id: "step2", name: "terminal" } });
+    const active = assistantMessage(store.get(chatRuntimeBySessionAtom).s1);
+    const snapshot: HermesUIMessage = { ...active, id: "stored-2", status: "complete", metadata: { finishReason: "tool_calls" } };
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: [runtimeMessage({ id: "user", role: "user" }), snapshot] });
+    expect(assistantMessage(store.get(chatRuntimeBySessionAtom).s1)).toEqual(active);
+    expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("streaming");
+  });
+
   it("does not recover from stored reasoning/tools when the stored final text is still missing", () => {
     const store = createStore();
 
-    store.set(startPromptAtom, { sessionId: "s1", text: "总结", now: 1_000 });
+    store.set(startPromptAtom, { sessionId: "s1", text: "总结", now: 1_000, historyBoundaryId: null });
     store.set(chatRuntimeBySessionAtom, (state) => {
       let rt = state.s1;
       rt = reduceGatewayEvent(rt, {
@@ -901,6 +913,7 @@ describe("startPromptAtom", () => {
       sessionId: "s1",
       now: 2_000,
       storedMessages: [
+        runtimeMessage({ id: "user", role: "user" }),
         runtimeMessage({
           id: "stored-no-final-text-yet",
           sessionId: "s1",
@@ -920,10 +933,68 @@ describe("startPromptAtom", () => {
     expect(textFromParts(assistantMessage(runtime).parts)).toBe("最终回答不要消失。");
   });
 
+  it("does not finish a quick follow-up from the previous saved reply or a partial page", () => {
+    const store = createStore();
+    const old = runtimeMessage({ id: "db-old", createdAt: 1000 });
+    const savedUser = runtimeMessage({ id: "db-new-user", role: "user", createdAt: 1100 });
+    const reply = runtimeMessage({ id: "db-new", createdAt: 1200 });
+    store.set(startPromptAtom, { sessionId: "s1", text: "再试一次", now: 1100, historyBoundaryId: old.id });
+    for (const history of [[old], [savedUser, reply], [old, savedUser]]) {
+      store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: history });
+      expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("streaming");
+    }
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: [old, savedUser, reply] });
+    const completed = store.get(chatRuntimeBySessionAtom).s1;
+    expect(completed.streamStatus).toBe("complete");
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: [old, savedUser, reply] });
+    expect(store.get(chatRuntimeBySessionAtom).s1).toBe(completed);
+  });
+
+  it("uses the submission order for identical questions sharing a cached boundary", () => {
+    const store = createStore();
+    const boundary = runtimeMessage({ id: "boundary" });
+    const history = [boundary];
+    for (const n of [1, 2]) {
+      store.set(startPromptAtom, { sessionId: "s1", text: "再试一次", now: 1000 + n, historyBoundaryId: boundary.id });
+      history.push(runtimeMessage({ id: "user-" + n, role: "user", parts: [{ type: "text", text: "再试一次" }] }));
+      store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: history });
+      expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("streaming");
+      history.push(runtimeMessage({ id: "reply-" + n }));
+      store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: history });
+      expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("complete");
+    }
+  });
+
+  it("recovers an identified background turn only from its own saved completion", () => {
+    const store = createStore();
+    store.set(startPromptAtom, { sessionId: "s1", text: "开始", historyBoundaryId: null });
+    for (const id of ["first", "second"]) {
+      store.set(applyGatewayEventAtom, { session_id: "s1", type: "message.start", payload: { turn_id: id } });
+    }
+    const history = [runtimeMessage({ id: "user", role: "user" }),
+      runtimeMessage({ id: "reply-1", metadata: { gatewayTurnId: "first" } })];
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: history });
+    expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("streaming");
+    history.push(runtimeMessage({ id: "reply-2", metadata: { gatewayTurnId: "second" } }));
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: history });
+    expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("complete");
+  });
+
+  it("requires an identified turn when the submitter had no history snapshot", () => {
+    const store = createStore();
+    store.set(startPromptAtom, { sessionId: "s1", text: "继续", now: 1000 });
+    const stored = [runtimeMessage({ createdAt: 1000, metadata: { gatewayTurnId: "new" } })];
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: stored });
+    expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("streaming");
+    store.set(applyGatewayEventAtom, { session_id: "s1", type: "message.start", payload: { turn_id: "new" } });
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, { sessionId: "s1", storedMessages: stored });
+    expect(store.get(chatRuntimeBySessionAtom).s1.streamStatus).toBe("complete");
+  });
+
   it("recovers a stale streaming assistant when stored messages already completed the turn", () => {
     const store = createStore();
 
-    store.set(startPromptAtom, { sessionId: "s1", text: "你是什么模型?", now: 1_000 });
+    store.set(startPromptAtom, { sessionId: "s1", text: "你是什么模型?", now: 1_000, historyBoundaryId: null });
     store.set(chatRuntimeBySessionAtom, (state) => ({
       ...state,
       s1: reduceGatewayEvent(
@@ -941,6 +1012,7 @@ describe("startPromptAtom", () => {
       sessionId: "s1",
       now: 3_000,
       storedMessages: [
+        runtimeMessage({ id: "stored-user", role: "user", createdAt: 1_000 }),
         runtimeMessage({
           id: "stored-1",
           sessionId: "s1",

@@ -454,10 +454,12 @@ function ensureAssistantMessage(
   sessionId: string,
   id: string,
   now: number,
+  gatewayTurnId?: string,
 ): ChatSessionRuntime {
   if (runtime.messages.some((message) => message.id === id)) {
     return updateMessage(runtime, id, (message) => ({
       ...message,
+      ...(gatewayTurnId ? { metadata: { ...message.metadata, gatewayTurnId } } : {}),
       status: message.status === "error" ? "error" : "streaming",
     }));
   }
@@ -472,6 +474,7 @@ function ensureAssistantMessage(
         sessionId,
         role: "assistant",
         createdAt,
+        ...(gatewayTurnId ? { metadata: { gatewayTurnId } } : {}),
         status: "streaming",
         parts: [],
       },
@@ -649,10 +652,13 @@ function reduceGatewayEventInner(
 
   switch (event.type) {
     case "message.start": {
-      const id =
-        isStreamingStatus(runtime.streamStatus) && runtime.activeAssistantId
-          ? runtime.activeAssistantId
-          : assistantClientId(now);
+      const gatewayTurnId = typeof payload.turn_id === "string" && payload.turn_id ? payload.turn_id : undefined;
+      const activeId = isStreamingStatus(runtime.streamStatus) ? runtime.activeAssistantId : undefined;
+      const activeTurn = activeId && gatewayTurnId
+        ? runtime.messages.find(message => message.id === activeId)?.metadata?.gatewayTurnId : undefined;
+      const changedTurn = activeTurn !== undefined && activeTurn !== gatewayTurnId;
+      const id = activeId && !changedTurn ? activeId
+        : gatewayTurnId ? `gateway-assistant-${gatewayTurnId}` : assistantClientId(now);
       return ensureAssistantMessage(
         {
           ...runtime,
@@ -661,13 +667,14 @@ function reduceGatewayEventInner(
           statusKind: undefined,
           statusUpdatedAt: undefined,
           activeAssistantId: id,
-          turnStartedAt: runtime.turnStartedAt ?? now,
+          turnStartedAt: changedTurn ? now : runtime.turnStartedAt ?? now,
           turnFirstTokenAt: undefined,
           updatedAt: now,
         },
         sessionId,
         id,
         now,
+        gatewayTurnId,
       );
     }
 
@@ -1143,19 +1150,18 @@ export const markSessionInterruptedAtom = atom(null, (get, set, sessionId: strin
   );
 });
 
-function storedAssistantIsAfterTurn(message: HermesUIMessage, turnStartedAt: number | undefined): boolean {
-  if (turnStartedAt === undefined) return true;
-  return message.createdAt >= turnStartedAt - 1_000;
-}
+function isRecoverableStoredAssistant(liveAssistant: HermesUIMessage, storedAssistant: HermesUIMessage): boolean {
+  if (storedAssistant.role !== "assistant" || storedAssistant.status !== "complete") return false;
+  const liveTurn = liveAssistant.metadata?.gatewayTurnId;
+  const storedTurn = storedAssistant.metadata?.gatewayTurnId;
+  if (liveTurn && storedTurn && liveTurn !== storedTurn) return false;
 
-function isRecoverableStoredAssistant(
-  liveAssistant: HermesUIMessage,
-  storedAssistant: HermesUIMessage,
-  turnStartedAt: number | undefined,
-): boolean {
-  if (liveAssistant.role !== "assistant" || storedAssistant.role !== "assistant") return false;
-  if (storedAssistant.status !== "complete") return false;
-  if (!storedAssistantIsAfterTurn(storedAssistant, turnStartedAt)) return false;
+  // Tool-stage snapshots can include all the live text while a call is
+  // still running. Only a terminal reason can recover a tool turn as finished.
+  const reason = storedAssistant.metadata?.finishReason;
+  if (storedAssistant.parts.some(part => part.type === "tool") &&
+      (!reason || reason === "tool_calls" || reason === "function_call")) return false;
+  if (reason === "interrupted" || reason === "error") return false;
 
   const liveText = looseComparableText(textFromParts(withoutProgressParts(liveAssistant.parts)));
   const storedText = looseComparableText(textFromParts(storedAssistant.parts));
@@ -1193,10 +1199,36 @@ function recoverableAssistantId(
   const liveAssistant = activeCandidate ?? fallbackCandidate;
   if (!liveAssistant) return undefined;
 
-  const matched = storedMessages.some((storedMessage) =>
-    isRecoverableStoredAssistant(liveAssistant, storedMessage, runtime.turnStartedAt),
-  );
-  return matched ? liveAssistant.id : undefined;
+  const liveIndex = runtime.messages.indexOf(liveAssistant);
+  let userIndex = liveIndex - 1;
+  while (userIndex >= 0 && runtime.messages[userIndex]?.role !== "user") userIndex--;
+  const user = runtime.messages[userIndex];
+  const boundary = user?.metadata?.historyBoundaryId;
+  const boundaryIndex = typeof boundary === "string"
+    ? storedMessages.findIndex(message => message.id === boundary) : -1;
+  if (typeof boundary === "string" && boundaryIndex < 0) return undefined;
+
+  const history = storedMessages.slice(boundaryIndex + 1);
+  const turnId = liveAssistant.metadata?.gatewayTurnId;
+  if (turnId && history.some(row => row.metadata?.gatewayTurnId === turnId && isRecoverableStoredAssistant(liveAssistant, row))) {
+    return liveAssistant.id;
+  }
+  // Older Core has no turn IDs. Locate the submitted user by its position
+  // after the captured boundary. Identical text and second-resolution clocks
+  // cannot distinguish two prompts. Background follow-ups need an explicit ID.
+  if (!user || boundary === undefined ||
+      runtime.messages.slice(userIndex + 1, liveIndex).some(message => message.role === "assistant")) return undefined;
+  const submitted = runtime.messages.slice(0, userIndex + 1)
+    .filter(message => message.role === "user" && message.metadata?.historyBoundaryId === boundary).length;
+  let users = 0;
+  for (const row of history) {
+    if (row.role === "user") users++;
+    if (users > submitted) break;
+    if (users === submitted && row.role === "assistant") {
+      return isRecoverableStoredAssistant(liveAssistant, row) ? liveAssistant.id : undefined;
+    }
+  }
+  return undefined;
 }
 
 export const recoverCompletedTurnFromStoredMessagesAtom = atom(
