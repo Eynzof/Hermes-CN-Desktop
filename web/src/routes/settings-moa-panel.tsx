@@ -22,7 +22,7 @@ interface SlotProviderOption {
 }
 
 function cloneSlot(slot: MoaModelSlot): MoaModelSlot {
-  return { provider: slot.provider, model: slot.model };
+  return { ...slot };
 }
 
 function clonePreset(preset: MoaPresetConfig): MoaPresetConfig {
@@ -144,7 +144,9 @@ export function MoaPanel() {
     setError("");
     setMoa(next);
     try {
-      await saveMoaConfig.mutateAsync(next);
+      if (JSON.stringify(next) !== JSON.stringify(moaData)) {
+        await saveMoaConfig.mutateAsync(next);
+      }
       setSavedFlash(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

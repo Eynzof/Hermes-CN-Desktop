@@ -850,7 +850,7 @@ describe("MoaConfigResponse schema", () => {
       default: {
         enabled: true,
         reference_models: [
-          { provider: "openai-codex", model: "gpt-5.5" },
+          { enabled: false, reasoning_effort: "low", provider: "openai-codex", model: "gpt-5.5" },
           { provider: "openrouter", model: "deepseek/deepseek-v4-pro" },
         ],
         aggregator: { provider: "openrouter", model: "anthropic/claude-opus-4.8" },
@@ -870,7 +870,7 @@ describe("MoaConfigResponse schema", () => {
   it("parses the backend-normalized shape and keeps UI-unedited fields via passthrough", () => {
     const parsed = MoaConfigResponse.parse(normalized);
     expect(parsed.default_preset).toBe("default");
-    expect(parsed.presets.default.reference_models).toHaveLength(2);
+    expect(parsed.presets.default.reference_models).toEqual(normalized.presets.default.reference_models);
     expect(parsed.presets.default.aggregator.model).toBe("anthropic/claude-opus-4.8");
     // passthrough：编辑器不渲染这些字段，但读取/回写时不能弄丢。
     expect(parsed.presets.default.reference_max_tokens).toBe(600);

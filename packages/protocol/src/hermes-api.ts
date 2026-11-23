@@ -621,7 +621,7 @@ export type ModelInfo = z.infer<typeof ModelInfo>;
 export const MoaModelSlot = z.object({
   provider: z.string(),
   model: z.string(),
-});
+}).passthrough();
 export type MoaModelSlot = z.infer<typeof MoaModelSlot>;
 
 // passthrough 保留后端归一化返回里 UI 不编辑的字段（reference_max_tokens、
