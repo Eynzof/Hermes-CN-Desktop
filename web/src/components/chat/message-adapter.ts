@@ -1,3 +1,4 @@
+import { replaceEqualDeep } from "@tanstack/react-query";
 import type {
   GatewayEvent,
   HermesMessageMetadata,
@@ -855,6 +856,25 @@ export function hermesUIMessagesToChatMessages(messages: HermesUIMessage[]): Cha
   return messages
     .map(hermesUIMessageToChatMessage)
     .filter((message): message is ChatMessage => message !== null);
+}
+
+export function createChatMessageSelector() {
+  let previous: HermesUIMessage[] = [];
+  const views = new WeakMap<HermesUIMessage, ChatMessage | null>();
+  return (messages: HermesUIMessage[]): ChatMessage[] => {
+    // Merging persisted and live history can recreate identical rows on each delta.
+    previous = replaceEqualDeep(previous, messages);
+    const result: ChatMessage[] = [];
+    for (const message of previous) {
+      let view = views.get(message);
+      if (view === undefined) {
+        view = hermesUIMessageToChatMessage(message);
+        views.set(message, view);
+      }
+      if (view !== null) result.push(view);
+    }
+    return result;
+  };
 }
 
 function comparableText(value: string | undefined): string {

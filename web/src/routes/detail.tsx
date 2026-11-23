@@ -84,7 +84,7 @@ import { activeCliDelegationCount, clearFinishedCliDelegationsAtom } from "@/sto
 import { activeSubagentCount, clearFinishedSubagentsAtom } from "@/stores/subagents";
 import { ConversationWidthControl } from "@/components/chat/conversation-width-control";
 import {
-  hermesUIMessagesToChatMessages,
+  createChatMessageSelector,
   attachTurnStatsMetadata,
   mergeHermesUIMessages,
   messagesResponseToHermesUIMessages,
@@ -377,13 +377,15 @@ export function DetailRoute() {
     taskId,
   ]);
 
+  const selectChatMessages = useMemo(createChatMessageSelector, []);
   const chatMessages = useMemo(() => {
     const canonical = mergeHermesUIMessages(
       storedMessages,
       isLiveSession ? runtime.messages : [],
     );
-    return hermesUIMessagesToChatMessages(canonical);
+    return selectChatMessages(canonical);
   }, [
+    selectChatMessages,
     isLiveSession,
     runtime.messages,
     storedMessages,

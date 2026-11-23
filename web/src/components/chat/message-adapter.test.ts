@@ -7,6 +7,7 @@ import {
 } from "@hermes/protocol";
 import {
   attachTurnStatsMetadata,
+  createChatMessageSelector,
   deriveAssistantStats,
   hermesUIMessageToChatMessage,
   hermesUIMessagesToChatMessages,
@@ -108,6 +109,25 @@ describe("protocol schemas", () => {
 });
 
 describe("message adapter", () => {
+  it("reuses identical history while refreshing edited messages and turn statistics", () => {
+    const select = createChatMessageSelector();
+    const history = uiMessage({ id: "history", metadata: { usage: { tokensOutput: 3 } } });
+    const tail = uiMessage({ id: "tail", status: "streaming" });
+    const [first, partial] = select([history, tail]);
+    const [same, updated] = select([
+      structuredClone(history),
+      { ...tail, parts: [{ type: "text", text: "continued" }] },
+    ]);
+    expect(same).toBe(first);
+    expect(updated).not.toBe(partial);
+    expect(updated.text).toBe("continued");
+
+    const [corrected] = select([{ ...history, metadata: { usage: { tokensOutput: 7 } } }]);
+    expect(corrected).not.toBe(first);
+    expect(corrected.stats?.tokensOutput).toBe(7);
+    expect(select([])).toEqual([]);
+  });
+
   it("drops historical CLI spinner reasoning placeholders", () => {
     const messages = storedMessagesToChatMessages([
       sessionMessage({
