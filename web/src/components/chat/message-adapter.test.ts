@@ -380,6 +380,13 @@ describe("message adapter", () => {
     expect(message?.blocks?.map((block) => block.type)).toEqual(["text", "image"]);
   });
 
+  it("preserves a stored turn ID for completion recovery when Core provides it", () => {
+    const rows = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({ content: "已完成", turn_id: "turn-2" }),
+    ]);
+    expect(rows[0]?.metadata?.gatewayTurnId).toBe("turn-2");
+  });
+
   it("turns legacy message images fields into image parts instead of dropping them", () => {
     const messages = legacySessionMessagesToHermesUIMessages([
       sessionMessage({

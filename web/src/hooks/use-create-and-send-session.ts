@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useSetAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
+import { GatewayResultError, humanizeGatewayError } from "@/lib/gateway-result";
 import type {
   ComposerSubmitControls,
   ComposerSubmitPayload,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/workspaces";
 
 interface CreateAndSendOptions {
+  fromNewTaskComposer?: boolean;
   createSession?: (options?: { cwd?: string; reasoningEffort?: ReasoningEffort | null }) => Promise<string>;
 }
 
@@ -95,7 +97,7 @@ export function useCreateAndSendSession() {
     setActiveSessionId(sessionId);
     navigate(`/tasks/${sessionId}`);
 
-    void (async () => {
+    const submitted = (async () => {
       try {
         if (payload.modelSelection?.model) {
           // Composer selection is the user's explicit source of truth.  Do not
@@ -145,7 +147,18 @@ export function useCreateAndSendSession() {
         });
       } catch (err) {
         console.error("Failed to submit session:", err);
-        failPrompt(sessionId, err);
+        if (options?.fromNewTaskComposer) {
+          const cause = humanizeGatewayError(err);
+          const draftHint = payload.text ? "可在「新建对话」继续编辑草稿。" : "";
+          const attachmentHint = payload.attachments.length
+            ? `${payload.attachments.length} 个附件需要重新添加。`
+            : "";
+          const message = [cause, draftHint, attachmentHint].filter(Boolean).join(" ");
+          failPrompt(sessionId, new GatewayResultError(message, "first prompt", { cause: err }));
+        } else {
+          failPrompt(sessionId, err);
+        }
+        throw err;
       }
     })();
 
@@ -162,6 +175,7 @@ export function useCreateAndSendSession() {
       });
     }
 
+    await submitted;
     return sessionId;
   }, [
     attachImage,

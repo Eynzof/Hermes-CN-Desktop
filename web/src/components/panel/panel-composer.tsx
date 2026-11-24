@@ -192,6 +192,7 @@ export function PanelComposer() {
   ) => {
     if (sending) return;
     setSending(true);
+    const submittedDraft = readComposerDraftByKey(newTaskDraftKey);
     try {
       const draft = draftRef.current;
       const requestedCwd = payload.workspacePath?.trim() || "";
@@ -214,8 +215,10 @@ export function PanelComposer() {
         draftRef.current = null;
         void closeSession(draft.id).catch(() => {});
       }
-      await createAndSendSession(payload, controls, options);
-      forgetComposerDraftByKey(newTaskDraftKey);
+      await createAndSendSession(payload, controls, { ...options, fromNewTaskComposer: true });
+      if (readComposerDraftByKey(newTaskDraftKey) === submittedDraft) {
+        forgetComposerDraftByKey(newTaskDraftKey);
+      }
     } catch (err) {
       console.error("Failed to create session:", err);
       throw err;
@@ -231,7 +234,8 @@ export function PanelComposer() {
   ]);
 
   const onDraftChange = useCallback((text: string) => {
-    writeComposerDraftByKey(newTaskDraftKey, text);
+    // A late acknowledgement can reach the old composer after navigation.
+    if (wrapperRef.current) writeComposerDraftByKey(newTaskDraftKey, text);
   }, [newTaskDraftKey]);
 
   return (

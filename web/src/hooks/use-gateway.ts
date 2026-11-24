@@ -710,7 +710,8 @@ export function useGateway() {
         "config.set",
       );
       invalidateModelOptionsCache(sessionId);
-      await Promise.all([
+      // The gateway has applied the model. Refreshing views must not hold the next prompt.
+      void Promise.all([
         queryClient.invalidateQueries({ queryKey: ["sessions"] }),
         queryClient.invalidateQueries({ queryKey: ["session"] }),
         queryClient.invalidateQueries({ queryKey: ["model-info"] }),

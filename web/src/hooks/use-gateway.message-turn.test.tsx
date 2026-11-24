@@ -154,3 +154,27 @@ describe("停止后发送", () => {
     }
   });
 });
+
+describe("会话切换模型后发送首条消息", () => {
+  it("收到切换确认即可继续，界面仍可刷新", async () => {
+    const { result, queryClient } = setup();
+    let release!: () => void;
+    const slowView = new Promise<void>(resolve => { release = resolve; });
+    const refresh = vi.spyOn(queryClient, "invalidateQueries").mockReturnValue(slowView);
+    try {
+      await result.current.setSessionModel(gatewayId, "trial/maple", "nous");
+      expect(refresh.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([["sessions"], ["session"], ["model-info"]]);
+    } finally {
+      release();
+      refresh.mockRestore();
+    }
+  });
+
+  it("模型切换失败时向调用方返回错误", async () => {
+    const { result, queryClient } = setup();
+    const refresh = vi.spyOn(queryClient, "invalidateQueries");
+    request.mockRejectedValueOnce(new Error("model rejected"));
+    await expect(result.current.setSessionModel(gatewayId, "trial/maple", "nous")).rejects.toThrow("model rejected");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+});
