@@ -1,4 +1,4 @@
-# Three explicit stages: build a private draft, publish exact accepted bytes
+# Three explicit stages: build release candidates, publish exact accepted bytes
 # with latest=false, then promote GitHub latest. D1 rollout uses hot-update:control.
 
 name: release-desktop
@@ -7,10 +7,16 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build 只生成草稿；publish 公开但不设 latest；promote 设为 latest"
+        description: "build 生成候选包，publish 公开但不设 latest，promote 设为 latest"
         type: choice
         options: [build, publish, promote]
         default: build
+        required: true
+      draft_mode:
+        description: "auto 自动上传发布草稿，manual 保存已签名原包供维护者上传"
+        type: choice
+        options: [auto, manual]
+        default: auto
         required: true
       tag:
         description: "目标版本 tag；build 可尚不存在（例如 v0.9.0）"
@@ -61,7 +67,7 @@ concurrency:
 
 jobs:
   preflight:
-    if: inputs.action == 'build'
+    if: inputs.action == 'build' || inputs.draft_mode == 'manual'
     runs-on: ubuntu-latest
     environment: hot-update-${{ inputs.release_environment }}
     outputs:
@@ -72,6 +78,11 @@ jobs:
       runtime_channel: ${{ steps.meta.outputs.runtime_channel }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
+      - name: Reject incompatible manual draft inputs
+        if: inputs.draft_mode == 'manual' && (inputs.action != 'build' || inputs.recovery_source_sha != '')
+        run: |
+          echo "手动上传仅适用于常规候选构建。"
+          exit 1
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.recovery_source_sha && format('refs/tags/{0}', inputs.tag) || github.sha }}
@@ -523,7 +534,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: hot-update-${{ inputs.release_environment }}
     env:
-      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
       RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
       RELEASE_SHA: ${{ needs.preflight.outputs.source_sha }}
       PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
@@ -567,7 +577,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Create private draft from the pinned source SHA
+        if: inputs.draft_mode != 'manual'
         env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
           RECOVERY_SOURCE_SHA: ${{ inputs.recovery_source_sha }}
         run: |
           set -euo pipefail
@@ -588,20 +600,33 @@ jobs:
           mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0)
           gh release upload "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY"
       - name: Re-download every draft asset and verify exact bytes
+        if: inputs.draft_mode != 'manual'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir verify-github
           CANDIDATE_SHA256="$(sha256sum release-assets/checksums.txt | cut -d ' ' -f 1)"
           export CANDIDATE_SHA256
           node scripts/desktop-release-policy.mjs verify verify-github
+      - name: Record candidate fingerprint
+        env:
+          DRAFT_MODE: ${{ inputs.draft_mode }}
+        run: |
+          set -euo pipefail
+          fingerprint="$(sha256sum release-assets/checksums.txt | cut -d ' ' -f 1)"
           {
             echo "### Candidate fingerprint"
-            echo "candidate_sha256=$CANDIDATE_SHA256"
-            echo "Draft only. Next: publish after final-package acceptance; no latest or rollout changed."
+            echo "candidate_sha256=$fingerprint"
+            if [[ "$DRAFT_MODE" == manual ]]; then
+              echo "Artifacts only, no draft created. Download desktop-release-candidate for manual upload."
+            else
+              echo "Draft only. Next: publish after final-package acceptance; no latest or rollout changed."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   release:
-    if: (inputs.action == 'publish' || inputs.action == 'promote') && !inputs.recovery_source_sha
+    if: (inputs.action == 'publish' || inputs.action == 'promote') && !inputs.recovery_source_sha && inputs.draft_mode != 'manual'
     runs-on: ubuntu-latest
     environment: hot-update-${{ inputs.release_environment }}
     env:
